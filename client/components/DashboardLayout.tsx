@@ -29,6 +29,7 @@ import {
   Megaphone,
   HandCoins,
   Building,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
@@ -88,6 +89,13 @@ const navigationItems: NavigationItem[] = [
     name: "Fund Raise",
     href: "/fundraise",
     icon: HandCoins,
+    roles: ["admin", "sales", "product"],
+    permissions: ["vc"],
+  },
+  {
+    name: "Business Offerings",
+    href: "/business-offerings",
+    icon: Briefcase,
     roles: ["admin", "sales", "product"],
     permissions: ["vc"],
   },

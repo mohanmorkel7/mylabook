@@ -660,7 +660,7 @@ router.get("/list/mitra", async (req: Request, res: Response) => {
         name: `${u.first_name} ${u.last_name}`,
         firstname: u.first_name,
         lastname: u.last_name,
-        type: 'User',
+        type: "User",
       }));
       res.json(mitraUsers);
     }
@@ -674,7 +674,7 @@ router.get("/list/mitra", async (req: Request, res: Response) => {
         name: `${u.first_name} ${u.last_name}`,
         firstname: u.first_name,
         lastname: u.last_name,
-        type: 'User',
+        type: "User",
       }));
       res.json(mitraUsers);
     } catch (fallbackError) {

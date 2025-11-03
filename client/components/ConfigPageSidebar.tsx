@@ -85,7 +85,7 @@ export function ConfigPageSidebar({ currentPage }: ConfigPageSidebarProps) {
 
   // Filter items based on user role
   const visibleItems = sidebarItems.filter((item) =>
-    item.roles.includes(user.role as any)
+    item.roles.includes(user.role as any),
   );
 
   const isActive = (href: string) => {
@@ -99,7 +99,9 @@ export function ConfigPageSidebar({ currentPage }: ConfigPageSidebarProps) {
         {/* Logo/Branding */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900">Mylapay</h2>
-          <p className="text-xs text-gray-600 mt-1">{currentPage || "Config"}</p>
+          <p className="text-xs text-gray-600 mt-1">
+            {currentPage || "Config"}
+          </p>
         </div>
 
         {/* Navigation */}
@@ -116,7 +118,7 @@ export function ConfigPageSidebar({ currentPage }: ConfigPageSidebarProps) {
                   "flex items-center justify-between px-4 py-3 rounded-lg transition-colors",
                   active
                     ? "bg-blue-100 text-blue-900 font-medium"
-                    : "text-gray-700 hover:bg-gray-100"
+                    : "text-gray-700 hover:bg-gray-100",
                 )}
               >
                 <div className="flex items-center gap-3">

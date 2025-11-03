@@ -301,8 +301,10 @@ export function MailConfigModal({
     // Try new mitra_users structure first
     if (user.name) return user.name;
     // Fallback to old structure
-    if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
-    if (user.firstname && user.lastname) return `${user.firstname} ${user.lastname}`;
+    if (user.first_name && user.last_name)
+      return `${user.first_name} ${user.last_name}`;
+    if (user.firstname && user.lastname)
+      return `${user.firstname} ${user.lastname}`;
     return user.name || "Unknown";
   };
 

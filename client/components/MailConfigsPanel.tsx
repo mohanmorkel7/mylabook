@@ -263,160 +263,163 @@ export function MailConfigsPanel({
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto p-6">
-          <div className="mb-6">
-            <h2 className="text-3xl font-bold">Mail Configs</h2>
-            <p className="text-gray-600 mt-1">
-              Manage email-to-ticket automation configurations
-            </p>
-          </div>
-
-
-          <Button
-            onClick={handleCreateNew}
-            className="mb-6"
-            disabled={isLoading}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create New Config
-          </Button>
-
-          {isLoading && configs.length === 0 ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-            </div>
-          ) : configs.length === 0 ? (
-            <div className="text-center py-8 text-gray-600">
-              <p>No mail configs created yet</p>
-              <p className="text-sm mt-2">
-                Click "Create New Config" to get started
+            <div className="mb-6">
+              <h2 className="text-3xl font-bold">Mail Configs</h2>
+              <p className="text-gray-600 mt-1">
+                Manage email-to-ticket automation configurations
               </p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {configs.map((config) => (
-                <Card
-                  key={config.id}
-                  className={`${
-                    !config.is_active ? "opacity-60" : ""
-                  } border-l-4 ${
-                    config.is_active
-                      ? "border-l-green-500"
-                      : "border-l-gray-300"
-                  }`}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg">{config.name}</CardTitle>
-                        {config.description && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            {config.description}
-                          </p>
-                        )}
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={
-                          config.is_active
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }
-                      >
-                        {config.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
 
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="text-gray-600">Field Type</p>
-                        <p className="font-medium">
-                          {getFieldTypeLabel(config.field_type)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Priority</p>
-                        <Badge className={PRIORITY_COLORS[config.priority_id]}>
-                          {PRIORITY_NAMES[config.priority_id]}
-                        </Badge>
-                      </div>
-                    </div>
+            <Button
+              onClick={handleCreateNew}
+              className="mb-6"
+              disabled={isLoading}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Config
+            </Button>
 
-                    <div>
-                      <p className="text-gray-600 text-sm">Field Value</p>
-                      <p className="text-sm font-mono bg-gray-100 p-2 rounded truncate">
-                        {config.field_value}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-gray-600 text-sm">Assigned To</p>
-                      <p className="font-medium text-sm">
-                        {getAssignedUserName(config.assigned_to_id)}
-                      </p>
-                    </div>
-
-                    {config.watcher_user_ids.length > 0 && (
-                      <div>
-                        <p className="text-gray-600 text-sm">Watchers</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {config.watcher_user_ids
-                            .slice(0, 3)
-                            .map((watcherId) => {
-                              const watcher = users.find(
-                                (u) => u.id === watcherId,
-                              );
-                              return (
-                                <Badge
-                                  key={watcherId}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  {watcher
-                                    ? `${watcher.first_name.charAt(0)}${watcher.last_name.charAt(0)}`
-                                    : "?"}
-                                </Badge>
-                              );
-                            })}
-                          {config.watcher_user_ids.length > 3 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{config.watcher_user_ids.length - 3}
-                            </Badge>
+            {isLoading && configs.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+              </div>
+            ) : configs.length === 0 ? (
+              <div className="text-center py-8 text-gray-600">
+                <p>No mail configs created yet</p>
+                <p className="text-sm mt-2">
+                  Click "Create New Config" to get started
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {configs.map((config) => (
+                  <Card
+                    key={config.id}
+                    className={`${
+                      !config.is_active ? "opacity-60" : ""
+                    } border-l-4 ${
+                      config.is_active
+                        ? "border-l-green-500"
+                        : "border-l-gray-300"
+                    }`}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg">
+                            {config.name}
+                          </CardTitle>
+                          {config.description && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {config.description}
+                            </p>
                           )}
                         </div>
+                        <Badge
+                          variant="outline"
+                          className={
+                            config.is_active
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }
+                        >
+                          {config.is_active ? "Active" : "Inactive"}
+                        </Badge>
                       </div>
-                    )}
+                    </CardHeader>
 
-                    <div className="flex gap-2 mt-4 pt-3 border-t">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleActive(config)}
-                        className="flex-1"
-                      >
-                        {config.is_active ? "Disable" : "Enable"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(config)}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDeleteClick(config.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-gray-600">Field Type</p>
+                          <p className="font-medium">
+                            {getFieldTypeLabel(config.field_type)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Priority</p>
+                          <Badge
+                            className={PRIORITY_COLORS[config.priority_id]}
+                          >
+                            {PRIORITY_NAMES[config.priority_id]}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-gray-600 text-sm">Field Value</p>
+                        <p className="text-sm font-mono bg-gray-100 p-2 rounded truncate">
+                          {config.field_value}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-gray-600 text-sm">Assigned To</p>
+                        <p className="font-medium text-sm">
+                          {getAssignedUserName(config.assigned_to_id)}
+                        </p>
+                      </div>
+
+                      {config.watcher_user_ids.length > 0 && (
+                        <div>
+                          <p className="text-gray-600 text-sm">Watchers</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {config.watcher_user_ids
+                              .slice(0, 3)
+                              .map((watcherId) => {
+                                const watcher = users.find(
+                                  (u) => u.id === watcherId,
+                                );
+                                return (
+                                  <Badge
+                                    key={watcherId}
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {watcher
+                                      ? `${watcher.first_name.charAt(0)}${watcher.last_name.charAt(0)}`
+                                      : "?"}
+                                  </Badge>
+                                );
+                              })}
+                            {config.watcher_user_ids.length > 3 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{config.watcher_user_ids.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 mt-4 pt-3 border-t">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleToggleActive(config)}
+                          className="flex-1"
+                        >
+                          {config.is_active ? "Disable" : "Enable"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(config)}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteClick(config.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

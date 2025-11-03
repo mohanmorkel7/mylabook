@@ -117,6 +117,7 @@ interface Props {
 export default function BusinessOfferings({ initial, offeringId }: Props = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("offerings");
 
   const [formA, setFormA] = useState({
@@ -500,33 +501,43 @@ export default function BusinessOfferings({ initial, offeringId }: Props = {}) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Client *</Label>
-                  <Select
-                    value={formA.clientId}
-                    onValueChange={(v) => {
-                      setFormA((p) => ({
-                        ...p,
-                        clientId: v,
-                        avgFee: "",
-                        mmgf: "",
-                      }));
-                      setErrors((e) => ({ ...e, clientIdA: "" }));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          clientsLoading ? "Loading..." : "Select client"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(clients || []).map((c: any) => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          {c.client_name} {c.country ? `(${c.country})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+<Select
+  value={formA.clientId}
+  onValueChange={(v) => {
+    setFormA((p) => ({
+      ...p,
+      clientId: v,
+      avgFee: "",
+      mmgf: "",
+    }));
+    setErrors((e) => ({ ...e, clientIdA: "" }));
+  }}
+>
+  <SelectTrigger>
+    <SelectValue placeholder={clientsLoading ? "Loading..." : "Select client"} />
+  </SelectTrigger>
+  <SelectContent>
+    <div className="p-2">
+      <input
+        type="text"
+        placeholder="Search..."
+        className="w-full border px-2 py-1 text-sm rounded"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
+    </div>
+    {(clients || [])
+      .filter((c: any) =>
+        c.client_name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .map((c: any) => (
+        <SelectItem key={c.id} value={String(c.id)}>
+          {c.client_name} {c.country ? `(${c.country})` : ""}
+        </SelectItem>
+      ))}
+  </SelectContent>
+</Select>
+
                   {errors.clientIdA && (
                     <div className="text-sm text-red-600 mt-1">
                       {errors.clientIdA}

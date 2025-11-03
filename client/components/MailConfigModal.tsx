@@ -103,9 +103,13 @@ export function MailConfigModal({
         if (response.data && Array.isArray(response.data)) {
           const mappedUsers = response.data.map((u: any) => ({
             id: u.id,
-            first_name: u.name?.split(" ")[0] || u.name || "",
-            last_name: u.name?.split(" ").slice(1).join(" ") || "",
-            email: "",
+            name: u.name || "",
+            first_name: u.firstname || u.first_name || u.name?.split(" ")[0] || "",
+            last_name: u.lastname || u.last_name || u.name?.split(" ").slice(1).join(" ") || "",
+            firstname: u.firstname || "",
+            lastname: u.lastname || "",
+            email: u.email || "",
+            type: u.type || "",
           }));
           setUsers(mappedUsers);
         }
@@ -179,13 +183,14 @@ export function MailConfigModal({
     });
   };
 
-  const filteredWatchers = users.filter(
-    (user) =>
-      `${user.first_name} ${user.last_name}`
-        .toLowerCase()
-        .includes(searchWatchers.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchWatchers.toLowerCase()),
-  );
+  const filteredWatchers = users.filter((user) => {
+    const displayName = getUserName(user);
+    const email = user.email || "";
+    return (
+      displayName.toLowerCase().includes(searchWatchers.toLowerCase()) ||
+      email.toLowerCase().includes(searchWatchers.toLowerCase())
+    );
+  });
 
   const getFieldValueLabel = (fieldType: string): string => {
     switch (fieldType) {

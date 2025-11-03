@@ -30,9 +30,13 @@ interface Ticket {
 
 interface User {
   id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  firstname?: string;
+  lastname?: string;
+  email?: string;
+  type?: string;
 }
 
 interface FilterOptions {

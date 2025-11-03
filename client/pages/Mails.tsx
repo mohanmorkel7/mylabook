@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { azureSilentAuth } from "@/lib/azure-silent-auth";
 import { azureSyncService } from "@/lib/azure-sync-service";
 import {
@@ -9,6 +10,9 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { textAlign } from "html2canvas/dist/types/css/property-descriptors/text-align";
+import { MailConfigsPanel } from "@/components/MailConfigsPanel";
+import api from "@/lib/api";
+import { Settings } from "lucide-react";
 
 type GraphEmail = {
   id: string;

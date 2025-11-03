@@ -295,6 +295,17 @@ export function MailConfigModal({
     }
   };
 
+  // Helper to get user display name from either old or new structure
+  const getUserName = (user: User | undefined): string => {
+    if (!user) return "";
+    // Try new mitra_users structure first
+    if (user.name) return user.name;
+    // Fallback to old structure
+    if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
+    if (user.firstname && user.lastname) return `${user.firstname} ${user.lastname}`;
+    return user.name || "Unknown";
+  };
+
   const assignedUser = users.find((u) => u.id === config.assigned_to_id);
   const selectedWatchers = users.filter((u) =>
     config.watcher_user_ids.includes(u.id),

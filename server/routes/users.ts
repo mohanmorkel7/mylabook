@@ -626,22 +626,41 @@ router.post("/bulk-status-update", async (req: Request, res: Response) => {
 // Get mitra users list (for mail config dropdowns)
 router.get("/list/mitra", async (req: Request, res: Response) => {
   try {
+    const { pool } = await import("../database/connection");
+
     if (await isDatabaseAvailable()) {
+      // Fetch from mitra_users table with proper filtering and formatting
       const query = `
-        SELECT user_id as id, name
-        FROM mitra_users_list
-        WHERE user_id IS NOT NULL
-        ORDER BY name ASC
+        SELECT
+          id,
+          firstname,
+          lastname,
+          CONCAT(firstname, ' ', lastname) as name,
+          type,
+          login
+        FROM mitra_users
+        WHERE status = 1
+          AND (type = 'User' OR type = 'Group')
+        ORDER BY firstname ASC, lastname ASC
       `;
-      const { pool } = await import("../database/connection");
       const result = await pool.query(query);
-      res.json(result.rows || []);
+      const mitraUsers = result.rows.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        firstname: row.firstname,
+        lastname: row.lastname,
+        type: row.type,
+      }));
+      res.json(mitraUsers || []);
     } else {
       // Fallback to regular users table
       const users = await UserRepository.findAll();
       const mitraUsers = users.map((u) => ({
         id: u.id,
         name: `${u.first_name} ${u.last_name}`,
+        firstname: u.first_name,
+        lastname: u.last_name,
+        type: 'User',
       }));
       res.json(mitraUsers);
     }
@@ -653,6 +672,9 @@ router.get("/list/mitra", async (req: Request, res: Response) => {
       const mitraUsers = users.map((u) => ({
         id: u.id,
         name: `${u.first_name} ${u.last_name}`,
+        firstname: u.first_name,
+        lastname: u.last_name,
+        type: 'User',
       }));
       res.json(mitraUsers);
     } catch (fallbackError) {

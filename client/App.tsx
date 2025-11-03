@@ -145,6 +145,7 @@ import FollowUpTracker from "@/pages/FollowUpTracker";
 import PipelineSettings from "@/pages/PipelineSettings";
 import Tickets from "@/pages/Tickets";
 import Mails from "@/pages/Mails";
+import MailConfigs from "@/pages/MailConfigs";
 import AdminTemplates from "@/pages/AdminTemplates";
 import FinOpsDashboard from "@/pages/FinOpsDashboard";
 import FinOpsAutomation from "@/pages/FinOpsAutomation";

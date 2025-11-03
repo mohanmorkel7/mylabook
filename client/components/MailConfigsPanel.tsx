@@ -223,61 +223,67 @@ export function MailConfigsPanel({
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
       <div className="fixed inset-0 bg-white z-50 overflow-hidden flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-gray-50 border-r border-gray-200 overflow-y-auto">
-          <div className="p-6">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">Mylapay</h2>
-              <p className="text-xs text-gray-600 mt-1">Mail Configs</p>
+        {/* Sidebar - Matching DashboardLayout design */}
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
+          {/* Logo */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-center">
+              <img
+                src="/mylapaylogo.png"
+                alt="Mylapay"
+                className="h-8 object-contain"
+              />
             </div>
-
-            <nav className="space-y-1">
-              <Button
-                onClick={onClose}
-                variant="ghost"
-                className="w-full justify-start text-gray-700 hover:bg-gray-100 mb-4"
-              >
-                ← Back to Mails
-              </Button>
-
-              <a
-                href="/dashboard"
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-              >
-                Dashboard
-              </a>
-              <a
-                href="/clients"
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-              >
-                Clients
-              </a>
-              <a
-                href="/vc"
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-              >
-                VC
-              </a>
-              <a
-                href="/fundraise"
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-              >
-                Fund Raise
-              </a>
-              <a
-                href="/mails"
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-              >
-                Mails
-              </a>
-              <a
-                href="/tickets"
-                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-              >
-                Tickets
-              </a>
-            </nav>
           </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-2">
+            <Button
+              onClick={onClose}
+              variant="outline"
+              size="sm"
+              className="w-full justify-start text-gray-700 hover:bg-gray-100 mb-2"
+            >
+              ← Back to Mails
+            </Button>
+
+            <a
+              href="/dashboard"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <span>Dashboard</span>
+            </a>
+            <a
+              href="/clients"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <span>Clients</span>
+            </a>
+            <a
+              href="/vc"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <span>VC</span>
+            </a>
+            <a
+              href="/fundraise"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <span>Fund Raise</span>
+            </a>
+            <a
+              href="/mails"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <span>Mails</span>
+            </a>
+            <a
+              href="/tickets"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <span>Tickets</span>
+            </a>
+          </nav>
         </div>
 
         {/* Main Content */}

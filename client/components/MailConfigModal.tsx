@@ -418,7 +418,7 @@ export function MailConfigModal({
                   className="w-full justify-between"
                 >
                   {assignedUser
-                    ? `${assignedUser.first_name} ${assignedUser.last_name}`
+                    ? getUserName(assignedUser)
                     : "Select assignee..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>

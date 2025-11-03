@@ -25,9 +25,13 @@ import {
 
 interface User {
   id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  firstname?: string;
+  lastname?: string;
+  type?: string;
+  email?: string;
 }
 
 interface MailConfig {
@@ -96,7 +100,7 @@ export default function MailConfigs() {
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get("/users");
+      const response = await api.get("/users/list/mitra");
       setUsers(response.data || []);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -185,7 +189,14 @@ export default function MailConfigs() {
 
   const getAssignedUserName = (userId: number): string => {
     const user = users.find((u) => u.id === userId);
-    return user ? `${user.first_name} ${user.last_name}` : "Unknown";
+    if (!user) return "Unknown";
+    // Handle new mitra_users structure
+    if (user.name) return user.name;
+    // Handle old structure
+    if (user.first_name && user.last_name) {
+      return `${user.first_name} ${user.last_name}`;
+    }
+    return "Unknown";
   };
 
   return (

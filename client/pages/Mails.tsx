@@ -13,6 +13,7 @@ import { textAlign } from "html2canvas/dist/types/css/property-descriptors/text-
 import { MailConfigsPanel } from "@/components/MailConfigsPanel";
 import api from "@/lib/api";
 import { Settings } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 type GraphEmail = {
   id: string;

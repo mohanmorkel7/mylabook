@@ -84,7 +84,8 @@ export function MailConfigsPanel({
   const fetchConfigs = async () => {
     try {
       setIsLoading(true);
-      const response = await api.get("/mail-configs");
+      const endpoint = user?.id ? `/mail-configs?userId=${user.id}` : "/mail-configs";
+      const response = await api.get(endpoint);
       setConfigs(response.data);
     } catch (error) {
       console.error("Error fetching mail configs:", error);

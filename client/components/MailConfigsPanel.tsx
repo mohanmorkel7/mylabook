@@ -256,19 +256,11 @@ export function MailConfigsPanel({
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-3xl font-bold">Mail Configs</h2>
-              <p className="text-gray-600 mt-1">
-                Manage email-to-ticket automation configurations
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 text-3xl font-light"
-            >
-              ←
-            </button>
+          <div className="mb-6">
+            <h2 className="text-3xl font-bold">Mail Configs</h2>
+            <p className="text-gray-600 mt-1">
+              Manage email-to-ticket automation configurations
+            </p>
           </div>
 
 

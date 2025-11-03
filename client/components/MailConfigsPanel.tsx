@@ -224,7 +224,7 @@ export function MailConfigsPanel({
 
           <Button
             onClick={handleCreateNew}
-            className="w-full mb-4"
+            className="mb-6"
             disabled={isLoading}
           >
             <Plus className="h-4 w-4 mr-2" />

@@ -2147,3 +2147,6 @@ export const apiClient = new ApiClient();
 
 // Reset circuit breaker for development/demo mode
 apiClient.resetCircuitBreaker();
+
+// Default export for convenience
+export default apiClient;

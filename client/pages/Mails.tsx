@@ -201,31 +201,6 @@ export default function Mails() {
     };
   }, [targetUser]);
 
-  async function processEmailsWithConfigs(emailList: GraphEmail[]) {
-    try {
-      if (emailList.length === 0 || !user?.id) return;
-
-      const payload: any = {
-        emails: emailList,
-        userId: parseInt(user.id, 10),
-      };
-
-      const response = await api.post("/mail-configs/process-emails", payload);
-
-      if (response.data?.results?.length > 0) {
-        const successCount = response.data.results.filter(
-          (r: any) => r.success,
-        ).length;
-        if (successCount > 0) {
-          console.log(`Processed ${successCount} email(s) into tickets`);
-        }
-      }
-    } catch (error) {
-      console.warn("Error processing emails with configs:", error);
-      // Don't show error to user - this is a background operation
-    }
-  }
-
   async function fetchEmailsWithToken(token: string, mounted = true) {
     setLoading(true);
     setError(null);

@@ -214,7 +214,7 @@ export function MailConfigModal({
         return;
       }
 
-      const payload = {
+      const payload: any = {
         name: config.name,
         description: config.description,
         field_type: config.field_type,
@@ -224,6 +224,11 @@ export function MailConfigModal({
         assigned_to_id: config.assigned_to_id,
         watcher_user_ids: config.watcher_user_ids,
       };
+
+      // Include user ID if available
+      if (user?.id) {
+        payload.userId = parseInt(user.id, 10);
+      }
 
       if (config.id) {
         // Update existing config

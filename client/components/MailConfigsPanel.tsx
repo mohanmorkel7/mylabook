@@ -187,6 +187,7 @@ export function MailConfigsPanel({
 
   const getAssignedUserName = (userId: number): string => {
     const user = users.find((u) => u.id === userId);
+    console.log("USERS",user.name)
     if (!user) return "Unknown";
     // Handle new mitra_users structure
     if (user.name) return user.name;
@@ -298,11 +299,11 @@ export function MailConfigsPanel({
               Create New Config
             </Button>
 
-            {isLoading && configs.length === 0 ? (
+            {isLoading && (configs?.length ?? 0) === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
               </div>
-            ) : configs.length === 0 ? (
+            ) : (configs?.length ?? 0) === 0 ? (
               <div className="text-center py-8 text-gray-600">
                 <p>No mail configs created yet</p>
                 <p className="text-sm mt-2">

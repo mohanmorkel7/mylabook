@@ -10,10 +10,10 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { textAlign } from "html2canvas/dist/types/css/property-descriptors/text-align";
-import { MailConfigsPanel } from "@/components/MailConfigsPanel";
 import api from "@/lib/api";
 import { Settings } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useNavigate } from "react-router-dom";
 
 type GraphEmail = {
   id: string;

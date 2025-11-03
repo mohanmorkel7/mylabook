@@ -174,16 +174,6 @@ export default function Mails() {
         setLoading(true);
         setError(null);
 
-        // Fetch users for mail config
-        try {
-          const usersResponse = await api.get("/users");
-          if (mounted) {
-            setUsers(usersResponse.data || []);
-          }
-        } catch (userError) {
-          console.warn("Failed to fetch users:", userError);
-        }
-
         // Handle return from Azure AD if applicable
         await azureSilentAuth.handleAuthReturn();
 

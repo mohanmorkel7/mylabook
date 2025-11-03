@@ -710,6 +710,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Mail configs table for email-to-ticket automation
+    try {
+      const mailConfigsPath = path.join(
+        __dirname,
+        "create-mail-configs-table.sql",
+      );
+      if (fs.existsSync(mailConfigsPath)) {
+        const sql = fs.readFileSync(mailConfigsPath, "utf8");
+        await client.query(sql);
+        console.log("Mail configs table migration applied successfully");
+      }
+    } catch (mailConfigsErr) {
+      console.log(
+        "Mail configs table migration already applied or error:",
+        (mailConfigsErr as any).message,
+      );
+    }
+
     // await client.query(schema);
     console.log("Database initialized successfully");
     client.release();

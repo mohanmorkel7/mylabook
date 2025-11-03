@@ -300,6 +300,11 @@ export function MailConfigModal({
           <DialogTitle>
             {config.id ? "Edit Mail Config" : "Create New Mail Config"}
           </DialogTitle>
+          <p className="text-sm text-gray-600 mt-2">
+            {config.id
+              ? "Update the mail configuration settings."
+              : "Configure email matching rules to automatically create tickets when matching emails are received."}
+          </p>
         </DialogHeader>
 
         <div className="space-y-4">

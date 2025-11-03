@@ -214,11 +214,14 @@ export default function Mails() {
 
   async function processEmailsWithConfigs(emailList: GraphEmail[]) {
     try {
-      if (emailList.length === 0) return;
+      if (emailList.length === 0 || !user?.id) return;
 
-      const response = await api.post("/mail-configs/process-emails", {
+      const payload: any = {
         emails: emailList,
-      });
+        userId: parseInt(user.id, 10),
+      };
+
+      const response = await api.post("/mail-configs/process-emails", payload);
 
       if (response.data?.results?.length > 0) {
         const successCount = response.data.results.filter(

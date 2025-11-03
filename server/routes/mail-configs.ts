@@ -1,0 +1,148 @@
+import express, { Request, Response } from "express";
+import { MailConfigRepository, CreateMailConfigData, UpdateMailConfigData } from "../models/MailConfig";
+
+const router = express.Router();
+
+// Middleware to get user ID from request (assumes auth middleware sets userId)
+function getUserId(req: Request): number {
+  const userId = (req as any).userId || (req as any).user?.id;
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+  return userId;
+}
+
+// GET all mail configs for current user
+router.get("/", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const configs = await MailConfigRepository.findAll(userId);
+    res.json(configs);
+  } catch (error) {
+    console.error("Error fetching mail configs:", error);
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+// GET active mail configs (for email processing)
+router.get("/active", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const configs = await MailConfigRepository.getActiveConfigs(userId);
+    res.json(configs);
+  } catch (error) {
+    console.error("Error fetching active mail configs:", error);
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+// GET a specific mail config
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { id } = req.params;
+    const config = await MailConfigRepository.findById(parseInt(id), userId);
+    
+    if (!config) {
+      return res.status(404).json({ error: "Mail config not found" });
+    }
+    
+    res.json(config);
+  } catch (error) {
+    console.error("Error fetching mail config:", error);
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+// CREATE a new mail config
+router.post("/", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const {
+      name,
+      description,
+      field_type,
+      field_value,
+      project_id,
+      priority_id,
+      assigned_to_id,
+      watcher_user_ids,
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !field_type || !field_value || !project_id || !priority_id || !assigned_to_id) {
+      return res.status(400).json({
+        error: "Missing required fields: name, field_type, field_value, project_id, priority_id, assigned_to_id",
+      });
+    }
+
+    // Validate field_type
+    if (!['subject', 'fromEmail', 'toEmail', 'body'].includes(field_type)) {
+      return res.status(400).json({
+        error: "Invalid field_type. Must be one of: subject, fromEmail, toEmail, body",
+      });
+    }
+
+    const data: CreateMailConfigData = {
+      user_id: userId,
+      name,
+      description,
+      field_type: field_type as 'subject' | 'fromEmail' | 'toEmail' | 'body',
+      field_value,
+      project_id,
+      priority_id,
+      assigned_to_id,
+      watcher_user_ids: watcher_user_ids || [],
+    };
+
+    const config = await MailConfigRepository.create(data);
+    res.status(201).json(config);
+  } catch (error) {
+    console.error("Error creating mail config:", error);
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+// UPDATE a mail config
+router.put("/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { id } = req.params;
+    const updateData: UpdateMailConfigData = req.body;
+
+    // Remove user_id from update data if present
+    delete (updateData as any).user_id;
+
+    const config = await MailConfigRepository.update(parseInt(id), userId, updateData);
+    
+    if (!config) {
+      return res.status(404).json({ error: "Mail config not found" });
+    }
+    
+    res.json(config);
+  } catch (error) {
+    console.error("Error updating mail config:", error);
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+// DELETE a mail config
+router.delete("/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { id } = req.params;
+    
+    const deleted = await MailConfigRepository.delete(parseInt(id), userId);
+    
+    if (!deleted) {
+      return res.status(404).json({ error: "Mail config not found" });
+    }
+    
+    res.json({ message: "Mail config deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting mail config:", error);
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+export default router;

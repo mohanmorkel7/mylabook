@@ -187,7 +187,14 @@ export default function ManageTickets() {
 
   const getAssignedUserName = (userId: number): string => {
     const user = users.find((u) => u.id === userId);
-    return user ? `${user.first_name} ${user.last_name}` : "Unassigned";
+    if (!user) return "Unassigned";
+    // Handle new mitra_users structure
+    if (user.name) return user.name;
+    // Handle old structure
+    if ((user as any).first_name && (user as any).last_name) {
+      return `${(user as any).first_name} ${(user as any).last_name}`;
+    }
+    return "Unassigned";
   };
 
   const getPriorityBadge = (priority: number) => {

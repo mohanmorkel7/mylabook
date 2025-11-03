@@ -584,6 +584,12 @@ export default function Mails() {
           )}
         </CardContent>
       </Card>
+
+      <MailConfigsPanel
+        isOpen={configPanelOpen}
+        onClose={() => setConfigPanelOpen(false)}
+        users={users}
+      />
     </div>
   );
 }

@@ -32,6 +32,7 @@ import fundRaisesRouter from "./routes/fund-raises";
 import businessOfferingsRouter from "./routes/business-offerings";
 import finopsScheduler from "./services/finopsScheduler";
 import connectionsRouter from "./routes/connections";
+import mailConfigsRouter from "./routes/mail-configs";
 
 // Production routes (database-only, no mock fallback)
 import templatesProductionRouter from "./routes/templates-production";

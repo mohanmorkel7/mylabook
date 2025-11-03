@@ -271,15 +271,6 @@ export function MailConfigsPanel({
             </button>
           </div>
 
-          <div className="mb-4">
-            <Button
-              onClick={onClose}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              ← Back to Mail
-            </Button>
-          </div>
 
           <Button
             onClick={handleCreateNew}

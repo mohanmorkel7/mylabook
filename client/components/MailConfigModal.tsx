@@ -86,6 +86,7 @@ export function MailConfigModal({
   users,
   priorities = PRIORITY_OPTIONS,
 }: MailConfigModalProps) {
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [config, setConfig] = useState<MailConfig>(
     initialConfig || {

@@ -66,6 +66,7 @@ export function MailConfigsPanel({
   onClose,
   users,
 }: MailConfigsPanelProps) {
+  const { user } = useAuth();
   const [configs, setConfigs] = useState<MailConfig[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState<MailConfig | null>(null);

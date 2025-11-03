@@ -132,7 +132,7 @@ export function MailConfigModal({
       fetchMitraUsers();
     }
   }, [isOpen]);
-const [searchAssignee, setSearchAssignee] = useState("");
+  const [searchAssignee, setSearchAssignee] = useState("");
 
   const [config, setConfig] = useState<MailConfig>(
     initialConfig || {
@@ -308,16 +308,16 @@ const [searchAssignee, setSearchAssignee] = useState("");
   };
 
   // Helper to get user display name from either old or new structure
- const getUserName = (user?: User): string => {
-  console.log("USERS FUNCTION CALLED with", user);
-  if (!user) return "";
-  if (user?.name) return user.name.trim();
-  if (user.first_name || user.last_name)
-    return `${user.first_name || ""} ${user.last_name || ""}`.trim();
-  if (user.firstname || user.lastname)
-    return `${user.firstname || ""} ${user.lastname || ""}`.trim();
-  return "Unknown";
-};
+  const getUserName = (user?: User): string => {
+    console.log("USERS FUNCTION CALLED with", user);
+    if (!user) return "";
+    if (user?.name) return user.name.trim();
+    if (user.first_name || user.last_name)
+      return `${user.first_name || ""} ${user.last_name || ""}`.trim();
+    if (user.firstname || user.lastname)
+      return `${user.firstname || ""} ${user.lastname || ""}`.trim();
+    return "Unknown";
+  };
 
   const assignedUser = users.find((u) => u.id === config.assigned_to_id);
   const selectedWatchers = users.filter((u) =>
@@ -421,56 +421,65 @@ const [searchAssignee, setSearchAssignee] = useState("");
 
           {/* Assigned To */}
           <div className="space-y-2">
-  <Label>Assigned To *</Label>
+            <Label>Assigned To *</Label>
 
-  <Popover open={openAssignee} onOpenChange={setOpenAssignee}>
-    <PopoverTrigger asChild>
-      <Button
-        variant="outline"
-        role="combobox"
-        aria-expanded={openAssignee}
-        className="w-full justify-between"
-      >
-        {assignedUser ? getUserName(assignedUser) : "Select assignee..."}
-        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-      </Button>
-    </PopoverTrigger>
+            <Popover open={openAssignee} onOpenChange={setOpenAssignee}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openAssignee}
+                  className="w-full justify-between"
+                >
+                  {assignedUser
+                    ? getUserName(assignedUser)
+                    : "Select assignee..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
 
-    <PopoverContent className="w-full p-0">
-      <Command>
-       <CommandInput
-  placeholder="Search users..."
-  value={searchAssignee}
-  onValueChange={setSearchAssignee}
-/>
+              <PopoverContent className="w-full p-0">
+                <Command>
+                  <CommandInput
+                    placeholder="Search users..."
+                    value={searchAssignee}
+                    onValueChange={setSearchAssignee}
+                  />
 
-        <CommandList>
-  <CommandEmpty>No user found.</CommandEmpty>
-  <CommandGroup>
-  {users
-    .filter(user => getUserName(user).toLowerCase().includes(searchAssignee.toLowerCase()))
-    .sort((a, b) => getUserName(a).localeCompare(getUserName(b)))
-    .map(user => (
-      <CommandItem
-        key={user.id}
-        value={getUserName(user).toLowerCase()}
-        onSelect={() => handleAssigneeSelect(user.id)}
-      >
-        <Check
-          className={`mr-2 h-4 w-4 ${
-            config.assigned_to_id === user.id ? "opacity-100" : "opacity-0"
-          }`}
-        />
-        {getUserName(user)}
-      </CommandItem>
-    ))}
-</CommandGroup>
-</CommandList>
-
-      </Command>
-    </PopoverContent>
-  </Popover>
-</div>
+                  <CommandList>
+                    <CommandEmpty>No user found.</CommandEmpty>
+                    <CommandGroup>
+                      {users
+                        .filter((user) =>
+                          getUserName(user)
+                            .toLowerCase()
+                            .includes(searchAssignee.toLowerCase()),
+                        )
+                        .sort((a, b) =>
+                          getUserName(a).localeCompare(getUserName(b)),
+                        )
+                        .map((user) => (
+                          <CommandItem
+                            key={user.id}
+                            value={getUserName(user).toLowerCase()}
+                            onSelect={() => handleAssigneeSelect(user.id)}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${
+                                config.assigned_to_id === user.id
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              }`}
+                            />
+                            {getUserName(user)}
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
           {/* Watchers */}
           <div className="space-y-2">

@@ -2143,6 +2143,31 @@ export class ApiClient {
   }
 }
 
+// Add HTTP helper methods to ApiClient
+ApiClient.prototype.get = function(endpoint: string, options?: RequestInit) {
+  return this.request(endpoint, { ...options, method: "GET" });
+};
+
+ApiClient.prototype.post = function(endpoint: string, body?: any, options?: RequestInit) {
+  return this.request(endpoint, {
+    ...options,
+    method: "POST",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+};
+
+ApiClient.prototype.put = function(endpoint: string, body?: any, options?: RequestInit) {
+  return this.request(endpoint, {
+    ...options,
+    method: "PUT",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+};
+
+ApiClient.prototype.delete = function(endpoint: string, options?: RequestInit) {
+  return this.request(endpoint, { ...options, method: "DELETE" });
+};
+
 export const apiClient = new ApiClient();
 
 // Reset circuit breaker for development/demo mode

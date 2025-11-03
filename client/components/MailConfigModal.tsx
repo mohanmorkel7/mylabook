@@ -507,7 +507,7 @@ export function MailConfigModal({
                     key={user.id}
                     className="bg-primary/10 text-primary px-2 py-1 rounded text-sm flex items-center gap-1"
                   >
-                    {user.first_name} {user.last_name}
+                    {getUserName(user)}
                     <X
                       className="h-3 w-3 cursor-pointer"
                       onClick={() => handleWatcherToggle(user.id)}

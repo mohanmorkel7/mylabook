@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import { MailConfigRepository, CreateMailConfigData, UpdateMailConfigData } from "../models/MailConfig";
+import { MailConfigService } from "../services/mailConfigService";
 
 const router = express.Router();
 

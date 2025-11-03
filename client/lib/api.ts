@@ -679,7 +679,38 @@ export class ApiClient {
   async getClientStats() {
     return this.request("/clients/stats");
   }
+public async get<T>(path: string): Promise<T> {
+    if (this.isOfflineMode) {
+      throw new Error("API client is in offline mode");
+    }
 
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      this.failureCount = 0; // reset on success
+      return data;
+    } catch (err) {
+      this.failureCount++;
+      this.lastFailureTime = Date.now();
+
+      if (this.failureCount >= this.OFFLINE_THRESHOLD) {
+        this.isOfflineMode = true;
+        this.offlineDetectedAt = Date.now();
+      }
+
+      throw err;
+    }
+  }
   // Connections
   async getConnections(filters?: { q?: string; type?: string }) {
     const params = new URLSearchParams();

@@ -84,7 +84,9 @@ export function MailConfigsPanel({
   const fetchConfigs = async () => {
     try {
       setIsLoading(true);
-      const endpoint = user?.id ? `/mail-configs?userId=${user.id}` : "/mail-configs";
+      const endpoint = user?.id
+        ? `/mail-configs?userId=${user.id}`
+        : "/mail-configs";
       const response = await api.get(endpoint);
       setConfigs(response.data);
     } catch (error) {
@@ -151,9 +153,12 @@ export function MailConfigsPanel({
       if (user?.id) {
         payload.userId = parseInt(user.id, 10);
       }
-      const updatedConfig = await api.put(`/mail-configs/${config.id}`, payload);
+      const updatedConfig = await api.put(
+        `/mail-configs/${config.id}`,
+        payload,
+      );
       setConfigs(
-        configs.map((c) => (c.id === config.id ? updatedConfig.data : c))
+        configs.map((c) => (c.id === config.id ? updatedConfig.data : c)),
       );
       toast({
         title: "Success",
@@ -230,15 +235,15 @@ export function MailConfigsPanel({
                   className={`${
                     !config.is_active ? "opacity-60" : ""
                   } border-l-4 ${
-                    config.is_active ? "border-l-green-500" : "border-l-gray-300"
+                    config.is_active
+                      ? "border-l-green-500"
+                      : "border-l-gray-300"
                   }`}
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <CardTitle className="text-lg">
-                          {config.name}
-                        </CardTitle>
+                        <CardTitle className="text-lg">{config.name}</CardTitle>
                         {config.description && (
                           <p className="text-sm text-gray-600 mt-1">
                             {config.description}
@@ -296,7 +301,7 @@ export function MailConfigsPanel({
                             .slice(0, 3)
                             .map((watcherId) => {
                               const watcher = users.find(
-                                (u) => u.id === watcherId
+                                (u) => u.id === watcherId,
                               );
                               return (
                                 <Badge
@@ -311,10 +316,7 @@ export function MailConfigsPanel({
                               );
                             })}
                           {config.watcher_user_ids.length > 3 && (
-                            <Badge
-                              variant="secondary"
-                              className="text-xs"
-                            >
+                            <Badge variant="secondary" className="text-xs">
                               +{config.watcher_user_ids.length - 3}
                             </Badge>
                           )}
@@ -380,10 +382,7 @@ export function MailConfigsPanel({
         users={users}
       />
 
-      <AlertDialog
-        open={deleteConfirmOpen}
-        onOpenChange={setDeleteConfirmOpen}
-      >
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Mail Config</AlertDialogTitle>

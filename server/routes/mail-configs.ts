@@ -1,5 +1,9 @@
 import express, { Request, Response } from "express";
-import { MailConfigRepository, CreateMailConfigData, UpdateMailConfigData } from "../models/MailConfig";
+import {
+  MailConfigRepository,
+  CreateMailConfigData,
+  UpdateMailConfigData,
+} from "../models/MailConfig";
 import { MailConfigService } from "../services/mailConfigService";
 
 const router = express.Router();
@@ -63,11 +67,11 @@ router.get("/:id", async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { id } = req.params;
     const config = await MailConfigRepository.findById(parseInt(id), userId);
-    
+
     if (!config) {
       return res.status(404).json({ error: "Mail config not found" });
     }
-    
+
     res.json(config);
   } catch (error) {
     console.error("Error fetching mail config:", error);
@@ -91,16 +95,25 @@ router.post("/", async (req: Request, res: Response) => {
     } = req.body;
 
     // Validate required fields
-    if (!name || !field_type || !field_value || !project_id || !priority_id || !assigned_to_id) {
+    if (
+      !name ||
+      !field_type ||
+      !field_value ||
+      !project_id ||
+      !priority_id ||
+      !assigned_to_id
+    ) {
       return res.status(400).json({
-        error: "Missing required fields: name, field_type, field_value, project_id, priority_id, assigned_to_id",
+        error:
+          "Missing required fields: name, field_type, field_value, project_id, priority_id, assigned_to_id",
       });
     }
 
     // Validate field_type
-    if (!['subject', 'fromEmail', 'toEmail', 'body'].includes(field_type)) {
+    if (!["subject", "fromEmail", "toEmail", "body"].includes(field_type)) {
       return res.status(400).json({
-        error: "Invalid field_type. Must be one of: subject, fromEmail, toEmail, body",
+        error:
+          "Invalid field_type. Must be one of: subject, fromEmail, toEmail, body",
       });
     }
 
@@ -108,7 +121,7 @@ router.post("/", async (req: Request, res: Response) => {
       user_id: userId,
       name,
       description,
-      field_type: field_type as 'subject' | 'fromEmail' | 'toEmail' | 'body',
+      field_type: field_type as "subject" | "fromEmail" | "toEmail" | "body",
       field_value,
       project_id,
       priority_id,
@@ -134,12 +147,16 @@ router.put("/:id", async (req: Request, res: Response) => {
     // Remove user_id from update data if present
     delete (updateData as any).user_id;
 
-    const config = await MailConfigRepository.update(parseInt(id), userId, updateData);
-    
+    const config = await MailConfigRepository.update(
+      parseInt(id),
+      userId,
+      updateData,
+    );
+
     if (!config) {
       return res.status(404).json({ error: "Mail config not found" });
     }
-    
+
     res.json(config);
   } catch (error) {
     console.error("Error updating mail config:", error);

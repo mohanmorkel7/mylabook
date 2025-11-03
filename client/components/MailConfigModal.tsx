@@ -89,6 +89,33 @@ export function MailConfigModal({
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [users, setUsers] = useState<User[]>(initialUsers);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    // Fetch mitra users list
+    const fetchMitraUsers = async () => {
+      try {
+        const response = await api.get("/users/list/mitra");
+        if (response.data && Array.isArray(response.data)) {
+          const mappedUsers = response.data.map((u: any) => ({
+            id: u.id,
+            first_name: u.name?.split(' ')[0] || u.name || '',
+            last_name: u.name?.split(' ').slice(1).join(' ') || '',
+            email: '',
+          }));
+          setUsers(mappedUsers);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch mitra users list, using provided users:", error);
+        setUsers(initialUsers);
+      }
+    };
+
+    if (isOpen) {
+      fetchMitraUsers();
+    }
+  }, [isOpen]);
+
   const [config, setConfig] = useState<MailConfig>(
     initialConfig || {
       name: "",

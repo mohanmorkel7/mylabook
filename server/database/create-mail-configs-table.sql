@@ -1,0 +1,45 @@
+CREATE TABLE IF NOT EXISTS mail_configs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  
+  -- Email matching criteria
+  field_type VARCHAR(50) NOT NULL CHECK (field_type IN ('subject', 'fromEmail', 'toEmail', 'body')),
+  field_value TEXT NOT NULL,
+  
+  -- Ticket creation details
+  project_id INTEGER NOT NULL,
+  priority_id INTEGER NOT NULL,
+  assigned_to_id INTEGER NOT NULL,
+  watcher_user_ids INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+  
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(user_id, name)
+);
+
+-- Track processed emails to prevent duplicate ticket creation
+CREATE TABLE IF NOT EXISTS mail_processing_log (
+  id SERIAL PRIMARY KEY,
+  mail_config_id INTEGER NOT NULL,
+  email_id VARCHAR(255) NOT NULL,
+  email_subject TEXT,
+  email_from TEXT,
+  ticket_id INTEGER,
+  status VARCHAR(50) NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'failed', 'skipped')),
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  FOREIGN KEY (mail_config_id) REFERENCES mail_configs(id) ON DELETE CASCADE,
+  UNIQUE(mail_config_id, email_id)
+);
+
+-- Create indices for better query performance
+CREATE INDEX IF NOT EXISTS idx_mail_configs_user_id ON mail_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_mail_configs_active ON mail_configs(is_active);
+CREATE INDEX IF NOT EXISTS idx_mail_processing_log_config ON mail_processing_log(mail_config_id);
+CREATE INDEX IF NOT EXISTS idx_mail_processing_log_email ON mail_processing_log(email_id);

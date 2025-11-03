@@ -300,7 +300,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <Tickets />
+              <ManageTickets />
             </DashboardLayout>
           </ProtectedRoute>
         }

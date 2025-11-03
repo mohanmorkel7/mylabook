@@ -1,0 +1,36 @@
+[build]
+  command = "npm run build:client"
+  functions = "netlify/functions"
+  publish = "dist/spa"
+
+[functions]
+  external_node_modules = ["express"]
+  node_bundler = "esbuild"
+  timeout = 30
+
+# Schedule FinOps cron every 5 minutes (UTC); service uses IST internally
+[functions."finops-cron"]
+  schedule = "*/5 * * * *"
+
+# Schedule Pulse sync every 5 minutes (unauthenticated)
+[functions."pulse-sync"]
+  schedule = "*/5 * * * *"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+  
+[[redirects]]
+  force = true
+  from = "/api/*"
+  status = 200
+  to = "/.netlify/functions/api/:splat"
+
+# SPA fallback: serve index.html for all non-function routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

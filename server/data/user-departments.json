@@ -1,0 +1,214 @@
+{
+  "departments": {
+    "hr": {
+      "name": "Human Resources",
+      "permissions": [
+        "users",
+        "reports",
+        "settings"
+      ],
+      "users": []
+    },
+    "finance": {
+      "name": "Finance",
+      "permissions": [
+        "finops",
+        "reports",
+        "billing"
+      ],
+      "users": []
+    }
+    ,
+    "finops": {
+      "name": "Financial Operations",
+      "permissions": [
+        "finops",
+        "reports",
+        "cost_optimization"
+      ],
+      "users": []
+    },
+    "database": {
+      "name": "Database",
+      "permissions": [
+        "admin",
+        "database",
+        "settings"
+      ],
+      "users": []
+    },
+    "frontend": {
+      "name": "Frontend Development",
+      "permissions": [
+        "product",
+        "leads",
+        "vc"
+      ],
+      "users": []
+    },
+    "backend": {
+      "name": "Backend Development",
+      "permissions": [
+        "admin",
+        "product",
+        "database",
+        "leads",
+        "vc"
+      ],
+      "users": []
+    },
+    "business_analyst": {
+      "name": "business_analyst",
+      "permissions": [
+        "finops",
+        "reports",
+        "billing"
+      ],
+      "users": []
+    },
+    "infra": {
+      "name": "Infrastructure",
+      "permissions": [
+        "admin",
+        "settings",
+        "database"
+      ],
+      "users": []
+    },
+    "admin": {
+      "name": "Administration",
+      "permissions": [
+        "admin",
+        "users",
+        "reports",
+        "settings",
+        "database",
+        "finops",
+        "finance",
+        "product",
+        "leads",
+        "vc"
+      ],
+      "users": []
+    },
+    "administration": {
+      "name": "Administration",
+      "permissions": [
+        "admin",
+        "users",
+        "reports",
+        "settings",
+        "database",
+        "finops",
+        "finance",
+        "product",
+        "leads",
+        "vc"
+      ],
+      "users": []
+    }
+  },
+  "users": [
+    {
+      "email": "Abinandan@mylapay.com",
+      "displayName": "Abinandan N",
+      "givenName": "Abinandan",
+      "surname": "Natraj",
+      "jobTitle": "Tech Lead",
+      "department": "backend",
+      "ssoId": "98d7b0c3-241c-4184-951e-77d971a0df61"
+    },
+    {
+      "email": "Abinaya.M@mylapay.com",
+      "displayName": "Abinaya M",
+      "givenName": "Abinaya",
+      "surname": "M",
+      "jobTitle": "Associate Director Technology",
+      "department": "backend",
+      "ssoId": "00403bc6-6a6d-46c3-a203-d12ff8c9d1ac"
+    },
+    {
+      "email": "mohan.m@mylapay.com",
+      "displayName": "Mohan Raj Ravichandran",
+      "givenName": "Mohan Raj",
+      "surname": "Ravichandran",
+      "jobTitle": "Director Technology",
+      "department": "admin",
+      "ssoId": "a416d1c8-bc01-4acd-8cad-3210a78d01a9"
+    },
+    {
+      "businessPhones": [],
+      "displayName": "Yuvaraj P",
+      "givenName": "Yuvaraj",
+      "jobTitle": "Tech Lead",
+      "email": "Yuvaraj.P@mylapay.com",
+      "mobilePhone": null,
+      "officeLocation": null,
+      "preferredLanguage": null,
+      "surname": "P",
+      "userPrincipalName": "Yuvaraj.P@mylapay.com",
+      "ssoId": "fb3829b8-c2aa-4cf4-be2b-e14ef01b45bb"
+    },
+    {
+      "businessPhones": [],
+      "displayName": "Prakash R",
+      "givenName": "Prakash",
+      "jobTitle": "Associate Technology",
+      "email": "Prakash.R@mylapay.com",
+      "mobilePhone": null,
+      "officeLocation": null,
+      "preferredLanguage": "en-US",
+      "surname": "R",
+      "userPrincipalName": "Prakash.R@mylapay.com",
+      "ssoId": "304a7b09-f024-45c4-83f3-ca898a356bef"
+    },
+    {
+      "businessPhones": [],
+      "displayName": "Maanas M",
+      "givenName": "Maanas",
+      "jobTitle": "Senior Assocaite technology",
+      "email": "Maanas.m@mylapay.com",
+      "mobilePhone": null,
+      "officeLocation": null,
+      "preferredLanguage": null,
+      "surname": "M",
+      "userPrincipalName": "Maanas.m@mylapay.com",
+      "ssoId": "a8400ea8-5e8a-41ef-aa9a-5621f3822876"
+    },
+    {
+      "businessPhones": [],
+      "displayName": "Sarumathi M",
+      "givenName": "Sarumathi",
+      "jobTitle": "Associate Vice President",
+      "email": "sarumathi.m@mylapay.com",
+      "mobilePhone": null,
+      "officeLocation": null,
+      "preferredLanguage": "en-US",
+      "surname": "Manickam",
+      "userPrincipalName": "sarumathi.m@mylapay.com",
+      "ssoId": "20f59bbe-f76d-4f05-a94e-99adbc85014d"
+    },
+    {
+      "businessPhones": [],
+      "displayName": "Gopikrishnan Perumal",
+      "givenName": "Gopikrishnan",
+      "jobTitle": "Tech Lead",
+      "email": "Gopikrishnan.P@mylapay.com",
+      "mobilePhone": null,
+      "officeLocation": null,
+      "preferredLanguage": "en-US",
+      "surname": "P",
+      "userPrincipalName": "Gopikrishnan.P@mylapay.com",
+      "ssoId": "2f7cbef8-41af-4b91-ba00-b70e422d93af"
+    },
+    {
+      "email": "lakshaa.rs@mylapay.com",
+      "displayName": "Lakshaa R S",
+      "givenName": "Lakshaa R S",
+      "surname": "R S",
+      "jobTitle": "business_analyst",
+      "department": "admin",
+      "ssoId": "5e9f77d1-ff0c-4b85-889a-09faf9c8fb05"
+    }
+  ]
+}

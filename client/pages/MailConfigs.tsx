@@ -152,9 +152,12 @@ export default function MailConfigs() {
       if (user?.id) {
         payload.userId = parseInt(user.id, 10);
       }
-      const updatedConfig = await api.put(`/mail-configs/${config.id}`, payload);
+      const updatedConfig = await api.put(
+        `/mail-configs/${config.id}`,
+        payload,
+      );
       setConfigs(
-        configs.map((c) => (c.id === config.id ? updatedConfig.data : c))
+        configs.map((c) => (c.id === config.id ? updatedConfig.data : c)),
       );
       toast({
         title: "Success",
@@ -208,7 +211,9 @@ export default function MailConfigs() {
             <div>
               <p className="font-semibold text-blue-900">How it works</p>
               <p className="text-sm text-blue-800 mt-1">
-                Configurations are processed in the background. When matching emails are received, tickets are automatically created in Redmine with the specified details.
+                Configurations are processed in the background. When matching
+                emails are received, tickets are automatically created in
+                Redmine with the specified details.
               </p>
             </div>
           </div>
@@ -223,9 +228,12 @@ export default function MailConfigs() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center py-12">
-              <p className="text-gray-600 text-lg">No mail configs created yet</p>
+              <p className="text-gray-600 text-lg">
+                No mail configs created yet
+              </p>
               <p className="text-gray-500 mt-2">
-                Click "Create Config" to start automating email-to-ticket conversion
+                Click "Create Config" to start automating email-to-ticket
+                conversion
               </p>
             </div>
           </CardContent>
@@ -235,9 +243,7 @@ export default function MailConfigs() {
           {configs.map((config) => (
             <Card
               key={config.id}
-              className={`${
-                !config.is_active ? "opacity-60" : ""
-              } border-l-4 ${
+              className={`${!config.is_active ? "opacity-60" : ""} border-l-4 ${
                 config.is_active ? "border-l-green-500" : "border-l-gray-300"
               }`}
             >
@@ -296,7 +302,9 @@ export default function MailConfigs() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Field Type</p>
-                    <p className="font-medium">{getFieldTypeLabel(config.field_type)}</p>
+                    <p className="font-medium">
+                      {getFieldTypeLabel(config.field_type)}
+                    </p>
                   </div>
 
                   <div>
@@ -368,7 +376,8 @@ export default function MailConfigs() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Mail Config</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this mail config? This action cannot be undone.
+              Are you sure you want to delete this mail config? This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogAction onClick={handleConfirmDelete}>

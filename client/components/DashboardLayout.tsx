@@ -58,7 +58,7 @@ const navigationItems: NavigationItem[] = [
     name: "Overview",
     href: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["admin", "sales", "product", "finops","business_analyst"]
+    roles: ["admin", "sales", "product", "finops", "business_analyst"],
   },
   // b) Templates (was Admin Panel)
   {
@@ -96,8 +96,7 @@ const navigationItems: NavigationItem[] = [
     name: "Clients",
     href: "/clients",
     icon: Building,
-    roles: ["admin", "sales", "product","business_analyst"],
-    
+    roles: ["admin", "sales", "product", "business_analyst"],
   },
   // g) Sales (was Business Offerings)
   {
@@ -141,7 +140,7 @@ const navigationItems: NavigationItem[] = [
     name: "Support Tickets",
     href: "/tickets",
     icon: Ticket,
-    roles: ["admin", "sales", "product","switch_team"],
+    roles: ["admin", "sales", "product", "switch_team"],
   },
   // l) Alerts & notifications
   {
@@ -155,14 +154,14 @@ const navigationItems: NavigationItem[] = [
     name: "Mails",
     href: "/mails",
     icon: Mail,
-    roles: ["admin","finance", "finops"]
+    roles: ["admin", "finance", "finops"],
   },
   // m1) Mail Configs
   {
     name: "Mail Configs",
     href: "/mail-configs",
     icon: Mail,
-    roles: ["admin","finance", "finops"]
+    roles: ["admin", "finance", "finops"],
   },
   // n) Settings
   {

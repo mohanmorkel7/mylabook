@@ -2144,11 +2144,15 @@ export class ApiClient {
 }
 
 // Add HTTP helper methods to ApiClient
-ApiClient.prototype.get = function(endpoint: string, options?: RequestInit) {
+ApiClient.prototype.get = function (endpoint: string, options?: RequestInit) {
   return this.request(endpoint, { ...options, method: "GET" });
 };
 
-ApiClient.prototype.post = function(endpoint: string, body?: any, options?: RequestInit) {
+ApiClient.prototype.post = function (
+  endpoint: string,
+  body?: any,
+  options?: RequestInit,
+) {
   return this.request(endpoint, {
     ...options,
     method: "POST",
@@ -2156,7 +2160,11 @@ ApiClient.prototype.post = function(endpoint: string, body?: any, options?: Requ
   });
 };
 
-ApiClient.prototype.put = function(endpoint: string, body?: any, options?: RequestInit) {
+ApiClient.prototype.put = function (
+  endpoint: string,
+  body?: any,
+  options?: RequestInit,
+) {
   return this.request(endpoint, {
     ...options,
     method: "PUT",
@@ -2164,7 +2172,10 @@ ApiClient.prototype.put = function(endpoint: string, body?: any, options?: Reque
   });
 };
 
-ApiClient.prototype.delete = function(endpoint: string, options?: RequestInit) {
+ApiClient.prototype.delete = function (
+  endpoint: string,
+  options?: RequestInit,
+) {
   return this.request(endpoint, { ...options, method: "DELETE" });
 };
 

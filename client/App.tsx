@@ -452,7 +452,7 @@ function AppRoutes() {
       <Route
         path="/upload-tasks"
         element={
-          <ProtectedRoute allowedRoles={["admin","finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finops"]}>
             <DashboardLayout>
               <TaskExcelUpload></TaskExcelUpload>
             </DashboardLayout>
@@ -661,7 +661,9 @@ function AppRoutes() {
       <Route
         path="/clients"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales", "product","business_analyst"]}>
+          <ProtectedRoute
+            allowedRoles={["admin", "sales", "product", "business_analyst"]}
+          >
             <DashboardLayout>
               <ClientDashboard />
             </DashboardLayout>
@@ -671,7 +673,7 @@ function AppRoutes() {
       <Route
         path="/clients/create"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales","business_analyst"]}>
+          <ProtectedRoute allowedRoles={["admin", "sales", "business_analyst"]}>
             <DashboardLayout>
               <CreateClient />
             </DashboardLayout>
@@ -681,7 +683,9 @@ function AppRoutes() {
       <Route
         path="/clients/:id"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales", "product","business_analyst"]}>
+          <ProtectedRoute
+            allowedRoles={["admin", "sales", "product", "business_analyst"]}
+          >
             <DashboardLayout>
               <ClientDetails />
             </DashboardLayout>
@@ -691,7 +695,7 @@ function AppRoutes() {
       <Route
         path="/clients/:id/edit"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales","business_analyst"]}>
+          <ProtectedRoute allowedRoles={["admin", "sales", "business_analyst"]}>
             <DashboardLayout>
               <ClientEdit />
             </DashboardLayout>

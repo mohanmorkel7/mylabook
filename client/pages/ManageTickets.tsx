@@ -121,14 +121,14 @@ export default function ManageTickets() {
       filtered = filtered.filter(
         (t) =>
           t.subject.toLowerCase().includes(searchLower) ||
-          t.description.toLowerCase().includes(searchLower)
+          t.description.toLowerCase().includes(searchLower),
       );
     }
 
     // Priority filter
     if (filters.priority) {
       filtered = filtered.filter(
-        (t) => t.priority_id === parseInt(filters.priority)
+        (t) => t.priority_id === parseInt(filters.priority),
       );
     }
 
@@ -140,7 +140,7 @@ export default function ManageTickets() {
     // Assigned to filter
     if (filters.assignedTo) {
       filtered = filtered.filter(
-        (t) => t.assigned_to_id === parseInt(filters.assignedTo)
+        (t) => t.assigned_to_id === parseInt(filters.assignedTo),
       );
     }
 
@@ -155,14 +155,14 @@ export default function ManageTickets() {
     if (filters.dateFrom) {
       const dateFrom = new Date(filters.dateFrom).getTime();
       filtered = filtered.filter(
-        (t) => new Date(t.created_at).getTime() >= dateFrom
+        (t) => new Date(t.created_at).getTime() >= dateFrom,
       );
     }
 
     if (filters.dateTo) {
       const dateTo = new Date(filters.dateTo).getTime();
       filtered = filtered.filter(
-        (t) => new Date(t.created_at).getTime() <= dateTo
+        (t) => new Date(t.created_at).getTime() <= dateTo,
       );
     }
 
@@ -248,7 +248,12 @@ export default function ManageTickets() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Priority
               </label>
-              <Select value={filters.priority} onValueChange={(value) => setFilters({ ...filters, priority: value })}>
+              <Select
+                value={filters.priority}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, priority: value })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All Priorities" />
                 </SelectTrigger>
@@ -268,7 +273,12 @@ export default function ManageTickets() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Status
               </label>
-              <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+              <Select
+                value={filters.status}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, status: value })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
@@ -288,7 +298,12 @@ export default function ManageTickets() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Assigned To
               </label>
-              <Select value={filters.assignedTo} onValueChange={(value) => setFilters({ ...filters, assignedTo: value })}>
+              <Select
+                value={filters.assignedTo}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, assignedTo: value })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All Users" />
                 </SelectTrigger>
@@ -308,7 +323,12 @@ export default function ManageTickets() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Source
               </label>
-              <Select value={filters.source} onValueChange={(value) => setFilters({ ...filters, source: value })}>
+              <Select
+                value={filters.source}
+                onValueChange={(value) =>
+                  setFilters({ ...filters, source: value })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All Sources" />
                 </SelectTrigger>
@@ -361,7 +381,9 @@ export default function ManageTickets() {
           <CardContent className="pt-6">
             <div className="text-center py-12">
               <p className="text-gray-600 text-lg">
-                {tickets.length === 0 ? "No tickets yet" : "No tickets match your filters"}
+                {tickets.length === 0
+                  ? "No tickets yet"
+                  : "No tickets match your filters"}
               </p>
             </div>
           </CardContent>
@@ -371,7 +393,10 @@ export default function ManageTickets() {
           {filteredTickets.map((ticket) => {
             const priority = getPriorityBadge(ticket.priority_id);
             return (
-              <Card key={ticket.id} className="hover:shadow-lg transition-shadow">
+              <Card
+                key={ticket.id}
+                className="hover:shadow-lg transition-shadow"
+              >
                 <CardContent className="pt-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">

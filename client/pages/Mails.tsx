@@ -156,6 +156,7 @@ interface User {
 }
 
 export default function Mails() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [emails, setEmails] = useState<GraphEmail[]>([]);

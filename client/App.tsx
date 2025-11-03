@@ -144,6 +144,7 @@ import ProposalList from "@/pages/ProposalList";
 import FollowUpTracker from "@/pages/FollowUpTracker";
 import PipelineSettings from "@/pages/PipelineSettings";
 import Tickets from "@/pages/Tickets";
+import ManageTickets from "@/pages/ManageTickets";
 import Mails from "@/pages/Mails";
 import MailConfigs from "@/pages/MailConfigs";
 import AdminTemplates from "@/pages/AdminTemplates";

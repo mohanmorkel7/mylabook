@@ -147,7 +147,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
 });
 
 // Process emails against configs and create tickets
-router.post("/process/emails", async (req: Request, res: Response) => {
+router.post("/process-emails", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const { emails } = req.body;

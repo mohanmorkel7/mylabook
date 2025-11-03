@@ -203,7 +203,10 @@ export function MailConfigsPanel({
     // Handle new mitra_users structure
     if (watcher.name) {
       const parts = watcher.name.split(" ");
-      return parts.map((p) => p.charAt(0)).join("").substring(0, 2);
+      return parts
+        .map((p) => p.charAt(0))
+        .join("")
+        .substring(0, 2);
     }
     // Handle old structure
     if (watcher.first_name && watcher.last_name) {

@@ -104,8 +104,13 @@ export function MailConfigModal({
           const mappedUsers = response.data.map((u: any) => ({
             id: u.id,
             name: u.name || "",
-            first_name: u.firstname || u.first_name || u.name?.split(" ")[0] || "",
-            last_name: u.lastname || u.last_name || u.name?.split(" ").slice(1).join(" ") || "",
+            first_name:
+              u.firstname || u.first_name || u.name?.split(" ")[0] || "",
+            last_name:
+              u.lastname ||
+              u.last_name ||
+              u.name?.split(" ").slice(1).join(" ") ||
+              "",
             firstname: u.firstname || "",
             lastname: u.lastname || "",
             email: u.email || "",

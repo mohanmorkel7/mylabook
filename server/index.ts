@@ -288,6 +288,13 @@ export function createServer() {
   }
 
   try {
+    app.use("/api/mail-configs", mailConfigsRouter);
+    console.log("Mail configs router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Mail configs router:", error);
+  }
+
+  try {
     app.use("/api/files", filesRouter);
     console.log("Files router loaded successfully");
   } catch (error) {

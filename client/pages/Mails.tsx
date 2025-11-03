@@ -390,12 +390,25 @@ export default function Mails() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Mails Inbox</h1>
-        {/* <p className="text-gray-600 mt-1">
-          Showing latest emails for {decodeURIComponent(targetUser)} containing
-          "Invoice" in the subject.
-        </p> */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Mails Inbox</h1>
+          {/* <p className="text-gray-600 mt-1">
+            Showing latest emails for {decodeURIComponent(targetUser)} containing
+            "Invoice" in the subject.
+          </p> */}
+        </div>
+        {!needsAuth && (
+          <Button
+            onClick={() => setConfigPanelOpen(true)}
+            variant="outline"
+            size="lg"
+            className="flex items-center gap-2"
+          >
+            <Settings className="h-5 w-5" />
+            Config
+          </Button>
+        )}
       </div>
 
       <Card>

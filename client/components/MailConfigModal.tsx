@@ -134,7 +134,7 @@ export function MailConfigModal({
   const [openAssignee, setOpenAssignee] = useState(false);
   const [openWatchers, setOpenWatchers] = useState(false);
   const [searchWatchers, setSearchWatchers] = useState("");
-  const { toast } = useToast();
+  // const { toast } = useToast();
 
   useEffect(() => {
     if (initialConfig) {

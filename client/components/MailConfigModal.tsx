@@ -442,7 +442,7 @@ export function MailConfigModal({
                                 : "opacity-0"
                             }`}
                           />
-                          {user.first_name} {user.last_name}
+                          {getUserName(user)}
                         </CommandItem>
                       ))}
                     </CommandList>
@@ -490,7 +490,7 @@ export function MailConfigModal({
                                 : "opacity-0"
                             }`}
                           />
-                          {user.first_name} {user.last_name}
+                          {getUserName(user)}
                         </CommandItem>
                       ))}
                     </CommandList>

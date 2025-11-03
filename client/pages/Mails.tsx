@@ -175,13 +175,20 @@ export default function Mails() {
   const targetUser = useMemo(() => encodeURIComponent(TARGET_MAIL), []);
 
   useEffect(() => {
-    // Fetch users from database
+    // Fetch mitra users for mail config
     const fetchUsers = async () => {
       try {
-        const response = await api.get("/users");
+        const response = await api.get("/users/list/mitra");
         setUsers(response.data || []);
       } catch (error) {
-        console.warn("Failed to fetch users:", error);
+        console.warn("Failed to fetch mitra users:", error);
+        // Fallback to regular users
+        try {
+          const fallbackResponse = await api.get("/users");
+          setUsers(fallbackResponse.data || []);
+        } catch (fallbackError) {
+          console.warn("Failed to fetch users:", fallbackError);
+        }
       }
     };
 

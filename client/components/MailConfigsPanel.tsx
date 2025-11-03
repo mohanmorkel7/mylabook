@@ -142,9 +142,13 @@ export function MailConfigsPanel({
 
   const handleToggleActive = async (config: MailConfig) => {
     try {
-      const updatedConfig = await api.put(`/mail-configs/${config.id}`, {
+      const payload: any = {
         is_active: !config.is_active,
-      });
+      };
+      if (user?.id) {
+        payload.userId = parseInt(user.id, 10);
+      }
+      const updatedConfig = await api.put(`/mail-configs/${config.id}`, payload);
       setConfigs(
         configs.map((c) => (c.id === config.id ? updatedConfig.data : c))
       );

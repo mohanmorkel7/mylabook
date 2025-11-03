@@ -317,6 +317,17 @@ function AppRoutes() {
       />
 
       <Route
+        path="/mail-configs"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
+            <DashboardLayout>
+              <MailConfigs />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/admin/users"
         element={
           <ProtectedRoute allowedRoles={["admin"]}>

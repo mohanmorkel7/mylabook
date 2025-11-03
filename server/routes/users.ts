@@ -131,7 +131,7 @@ router.post("/", async (req: Request, res: Response) => {
       "infra",
       "switch_team",
       "unknown",
-      "business_analyst"
+      "business_analyst",
     ];
     if (!validRoles.includes(userData.role)) {
       return res.status(400).json({ error: "Invalid role" });
@@ -186,7 +186,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       "infra",
       "switch_team",
       "unknown",
-      "business_analyst"
+      "business_analyst",
     ];
     if (userData.role && !validRoles.includes(userData.role)) {
       return res.status(400).json({ error: "Invalid role" });

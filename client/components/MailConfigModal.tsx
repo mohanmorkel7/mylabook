@@ -99,14 +99,17 @@ export function MailConfigModal({
         if (response.data && Array.isArray(response.data)) {
           const mappedUsers = response.data.map((u: any) => ({
             id: u.id,
-            first_name: u.name?.split(' ')[0] || u.name || '',
-            last_name: u.name?.split(' ').slice(1).join(' ') || '',
-            email: '',
+            first_name: u.name?.split(" ")[0] || u.name || "",
+            last_name: u.name?.split(" ").slice(1).join(" ") || "",
+            email: "",
           }));
           setUsers(mappedUsers);
         }
       } catch (error) {
-        console.warn("Failed to fetch mitra users list, using provided users:", error);
+        console.warn(
+          "Failed to fetch mitra users list, using provided users:",
+          error,
+        );
         setUsers(initialUsers);
       }
     };

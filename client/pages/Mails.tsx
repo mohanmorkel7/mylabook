@@ -413,7 +413,7 @@ export default function Mails() {
         </div>
         {!needsAuth && (
           <Button
-            onClick={() => navigate("/mail-configs")}
+            onClick={() => setConfigPanelOpen(true)}
             variant="outline"
             size="lg"
             className="flex items-center gap-2"

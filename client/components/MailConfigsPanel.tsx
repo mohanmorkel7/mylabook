@@ -195,8 +195,67 @@ export function MailConfigsPanel({
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
-      <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-6">
+      <div className="fixed inset-0 bg-white z-50 overflow-hidden flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-gray-50 border-r border-gray-200 overflow-y-auto">
+          <div className="p-6">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900">Mylapay</h2>
+              <p className="text-xs text-gray-600 mt-1">Mail Configs</p>
+            </div>
+
+            <nav className="space-y-1">
+              <Button
+                onClick={onClose}
+                variant="ghost"
+                className="w-full justify-start text-gray-700 hover:bg-gray-100 mb-4"
+              >
+                ← Back to Mails
+              </Button>
+
+              <a
+                href="/dashboard"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Dashboard
+              </a>
+              <a
+                href="/clients"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Clients
+              </a>
+              <a
+                href="/vc"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                VC
+              </a>
+              <a
+                href="/fundraise"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Fund Raise
+              </a>
+              <a
+                href="/mails"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Mails
+              </a>
+              <a
+                href="/tickets"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Tickets
+              </a>
+            </nav>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-3xl font-bold">Mail Configs</h2>
@@ -368,6 +427,7 @@ export function MailConfigsPanel({
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
 

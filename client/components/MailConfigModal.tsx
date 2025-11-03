@@ -98,7 +98,7 @@ export function MailConfigModal({
       priority_id: 3,
       assigned_to_id: 0,
       watcher_user_ids: [],
-    }
+    },
   );
   const [openAssignee, setOpenAssignee] = useState(false);
   const [openWatchers, setOpenWatchers] = useState(false);
@@ -149,7 +149,7 @@ export function MailConfigModal({
       `${user.first_name} ${user.last_name}`
         .toLowerCase()
         .includes(searchWatchers.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchWatchers.toLowerCase())
+      user.email.toLowerCase().includes(searchWatchers.toLowerCase()),
   );
 
   const getFieldValueLabel = (fieldType: string): string => {
@@ -252,8 +252,7 @@ export function MailConfigModal({
       console.error("Error saving mail config:", error);
       toast({
         title: "Error",
-        description:
-          (error as any)?.message || "Failed to save mail config",
+        description: (error as any)?.message || "Failed to save mail config",
         variant: "destructive",
       });
     } finally {
@@ -263,7 +262,7 @@ export function MailConfigModal({
 
   const assignedUser = users.find((u) => u.id === config.assigned_to_id);
   const selectedWatchers = users.filter((u) =>
-    config.watcher_user_ids.includes(u.id)
+    config.watcher_user_ids.includes(u.id),
   );
 
   return (

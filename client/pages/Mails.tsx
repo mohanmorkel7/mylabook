@@ -225,7 +225,7 @@ export default function Mails() {
 
       if (response.data?.results?.length > 0) {
         const successCount = response.data.results.filter(
-          (r: any) => r.success
+          (r: any) => r.success,
         ).length;
         if (successCount > 0) {
           console.log(`Processed ${successCount} email(s) into tickets`);
@@ -245,7 +245,7 @@ export default function Mails() {
       //   `https://graph.microsoft.com/v1.0/users/${targetUser}/messages` +
       //   `?$top=25&$orderby=receivedDateTime%20desc&$select=subject,from,body,receivedDateTime`;
 
-      const url=`https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/mailFolders/inbox/messages`;
+      const url = `https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/mailFolders/inbox/messages`;
 
       // const url=`https://graph.microsoft.com/v1.0/users/support.wavegate@payswiff.com/messages`;
 
@@ -254,8 +254,6 @@ export default function Mails() {
       //dcfb7108-ce83-442b-ba56-0e56a1c1583c
 
       // const url=`https://graph.microsoft.com/v1.0//users/reconops@mylapay.com/mailFolders`
-
-      
 
       const res = await fetch(url, {
         headers: {
@@ -543,7 +541,10 @@ export default function Mails() {
                               <div className="flex items-start justify-between w-full">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-start gap-3">
-                                    <div className="flex-1" style={{textAlign:"left"}}>
+                                    <div
+                                      className="flex-1"
+                                      style={{ textAlign: "left" }}
+                                    >
                                       <div className="text-sm font-medium text-gray-900 truncate">
                                         {m.subject || "(No subject)"}
                                       </div>

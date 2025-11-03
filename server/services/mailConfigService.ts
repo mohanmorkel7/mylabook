@@ -22,7 +22,8 @@ interface TicketPayload {
 }
 
 // Redmine API configuration
-const REDMINE_API_URL = process.env.REDMINE_API_URL || "https://redmine.example.com/api";
+const REDMINE_API_URL =
+  process.env.REDMINE_API_URL || "https://redmine.example.com/api";
 const REDMINE_API_KEY = process.env.REDMINE_API_KEY || "";
 
 export class MailConfigService {
@@ -138,7 +139,7 @@ ${bodyText}`;
         };
       }
 
-      const responseData = await response.json() as any;
+      const responseData = (await response.json()) as any;
       const ticketId = responseData.issue?.id;
 
       return {

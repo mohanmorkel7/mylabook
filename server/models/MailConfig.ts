@@ -5,7 +5,7 @@ export interface MailConfig {
   user_id: number;
   name: string;
   description?: string;
-  field_type: 'subject' | 'fromEmail' | 'toEmail' | 'body';
+  field_type: "subject" | "fromEmail" | "toEmail" | "body";
   field_value: string;
   project_id: number;
   priority_id: number;
@@ -20,7 +20,7 @@ export interface CreateMailConfigData {
   user_id: number;
   name: string;
   description?: string;
-  field_type: 'subject' | 'fromEmail' | 'toEmail' | 'body';
+  field_type: "subject" | "fromEmail" | "toEmail" | "body";
   field_value: string;
   project_id: number;
   priority_id: number;
@@ -31,7 +31,7 @@ export interface CreateMailConfigData {
 export interface UpdateMailConfigData {
   name?: string;
   description?: string;
-  field_type?: 'subject' | 'fromEmail' | 'toEmail' | 'body';
+  field_type?: "subject" | "fromEmail" | "toEmail" | "body";
   field_value?: string;
   project_id?: number;
   priority_id?: number;
@@ -54,7 +54,10 @@ export class MailConfigRepository {
     return result.rows;
   }
 
-  static async findById(id: number, userId: number): Promise<MailConfig | null> {
+  static async findById(
+    id: number,
+    userId: number,
+  ): Promise<MailConfig | null> {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
              project_id, priority_id, assigned_to_id, watcher_user_ids,
@@ -89,7 +92,7 @@ export class MailConfigRepository {
                 project_id, priority_id, assigned_to_id, watcher_user_ids,
                 is_active, created_at, updated_at
     `;
-    
+
     const values = [
       data.user_id,
       data.name,
@@ -156,7 +159,7 @@ export class MailConfigRepository {
     emailSubject: string,
     emailFrom: string,
     ticketId?: number,
-    status: string = 'success',
+    status: string = "success",
     errorMessage?: string,
   ): Promise<void> {
     const query = `
@@ -168,7 +171,7 @@ export class MailConfigRepository {
           error_message = EXCLUDED.error_message,
           ticket_id = EXCLUDED.ticket_id
     `;
-    
+
     await pool.query(query, [
       mailConfigId,
       emailId,

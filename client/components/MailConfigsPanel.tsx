@@ -187,7 +187,7 @@ export function MailConfigsPanel({
 
   const getAssignedUserName = (userId: number): string => {
     const user = users.find((u) => u.id === userId);
-    console.log("USERS",user.name)
+    console.log("USERS", user.name);
     if (!user) return "Unknown";
     // Handle new mitra_users structure
     if (user.name) return user.name;

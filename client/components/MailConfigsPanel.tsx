@@ -195,16 +195,31 @@ export function MailConfigsPanel({
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
-      <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-white shadow-lg z-50 overflow-y-auto">
-        <div className="p-6">
+      <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+        <div className="max-w-4xl mx-auto p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">Mail Configs</h2>
+            <div>
+              <h2 className="text-3xl font-bold">Mail Configs</h2>
+              <p className="text-gray-600 mt-1">
+                Manage email-to-ticket automation configurations
+              </p>
+            </div>
             <button
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 text-2xl"
+              className="text-gray-500 hover:text-gray-700 text-3xl font-light"
             >
-              ×
+              ←
             </button>
+          </div>
+
+          <div className="mb-4">
+            <Button
+              onClick={onClose}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              ← Back to Mail
+            </Button>
           </div>
 
           <Button

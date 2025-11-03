@@ -132,21 +132,21 @@ function validateContacts(contacts: Contact[]): ContactError[] {
   const errors: ContactError[] = [];
 
   contacts.forEach((contact, idx) => {
-    if (!contact.contact_name.trim()) {
-      errors.push({
-        index: idx,
-        field: "Contact Name",
-        message: "Contact name is required",
-      });
-    }
+    // if (!contact.contact_name.trim()) {
+    //   errors.push({
+    //     index: idx,
+    //     field: "Contact Name",
+    //     message: "Contact name is required",
+    //   });
+    // }
 
-    if (!contact.designation.trim()) {
-      errors.push({
-        index: idx,
-        field: "Designation",
-        message: "Designation is required",
-      });
-    }
+    // if (!contact.designation.trim()) {
+    //   errors.push({
+    //     index: idx,
+    //     field: "Designation",
+    //     message: "Designation is required",
+    //   });
+    // }
 
     if (contact.email && contact.email.trim() !== "" && !isValidEmail(contact.email)) {
   errors.push({
@@ -379,7 +379,7 @@ export function ClientContactInformationSection({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Contact Name *</Label>
+                <Label>Contact Name</Label>
                 <Input
                   value={c.contact_name}
                   onChange={(e) =>
@@ -396,7 +396,7 @@ export function ClientContactInformationSection({
                 />
               </div>
               <div>
-                <Label>Designation *</Label>
+                <Label>Designation</Label>
                 <Input
                   value={c.designation}
                   onChange={(e) =>
@@ -410,37 +410,6 @@ export function ClientContactInformationSection({
                       ? "border-red-500"
                       : ""
                   }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Department</Label>
-                <Select
-                  value={c.department || ""}
-                  onValueChange={(v) => updateContact(idx, "department", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COMMON_DEPARTMENTS.map((dept) => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Reporting To</Label>
-                <Input
-                  value={c.reportingTo || ""}
-                  onChange={(e) =>
-                    updateContact(idx, "reportingTo", e.target.value)
-                  }
-                  placeholder="Manager/Superior name"
                 />
               </div>
             </div>

@@ -19,8 +19,9 @@ import api from "@/lib/api";
 
 interface User {
   id: number;
-  first_name: string;
-  last_name: string;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
   email: string;
 }
 
@@ -190,10 +191,25 @@ export function MailConfigsPanel({
     // Handle new mitra_users structure
     if (user.name) return user.name;
     // Handle old structure
-    if ((user as any).first_name && (user as any).last_name) {
-      return `${(user as any).first_name} ${(user as any).last_name}`;
+    if (user.first_name && user.last_name) {
+      return `${user.first_name} ${user.last_name}`;
     }
     return "Unknown";
+  };
+
+  const getWatcherInitials = (watcherId: number): string => {
+    const watcher = users.find((u) => u.id === watcherId);
+    if (!watcher) return "?";
+    // Handle new mitra_users structure
+    if (watcher.name) {
+      const parts = watcher.name.split(" ");
+      return parts.map((p) => p.charAt(0)).join("").substring(0, 2);
+    }
+    // Handle old structure
+    if (watcher.first_name && watcher.last_name) {
+      return `${watcher.first_name.charAt(0)}${watcher.last_name.charAt(0)}`;
+    }
+    return "?";
   };
 
   if (!isOpen) return null;
@@ -366,22 +382,15 @@ export function MailConfigsPanel({
                           <div className="flex flex-wrap gap-1 mt-1">
                             {config.watcher_user_ids
                               .slice(0, 3)
-                              .map((watcherId) => {
-                                const watcher = users.find(
-                                  (u) => u.id === watcherId,
-                                );
-                                return (
-                                  <Badge
-                                    key={watcherId}
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    {watcher
-                                      ? `${watcher.first_name.charAt(0)}${watcher.last_name.charAt(0)}`
-                                      : "?"}
-                                  </Badge>
-                                );
-                              })}
+                              .map((watcherId) => (
+                                <Badge
+                                  key={watcherId}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {getWatcherInitials(watcherId)}
+                                </Badge>
+                              ))}
                             {config.watcher_user_ids.length > 3 && (
                               <Badge variant="secondary" className="text-xs">
                                 +{config.watcher_user_ids.length - 3}

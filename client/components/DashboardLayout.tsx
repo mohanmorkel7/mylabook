@@ -157,6 +157,13 @@ const navigationItems: NavigationItem[] = [
     icon: Mail,
     roles: ["admin","finance", "finops"]
   },
+  // m1) Mail Configs
+  {
+    name: "Mail Configs",
+    href: "/mail-configs",
+    icon: Mail,
+    roles: ["admin","finance", "finops"]
+  },
   // n) Settings
   {
     name: "Settings",

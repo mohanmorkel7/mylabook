@@ -122,7 +122,10 @@ export function MailConfigsPanel({
     if (!configToDelete) return;
 
     try {
-      await api.delete(`/mail-configs/${configToDelete}`);
+      const url = user?.id
+        ? `/mail-configs/${configToDelete}?userId=${user.id}`
+        : `/mail-configs/${configToDelete}`;
+      await api.delete(url);
       toast({
         title: "Success",
         description: "Mail config deleted successfully",

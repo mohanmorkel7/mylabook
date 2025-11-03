@@ -157,13 +157,12 @@ interface User {
 
 export default function Mails() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [emails, setEmails] = useState<GraphEmail[]>([]);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
-  const [configPanelOpen, setConfigPanelOpen] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
 
   const targetUser = useMemo(() => encodeURIComponent(TARGET_MAIL), []);
 

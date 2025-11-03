@@ -623,4 +623,42 @@ router.post("/bulk-status-update", async (req: Request, res: Response) => {
   }
 });
 
+// Get mitra users list (for mail config dropdowns)
+router.get("/list/mitra", async (req: Request, res: Response) => {
+  try {
+    if (await isDatabaseAvailable()) {
+      const query = `
+        SELECT user_id as id, name
+        FROM mitra_users_list
+        WHERE user_id IS NOT NULL
+        ORDER BY name ASC
+      `;
+      const { pool } = await import("../database/connection");
+      const result = await pool.query(query);
+      res.json(result.rows || []);
+    } else {
+      // Fallback to regular users table
+      const users = await UserRepository.findAll();
+      const mitraUsers = users.map((u) => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+      }));
+      res.json(mitraUsers);
+    }
+  } catch (error) {
+    console.error("Error fetching mitra users list:", error);
+    // Fallback to regular users
+    try {
+      const users = await UserRepository.findAll();
+      const mitraUsers = users.map((u) => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+      }));
+      res.json(mitraUsers);
+    } catch (fallbackError) {
+      res.status(500).json({ error: "Failed to fetch users list" });
+    }
+  }
+});
+
 export default router;

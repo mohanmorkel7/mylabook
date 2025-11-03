@@ -132,16 +132,36 @@ router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const { id } = req.params;
-    
+
     const deleted = await MailConfigRepository.delete(parseInt(id), userId);
-    
+
     if (!deleted) {
       return res.status(404).json({ error: "Mail config not found" });
     }
-    
+
     res.json({ message: "Mail config deleted successfully" });
   } catch (error) {
     console.error("Error deleting mail config:", error);
+    res.status(500).json({ error: (error as any).message });
+  }
+});
+
+// Process emails against configs and create tickets
+router.post("/process/emails", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { emails } = req.body;
+
+    if (!Array.isArray(emails)) {
+      return res.status(400).json({
+        error: "emails must be an array",
+      });
+    }
+
+    const results = await MailConfigService.processEmails(emails, userId);
+    res.json({ results });
+  } catch (error) {
+    console.error("Error processing emails:", error);
     res.status(500).json({ error: (error as any).message });
   }
 });

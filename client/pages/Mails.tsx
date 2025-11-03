@@ -175,6 +175,20 @@ export default function Mails() {
   const targetUser = useMemo(() => encodeURIComponent(TARGET_MAIL), []);
 
   useEffect(() => {
+    // Fetch users from database
+    const fetchUsers = async () => {
+      try {
+        const response = await api.get("/users");
+        setUsers(response.data || []);
+      } catch (error) {
+        console.warn("Failed to fetch users:", error);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
 
     async function init() {

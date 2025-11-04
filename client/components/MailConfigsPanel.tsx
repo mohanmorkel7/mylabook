@@ -255,7 +255,7 @@ export function MailConfigsPanel({
                 "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 location.pathname.includes("/mail-configs")
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100",
               )}
             >
               <span>Mail Configs</span>
@@ -267,7 +267,7 @@ export function MailConfigsPanel({
                 "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 location.pathname === "/dashboard"
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100",
               )}
             >
               <span>Dashboard</span>
@@ -278,7 +278,7 @@ export function MailConfigsPanel({
                 "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 location.pathname.includes("/clients")
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100",
               )}
             >
               <span>Clients</span>
@@ -289,7 +289,7 @@ export function MailConfigsPanel({
                 "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 location.pathname.includes("/vc")
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100",
               )}
             >
               <span>VC</span>
@@ -300,7 +300,7 @@ export function MailConfigsPanel({
                 "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 location.pathname.includes("/fundraise")
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100",
               )}
             >
               <span>Fund Raise</span>
@@ -311,7 +311,7 @@ export function MailConfigsPanel({
                 "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 location.pathname.includes("/mails")
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100",
               )}
             >
               <span>Mails</span>
@@ -322,7 +322,7 @@ export function MailConfigsPanel({
                 "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 location.pathname.includes("/tickets")
                   ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-gray-700 hover:bg-gray-100",
               )}
             >
               <span>Tickets</span>

@@ -98,14 +98,25 @@ export default function MailConfigs() {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const response = await api.get("/users/list/mitra");
-      setUsers(response.data || []);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
+  interface User {
+  id: number;
+  name: string;
+  firstname: string;
+  lastname: string;
+  type: string;
+}
+
+const fetchUsers = async () => {
+  try {
+    const users = await api.get<User[]>("/users/list/mitra");
+setUsers(users || []);
+console.log("Users fetched:", users);
+
+  } catch (error) {
+    console.error("Error fetching users:", error);
+  }
+};
+
 
   const handleCreateNew = () => {
     setSelectedConfig(null);
@@ -188,16 +199,17 @@ export default function MailConfigs() {
   };
 
   const getAssignedUserName = (userId: number): string => {
-    const user = users.find((u) => u.id === userId);
-    if (!user) return "Unknown";
-    // Handle new mitra_users structure
-    if (user.name) return user.name;
-    // Handle old structure
-    if (user.first_name && user.last_name) {
-      return `${user.first_name} ${user.last_name}`;
-    }
-    return "Unknown";
-  };
+    console.log("Assigned userId:", userId);
+console.log("All user IDs:", users.map(u => u.id));
+  const user = users.find((u) => Number(u.id) === Number(userId));
+  if (!user) return "Unknown";
+  if (user.name?.trim()) return user.name.trim();
+  if (user.firstname && user.lastname) {
+    return `${user.firstname} ${user.lastname}`;
+  }
+  return "Unknown";
+};
+
 
   return (
     <div className="p-6">

@@ -305,10 +305,9 @@ export default function Mails() {
           )
         : items;
 
-      const top10 = filtered.slice(0, 10);
-      if (mounted) {
-        setEmails(top10);
-      }
+
+       const top10 = filtered.slice(0, 10);
+      if (mounted) setEmails(top10);
     } catch (e: any) {
       setError(e?.message || "Failed to load emails");
     } finally {

@@ -88,6 +88,18 @@ class FinOpsAlertService {
     }
   }
 
+  private async getPulseAlertsEnabled(): Promise<boolean> {
+    try {
+      const res = await pool.query(
+        `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+      );
+      return res.rows[0]?.pulse_alerts_enabled ?? true;
+    } catch (error) {
+      console.warn("Failed to check pulse alerts setting:", error);
+      return true; // Default to enabled if check fails
+    }
+  }
+
   private async getUserIdsFromNames(names: string[]): Promise<string[]> {
     if (!names.length) return [];
     const normalized = names

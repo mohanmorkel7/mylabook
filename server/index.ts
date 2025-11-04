@@ -66,6 +66,15 @@ export function createServer() {
     );
   }
 
+  // Start Email Processing Job (background cron)
+  try {
+    setTimeout(() => {
+      initializeEmailProcessingJob();
+    }, 700);
+  } catch (e) {
+    console.error("Failed to initialize Email Processing Job:", (e as any)?.message);
+  }
+
   // Middleware
   app.use(cors());
 

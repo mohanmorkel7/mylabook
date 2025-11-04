@@ -24,7 +24,10 @@ interface User {
   first_name?: string;
   last_name?: string;
   name?: string;
-  email: string;
+  firstname?: string;
+  lastname?: string;
+  email?: string;
+  type?: string;
 }
 
 interface MailConfig {

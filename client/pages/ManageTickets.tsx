@@ -240,9 +240,20 @@ export default function ManageTickets() {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-4xl font-bold text-gray-900">Manage Tickets</h1>
-        <p className="text-gray-600 mt-2">
-          {filteredTickets.length} of {tickets.length} tickets
-        </p>
+        <div className="flex gap-4 mt-4">
+          <Button
+            variant={activeTab === "all" ? "default" : "outline"}
+            onClick={() => setActiveTab("all")}
+          >
+            All Tickets ({tickets.length})
+          </Button>
+          <Button
+            variant={activeTab === "created" ? "default" : "outline"}
+            onClick={() => setActiveTab("created")}
+          >
+            Created from Email ({createdTickets.length})
+          </Button>
+        </div>
       </div>
 
       {/* Filters Card */}

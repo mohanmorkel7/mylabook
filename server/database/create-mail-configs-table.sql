@@ -3,21 +3,28 @@ CREATE TABLE IF NOT EXISTS mail_configs (
   user_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
-  
-  -- Email matching criteria
+
+  -- Legacy email matching criteria
   field_type VARCHAR(50) NOT NULL CHECK (field_type IN ('subject', 'fromEmail', 'toEmail', 'body')),
   field_value TEXT NOT NULL,
-  
+
+  -- New email matching criteria
+  from_email VARCHAR(255),
+  to_email VARCHAR(255),
+  subject_pattern TEXT,
+  body_content TEXT,
+  body_match_type VARCHAR(50) DEFAULT 'word' CHECK (body_match_type IN ('word', 'full')),
+
   -- Ticket creation details
   project_id INTEGER NOT NULL,
   priority_id INTEGER NOT NULL,
   assigned_to_id INTEGER NOT NULL,
   watcher_user_ids INTEGER[] DEFAULT ARRAY[]::INTEGER[],
-  
+
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
-  
+
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE(user_id, name)
 );

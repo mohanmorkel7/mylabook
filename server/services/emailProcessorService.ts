@@ -1,5 +1,9 @@
 import { pool } from "@/server/database/connection";
-import { matchEmailAgainstConfig, Email, MailConfig } from "./emailMatchingService";
+import {
+  matchEmailAgainstConfig,
+  Email,
+  MailConfig,
+} from "./emailMatchingService";
 import {
   createTicketInMitra,
   validateConfigForMitra,

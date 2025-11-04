@@ -128,9 +128,12 @@ export default function ManageTickets() {
       if (filters.dateFrom) params.append("date_from", filters.dateFrom);
       if (filters.dateTo) params.append("date_to", filters.dateTo);
       if (filters.priority) params.append("priority_id", filters.priority);
-      if (filters.assignedTo) params.append("assigned_user_id", filters.assignedTo);
+      if (filters.assignedTo)
+        params.append("assigned_user_id", filters.assignedTo);
 
-      const response = await api.get(`/email-processing/created-tickets?${params}`);
+      const response = await api.get(
+        `/email-processing/created-tickets?${params}`,
+      );
       setCreatedTickets(response.data?.tickets || []);
     } catch (error) {
       console.error("Error fetching created tickets:", error);
@@ -447,63 +450,65 @@ export default function ManageTickets() {
           ) : (
             <div className="space-y-4">
               {filteredTickets.map((ticket) => {
-            const priority = getPriorityBadge(ticket.priority_id);
-            return (
-              <Card
-                key={ticket.id}
-                className="hover:shadow-lg transition-shadow"
-              >
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          #{ticket.id}: {ticket.subject}
-                        </h3>
-                        {ticket.created_from_mail_config && (
-                          <Badge className="bg-green-100 text-green-800">
-                            From Mail Config
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {ticket.description}
-                      </p>
+                const priority = getPriorityBadge(ticket.priority_id);
+                return (
+                  <Card
+                    key={ticket.id}
+                    className="hover:shadow-lg transition-shadow"
+                  >
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              #{ticket.id}: {ticket.subject}
+                            </h3>
+                            {ticket.created_from_mail_config && (
+                              <Badge className="bg-green-100 text-green-800">
+                                From Mail Config
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                            {ticket.description}
+                          </p>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <p className="text-gray-600">Status</p>
-                          <Badge variant="outline" className="mt-1">
-                            {ticket.status}
-                          </Badge>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Priority</p>
-                          {priority && (
-                            <Badge className={`mt-1 ${priority.color}`}>
-                              {priority.name}
-                            </Badge>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Assigned To</p>
-                          <p className="font-medium mt-1">
-                            {getAssignedUserName(ticket.assigned_to_id)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Created</p>
-                          <p className="font-medium mt-1">
-                            {new Date(ticket.created_at).toLocaleDateString()}
-                          </p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div>
+                              <p className="text-gray-600">Status</p>
+                              <Badge variant="outline" className="mt-1">
+                                {ticket.status}
+                              </Badge>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Priority</p>
+                              {priority && (
+                                <Badge className={`mt-1 ${priority.color}`}>
+                                  {priority.name}
+                                </Badge>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Assigned To</p>
+                              <p className="font-medium mt-1">
+                                {getAssignedUserName(ticket.assigned_to_id)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Created</p>
+                              <p className="font-medium mt-1">
+                                {new Date(
+                                  ticket.created_at,
+                                ).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              );
-            })}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </>
@@ -517,14 +522,19 @@ export default function ManageTickets() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center py-12">
-                  <p className="text-gray-600 text-lg">No tickets created from email automation yet</p>
+                  <p className="text-gray-600 text-lg">
+                    No tickets created from email automation yet
+                  </p>
                 </div>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
               {createdTickets.map((ticket) => (
-                <Card key={ticket.id} className="hover:shadow-lg transition-shadow">
+                <Card
+                  key={ticket.id}
+                  className="hover:shadow-lg transition-shadow"
+                >
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -542,19 +552,25 @@ export default function ManageTickets() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                           <div>
                             <p className="text-gray-600">Assigned To</p>
-                            <p className="font-medium mt-1">{ticket.assigned_to?.name || "Unassigned"}</p>
+                            <p className="font-medium mt-1">
+                              {ticket.assigned_to?.name || "Unassigned"}
+                            </p>
                           </div>
                           <div>
                             <p className="text-gray-600">Priority</p>
                             {getPriorityBadge(ticket.priority_id) && (
-                              <Badge className={`mt-1 ${getPriorityBadge(ticket.priority_id)?.color}`}>
+                              <Badge
+                                className={`mt-1 ${getPriorityBadge(ticket.priority_id)?.color}`}
+                              >
                                 {getPriorityBadge(ticket.priority_id)?.name}
                               </Badge>
                             )}
                           </div>
                           <div>
                             <p className="text-gray-600">Mitra Ticket ID</p>
-                            <p className="font-medium mt-1">#{ticket.mitra_ticket_id}</p>
+                            <p className="font-medium mt-1">
+                              #{ticket.mitra_ticket_id}
+                            </p>
                           </div>
                           <div>
                             <p className="text-gray-600">Created</p>

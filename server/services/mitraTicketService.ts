@@ -1,6 +1,7 @@
 import axios, { AxiosError } from "axios";
 
-const MITRA_BASE_URL = process.env.MITRA_BASE_URL || "https://mitra.mylapay-dev.com";
+const MITRA_BASE_URL =
+  process.env.MITRA_BASE_URL || "https://mitra.mylapay-dev.com";
 const MITRA_API_KEY = process.env.MITRA_API_KEY || "";
 
 export interface MitraTicketPayload {

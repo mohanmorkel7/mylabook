@@ -238,8 +238,15 @@ export default function Mails() {
       // Trigger immediately once, then every 30 seconds
       const trigger = async () => {
         try {
-          console.log("Triggering periodic email processing with", emails.length, "emails");
-          const resp = await api.post("/mail-configs/process-emails", { emails, userId: user?.id ? parseInt(user.id, 10) : undefined });
+          console.log(
+            "Triggering periodic email processing with",
+            emails.length,
+            "emails",
+          );
+          const resp = await api.post("/mail-configs/process-emails", {
+            emails,
+            userId: user?.id ? parseInt(user.id, 10) : undefined,
+          });
           console.log("Periodic processing response:", resp);
         } catch (err) {
           console.error("Periodic processing error:", err);

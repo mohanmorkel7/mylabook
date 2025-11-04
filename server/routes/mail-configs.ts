@@ -197,20 +197,27 @@ router.delete("/:id", async (req: Request, res: Response) => {
 router.post("/process-emails", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
-    const { emails } = req.body;
+    const { matches, emails } = req.body;
 
-    if (!Array.isArray(emails)) {
+    let results;
+
+    if (Array.isArray(matches)) {
+      results = await MailConfigService.processMatchedEmails(matches, userId);
+    } else if (Array.isArray(emails)) {
+      // Legacy support for old frontend code
+      results = await MailConfigService.processEmails(emails, userId);
+    } else {
       return res.status(400).json({
-        error: "emails must be an array",
+        error: "Request must include either 'matches' or 'emails' array",
       });
     }
 
-    const results = await MailConfigService.processEmails(emails, userId);
     res.json({ results });
   } catch (error) {
     console.error("Error processing emails:", error);
     res.status(500).json({ error: (error as any).message });
   }
 });
+
 
 export default router;

@@ -1,5 +1,3 @@
-import axios, { AxiosError } from "axios";
-
 const MITRA_BASE_URL =
   process.env.MITRA_BASE_URL || "https://mitra.mylapay-dev.com";
 const MITRA_API_KEY = process.env.MITRA_API_KEY || "";
@@ -64,47 +62,43 @@ export async function createTicketInMitra(
       },
     };
 
-    const response = await axios.post<MitraTicketResponse>(
-      `${MITRA_BASE_URL}/issues.json`,
-      payload,
-      {
-        headers: {
-          "X-Redmine-API-Key": MITRA_API_KEY,
-          "Content-Type": "application/json",
-        },
-        timeout: 30000,
+    const response = await fetch(`${MITRA_BASE_URL}/issues.json`, {
+      method: "POST",
+      headers: {
+        "X-Redmine-API-Key": MITRA_API_KEY,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify(payload),
+    });
 
-    if (response.data?.issue?.id) {
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `HTTP ${response.status}: ${response.statusText} - ${errorText}`,
+      );
+    }
+
+    const data: MitraTicketResponse = await response.json();
+
+    if (data?.issue?.id) {
       return {
         success: true,
-        ticketId: response.data.issue.id,
-        response: response.data,
+        ticketId: data.issue.id,
+        response: data,
       };
     }
 
     return {
       success: false,
       error: "No ticket ID returned from Mitra",
-      response: response.data,
+      response: data,
     };
-  } catch (error) {
-    const axiosError = error as AxiosError;
-    const errorMessage =
-      axiosError.response?.data instanceof Object
-        ? JSON.stringify(axiosError.response.data)
-        : axiosError.message;
-
-    console.error("Error creating ticket in Mitra:", {
-      status: axiosError.response?.status,
-      data: axiosError.response?.data,
-      message: axiosError.message,
-    });
+  } catch (error: any) {
+    console.error("Error creating ticket in Mitra:", error);
 
     return {
       success: false,
-      error: `Failed to create ticket in Mitra: ${errorMessage}`,
+      error: `Failed to create ticket in Mitra: ${error.message || error}`,
     };
   }
 }
@@ -146,14 +140,18 @@ export async function getAvailableProjects(): Promise<any[]> {
       return [];
     }
 
-    const response = await axios.get(`${MITRA_BASE_URL}/projects.json`, {
+    const response = await fetch(`${MITRA_BASE_URL}/projects.json`, {
       headers: {
         "X-Redmine-API-Key": MITRA_API_KEY,
       },
-      timeout: 10000,
     });
 
-    return response.data?.projects || [];
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data?.projects || [];
   } catch (error) {
     console.error("Error fetching projects from Mitra:", error);
     return [];

@@ -89,6 +89,13 @@ export default function ManageTickets() {
     if (activeTab === "created") {
       fetchCreatedTickets();
     }
+
+    // Listen for created tickets updates from other parts of the app (e.g., Mails)
+    const handler = () => {
+      if (activeTab === "created") fetchCreatedTickets();
+    };
+    window.addEventListener("createdTicketsUpdated", handler);
+    return () => window.removeEventListener("createdTicketsUpdated", handler);
   }, [activeTab]);
 
   useEffect(() => {

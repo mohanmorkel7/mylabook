@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
@@ -16,6 +17,7 @@ import { Edit2, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MailConfigModal } from "./MailConfigModal";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface User {
   id: number;

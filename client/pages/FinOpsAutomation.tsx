@@ -78,6 +78,32 @@ export default function FinOpsAutomation() {
   // Add this line to define selectedTask
   const [selectedTask, setSelectedTask] = useState<AutomationTask | null>(null);
 
+  // Pulse alerts toggle (admin only)
+  const isAdmin = user?.role === "admin";
+
+  const { data: pulseAlertsEnabled = true } = useQuery({
+    queryKey: ["finops-pulse-alerts"],
+    queryFn: async () => {
+      const response = await apiClient.get("/finops/settings/pulse-alerts");
+      return response.enabled ?? true;
+    },
+    enabled: isAdmin,
+    staleTime: Infinity,
+  });
+
+  const updatePulseAlerts = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      return await apiClient.put("/finops/settings/pulse-alerts", { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["finops-pulse-alerts"] });
+    },
+  });
+
+  const handlePulseAlertsToggle = (enabled: boolean) => {
+    updatePulseAlerts.mutate(enabled);
+  };
+
   // Fetch workflow projects for FinOps
   const {
     data: finopsProjects = [],

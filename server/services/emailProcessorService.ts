@@ -1,4 +1,4 @@
-import { pool } from "@/server/database/connection";
+import { pool } from "../database/connection";
 import {
   matchEmailAgainstConfig,
   Email,

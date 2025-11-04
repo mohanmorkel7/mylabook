@@ -59,6 +59,7 @@ export class MailConfigRepository {
   static async findAll(userId: number): Promise<MailConfig[]> {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
+             from_email, to_email, subject_pattern, body_content, body_match_type,
              project_id, priority_id, assigned_to_id, watcher_user_ids,
              is_active, created_at, updated_at
       FROM mail_configs
@@ -75,6 +76,7 @@ export class MailConfigRepository {
   ): Promise<MailConfig | null> {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
+             from_email, to_email, subject_pattern, body_content, body_match_type,
              project_id, priority_id, assigned_to_id, watcher_user_ids,
              is_active, created_at, updated_at
       FROM mail_configs
@@ -87,6 +89,7 @@ export class MailConfigRepository {
   static async getActiveConfigs(userId: number): Promise<MailConfig[]> {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
+             from_email, to_email, subject_pattern, body_content, body_match_type,
              project_id, priority_id, assigned_to_id, watcher_user_ids,
              is_active, created_at, updated_at
       FROM mail_configs

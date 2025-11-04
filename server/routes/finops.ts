@@ -842,21 +842,19 @@ WHERE run_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
   AND task_id = $9
   AND subtask_id = $10;
 `,
-  [
-  task_name || null,            // $1
-  subtask.name || null,         // $2
-  subtask.description || null,  // $3
-  subtask.start_time || null,   // $4
-  subtask.sla_hours ?? null,    // $5
-  subtask.sla_minutes ?? null,  // $6
-  subtask.order_position ?? 0,  // $7
-  subtask.status || null,       // $8
-  taskId,                       // $9
-  numericId                     // $10
-]
-,
+                [
+                  task_name || null, // $1
+                  subtask.name || null, // $2
+                  subtask.description || null, // $3
+                  subtask.start_time || null, // $4
+                  subtask.sla_hours ?? null, // $5
+                  subtask.sla_minutes ?? null, // $6
+                  subtask.order_position ?? 0, // $7
+                  subtask.status || null, // $8
+                  taskId, // $9
+                  numericId, // $10
+                ],
               );
-
             } catch (err) {
               console.warn(
                 "Failed to sync finops_tracker for updated subtask",
@@ -2219,7 +2217,8 @@ router.post(
           const settingsRes = await pool.query(
             `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
           );
-          const pulseAlertsEnabled = settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
+          const pulseAlertsEnabled =
+            settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
 
           if (pulseAlertsEnabled && user_ids.length) {
             fetch("https://pulsealerts.mylapay.com/direct-call", {

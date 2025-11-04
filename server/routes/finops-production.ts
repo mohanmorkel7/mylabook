@@ -170,7 +170,8 @@ async function sendReplicaDownAlertOnce(
       const settingsResult = await pool.query(
         `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
       );
-      const pulseAlertsEnabled = settingsResult.rows[0]?.pulse_alerts_enabled ?? true;
+      const pulseAlertsEnabled =
+        settingsResult.rows[0]?.pulse_alerts_enabled ?? true;
 
       if (pulseAlertsEnabled && immediateUserIds.length) {
         fetch("https://pulsealerts.mylapay.com/direct-call", {
@@ -188,7 +189,9 @@ async function sendReplicaDownAlertOnce(
           ),
         );
       } else if (!pulseAlertsEnabled) {
-        console.log("[finops-production] Pulse alerts disabled, skipping direct-call");
+        console.log(
+          "[finops-production] Pulse alerts disabled, skipping direct-call",
+        );
       }
     } catch (err) {
       console.warn(

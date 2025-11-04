@@ -230,6 +230,31 @@ export default function Mails() {
     };
   }, [targetUser]);
 
+  // Periodically trigger server-side processing using the currently fetched emails
+  useEffect(() => {
+    let interval: any = null;
+    // Don't start if not authenticated or no emails
+    if (!needsAuth && emails && emails.length > 0) {
+      // Trigger immediately once, then every 30 seconds
+      const trigger = async () => {
+        try {
+          console.log("Triggering periodic email processing with", emails.length, "emails");
+          const resp = await api.post("/mail-configs/process-emails", { emails, userId: user?.id ? parseInt(user.id, 10) : undefined });
+          console.log("Periodic processing response:", resp);
+        } catch (err) {
+          console.error("Periodic processing error:", err);
+        }
+      };
+
+      trigger();
+      interval = setInterval(trigger, 30000); // 30 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [needsAuth, emails, user?.id]);
+
   async function fetchEmailsWithToken(token: string, mounted = true) {
     setLoading(true);
     setError(null);

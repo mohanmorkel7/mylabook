@@ -86,7 +86,10 @@ export default function ManageTickets() {
   useEffect(() => {
     fetchTickets();
     fetchUsers();
-  }, []);
+    if (activeTab === "created") {
+      fetchCreatedTickets();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     applyFilters();

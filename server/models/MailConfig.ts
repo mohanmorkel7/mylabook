@@ -164,6 +164,7 @@ export class MailConfigRepository {
       SET ${setClause.join(", ")}
       WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
       RETURNING id, user_id, name, description, field_type, field_value,
+                from_email, to_email, subject_pattern, body_content, body_match_type,
                 project_id, priority_id, assigned_to_id, watcher_user_ids,
                 is_active, created_at, updated_at
     `;

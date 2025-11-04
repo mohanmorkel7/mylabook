@@ -318,11 +318,19 @@ export function MailConfigsPanel({
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold">Mail Configs</h2>
-                <p className="text-sm text-gray-600 mt-1">Manage email-to-ticket automation configurations</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Manage email-to-ticket automation configurations
+                </p>
               </div>
               <div>
-                <Button variant="ghost" onClick={onClose} className="mr-2">Close</Button>
-                <Button onClick={handleCreateNew} className="ml-2" disabled={isLoading}>
+                <Button variant="ghost" onClick={onClose} className="mr-2">
+                  Close
+                </Button>
+                <Button
+                  onClick={handleCreateNew}
+                  className="ml-2"
+                  disabled={isLoading}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create New Config
                 </Button>
@@ -336,7 +344,9 @@ export function MailConfigsPanel({
             ) : (configs?.length ?? 0) === 0 ? (
               <div className="text-center py-8 text-gray-600">
                 <p>No mail configs created yet</p>
-                <p className="text-sm mt-2">Click "Create New Config" to get started</p>
+                <p className="text-sm mt-2">
+                  Click "Create New Config" to get started
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

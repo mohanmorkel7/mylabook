@@ -194,11 +194,11 @@ export function MailConfigsPanel({
         }
 
         // If any matches found, send emails to server to process (server will create tickets)
-       if (matched.length > 0) {
-  await api.post(`/mail-configs/process-emails`, {
-    matches: matched, // send only matched emails/configs
-    userId: user?.id ? parseInt(user.id, 10) : undefined,
-  });
+        if (matched.length > 0) {
+          await api.post(`/mail-configs/process-emails`, {
+            matches: matched, // send only matched emails/configs
+            userId: user?.id ? parseInt(user.id, 10) : undefined,
+          });
           toast({
             title: "Processing",
             description: `Found ${matched.length} matches and triggered processing`,

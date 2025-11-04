@@ -296,6 +296,13 @@ export function createServer() {
   }
 
   try {
+    app.use("/api/email-processing", emailProcessingRouter);
+    console.log("Email processing router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Email processing router:", error);
+  }
+
+  try {
     app.use("/api/files", filesRouter);
     console.log("Files router loaded successfully");
   } catch (error) {

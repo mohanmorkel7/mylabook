@@ -13,17 +13,23 @@ async function ensureFinOpsSettings() {
       initial_overdue_call_delay_minutes INTEGER DEFAULT 0,
       repeat_overdue_call_interval_minutes INTEGER DEFAULT 15,
       only_repeat_when_single_overdue BOOLEAN DEFAULT false,
+      pulse_alerts_enabled BOOLEAN DEFAULT true,
       updated_at TIMESTAMP DEFAULT NOW()
     )
+  `);
+  // Add column if it doesn't exist (for existing installations)
+  await pool.query(`
+    ALTER TABLE finops_settings
+    ADD COLUMN IF NOT EXISTS pulse_alerts_enabled BOOLEAN DEFAULT true
   `);
   const row = await pool.query(
     `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
   );
   if (row.rows.length === 0) {
     await pool.query(
-      `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue)
-       VALUES ($1, $2, $3)`,
-      [0, 15, false],
+      `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue, pulse_alerts_enabled)
+       VALUES ($1, $2, $3, $4)`,
+      [0, 15, false, true],
     );
   }
 }

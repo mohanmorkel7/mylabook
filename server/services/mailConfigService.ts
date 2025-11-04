@@ -21,26 +21,19 @@ interface TicketPayload {
   };
 }
 
-// Redmine API configuration
 const REDMINE_API_URL =
   process.env.REDMINE_API_URL || "https://redmine.example.com/api";
-const REDMINE_API_KEY = process.env.REDMINE_API_KEY || "";
-
 export class MailConfigService {
-  /**
-   * Check if email matches the given config criteria
-   */
+  /** ✅ Check if email matches the given config criteria */
   static matchesConfig(email: GraphEmail, config: MailConfig): boolean {
     const fieldType = config.field_type;
-    const fieldValue = config.field_value.toLowerCase();
-
+    const fieldValue = config.field_value?.toLowerCase?.() || "";
     let emailFieldValue = "";
 
     switch (fieldType) {
       case "subject":
         emailFieldValue = (email.subject || "").toLowerCase();
         break;
-
       case "fromEmail":
         const fromEmail =
           email.from?.emailAddress?.address ||
@@ -48,44 +41,26 @@ export class MailConfigService {
           "";
         emailFieldValue = fromEmail.toLowerCase();
         break;
-
-      case "toEmail":
-        // Extract TO email address from email headers if available
-        // This would need to be passed from the email data
-        // For now, we'll use a placeholder
-        emailFieldValue = "";
-        break;
-
       case "body":
         let bodyText = email.bodyPreview || "";
         if (email.body?.content) {
-          // Remove HTML tags if present
           bodyText = email.body.content.replace(/<[^>]*>/g, "");
         }
         emailFieldValue = bodyText.toLowerCase();
         break;
+      default:
+        emailFieldValue = "";
     }
 
-    // Simple substring matching (case-insensitive)
     return emailFieldValue.includes(fieldValue);
   }
 
-  /**
-   * Create a ticket in Redmine based on email and config
-   */
+  /** ✅ Create a ticket in Redmine */
   static async createTicket(
     email: GraphEmail,
     config: MailConfig,
   ): Promise<{ ticketId?: number; success: boolean; error?: string }> {
     try {
-      if (!REDMINE_API_KEY) {
-        return {
-          success: false,
-          error: "Redmine API key not configured",
-        };
-      }
-
-      // Extract email details
       const subject = email.subject || "(No subject)";
       const fromEmail =
         email.from?.emailAddress?.address ||
@@ -96,7 +71,6 @@ export class MailConfigService {
         email.sender?.emailAddress?.name ||
         "Unknown";
 
-      // Build email body for ticket description
       let bodyText = email.bodyPreview || "";
       if (email.body?.content) {
         bodyText = email.body.content.replace(/<[^>]*>/g, "");
@@ -109,27 +83,26 @@ Received: ${email.receivedDateTime || "Unknown"}
 
 ${bodyText}`;
 
-      // Create ticket payload
       const payload: TicketPayload = {
         issue: {
           project_id: config.project_id,
-          subject: subject,
-          description: description,
+          subject,
+          description,
           assigned_to_id: config.assigned_to_id,
           priority_id: config.priority_id,
           watcher_user_ids: config.watcher_user_ids || [],
         },
       };
-
-      // Call Redmine API to create ticket
+      console.log("PAYLOAD",payload)
       const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "X-Redmine-API-Key": REDMINE_API_KEY,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload),
       });
+
+      console.log("DATA1",response)
 
       if (!response.ok) {
         const errorData = await response.text();
@@ -139,66 +112,31 @@ ${bodyText}`;
         };
       }
 
-      const responseData = (await response.json()) as any;
-      const ticketId = responseData.issue?.id;
-
-      return {
-        ticketId,
-        success: true,
-      };
+      const data = (await response.json()) as any;
+      return { ticketId: data.issue?.id, success: true };
     } catch (error) {
-      return {
-        success: false,
-        error: (error as any)?.message || "Failed to create ticket",
-      };
+      return { success: false, error: (error as any)?.message || "Failed to create ticket" };
     }
   }
 
-  /**
-   * Process new emails and create tickets based on matching configs
-   */
-  static async processEmails(
-    emails: GraphEmail[],
-    userId: number,
-  ): Promise<
-    {
-      emailId: string;
-      configId: number;
-      success: boolean;
-      ticketId?: number;
-      error?: string;
-    }[]
-  > {
+  /** ✅ Original processEmails (kept for backward compatibility) */
+  static async processEmails(emails: GraphEmail[], userId: number) {
     const results = [];
-
     try {
-      // Get active configs for this user
       const configs = await MailConfigRepository.getActiveConfigs(userId);
+      if (configs.length === 0) return [];
 
-      if (configs.length === 0) {
-        return [];
-      }
-
-      // Process each email
       for (const email of emails) {
-        // Check each config for this email
         for (const config of configs) {
-          // Check if email was already processed
           const isProcessed = await MailConfigRepository.isEmailProcessed(
             config.id,
             email.id,
           );
+          if (isProcessed) continue;
 
-          if (isProcessed) {
-            continue; // Skip if already processed
-          }
-
-          // Check if email matches config criteria
           if (this.matchesConfig(email, config)) {
-            // Try to create ticket
             const ticketResult = await this.createTicket(email, config);
 
-            // Log the processing result
             await MailConfigRepository.logProcessedEmail(
               config.id,
               email.id,
@@ -218,18 +156,6 @@ ${bodyText}`;
               ticketId: ticketResult.ticketId,
               error: ticketResult.error,
             });
-          } else {
-            // Log as skipped (matched config but no ticket created)
-            await MailConfigRepository.logProcessedEmail(
-              config.id,
-              email.id,
-              email.subject || "(No subject)",
-              email.from?.emailAddress?.address ||
-                email.sender?.emailAddress?.address ||
-                "unknown",
-              undefined,
-              "skipped",
-            );
           }
         }
       }
@@ -239,5 +165,66 @@ ${bodyText}`;
       console.error("Error processing emails:", error);
       return [];
     }
+  }
+
+  /** 🆕 ✅ New function for frontend’s `matches` array */
+  static async processMatchedEmails(
+    matches: { emailId: string; configId: number; payload: any }[],
+    userId: number,
+  ) {
+    const results = [];
+
+    for (const match of matches) {
+      const { emailId, configId, payload } = match;
+
+      try {
+        // Skip duplicates
+        const already = await MailConfigRepository.isEmailProcessed(configId, emailId);
+        if (already) continue;
+
+        // Create ticket from payload
+        const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload),
+        });
+console.log("Payload send to mitra ",response)
+        let ticketId: number | undefined;
+        let success = true;
+        let error: string | undefined;
+
+        if (!response.ok) {
+          success = false;
+          error = `Redmine API error: ${response.status}`;
+        } else {
+          const data = await response.json();
+          ticketId = data.issue?.id;
+        }
+
+        await MailConfigRepository.logProcessedEmail(
+          configId,
+          emailId,
+          payload.issue.subject,
+          "unknown",
+          ticketId,
+          success ? "success" : "failed",
+          error,
+        );
+
+        results.push({ emailId, configId, success, ticketId, error });
+      } catch (err: any) {
+        console.error(`Error processing match for email ${match.emailId}:`, err);
+        results.push({
+          emailId: match.emailId,
+          configId: match.configId,
+          success: false,
+          error: err.message,
+        });
+      }
+    }
+
+    return results;
   }
 }

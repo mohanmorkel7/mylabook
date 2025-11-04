@@ -118,17 +118,15 @@ ${bodyText}`;
           watcher_user_ids: config.watcher_user_ids || [],
         },
       };
-
+console.log("FETCHED MAIL MATCHES WITH CONFIG",payload)
       // Call Redmine API to create ticket
       const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "X-Redmine-API-Key": REDMINE_API_KEY,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload),
       });
-
       if (!response.ok) {
         const errorData = await response.text();
         return {

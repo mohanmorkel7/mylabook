@@ -68,7 +68,7 @@ interface MailConfigModalProps {
   onClose: () => void;
   onConfigSaved: () => void;
   initialConfig?: MailConfig;
-  users: User[];
+  users?: User[];
   priorities: Array<{ id: number; name: string }>;
 }
 
@@ -101,26 +101,9 @@ export function MailConfigModal({
   const { toast } = useToast();
 
   useEffect(() => {
-    // Use users passed from parent (already fetched in MailConfigsPanel)
-    if (initialUsers && initialUsers.length > 0) {
-      setUsers(initialUsers);
-      return;
-    }
-    // Fetch mitra_users if not provided
-    if (users.length === 0 && isOpen) {
-      const fetchUsers = async () => {
-        try {
-          const response = await api.get("/users/list/mitra");
-          if (response.data) {
-            setUsers(response.data);
-          }
-        } catch (error) {
-          console.error("Error fetching mitra users:", error);
-        }
-      };
-      fetchUsers();
-    }
-  }, [initialUsers, isOpen]);
+  setUsers(initialUsers);
+}, [initialUsers]);
+
   const [searchAssignee, setSearchAssignee] = useState("");
 
   const [config, setConfig] = useState<MailConfig>(
@@ -161,12 +144,10 @@ export function MailConfigModal({
   };
 
   const handleAssigneeSelect = (userId: number) => {
-    setConfig({
-      ...config,
-      assigned_to_id: userId,
-    });
-    setOpenAssignee(false);
-  };
+  setConfig({ ...config, assigned_to_id: userId });
+  setOpenAssignee(false);
+};
+
 
   const handleWatcherToggle = (userId: number) => {
     const newWatchers = config.watcher_user_ids.includes(userId)
@@ -179,14 +160,6 @@ export function MailConfigModal({
     });
   };
 
-  const filteredWatchers = users.filter((user) => {
-    const displayName = getUserName(user);
-    const email = user.email || "";
-    return (
-      displayName.toLowerCase().includes(searchWatchers.toLowerCase()) ||
-      email.toLowerCase().includes(searchWatchers.toLowerCase())
-    );
-  });
 
   const getFieldValueLabel = (fieldType: string): string => {
     switch (fieldType) {
@@ -302,15 +275,26 @@ export function MailConfigModal({
   };
 
   // Helper to get user display name from either old or new structure
-  const getUserName = (user?: User): string => {
-    if (!user) return "";
-    if (user?.name) return user.name.trim();
-    if (user.firstname || user.lastname)
-      return `${user.firstname || ""} ${user.lastname || ""}`.trim();
-    if ((user as any).first_name || (user as any).last_name)
-      return `${(user as any).first_name || ""} ${(user as any).last_name || ""}`.trim();
-    return "Unknown";
-  };
+const getUserName = (user?: User): string => {
+  if (!user) return "";
+  if (user?.name) return user.name.trim();
+  if (user.firstname || user.lastname)
+    return `${user.firstname || ""} ${user.lastname || ""}`.trim();
+  if ((user as any).first_name || (user as any).last_name)
+    return `${(user as any).first_name || ""} ${(user as any).last_name || ""}`.trim();
+  return "Unknown";
+};
+
+const filteredWatchers = users.filter((user) => {
+  const displayName = getUserName(user);
+  const email = user.email || "";
+  return (
+    displayName.toLowerCase().includes(searchWatchers.toLowerCase()) ||
+    email.toLowerCase().includes(searchWatchers.toLowerCase())
+  );
+});
+
+
 
   const assignedUser = users.find((u) => u.id === config.assigned_to_id);
   const selectedWatchers = users.filter((u) =>
@@ -498,8 +482,8 @@ export function MailConfigModal({
                     onValueChange={setSearchWatchers}
                   />
                   <CommandEmpty>No user found.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandList className="max-h-48">
+                  <CommandList className="max-h-48">
+                     <CommandGroup>
                       {filteredWatchers.map((user) => (
                         <CommandItem
                           key={user.id}
@@ -515,8 +499,8 @@ export function MailConfigModal({
                           {getUserName(user)}
                         </CommandItem>
                       ))}
+                      </CommandGroup>
                     </CommandList>
-                  </CommandGroup>
                 </Command>
               </PopoverContent>
             </Popover>

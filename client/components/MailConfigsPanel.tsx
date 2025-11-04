@@ -312,28 +312,22 @@ export function MailConfigsPanel({
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
-      <div className="fixed inset-0 bg-white z-50 overflow-hidden flex">
-        {/* Sidebar (re-use shared ConfigPageSidebar) */}
-        <ConfigPageSidebar currentPage="Mail Configs" />
-
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="mb-6">
-              <h2 className="text-3xl font-bold">Mail Configs</h2>
-              <p className="text-gray-600 mt-1">
-                Manage email-to-ticket automation configurations
-              </p>
+      <div className="fixed inset-0 z-50 overflow-auto flex items-start justify-center p-6">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-5xl overflow-hidden">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold">Mail Configs</h2>
+                <p className="text-sm text-gray-600 mt-1">Manage email-to-ticket automation configurations</p>
+              </div>
+              <div>
+                <Button variant="ghost" onClick={onClose} className="mr-2">Close</Button>
+                <Button onClick={handleCreateNew} className="ml-2" disabled={isLoading}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New Config
+                </Button>
+              </div>
             </div>
-
-            <Button
-              onClick={handleCreateNew}
-              className="mb-6"
-              disabled={isLoading}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Config
-            </Button>
 
             {isLoading && (configs?.length ?? 0) === 0 ? (
               <div className="flex items-center justify-center py-8">
@@ -342,9 +336,7 @@ export function MailConfigsPanel({
             ) : (configs?.length ?? 0) === 0 ? (
               <div className="text-center py-8 text-gray-600">
                 <p>No mail configs created yet</p>
-                <p className="text-sm mt-2">
-                  Click "Create New Config" to get started
-                </p>
+                <p className="text-sm mt-2">Click "Create New Config" to get started</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

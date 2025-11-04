@@ -107,7 +107,7 @@ const [users, setUsers] = useState<User[]>([]);
         ? `/mail-configs?userId=${user.id}`
         : "/mail-configs";
       const response = await api.get(endpoint);
-      setConfigs(response.data);
+      setConfigs(response);
     } catch (error) {
       console.error("Error fetching mail configs:", error);
       toast({
@@ -177,11 +177,11 @@ const [users, setUsers] = useState<User[]>([]);
         payload,
       );
       setConfigs(
-        configs.map((c) => (c.id === config.id ? updatedConfig.data : c)),
+        configs.map((c) => (c.id === config.id ? updatedConfig : c)),
       );
       toast({
         title: "Success",
-        description: `Mail config ${updatedConfig.data.is_active ? "enabled" : "disabled"}`,
+        description: `Mail config ${updatedConfig.is_active ? "enabled" : "disabled"}`,
       });
     } catch (error) {
       console.error("Error updating mail config:", error);

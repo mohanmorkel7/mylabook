@@ -71,6 +71,14 @@ export function MailConfigsPanel({
 }: MailConfigsPanelProps) {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleSignout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
   const [configs, setConfigs] = useState<MailConfig[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState<MailConfig | null>(null);

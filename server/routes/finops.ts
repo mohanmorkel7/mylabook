@@ -42,6 +42,48 @@ async function getFinOpsSettings() {
   return res.rows[0];
 }
 
+// GET pulse alerts setting
+router.get("/settings/pulse-alerts", async (req, res) => {
+  try {
+    const settings = await getFinOpsSettings();
+    res.json({ enabled: settings.pulse_alerts_enabled ?? true });
+  } catch (error) {
+    console.error("Error fetching pulse alerts setting:", error);
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+});
+
+// UPDATE pulse alerts setting (admin only)
+router.put("/settings/pulse-alerts", async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled must be a boolean" });
+    }
+
+    const result = await pool.query(
+      `UPDATE finops_settings SET pulse_alerts_enabled = $1, updated_at = NOW()
+       WHERE id = (SELECT id FROM finops_settings ORDER BY id LIMIT 1)
+       RETURNING pulse_alerts_enabled`,
+      [enabled],
+    );
+
+    if (result.rows.length === 0) {
+      return res
+        .status(500)
+        .json({ error: "Failed to update pulse alerts setting" });
+    }
+
+    res.json({
+      success: true,
+      enabled: result.rows[0].pulse_alerts_enabled,
+    });
+  } catch (error) {
+    console.error("Error updating pulse alerts setting:", error);
+    res.status(500).json({ error: "Failed to update settings" });
+  }
+});
+
 // Database availability check
 async function isDatabaseAvailable() {
   try {

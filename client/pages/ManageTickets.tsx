@@ -67,8 +67,10 @@ const STATUS_OPTIONS = [
 
 export default function ManageTickets() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "created">("all");
   const [filters, setFilters] = useState<FilterOptions>({
     searchText: "",
     priority: "",

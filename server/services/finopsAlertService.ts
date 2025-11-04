@@ -483,30 +483,34 @@ class FinOpsAlertService {
             immediate_user_ids: immediateUserIds,
           });
 
-          // // Make the external Pulse alert call (unconditional - this is the primary notification)
-          // console.log("PULSE ALERT CALL STARTS - allUserIds:", allUserIds);
-          // try {
-          //   const response = await fetch(
-          //     "https://pulsealerts.mylapay.com/direct-call",
-          //     {
-          //       method: "POST",
-          //       headers: { "Content-Type": "application/json" },
-          //       body: JSON.stringify({
-          //         receiver: "CRM_Switch",
-          //         title,
-          //         user_ids: allUserIds,
-          //       }),
-          //     },
-          //   );
-          //   console.log("PULSE ALERT CALL response status:", response.status);
-          //   const responseBody = await response.text();
-          //   console.log("PULSE ALERT CALL response body:", responseBody);
-          // } catch (fetchErr) {
-          //   console.error(
-          //     "PULSE ALERT CALL ERROR:",
-          //     (fetchErr as Error).message,
-          //   );
-          // }
+          // Make the external Pulse alert call (if enabled)
+          if (await this.getPulseAlertsEnabled()) {
+            console.log("PULSE ALERT CALL STARTS - allUserIds:", allUserIds);
+            try {
+              const response = await fetch(
+                "https://pulsealerts.mylapay.com/direct-call",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    receiver: "CRM_Switch",
+                    title,
+                    user_ids: allUserIds,
+                  }),
+                },
+              );
+              console.log("PULSE ALERT CALL response status:", response.status);
+              const responseBody = await response.text();
+              console.log("PULSE ALERT CALL response body:", responseBody);
+            } catch (fetchErr) {
+              console.error(
+                "PULSE ALERT CALL ERROR:",
+                (fetchErr as Error).message,
+              );
+            }
+          } else {
+            console.log("Pulse alerts disabled, skipping Pulse alert call");
+          }
 
           // Send notifications and log (these can use pool, but may skip if recent alert exists)
           if (!shouldSkipLogging) {

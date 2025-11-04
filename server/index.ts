@@ -72,7 +72,10 @@ export function createServer() {
       initializeEmailProcessingJob();
     }, 700);
   } catch (e) {
-    console.error("Failed to initialize Email Processing Job:", (e as any)?.message);
+    console.error(
+      "Failed to initialize Email Processing Job:",
+      (e as any)?.message,
+    );
   }
 
   // Middleware

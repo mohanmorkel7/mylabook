@@ -74,9 +74,9 @@ export function MailConfigsPanel({
   const navigate = useNavigate();
 
   const handleSignout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
-    navigate('/login');
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
+    navigate("/login");
   };
 
   const [configs, setConfigs] = useState<MailConfig[]>([]);
@@ -249,8 +249,12 @@ export function MailConfigsPanel({
 
           {/* User Info Section */}
           <div className="p-4 border-b border-gray-200">
-            <p className="font-semibold text-gray-900">{user?.name || 'User'}</p>
-            <p className="text-xs text-gray-600 mt-1">{user?.role || 'Admin'}</p>
+            <p className="font-semibold text-gray-900">
+              {user?.name || "User"}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              {user?.role || "Admin"}
+            </p>
             <Button
               onClick={handleSignout}
               variant="outline"

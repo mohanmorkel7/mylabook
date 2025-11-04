@@ -494,7 +494,7 @@ class FinOpsAlertService {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     receiver: "CRM_Switch",
-                    title,
+                    title:title,
                     user_ids: allUserIds,
                   }),
                 },

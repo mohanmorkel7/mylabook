@@ -66,6 +66,8 @@ const PRIORITY_COLORS: Record<number, string> = {
 export function MailConfigsPanel({
   isOpen,
   onClose,
+  users: initialUsers,
+  emails = [],
 }: MailConfigsPanelProps) {
   const { user } = useAuth();
   const [configs, setConfigs] = useState<MailConfig[]>([]);
@@ -79,9 +81,14 @@ export function MailConfigsPanel({
   useEffect(() => {
     if (isOpen) {
       fetchConfigs();
-      fetchUsers();
+      // Only fetch users if initialUsers not provided
+      if (!initialUsers || initialUsers.length === 0) {
+        fetchUsers();
+      } else {
+        setUsers(initialUsers);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialUsers]);
 const [users, setUsers] = useState<User[]>([]);
 
   const fetchUsers = async () => {
@@ -130,8 +137,59 @@ const [users, setUsers] = useState<User[]>([]);
     setIsModalOpen(true);
   };
 
-  const handleConfigSaved = () => {
-    fetchConfigs();
+  const handleConfigSaved = async () => {
+    await fetchConfigs();
+    // After saving a config, if emails are available, find matches and trigger processing
+    if (emails && emails.length > 0) {
+      try {
+        // Log matched emails and payloads
+        const matched: any[] = [];
+        for (const email of emails) {
+          for (const cfg of configs) {
+            const field = cfg.field_type;
+            const value = (cfg.field_value || "").toLowerCase();
+            let emailField = "";
+            if (field === "subject") {
+              emailField = (email.subject || "").toLowerCase();
+            } else if (field === "fromEmail") {
+              emailField = (
+                (email.from?.emailAddress?.address || email.sender?.emailAddress?.address) || ""
+              ).toLowerCase();
+            } else if (field === "body") {
+              emailField = (email.bodyPreview || email.body?.content || "").toLowerCase();
+            }
+
+            if (value && emailField.includes(value)) {
+              // matched
+              const payload = {
+                issue: {
+                  project_id: cfg.project_id,
+                  subject: email.subject || "(No subject)",
+                  description: (email.bodyPreview || email.body?.content || "").replace(/<[^>]*>/g, ""),
+                  assigned_to_id: cfg.assigned_to_id,
+                  priority_id: cfg.priority_id,
+                  watcher_user_ids: cfg.watcher_user_ids || [],
+                },
+              };
+              console.log("Matched email for config:", cfg.name, "emailId:", email.id);
+              console.log("Payload to send:", payload);
+              matched.push({ emailId: email.id, configId: cfg.id, payload });
+            }
+          }
+        }
+
+        // If any matches found, send emails to server to process (server will create tickets)
+        if (matched.length > 0) {
+          // Send the raw emails to the server processing endpoint so it can create tickets and log them
+          await api.post(`/mail-configs/process-emails`, { emails, userId: user?.id ? parseInt(user.id, 10) : undefined });
+          toast({ title: "Processing", description: `Found ${matched.length} matches and triggered processing` });
+        } else {
+          console.log("No matching emails found for current configs");
+        }
+      } catch (err) {
+        console.error("Error triggering processing after config saved:", err);
+      }
+    }
   };
 
   const handleDeleteClick = (configId: number) => {

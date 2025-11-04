@@ -44,6 +44,7 @@ interface MailConfigsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   users: User[];
+  emails?: any[]; // GraphEmail[] from Mails page (optional)
 }
 
 const PRIORITY_NAMES: Record<number, string> = {

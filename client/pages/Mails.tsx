@@ -611,6 +611,7 @@ export default function Mails() {
         isOpen={configPanelOpen}
         onClose={() => setConfigPanelOpen(false)}
         users={users}
+        emails={emails}
       />
     </div>
   );

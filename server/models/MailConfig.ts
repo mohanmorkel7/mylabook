@@ -104,9 +104,11 @@ export class MailConfigRepository {
     const query = `
       INSERT INTO mail_configs (
         user_id, name, description, field_type, field_value,
+        from_email, to_email, subject_pattern, body_content, body_match_type,
         project_id, priority_id, assigned_to_id, watcher_user_ids
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING id, user_id, name, description, field_type, field_value,
+                from_email, to_email, subject_pattern, body_content, body_match_type,
                 project_id, priority_id, assigned_to_id, watcher_user_ids,
                 is_active, created_at, updated_at
     `;
@@ -117,6 +119,11 @@ export class MailConfigRepository {
       data.description || null,
       data.field_type,
       data.field_value,
+      data.from_email || null,
+      data.to_email || null,
+      data.subject_pattern || null,
+      data.body_content || null,
+      data.body_match_type || "word",
       data.project_id,
       data.priority_id,
       data.assigned_to_id,

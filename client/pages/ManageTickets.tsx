@@ -114,10 +114,33 @@ export default function ManageTickets() {
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get("/users");
+      const response = await api.get("/users/list/mitra");
       setUsers(response.data || []);
     } catch (error) {
       console.error("Error fetching users:", error);
+    }
+  };
+
+  const fetchCreatedTickets = async () => {
+    try {
+      setIsLoading(true);
+      const params = new URLSearchParams();
+      if (filters.dateFrom) params.append("date_from", filters.dateFrom);
+      if (filters.dateTo) params.append("date_to", filters.dateTo);
+      if (filters.priority) params.append("priority_id", filters.priority);
+      if (filters.assignedTo) params.append("assigned_user_id", filters.assignedTo);
+
+      const response = await api.get(`/email-processing/created-tickets?${params}`);
+      setCreatedTickets(response.data?.tickets || []);
+    } catch (error) {
+      console.error("Error fetching created tickets:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load created tickets",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 

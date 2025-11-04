@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MailConfigModal } from "./MailConfigModal";
+import { ConfigPageSidebar } from "./ConfigPageSidebar";
 import api from "@/lib/api";
 
 interface User {

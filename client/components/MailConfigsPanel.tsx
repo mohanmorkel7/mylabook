@@ -89,23 +89,22 @@ export function MailConfigsPanel({
       }
     }
   }, [isOpen, initialUsers]);
-const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
 
   const fetchUsers = async () => {
-  try {
-    const response = await api.get<User[]>("/users/list/mitra");
-    console.log("Fetched users:", response);
-    setUsers(response || []);
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    toast({
-      title: "Error",
-      description: "Failed to load user list",
-      variant: "destructive",
-    });
-  }
-};
-
+    try {
+      const response = await api.get<User[]>("/users/list/mitra");
+      console.log("Fetched users:", response);
+      setUsers(response || []);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load user list",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchConfigs = async () => {
     try {
@@ -153,10 +152,16 @@ const [users, setUsers] = useState<User[]>([]);
               emailField = (email.subject || "").toLowerCase();
             } else if (field === "fromEmail") {
               emailField = (
-                (email.from?.emailAddress?.address || email.sender?.emailAddress?.address) || ""
+                email.from?.emailAddress?.address ||
+                email.sender?.emailAddress?.address ||
+                ""
               ).toLowerCase();
             } else if (field === "body") {
-              emailField = (email.bodyPreview || email.body?.content || "").toLowerCase();
+              emailField = (
+                email.bodyPreview ||
+                email.body?.content ||
+                ""
+              ).toLowerCase();
             }
 
             if (value && emailField.includes(value)) {
@@ -165,13 +170,22 @@ const [users, setUsers] = useState<User[]>([]);
                 issue: {
                   project_id: cfg.project_id,
                   subject: email.subject || "(No subject)",
-                  description: (email.bodyPreview || email.body?.content || "").replace(/<[^>]*>/g, ""),
+                  description: (
+                    email.bodyPreview ||
+                    email.body?.content ||
+                    ""
+                  ).replace(/<[^>]*>/g, ""),
                   assigned_to_id: cfg.assigned_to_id,
                   priority_id: cfg.priority_id,
                   watcher_user_ids: cfg.watcher_user_ids || [],
                 },
               };
-              console.log("Matched email for config:", cfg.name, "emailId:", email.id);
+              console.log(
+                "Matched email for config:",
+                cfg.name,
+                "emailId:",
+                email.id,
+              );
               console.log("Payload to send:", payload);
               matched.push({ emailId: email.id, configId: cfg.id, payload });
             }
@@ -181,8 +195,14 @@ const [users, setUsers] = useState<User[]>([]);
         // If any matches found, send emails to server to process (server will create tickets)
         if (matched.length > 0) {
           // Send the raw emails to the server processing endpoint so it can create tickets and log them
-          await api.post(`/mail-configs/process-emails`, { emails, userId: user?.id ? parseInt(user.id, 10) : undefined });
-          toast({ title: "Processing", description: `Found ${matched.length} matches and triggered processing` });
+          await api.post(`/mail-configs/process-emails`, {
+            emails,
+            userId: user?.id ? parseInt(user.id, 10) : undefined,
+          });
+          toast({
+            title: "Processing",
+            description: `Found ${matched.length} matches and triggered processing`,
+          });
         } else {
           console.log("No matching emails found for current configs");
         }
@@ -198,7 +218,7 @@ const [users, setUsers] = useState<User[]>([]);
   };
 
   const handleConfirmDelete = async () => {
-   if (configToDelete === null) return;
+    if (configToDelete === null) return;
 
     try {
       const url = user?.id
@@ -234,9 +254,7 @@ const [users, setUsers] = useState<User[]>([]);
         `/mail-configs/${config.id}`,
         payload,
       );
-      setConfigs(
-        configs.map((c) => (c.id === config.id ? updatedConfig : c)),
-      );
+      setConfigs(configs.map((c) => (c.id === config.id ? updatedConfig : c)));
       toast({
         title: "Success",
         description: `Mail config ${updatedConfig.is_active ? "enabled" : "disabled"}`,
@@ -261,13 +279,14 @@ const [users, setUsers] = useState<User[]>([]);
     return labels[fieldType] || fieldType;
   };
 
- const getAssignedUserName = (userId: number): string => {
-  const user = users.find((u) => u.id === userId);
-  if (!user) return "Unknown";
-  if (user.name) return user.name;
-  if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
-  return "Unknown";
-};
+  const getAssignedUserName = (userId: number): string => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return "Unknown";
+    if (user.name) return user.name;
+    if (user.first_name && user.last_name)
+      return `${user.first_name} ${user.last_name}`;
+    return "Unknown";
+  };
 
   const getWatcherInitials = (watcherId: number): string => {
     const watcher = users.find((u) => u.id === watcherId);
@@ -508,14 +527,16 @@ const [users, setUsers] = useState<User[]>([]);
         </div>
       </div>
 
-     <MailConfigModal
-  isOpen={isModalOpen}
-  onClose={() => { setIsModalOpen(false); setSelectedConfig(null); }}
-  onConfigSaved={handleConfigSaved}
-  initialConfig={selectedConfig || undefined}
-  users={users}
-/>
-
+      <MailConfigModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedConfig(null);
+        }}
+        onConfigSaved={handleConfigSaved}
+        initialConfig={selectedConfig || undefined}
+        users={users}
+      />
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>

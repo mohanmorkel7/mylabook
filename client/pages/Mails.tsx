@@ -258,7 +258,9 @@ export default function Mails() {
               console.log({
                 emailId: r.emailId,
                 subject: emailObj?.subject,
-                from: emailObj?.from?.emailAddress?.address || emailObj?.sender?.emailAddress?.address,
+                from:
+                  emailObj?.from?.emailAddress?.address ||
+                  emailObj?.sender?.emailAddress?.address,
                 configId: r.configId,
                 success: r.success,
                 error: r.error,

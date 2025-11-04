@@ -99,11 +99,7 @@ export function matchEmailAgainstConfig(
   // Check body_content with match type
   if (config.body_content) {
     if (
-      !matchBodyContent(
-        config.body_content,
-        email.body,
-        config.body_match_type,
-      )
+      !matchBodyContent(config.body_content, email.body, config.body_match_type)
     ) {
       return false;
     }

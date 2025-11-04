@@ -14,46 +14,51 @@ const router = express.Router();
  * Manually trigger email processing
  * Requires emails to be passed in the body
  */
-router.post("/process", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { emails } = req.body;
+router.post(
+  "/process",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { emails } = req.body;
 
-    if (!emails || !Array.isArray(emails)) {
-      return res.status(400).json({
-        error: "emails array is required",
+      if (!emails || !Array.isArray(emails)) {
+        return res.status(400).json({
+          error: "emails array is required",
+        });
+      }
+
+      // Get all active configs
+      const configs = await getAllActiveConfigs();
+
+      if (configs.length === 0) {
+        return res.json({
+          message: "No active configs found",
+          result: {
+            processed: 0,
+            succeeded: 0,
+            failed: 0,
+            skipped: 0,
+            errors: [],
+          },
+        });
+      }
+
+      // Process emails
+      const result = await processEmailsForConfigs(emails as Email[], configs);
+
+      res.json({
+        message: "Email processing completed",
+        result,
+      });
+    } catch (error) {
+      console.error("Error processing emails:", error);
+      res.status(500).json({
+        error:
+          error instanceof Error ? error.message : "Email processing failed",
       });
     }
-
-    // Get all active configs
-    const configs = await getAllActiveConfigs();
-
-    if (configs.length === 0) {
-      return res.json({
-        message: "No active configs found",
-        result: {
-          processed: 0,
-          succeeded: 0,
-          failed: 0,
-          skipped: 0,
-          errors: [],
-        },
-      });
-    }
-
-    // Process emails
-    const result = await processEmailsForConfigs(emails as Email[], configs);
-
-    res.json({
-      message: "Email processing completed",
-      result,
-    });
-  } catch (error) {
-    console.error("Error processing emails:", error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : "Email processing failed",
-    });
-  }
-});
+  },
+);
 
 /**
  * GET /api/created-tickets
@@ -68,20 +73,23 @@ router.post("/process", authenticateToken, async (req: Request, res: Response) =
  *  - limit: number (default 50)
  *  - offset: number (default 0)
  */
-router.get("/created-tickets", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const {
-      status,
-      date_from,
-      date_to,
-      assigned_user_id,
-      priority_id,
-      project_id,
-      limit = 50,
-      offset = 0,
-    } = req.query;
+router.get(
+  "/created-tickets",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        status,
+        date_from,
+        date_to,
+        assigned_user_id,
+        priority_id,
+        project_id,
+        limit = 50,
+        offset = 0,
+      } = req.query;
 
-    let query = `
+      let query = `
       SELECT 
         ct.id,
         ct.email_id,
@@ -104,127 +112,130 @@ router.get("/created-tickets", authenticateToken, async (req: Request, res: Resp
       WHERE 1=1
     `;
 
-    const values: any[] = [];
-    let paramCount = 1;
+      const values: any[] = [];
+      let paramCount = 1;
 
-    // Add optional filters
-    if (date_from) {
-      query += ` AND ct.created_at >= $${paramCount}`;
-      values.push(date_from);
-      paramCount++;
-    }
+      // Add optional filters
+      if (date_from) {
+        query += ` AND ct.created_at >= $${paramCount}`;
+        values.push(date_from);
+        paramCount++;
+      }
 
-    if (date_to) {
-      query += ` AND ct.created_at <= $${paramCount}`;
-      values.push(date_to);
-      paramCount++;
-    }
+      if (date_to) {
+        query += ` AND ct.created_at <= $${paramCount}`;
+        values.push(date_to);
+        paramCount++;
+      }
 
-    if (assigned_user_id) {
-      query += ` AND mc.assigned_to_id = $${paramCount}`;
-      values.push(assigned_user_id);
-      paramCount++;
-    }
+      if (assigned_user_id) {
+        query += ` AND mc.assigned_to_id = $${paramCount}`;
+        values.push(assigned_user_id);
+        paramCount++;
+      }
 
-    if (priority_id) {
-      query += ` AND mc.priority_id = $${paramCount}`;
-      values.push(priority_id);
-      paramCount++;
-    }
+      if (priority_id) {
+        query += ` AND mc.priority_id = $${paramCount}`;
+        values.push(priority_id);
+        paramCount++;
+      }
 
-    if (project_id) {
-      query += ` AND mc.project_id = $${paramCount}`;
-      values.push(project_id);
-      paramCount++;
-    }
+      if (project_id) {
+        query += ` AND mc.project_id = $${paramCount}`;
+        values.push(project_id);
+        paramCount++;
+      }
 
-    query += ` ORDER BY ct.created_at DESC`;
-    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-    values.push(limit);
-    values.push(offset);
+      query += ` ORDER BY ct.created_at DESC`;
+      query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+      values.push(limit);
+      values.push(offset);
 
-    const result = await pool.query(query, values);
+      const result = await pool.query(query, values);
 
-    // Format response with assigned user display name
-    const tickets = result.rows.map((row) => ({
-      id: row.id,
-      email_id: row.email_id,
-      mail_config_id: row.mail_config_id,
-      config_name: row.config_name,
-      ticket_id: row.ticket_id,
-      mitra_ticket_id: row.mitra_ticket_id,
-      email_subject: row.email_subject,
-      email_from: row.email_from,
-      project_id: row.project_id,
-      priority_id: row.priority_id,
-      assigned_to: {
-        id: row.assigned_to_id,
-        name: row.firstname && row.lastname
-          ? `${row.firstname} ${row.lastname}`
-          : "Unknown",
-      },
-      watchers: row.watcher_user_ids || [],
-      created_at: row.created_at,
-    }));
+      // Format response with assigned user display name
+      const tickets = result.rows.map((row) => ({
+        id: row.id,
+        email_id: row.email_id,
+        mail_config_id: row.mail_config_id,
+        config_name: row.config_name,
+        ticket_id: row.ticket_id,
+        mitra_ticket_id: row.mitra_ticket_id,
+        email_subject: row.email_subject,
+        email_from: row.email_from,
+        project_id: row.project_id,
+        priority_id: row.priority_id,
+        assigned_to: {
+          id: row.assigned_to_id,
+          name:
+            row.firstname && row.lastname
+              ? `${row.firstname} ${row.lastname}`
+              : "Unknown",
+        },
+        watchers: row.watcher_user_ids || [],
+        created_at: row.created_at,
+      }));
 
-    // Get total count for pagination
-    let countQuery = `
+      // Get total count for pagination
+      let countQuery = `
       SELECT COUNT(*) as total
       FROM created_tickets ct
       LEFT JOIN mail_configs mc ON ct.mail_config_id = mc.id
       WHERE 1=1
     `;
 
-    const countValues: any[] = [];
-    let countParamCount = 1;
+      const countValues: any[] = [];
+      let countParamCount = 1;
 
-    if (date_from) {
-      countQuery += ` AND ct.created_at >= $${countParamCount}`;
-      countValues.push(date_from);
-      countParamCount++;
+      if (date_from) {
+        countQuery += ` AND ct.created_at >= $${countParamCount}`;
+        countValues.push(date_from);
+        countParamCount++;
+      }
+
+      if (date_to) {
+        countQuery += ` AND ct.created_at <= $${countParamCount}`;
+        countValues.push(date_to);
+        countParamCount++;
+      }
+
+      if (assigned_user_id) {
+        countQuery += ` AND mc.assigned_to_id = $${countParamCount}`;
+        countValues.push(assigned_user_id);
+        countParamCount++;
+      }
+
+      if (priority_id) {
+        countQuery += ` AND mc.priority_id = $${countParamCount}`;
+        countValues.push(priority_id);
+        countParamCount++;
+      }
+
+      if (project_id) {
+        countQuery += ` AND mc.project_id = $${countParamCount}`;
+        countValues.push(project_id);
+        countParamCount++;
+      }
+
+      const countResult = await pool.query(countQuery, countValues);
+      const total = countResult.rows[0]?.total || 0;
+
+      res.json({
+        tickets,
+        pagination: {
+          total,
+          limit: Number(limit),
+          offset: Number(offset),
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching created tickets:", error);
+      res.status(500).json({
+        error:
+          error instanceof Error ? error.message : "Failed to fetch tickets",
+      });
     }
-
-    if (date_to) {
-      countQuery += ` AND ct.created_at <= $${countParamCount}`;
-      countValues.push(date_to);
-      countParamCount++;
-    }
-
-    if (assigned_user_id) {
-      countQuery += ` AND mc.assigned_to_id = $${countParamCount}`;
-      countValues.push(assigned_user_id);
-      countParamCount++;
-    }
-
-    if (priority_id) {
-      countQuery += ` AND mc.priority_id = $${countParamCount}`;
-      countValues.push(priority_id);
-      countParamCount++;
-    }
-
-    if (project_id) {
-      countQuery += ` AND mc.project_id = $${countParamCount}`;
-      countValues.push(project_id);
-      countParamCount++;
-    }
-
-    const countResult = await pool.query(countQuery, countValues);
-    const total = countResult.rows[0]?.total || 0;
-
-    res.json({
-      tickets,
-      pagination: {
-        total,
-        limit: Number(limit),
-        offset: Number(offset),
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching created tickets:", error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : "Failed to fetch tickets",
-    });
-  }
-});
+  },
+);
 
 export default router;

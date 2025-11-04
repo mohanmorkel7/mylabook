@@ -303,13 +303,12 @@ export function MailConfigModal({
 
   // Helper to get user display name from either old or new structure
   const getUserName = (user?: User): string => {
-    console.log("USERS FUNCTION CALLED with", user);
     if (!user) return "";
     if (user?.name) return user.name.trim();
-    if (user.first_name || user.last_name)
-      return `${user.first_name || ""} ${user.last_name || ""}`.trim();
     if (user.firstname || user.lastname)
       return `${user.firstname || ""} ${user.lastname || ""}`.trim();
+    if ((user as any).first_name || (user as any).last_name)
+      return `${(user as any).first_name || ""} ${(user as any).last_name || ""}`.trim();
     return "Unknown";
   };
 

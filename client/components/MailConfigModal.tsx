@@ -104,6 +104,21 @@ export function MailConfigModal({
     // Use users passed from parent (already fetched in MailConfigsPanel)
     if (initialUsers && initialUsers.length > 0) {
       setUsers(initialUsers);
+      return;
+    }
+    // Fetch mitra_users if not provided
+    if (users.length === 0 && isOpen) {
+      const fetchUsers = async () => {
+        try {
+          const response = await api.get("/users/list/mitra");
+          if (response.data) {
+            setUsers(response.data);
+          }
+        } catch (error) {
+          console.error("Error fetching mitra users:", error);
+        }
+      };
+      fetchUsers();
     }
   }, [initialUsers, isOpen]);
   const [searchAssignee, setSearchAssignee] = useState("");

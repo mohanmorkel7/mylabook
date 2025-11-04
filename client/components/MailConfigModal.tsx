@@ -51,6 +51,11 @@ interface MailConfig {
   description?: string;
   field_type: "subject" | "fromEmail" | "toEmail" | "body";
   field_value: string;
+  from_email?: string;
+  to_email?: string;
+  subject_pattern?: string;
+  body_content?: string;
+  body_match_type?: "word" | "full";
   project_id: number;
   priority_id: number;
   assigned_to_id: number;

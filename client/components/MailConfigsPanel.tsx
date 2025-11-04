@@ -247,6 +247,20 @@ export function MailConfigsPanel({
             </div>
           </div>
 
+          {/* User Info Section */}
+          <div className="p-4 border-b border-gray-200">
+            <p className="font-semibold text-gray-900">{user?.name || 'User'}</p>
+            <p className="text-xs text-gray-600 mt-1">{user?.role || 'Admin'}</p>
+            <Button
+              onClick={handleSignout}
+              variant="outline"
+              size="sm"
+              className="w-full mt-3"
+            >
+              Sign Out
+            </Button>
+          </div>
+
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-2">
             <Button

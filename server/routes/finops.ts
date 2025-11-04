@@ -2215,15 +2215,23 @@ router.post(
             ),
           );
 
-          // if (user_ids.length) {
-          //   fetch("https://pulsealerts.mylapay.com/direct-call", {
-          //     method: "POST",
-          //     headers: { "Content-Type": "application/json" },
-          //     body: JSON.stringify({ receiver: "CRM_Switch", title, user_ids }),
-          //   }).catch((err) => {
-          //     console.warn("Manual direct-call error:", (err as Error).message);
-          //   });
-          // }
+          // Check if Pulse alerts are enabled
+          const settingsRes = await pool.query(
+            `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+          );
+          const pulseAlertsEnabled = settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
+
+          if (pulseAlertsEnabled && user_ids.length) {
+            fetch("https://pulsealerts.mylapay.com/direct-call", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ receiver: "CRM_Switch", title, user_ids }),
+            }).catch((err) => {
+              console.warn("Manual direct-call error:", (err as Error).message);
+            });
+          } else if (!pulseAlertsEnabled) {
+            console.log("Pulse alerts disabled, skipping manual direct-call");
+          }
         } catch (e) {
           console.warn(
             "Manual direct-call user resolution failed:",

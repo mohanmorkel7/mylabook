@@ -425,26 +425,28 @@ export default function ManageTickets() {
         </CardContent>
       </Card>
 
-      {/* Tickets List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-        </div>
-      ) : filteredTickets.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-12">
-              <p className="text-gray-600 text-lg">
-                {tickets.length === 0
-                  ? "No tickets yet"
-                  : "No tickets match your filters"}
-              </p>
+      {/* Tickets List - Conditional Tab Display */}
+      {activeTab === "all" ? (
+        <>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {filteredTickets.map((ticket) => {
+          ) : filteredTickets.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-12">
+                  <p className="text-gray-600 text-lg">
+                    {tickets.length === 0
+                      ? "No tickets yet"
+                      : "No tickets match your filters"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {filteredTickets.map((ticket) => {
             const priority = getPriorityBadge(ticket.priority_id);
             return (
               <Card
@@ -500,9 +502,75 @@ export default function ManageTickets() {
                   </div>
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
+              );
+            })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+            </div>
+          ) : createdTickets.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-12">
+                  <p className="text-gray-600 text-lg">No tickets created from email automation yet</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {createdTickets.map((ticket) => (
+                <Card key={ticket.id} className="hover:shadow-lg transition-shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {ticket.email_subject}
+                          </h3>
+                          <Badge className="bg-blue-100 text-blue-800">
+                            {ticket.config_name}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-3">
+                          From: {ticket.email_from}
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                          <div>
+                            <p className="text-gray-600">Assigned To</p>
+                            <p className="font-medium mt-1">{ticket.assigned_to?.name || "Unassigned"}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Priority</p>
+                            {getPriorityBadge(ticket.priority_id) && (
+                              <Badge className={`mt-1 ${getPriorityBadge(ticket.priority_id)?.color}`}>
+                                {getPriorityBadge(ticket.priority_id)?.name}
+                              </Badge>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Mitra Ticket ID</p>
+                            <p className="font-medium mt-1">#{ticket.mitra_ticket_id}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Created</p>
+                            <p className="font-medium mt-1">
+                              {new Date(ticket.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

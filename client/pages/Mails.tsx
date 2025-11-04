@@ -248,6 +248,29 @@ export default function Mails() {
             userId: user?.id ? parseInt(user.id, 10) : undefined,
           });
           console.log("Periodic processing response:", resp);
+
+          const results = resp?.results || resp?.data?.results || [];
+          if (results.length > 0) {
+            console.log(`Found ${results.length} processing results:`);
+            let anyCreated = false;
+            for (const r of results) {
+              const emailObj = emails.find((e) => e.id === r.emailId);
+              console.log({
+                emailId: r.emailId,
+                subject: emailObj?.subject,
+                from: emailObj?.from?.emailAddress?.address || emailObj?.sender?.emailAddress?.address,
+                configId: r.configId,
+                success: r.success,
+                error: r.error,
+              });
+              if (r.success) anyCreated = true;
+            }
+            if (anyCreated) {
+              try {
+                window.dispatchEvent(new CustomEvent("createdTicketsUpdated"));
+              } catch (e) {}
+            }
+          }
         } catch (err) {
           console.error("Periodic processing error:", err);
         }

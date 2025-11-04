@@ -1,11 +1,11 @@
 import express, { Request, Response } from "express";
-import { pool } from "@/server/database/connection";
+import { pool } from "../database/connection";
 import {
   processEmailsForConfigs,
   getAllActiveConfigs,
-} from "@/server/services/emailProcessorService";
-import { Email } from "@/server/services/emailMatchingService";
-import { authenticateToken } from "@/server/middleware/auth";
+} from "../services/emailProcessorService";
+import { Email } from "../services/emailMatchingService";
+import { authenticateToken } from "../middleware/auth";
 
 const router = express.Router();
 

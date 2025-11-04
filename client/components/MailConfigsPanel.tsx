@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
@@ -17,17 +16,13 @@ import { Edit2, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MailConfigModal } from "./MailConfigModal";
 import api from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 interface User {
   id: number;
   first_name?: string;
   last_name?: string;
   name?: string;
-  firstname?: string;
-  lastname?: string;
-  email?: string;
-  type?: string;
+  email: string;
 }
 
 interface MailConfig {
@@ -70,18 +65,8 @@ const PRIORITY_COLORS: Record<number, string> = {
 export function MailConfigsPanel({
   isOpen,
   onClose,
-  users,
 }: MailConfigsPanelProps) {
   const { user } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const handleSignout = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("user");
-    navigate("/login");
-  };
-
   const [configs, setConfigs] = useState<MailConfig[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState<MailConfig | null>(null);
@@ -93,8 +78,26 @@ export function MailConfigsPanel({
   useEffect(() => {
     if (isOpen) {
       fetchConfigs();
+      fetchUsers();
     }
   }, [isOpen]);
+const [users, setUsers] = useState<User[]>([]);
+
+  const fetchUsers = async () => {
+  try {
+    const response = await api.get<User[]>("/users/list/mitra");
+    console.log("Fetched users:", response);
+    setUsers(response || []);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    toast({
+      title: "Error",
+      description: "Failed to load user list",
+      variant: "destructive",
+    });
+  }
+};
+
 
   const fetchConfigs = async () => {
     try {
@@ -136,7 +139,7 @@ export function MailConfigsPanel({
   };
 
   const handleConfirmDelete = async () => {
-    if (!configToDelete) return;
+   if (configToDelete === null) return;
 
     try {
       const url = user?.id
@@ -199,17 +202,13 @@ export function MailConfigsPanel({
     return labels[fieldType] || fieldType;
   };
 
-  const getAssignedUserName = (userId: number): string => {
-    const user = users.find((u) => u.id === userId);
-    if (!user) return "Unknown";
-    // Handle new mitra_users structure
-    if (user.name) return user.name;
-    // Handle old structure
-    if ((user as any).first_name && (user as any).last_name) {
-      return `${(user as any).first_name} ${(user as any).last_name}`;
-    }
-    return "Unknown";
-  };
+ const getAssignedUserName = (userId: number): string => {
+  const user = users.find((u) => u.id === userId);
+  if (!user) return "Unknown";
+  if (user.name) return user.name;
+  if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
+  return "Unknown";
+};
 
   const getWatcherInitials = (watcherId: number): string => {
     const watcher = users.find((u) => u.id === watcherId);
@@ -236,126 +235,61 @@ export function MailConfigsPanel({
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
       <div className="fixed inset-0 bg-white z-50 overflow-hidden flex">
-        {/* Sidebar - Matching DashboardLayout design */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
-          {/* Logo */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-center">
-              <img
-                src="/mylapaylogo.png"
-                alt="Mylapay"
-                className="h-8 object-contain"
-              />
-            </div>
-          </div>
-
-          {/* User Info Section */}
-          <div className="p-4 border-b border-gray-200">
-            <p className="font-semibold text-gray-900">
-              {user?.name || "User"}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              {user?.role || "Admin"}
-            </p>
-            <Button
-              onClick={handleSignout}
-              variant="outline"
-              size="sm"
-              className="w-full mt-3"
-            >
-              Sign Out
-            </Button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
-            <Button
-              onClick={onClose}
-              variant="outline"
-              size="sm"
-              className="w-full justify-start text-gray-700 hover:bg-gray-100 mb-2"
-            >
-              ← Back to Mails
-            </Button>
-
-            <div
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                location.pathname.includes("/mail-configs")
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100",
-              )}
-            >
-              <span>Mail Configs</span>
+        {/* Sidebar */}
+        <div className="w-64 bg-gray-50 border-r border-gray-200 overflow-y-auto">
+          <div className="p-6">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900">Mylapay</h2>
+              <p className="text-xs text-gray-600 mt-1">Mail Configs</p>
             </div>
 
-            <a
-              href="/dashboard"
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                location.pathname === "/dashboard"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100",
-              )}
-            >
-              <span>Dashboard</span>
-            </a>
-            <a
-              href="/clients"
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                location.pathname.includes("/clients")
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100",
-              )}
-            >
-              <span>Clients</span>
-            </a>
-            <a
-              href="/vc"
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                location.pathname.includes("/vc")
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100",
-              )}
-            >
-              <span>VC</span>
-            </a>
-            <a
-              href="/fundraise"
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                location.pathname.includes("/fundraise")
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100",
-              )}
-            >
-              <span>Fund Raise</span>
-            </a>
-            <a
-              href="/mails"
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                location.pathname.includes("/mails")
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100",
-              )}
-            >
-              <span>Mails</span>
-            </a>
-            <a
-              href="/tickets"
-              className={cn(
-                "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                location.pathname.includes("/tickets")
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-700 hover:bg-gray-100",
-              )}
-            >
-              <span>Tickets</span>
-            </a>
-          </nav>
+            <nav className="space-y-1">
+              <Button
+                onClick={onClose}
+                variant="ghost"
+                className="w-full justify-start text-gray-700 hover:bg-gray-100 mb-4"
+              >
+                ← Back to Mails
+              </Button>
+
+              <a
+                href="/dashboard"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Dashboard
+              </a>
+              <a
+                href="/clients"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Clients
+              </a>
+              <a
+                href="/vc"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                VC
+              </a>
+              <a
+                href="/fundraise"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Fund Raise
+              </a>
+              <a
+                href="/mails"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Mails
+              </a>
+              <a
+                href="/tickets"
+                className="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+              >
+                Tickets
+              </a>
+            </nav>
+          </div>
         </div>
 
         {/* Main Content */}
@@ -515,31 +449,14 @@ export function MailConfigsPanel({
         </div>
       </div>
 
-      <MailConfigModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedConfig(null);
-        }}
-        onConfigSaved={handleConfigSaved}
-        initialConfig={
-          selectedConfig
-            ? {
-                id: selectedConfig.id,
-                name: selectedConfig.name,
-                description: selectedConfig.description,
-                field_type: selectedConfig.field_type,
-                field_value: selectedConfig.field_value,
-                project_id: selectedConfig.project_id,
-                priority_id: selectedConfig.priority_id,
-                assigned_to_id: selectedConfig.assigned_to_id,
-                watcher_user_ids: selectedConfig.watcher_user_ids,
-                is_active: selectedConfig.is_active,
-              }
-            : undefined
-        }
-        users={users}
-      />
+     <MailConfigModal
+  isOpen={isModalOpen}
+  onClose={() => { setIsModalOpen(false); setSelectedConfig(null); }}
+  onConfigSaved={handleConfigSaved}
+  initialConfig={selectedConfig || undefined}
+  users={users}
+/>
+
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>

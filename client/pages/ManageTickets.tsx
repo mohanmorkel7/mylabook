@@ -216,11 +216,15 @@ export default function ManageTickets() {
   const getAssignedUserName = (userId: number): string => {
     const user = users.find((u) => u.id === userId);
     if (!user) return "Unassigned";
-    // Handle new mitra_users structure
+    // Handle new mitra_users structure (firstname + lastname)
+    if (user.firstname || user.lastname) {
+      return `${user.firstname || ""} ${user.lastname || ""}`.trim();
+    }
+    // Handle name field
     if (user.name) return user.name;
     // Handle old structure
-    if ((user as any).first_name && (user as any).last_name) {
-      return `${(user as any).first_name} ${(user as any).last_name}`;
+    if (user.first_name && user.last_name) {
+      return `${user.first_name} ${user.last_name}`;
     }
     return "Unassigned";
   };

@@ -88,7 +88,7 @@ function ApprovalTimer({
 export default function ClientBasedFinOpsTaskManager() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === "admin";
 
   const { data: finopsTasks = [], isLoading } = useQuery({
     queryKey: ["finops-tasks"],

@@ -1910,7 +1910,7 @@ router.patch(
         );
 
         // Notification data
-        const notifyData = {
+        const notifyDataBase = {
           ...(updated || trackerRow),
           id: (updated || trackerRow)?.subtask_id || subtaskId,
           task_id: (updated || trackerRow)?.task_id || taskId,
@@ -1920,6 +1920,25 @@ router.patch(
           escalation_managers:
             (updated || trackerRow)?.escalation_managers || null,
           assigned_to: (updated || trackerRow)?.assigned_to || null,
+        };
+
+        // Ensure client_name is included (fetch from finops_tasks if not present)
+        let clientName = (notifyDataBase as any).client_name;
+        try {
+          if (!clientName) {
+            const taskMetaRes = await pool.query(
+              `SELECT client_name FROM finops_tasks WHERE id = $1 LIMIT 1`,
+              [(notifyDataBase as any).task_id || taskId],
+            );
+            clientName = taskMetaRes.rows[0]?.client_name || null;
+          }
+        } catch (e) {
+          console.warn('Failed to fetch client_name for notifications:', (e as Error).message);
+        }
+
+        const notifyData = {
+          ...notifyDataBase,
+          client_name: clientName,
         };
 
         await handleStatusChangeNotifications(

@@ -1144,13 +1144,13 @@ class FinOpsAlertService {
     }));
 
     // Debug: log subtask statuses from finops_tracker
-    for (const task of tasksWithSubtasks) {
-      for (const subtask of task.subtasks) {
-        console.log(
-          `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
-        );
-      }
-    }
+    // for (const task of tasksWithSubtasks) {
+    //   for (const subtask of task.subtasks) {
+    //     console.log(
+    //       `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
+    //     );
+    //   }
+    // }
 
     return tasksWithSubtasks;
   }

@@ -2128,6 +2128,36 @@ async function handleStatusChangeNotifications(
         "Completion notification would be sent to:",
         reportingManagers,
       );
+
+      // Schedule pending-approval alert for reporting managers after 30 minutes
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS finops_external_alerts (
+            id SERIAL PRIMARY KEY,
+            task_id INTEGER NOT NULL,
+            subtask_id INTEGER NOT NULL,
+            alert_group TEXT NOT NULL,
+            alert_bucket INTEGER NOT NULL DEFAULT -1,
+            title TEXT,
+            next_call_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
+          )
+        `);
+
+        const title = `Please review and approve the subtask \"${subtaskData.subtask_name || subtaskData.name}\" under the task \"${subtaskData.task_name}\" for the client \"${subtaskData.client_name || 'Unknown Client'}\" at your earliest convenience.`;
+
+        await pool.query(
+          `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+           VALUES ($1, $2, $3, -1, $4, NOW() + INTERVAL '30 minutes')
+           ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
+          [subtaskData.task_id, subtaskData.id, 'pending_approval_reporting', title],
+        );
+
+        console.log(`Scheduled pending approval alert for task ${subtaskData.task_id} subtask ${subtaskData.id}`);
+      } catch (e) {
+        console.warn('Failed to schedule pending approval alert:', (e as Error).message);
+      }
     }
 
     // Send overdue notifications

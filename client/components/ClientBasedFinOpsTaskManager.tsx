@@ -88,6 +88,7 @@ function ApprovalTimer({
 export default function ClientBasedFinOpsTaskManager() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const isAdmin = user?.role === 'admin';
 
   const { data: finopsTasks = [], isLoading } = useQuery({
     queryKey: ["finops-tasks"],
@@ -191,10 +192,10 @@ export default function ClientBasedFinOpsTaskManager() {
                       </div>
                     </div>
 
-                    {/* Show ApprovalTimer only to reporting managers when subtask completed and not approved */}
+                    {/* Show ApprovalTimer to reporting managers and admins when subtask completed and not approved */}
                     {subtask.status === "completed" &&
                       !isApproved &&
-                      isReporting && (
+                      (isReporting || isAdmin) && (
                         <ApprovalTimer
                           taskId={task.id}
                           subtaskId={Number(subtask.id)}

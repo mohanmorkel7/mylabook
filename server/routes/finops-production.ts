@@ -30,6 +30,32 @@ async function ensureExternalAlertsSchema(): Promise<void> {
   );
 }
 
+// Endpoint to fetch external alert next_call_at for a given task/subtask
+router.get("/external-alerts", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+    const taskId = req.query.task_id ? parseInt(req.query.task_id as string) : null;
+    const subtaskId = req.query.subtask_id ? parseInt(req.query.subtask_id as string) : null;
+    const group = (req.query.group as string) || "pending_approval_reporting";
+
+    if (!taskId || !subtaskId) {
+      return res.status(400).json({ error: "task_id and subtask_id are required" });
+    }
+
+    const q = `SELECT id, next_call_at, created_at, alert_group FROM finops_external_alerts WHERE task_id = $1 AND subtask_id = $2 AND alert_group = $3 ORDER BY next_call_at ASC LIMIT 1`;
+    const rr = await pool.query(q, [taskId, subtaskId, group]);
+    if (rr.rows.length === 0) {
+      return res.json({ next_call_at: null });
+    }
+
+    const row = rr.rows[0];
+    return res.json({ next_call_at: row.next_call_at });
+  } catch (error) {
+    console.error('Error fetching external alerts:', error);
+    res.status(500).json({ error: 'Failed to fetch external alerts' });
+  }
+});
+
 // Production database availability check - fail fast if no database
 async function requireDatabase() {
   try {

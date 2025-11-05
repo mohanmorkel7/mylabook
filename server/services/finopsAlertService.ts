@@ -1348,6 +1348,22 @@ class FinOpsAlertService {
         statusChangeMessage,
       );
 
+      // When a subtask is marked completed, schedule a pending-approval alert for reporting managers after 30 minutes
+      if (status === "completed") {
+        try {
+          const approvalTitle = `Please review and approve the subtask "${subtaskName}" under the task "${taskName}" for the client "${clientName}" at your earliest convenience.`;
+          await pool.query(
+            `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+             VALUES ($1, $2, $3, -1, $4, NOW() + INTERVAL '30 minutes')
+             ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
+            [taskId, subtaskId, 'pending_approval_reporting', approvalTitle],
+          );
+          console.log(`Scheduled pending-approval alert for task ${taskId} subtask ${subtaskId}`);
+        } catch (e) {
+          console.warn('Failed to schedule pending-approval alert:', (e as Error).message);
+        }
+      }
+
       // Trigger external alert only for overdue transitions
       if (status === "overdue") {
         await this.sendReplicaDownAlert(taskId, subtaskId, statusChangeMessage);

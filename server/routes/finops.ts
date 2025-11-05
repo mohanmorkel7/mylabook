@@ -1933,7 +1933,10 @@ router.patch(
             clientName = taskMetaRes.rows[0]?.client_name || null;
           }
         } catch (e) {
-          console.warn('Failed to fetch client_name for notifications:', (e as Error).message);
+          console.warn(
+            "Failed to fetch client_name for notifications:",
+            (e as Error).message,
+          );
         }
 
         const notifyData = {

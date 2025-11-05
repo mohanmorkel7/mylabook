@@ -832,10 +832,10 @@ router.post("/tasks", async (req: Request, res: Response) => {
 //     sla_hours = COALESCE($5, sla_hours),
 //     sla_minutes = COALESCE($6, sla_minutes),
 //     order_position = COALESCE($7, order_position),
-//     status = CASE 
-//                WHEN run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date 
-//                THEN COALESCE($8, status) 
-//                ELSE status 
+//     status = CASE
+//                WHEN run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+//                THEN COALESCE($8, status)
+//                ELSE status
 //              END,
 //                      updated_at = NOW()
 // WHERE run_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
@@ -936,7 +936,6 @@ router.post("/tasks", async (req: Request, res: Response) => {
 //   }
 // });
 
-
 router.put("/tasks/:id", async (req: Request, res: Response) => {
   const client = await pool.connect();
 
@@ -990,7 +989,9 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
     await client.query(updateTaskQuery, [
       task_name,
       description,
-      typeof assigned_to === "string" ? assigned_to : JSON.stringify(assigned_to || []),
+      typeof assigned_to === "string"
+        ? assigned_to
+        : JSON.stringify(assigned_to || []),
       JSON.stringify(reporting_managers || []),
       JSON.stringify(escalation_managers || []),
       effective_from,
@@ -1008,10 +1009,15 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
     console.log(`[Task ${taskId}] Fetching existing subtasks...`);
     const existingSubtasksRes = await client.query(
       `SELECT id FROM finops_subtasks WHERE task_id = $1`,
-      [taskId]
+      [taskId],
     );
-    const existingIds = new Set<number>(existingSubtasksRes.rows.map((r: any) => Number(r.id)));
-    console.log(`[Task ${taskId}] Existing subtasks IDs:`, Array.from(existingIds));
+    const existingIds = new Set<number>(
+      existingSubtasksRes.rows.map((r: any) => Number(r.id)),
+    );
+    console.log(
+      `[Task ${taskId}] Existing subtasks IDs:`,
+      Array.from(existingIds),
+    );
 
     const incomingSubtasks = Array.isArray(subtasks) ? subtasks : [];
     const processedIds: number[] = [];
@@ -1025,7 +1031,9 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
       // -----------------------------
       if (subtaskId && existingIds.has(subtaskId)) {
         processedIds.push(subtaskId);
-        console.log(`[Task ${taskId}] Updating existing subtask ID ${subtaskId}...`);
+        console.log(
+          `[Task ${taskId}] Updating existing subtask ID ${subtaskId}...`,
+        );
         await client.query(
           `
           UPDATE finops_subtasks
@@ -1050,12 +1058,16 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
             status,
             subtaskId,
             taskId,
-          ]
+          ],
         );
-        console.log(`[Task ${taskId}] Subtask ${subtaskId} updated successfully.`);
+        console.log(
+          `[Task ${taskId}] Subtask ${subtaskId} updated successfully.`,
+        );
 
         // Update today's tracker
-        console.log(`[Task ${taskId}] Updating tracker for subtask ID ${subtaskId}...`);
+        console.log(
+          `[Task ${taskId}] Updating tracker for subtask ID ${subtaskId}...`,
+        );
         await client.query(
           `
           UPDATE finops_tracker
@@ -1087,16 +1099,20 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
             status,
             taskId,
             subtaskId,
-          ]
+          ],
         );
-        console.log(`[Task ${taskId}] Tracker updated for subtask ID ${subtaskId}.`);
+        console.log(
+          `[Task ${taskId}] Tracker updated for subtask ID ${subtaskId}.`,
+        );
       }
 
       // -----------------------------
       // Insert new subtask
       // -----------------------------
       else {
-        console.log(`[Task ${taskId}] Inserting new subtask: ${JSON.stringify(subtask)}...`);
+        console.log(
+          `[Task ${taskId}] Inserting new subtask: ${JSON.stringify(subtask)}...`,
+        );
         const insertRes = await client.query(
           `
           INSERT INTO finops_subtasks (
@@ -1121,14 +1137,16 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
             subtask.sla_minutes ?? null,
             subtask.order_position ?? 0,
             status,
-          ]
+          ],
         );
         const newId = insertRes.rows[0].id;
         processedIds.push(newId);
         console.log(`[Task ${taskId}] New subtask inserted with ID ${newId}.`);
 
         // Insert tracker for new subtask
-        console.log(`[Task ${taskId}] Inserting tracker for new subtask ID ${newId}...`);
+        console.log(
+          `[Task ${taskId}] Inserting tracker for new subtask ID ${newId}...`,
+        );
         await client.query(
           `
           INSERT INTO finops_tracker (
@@ -1165,9 +1183,11 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
             subtask.order_position ?? 0,
             status,
             "daily",
-          ]
+          ],
         );
-        console.log(`[Task ${taskId}] Tracker inserted for new subtask ID ${newId}.`);
+        console.log(
+          `[Task ${taskId}] Tracker inserted for new subtask ID ${newId}.`,
+        );
       }
     }
 
@@ -1179,11 +1199,11 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
       `DELETE FROM finops_subtasks WHERE task_id = $1 AND id NOT IN (${idsToKeep
         .map((_, i) => `$${i + 2}`)
         .join(",")}) RETURNING id`,
-      [taskId, ...idsToKeep]
+      [taskId, ...idsToKeep],
     );
     console.log(
       `[Task ${taskId}] Deleted subtasks IDs:`,
-      deletedSubtasksRes.rows.map((r) => r.id)
+      deletedSubtasksRes.rows.map((r) => r.id),
     );
 
     const deletedTrackersRes = await client.query(
@@ -1192,11 +1212,11 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
        AND subtask_id NOT IN (${idsToKeep.map((_, i) => `$${i + 2}`).join(",")})
        AND run_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
        RETURNING subtask_id`,
-      [taskId, ...idsToKeep]
+      [taskId, ...idsToKeep],
     );
     console.log(
       `[Task ${taskId}] Deleted tracker entries for subtask IDs:`,
-      deletedTrackersRes.rows.map((r) => r.subtask_id)
+      deletedTrackersRes.rows.map((r) => r.subtask_id),
     );
 
     await client.query("COMMIT");
@@ -1204,15 +1224,16 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
     res.json({ message: "FinOps task updated successfully" });
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error(`[Task ${req.params.id}] Transaction rolled back due to error:`, error);
+    console.error(
+      `[Task ${req.params.id}] Transaction rolled back due to error:`,
+      error,
+    );
     res.status(500).json({ error: "Failed to update FinOps task" });
   } finally {
     client.release();
     console.log(`[Task ${req.params.id}] DB client released.`);
   }
 });
-
-
 
 // Delete FinOps task
 router.delete("/tasks/:id", async (req: Request, res: Response) => {
@@ -1643,7 +1664,6 @@ async function getUserIdsFromNames(names: string[]): Promise<string[]> {
 //   },
 // );
 
-
 router.patch(
   "/tasks/:taskId/subtasks/:subtaskId",
   async (req: Request, res: Response) => {
@@ -1719,7 +1739,7 @@ router.patch(
           WHERE ft.run_date = $1::date AND ft.task_id = $2 AND ft.subtask_id = $3
           LIMIT 1
         `,
-          [updateDate, taskId, subtaskId]
+          [updateDate, taskId, subtaskId],
         );
 
         let trackerRow: any = trackerRes.rows[0];
@@ -1734,7 +1754,7 @@ router.patch(
             WHERE st.task_id = $1 AND st.id = $2
             LIMIT 1
           `,
-            [taskId, subtaskId]
+            [taskId, subtaskId],
           );
 
           if (stRes.rows.length === 0) {
@@ -1790,14 +1810,16 @@ router.patch(
               st.assigned_to || null,
               st.reporting_managers || null,
               st.escalation_managers || null,
-            ]
+            ],
           );
 
           trackerRow = insertRes.rows[0];
         } else {
           // Update existing row with proper backdating
           const startedAt =
-            status === "in_progress" ? trackerRow.started_at || updateDateObj : trackerRow.started_at;
+            status === "in_progress"
+              ? trackerRow.started_at || updateDateObj
+              : trackerRow.started_at;
           const completedAt =
             status === "completed" ? updateDateObj : trackerRow.completed_at;
 
@@ -1809,13 +1831,20 @@ router.patch(
             "completed_at = $4",
           ];
 
-          const params = [status, updateDate, startedAt, completedAt, taskId, subtaskId];
+          const params = [
+            status,
+            updateDate,
+            startedAt,
+            completedAt,
+            taskId,
+            subtaskId,
+          ];
 
           await pool.query(
             `UPDATE finops_tracker
              SET ${updateFields.join(", ")}
              WHERE run_date = $2::date AND task_id = $5 AND subtask_id = $6`,
-            params
+            params,
           );
         }
 
@@ -1833,10 +1862,20 @@ router.patch(
                 updated_at = CURRENT_TIMESTAMP
             WHERE task_id = $5 AND id = $6
           `,
-            [status, isInProgress, isCompleted, updateDateObj, taskId, subtaskId]
+            [
+              status,
+              isInProgress,
+              isCompleted,
+              updateDateObj,
+              taskId,
+              subtaskId,
+            ],
           );
         } catch (err) {
-          console.warn("Failed to persist status to finops_subtasks:", err?.message || err);
+          console.warn(
+            "Failed to persist status to finops_subtasks:",
+            err?.message || err,
+          );
         }
 
         // Fetch updated row for logging/notifications
@@ -1848,18 +1887,27 @@ router.patch(
           WHERE ft.run_date = $1::date AND ft.task_id = $2 AND ft.subtask_id = $3
           LIMIT 1
         `,
-          [updateDate, taskId, subtaskId]
+          [updateDate, taskId, subtaskId],
         );
 
         const updated = updatedRes.rows[0];
         const oldStatus = trackerRow?.status || null;
-        const subtaskName = trackerRow?.subtask_name || updated?.subtask_name || "Unknown Subtask";
+        const subtaskName =
+          trackerRow?.subtask_name ||
+          updated?.subtask_name ||
+          "Unknown Subtask";
 
         let logDetails = `Subtask "${subtaskName}" status changed from "${oldStatus}" to "${status}"`;
         if (status === "delayed" && delay_reason)
           logDetails += ` (Reason: ${delay_reason})`;
 
-        await logActivity(taskId, subtaskId, "status_changed", userName, logDetails);
+        await logActivity(
+          taskId,
+          subtaskId,
+          "status_changed",
+          userName,
+          logDetails,
+        );
 
         // Notification data
         const notifyData = {
@@ -1867,12 +1915,19 @@ router.patch(
           id: (updated || trackerRow)?.subtask_id || subtaskId,
           task_id: (updated || trackerRow)?.task_id || taskId,
           name: (updated || trackerRow)?.subtask_name || subtaskName,
-          reporting_managers: (updated || trackerRow)?.reporting_managers || null,
-          escalation_managers: (updated || trackerRow)?.escalation_managers || null,
+          reporting_managers:
+            (updated || trackerRow)?.reporting_managers || null,
+          escalation_managers:
+            (updated || trackerRow)?.escalation_managers || null,
           assigned_to: (updated || trackerRow)?.assigned_to || null,
         };
 
-        await handleStatusChangeNotifications(notifyData, status, delay_reason, delay_notes);
+        await handleStatusChangeNotifications(
+          notifyData,
+          status,
+          delay_reason,
+          delay_notes,
+        );
 
         await logUserActivity(userName, taskId);
         await checkAndUpdateTaskStatus(taskId, userName);
@@ -1891,13 +1946,16 @@ router.patch(
         if (!task) return res.status(404).json({ error: "Task not found" });
 
         const subtask = task.subtasks.find((st) => st.id === subtaskId);
-        if (!subtask) return res.status(404).json({ error: "Subtask not found" });
+        if (!subtask)
+          return res.status(404).json({ error: "Subtask not found" });
 
         const oldStatus = subtask.status;
         subtask.status = status;
 
-        if (status === "completed") subtask.completed_at = updateDateObj.toISOString();
-        if (status === "in_progress") subtask.started_at = updateDateObj.toISOString();
+        if (status === "completed")
+          subtask.completed_at = updateDateObj.toISOString();
+        if (status === "in_progress")
+          subtask.started_at = updateDateObj.toISOString();
         if (status === "delayed") {
           (subtask as any).delay_reason = delay_reason;
           (subtask as any).delay_notes = delay_notes;
@@ -1915,9 +1973,8 @@ router.patch(
       console.error("Error updating subtask status:", error);
       res.status(500).json({ error: "Failed to update subtask status" });
     }
-  }
+  },
 );
-
 
 // Get activity log
 router.get("/activity-log", async (req: Request, res: Response) => {
@@ -2145,18 +2202,28 @@ async function handleStatusChangeNotifications(
           )
         `);
 
-        const title = `Please review and approve the subtask \"${subtaskData.subtask_name || subtaskData.name}\" under the task \"${subtaskData.task_name}\" for the client \"${subtaskData.client_name || 'Unknown Client'}\" at your earliest convenience.`;
+        const title = `Please review and approve the subtask \"${subtaskData.subtask_name || subtaskData.name}\" under the task \"${subtaskData.task_name}\" for the client \"${subtaskData.client_name || "Unknown Client"}\" at your earliest convenience.`;
 
         await pool.query(
           `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
            VALUES ($1, $2, $3, -1, $4, NOW() + INTERVAL '30 minutes')
            ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
-          [subtaskData.task_id, subtaskData.id, 'pending_approval_reporting', title],
+          [
+            subtaskData.task_id,
+            subtaskData.id,
+            "pending_approval_reporting",
+            title,
+          ],
         );
 
-        console.log(`Scheduled pending approval alert for task ${subtaskData.task_id} subtask ${subtaskData.id}`);
+        console.log(
+          `Scheduled pending approval alert for task ${subtaskData.task_id} subtask ${subtaskData.id}`,
+        );
       } catch (e) {
-        console.warn('Failed to schedule pending approval alert:', (e as Error).message);
+        console.warn(
+          "Failed to schedule pending approval alert:",
+          (e as Error).message,
+        );
       }
     }
 
@@ -2796,7 +2863,7 @@ router.post(
                 .filter((id: string | null) => !!id),
             ),
           );
-console.log("USER INSIDE ALERT ENABLED",user_ids)
+          console.log("USER INSIDE ALERT ENABLED", user_ids);
           // Check if Pulse alerts are enabled
           const settingsRes = await pool.query(
             `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
@@ -2808,10 +2875,11 @@ console.log("USER INSIDE ALERT ENABLED",user_ids)
             fetch("https://pulsealerts.mylapay.com/direct-call", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                receiver: "CRM_Switch", 
-                title:title,
-                 user_ids: user_ids, }),
+              body: JSON.stringify({
+                receiver: "CRM_Switch",
+                title: title,
+                user_ids: user_ids,
+              }),
             }).catch((err) => {
               console.warn("Manual direct-call error:", (err as Error).message);
             });

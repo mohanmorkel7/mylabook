@@ -1675,7 +1675,7 @@ export default function ClientBasedFinOpsTaskManager() {
   };
 
   // Filter tasks based on client, status, search, and date
-  const filteredTasks = finopsTasks.filter((task: ClientBasedFinOpsTask) => {
+  let filteredTasks = finopsTasks.filter((task: ClientBasedFinOpsTask) => {
     if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
       console.log("Processing task:", task.task_name, "for filtering");
     // Client filter from summary (takes priority)
@@ -1778,6 +1778,26 @@ export default function ClientBasedFinOpsTaskManager() {
   const normalizedUserName = normalize(user?.name || user?.email || "");
 
   const isAdmin = user?.role === "admin";
+
+  // Role-based visibility: non-admins see only tasks where they are assigned_to, reporting manager, or escalation manager
+  if (!isAdmin) {
+    filteredTasks = filteredTasks.filter((task: ClientBasedFinOpsTask) => {
+      const allInvolvedUsers = [
+        ...(Array.isArray(task.assigned_to) ? task.assigned_to : [task.assigned_to].filter(Boolean)),
+        ...(Array.isArray(task.reporting_managers) ? task.reporting_managers : []),
+        ...(Array.isArray(task.escalation_managers) ? task.escalation_managers : []),
+      ];
+      return allInvolvedUsers.some((person) => {
+        if (!person) return false;
+        const name = extractNameFromValue(person);
+        const normalized = normalize(name);
+        return (
+          normalized === normalizedUserName ||
+          (typeof person === "string" && person.includes(user?.email || ""))
+        );
+      });
+    });
+  }
 
   // <-- Add this here, after filteredTasks is available -->
   const canCreateTask =

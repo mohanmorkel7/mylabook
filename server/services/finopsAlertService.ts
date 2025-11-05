@@ -200,18 +200,18 @@ class FinOpsAlertService {
     const lockKey = 1234567890; // arbitrary constant
     let haveDbLock = false;
     try {
-      const lockRes = await pool.query(
-        `SELECT pg_try_advisory_lock($1) as ok`,
-        [lockKey],
-      );
-      haveDbLock = !!(lockRes.rows && lockRes.rows[0] && lockRes.rows[0].ok);
-      if (!haveDbLock) {
-        console.log(
-          "Another process holds the SLA advisory lock — skipping this run",
-        );
-        this.isCheckingSLA = false;
-        return;
-      }
+      // const lockRes = await pool.query(
+      //   `SELECT pg_try_advisory_lock($1) as ok`,
+      //   [lockKey],
+      // );
+      // haveDbLock = !!(lockRes.rows && lockRes.rows[0] && lockRes.rows[0].ok);
+      // if (!haveDbLock) {
+      //   console.log(
+      //     "Another process holds the SLA advisory lock — skipping this run",
+      //   );
+      //   this.isCheckingSLA = false;
+      //   return;
+      // }
 
       const { isDatabaseAvailable } = await import("../database/connection");
       if (!(await isDatabaseAvailable())) return;
@@ -291,9 +291,9 @@ class FinOpsAlertService {
   private async checkSubtaskSLA(task: any, subtask: any): Promise<void> {
     const now = new Date();
 
-    console.log(
-      `Checking SLA for subtask ${subtask.id} (${subtask.name}): status=${subtask.status}`,
-    );
+    // console.log(
+    //   `Checking SLA for subtask ${subtask.id} (${subtask.name}): status=${subtask.status}`,
+    // );
 
     // Only check pending tasks for overdue status
     if (subtask.status !== "pending") {

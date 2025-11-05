@@ -190,7 +190,9 @@ export const handler: Handler = async () => {
         );
         const pulseEnabled = pulseSetting.rows[0]?.pulse_alerts_enabled ?? true;
         if (!pulseEnabled) {
-          console.log('[pulse-sync] Pulse alerts disabled, skipping external call');
+          console.log(
+            "[pulse-sync] Pulse alerts disabled, skipping external call",
+          );
           continue;
         }
 
@@ -221,10 +223,16 @@ export const handler: Handler = async () => {
 
           sent++;
         } catch (err) {
-          console.warn("[pulse-sync] Pulse call error:", (err as Error).message);
+          console.warn(
+            "[pulse-sync] Pulse call error:",
+            (err as Error).message,
+          );
         }
       } catch (e) {
-        console.warn('[pulse-sync] pending alert processing error:', e?.message || e);
+        console.warn(
+          "[pulse-sync] pending alert processing error:",
+          e?.message || e,
+        );
       }
     }
 

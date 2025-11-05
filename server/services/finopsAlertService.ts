@@ -494,7 +494,7 @@ class FinOpsAlertService {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     receiver: "CRM_Switch",
-                    title:title,
+                    title: title,
                     user_ids: allUserIds,
                   }),
                 },
@@ -1356,11 +1356,16 @@ class FinOpsAlertService {
             `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
              VALUES ($1, $2, $3, -1, $4, NOW() + INTERVAL '30 minutes')
              ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
-            [taskId, subtaskId, 'pending_approval_reporting', approvalTitle],
+            [taskId, subtaskId, "pending_approval_reporting", approvalTitle],
           );
-          console.log(`Scheduled pending-approval alert for task ${taskId} subtask ${subtaskId}`);
+          console.log(
+            `Scheduled pending-approval alert for task ${taskId} subtask ${subtaskId}`,
+          );
         } catch (e) {
-          console.warn('Failed to schedule pending-approval alert:', (e as Error).message);
+          console.warn(
+            "Failed to schedule pending-approval alert:",
+            (e as Error).message,
+          );
         }
       }
 

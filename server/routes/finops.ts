@@ -2212,7 +2212,7 @@ router.post(
                 .filter((id: string | null) => !!id),
             ),
           );
-console.log("USER INSIDE ALERT ENABKED",user_ids)
+console.log("USER INSIDE ALERT ENABLED",user_ids)
           // Check if Pulse alerts are enabled
           const settingsRes = await pool.query(
             `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,

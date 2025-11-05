@@ -1783,9 +1783,15 @@ export default function ClientBasedFinOpsTaskManager() {
   if (!isAdmin) {
     filteredTasks = filteredTasks.filter((task: ClientBasedFinOpsTask) => {
       const allInvolvedUsers = [
-        ...(Array.isArray(task.assigned_to) ? task.assigned_to : [task.assigned_to].filter(Boolean)),
-        ...(Array.isArray(task.reporting_managers) ? task.reporting_managers : []),
-        ...(Array.isArray(task.escalation_managers) ? task.escalation_managers : []),
+        ...(Array.isArray(task.assigned_to)
+          ? task.assigned_to
+          : [task.assigned_to].filter(Boolean)),
+        ...(Array.isArray(task.reporting_managers)
+          ? task.reporting_managers
+          : []),
+        ...(Array.isArray(task.escalation_managers)
+          ? task.escalation_managers
+          : []),
       ];
       return allInvolvedUsers.some((person) => {
         if (!person) return false;

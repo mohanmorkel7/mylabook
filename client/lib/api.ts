@@ -1202,11 +1202,40 @@ public async get<T>(path: string): Promise<T> {
     userName?: string,
     date?: string,
   ) {
+    // Determine safe user name: prefer explicit param, otherwise try localStorage 'banani_user'
+    let safeUserName: string | null | undefined = userName;
+    try {
+      if (!safeUserName && typeof window !== "undefined") {
+        const raw = localStorage.getItem("banani_user") || localStorage.getItem("user");
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed) {
+              if (parsed.name && typeof parsed.name === "string") safeUserName = parsed.name.trim();
+              else if ((parsed.first_name || parsed.last_name) && (parsed.first_name || parsed.last_name).trim())
+                safeUserName = `${(parsed.first_name || "").trim()} ${(parsed.last_name || "").trim()}`.trim();
+            }
+          } catch (e) {
+            // raw might already be a string name
+            if (typeof raw === "string" && raw.trim()) safeUserName = raw.trim();
+          }
+        }
+      }
+
+      if (typeof safeUserName === "string") {
+        const cleaned = safeUserName.trim();
+        if (!cleaned || /^(undefined|null)$/i.test(cleaned.replace(/\s+/g, " "))) safeUserName = null;
+        else safeUserName = cleaned;
+      }
+    } catch (e) {
+      safeUserName = userName || null;
+    }
+
     return this.request(`/finops/tasks/${taskId}/subtasks/${subTaskId}`, {
       method: "PATCH",
       body: JSON.stringify({
         status,
-        user_name: userName,
+        user_name: safeUserName,
         date,
       }),
     });

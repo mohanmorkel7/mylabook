@@ -1672,7 +1672,11 @@ router.patch(
       const subtaskId = Number(req.params.subtaskId);
       const { status, user_name, delay_reason, delay_notes, date } = req.body;
       let userName = typeof user_name === "string" ? user_name.trim() : "";
-      if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+      if (
+        !userName ||
+        /undefined|null/i.test(userName) ||
+        userName.replace(/\s+/g, "") === ""
+      ) {
         userName = "Unknown User";
       }
 

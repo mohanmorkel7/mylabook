@@ -2159,7 +2159,7 @@ export default function ClientBasedFinOpsTaskManager() {
         )}
 
         {/* Overall Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-blue-600">
@@ -2168,6 +2168,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Total Tasks</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-gray-900">
@@ -2176,6 +2177,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Total Subtasks</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-green-600">
@@ -2184,6 +2186,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Completed</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-yellow-600">
@@ -2192,6 +2195,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Delayed</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-red-600">
@@ -2200,6 +2204,25 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Overdue</div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-indigo-600">
+                {overallSummary.pending_subtasks}
+              </div>
+              <div className="text-xs text-gray-600">Pending</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {overallSummary.in_progress_subtasks}
+              </div>
+              <div className="text-xs text-gray-600">In-Progress</div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-purple-600">
@@ -3016,7 +3039,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           typeof window !== "undefined" &&
                           (window as any).__APP_DEBUG
                         )
-                          console.log("🎯 Rendering client dropdown:", {
+                          console.log("��� Rendering client dropdown:", {
                             isLoading: clientsLoading,
                             clientsCount: clients.length,
                             rawClientsCount: rawClients.length,

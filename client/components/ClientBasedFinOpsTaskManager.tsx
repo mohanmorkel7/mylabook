@@ -152,6 +152,18 @@ const convertNameToValueFormat = (name: string, users: any[]): string => {
   return user ? `${name} (${user.email || "no-email"})` : `${name} (no-email)`;
 };
 
+// Format ISO timestamp to "YYYY-MM-DD h:mm:ss AM/PM"
+const formatDateTime = (iso?: string | null) => {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return format(d, "yyyy-MM-dd h:mm:ss a");
+  } catch (e) {
+    return "";
+  }
+};
+
 // Time conversion utilities for AM/PM format
 const convertTo12Hour = (time24: string): { time: string; period: string } => {
   if (!time24) return { time: "", period: "AM" };

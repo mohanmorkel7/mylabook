@@ -270,11 +270,12 @@ export const AuthProvider = React.memo(function AuthProvider({
       const response: any = await apiClient.login(email, password);
 
       if (response.user) {
-        const displayName = (response.user.name && response.user.name.trim())
-          ? response.user.name.trim()
-          : (response.user.first_name && response.user.last_name)
-          ? `${response.user.first_name} ${response.user.last_name}`
-          : (response.user.first_name || response.user.last_name || "User");
+        const displayName =
+          response.user.name && response.user.name.trim()
+            ? response.user.name.trim()
+            : response.user.first_name && response.user.last_name
+              ? `${response.user.first_name} ${response.user.last_name}`
+              : response.user.first_name || response.user.last_name || "User";
 
         const userData: User = {
           id: response.user.id.toString(),

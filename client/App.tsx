@@ -307,6 +307,28 @@ function AppRoutes() {
       />
 
       <Route
+        path="/tickets/create"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TicketsCreate />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/tickets/:id"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TicketDetail />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/mails"
         element={
           <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>

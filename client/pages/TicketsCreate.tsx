@@ -129,7 +129,23 @@ export default function TicketsCreatePage() {
 
             <div>
               <Label className="mb-2">Description</Label>
-              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full border rounded p-3 min-h-[140px]" placeholder="Explain the issue or request in detail. Include steps to reproduce, expected vs actual behavior, and any relevant links." />
+              {/* Rich text editor */}
+              <div>
+                <div className="flex gap-2 mb-2">
+                  <button type="button" className="px-2 py-1 border rounded" onClick={() => document.execCommand('bold')}><strong>B</strong></button>
+                  <button type="button" className="px-2 py-1 border rounded" onClick={() => document.execCommand('italic')}><em>I</em></button>
+                  <button type="button" className="px-2 py-1 border rounded" onClick={() => document.execCommand('underline')}><u>U</u></button>
+                  <button type="button" className="px-2 py-1 border rounded" onClick={() => document.execCommand('insertUnorderedList')}>• List</button>
+                  <button type="button" className="px-2 py-1 border rounded" onClick={() => document.execCommand('insertOrderedList')}>1. List</button>
+                  <button type="button" className="px-2 py-1 border rounded" onClick={() => { const url = prompt('Enter URL'); if (url) document.execCommand('createLink', false, url); }}>Link</button>
+                </div>
+                <div
+                  ref={(el) => { (descriptionRef as any).current = el; if (el && form.description && form.description !== el.innerHTML) el.innerHTML = form.description; }}
+                  contentEditable
+                  onInput={(e:any) => setForm({ ...form, description: e.currentTarget.innerHTML })}
+                  className="w-full border rounded p-3 min-h-[140px] prose"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

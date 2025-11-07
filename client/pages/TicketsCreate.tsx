@@ -15,16 +15,31 @@ import apiClient from "@/lib/api";
 
 export default function TicketsCreatePage() {
   const navigate = useNavigate();
-  const [meta, setMeta] = useState<any>({ priorities: [], statuses: [], categories: [], teams: [], buckets: [] });
-  const [form, setForm] = useState<any>({ subject: "", description: "", priority_id: undefined, category_id: undefined, assigned_to: undefined, team_id: undefined, bucket_id: undefined, demand: 0 });
+  const [meta, setMeta] = useState<any>({ priorities: [], statuses: [], categories: [], teams: [], buckets: [], users: [] });
+  const [form, setForm] = useState<any>({ subject: "", description: "", priority_id: undefined, category_id: undefined, assigned_to: undefined, team_id: undefined, bucket_id: undefined, status_id: undefined, demand: 0 });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
 
   useEffect(() => {
-    apiClient.getTicketMetadata().then((m) => {
-      // Ensure arrays exist
-      setMeta({ priorities: m.priorities || [], statuses: m.statuses || [], categories: m.categories || [], teams: m.teams || [], buckets: m.buckets || [] });
-    }).catch((e) => console.warn(e));
+    (async () => {
+      try {
+        const m = await apiClient.getTicketMetadata();
+        // Ensure arrays exist
+        const metaObj: any = { priorities: m.priorities || [], statuses: m.statuses || [], categories: m.categories || [], teams: m.teams || [], buckets: m.buckets || [], users: [] };
+        // Fetch users list for assignee dropdown
+        try {
+          const usersResp = await apiClient.request('/users/list/mitra');
+          metaObj.users = usersResp || [];
+        } catch (uErr) {
+          console.warn('Failed to load users for assignee dropdown', uErr);
+          metaObj.users = [];
+        }
+        setMeta(metaObj);
+      } catch (e) {
+        console.warn(e);
+      }
+    })();
   }, []);
 
   const computeSlaLabel = (demand: number) => {
@@ -39,6 +54,50 @@ export default function TicketsCreatePage() {
         return "—";
     }
   };
+
+  // Rich text editor helper: simple contentEditable implementation
+  const RichTextEditor: React.FC<{ value: string; onChange: (html: string) => void }> = ({ value, onChange }) => {
+    const ref = React.useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+      if (ref.current && value !== ref.current.innerHTML) {
+        ref.current.innerHTML = value || "";
+      }
+    }, [value]);
+
+    const exec = (cmd: string, arg?: string) => {
+      document.execCommand(cmd, false, arg as any);
+      if (ref.current) onChange(ref.current.innerHTML);
+    };
+
+    return (
+      <div>
+        <div className="flex gap-2 mb-2">
+          <button type="button" className="btn" onClick={() => exec('bold')}><strong>B</strong></button>
+          <button type="button" className="btn" onClick={() => exec('italic')}><em>I</em></button>
+          <button type="button" className="btn" onClick={() => exec('underline')}><u>U</u></button>
+          <button type="button" className="btn" onClick={() => exec('insertUnorderedList')}>• List</button>
+          <button type="button" className="btn" onClick={() => exec('insertOrderedList')}>1. List</button>
+          <button type="button" className="btn" onClick={() => {
+            const url = prompt('Enter URL'); if (url) exec('createLink', url);
+          }}>Link</button>
+        </div>
+        <div
+          ref={ref}
+          contentEditable
+          onInput={() => ref.current && onChange(ref.current.innerHTML)}
+          className="w-full border rounded p-3 min-h-[140px] prose"
+        />
+      </div>
+    );
+  };
+
+  const filteredAssignees = meta.users.filter((u: any) => {
+    if (!assigneeSearch) return true;
+    const s = assigneeSearch.toLowerCase();
+    const name = (u.name || `${u.firstname || u.first_name || ''} ${u.lastname || u.last_name || ''}`).toLowerCase();
+    return name.includes(s) || (u.email || '').toLowerCase().includes(s);
+  });
 
   const submit = async () => {
     setLoading(true);

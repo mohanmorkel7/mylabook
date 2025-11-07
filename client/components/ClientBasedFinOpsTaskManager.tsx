@@ -2195,6 +2195,8 @@ export default function ClientBasedFinOpsTaskManager() {
                           Array.isArray(task.escalation_managers)
                             ? task.escalation_managers.join(", ")
                             : task.escalation_managers || "",
+                          // Reason for delayed/overdue
+                          st.delay_reason || st.delay_notes || "",
                         ]);
                       });
                     });

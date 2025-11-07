@@ -2199,7 +2199,7 @@ export default function ClientBasedFinOpsTaskManager() {
                   // Build workbook
                   const wb = XLSX.utils.book_new();
 
-                  // Summary sheet (use existing in-memory summary)
+                  // Summary sheet - prefer authoritative server summary when available
                   const summaryHeaders = [
                     "Total Task",
                     "Total Subtasks",
@@ -2210,25 +2210,39 @@ export default function ClientBasedFinOpsTaskManager() {
                     "Pending",
                     "In-Progress",
                   ];
-                  const summaryRow = [
-                    overallSummary.total_tasks,
-                    overallSummary.total_subtasks,
-                    overallSummary.completed_tasks ??
-                      overallSummary.completed_subtasks,
-                    overallSummary.delayed_tasks ??
-                      overallSummary.delayed_subtasks,
-                    overallSummary.overdue_tasks ??
-                      overallSummary.overdue_subtasks,
-                    Object.keys(clientSummary).length,
-                    overallSummary.pending_tasks ??
-                      overallSummary.pending_subtasks,
-                    overallSummary.in_progress_tasks ??
-                      overallSummary.in_progress_subtasks,
-                  ];
-                  const wsSummary = XLSX.utils.aoa_to_sheet([
-                    summaryHeaders,
-                    summaryRow,
-                  ]);
+
+                  // Attempt to get server summary if we fetched tasks
+                  let serverSummary: any = null;
+                  try {
+                    const resp = await apiClient.getFinOpsDailyTasks(dateFilter);
+                    if (resp && resp.summary) serverSummary = resp.summary;
+                  } catch (e) {
+                    // ignore - we'll fallback to client summary
+                  }
+
+                  const summaryRow = serverSummary
+                    ? [
+                        serverSummary.total_tasks ?? 0,
+                        serverSummary.total_subtasks ?? 0,
+                        serverSummary.completed_tasks ?? 0,
+                        serverSummary.delayed_tasks ?? 0,
+                        serverSummary.overdue_tasks ?? 0,
+                        Object.keys(clientSummary).length,
+                        serverSummary.pending_tasks ?? 0,
+                        serverSummary.in_progress_tasks ?? 0,
+                      ]
+                    : [
+                        overallSummary.total_tasks,
+                        overallSummary.total_subtasks,
+                        overallSummary.completed_tasks ?? overallSummary.completed_subtasks,
+                        overallSummary.delayed_tasks ?? overallSummary.delayed_subtasks,
+                        overallSummary.overdue_tasks ?? overallSummary.overdue_subtasks,
+                        Object.keys(clientSummary).length,
+                        overallSummary.pending_tasks ?? overallSummary.pending_subtasks,
+                        overallSummary.in_progress_tasks ?? overallSummary.in_progress_subtasks,
+                      ];
+
+                  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
                   // Fetch authoritative data from server (includes completed_by / approved_by)

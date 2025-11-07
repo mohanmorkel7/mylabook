@@ -158,6 +158,19 @@ router.get("/metadata", async (req: Request, res: Response) => {
             color: "#F59E0B",
           },
         ],
+        teams: [
+          { id: 1, name: 'Product', description: 'Product team' },
+          { id: 2, name: 'Infra', description: 'Infrastructure' },
+          { id: 3, name: 'Development', description: 'Development' },
+          { id: 4, name: 'Design', description: 'Design' },
+          { id: 5, name: 'Finops', description: 'FinOps' },
+        ],
+        buckets: [
+          { id: 1, team_id: 3, name: 'Bug fixes', description: '' },
+          { id: 2, team_id: 3, name: 'Enhancements', description: '' },
+          { id: 3, team_id: 1, name: 'Roadmap', description: '' },
+          { id: 4, team_id: 5, name: 'Daily Ops', description: '' },
+        ],
       });
     }
   } catch (error) {

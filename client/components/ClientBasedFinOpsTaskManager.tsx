@@ -2171,6 +2171,7 @@ export default function ClientBasedFinOpsTaskManager() {
                       "assigned_to",
                       "Reporting manager",
                       "Escalation manager",
+                      "Reason",
                     ]);
 
                     filteredTasks.forEach((task: any) => {

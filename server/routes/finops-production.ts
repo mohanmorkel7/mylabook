@@ -658,6 +658,7 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
         status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
         started_at TIMESTAMP NULL,
         completed_at TIMESTAMP NULL,
+        completed_by TEXT,
         scheduled_time TIME NULL,
         subtask_scheduled_date DATE NULL,
         description TEXT,
@@ -673,10 +674,18 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
         assigned_to TEXT,
         reporting_managers TEXT,
         escalation_managers TEXT,
+        approved_at TIMESTAMP,
+        approved_by TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(run_date, period, task_id, subtask_id)
       );
+
+      -- Ensure additional columns exist for older installs
+      ALTER TABLE finops_tracker
+        ADD COLUMN IF NOT EXISTS completed_by TEXT,
+        ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS approved_by TEXT;
     `);
 
       // Try to find existing tracker row for the specified date

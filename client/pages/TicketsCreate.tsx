@@ -233,8 +233,42 @@ export default function TicketsCreatePage() {
               )}
 
               <div>
-                <Label className="mb-2">Assignee</Label>
-                <Input placeholder="Optional assignee (user id)" value={form.assigned_to || ""} onChange={(e) => setForm({ ...form, assigned_to: e.target.value ? parseInt(e.target.value) : undefined })} />
+                <Label className="mb-2">Status</Label>
+                <Select value={form.status_id ? String(form.status_id) : ""} onValueChange={(v) => setForm({ ...form, status_id: v ? parseInt(v) : undefined })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {meta.statuses.map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="mt-3">
+                  <Label className="mb-2">Assignee</Label>
+                  <Select value={form.assigned_to ? String(form.assigned_to) : ""} onValueChange={(v) => setForm({ ...form, assigned_to: v ? parseInt(v) : undefined })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Search and select user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="p-2 border-b">
+                        <Input placeholder="Search users" value={assigneeSearch} onChange={(e) => setAssigneeSearch(e.target.value)} className="h-8" />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {filteredAssignees.map((user: any) => (
+                          <SelectItem key={user.id} value={String(user.id)}>
+                            {user.firstname || user.first_name ? `${user.firstname || user.first_name} ${user.lastname || user.last_name}`.trim() : user.name} {user.email ? `• ${user.email}` : ''}
+                          </SelectItem>
+                        ))}
+                        {filteredAssignees.length === 0 && (
+                          <SelectItem value="no-users" disabled>No users found</SelectItem>
+                        )}
+                      </div>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 

@@ -1822,6 +1822,18 @@ router.patch(
           );
 
           trackerRow = insertRes.rows[0];
+
+          // If completed, set completed_by
+          if (status === "completed") {
+            try {
+              await pool.query(
+                `UPDATE finops_tracker SET completed_by = $1 WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+                [userName, updateDate, st.task_id, st.id],
+              );
+            } catch (e) {
+              console.warn('Failed to set completed_by on new tracker row:', (e as Error).message);
+            }
+          }
         } else {
           // Update existing row with proper backdating
           const startedAt =

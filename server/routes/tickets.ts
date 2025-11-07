@@ -436,8 +436,8 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-// Delete ticket
-router.delete("/:id", async (req: Request, res: Response) => {
+// Delete ticket (authenticated + permission check)
+router.delete("/:id", authenticateToken, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {

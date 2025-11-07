@@ -2447,7 +2447,8 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
         completed_tasks: tasks.filter((t) => t.status === "completed").length,
         delayed_tasks: tasks.filter((t) => t.status === "delayed").length,
         overdue_tasks: tasks.filter((t) => t.status === "overdue").length,
-        in_progress_tasks: tasks.filter((t) => t.status === "in_progress").length,
+        in_progress_tasks: tasks.filter((t) => t.status === "in_progress")
+          .length,
         pending_tasks: tasks.filter((t) => t.status === "pending").length,
         // Subtask level counters
         completed_subtasks: 0,

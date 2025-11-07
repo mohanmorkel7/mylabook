@@ -2118,6 +2118,88 @@ export default function ClientBasedFinOpsTaskManager() {
 
           {/* 🎯 Right: Action buttons (normal size, outside the box) */}
           <div className="flex gap-2 ml-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                try {
+                  // Build workbook
+                  const wb = XLSX.utils.book_new();
+
+                  // Summary sheet
+                  const summaryHeaders = [
+                    "Total Task",
+                    "Total Subtasks",
+                    "Completed",
+                    "Delayed",
+                    "Overdue",
+                    "Active Clients",
+                    "Pending",
+                    "In-Progress",
+                  ];
+                  const summaryRow = [
+                    overallSummary.total_tasks,
+                    overallSummary.total_subtasks,
+                    overallSummary.completed_tasks ?? overallSummary.completed_subtasks,
+                    overallSummary.delayed_tasks ?? overallSummary.delayed_subtasks,
+                    overallSummary.overdue_tasks ?? overallSummary.overdue_subtasks,
+                    Object.keys(clientSummary).length,
+                    overallSummary.pending_tasks ?? overallSummary.pending_subtasks,
+                    overallSummary.in_progress_tasks ?? overallSummary.in_progress_subtasks,
+                  ];
+                  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);
+                  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+                  // Client sheets
+                  Object.keys(clientSummary).forEach((clientName) => {
+                    const rows: any[] = [];
+                    rows.push([
+                      "Task name",
+                      "Sub task Name",
+                      "Client name",
+                      "Period",
+                      "start time",
+                      "completed time",
+                      "status",
+                      "assigned_to",
+                      "Reporting manager",
+                      "Escalation manager",
+                    ]);
+
+                    filteredTasks.forEach((task: any) => {
+                      const tClientName = task.client_name || "Unknown Client";
+                      if ((tClientName || "").toString() !== clientName) return;
+                      const period = task.duration || "daily";
+                      (task.subtasks || []).forEach((st: any) => {
+                        rows.push([
+                          task.task_name || "",
+                          st.name || "",
+                          clientName,
+                          period,
+                          st.start_time || "",
+                          st.completed_at || "",
+                          st.status || "",
+                          Array.isArray(task.assigned_to) ? task.assigned_to.join(", ") : task.assigned_to || "",
+                          Array.isArray(task.reporting_managers) ? task.reporting_managers.join(", ") : (task.reporting_managers || ""),
+                          Array.isArray(task.escalation_managers) ? task.escalation_managers.join(", ") : (task.escalation_managers || ""),
+                        ]);
+                      });
+                    });
+
+                    const ws = XLSX.utils.aoa_to_sheet(rows);
+                    const safeName = (clientName || "Client").toString().slice(0, 31);
+                    XLSX.utils.book_append_sheet(wb, ws, safeName || "Client");
+                  });
+
+                  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+                  const blob = new Blob([wbout], { type: "application/octet-stream" });
+                  saveAs(blob, `finops-daily-process-${dateFilter}.xlsx`);
+                } catch (err) {
+                  console.error("Failed to export Excel:", err);
+                }
+              }}
+            >
+              Export Excel
+            </Button>
             {/* Admin buttons */}
             {isAdmin && (
               <>

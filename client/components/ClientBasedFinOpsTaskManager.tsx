@@ -1935,9 +1935,14 @@ export default function ClientBasedFinOpsTaskManager() {
       completed_tasks: 0,
       delayed_tasks: 0,
       overdue_tasks: 0,
+      // Added counts
+      pending_tasks: 0,
+      in_progress_tasks: 0,
       completed_subtasks: 0,
       delayed_subtasks: 0,
       overdue_subtasks: 0,
+      pending_subtasks: 0,
+      in_progress_subtasks: 0,
     };
 
     filteredTasks.forEach((task: ClientBasedFinOpsTask) => {
@@ -1945,11 +1950,15 @@ export default function ClientBasedFinOpsTaskManager() {
       if (task.status === "completed") summary.completed_tasks++;
       if (task.status === "delayed") summary.delayed_tasks++;
       if (task.status === "overdue") summary.overdue_tasks++;
+      if (task.status === "pending") summary.pending_tasks++;
+      if (task.status === "in_progress") summary.in_progress_tasks++;
 
       task.subtasks?.forEach((subtask) => {
         if (subtask.status === "completed") summary.completed_subtasks++;
         if (subtask.status === "delayed") summary.delayed_subtasks++;
         if (subtask.status === "overdue") summary.overdue_subtasks++;
+        if (subtask.status === "pending") summary.pending_subtasks++;
+        if (subtask.status === "in_progress") summary.in_progress_subtasks++;
       });
     });
 

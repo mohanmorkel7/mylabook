@@ -392,8 +392,8 @@ router.post(
   },
 );
 
-// Update ticket
-router.put("/:id", async (req: Request, res: Response) => {
+// Update ticket (authenticated + permission check)
+router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {

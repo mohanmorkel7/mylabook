@@ -2232,6 +2232,51 @@ export default function ClientBasedFinOpsTaskManager() {
                     XLSX.utils.book_append_sheet(wb, ws, safeName || "Client");
                   });
 
+                  // Add Client Summary sheet
+                  const clientSummaryRows: any[] = [];
+                  clientSummaryRows.push([
+                    "Client Name",
+                    "Total Tasks",
+                    "Total Subtasks",
+                    "Completed Subtasks",
+                    "Delayed Subtasks",
+                    "Overdue Subtasks",
+                    "Pending Subtasks",
+                    "In-Progress Subtasks",
+                  ]);
+                  Object.entries(clientSummary).forEach(([cName, sum]: any) => {
+                    clientSummaryRows.push([
+                      cName,
+                      sum.total_tasks || 0,
+                      sum.total_subtasks || 0,
+                      sum.completed_subtasks || 0,
+                      sum.delayed_subtasks || 0,
+                      sum.overdue_subtasks || 0,
+                      sum.pending_subtasks || 0,
+                      sum.in_progress_subtasks || 0,
+                    ]);
+                  });
+                  const wsClient = XLSX.utils.aoa_to_sheet(clientSummaryRows);
+                  XLSX.utils.book_append_sheet(wb, wsClient, "Client Summary");
+
+                  // Add Status Summary sheet (task-wise counts)
+                  const statusSummaryRows: any[] = [];
+                  statusSummaryRows.push(["Status", "Count"]);
+                  const statusCounts = {
+                    completed:
+                      overallSummary.completed_subtasks || 0,
+                    in_progress:
+                      overallSummary.in_progress_subtasks || 0,
+                    pending: overallSummary.pending_subtasks || 0,
+                    delayed: overallSummary.delayed_subtasks || 0,
+                    overdue: overallSummary.overdue_subtasks || 0,
+                  };
+                  Object.entries(statusCounts).forEach(([status, cnt]) => {
+                    statusSummaryRows.push([status, cnt]);
+                  });
+                  const wsStatus = XLSX.utils.aoa_to_sheet(statusSummaryRows);
+                  XLSX.utils.book_append_sheet(wb, wsStatus, "Status Summary");
+
                   const wbout = XLSX.write(wb, {
                     bookType: "xlsx",
                     type: "array",
@@ -2705,7 +2750,7 @@ export default function ClientBasedFinOpsTaskManager() {
                                 (window as any).__APP_DEBUG
                               )
                                 console.log(
-                                  "��� Raw task.assigned_to:",
+                                  "🔍 Raw task.assigned_to:",
                                   JSON.stringify(task.assigned_to),
                                 );
 

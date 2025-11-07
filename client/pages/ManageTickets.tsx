@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Link } from "react-router-dom";
 
 interface Ticket {
   id: number;

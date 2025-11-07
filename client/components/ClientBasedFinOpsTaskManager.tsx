@@ -2214,13 +2214,23 @@ export default function ClientBasedFinOpsTaskManager() {
                   // Fetch authoritative data from server once (tasks + summary)
                   let serverResp: any = null;
                   try {
-                    serverResp = await apiClient.getFinOpsDailyTasks(dateFilter);
+                    serverResp =
+                      await apiClient.getFinOpsDailyTasks(dateFilter);
                   } catch (err) {
-                    console.warn("Failed to fetch daily tasks from server for export:", err);
+                    console.warn(
+                      "Failed to fetch daily tasks from server for export:",
+                      err,
+                    );
                   }
 
-                  const serverSummary: any = serverResp && serverResp.summary ? serverResp.summary : null;
-                  const tasksForExport: any[] = serverResp && Array.isArray(serverResp.tasks) ? serverResp.tasks : filteredTasks;
+                  const serverSummary: any =
+                    serverResp && serverResp.summary
+                      ? serverResp.summary
+                      : null;
+                  const tasksForExport: any[] =
+                    serverResp && Array.isArray(serverResp.tasks)
+                      ? serverResp.tasks
+                      : filteredTasks;
 
                   const summaryRow = serverSummary
                     ? [
@@ -2244,7 +2254,10 @@ export default function ClientBasedFinOpsTaskManager() {
                         overallSummary.in_progress_subtasks,
                       ];
 
-                  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);
+                  const wsSummary = XLSX.utils.aoa_to_sheet([
+                    summaryHeaders,
+                    summaryRow,
+                  ]);
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
                   // Build client sheets based on server data

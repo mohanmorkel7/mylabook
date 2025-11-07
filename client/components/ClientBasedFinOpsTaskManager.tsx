@@ -2166,7 +2166,7 @@ export default function ClientBasedFinOpsTaskManager() {
         )}
 
         {/* Overall Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-blue-600">

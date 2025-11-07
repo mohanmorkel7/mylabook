@@ -2020,6 +2020,9 @@ export default function ClientBasedFinOpsTaskManager() {
           completed_subtasks: 0,
           delayed_subtasks: 0,
           overdue_subtasks: 0,
+          // New per-client counts
+          pending_subtasks: 0,
+          in_progress_subtasks: 0,
         };
       }
 
@@ -2033,6 +2036,10 @@ export default function ClientBasedFinOpsTaskManager() {
           clientSummary[clientName].delayed_subtasks++;
         if (subtask.status === "overdue")
           clientSummary[clientName].overdue_subtasks++;
+        if (subtask.status === "pending")
+          clientSummary[clientName].pending_subtasks++;
+        if (subtask.status === "in_progress")
+          clientSummary[clientName].in_progress_subtasks++;
       });
     });
 

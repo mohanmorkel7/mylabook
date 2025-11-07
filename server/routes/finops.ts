@@ -1671,11 +1671,15 @@ router.patch(
       const taskId = parseInt(req.params.taskId);
       const subtaskId = Number(req.params.subtaskId);
       const { status, user_name, delay_reason, delay_notes, date } = req.body;
-      const userName = user_name || "Unknown User";
+      let userName = typeof user_name === "string" ? user_name.trim() : "";
+      if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+        userName = "Unknown User";
+      }
 
-      // Use passed date or default to today
+      // Use passed date or default to today (preserve time component for timestamps)
       const updateDate = date || new Date().toISOString().split("T")[0];
-      const updateDateObj = new Date(updateDate);
+      const nowTime = new Date().toTimeString().slice(0, 8);
+      const updateDateObj = new Date(`${updateDate}T${nowTime}`);
 
       if (await isDatabaseAvailable()) {
         // Ensure tracker table exists

@@ -62,8 +62,24 @@ router.get("/metadata", async (req: Request, res: Response) => {
       const priorities = await TicketRepository.getPriorities();
       const statuses = await TicketRepository.getStatuses();
       const categories = await TicketRepository.getCategories();
+      // Fetch teams and buckets if available
+      let teams = [];
+      let buckets = [];
+      try {
+        const tRes = await pool.query(`SELECT id, name, description FROM ticket_teams ORDER BY name`);
+        teams = tRes.rows || [];
+      } catch (e) {
+        teams = [];
+      }
 
-      res.json({ priorities, statuses, categories });
+      try {
+        const bRes = await pool.query(`SELECT id, team_id, name, description FROM ticket_buckets ORDER BY name`);
+        buckets = bRes.rows || [];
+      } catch (e) {
+        buckets = [];
+      }
+
+      res.json({ priorities, statuses, categories, teams, buckets });
     } else {
       // Mock metadata for development
       res.json({

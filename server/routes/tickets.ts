@@ -404,6 +404,15 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
     const updatedBy = normalizeUserId(req.body.updated_by || "1");
 
     if (await isDatabaseAvailable()) {
+      // Permission: only admin or creator can update
+      const userId = (req as any).userId || updatedBy;
+      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
+      const role = userRes.rows[0]?.role;
+      const existing = await TicketRepository.getById(id);
+      if (role !== "admin" && existing.created_by !== userId) {
+        return res.status(403).json({ error: "Forbidden: not allowed to update ticket" });
+      }
+
       const ticket = await TicketRepository.update(id, updateData, updatedBy);
       res.json(ticket);
     } else {

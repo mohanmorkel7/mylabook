@@ -331,14 +331,15 @@ router.get("/track/:trackId", async (req: Request, res: Response) => {
   }
 });
 
-// Create new ticket
+// Create new ticket (authenticated)
 router.post(
   "/",
+  authenticateToken,
   upload.array("attachments", 5),
   async (req: Request, res: Response) => {
     try {
       const ticketData: CreateTicketRequest = req.body;
-      const createdBy = normalizeUserId(req.body.created_by || "1");
+      const createdBy = (req as any).userId || normalizeUserId(req.body.created_by || "1");
 
       // Parse JSON fields if they're strings
       if (typeof ticketData.tags === "string") {

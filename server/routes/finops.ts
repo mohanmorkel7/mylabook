@@ -1831,7 +1831,10 @@ router.patch(
                 [userName, updateDate, st.task_id, st.id],
               );
             } catch (e) {
-              console.warn('Failed to set completed_by on new tracker row:', (e as Error).message);
+              console.warn(
+                "Failed to set completed_by on new tracker row:",
+                (e as Error).message,
+              );
             }
           }
         } else {
@@ -1875,7 +1878,10 @@ router.patch(
                 [userName, updateDate, taskId, subtaskId],
               );
             } catch (e) {
-              console.warn('Failed to set completed_by on existing tracker row:', (e as Error).message);
+              console.warn(
+                "Failed to set completed_by on existing tracker row:",
+                (e as Error).message,
+              );
             }
           }
         }

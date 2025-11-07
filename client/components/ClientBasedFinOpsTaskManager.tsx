@@ -2214,7 +2214,8 @@ export default function ClientBasedFinOpsTaskManager() {
                   // Attempt to get server summary if we fetched tasks
                   let serverSummary: any = null;
                   try {
-                    const resp = await apiClient.getFinOpsDailyTasks(dateFilter);
+                    const resp =
+                      await apiClient.getFinOpsDailyTasks(dateFilter);
                     if (resp && resp.summary) serverSummary = resp.summary;
                   } catch (e) {
                     // ignore - we'll fallback to client summary
@@ -2234,15 +2235,23 @@ export default function ClientBasedFinOpsTaskManager() {
                     : [
                         overallSummary.total_tasks,
                         overallSummary.total_subtasks,
-                        overallSummary.completed_tasks ?? overallSummary.completed_subtasks,
-                        overallSummary.delayed_tasks ?? overallSummary.delayed_subtasks,
-                        overallSummary.overdue_tasks ?? overallSummary.overdue_subtasks,
+                        overallSummary.completed_tasks ??
+                          overallSummary.completed_subtasks,
+                        overallSummary.delayed_tasks ??
+                          overallSummary.delayed_subtasks,
+                        overallSummary.overdue_tasks ??
+                          overallSummary.overdue_subtasks,
                         Object.keys(clientSummary).length,
-                        overallSummary.pending_tasks ?? overallSummary.pending_subtasks,
-                        overallSummary.in_progress_tasks ?? overallSummary.in_progress_subtasks,
+                        overallSummary.pending_tasks ??
+                          overallSummary.pending_subtasks,
+                        overallSummary.in_progress_tasks ??
+                          overallSummary.in_progress_subtasks,
                       ];
 
-                  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);
+                  const wsSummary = XLSX.utils.aoa_to_sheet([
+                    summaryHeaders,
+                    summaryRow,
+                  ]);
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
                   // Fetch authoritative data from server (includes completed_by / approved_by)

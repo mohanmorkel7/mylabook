@@ -2315,6 +2315,7 @@ export default function ClientBasedFinOpsTaskManager() {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In-Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="delayed">Delayed</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
@@ -3039,7 +3040,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           typeof window !== "undefined" &&
                           (window as any).__APP_DEBUG
                         )
-                          console.log("��� Rendering client dropdown:", {
+                          console.log("🎯 Rendering client dropdown:", {
                             isLoading: clientsLoading,
                             clientsCount: clients.length,
                             rawClientsCount: rawClients.length,

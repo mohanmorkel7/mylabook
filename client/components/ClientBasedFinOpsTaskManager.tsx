@@ -2211,15 +2211,16 @@ export default function ClientBasedFinOpsTaskManager() {
                     "In-Progress",
                   ];
 
-                  // Attempt to get server summary if we fetched tasks
-                  let serverSummary: any = null;
+                  // Fetch authoritative data from server once (tasks + summary)
+                  let serverResp: any = null;
                   try {
-                    const resp =
-                      await apiClient.getFinOpsDailyTasks(dateFilter);
-                    if (resp && resp.summary) serverSummary = resp.summary;
-                  } catch (e) {
-                    // ignore - we'll fallback to client summary
+                    serverResp = await apiClient.getFinOpsDailyTasks(dateFilter);
+                  } catch (err) {
+                    console.warn("Failed to fetch daily tasks from server for export:", err);
                   }
+
+                  const serverSummary: any = serverResp && serverResp.summary ? serverResp.summary : null;
+                  const tasksForExport: any[] = serverResp && Array.isArray(serverResp.tasks) ? serverResp.tasks : filteredTasks;
 
                   const summaryRow = serverSummary
                     ? [
@@ -2235,40 +2236,16 @@ export default function ClientBasedFinOpsTaskManager() {
                     : [
                         overallSummary.total_tasks,
                         overallSummary.total_subtasks,
-                        overallSummary.completed_tasks ??
-                          overallSummary.completed_subtasks,
-                        overallSummary.delayed_tasks ??
-                          overallSummary.delayed_subtasks,
-                        overallSummary.overdue_tasks ??
-                          overallSummary.overdue_subtasks,
+                        overallSummary.completed_tasks ?? overallSummary.completed_subtasks,
+                        overallSummary.delayed_tasks ?? overallSummary.delayed_subtasks,
+                        overallSummary.overdue_tasks ?? overallSummary.overdue_subtasks,
                         Object.keys(clientSummary).length,
-                        overallSummary.pending_tasks ??
-                          overallSummary.pending_subtasks,
-                        overallSummary.in_progress_tasks ??
-                          overallSummary.in_progress_subtasks,
+                        overallSummary.pending_tasks ?? overallSummary.pending_subtasks,
+                        overallSummary.in_progress_tasks ?? overallSummary.in_progress_subtasks,
                       ];
 
-                  const wsSummary = XLSX.utils.aoa_to_sheet([
-                    summaryHeaders,
-                    summaryRow,
-                  ]);
+                  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
-
-                  // Fetch authoritative data from server (includes completed_by / approved_by)
-                  let tasksForExport: any[] = filteredTasks;
-                  try {
-                    const resp =
-                      await apiClient.getFinOpsDailyTasks(dateFilter);
-                    if (resp && Array.isArray(resp.tasks)) {
-                      tasksForExport = resp.tasks;
-                    }
-                  } catch (fetchErr) {
-                    // If server fetch fails, fall back to client data
-                    console.warn(
-                      "Failed to fetch daily tasks from server for export, using client data:",
-                      fetchErr,
-                    );
-                  }
 
                   // Build client sheets based on server data
                   const clientNames = Array.from(

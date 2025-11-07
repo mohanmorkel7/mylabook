@@ -469,7 +469,7 @@ router.delete("/:id", authenticateToken, async (req: Request, res: Response) => 
 });
 
 // Get comments for a ticket
-router.get("/:id/comments", async (req: Request, res: Response) => {
+router.get("/:id/comments", authenticateToken, async (req: Request, res: Response) => {
   try {
     const ticketId = parseInt(req.params.id);
     if (isNaN(ticketId)) {

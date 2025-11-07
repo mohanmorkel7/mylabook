@@ -1628,7 +1628,7 @@ export default function ClientBasedFinOpsTaskManager() {
               .map((name) => name.replace(/^"|"$/g, "").trim())
               .filter((name) => name.length > 0);
             if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-              console.log("🔄 Edit form - split names:", assignedArray);
+              console.log("��� Edit form - split names:", assignedArray);
           } else {
             // Single name
             assignedArray = [extracted];
@@ -2392,7 +2392,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           </Badge>
                         )}
                       </div>
-                      <div className="grid grid-cols-5 gap-2 text-center">
+                      <div className="grid grid-cols-7 gap-2 text-center">
                         <div>
                           <div className="text-lg font-bold text-blue-600">
                             {summary.total_tasks}
@@ -2422,6 +2422,18 @@ export default function ClientBasedFinOpsTaskManager() {
                             {summary.overdue_subtasks}
                           </div>
                           <div className="text-xs text-gray-600">Overdue</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-indigo-600">
+                            {summary.pending_subtasks}
+                          </div>
+                          <div className="text-xs text-gray-600">Pending</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-blue-600">
+                            {summary.in_progress_subtasks}
+                          </div>
+                          <div className="text-xs text-gray-600">In-Progress</div>
                         </div>
                       </div>
                       <div className="mt-2 text-xs text-gray-500 text-center">

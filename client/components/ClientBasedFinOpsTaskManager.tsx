@@ -1245,7 +1245,7 @@ export default function ClientBasedFinOpsTaskManager() {
       taskId,
       subTaskId: subtaskId,
       status: newStatus,
-      userName: user?.first_name + " " + user?.last_name,
+      userName: getUserDisplayName(user),
       delayReason,
       delayNotes,
       date: dateFilter,
@@ -1275,7 +1275,7 @@ export default function ClientBasedFinOpsTaskManager() {
           taskId: overdueReasonData.taskId,
           subTaskId: overdueReasonData.subtaskId,
           status: overdueReasonData.newStatus,
-          userName: user?.first_name + " " + user?.last_name,
+          userName: getUserDisplayName(user),
           date: dateFilter,
         });
       }

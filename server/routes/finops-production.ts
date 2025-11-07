@@ -988,7 +988,10 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
           [approver_name, row.task_id, subtaskId],
         );
       } catch (e) {
-        console.warn('Failed to update finops_tracker approval fields:', (e as Error).message);
+        console.warn(
+          "Failed to update finops_tracker approval fields:",
+          (e as Error).message,
+        );
       }
 
       await client.query("COMMIT");

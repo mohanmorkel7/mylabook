@@ -90,57 +90,107 @@ import { saveAs } from "file-saver";
 
 // Helper function to extract name from "Name (email)" format or messy JSON-like strings (silent + memoized)
 const __nameParseCache = new Map<string, string>();
-const extractNameFromValue = (raw: string, depth: number = 0): string => {
-  if (!raw) return raw;
-  const cached = __nameParseCache.get(raw);
-  if (cached) return cached;
-  if (depth > 5) {
-    __nameParseCache.set(raw, raw);
-    return raw;
-  }
-  let value = String(raw).trim();
+const extractNameFromValue = (raw: any, depth: number = 0): string => {
+  if (raw === null || raw === undefined) return "";
 
-  // Strip surrounding braces {..} or quotes ".."
-  if (value.startsWith("{") && value.endsWith("}")) {
-    value = value.slice(1, -1).trim();
-  }
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    value = value.slice(1, -1);
+  // If it's already a non-empty string, proceed with existing normalization
+  if (typeof raw === "string") {
+    const cached = __nameParseCache.get(raw);
+    if (cached) return cached;
+    if (depth > 5) {
+      __nameParseCache.set(raw, raw);
+      return raw;
+    }
+    let value = raw.trim();
+
+    // Strip surrounding braces {..} or quotes ".."
+    if (value.startsWith("{") && value.endsWith("}")) {
+      value = value.slice(1, -1).trim();
+    }
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    // Unescape common escaped quotes \"...\"
+    if (value.startsWith('\\"') && value.endsWith('\\"')) {
+      value = value.slice(2, -2);
+    }
+
+    // If still looks like JSON string, try parse once
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("{") && value.endsWith("}"))
+    ) {
+      try {
+        const parsed = JSON.parse(value);
+        const res =
+          typeof parsed === "string"
+            ? extractNameFromValue(parsed, depth + 1)
+            : extractNameFromValue(parsed, depth + 1);
+        __nameParseCache.set(raw, res);
+        return res;
+      } catch {}
+    }
+
+    // Name (email) => take name only
+    const m = value.match(/^(.+)\s\([^)]+\)$/);
+    if (m) {
+      __nameParseCache.set(raw, m[1]);
+      return m[1];
+    }
+
+    __nameParseCache.set(raw, value);
+    return value;
   }
 
-  // Unescape common escaped quotes \"...\"
-  if (value.startsWith('\\"') && value.endsWith('\\"')) {
-    value = value.slice(2, -2);
+  // If raw is an array, map each element to a name and join
+  if (Array.isArray(raw)) {
+    const parts = raw
+      .map((r) => extractNameFromValue(r, depth + 1))
+      .filter(Boolean);
+    return parts.join(", ");
   }
 
-  // If still looks like JSON string, try parse once
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("{") && value.endsWith("}"))
-  ) {
+  // If raw is an object, try common properties
+  if (typeof raw === "object") {
     try {
-      const parsed = JSON.parse(value);
-      const res =
-        typeof parsed === "string"
-          ? extractNameFromValue(parsed, depth + 1)
-          : raw;
-      __nameParseCache.set(raw, res);
-      return res;
-    } catch {}
+      // Common shapes: { name: 'Naveen Kumar' } or { first_name, last_name }
+      if (raw.name && typeof raw.name === "string") return raw.name.trim();
+      if (raw.full_name && typeof raw.full_name === "string")
+        return raw.full_name.trim();
+      const first = raw.first_name || raw.firstname || raw.firstName;
+      const last = raw.last_name || raw.lastname || raw.lastName;
+      if (first || last) return `${(first || "").toString().trim()} ${(last || "").toString().trim()}`.trim();
+
+      // Some payloads use user_name / username
+      if (raw.user_name || raw.username || raw.userName)
+        return (raw.user_name || raw.username || raw.userName).toString().trim();
+
+      // If email is present, prefer a display-friendly local part
+      if (raw.email && typeof raw.email === "string") {
+        const email = raw.email.trim();
+        // Use name if available in object as name + email
+        if (raw.name) return raw.name;
+        return email;
+      }
+
+      // If object contains nested tracker info with run_date and completed_by etc, try to extract name fields
+      if (raw.completed_by) return extractNameFromValue(raw.completed_by, depth + 1);
+      if (raw.approved_by) return extractNameFromValue(raw.approved_by, depth + 1);
+
+      // Fallback: stringify and attempt to parse
+      const str = JSON.stringify(raw);
+      return extractNameFromValue(str, depth + 1);
+    } catch (e) {
+      return "";
+    }
   }
 
-  // Name (email) => take name only
-  const m = value.match(/^(.+)\s\([^)]+\)$/);
-  if (m) {
-    __nameParseCache.set(raw, m[1]);
-    return m[1];
-  }
-
-  __nameParseCache.set(raw, value);
-  return value;
+  // Fallback to empty string for unexpected types
+  return "";
 };
 
 // Helper function to convert name to "Name (email)" format

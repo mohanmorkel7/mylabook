@@ -981,6 +981,16 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
         ],
       );
 
+      // Update finops_tracker to set approved_by/approved_at for today's tracker row
+      try {
+        await client.query(
+          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+          [approver_name, row.task_id, subtaskId],
+        );
+      } catch (e) {
+        console.warn('Failed to update finops_tracker approval fields:', (e as Error).message);
+      }
+
       await client.query("COMMIT");
 
       console.log(

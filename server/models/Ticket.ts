@@ -34,7 +34,13 @@ export interface Ticket {
   priority_id?: number;
   status_id: number;
   category_id?: number;
+  team_id?: number;
+  bucket_id?: number;
+  demand?: number; // 0/1/2 mapping
+  sla_time?: Date | null;
+  reason?: string | null;
   created_by: number;
+  updated_by?: number;
   assigned_to?: number;
   related_lead_id?: number;
   related_client_id?: number;

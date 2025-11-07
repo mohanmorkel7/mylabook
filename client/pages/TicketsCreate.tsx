@@ -123,6 +123,73 @@ export default function TicketsCreatePage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Team select (always shown) */}
+              <div>
+                <Label className="mb-2">Team</Label>
+                <Select
+                  value={form.team_id ? String(form.team_id) : ""}
+                  onValueChange={(v) => {
+                    const teamId = v ? parseInt(v) : undefined;
+                    setForm({ ...form, team_id: teamId, bucket_id: undefined });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {meta.teams && meta.teams.length > 0 ? (
+                      meta.teams.map((t: any) => (
+                        <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-teams" disabled>No teams available</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Bucket select (always shown) - filtered by selected team */}
+              <div>
+                <Label className="mb-2">Bucket</Label>
+                <Select
+                  value={form.bucket_id ? String(form.bucket_id) : ""}
+                  onValueChange={(v) => setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select bucket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {(() => {
+                      const teamId = form.team_id;
+                      const buckets = (meta.buckets || []).filter((b: any) => (teamId ? b.team_id === teamId : true));
+                      if (buckets.length === 0) return <SelectItem value="no-buckets" disabled>No buckets available</SelectItem>;
+                      return buckets.map((b: any) => (
+                        <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-2">Status</Label>
+                <Select value={form.status_id ? String(form.status_id) : ""} onValueChange={(v) => setForm({ ...form, status_id: v ? parseInt(v) : undefined })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {meta.statuses.map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div>
               <Label className="mb-2">Title</Label>
               <Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Brief summary (e.g. 'Login page error')" />
@@ -196,95 +263,28 @@ export default function TicketsCreatePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Team select (always shown) */}
-              <div>
-                <Label className="mb-2">Team</Label>
-                <Select
-                  value={form.team_id ? String(form.team_id) : ""}
-                  onValueChange={(v) => {
-                    const teamId = v ? parseInt(v) : undefined;
-                    setForm({ ...form, team_id: teamId, bucket_id: undefined });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Select</SelectItem>
-                    {meta.teams && meta.teams.length > 0 ? (
-                      meta.teams.map((t: any) => (
-                        <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="no-teams" disabled>No teams available</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Bucket select (always shown) - filtered by selected team */}
-              <div>
-                <Label className="mb-2">Bucket</Label>
-                <Select
-                  value={form.bucket_id ? String(form.bucket_id) : ""}
-                  onValueChange={(v) => setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select bucket" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Select</SelectItem>
-                    {(() => {
-                      const teamId = form.team_id;
-                      const buckets = (meta.buckets || []).filter((b: any) => (teamId ? b.team_id === teamId : true));
-                      if (buckets.length === 0) return <SelectItem value="no-buckets" disabled>No buckets available</SelectItem>;
-                      return buckets.map((b: any) => (
-                        <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                      ));
-                    })()}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="mb-2">Status</Label>
-                <Select value={form.status_id ? String(form.status_id) : ""} onValueChange={(v) => setForm({ ...form, status_id: v ? parseInt(v) : undefined })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Select</SelectItem>
-                    {meta.statuses.map((s: any) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+            <div className="mt-3">
+              <Label className="mb-2">Assignee</Label>
+              <Select value={form.assigned_to ? String(form.assigned_to) : ""} onValueChange={(v) => setForm({ ...form, assigned_to: v ? parseInt(v) : undefined })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Search and select user" />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="p-2 border-b">
+                    <Input placeholder="Search users" value={assigneeSearch} onChange={(e) => setAssigneeSearch(e.target.value)} className="h-8" />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {filteredAssignees.map((user: any) => (
+                      <SelectItem key={user.id} value={String(user.id)}>
+                        {user.firstname || user.first_name ? `${user.firstname || user.first_name} ${user.lastname || user.last_name}`.trim() : user.name} {user.email ? `• ${user.email}` : ''}
+                      </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-
-                <div className="mt-3">
-                  <Label className="mb-2">Assignee</Label>
-                  <Select value={form.assigned_to ? String(form.assigned_to) : ""} onValueChange={(v) => setForm({ ...form, assigned_to: v ? parseInt(v) : undefined })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Search and select user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="p-2 border-b">
-                        <Input placeholder="Search users" value={assigneeSearch} onChange={(e) => setAssigneeSearch(e.target.value)} className="h-8" />
-                      </div>
-                      <div className="max-h-48 overflow-y-auto">
-                        {filteredAssignees.map((user: any) => (
-                          <SelectItem key={user.id} value={String(user.id)}>
-                            {user.firstname || user.first_name ? `${user.firstname || user.first_name} ${user.lastname || user.last_name}`.trim() : user.name} {user.email ? `• ${user.email}` : ''}
-                          </SelectItem>
-                        ))}
-                        {filteredAssignees.length === 0 && (
-                          <SelectItem value="no-users" disabled>No users found</SelectItem>
-                        )}
-                      </div>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                    {filteredAssignees.length === 0 && (
+                      <SelectItem value="no-users" disabled>No users found</SelectItem>
+                    )}
+                  </div>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>

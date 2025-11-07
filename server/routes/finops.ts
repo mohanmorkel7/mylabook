@@ -2440,16 +2440,52 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
         subtasks: row.subtasks || [],
       }));
 
+      // Build comprehensive summary including subtask-level counts
+      const summary = {
+        total_tasks: tasks.length,
+        total_subtasks: 0,
+        completed_tasks: tasks.filter((t) => t.status === "completed").length,
+        delayed_tasks: tasks.filter((t) => t.status === "delayed").length,
+        overdue_tasks: tasks.filter((t) => t.status === "overdue").length,
+        in_progress_tasks: tasks.filter((t) => t.status === "in_progress").length,
+        pending_tasks: tasks.filter((t) => t.status === "pending").length,
+        // Subtask level counters
+        completed_subtasks: 0,
+        delayed_subtasks: 0,
+        overdue_subtasks: 0,
+        pending_subtasks: 0,
+        in_progress_subtasks: 0,
+      };
+
+      tasks.forEach((t) => {
+        const subs = t.subtasks || [];
+        summary.total_subtasks += subs.length;
+        subs.forEach((st: any) => {
+          switch (st.status) {
+            case "completed":
+              summary.completed_subtasks++;
+              break;
+            case "delayed":
+              summary.delayed_subtasks++;
+              break;
+            case "overdue":
+              summary.overdue_subtasks++;
+              break;
+            case "in_progress":
+              summary.in_progress_subtasks++;
+              break;
+            case "pending":
+            default:
+              summary.pending_subtasks++;
+              break;
+          }
+        });
+      });
+
       res.json({
         date: dateStr,
         tasks: tasks,
-        summary: {
-          total_tasks: tasks.length,
-          completed_tasks: tasks.filter((t) => t.status === "completed").length,
-          overdue_tasks: tasks.filter((t) => t.status === "overdue").length,
-          in_progress_tasks: tasks.filter((t) => t.status === "in_progress")
-            .length,
-        },
+        summary,
       });
     } else {
       res.json({

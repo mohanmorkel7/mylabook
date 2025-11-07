@@ -759,7 +759,7 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
         updateFields.push("completed_at = CURRENT_TIMESTAMP");
         // record who completed if provided
         updateFields.push(`completed_by = $${pIdx++}`);
-        params.push(user_name || null);
+        params.push(sanitizedUserName);
       }
       if (status === "in_progress") {
         updateFields.push(

@@ -2208,8 +2208,8 @@ export default function ClientBasedFinOpsTaskManager() {
                           formatDateTime(st.completed_at) || "",
                           st.status || "",
                           // completed_by and approved_by if available
-                          (st.completed_by || st.completedBy || "") ,
-                          (st.approved_by || st.approvedBy || ""),
+                          st.completed_by || st.completedBy || "",
+                          st.approved_by || st.approvedBy || "",
                           Array.isArray(task.assigned_to)
                             ? task.assigned_to.join(", ")
                             : task.assigned_to || "",
@@ -2263,10 +2263,8 @@ export default function ClientBasedFinOpsTaskManager() {
                   const statusSummaryRows: any[] = [];
                   statusSummaryRows.push(["Status", "Count"]);
                   const statusCounts = {
-                    completed:
-                      overallSummary.completed_subtasks || 0,
-                    in_progress:
-                      overallSummary.in_progress_subtasks || 0,
+                    completed: overallSummary.completed_subtasks || 0,
+                    in_progress: overallSummary.in_progress_subtasks || 0,
                     pending: overallSummary.pending_subtasks || 0,
                     delayed: overallSummary.delayed_subtasks || 0,
                     overdue: overallSummary.overdue_subtasks || 0,

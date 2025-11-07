@@ -2204,8 +2204,12 @@ export default function ClientBasedFinOpsTaskManager() {
                           clientName,
                           period,
                           st.start_time || "",
-                          st.completed_at || "",
+                          // formatted completed time
+                          formatDateTime(st.completed_at) || "",
                           st.status || "",
+                          // completed_by and approved_by if available
+                          (st.completed_by || st.completedBy || "") ,
+                          (st.approved_by || st.approvedBy || ""),
                           Array.isArray(task.assigned_to)
                             ? task.assigned_to.join(", ")
                             : task.assigned_to || "",
@@ -2701,7 +2705,7 @@ export default function ClientBasedFinOpsTaskManager() {
                                 (window as any).__APP_DEBUG
                               )
                                 console.log(
-                                  "🔍 Raw task.assigned_to:",
+                                  "��� Raw task.assigned_to:",
                                   JSON.stringify(task.assigned_to),
                                 );
 

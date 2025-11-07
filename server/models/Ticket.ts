@@ -220,6 +220,11 @@ export class TicketRepository {
       description,
       priority_id,
       category_id,
+      team_id,
+      bucket_id,
+      demand,
+      sla_time,
+      reason,
       assigned_to,
       related_lead_id,
       related_client_id,
@@ -228,26 +233,73 @@ export class TicketRepository {
       custom_fields,
     } = ticketData;
 
-    const result = await pool.query(
-      `INSERT INTO tickets (
-        subject, description, priority_id, category_id, assigned_to,
-        related_lead_id, related_client_id, estimated_hours, tags, custom_fields, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING *`,
-      [
-        subject,
-        description,
-        priority_id,
-        category_id,
-        assigned_to,
-        related_lead_id,
-        related_client_id,
-        estimated_hours,
-        tags,
-        JSON.stringify(custom_fields),
-        createdBy,
-      ],
-    );
+    // Compute SLA time if not explicitly provided
+    let computedSla: string | null = null;
+    try {
+      if (sla_time) {
+        computedSla = sla_time;
+      } else {
+        // Map demand to SLA: 0 => 2 hours, 1 => 5 hours, 2 => end of day (~24 hours)
+        if (demand === 0) computedSla = "NOW() + INTERVAL '2 hours'";
+        else if (demand === 1) computedSla = "NOW() + INTERVAL '5 hours'";
+        else if (demand === 2) computedSla = "NOW() + INTERVAL '24 hours'";
+        else computedSla = null;
+      }
+    } catch (e) {
+      computedSla = null;
+    }
+
+    // Build insert query dynamically to support computedSla
+    const cols = [
+      "subject",
+      "description",
+      "priority_id",
+      "category_id",
+      "team_id",
+      "bucket_id",
+      "demand",
+      "assigned_to",
+      "related_lead_id",
+      "related_client_id",
+      "estimated_hours",
+      "tags",
+      "custom_fields",
+      "reason",
+      "created_by",
+    ];
+
+    const values: any[] = [
+      subject,
+      description,
+      priority_id,
+      category_id,
+      team_id,
+      bucket_id,
+      demand,
+      assigned_to,
+      related_lead_id,
+      related_client_id,
+      estimated_hours,
+      tags,
+      JSON.stringify(custom_fields),
+      reason,
+      createdBy,
+    ];
+
+    // Prepare placeholders; if computedSla is a SQL expression, we'll inject it directly
+    const placeholders = cols.map((_, i) => `$${i + 1}`);
+
+    let insertSql = `INSERT INTO tickets (${cols.join(", ")}`;
+    if (computedSla) {
+      insertSql += ", sla_time";
+    }
+    insertSql += `) VALUES (${placeholders.join(", ")}`;
+    if (computedSla) {
+      insertSql += `, ${computedSla}`;
+    }
+    insertSql += `) RETURNING *`;
+
+    const result = await pool.query(insertSql, values);
 
     const ticket = result.rows[0];
 

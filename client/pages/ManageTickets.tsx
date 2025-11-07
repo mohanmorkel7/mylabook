@@ -251,19 +251,27 @@ export default function ManageTickets() {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-4xl font-bold text-gray-900">Manage Tickets</h1>
-        <div className="flex gap-4 mt-4">
-          <Button
-            variant={activeTab === "all" ? "default" : "outline"}
-            onClick={() => setActiveTab("all")}
-          >
-            All Tickets ({tickets.length})
-          </Button>
-          <Button
-            variant={activeTab === "created" ? "default" : "outline"}
-            onClick={() => setActiveTab("created")}
-          >
-            Created from Email ({createdTickets.length})
-          </Button>
+        <div className="flex gap-4 mt-4 items-center">
+          <div className="flex gap-4">
+            <Button
+              variant={activeTab === "all" ? "default" : "outline"}
+              onClick={() => setActiveTab("all")}
+            >
+              All Tickets ({tickets.length})
+            </Button>
+            <Button
+              variant={activeTab === "created" ? "default" : "outline"}
+              onClick={() => setActiveTab("created")}
+            >
+              Created from Email ({createdTickets.length})
+            </Button>
+          </div>
+
+          <div className="ml-auto">
+            <Link to="/tickets/create">
+              <Button>Create Ticket</Button>
+            </Link>
+          </div>
         </div>
       </div>
 

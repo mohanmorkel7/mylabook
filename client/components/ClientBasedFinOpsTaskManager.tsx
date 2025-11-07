@@ -2210,8 +2210,12 @@ export default function ClientBasedFinOpsTaskManager() {
                           formatDateTime(st.completed_at) || "",
                           st.status || "",
                           // completed_by and approved_by if available (normalized)
-                          extractNameFromValue(st.completed_by || st.completedBy || ""),
-                          extractNameFromValue(st.approved_by || st.approvedBy || ""),
+                          extractNameFromValue(
+                            st.completed_by || st.completedBy || "",
+                          ),
+                          extractNameFromValue(
+                            st.approved_by || st.approvedBy || "",
+                          ),
                           Array.isArray(task.assigned_to)
                             ? task.assigned_to.join(", ")
                             : task.assigned_to || "",

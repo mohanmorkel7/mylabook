@@ -2433,7 +2433,9 @@ export default function ClientBasedFinOpsTaskManager() {
                           <div className="text-lg font-bold text-blue-600">
                             {summary.in_progress_subtasks}
                           </div>
-                          <div className="text-xs text-gray-600">In-Progress</div>
+                          <div className="text-xs text-gray-600">
+                            In-Progress
+                          </div>
                         </div>
                       </div>
                       <div className="mt-2 text-xs text-gray-500 text-center">

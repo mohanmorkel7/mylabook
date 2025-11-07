@@ -602,6 +602,10 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
 
     const subtaskId = parseInt(req.params.id);
     const { status, delay_reason, user_name, date } = req.body;
+    let sanitizedUserName = typeof user_name === 'string' ? user_name.trim() : '';
+    if (!sanitizedUserName || /undefined|null/i.test(sanitizedUserName) || sanitizedUserName.replace(/\s+/g, '') === '') {
+      sanitizedUserName = null;
+    }
 
     if (isNaN(subtaskId)) {
       return res.status(400).json({ error: "Invalid subtask ID" });

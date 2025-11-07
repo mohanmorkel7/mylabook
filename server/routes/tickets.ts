@@ -11,6 +11,7 @@ import {
 import { normalizeUserId } from "../services/mockData";
 
 const router = Router();
+import { authenticateToken } from "../middleware/auth";
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({

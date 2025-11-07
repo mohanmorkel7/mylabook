@@ -2411,13 +2411,18 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
               'sla_hours', st.sla_hours,
               'sla_minutes', st.sla_minutes,
               'order_position', st.order_position,
-              'status', st.status,
-              'started_at', st.started_at,
-              'completed_at', st.completed_at
+              'status', COALESCE(ft.status, st.status),
+              'started_at', COALESCE(ft.started_at, st.started_at),
+              'completed_at', COALESCE(ft.completed_at, st.completed_at),
+              'completed_by', ft.completed_by,
+              'approved_by', ft.approved_by,
+              'delay_reason', COALESCE(ft.delay_reason, st.delay_reason),
+              'delay_notes', COALESCE(ft.delay_notes, st.delay_notes)
             ) ORDER BY st.order_position
           ) FILTER (WHERE st.id IS NOT NULL) as subtasks
         FROM finops_tasks t
         LEFT JOIN finops_subtasks st ON t.id = st.task_id
+        LEFT JOIN finops_tracker ft ON ft.run_date = $1::date AND ft.task_id = t.id AND ft.subtask_id = st.id
         WHERE t.is_active = true
         AND t.deleted_at IS NULL
         AND (

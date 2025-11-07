@@ -197,40 +197,55 @@ export default function TicketsCreatePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Team and bucket optionally shown if metadata present */}
-              {meta.teams && meta.teams.length > 0 && (
-                <div>
-                  <Label className="mb-2">Team</Label>
-                  <Select value={form.team_id ? String(form.team_id) : ""} onValueChange={(v) => setForm({ ...form, team_id: v ? parseInt(v) : undefined })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select team" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Select</SelectItem>
-                      {meta.teams.map((t: any) => (
+              {/* Team select (always shown) */}
+              <div>
+                <Label className="mb-2">Team</Label>
+                <Select
+                  value={form.team_id ? String(form.team_id) : ""}
+                  onValueChange={(v) => {
+                    const teamId = v ? parseInt(v) : undefined;
+                    setForm({ ...form, team_id: teamId, bucket_id: undefined });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {meta.teams && meta.teams.length > 0 ? (
+                      meta.teams.map((t: any) => (
                         <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+                      ))
+                    ) : (
+                      <SelectItem value="no-teams" disabled>No teams available</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              {meta.buckets && meta.buckets.length > 0 && (
-                <div>
-                  <Label className="mb-2">Bucket</Label>
-                  <Select value={form.bucket_id ? String(form.bucket_id) : ""} onValueChange={(v) => setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select bucket" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Select</SelectItem>
-                      {meta.buckets.map((b: any) => (
+              {/* Bucket select (always shown) - filtered by selected team */}
+              <div>
+                <Label className="mb-2">Bucket</Label>
+                <Select
+                  value={form.bucket_id ? String(form.bucket_id) : ""}
+                  onValueChange={(v) => setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select bucket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {(() => {
+                      const teamId = form.team_id;
+                      const buckets = (meta.buckets || []).filter((b: any) => (teamId ? b.team_id === teamId : true));
+                      if (buckets.length === 0) return <SelectItem value="no-buckets" disabled>No buckets available</SelectItem>;
+                      return buckets.map((b: any) => (
                         <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+                      ));
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div>
                 <Label className="mb-2">Status</Label>

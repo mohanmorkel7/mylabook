@@ -704,6 +704,13 @@ export default function ClientBasedFinOpsTaskManager() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const getUserDisplayName = (u: any) => {
+    if (!u) return undefined;
+    if (typeof u.name === "string" && u.name.trim()) return u.name.trim();
+    if (u.first_name && u.last_name) return `${u.first_name} ${u.last_name}`;
+    return undefined;
+  };
+
   // Check if user can edit FinOps tasks
   const canEditFinOpsTasks = (task: ClientBasedFinOpsTask): boolean => {
     if (!user) return false;

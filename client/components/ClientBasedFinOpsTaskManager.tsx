@@ -2213,30 +2213,52 @@ export default function ClientBasedFinOpsTaskManager() {
                   const summaryRow = [
                     overallSummary.total_tasks,
                     overallSummary.total_subtasks,
-                    overallSummary.completed_tasks ?? overallSummary.completed_subtasks,
-                    overallSummary.delayed_tasks ?? overallSummary.delayed_subtasks,
-                    overallSummary.overdue_tasks ?? overallSummary.overdue_subtasks,
+                    overallSummary.completed_tasks ??
+                      overallSummary.completed_subtasks,
+                    overallSummary.delayed_tasks ??
+                      overallSummary.delayed_subtasks,
+                    overallSummary.overdue_tasks ??
+                      overallSummary.overdue_subtasks,
                     Object.keys(clientSummary).length,
-                    overallSummary.pending_tasks ?? overallSummary.pending_subtasks,
-                    overallSummary.in_progress_tasks ?? overallSummary.in_progress_subtasks,
+                    overallSummary.pending_tasks ??
+                      overallSummary.pending_subtasks,
+                    overallSummary.in_progress_tasks ??
+                      overallSummary.in_progress_subtasks,
                   ];
-                  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);
+                  const wsSummary = XLSX.utils.aoa_to_sheet([
+                    summaryHeaders,
+                    summaryRow,
+                  ]);
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
                   // Fetch authoritative data from server (includes completed_by / approved_by)
                   let tasksForExport: any[] = filteredTasks;
                   try {
-                    const resp = await apiClient.getFinOpsDailyTasks(dateFilter);
+                    const resp =
+                      await apiClient.getFinOpsDailyTasks(dateFilter);
                     if (resp && Array.isArray(resp.tasks)) {
                       tasksForExport = resp.tasks;
                     }
                   } catch (fetchErr) {
                     // If server fetch fails, fall back to client data
-                    console.warn("Failed to fetch daily tasks from server for export, using client data:", fetchErr);
+                    console.warn(
+                      "Failed to fetch daily tasks from server for export, using client data:",
+                      fetchErr,
+                    );
                   }
 
                   // Build client sheets based on server data
-                  const clientNames = Array.from(new Set(tasksForExport.map((t: any) => t.client_name || (t.client_id ? `Client ${t.client_id}` : "Unknown Client"))));
+                  const clientNames = Array.from(
+                    new Set(
+                      tasksForExport.map(
+                        (t: any) =>
+                          t.client_name ||
+                          (t.client_id
+                            ? `Client ${t.client_id}`
+                            : "Unknown Client"),
+                      ),
+                    ),
+                  );
 
                   clientNames.forEach((clientName: string) => {
                     const rows: any[] = [];
@@ -2257,7 +2279,11 @@ export default function ClientBasedFinOpsTaskManager() {
                     ]);
 
                     tasksForExport.forEach((task: any) => {
-                      const tClientName = task.client_name || (task.client_id ? `Client ${task.client_id}` : "Unknown Client");
+                      const tClientName =
+                        task.client_name ||
+                        (task.client_id
+                          ? `Client ${task.client_id}`
+                          : "Unknown Client");
                       if ((tClientName || "").toString() !== clientName) return;
                       const period = task.duration || "daily";
                       (task.subtasks || []).forEach((st: any) => {
@@ -2269,18 +2295,33 @@ export default function ClientBasedFinOpsTaskManager() {
                           st.start_time || "",
                           formatDateTime(st.completed_at) || "",
                           st.status || "",
-                          extractNameFromValue(st.completed_by || st.completedBy || st.completed_by || ""),
-                          extractNameFromValue(st.approved_by || st.approvedBy || ""),
-                          Array.isArray(task.assigned_to) ? task.assigned_to.join(", ") : task.assigned_to || "",
-                          Array.isArray(task.reporting_managers) ? task.reporting_managers.join(", ") : task.reporting_managers || "",
-                          Array.isArray(task.escalation_managers) ? task.escalation_managers.join(", ") : task.escalation_managers || "",
+                          extractNameFromValue(
+                            st.completed_by ||
+                              st.completedBy ||
+                              st.completed_by ||
+                              "",
+                          ),
+                          extractNameFromValue(
+                            st.approved_by || st.approvedBy || "",
+                          ),
+                          Array.isArray(task.assigned_to)
+                            ? task.assigned_to.join(", ")
+                            : task.assigned_to || "",
+                          Array.isArray(task.reporting_managers)
+                            ? task.reporting_managers.join(", ")
+                            : task.reporting_managers || "",
+                          Array.isArray(task.escalation_managers)
+                            ? task.escalation_managers.join(", ")
+                            : task.escalation_managers || "",
                           st.delay_reason || st.delay_notes || "",
                         ]);
                       });
                     });
 
                     const ws = XLSX.utils.aoa_to_sheet(rows);
-                    const safeName = (clientName || "Client").toString().slice(0, 31);
+                    const safeName = (clientName || "Client")
+                      .toString()
+                      .slice(0, 31);
                     XLSX.utils.book_append_sheet(wb, ws, safeName || "Client");
                   });
 
@@ -2299,17 +2340,36 @@ export default function ClientBasedFinOpsTaskManager() {
 
                   const clientAgg: Record<string, any> = {};
                   tasksForExport.forEach((task: any) => {
-                    const name = task.client_name || (task.client_id ? `Client ${task.client_id}` : "Unknown Client");
+                    const name =
+                      task.client_name ||
+                      (task.client_id
+                        ? `Client ${task.client_id}`
+                        : "Unknown Client");
                     if (!clientAgg[name])
-                      clientAgg[name] = { total_tasks: 0, total_subtasks: 0, completed_subtasks: 0, delayed_subtasks: 0, overdue_subtasks: 0, pending_subtasks: 0, in_progress_subtasks: 0 };
+                      clientAgg[name] = {
+                        total_tasks: 0,
+                        total_subtasks: 0,
+                        completed_subtasks: 0,
+                        delayed_subtasks: 0,
+                        overdue_subtasks: 0,
+                        pending_subtasks: 0,
+                        in_progress_subtasks: 0,
+                      };
                     clientAgg[name].total_tasks += 1;
-                    clientAgg[name].total_subtasks += (task.subtasks || []).length;
+                    clientAgg[name].total_subtasks += (
+                      task.subtasks || []
+                    ).length;
                     (task.subtasks || []).forEach((st: any) => {
-                      if (st.status === "completed") clientAgg[name].completed_subtasks++;
-                      if (st.status === "delayed") clientAgg[name].delayed_subtasks++;
-                      if (st.status === "overdue") clientAgg[name].overdue_subtasks++;
-                      if (st.status === "pending") clientAgg[name].pending_subtasks++;
-                      if (st.status === "in_progress") clientAgg[name].in_progress_subtasks++;
+                      if (st.status === "completed")
+                        clientAgg[name].completed_subtasks++;
+                      if (st.status === "delayed")
+                        clientAgg[name].delayed_subtasks++;
+                      if (st.status === "overdue")
+                        clientAgg[name].overdue_subtasks++;
+                      if (st.status === "pending")
+                        clientAgg[name].pending_subtasks++;
+                      if (st.status === "in_progress")
+                        clientAgg[name].in_progress_subtasks++;
                     });
                   });
 
@@ -2332,10 +2392,17 @@ export default function ClientBasedFinOpsTaskManager() {
                   // Status Summary built from server data
                   const statusSummaryRows: any[] = [];
                   statusSummaryRows.push(["Status", "Count"]);
-                  const statusCounts: Record<string, number> = { completed: 0, in_progress: 0, pending: 0, delayed: 0, overdue: 0 };
+                  const statusCounts: Record<string, number> = {
+                    completed: 0,
+                    in_progress: 0,
+                    pending: 0,
+                    delayed: 0,
+                    overdue: 0,
+                  };
                   tasksForExport.forEach((task: any) => {
                     (task.subtasks || []).forEach((st: any) => {
-                      statusCounts[st.status] = (statusCounts[st.status] || 0) + 1;
+                      statusCounts[st.status] =
+                        (statusCounts[st.status] || 0) + 1;
                     });
                   });
 
@@ -2346,8 +2413,13 @@ export default function ClientBasedFinOpsTaskManager() {
                   const wsStatus = XLSX.utils.aoa_to_sheet(statusSummaryRows);
                   XLSX.utils.book_append_sheet(wb, wsStatus, "Status Summary");
 
-                  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-                  const blob = new Blob([wbout], { type: "application/octet-stream" });
+                  const wbout = XLSX.write(wb, {
+                    bookType: "xlsx",
+                    type: "array",
+                  });
+                  const blob = new Blob([wbout], {
+                    type: "application/octet-stream",
+                  });
                   saveAs(blob, `finops-daily-process-${dateFilter}.xlsx`);
                 } catch (err) {
                   console.error("Failed to export Excel:", err);

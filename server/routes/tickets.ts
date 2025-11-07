@@ -445,6 +445,15 @@ router.delete("/:id", authenticateToken, async (req: Request, res: Response) => 
     }
 
     if (await isDatabaseAvailable()) {
+      // Permission: only admin or creator can delete
+      const userId = (req as any).userId;
+      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
+      const role = userRes.rows[0]?.role;
+      const existing = await TicketRepository.getById(id);
+      if (role !== "admin" && existing.created_by !== userId) {
+        return res.status(403).json({ error: "Forbidden: not allowed to delete ticket" });
+      }
+
       await TicketRepository.delete(id);
       res.status(204).send();
     } else {

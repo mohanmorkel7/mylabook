@@ -20,6 +20,7 @@ export default function TicketsCreatePage() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
+  const descriptionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     (async () => {

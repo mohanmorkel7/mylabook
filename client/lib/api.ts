@@ -679,7 +679,7 @@ export class ApiClient {
   async getClientStats() {
     return this.request("/clients/stats");
   }
-public async get<T>(path: string): Promise<T> {
+  public async get<T>(path: string): Promise<T> {
     if (this.isOfflineMode) {
       throw new Error("API client is in offline mode");
     }
@@ -1206,25 +1206,36 @@ public async get<T>(path: string): Promise<T> {
     let safeUserName: string | null | undefined = userName;
     try {
       if (!safeUserName && typeof window !== "undefined") {
-        const raw = localStorage.getItem("banani_user") || localStorage.getItem("user");
+        const raw =
+          localStorage.getItem("banani_user") || localStorage.getItem("user");
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
             if (parsed) {
-              if (parsed.name && typeof parsed.name === "string") safeUserName = parsed.name.trim();
-              else if ((parsed.first_name || parsed.last_name) && (parsed.first_name || parsed.last_name).trim())
-                safeUserName = `${(parsed.first_name || "").trim()} ${(parsed.last_name || "").trim()}`.trim();
+              if (parsed.name && typeof parsed.name === "string")
+                safeUserName = parsed.name.trim();
+              else if (
+                (parsed.first_name || parsed.last_name) &&
+                (parsed.first_name || parsed.last_name).trim()
+              )
+                safeUserName =
+                  `${(parsed.first_name || "").trim()} ${(parsed.last_name || "").trim()}`.trim();
             }
           } catch (e) {
             // raw might already be a string name
-            if (typeof raw === "string" && raw.trim()) safeUserName = raw.trim();
+            if (typeof raw === "string" && raw.trim())
+              safeUserName = raw.trim();
           }
         }
       }
 
       if (typeof safeUserName === "string") {
         const cleaned = safeUserName.trim();
-        if (!cleaned || /^(undefined|null)$/i.test(cleaned.replace(/\s+/g, " "))) safeUserName = null;
+        if (
+          !cleaned ||
+          /^(undefined|null)$/i.test(cleaned.replace(/\s+/g, " "))
+        )
+          safeUserName = null;
         else safeUserName = cleaned;
       }
     } catch (e) {

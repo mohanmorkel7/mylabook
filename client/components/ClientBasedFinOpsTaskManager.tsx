@@ -2187,6 +2187,8 @@ export default function ClientBasedFinOpsTaskManager() {
                       "start time",
                       "completed time",
                       "status",
+                      "completed_by",
+                      "approved_by",
                       "assigned_to",
                       "Reporting manager",
                       "Escalation manager",

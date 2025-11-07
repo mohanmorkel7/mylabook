@@ -2226,22 +2226,22 @@ export default function ClientBasedFinOpsTaskManager() {
                     ? [
                         serverSummary.total_tasks ?? 0,
                         serverSummary.total_subtasks ?? 0,
-                        serverSummary.completed_tasks ?? 0,
-                        serverSummary.delayed_tasks ?? 0,
-                        serverSummary.overdue_tasks ?? 0,
+                        serverSummary.completed_subtasks ?? 0,
+                        serverSummary.delayed_subtasks ?? 0,
+                        serverSummary.overdue_subtasks ?? 0,
                         Object.keys(clientSummary).length,
-                        serverSummary.pending_tasks ?? 0,
-                        serverSummary.in_progress_tasks ?? 0,
+                        serverSummary.pending_subtasks ?? 0,
+                        serverSummary.in_progress_subtasks ?? 0,
                       ]
                     : [
                         overallSummary.total_tasks,
                         overallSummary.total_subtasks,
-                        overallSummary.completed_tasks ?? overallSummary.completed_subtasks,
-                        overallSummary.delayed_tasks ?? overallSummary.delayed_subtasks,
-                        overallSummary.overdue_tasks ?? overallSummary.overdue_subtasks,
+                        overallSummary.completed_subtasks,
+                        overallSummary.delayed_subtasks,
+                        overallSummary.overdue_subtasks,
                         Object.keys(clientSummary).length,
-                        overallSummary.pending_tasks ?? overallSummary.pending_subtasks,
-                        overallSummary.in_progress_tasks ?? overallSummary.in_progress_subtasks,
+                        overallSummary.pending_subtasks,
+                        overallSummary.in_progress_subtasks,
                       ];
 
                   const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);

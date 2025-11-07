@@ -1730,6 +1730,14 @@ router.patch(
             ADD COLUMN IF NOT EXISTS escalation_managers TEXT;
         `);
 
+        // Ensure approval/completion columns exist
+        await pool.query(`
+          ALTER TABLE finops_tracker
+            ADD COLUMN IF NOT EXISTS completed_by TEXT,
+            ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS approved_by TEXT;
+        `);
+
         // Fetch existing tracker row
         let trackerRes = await pool.query(
           `

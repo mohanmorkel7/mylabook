@@ -9,7 +9,7 @@ import {
   TicketFilters,
 } from "../models/Ticket";
 import { normalizeUserId } from "../services/mockData";
-import pool from "../database/connection";
+import { pool } from "../database/connection";
 
 const router = Router();
 import { authenticateToken } from "../middleware/auth";

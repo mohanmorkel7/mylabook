@@ -4,18 +4,42 @@ import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import apiClient from "@/lib/api";
 
 export default function TicketsCreatePage() {
   const navigate = useNavigate();
-  const [meta, setMeta] = useState<any>({ priorities: [], statuses: [], categories: [] });
+  const [meta, setMeta] = useState<any>({ priorities: [], statuses: [], categories: [], teams: [], buckets: [] });
   const [form, setForm] = useState<any>({ subject: "", description: "", priority_id: undefined, category_id: undefined, assigned_to: undefined, team_id: undefined, bucket_id: undefined, demand: 0 });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    apiClient.getTicketMetadata().then(setMeta).catch((e) => console.warn(e));
+    apiClient.getTicketMetadata().then((m) => {
+      // Ensure arrays exist
+      setMeta({ priorities: m.priorities || [], statuses: m.statuses || [], categories: m.categories || [], teams: m.teams || [], buckets: m.buckets || [] });
+    }).catch((e) => console.warn(e));
   }, []);
+
+  const computeSlaLabel = (demand: number) => {
+    switch (demand) {
+      case 0:
+        return "2 hours";
+      case 1:
+        return "5 hours";
+      case 2:
+        return "End of day";
+      default:
+        return "—";
+    }
+  };
 
   const submit = async () => {
     setLoading(true);
@@ -31,58 +55,136 @@ export default function TicketsCreatePage() {
   };
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-semibold mb-4">Create Ticket</h1>
-      <div className="grid grid-cols-1 gap-4 max-w-2xl">
-        <div>
-          <Label>Title</Label>
-          <Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
-        </div>
-        <div>
-          <Label>Description</Label>
-          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full border rounded p-2 h-32" />
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <Label>Priority</Label>
-            <select value={form.priority_id || ""} onChange={(e) => setForm({ ...form, priority_id: e.target.value ? parseInt(e.target.value) : undefined })} className="w-full border p-2 rounded">
-              <option value="">Select</option>
-              {meta.priorities.map((p: any) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Create Support Ticket</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ticket Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <Label className="mb-2">Title</Label>
+              <Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Brief summary (e.g. 'Login page error')" />
+            </div>
+
+            <div>
+              <Label className="mb-2">Description</Label>
+              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full border rounded p-3 min-h-[140px]" placeholder="Explain the issue or request in detail. Include steps to reproduce, expected vs actual behavior, and any relevant links." />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label className="mb-2">Priority</Label>
+                <Select value={form.priority_id?.toString() || ""} onValueChange={(v) => setForm({ ...form, priority_id: v ? parseInt(v) : undefined })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {meta.priorities.map((p: any) => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-2">Category</Label>
+                <Select value={form.category_id?.toString() || ""} onValueChange={(v) => setForm({ ...form, category_id: v ? parseInt(v) : undefined })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Select</SelectItem>
+                    {meta.categories.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-2">Demand (SLA)</Label>
+                <Select value={String(form.demand)} onValueChange={(v) => setForm({ ...form, demand: parseInt(v) })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select demand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Priority 0 — 2 hours</SelectItem>
+                    <SelectItem value="1">Priority 1 — 5 hours</SelectItem>
+                    <SelectItem value="2">Priority 2 — End of day</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="text-sm text-muted-foreground mt-1">SLA: {computeSlaLabel(form.demand)}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Team and bucket optionally shown if metadata present */}
+              {meta.teams && meta.teams.length > 0 && (
+                <div>
+                  <Label className="mb-2">Team</Label>
+                  <Select value={form.team_id ? String(form.team_id) : ""} onValueChange={(v) => setForm({ ...form, team_id: v ? parseInt(v) : undefined })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Select</SelectItem>
+                      {meta.teams.map((t: any) => (
+                        <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {meta.buckets && meta.buckets.length > 0 && (
+                <div>
+                  <Label className="mb-2">Bucket</Label>
+                  <Select value={form.bucket_id ? String(form.bucket_id) : ""} onValueChange={(v) => setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select bucket" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Select</SelectItem>
+                      {meta.buckets.map((b: any) => (
+                        <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div>
+                <Label className="mb-2">Assignee</Label>
+                <Input placeholder="Optional assignee (user id)" value={form.assigned_to || ""} onChange={(e) => setForm({ ...form, assigned_to: e.target.value ? parseInt(e.target.value) : undefined })} />
+              </div>
+            </div>
+
+            <div>
+              <Label className="mb-2">Attachments</Label>
+              <div className="border-dashed border-2 border-gray-200 rounded p-4 text-center">
+                <input type="file" multiple onChange={(e) => setAttachments(Array.from(e.target.files || []))} />
+                <div className="text-sm text-gray-500 mt-2">Drag and drop files here, or click to browse. Max 50MB per file.</div>
+                {attachments.length > 0 && (
+                  <div className="mt-3 text-sm text-left">
+                    {attachments.map((f, i) => (
+                      <div key={i} className="py-1">{f.name} • {(f.size/1024/1024).toFixed(2)} MB</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 justify-end">
+              <Button variant="ghost" onClick={() => navigate(-1)}>Cancel</Button>
+              <Button onClick={submit} disabled={loading}>{loading ? "Creating..." : "Create Ticket"}</Button>
+            </div>
           </div>
-
-          <div>
-            <Label>Category</Label>
-            <select value={form.category_id || ""} onChange={(e) => setForm({ ...form, category_id: e.target.value ? parseInt(e.target.value) : undefined })} className="w-full border p-2 rounded">
-              <option value="">Select</option>
-              {meta.categories.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <Label>Demand</Label>
-            <select value={form.demand} onChange={(e) => setForm({ ...form, demand: parseInt(e.target.value) })} className="w-full border p-2 rounded">
-              <option value={0}>Priority 0 (2 hours)</option>
-              <option value={1}>Priority 1 (5 hours)</option>
-              <option value={2}>Priority 2 (Within day)</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <Label>Attachments</Label>
-          <input type="file" multiple onChange={(e) => setAttachments(Array.from(e.target.files || []))} />
-        </div>
-
-        <div className="flex gap-2">
-          <Button onClick={submit} disabled={loading}>Create</Button>
-          <Button variant="ghost" onClick={() => navigate(-1)}>Cancel</Button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

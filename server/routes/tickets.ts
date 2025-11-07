@@ -638,6 +638,7 @@ router.put(
 // Upload attachment to existing ticket
 router.post(
   "/:id/attachments",
+  authenticateToken,
   upload.single("file"),
   async (req: Request, res: Response) => {
     try {

@@ -522,8 +522,8 @@ router.get("/:id/comments", authenticateToken, async (req: Request, res: Respons
   }
 });
 
-// Add comment to ticket
-router.post("/:id/comments", async (req: Request, res: Response) => {
+// Add comment to ticket (authenticated)
+router.post("/:id/comments", authenticateToken, async (req: Request, res: Response) => {
   try {
     const ticketId = parseInt(req.params.id);
     if (isNaN(ticketId)) {

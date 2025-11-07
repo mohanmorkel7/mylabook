@@ -129,10 +129,33 @@ export interface CreateTicketRequest {
   description?: string;
   priority_id?: number;
   category_id?: number;
+  team_id?: number;
+  bucket_id?: number;
+  demand?: number; // 0,1,2
+  sla_time?: string | null;
+  reason?: string | null;
   assigned_to?: number;
   related_lead_id?: number;
   related_client_id?: number;
   estimated_hours?: number;
+  tags?: string[];
+  custom_fields?: Record<string, any>;
+}
+
+export interface UpdateTicketRequest {
+  subject?: string;
+  description?: string;
+  priority_id?: number;
+  status_id?: number;
+  category_id?: number;
+  team_id?: number;
+  bucket_id?: number;
+  demand?: number;
+  sla_time?: string | null;
+  reason?: string | null;
+  assigned_to?: number;
+  estimated_hours?: number;
+  actual_hours?: number;
   tags?: string[];
   custom_fields?: Record<string, any>;
 }

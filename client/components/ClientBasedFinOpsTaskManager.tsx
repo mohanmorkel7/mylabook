@@ -85,6 +85,8 @@ import {
   isBefore,
   isAfter,
 } from "date-fns";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 // Helper function to extract name from "Name (email)" format or messy JSON-like strings (silent + memoized)
 const __nameParseCache = new Map<string, string>();

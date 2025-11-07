@@ -1866,6 +1866,18 @@ router.patch(
              WHERE run_date = $2::date AND task_id = $5 AND subtask_id = $6`,
             params,
           );
+
+          // If completed, set completed_by
+          if (status === "completed") {
+            try {
+              await pool.query(
+                `UPDATE finops_tracker SET completed_by = $1 WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+                [userName, updateDate, taskId, subtaskId],
+              );
+            } catch (e) {
+              console.warn('Failed to set completed_by on existing tracker row:', (e as Error).message);
+            }
+          }
         }
 
         // Persist status to finops_subtasks table

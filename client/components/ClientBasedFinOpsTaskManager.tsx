@@ -163,11 +163,14 @@ const extractNameFromValue = (raw: any, depth: number = 0): string => {
         return raw.full_name.trim();
       const first = raw.first_name || raw.firstname || raw.firstName;
       const last = raw.last_name || raw.lastname || raw.lastName;
-      if (first || last) return `${(first || "").toString().trim()} ${(last || "").toString().trim()}`.trim();
+      if (first || last)
+        return `${(first || "").toString().trim()} ${(last || "").toString().trim()}`.trim();
 
       // Some payloads use user_name / username
       if (raw.user_name || raw.username || raw.userName)
-        return (raw.user_name || raw.username || raw.userName).toString().trim();
+        return (raw.user_name || raw.username || raw.userName)
+          .toString()
+          .trim();
 
       // If email is present, prefer a display-friendly local part
       if (raw.email && typeof raw.email === "string") {
@@ -178,8 +181,10 @@ const extractNameFromValue = (raw: any, depth: number = 0): string => {
       }
 
       // If object contains nested tracker info with run_date and completed_by etc, try to extract name fields
-      if (raw.completed_by) return extractNameFromValue(raw.completed_by, depth + 1);
-      if (raw.approved_by) return extractNameFromValue(raw.approved_by, depth + 1);
+      if (raw.completed_by)
+        return extractNameFromValue(raw.completed_by, depth + 1);
+      if (raw.approved_by)
+        return extractNameFromValue(raw.approved_by, depth + 1);
 
       // Fallback: stringify and attempt to parse
       const str = JSON.stringify(raw);

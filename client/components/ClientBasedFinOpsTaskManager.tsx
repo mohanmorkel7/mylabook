@@ -2139,14 +2139,22 @@ export default function ClientBasedFinOpsTaskManager() {
                   const summaryRow = [
                     overallSummary.total_tasks,
                     overallSummary.total_subtasks,
-                    overallSummary.completed_tasks ?? overallSummary.completed_subtasks,
-                    overallSummary.delayed_tasks ?? overallSummary.delayed_subtasks,
-                    overallSummary.overdue_tasks ?? overallSummary.overdue_subtasks,
+                    overallSummary.completed_tasks ??
+                      overallSummary.completed_subtasks,
+                    overallSummary.delayed_tasks ??
+                      overallSummary.delayed_subtasks,
+                    overallSummary.overdue_tasks ??
+                      overallSummary.overdue_subtasks,
                     Object.keys(clientSummary).length,
-                    overallSummary.pending_tasks ?? overallSummary.pending_subtasks,
-                    overallSummary.in_progress_tasks ?? overallSummary.in_progress_subtasks,
+                    overallSummary.pending_tasks ??
+                      overallSummary.pending_subtasks,
+                    overallSummary.in_progress_tasks ??
+                      overallSummary.in_progress_subtasks,
                   ];
-                  const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeaders, summaryRow]);
+                  const wsSummary = XLSX.utils.aoa_to_sheet([
+                    summaryHeaders,
+                    summaryRow,
+                  ]);
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
                   // Client sheets
@@ -2178,20 +2186,33 @@ export default function ClientBasedFinOpsTaskManager() {
                           st.start_time || "",
                           st.completed_at || "",
                           st.status || "",
-                          Array.isArray(task.assigned_to) ? task.assigned_to.join(", ") : task.assigned_to || "",
-                          Array.isArray(task.reporting_managers) ? task.reporting_managers.join(", ") : (task.reporting_managers || ""),
-                          Array.isArray(task.escalation_managers) ? task.escalation_managers.join(", ") : (task.escalation_managers || ""),
+                          Array.isArray(task.assigned_to)
+                            ? task.assigned_to.join(", ")
+                            : task.assigned_to || "",
+                          Array.isArray(task.reporting_managers)
+                            ? task.reporting_managers.join(", ")
+                            : task.reporting_managers || "",
+                          Array.isArray(task.escalation_managers)
+                            ? task.escalation_managers.join(", ")
+                            : task.escalation_managers || "",
                         ]);
                       });
                     });
 
                     const ws = XLSX.utils.aoa_to_sheet(rows);
-                    const safeName = (clientName || "Client").toString().slice(0, 31);
+                    const safeName = (clientName || "Client")
+                      .toString()
+                      .slice(0, 31);
                     XLSX.utils.book_append_sheet(wb, ws, safeName || "Client");
                   });
 
-                  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-                  const blob = new Blob([wbout], { type: "application/octet-stream" });
+                  const wbout = XLSX.write(wb, {
+                    bookType: "xlsx",
+                    type: "array",
+                  });
+                  const blob = new Blob([wbout], {
+                    type: "application/octet-stream",
+                  });
                   saveAs(blob, `finops-daily-process-${dateFilter}.xlsx`);
                 } catch (err) {
                   console.error("Failed to export Excel:", err);

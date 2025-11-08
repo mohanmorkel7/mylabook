@@ -229,12 +229,10 @@ export default function TicketsCreatePage() {
 
               {/* Bucket select (always shown) - filtered by selected team */}
               <div>
-                <Label className="mb-2">Bucket</Label>
+                <Label className="mb-2">Bucket<span className="text-red-500 ml-1">*</span></Label>
                 <Select
                   value={form.bucket_id ? String(form.bucket_id) : ""}
-                  onValueChange={(v) =>
-                    setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })
-                  }
+                  onValueChange={(v) => { setForm({ ...form, bucket_id: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, bucket_id: undefined })); }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select bucket" />
@@ -260,6 +258,7 @@ export default function TicketsCreatePage() {
                     })()}
                   </SelectContent>
                 </Select>
+                {errors.bucket_id && <div className="text-sm text-red-600 mt-1">{errors.bucket_id}</div>}
               </div>
 
               <div>

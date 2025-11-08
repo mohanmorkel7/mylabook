@@ -16,8 +16,25 @@ import RichTextEditor from "@/components/RichTextEditor";
 
 export default function TicketsCreatePage() {
   const navigate = useNavigate();
-  const [meta, setMeta] = useState<any>({ priorities: [], statuses: [], categories: [], teams: [], buckets: [], users: [] });
-  const [form, setForm] = useState<any>({ subject: "", description: "", priority_id: undefined, category_id: undefined, assigned_to: undefined, team_id: undefined, bucket_id: undefined, status_id: undefined, demand: 0 });
+  const [meta, setMeta] = useState<any>({
+    priorities: [],
+    statuses: [],
+    categories: [],
+    teams: [],
+    buckets: [],
+    users: [],
+  });
+  const [form, setForm] = useState<any>({
+    subject: "",
+    description: "",
+    priority_id: undefined,
+    category_id: undefined,
+    assigned_to: undefined,
+    team_id: undefined,
+    bucket_id: undefined,
+    status_id: undefined,
+    demand: 0,
+  });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
@@ -28,13 +45,20 @@ export default function TicketsCreatePage() {
       try {
         const m = await apiClient.getTicketMetadata();
         // Ensure arrays exist
-        const metaObj: any = { priorities: m.priorities || [], statuses: m.statuses || [], categories: m.categories || [], teams: m.teams || [], buckets: m.buckets || [], users: [] };
+        const metaObj: any = {
+          priorities: m.priorities || [],
+          statuses: m.statuses || [],
+          categories: m.categories || [],
+          teams: m.teams || [],
+          buckets: m.buckets || [],
+          users: [],
+        };
         // Fetch users list for assignee dropdown
         try {
-          const usersResp = await apiClient.request('/users/list/mitra');
+          const usersResp = await apiClient.request("/users/list/mitra");
           metaObj.users = usersResp || [];
         } catch (uErr) {
-          console.warn('Failed to load users for assignee dropdown', uErr);
+          console.warn("Failed to load users for assignee dropdown", uErr);
           metaObj.users = [];
         }
         setMeta(metaObj);
@@ -57,12 +81,14 @@ export default function TicketsCreatePage() {
     }
   };
 
-  
   const filteredAssignees = meta.users.filter((u: any) => {
     if (!assigneeSearch) return true;
     const s = assigneeSearch.toLowerCase();
-    const name = (u.name || `${u.firstname || u.first_name || ''} ${u.lastname || u.last_name || ''}`).toLowerCase();
-    return name.includes(s) || (u.email || '').toLowerCase().includes(s);
+    const name = (
+      u.name ||
+      `${u.firstname || u.first_name || ""} ${u.lastname || u.last_name || ""}`
+    ).toLowerCase();
+    return name.includes(s) || (u.email || "").toLowerCase().includes(s);
   });
 
   const submit = async () => {
@@ -106,10 +132,14 @@ export default function TicketsCreatePage() {
                     <SelectItem value="">Select</SelectItem>
                     {meta.teams && meta.teams.length > 0 ? (
                       meta.teams.map((t: any) => (
-                        <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.name}
+                        </SelectItem>
                       ))
                     ) : (
-                      <SelectItem value="no-teams" disabled>No teams available</SelectItem>
+                      <SelectItem value="no-teams" disabled>
+                        No teams available
+                      </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
@@ -120,7 +150,9 @@ export default function TicketsCreatePage() {
                 <Label className="mb-2">Bucket</Label>
                 <Select
                   value={form.bucket_id ? String(form.bucket_id) : ""}
-                  onValueChange={(v) => setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })}
+                  onValueChange={(v) =>
+                    setForm({ ...form, bucket_id: v ? parseInt(v) : undefined })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select bucket" />
@@ -129,10 +161,19 @@ export default function TicketsCreatePage() {
                     <SelectItem value="">Select</SelectItem>
                     {(() => {
                       const teamId = form.team_id;
-                      const buckets = (meta.buckets || []).filter((b: any) => (teamId ? b.team_id === teamId : true));
-                      if (buckets.length === 0) return <SelectItem value="no-buckets" disabled>No buckets available</SelectItem>;
+                      const buckets = (meta.buckets || []).filter((b: any) =>
+                        teamId ? b.team_id === teamId : true,
+                      );
+                      if (buckets.length === 0)
+                        return (
+                          <SelectItem value="no-buckets" disabled>
+                            No buckets available
+                          </SelectItem>
+                        );
                       return buckets.map((b: any) => (
-                        <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {b.name}
+                        </SelectItem>
                       ));
                     })()}
                   </SelectContent>
@@ -141,14 +182,21 @@ export default function TicketsCreatePage() {
 
               <div>
                 <Label className="mb-2">Status</Label>
-                <Select value={form.status_id ? String(form.status_id) : ""} onValueChange={(v) => setForm({ ...form, status_id: v ? parseInt(v) : undefined })}>
+                <Select
+                  value={form.status_id ? String(form.status_id) : ""}
+                  onValueChange={(v) =>
+                    setForm({ ...form, status_id: v ? parseInt(v) : undefined })
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Select</SelectItem>
                     {meta.statuses.map((s: any) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -157,7 +205,11 @@ export default function TicketsCreatePage() {
 
             <div>
               <Label className="mb-2">Title</Label>
-              <Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Brief summary (e.g. 'Login page error')" />
+              <Input
+                value={form.subject}
+                onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                placeholder="Brief summary (e.g. 'Login page error')"
+              />
             </div>
 
             <div>
@@ -172,14 +224,24 @@ export default function TicketsCreatePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label className="mb-2">Priority</Label>
-                <Select value={form.priority_id?.toString() || ""} onValueChange={(v) => setForm({ ...form, priority_id: v ? parseInt(v) : undefined })}>
+                <Select
+                  value={form.priority_id?.toString() || ""}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      priority_id: v ? parseInt(v) : undefined,
+                    })
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Select</SelectItem>
                     {meta.priorities.map((p: any) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -187,7 +249,12 @@ export default function TicketsCreatePage() {
 
               <div>
                 <Label className="mb-2">Demand (SLA)</Label>
-                <Select value={String(form.demand)} onValueChange={(v) => setForm({ ...form, demand: parseInt(v) })}>
+                <Select
+                  value={String(form.demand)}
+                  onValueChange={(v) =>
+                    setForm({ ...form, demand: parseInt(v) })
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select demand" />
                   </SelectTrigger>
@@ -197,28 +264,45 @@ export default function TicketsCreatePage() {
                     <SelectItem value="2">Priority 2 — End of day</SelectItem>
                   </SelectContent>
                 </Select>
-                <div className="text-sm text-muted-foreground mt-1">SLA: {computeSlaLabel(form.demand)}</div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  SLA: {computeSlaLabel(form.demand)}
+                </div>
               </div>
             </div>
 
             <div className="mt-3">
               <Label className="mb-2">Assignee</Label>
-              <Select value={form.assigned_to ? String(form.assigned_to) : ""} onValueChange={(v) => setForm({ ...form, assigned_to: v ? parseInt(v) : undefined })}>
+              <Select
+                value={form.assigned_to ? String(form.assigned_to) : ""}
+                onValueChange={(v) =>
+                  setForm({ ...form, assigned_to: v ? parseInt(v) : undefined })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Search and select user" />
                 </SelectTrigger>
                 <SelectContent>
                   <div className="p-2 border-b">
-                    <Input placeholder="Search users" value={assigneeSearch} onChange={(e) => setAssigneeSearch(e.target.value)} className="h-8" />
+                    <Input
+                      placeholder="Search users"
+                      value={assigneeSearch}
+                      onChange={(e) => setAssigneeSearch(e.target.value)}
+                      className="h-8"
+                    />
                   </div>
                   <div className="max-h-48 overflow-y-auto">
                     {filteredAssignees.map((user: any) => (
                       <SelectItem key={user.id} value={String(user.id)}>
-                        {user.firstname || user.first_name ? `${user.firstname || user.first_name} ${user.lastname || user.last_name}`.trim() : user.name} {user.email ? `• ${user.email}` : ''}
+                        {user.firstname || user.first_name
+                          ? `${user.firstname || user.first_name} ${user.lastname || user.last_name}`.trim()
+                          : user.name}{" "}
+                        {user.email ? `• ${user.email}` : ""}
                       </SelectItem>
                     ))}
                     {filteredAssignees.length === 0 && (
-                      <SelectItem value="no-users" disabled>No users found</SelectItem>
+                      <SelectItem value="no-users" disabled>
+                        No users found
+                      </SelectItem>
                     )}
                   </div>
                 </SelectContent>
@@ -228,12 +312,23 @@ export default function TicketsCreatePage() {
             <div>
               <Label className="mb-2">Attachments</Label>
               <div className="border-dashed border-2 border-gray-200 rounded p-4 text-center">
-                <input type="file" multiple onChange={(e) => setAttachments(Array.from(e.target.files || []))} />
-                <div className="text-sm text-gray-500 mt-2">Drag and drop files here, or click to browse. Max 50MB per file.</div>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) =>
+                    setAttachments(Array.from(e.target.files || []))
+                  }
+                />
+                <div className="text-sm text-gray-500 mt-2">
+                  Drag and drop files here, or click to browse. Max 50MB per
+                  file.
+                </div>
                 {attachments.length > 0 && (
                   <div className="mt-3 text-sm text-left">
                     {attachments.map((f, i) => (
-                      <div key={i} className="py-1">{f.name} • {(f.size/1024/1024).toFixed(2)} MB</div>
+                      <div key={i} className="py-1">
+                        {f.name} • {(f.size / 1024 / 1024).toFixed(2)} MB
+                      </div>
                     ))}
                   </div>
                 )}
@@ -241,8 +336,12 @@ export default function TicketsCreatePage() {
             </div>
 
             <div className="flex items-center gap-2 justify-end">
-              <Button variant="ghost" onClick={() => navigate(-1)}>Cancel</Button>
-              <Button onClick={submit} disabled={loading}>{loading ? "Creating..." : "Create Ticket"}</Button>
+              <Button variant="ghost" onClick={() => navigate(-1)}>
+                Cancel
+              </Button>
+              <Button onClick={submit} disabled={loading}>
+                {loading ? "Creating..." : "Create Ticket"}
+              </Button>
             </div>
           </div>
         </CardContent>

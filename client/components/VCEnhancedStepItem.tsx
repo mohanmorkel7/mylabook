@@ -1015,8 +1015,7 @@ export function VCEnhancedStepItem({
                                                               message: sysMsg,
                                                               message_type:
                                                                 "system" as const,
-                                                              is_rich_text:
-                                                                false,
+                                                              is_rich_text: false,
                                                               created_at:
                                                                 new Date().toISOString(),
                                                             } as any;
@@ -1046,8 +1045,7 @@ export function VCEnhancedStepItem({
                                                                         sysMsg,
                                                                       message_type:
                                                                         "system",
-                                                                      is_rich_text:
-                                                                        false,
+                                                                      is_rich_text: false,
                                                                       attachments:
                                                                         [],
                                                                     },
@@ -1145,8 +1143,7 @@ export function VCEnhancedStepItem({
                                                                       sysMsg,
                                                                     message_type:
                                                                       "system",
-                                                                    is_rich_text:
-                                                                      false,
+                                                                    is_rich_text: false,
                                                                     attachments:
                                                                       [],
                                                                   },
@@ -1235,7 +1232,9 @@ export function VCEnhancedStepItem({
                                       <div className="space-y-2">
                                         <Textarea
                                           value={editMessageText}
-                                          onChange={(e) => setEditMessageText(e.target.value)}
+                                          onChange={(e) =>
+                                            setEditMessageText(e.target.value)
+                                          }
                                           placeholder="Edit your message..."
                                           className="min-h-[80px] border-gray-200"
                                         />

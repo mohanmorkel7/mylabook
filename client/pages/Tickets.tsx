@@ -18,23 +18,27 @@ export default function TicketsPage() {
     setLoading(true);
     try {
       const localFilters = { ...filters };
-      if (tab === "assignedToMe") {
+
+      // Read current user from localStorage (if available)
+      let currentUser: any = null;
+      try {
         const raw = localStorage.getItem("banani_user");
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed && parsed.id) localFilters.assigned_to = parsed.id;
-          } catch {}
-        }
-      } else {
-        const raw = localStorage.getItem("banani_user");
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed && parsed.id) localFilters.created_by = parsed.id;
-          } catch {}
+        if (raw) currentUser = JSON.parse(raw);
+      } catch (e) {
+        currentUser = null;
+      }
+
+      // Admin users should see all tickets (no assigned/created_by filter)
+      const isAdmin = currentUser && String(currentUser.role).toLowerCase() === "admin";
+
+      if (!isAdmin) {
+        if (tab === "assignedToMe") {
+          if (currentUser && currentUser.id) localFilters.assigned_to = currentUser.id;
+        } else {
+          if (currentUser && currentUser.id) localFilters.created_by = currentUser.id;
         }
       }
+
       if (search) localFilters.search = search;
       const resp = await apiClient.getTickets(localFilters, page, limit);
       setTicketsResp(resp);

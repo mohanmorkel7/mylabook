@@ -315,12 +315,13 @@ export default function TicketsCreatePage() {
             </div>
 
             <div>
-              <Label className="mb-2">Description</Label>
+              <Label className="mb-2">Description<span className="text-red-500 ml-1">*</span></Label>
               <RichTextEditor
                 value={form.description}
-                onChange={(html) => setForm({ ...form, description: html })}
+                onChange={(html) => { setForm({ ...form, description: html }); setErrors((prev) => ({ ...prev, description: undefined })); }}
                 placeholder="Describe the issue in detail... Include steps to reproduce, expected vs actual behavior, and any relevant links."
               />
+              {errors.description && <div className="text-sm text-red-600 mt-1">{errors.description}</div>}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1918,7 +1918,10 @@ export class ApiClient {
       tickets: any[];
       total: number;
       pages: number;
-    }>(endpoint, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
+    }>(endpoint, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
   }
 
   async getTicketById(id: number) {

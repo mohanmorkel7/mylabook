@@ -79,7 +79,20 @@ export function createServer() {
   }
 
   // Middleware
-  app.use(cors());
+  // Configure CORS to include custom headers used by the client (x-user-id)
+  app.use(
+    cors({
+      origin: true,
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Content-Length",
+        "X-Requested-With",
+        "X-User-Id",
+      ],
+      exposedHeaders: ["X-User-Id"],
+    }),
+  );
 
   // Handle large file uploads with proper error handling - skip multipart/form-data for multer
   app.use((req, res, next) => {

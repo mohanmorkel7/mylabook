@@ -524,11 +524,13 @@ export default function ManageTickets() {
                                 __html: ((): string => {
                                   try {
                                     const parser = new DOMParser();
-                                    const decoded = parser.parseFromString(
-                                      ticket.description || "",
-                                      "text/html",
-                                    ).body.textContent || "";
-                                    return decoded;
+                                    const raw = ticket.description || "";
+                                  if (raw.includes("&lt;") || raw.includes("&gt;")) {
+                                    // description is HTML-escaped, decode entities
+                                    return parser.parseFromString(raw, "text/html").body.textContent || "";
+                                  }
+                                  // If it already contains tags, use as-is; otherwise safe text
+                                  return raw;
                                   } catch (e) {
                                     return ticket.description || "";
                                   }

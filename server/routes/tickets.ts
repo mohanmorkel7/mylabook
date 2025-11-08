@@ -380,7 +380,40 @@ router.post(
         ticketData.custom_fields = JSON.parse(ticketData.custom_fields);
       }
 
+      // Server-side validation for required fields
+      const requiredFields = [
+        { key: 'team_id', label: 'team' },
+        { key: 'bucket_id', label: 'bucket' },
+        { key: 'subject', label: 'title' },
+        { key: 'description', label: 'description' },
+        { key: 'priority_id', label: 'priority' },
+        { key: 'demand', label: 'demand' },
+        { key: 'assigned_to', label: 'assignee' },
+      ];
+
+      const missing = requiredFields.filter((f) => {
+        const val = (ticketData as any)[f.key];
+        return val === undefined || val === null || val === '';
+      });
+
+      if (missing.length > 0) {
+        return res.status(400).json({ error: `Missing required fields: ${missing.map(m=>m.label).join(', ')}` });
+      }
+
+      // Normalize numeric fields
+      ticketData.team_id = parseInt(ticketData.team_id as any);
+      ticketData.bucket_id = parseInt(ticketData.bucket_id as any);
+      ticketData.priority_id = parseInt(ticketData.priority_id as any);
+      ticketData.demand = parseInt(ticketData.demand as any);
+      ticketData.assigned_to = parseInt(ticketData.assigned_to as any);
+
+      // Ensure demand is within allowed range 0|1|2
+      if (![0,1,2].includes(Number(ticketData.demand))) {
+        return res.status(400).json({ error: 'Invalid demand value. Allowed: 0, 1, 2' });
+      }
+
       if (await isDatabaseAvailable()) {
+        // Ensure status default (Open) will be applied by DB if not provided
         const ticket = await TicketRepository.create(ticketData, createdBy);
 
         // Handle file attachments

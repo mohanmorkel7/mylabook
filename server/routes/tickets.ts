@@ -477,6 +477,22 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
         return res.status(403).json({ error: "Forbidden: not allowed to update ticket" });
       }
 
+      // If status is being changed to an 'Overdue' status, require reason
+      if (updateData.status_id) {
+        try {
+          const statusRes = await pool.query("SELECT name FROM ticket_statuses WHERE id = $1", [updateData.status_id]);
+          const statusName = statusRes.rows[0]?.name || "";
+          if (String(statusName).toLowerCase().includes("overdue")) {
+            const reasonVal = updateData.reason || (existing && (existing as any).reason);
+            if (!reasonVal || String(reasonVal).trim() === "") {
+              return res.status(400).json({ error: "Reason is required when marking a ticket as overdue" });
+            }
+          }
+        } catch (e) {
+          // ignore and proceed
+        }
+      }
+
       const ticket = await TicketRepository.update(id, updateData, updatedBy);
       res.json(ticket);
     } else {

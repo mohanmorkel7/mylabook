@@ -36,8 +36,37 @@ export function RichTextEditor({ value = "", onChange, placeholder = "Describe t
   const toggleBold = () => editor?.chain().focus().toggleBold().run();
   const toggleItalic = () => editor?.chain().focus().toggleItalic().run();
   const toggleStrike = () => editor?.chain().focus().toggleStrike().run();
-  const toggleBullet = () => editor?.chain().focus().toggleBulletList().run();
-  const toggleOrdered = () => editor?.chain().focus().toggleOrderedList().run();
+  const toggleBullet = () => {
+    if (editor?.chain && (editor as any).commands?.toggleBulletList) {
+      editor.chain().focus().toggleBulletList().run();
+      return;
+    }
+    // Fallback: insert basic ul/li around selection
+    try {
+      const from = (editor as any).state.selection.from;
+      const to = (editor as any).state.selection.to;
+      const selected = (editor as any).state.doc.textBetween(from, to) || "List item";
+      editor.chain().focus().deleteRange({ from, to }).insertContent(`<ul><li>${selected}</li></ul>`).run();
+    } catch (e) {
+      // Last resort: append empty list
+      editor.chain().focus().insertContent(`<ul><li>List item</li></ul>`).run();
+    }
+  };
+  const toggleOrdered = () => {
+    if (editor?.chain && (editor as any).commands?.toggleOrderedList) {
+      editor.chain().focus().toggleOrderedList().run();
+      return;
+    }
+    // Fallback: insert basic ol/li around selection
+    try {
+      const from = (editor as any).state.selection.from;
+      const to = (editor as any).state.selection.to;
+      const selected = (editor as any).state.doc.textBetween(from, to) || "List item";
+      editor.chain().focus().deleteRange({ from, to }).insertContent(`<ol><li>${selected}</li></ol>`).run();
+    } catch (e) {
+      editor.chain().focus().insertContent(`<ol><li>List item</li></ol>`).run();
+    }
+  };
   const toggleBlockquote = () => editor?.chain().focus().toggleBlockquote().run();
   const toggleCode = () => editor?.chain().focus().toggleCode().run();
   const setLink = () => {

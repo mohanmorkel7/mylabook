@@ -196,6 +196,9 @@ export default function TicketsCreatePage() {
     return name.includes(s) || (u.email || "").toLowerCase().includes(s);
   });
 
+  const params = useParams();
+  const ticketIdParam = params.id ? Number(params.id) : undefined;
+
   const submit = async () => {
     // Client-side validation
     const newErrors: Record<string, string> = {};
@@ -228,19 +231,22 @@ export default function TicketsCreatePage() {
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      // Scroll to first error field (optional)
-      const firstKey = Object.keys(newErrors)[0];
-      // Keep user on form and do not submit
       return;
     }
 
     setLoading(true);
     try {
-      const created = await apiClient.createTicket(form, attachments);
-      navigate(`/tickets/${created.id}`);
+      if (ticketIdParam) {
+        // Update existing ticket
+        await apiClient.updateTicket(ticketIdParam, form);
+        navigate(`/tickets/${ticketIdParam}`);
+      } else {
+        const created = await apiClient.createTicket(form, attachments);
+        navigate(`/tickets/${created.id}`);
+      }
     } catch (err) {
-      console.error("Failed to create ticket:", err);
-      alert("Failed to create ticket");
+      console.error("Failed to save ticket:", err);
+      alert("Failed to save ticket");
     } finally {
       setLoading(false);
     }

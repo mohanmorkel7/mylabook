@@ -144,10 +144,9 @@ export default function TicketsCreatePage() {
           ];
         }
 
-        // Fetch users list for assignee dropdown
+        // Fetch users list for assignee dropdown (use mitra users for consistency)
         try {
-          // Load users from local users table (server-side users endpoint)
-          const usersResp = await apiClient.request("/users");
+          const usersResp = await apiClient.request("/users/list/mitra");
           metaObj.users = usersResp || [];
         } catch (uErr) {
           console.warn("Failed to load users for assignee dropdown", uErr);
@@ -623,7 +622,7 @@ export default function TicketsCreatePage() {
                 Cancel
               </Button>
               <Button type="button" onClick={submit} disabled={loading}>
-                {loading ? "Creating..." : "Create Ticket"}
+                {loading ? (ticketIdParam ? "Updating..." : "Creating...") : ticketIdParam ? "Update Ticket" : "Create Ticket"}
               </Button>
             </div>
           </div>

@@ -260,6 +260,21 @@ export async function initializeDatabase() {
       );
     }
 
+    // Ensure ticket teams and buckets migration has run (adds team_id, bucket_id, demand, sla_time, reason)
+    try {
+      const ticketTeamsPath = path.join(__dirname, "add-ticket-teams-buckets.sql");
+      if (fs.existsSync(ticketTeamsPath)) {
+        const ticketSql = fs.readFileSync(ticketTeamsPath, "utf8");
+        await client.query(ticketSql);
+        console.log("Ticket teams/buckets migration applied successfully");
+      }
+    } catch (ticketTeamsError) {
+      console.log(
+        "Ticket teams/buckets migration already applied or error:",
+        ticketTeamsError.message,
+      );
+    }
+
     // Update investor_category allowed values (add accelerator, individual)
     try {
       const vcInvestorCategoryMigrationPath = path.join(

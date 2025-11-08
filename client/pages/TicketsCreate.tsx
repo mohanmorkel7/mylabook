@@ -112,7 +112,10 @@ export default function TicketsCreatePage() {
           { id: 5, name: "Closed" },
         ];
 
-        metaObj.statuses = (metaObj.statuses && metaObj.statuses.length > 0) ? metaObj.statuses : defaultStatuses;
+        metaObj.statuses =
+          metaObj.statuses && metaObj.statuses.length > 0
+            ? metaObj.statuses
+            : defaultStatuses;
 
         // Fetch users list for assignee dropdown
         try {
@@ -266,14 +269,20 @@ export default function TicketsCreatePage() {
 
             {/* Reason when status is Overdue */}
             {(() => {
-              const selectedStatus = meta.statuses.find((s: any) => String(s.id) === String(form.status_id));
-              const isOverdue = selectedStatus && String(selectedStatus.name).toLowerCase().includes('overdue');
+              const selectedStatus = meta.statuses.find(
+                (s: any) => String(s.id) === String(form.status_id),
+              );
+              const isOverdue =
+                selectedStatus &&
+                String(selectedStatus.name).toLowerCase().includes("overdue");
               return isOverdue ? (
                 <div>
                   <Label className="mb-2">Reason for overdue</Label>
                   <Input
                     value={form.reason}
-                    onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, reason: e.target.value })
+                    }
                     placeholder="Describe why this ticket is overdue"
                   />
                 </div>

@@ -827,7 +827,7 @@ export class TicketRepository {
       id: row.id,
       ticket_id: row.ticket_id,
       user_id: row.user_id,
-      content: row.content,
+      content: row.content ?? row.comment,
       is_internal: row.is_internal,
       parent_comment_id: row.parent_comment_id,
       mentions: row.mentions,

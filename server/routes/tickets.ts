@@ -911,8 +911,29 @@ router.post(
 
           res.status(201).json(saved);
         } catch (dbErr) {
-          console.error("Failed to save uploaded attachment:", dbErr);
-          return res.status(500).json({ error: "Failed to save attachment" });
+          console.warn("Primary attachment insert failed, attempting fallback:", dbErr.message || dbErr);
+          // Fallback for alternate schema
+          try {
+            const insertRes2 = await pool.query(
+              `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+              [
+                ticketId,
+                commentId || null,
+                userId,
+                req.file.filename || req.file.originalname,
+                `/uploads/tickets/${req.file.filename}`,
+                req.file.size,
+                req.file.mimetype,
+              ],
+            );
+            const saved2 = insertRes2.rows[0];
+            console.log("File uploaded and saved (fallback) for ticket:", ticketId, saved2.file_name || saved2.filename);
+            res.status(201).json(saved2);
+          } catch (fbErr) {
+            console.error("Failed to save uploaded attachment (fallback):", fbErr);
+            return res.status(500).json({ error: "Failed to save attachment" });
+          }
         }
       } else {
         // Mock attachment upload

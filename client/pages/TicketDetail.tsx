@@ -4,7 +4,7 @@ import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, MessageSquare, Paperclip } from "lucide-react";
+import { Edit, MessageSquare, Paperclip, ArrowLeft } from "lucide-react";
 
 export default function TicketDetailPage() {
   const navigate = useNavigate();

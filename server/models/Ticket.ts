@@ -748,12 +748,12 @@ export class TicketRepository {
               WHEN ta.id IS NOT NULL THEN
                 json_build_object(
                   'id', ta.id,
-                  'filename', ta.filename,
-                  'original_filename', ta.original_filename,
-                  'file_path', ta.file_path,
-                  'file_size', ta.file_size,
-                  'mime_type', ta.mime_type,
-                  'uploaded_at', ta.uploaded_at
+                  'filename', COALESCE(ta.filename, ta.file_name),
+                  'original_filename', COALESCE(ta.original_filename, ta.file_name),
+                  'file_path', COALESCE(ta.file_path, ta.file_path),
+                  'file_size', COALESCE(ta.file_size, ta.file_size),
+                  'mime_type', COALESCE(ta.mime_type, ta.mime_type),
+                  'uploaded_at', COALESCE(ta.uploaded_at, ta.uploaded_at)
                 )
               ELSE NULL
             END

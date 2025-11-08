@@ -296,11 +296,10 @@ export default function TicketsCreatePage() {
                   <Label className="mb-2">Reason for overdue</Label>
                   <Input
                     value={form.reason}
-                    onChange={(e) =>
-                      setForm({ ...form, reason: e.target.value })
-                    }
+                    onChange={(e) => { setForm({ ...form, reason: e.target.value }); setErrors((prev) => ({ ...prev, reason: undefined })); }}
                     placeholder="Describe why this ticket is overdue"
                   />
+                  {errors.reason && <div className="text-sm text-red-600 mt-1">{errors.reason}</div> }
                 </div>
               ) : null;
             })()}

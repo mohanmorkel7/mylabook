@@ -396,7 +396,7 @@ export default function ManageTickets() {
                   <SelectItem value="">All Users</SelectItem>
                   {users.map((user) => (
                     <SelectItem key={user.id} value={user.id.toString()}>
-                      {user.first_name} {user.last_name}
+                      {getAssignedUserName(user.id)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -505,6 +505,7 @@ export default function ManageTickets() {
                                 to={`/tickets/${ticket.id}`}
                                 className="p-1 rounded hover:bg-gray-100"
                                 title="View"
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 <Search size={16} />
                               </Link>
@@ -512,6 +513,7 @@ export default function ManageTickets() {
                                 to={`/tickets/${ticket.id}/edit`}
                                 className="p-1 rounded hover:bg-gray-100"
                                 title="Edit"
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 <Edit size={16} />
                               </Link>
@@ -545,24 +547,18 @@ export default function ManageTickets() {
                             </div>
                           </div>
 
-                          <div className="mt-3 mb-3 text-sm text-gray-700">
+                          <div className="mt-2 mb-3 text-sm text-gray-700 max-h-24 overflow-hidden">
                             <div
                               dangerouslySetInnerHTML={{
                                 __html: ((): string => {
                                   try {
                                     const parser = new DOMParser();
                                     const raw = ticket.description || "";
-                                    if (
-                                      raw.includes("&lt;") ||
-                                      raw.includes("&gt;")
-                                    ) {
-                                      // description is HTML-escaped, decode entities
+                                    if (raw.includes("&lt;") || raw.includes("&gt;")) {
                                       return (
-                                        parser.parseFromString(raw, "text/html")
-                                          .body.textContent || ""
+                                        parser.parseFromString(raw, "text/html").body.textContent || ""
                                       );
                                     }
-                                    // If it already contains tags, use as-is; otherwise safe text
                                     return raw;
                                   } catch (e) {
                                     return ticket.description || "";
@@ -572,36 +568,34 @@ export default function ManageTickets() {
                             />
                           </div>
 
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
                             <div>
                               <p className="text-gray-600">Status</p>
                               <Badge variant="outline" className="mt-1">
-                                {typeof ticket.status === "object"
-                                  ? ticket.status?.name
-                                  : ticket.status}
+                                {typeof ticket.status === "object" ? ticket.status?.name : ticket.status}
                               </Badge>
                             </div>
                             <div>
                               <p className="text-gray-600">Priority</p>
                               {priority && (
-                                <Badge className={`mt-1 ${priority.color}`}>
-                                  {priority.name}
-                                </Badge>
+                                <Badge className={`mt-1 ${priority.color}`}>{priority.name}</Badge>
                               )}
                             </div>
                             <div>
                               <p className="text-gray-600">Assigned To</p>
-                              <p className="font-medium mt-1">
-                                {getAssignedUserName(ticket.assigned_to_id)}
-                              </p>
+                              <p className="font-medium mt-1">{getAssignedUserName(ticket.assigned_to_id)}</p>
                             </div>
                             <div>
                               <p className="text-gray-600">Created</p>
-                              <p className="font-medium mt-1">
-                                {new Date(
-                                  ticket.created_at,
-                                ).toLocaleDateString()}
-                              </p>
+                              <p className="font-medium mt-1">{new Date(ticket.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Updated</p>
+                              <p className="font-medium mt-1">{new Date(ticket.updated_at).toLocaleDateString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Track ID</p>
+                              <Badge variant="secondary" className="mt-1">{ticket.track_id || `TKT-${String(ticket.id).padStart(4, "0")}`}</Badge>
                             </div>
                           </div>
                         </div>

@@ -184,31 +184,43 @@ export default function TicketsCreatePage() {
         const decodedDescription = (() => {
           try {
             const raw = ticket.description || "";
-            if (raw.includes("&lt;") || raw.includes("&gt;")) {
-              const parser = new DOMParser();
-              return (
-                parser.parseFromString(raw, "text/html").body.textContent || raw
-              );
+            if (!raw) return "";
+            if (raw.includes("&lt;") || raw.includes("&gt;") || raw.includes("&amp;")) {
+              return raw
+                .replace(/&amp;/g, "&")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">");
             }
             return raw;
           } catch (e) {
             return ticket.description || "";
           }
         })();
-        setForm((prev: any) => ({
-          ...prev,
-          subject: ticket.subject || prev.subject,
-          description: decodedDescription || prev.description,
-          priority_id: ticket.priority_id ?? prev.priority_id,
-          category_id: ticket.category_id ?? prev.category_id,
-          assigned_to:
-            ticket.assigned_to ?? ticket.assignee?.id ?? prev.assigned_to,
-          team_id: ticket.team_id ?? ticket.team?.id ?? prev.team_id,
-          bucket_id: ticket.bucket_id ?? ticket.bucket?.id ?? prev.bucket_id,
-          status_id: ticket.status_id ?? prev.status_id,
-          demand: ticket.demand ?? prev.demand,
-          reason: ticket.reason || prev.reason,
-        }));
+        const nextForm = {
+          subject: ticket.subject || form.subject,
+          description: decodedDescription || form.description,
+          priority_id: ticket.priority_id ?? form.priority_id,
+          category_id: ticket.category_id ?? form.category_id,
+          assigned_to: ticket.assigned_to ?? ticket.assignee?.id ?? form.assigned_to,
+          team_id: ticket.team_id ?? ticket.team?.id ?? form.team_id,
+          bucket_id: ticket.bucket_id ?? ticket.bucket?.id ?? form.bucket_id,
+          status_id: ticket.status_id ?? form.status_id,
+          demand: ticket.demand ?? form.demand,
+          reason: ticket.reason || form.reason,
+        } as any;
+        setForm(nextForm);
+
+        // Ensure meta options contain selected team/bucket so Select shows them
+        setMeta((prevMeta: any) => {
+          const updated = { ...prevMeta };
+          if (nextForm.team_id && !(updated.teams || []).some((t: any) => String(t.id) === String(nextForm.team_id))) {
+            updated.teams = [...(updated.teams || []), { id: nextForm.team_id, name: ticket.team?.name || `Team #${nextForm.team_id}` }];
+          }
+          if (nextForm.bucket_id && !(updated.buckets || []).some((b: any) => String(b.id) === String(nextForm.bucket_id))) {
+            updated.buckets = [...(updated.buckets || []), { id: nextForm.bucket_id, name: ticket.bucket?.name || `Bucket #${nextForm.bucket_id}`, team_id: nextForm.team_id }];
+          }
+          return updated;
+        });
       } catch (e) {
         console.warn("Failed to load ticket for edit:", e);
       }

@@ -583,9 +583,9 @@ export function EnhancedProjectStepItem({
                     )}
 
                     <div className="mb-3">
-                      <RichTextEditor
+                      <Textarea
                         value={newComment}
-                        onChange={setNewComment}
+                        onChange={(e) => setNewComment(e.target.value)}
                         placeholder="Add a detailed comment for this step..."
                         className="min-h-[100px] border-gray-200"
                       />

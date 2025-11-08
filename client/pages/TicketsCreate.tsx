@@ -336,8 +336,12 @@ export default function TicketsCreatePage() {
             </div>
 
             <div className="flex items-center gap-2 justify-end">
-              <Button type="button" variant="ghost" onClick={() => navigate('/tickets')}>
-              Cancel
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => navigate("/tickets")}
+              >
+                Cancel
               </Button>
               <Button type="button" onClick={submit} disabled={loading}>
                 {loading ? "Creating..." : "Create Ticket"}

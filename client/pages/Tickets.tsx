@@ -52,7 +52,10 @@ export default function TicketsPage() {
       const resp = await apiClient.getTickets(localFilters, page, limit);
       console.log("[TicketsPage] API response:", resp);
       setTicketsResp(resp);
-      console.log("[TicketsPage] state updated ticketsResp:", resp.tickets && resp.tickets.length ? resp.tickets.length : 0);
+      console.log(
+        "[TicketsPage] state updated ticketsResp:",
+        resp.tickets && resp.tickets.length ? resp.tickets.length : 0,
+      );
     } catch (err) {
       console.error("Failed to load tickets:", err);
     } finally {
@@ -156,9 +159,18 @@ export default function TicketsPage() {
                   <td className="p-2">{t.priority?.name}</td>
                   <td className="p-2">{t.status?.name}</td>
                   <td className="p-2">{t.assignee?.name || "-"}</td>
-                  <td className="p-2">{t.created_at ? new Date(t.created_at).toLocaleString() : "-"}</td>
                   <td className="p-2">
-                    <Link to={`/tickets/${t.id}`} className="mr-2 text-sm text-blue-600">View</Link>
+                    {t.created_at
+                      ? new Date(t.created_at).toLocaleString()
+                      : "-"}
+                  </td>
+                  <td className="p-2">
+                    <Link
+                      to={`/tickets/${t.id}`}
+                      className="mr-2 text-sm text-blue-600"
+                    >
+                      View
+                    </Link>
                   </td>
                 </tr>
               ))

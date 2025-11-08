@@ -16,6 +16,8 @@ import RichTextEditor from "@/components/RichTextEditor";
 
 export default function TicketsCreatePage() {
   const navigate = useNavigate();
+  const params = useParams();
+  const ticketIdParam = params.id ? Number(params.id) : undefined;
   const [meta, setMeta] = useState<any>({
     priorities: [],
     statuses: [],

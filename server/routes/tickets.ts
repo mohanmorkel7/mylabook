@@ -506,13 +506,26 @@ router.post(
         // Handle file attachments
         if (req.files && Array.isArray(req.files)) {
           for (const file of req.files) {
-            // Store attachment info in database (would be implemented in TicketRepository)
-            console.log(
-              "Uploaded file:",
-              file.filename,
-              "for ticket:",
-              ticket.id,
-            );
+            try {
+              // Persist attachment record
+              await pool.query(
+                `INSERT INTO ticket_attachments (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type, uploaded_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+                [
+                  ticket.id,
+                  null,
+                  createdBy,
+                  file.filename,
+                  file.originalname,
+                  `/uploads/tickets/${file.filename}`,
+                  file.size,
+                  file.mimetype,
+                ],
+              );
+              console.log("Saved attachment for ticket:", ticket.id, file.filename);
+            } catch (aErr) {
+              console.error("Failed to save attachment record:", aErr);
+            }
           }
         }
 

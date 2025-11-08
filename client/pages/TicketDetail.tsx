@@ -60,6 +60,7 @@ export default function TicketDetailPage() {
   if (!ticket) return <div className="p-6">Loading...</div>;
 
   const assignedName =
+    ticket.assignee?.name ||
     ticket.assigned_to?.name ||
     ticket.assigned_to_name ||
     ticket.assigned_to ||

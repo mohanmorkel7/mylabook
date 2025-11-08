@@ -305,12 +305,13 @@ export default function TicketsCreatePage() {
             })()}
 
             <div>
-              <Label className="mb-2">Title</Label>
+              <Label className="mb-2">Title<span className="text-red-500 ml-1">*</span></Label>
               <Input
                 value={form.subject}
-                onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                onChange={(e) => { setForm({ ...form, subject: e.target.value }); setErrors((prev) => ({ ...prev, subject: undefined })); }}
                 placeholder="Brief summary (e.g. 'Login page error')"
               />
+              {errors.subject && <div className="text-sm text-red-600 mt-1">{errors.subject}</div>}
             </div>
 
             <div>

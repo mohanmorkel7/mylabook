@@ -863,26 +863,30 @@ router.post(
         : undefined;
 
       if (await isDatabaseAvailable()) {
-        // In real implementation, save attachment to database
-        console.log(
-          "File uploaded for ticket:",
-          ticketId,
-          "File:",
-          req.file.filename,
-        );
+        try {
+          const insertRes = await pool.query(
+            `INSERT INTO ticket_attachments (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type, uploaded_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+            [
+              ticketId,
+              commentId || null,
+              userId,
+              req.file.filename,
+              req.file.originalname,
+              `/uploads/tickets/${req.file.filename}`,
+              req.file.size,
+              req.file.mimetype,
+            ],
+          );
 
-        res.status(201).json({
-          id: Math.floor(Math.random() * 1000),
-          ticket_id: ticketId,
-          comment_id: commentId,
-          user_id: userId,
-          filename: req.file.filename,
-          original_filename: req.file.originalname,
-          file_path: `/uploads/tickets/${req.file.filename}`,
-          file_size: req.file.size,
-          mime_type: req.file.mimetype,
-          uploaded_at: new Date(),
-        });
+          const saved = insertRes.rows[0];
+          console.log("File uploaded and saved for ticket:", ticketId, saved.filename);
+
+          res.status(201).json(saved);
+        } catch (dbErr) {
+          console.error("Failed to save uploaded attachment:", dbErr);
+          return res.status(500).json({ error: "Failed to save attachment" });
+        }
       } else {
         // Mock attachment upload
         res.status(201).json({

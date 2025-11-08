@@ -107,8 +107,8 @@ export default function ManageTickets() {
     try {
       setIsLoading(true);
       const response = await api.get("/tickets");
-      // API returns { tickets: [], total, pages }
-      const data = response.data;
+      // API may return parsed JSON directly or an axios-like { data } wrapper
+      const data = response?.data ?? response;
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
       setTickets(ticketsArray);
     } catch (error) {

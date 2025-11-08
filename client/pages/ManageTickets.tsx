@@ -67,6 +67,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function ManageTickets() {
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);

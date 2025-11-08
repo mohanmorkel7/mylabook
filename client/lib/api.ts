@@ -1947,10 +1947,26 @@ export class ApiClient {
       });
     }
 
+    // Attach x-user-id explicitly in headers for FormData requests (some environments strip headers otherwise)
+    const headersForForm: Record<string, string> = {};
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const stored = localStorage.getItem("banani_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.id) {
+            headersForForm["x-user-id"] = String(parsed.id);
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     return this.request<any>("/tickets", {
       method: "POST",
       body: formData,
-      headers: {}, // Let browser set Content-Type for FormData
+      headers: headersForForm, // let request() merge and keep Content-Type unset so browser handles boundary
     });
   }
 

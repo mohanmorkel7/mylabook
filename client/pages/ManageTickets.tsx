@@ -498,44 +498,30 @@ export default function ManageTickets() {
                               </Badge>
                             )}
 
-                            <div className="ml-auto flex items-center gap-3">
-                              <Link
-                                to={`/tickets/${ticket.id}`}
-                                className="text-sm text-blue-600"
-                              >
-                                View
+                            <div className="ml-auto flex items-center gap-2">
+                              <Link to={`/tickets/${ticket.id}`} className="p-1 rounded hover:bg-gray-100" title="View">
+                                <Search size={16} />
                               </Link>
-                              <Link
-                                to={`/tickets/${ticket.id}/edit`}
-                                className="text-sm text-indigo-600"
-                              >
-                                Edit
+                              <Link to={`/tickets/${ticket.id}/edit`} className="p-1 rounded hover:bg-gray-100" title="Edit">
+                                <Edit size={16} />
                               </Link>
                               <button
-                                className="text-sm text-red-600"
+                                className="p-1 rounded hover:bg-gray-100 text-red-600"
+                                title="Delete"
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(ticket.id);
-                                    setTickets((prev) =>
-                                      prev.filter((p) => p.id !== ticket.id),
-                                    );
-                                    toast({
-                                      title: "Deleted",
-                                      description: "Ticket deleted",
-                                    });
+                                    setTickets((prev) => prev.filter((p) => p.id !== ticket.id));
+                                    toast({ title: "Deleted", description: "Ticket deleted" });
                                   } catch (delErr) {
                                     console.error("Delete failed", delErr);
-                                    toast({
-                                      title: "Error",
-                                      description: "Failed to delete ticket",
-                                      variant: "destructive",
-                                    });
+                                    toast({ title: "Error", description: "Failed to delete ticket", variant: "destructive" });
                                   }
                                 }}
                               >
-                                Delete
+                                <Trash size={16} />
                               </button>
                             </div>
                           </div>

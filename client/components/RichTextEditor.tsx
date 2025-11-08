@@ -79,3 +79,5 @@ export function RichTextEditor({ value = "", onChange, placeholder = "Describe t
     </Card>
   );
 }
+
+export default RichTextEditor;

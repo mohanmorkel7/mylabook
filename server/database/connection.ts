@@ -201,6 +201,18 @@ export async function initializeDatabase() {
             console.log("VC schema initialized");
           }
         }
+
+        // Also attempt to apply ticket teams/buckets migration if present (schema already existed)
+        try {
+          const ticketTeamsPath = path.join(__dirname, "add-ticket-teams-buckets.sql");
+          if (fs.existsSync(ticketTeamsPath)) {
+            const ticketSql = fs.readFileSync(ticketTeamsPath, "utf8");
+            await client.query(ticketSql);
+            console.log("Ticket teams/buckets migration applied successfully (existing schema path)");
+          }
+        } catch (ticketErr) {
+          console.log("Ticket teams migration skipped or error:", ticketErr.message);
+        }
       } catch (e) {
         console.log("VC schema init skipped or failed:", e.message);
       }

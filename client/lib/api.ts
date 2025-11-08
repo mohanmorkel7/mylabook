@@ -8,6 +8,8 @@ export class ApiClient {
   private isOfflineMode = false;
   private offlineDetectedAt = 0;
   private readonly OFFLINE_THRESHOLD = 2; // Number of consecutive failures to trigger offline mode
+  private probeIntervalId: number | null = null;
+  private readonly PROBE_INTERVAL_MS = 10000; // Probe server every 10s when offline
 
   // Method to reset circuit breaker (for development/demo mode)
   public resetCircuitBreaker() {
@@ -15,6 +17,10 @@ export class ApiClient {
     this.lastFailureTime = 0;
     this.isOfflineMode = false;
     this.offlineDetectedAt = 0;
+    if (this.probeIntervalId) {
+      clearInterval(this.probeIntervalId);
+      this.probeIntervalId = null;
+    }
     if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
       console.log("Circuit breaker reset");
   }
@@ -32,7 +38,28 @@ export class ApiClient {
         console.warn(
           "���� The app will show cached/mock data until the server is restored",
         );
+      // Start probing the server so the client can auto-recover when backend is back
+      this.startProbe();
     }
+  }
+
+  private startProbe() {
+    if (this.probeIntervalId) return;
+    if (typeof window === "undefined") return;
+    this.probeIntervalId = window.setInterval(async () => {
+      try {
+        const url = `${API_BASE_URL}/status`;
+        const res = await fetch(url, { method: "GET" });
+        if (res && res.ok) {
+          // Server is back
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.log("🟢 Backend reachable again via probe");
+          this.resetCircuitBreaker();
+        }
+      } catch (e) {
+        // ignore probe errors
+      }
+    }, this.PROBE_INTERVAL_MS) as unknown as number;
   }
 
   // Check if we should try to exit offline mode

@@ -1233,10 +1233,10 @@ export function VCEnhancedStepItem({
                                   <div className="text-sm text-gray-700">
                                     {editingMessageId === message.id ? (
                                       <div className="space-y-2">
-                                        <RichTextEditor
+                                        <Textarea
                                           value={editMessageText}
-                                          onChange={setEditMessageText}
-                                          placeholder="Edit your message with rich formatting..."
+                                          onChange={(e) => setEditMessageText(e.target.value)}
+                                          placeholder="Edit your message..."
                                           className="min-h-[80px] border-gray-200"
                                         />
                                         <div className="flex space-x-2">

@@ -102,6 +102,18 @@ export default function TicketsCreatePage() {
 
         metaObj.teams = teamsToUse;
         metaObj.buckets = bucketsToUse;
+
+        // Provide default statuses if backend doesn't return them
+        const defaultStatuses = [
+          { id: 1, name: "Open" },
+          { id: 2, name: "In Progress" },
+          { id: 3, name: "Pending" },
+          { id: 4, name: "Overdue" },
+          { id: 5, name: "Closed" },
+        ];
+
+        metaObj.statuses = (metaObj.statuses && metaObj.statuses.length > 0) ? metaObj.statuses : defaultStatuses;
+
         // Fetch users list for assignee dropdown
         try {
           const usersResp = await apiClient.request("/users/list/mitra");

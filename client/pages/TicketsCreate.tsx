@@ -264,6 +264,22 @@ export default function TicketsCreatePage() {
               </div>
             </div>
 
+            {/* Reason when status is Overdue */}
+            {(() => {
+              const selectedStatus = meta.statuses.find((s: any) => String(s.id) === String(form.status_id));
+              const isOverdue = selectedStatus && String(selectedStatus.name).toLowerCase().includes('overdue');
+              return isOverdue ? (
+                <div>
+                  <Label className="mb-2">Reason for overdue</Label>
+                  <Input
+                    value={form.reason}
+                    onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                    placeholder="Describe why this ticket is overdue"
+                  />
+                </div>
+              ) : null;
+            })()}
+
             <div>
               <Label className="mb-2">Title</Label>
               <Input

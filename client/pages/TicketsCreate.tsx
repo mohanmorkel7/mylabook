@@ -172,6 +172,30 @@ export default function TicketsCreatePage() {
   });
 
   const submit = async () => {
+    // Client-side validation
+    const newErrors: Record<string, string> = {};
+    if (!form.team_id) newErrors.team_id = "Team is required";
+    if (!form.bucket_id) newErrors.bucket_id = "Bucket is required";
+    if (!form.status_id) newErrors.status_id = "Status is required";
+    if (!form.subject || String(form.subject).trim() === "") newErrors.subject = "Title is required";
+    if (!form.description || String(form.description).trim() === "") newErrors.description = "Description is required";
+    if (!form.priority_id) newErrors.priority_id = "Priority is required";
+    if (form.demand === undefined || form.demand === null || ![0,1,2].includes(Number(form.demand))) newErrors.demand = "Demand is required";
+    if (!form.assigned_to) newErrors.assigned_to = "Assignee is required";
+
+    const selectedStatus = meta.statuses ? meta.statuses.find((s: any) => s.id === form.status_id) : null;
+    if (selectedStatus && String(selectedStatus.name).toLowerCase().includes("overdue")) {
+      if (!form.reason || String(form.reason).trim() === "") newErrors.reason = "Reason is required when status is Overdue";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      // Scroll to first error field (optional)
+      const firstKey = Object.keys(newErrors)[0];
+      // Keep user on form and do not submit
+      return;
+    }
+
     setLoading(true);
     try {
       const created = await apiClient.createTicket(form, attachments);

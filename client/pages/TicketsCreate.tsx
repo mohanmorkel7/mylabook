@@ -177,15 +177,28 @@ export default function TicketsCreatePage() {
     if (!form.team_id) newErrors.team_id = "Team is required";
     if (!form.bucket_id) newErrors.bucket_id = "Bucket is required";
     if (!form.status_id) newErrors.status_id = "Status is required";
-    if (!form.subject || String(form.subject).trim() === "") newErrors.subject = "Title is required";
-    if (!form.description || String(form.description).trim() === "") newErrors.description = "Description is required";
+    if (!form.subject || String(form.subject).trim() === "")
+      newErrors.subject = "Title is required";
+    if (!form.description || String(form.description).trim() === "")
+      newErrors.description = "Description is required";
     if (!form.priority_id) newErrors.priority_id = "Priority is required";
-    if (form.demand === undefined || form.demand === null || ![0,1,2].includes(Number(form.demand))) newErrors.demand = "Demand is required";
+    if (
+      form.demand === undefined ||
+      form.demand === null ||
+      ![0, 1, 2].includes(Number(form.demand))
+    )
+      newErrors.demand = "Demand is required";
     if (!form.assigned_to) newErrors.assigned_to = "Assignee is required";
 
-    const selectedStatus = meta.statuses ? meta.statuses.find((s: any) => s.id === form.status_id) : null;
-    if (selectedStatus && String(selectedStatus.name).toLowerCase().includes("overdue")) {
-      if (!form.reason || String(form.reason).trim() === "") newErrors.reason = "Reason is required when status is Overdue";
+    const selectedStatus = meta.statuses
+      ? meta.statuses.find((s: any) => s.id === form.status_id)
+      : null;
+    if (
+      selectedStatus &&
+      String(selectedStatus.name).toLowerCase().includes("overdue")
+    ) {
+      if (!form.reason || String(form.reason).trim() === "")
+        newErrors.reason = "Reason is required when status is Overdue";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -221,7 +234,9 @@ export default function TicketsCreatePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Team select (always shown) */}
               <div>
-                <Label className="mb-2">Team<span className="text-red-500 ml-1">*</span></Label>
+                <Label className="mb-2">
+                  Team<span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Select
                   value={form.team_id ? String(form.team_id) : ""}
                   onValueChange={(v) => {
@@ -248,15 +263,27 @@ export default function TicketsCreatePage() {
                     )}
                   </SelectContent>
                 </Select>
-                {errors.team_id && <div className="text-sm text-red-600 mt-1">{errors.team_id}</div>}
+                {errors.team_id && (
+                  <div className="text-sm text-red-600 mt-1">
+                    {errors.team_id}
+                  </div>
+                )}
               </div>
 
               {/* Bucket select (always shown) - filtered by selected team */}
               <div>
-                <Label className="mb-2">Bucket<span className="text-red-500 ml-1">*</span></Label>
+                <Label className="mb-2">
+                  Bucket<span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Select
                   value={form.bucket_id ? String(form.bucket_id) : ""}
-                  onValueChange={(v) => { setForm({ ...form, bucket_id: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, bucket_id: undefined })); }}
+                  onValueChange={(v) => {
+                    setForm({
+                      ...form,
+                      bucket_id: v ? parseInt(v) : undefined,
+                    });
+                    setErrors((prev) => ({ ...prev, bucket_id: undefined }));
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select bucket" />
@@ -282,14 +309,26 @@ export default function TicketsCreatePage() {
                     })()}
                   </SelectContent>
                 </Select>
-                {errors.bucket_id && <div className="text-sm text-red-600 mt-1">{errors.bucket_id}</div>}
+                {errors.bucket_id && (
+                  <div className="text-sm text-red-600 mt-1">
+                    {errors.bucket_id}
+                  </div>
+                )}
               </div>
 
               <div>
-                <Label className="mb-2">Status<span className="text-red-500 ml-1">*</span></Label>
+                <Label className="mb-2">
+                  Status<span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Select
                   value={form.status_id ? String(form.status_id) : ""}
-                  onValueChange={(v) => { setForm({ ...form, status_id: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, status_id: undefined })); }}
+                  onValueChange={(v) => {
+                    setForm({
+                      ...form,
+                      status_id: v ? parseInt(v) : undefined,
+                    });
+                    setErrors((prev) => ({ ...prev, status_id: undefined }));
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
@@ -303,7 +342,11 @@ export default function TicketsCreatePage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.status_id && <div className="text-sm text-red-600 mt-1">{errors.status_id}</div>}
+                {errors.status_id && (
+                  <div className="text-sm text-red-600 mt-1">
+                    {errors.status_id}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -320,40 +363,73 @@ export default function TicketsCreatePage() {
                   <Label className="mb-2">Reason for overdue</Label>
                   <Input
                     value={form.reason}
-                    onChange={(e) => { setForm({ ...form, reason: e.target.value }); setErrors((prev) => ({ ...prev, reason: undefined })); }}
+                    onChange={(e) => {
+                      setForm({ ...form, reason: e.target.value });
+                      setErrors((prev) => ({ ...prev, reason: undefined }));
+                    }}
                     placeholder="Describe why this ticket is overdue"
                   />
-                  {errors.reason && <div className="text-sm text-red-600 mt-1">{errors.reason}</div> }
+                  {errors.reason && (
+                    <div className="text-sm text-red-600 mt-1">
+                      {errors.reason}
+                    </div>
+                  )}
                 </div>
               ) : null;
             })()}
 
             <div>
-              <Label className="mb-2">Title<span className="text-red-500 ml-1">*</span></Label>
+              <Label className="mb-2">
+                Title<span className="text-red-500 ml-1">*</span>
+              </Label>
               <Input
                 value={form.subject}
-                onChange={(e) => { setForm({ ...form, subject: e.target.value }); setErrors((prev) => ({ ...prev, subject: undefined })); }}
+                onChange={(e) => {
+                  setForm({ ...form, subject: e.target.value });
+                  setErrors((prev) => ({ ...prev, subject: undefined }));
+                }}
                 placeholder="Brief summary (e.g. 'Login page error')"
               />
-              {errors.subject && <div className="text-sm text-red-600 mt-1">{errors.subject}</div>}
+              {errors.subject && (
+                <div className="text-sm text-red-600 mt-1">
+                  {errors.subject}
+                </div>
+              )}
             </div>
 
             <div>
-              <Label className="mb-2">Description<span className="text-red-500 ml-1">*</span></Label>
+              <Label className="mb-2">
+                Description<span className="text-red-500 ml-1">*</span>
+              </Label>
               <RichTextEditor
                 value={form.description}
-                onChange={(html) => { setForm({ ...form, description: html }); setErrors((prev) => ({ ...prev, description: undefined })); }}
+                onChange={(html) => {
+                  setForm({ ...form, description: html });
+                  setErrors((prev) => ({ ...prev, description: undefined }));
+                }}
                 placeholder="Describe the issue in detail... Include steps to reproduce, expected vs actual behavior, and any relevant links."
               />
-              {errors.description && <div className="text-sm text-red-600 mt-1">{errors.description}</div>}
+              {errors.description && (
+                <div className="text-sm text-red-600 mt-1">
+                  {errors.description}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label className="mb-2">Priority<span className="text-red-500 ml-1">*</span></Label>
+                <Label className="mb-2">
+                  Priority<span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Select
                   value={form.priority_id?.toString() || ""}
-                  onValueChange={(v) => { setForm({ ...form, priority_id: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, priority_id: undefined })); }}
+                  onValueChange={(v) => {
+                    setForm({
+                      ...form,
+                      priority_id: v ? parseInt(v) : undefined,
+                    });
+                    setErrors((prev) => ({ ...prev, priority_id: undefined }));
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
@@ -367,14 +443,23 @@ export default function TicketsCreatePage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.priority_id && <div className="text-sm text-red-600 mt-1">{errors.priority_id}</div>}
+                {errors.priority_id && (
+                  <div className="text-sm text-red-600 mt-1">
+                    {errors.priority_id}
+                  </div>
+                )}
               </div>
 
               <div>
-                <Label className="mb-2">Demand (SLA)<span className="text-red-500 ml-1">*</span></Label>
+                <Label className="mb-2">
+                  Demand (SLA)<span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Select
                   value={String(form.demand)}
-                  onValueChange={(v) => { setForm({ ...form, demand: parseInt(v) }); setErrors((prev) => ({ ...prev, demand: undefined })); }}
+                  onValueChange={(v) => {
+                    setForm({ ...form, demand: parseInt(v) });
+                    setErrors((prev) => ({ ...prev, demand: undefined }));
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select demand" />
@@ -385,7 +470,11 @@ export default function TicketsCreatePage() {
                     <SelectItem value="2">Priority 2 — End of day</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.demand && <div className="text-sm text-red-600 mt-1">{errors.demand}</div>}
+                {errors.demand && (
+                  <div className="text-sm text-red-600 mt-1">
+                    {errors.demand}
+                  </div>
+                )}
                 <div className="text-sm text-muted-foreground mt-1">
                   SLA: {computeSlaLabel(form.demand)}
                 </div>
@@ -393,10 +482,18 @@ export default function TicketsCreatePage() {
             </div>
 
             <div className="mt-3">
-              <Label className="mb-2">Assignee<span className="text-red-500 ml-1">*</span></Label>
+              <Label className="mb-2">
+                Assignee<span className="text-red-500 ml-1">*</span>
+              </Label>
               <Select
                 value={form.assigned_to ? String(form.assigned_to) : ""}
-                onValueChange={(v) => { setForm({ ...form, assigned_to: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, assigned_to: undefined })); }}
+                onValueChange={(v) => {
+                  setForm({
+                    ...form,
+                    assigned_to: v ? parseInt(v) : undefined,
+                  });
+                  setErrors((prev) => ({ ...prev, assigned_to: undefined }));
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Search and select user" />
@@ -427,7 +524,11 @@ export default function TicketsCreatePage() {
                   </div>
                 </SelectContent>
               </Select>
-              {errors.assigned_to && <div className="text-sm text-red-600 mt-1">{errors.assigned_to}</div>}
+              {errors.assigned_to && (
+                <div className="text-sm text-red-600 mt-1">
+                  {errors.assigned_to}
+                </div>
+              )}
             </div>
 
             <div>

@@ -176,6 +176,31 @@ export default function TicketsCreatePage() {
     })();
   }, []);
 
+  // If editing existing ticket, fetch ticket data and populate form
+  useEffect(() => {
+    if (!ticketIdParam) return;
+    (async () => {
+      try {
+        const ticket = await apiClient.getTicketById(ticketIdParam);
+        setForm((prev: any) => ({
+          ...prev,
+          subject: ticket.subject || prev.subject,
+          description: ticket.description || prev.description,
+          priority_id: ticket.priority_id || prev.priority_id,
+          category_id: ticket.category_id || prev.category_id,
+          assigned_to: ticket.assigned_to || prev.assigned_to,
+          team_id: ticket.team_id || prev.team_id,
+          bucket_id: ticket.bucket_id || prev.bucket_id,
+          status_id: ticket.status_id || prev.status_id,
+          demand: ticket.demand ?? prev.demand,
+          reason: ticket.reason || prev.reason,
+        }));
+      } catch (e) {
+        console.warn("Failed to load ticket for edit:", e);
+      }
+    })();
+  }, [ticketIdParam]);
+
   const computeSlaLabel = (demand: number) => {
     switch (demand) {
       case 0:

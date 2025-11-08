@@ -114,7 +114,8 @@ export default function ManageTickets() {
       const normalized = ticketsArray.map((t: any) => ({
         ...t,
         assigned_to_id: t.assigned_to_id ?? t.assigned_to ?? null,
-        track_id: t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+        track_id:
+          t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
         description: t.description || "",
       }));
       setTickets(normalized);
@@ -487,7 +488,9 @@ export default function ManageTickets() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-lg font-semibold text-gray-900">
-                              {ticket.track_id || `TKT-${String(ticket.id).padStart(4, "0")}`}: {ticket.subject}
+                              {ticket.track_id ||
+                                `TKT-${String(ticket.id).padStart(4, "0")}`}
+                              : {ticket.subject}
                             </h3>
                             {ticket.created_from_mail_config && (
                               <Badge className="bg-green-100 text-green-800">
@@ -496,8 +499,18 @@ export default function ManageTickets() {
                             )}
 
                             <div className="ml-auto flex items-center gap-3">
-                              <Link to={`/tickets/${ticket.id}`} className="text-sm text-blue-600">View</Link>
-                              <Link to={`/tickets/${ticket.id}/edit`} className="text-sm text-indigo-600">Edit</Link>
+                              <Link
+                                to={`/tickets/${ticket.id}`}
+                                className="text-sm text-blue-600"
+                              >
+                                View
+                              </Link>
+                              <Link
+                                to={`/tickets/${ticket.id}/edit`}
+                                className="text-sm text-indigo-600"
+                              >
+                                Edit
+                              </Link>
                               <button
                                 className="text-sm text-red-600"
                                 onClick={async (e) => {
@@ -505,11 +518,20 @@ export default function ManageTickets() {
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(ticket.id);
-                                    setTickets((prev) => prev.filter((p) => p.id !== ticket.id));
-                                    toast({ title: "Deleted", description: "Ticket deleted" });
+                                    setTickets((prev) =>
+                                      prev.filter((p) => p.id !== ticket.id),
+                                    );
+                                    toast({
+                                      title: "Deleted",
+                                      description: "Ticket deleted",
+                                    });
                                   } catch (delErr) {
                                     console.error("Delete failed", delErr);
-                                    toast({ title: "Error", description: "Failed to delete ticket", variant: "destructive" });
+                                    toast({
+                                      title: "Error",
+                                      description: "Failed to delete ticket",
+                                      variant: "destructive",
+                                    });
                                   }
                                 }}
                               >
@@ -525,12 +547,18 @@ export default function ManageTickets() {
                                   try {
                                     const parser = new DOMParser();
                                     const raw = ticket.description || "";
-                                  if (raw.includes("&lt;") || raw.includes("&gt;")) {
-                                    // description is HTML-escaped, decode entities
-                                    return parser.parseFromString(raw, "text/html").body.textContent || "";
-                                  }
-                                  // If it already contains tags, use as-is; otherwise safe text
-                                  return raw;
+                                    if (
+                                      raw.includes("&lt;") ||
+                                      raw.includes("&gt;")
+                                    ) {
+                                      // description is HTML-escaped, decode entities
+                                      return (
+                                        parser.parseFromString(raw, "text/html")
+                                          .body.textContent || ""
+                                      );
+                                    }
+                                    // If it already contains tags, use as-is; otherwise safe text
+                                    return raw;
                                   } catch (e) {
                                     return ticket.description || "";
                                   }
@@ -543,7 +571,9 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Status</p>
                               <Badge variant="outline" className="mt-1">
-                                {typeof ticket.status === "object" ? ticket.status?.name : ticket.status}
+                                {typeof ticket.status === "object"
+                                  ? ticket.status?.name
+                                  : ticket.status}
                               </Badge>
                             </div>
                             <div>
@@ -563,7 +593,9 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Created</p>
                               <p className="font-medium mt-1">
-                                {new Date(ticket.created_at).toLocaleDateString()}
+                                {new Date(
+                                  ticket.created_at,
+                                ).toLocaleDateString()}
                               </p>
                             </div>
                           </div>

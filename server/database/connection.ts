@@ -204,14 +204,22 @@ export async function initializeDatabase() {
 
         // Also attempt to apply ticket teams/buckets migration if present (schema already existed)
         try {
-          const ticketTeamsPath = path.join(__dirname, "add-ticket-teams-buckets.sql");
+          const ticketTeamsPath = path.join(
+            __dirname,
+            "add-ticket-teams-buckets.sql",
+          );
           if (fs.existsSync(ticketTeamsPath)) {
             const ticketSql = fs.readFileSync(ticketTeamsPath, "utf8");
             await client.query(ticketSql);
-            console.log("Ticket teams/buckets migration applied successfully (existing schema path)");
+            console.log(
+              "Ticket teams/buckets migration applied successfully (existing schema path)",
+            );
           }
         } catch (ticketErr) {
-          console.log("Ticket teams migration skipped or error:", ticketErr.message);
+          console.log(
+            "Ticket teams migration skipped or error:",
+            ticketErr.message,
+          );
         }
       } catch (e) {
         console.log("VC schema init skipped or failed:", e.message);
@@ -274,7 +282,10 @@ export async function initializeDatabase() {
 
     // Ensure ticket teams and buckets migration has run (adds team_id, bucket_id, demand, sla_time, reason)
     try {
-      const ticketTeamsPath = path.join(__dirname, "add-ticket-teams-buckets.sql");
+      const ticketTeamsPath = path.join(
+        __dirname,
+        "add-ticket-teams-buckets.sql",
+      );
       if (fs.existsSync(ticketTeamsPath)) {
         const ticketSql = fs.readFileSync(ticketTeamsPath, "utf8");
         await client.query(ticketSql);

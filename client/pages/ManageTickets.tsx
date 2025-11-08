@@ -107,7 +107,10 @@ export default function ManageTickets() {
     try {
       setIsLoading(true);
       const response = await api.get("/tickets");
-      setTickets(response.data || []);
+      // API returns { tickets: [], total, pages }
+      const data = response.data;
+      const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
+      setTickets(ticketsArray);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({

@@ -739,11 +739,14 @@ export class TicketRepository {
             [userId],
           );
           const u = uRes.rows[0] || {};
-          const firstName = u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
-          const lastName = u.last_name ?? u.lastname ?? u.lastName ?? u.lname ?? "";
+          const firstName =
+            u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
+          const lastName =
+            u.last_name ?? u.lastname ?? u.lastName ?? u.lname ?? "";
           let userName = "User";
           if (firstName || lastName) {
-            userName = `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
+            userName =
+              `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
           } else if (u.name) {
             userName = u.name;
           } else if (u.login) {

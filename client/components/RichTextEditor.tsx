@@ -13,7 +13,7 @@ interface RichTextEditorProps {
   placeholder?: string;
 }
 
-export default function RichTextEditor({ value = "", onChange, placeholder = "Describe the issue in detail..." }: RichTextEditorProps) {
+export function RichTextEditor({ value = "", onChange, placeholder = "Describe the issue in detail..." }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,

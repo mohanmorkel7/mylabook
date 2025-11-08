@@ -185,7 +185,11 @@ export default function TicketsCreatePage() {
           try {
             const raw = ticket.description || "";
             if (!raw) return "";
-            if (raw.includes("&lt;") || raw.includes("&gt;") || raw.includes("&amp;")) {
+            if (
+              raw.includes("&lt;") ||
+              raw.includes("&gt;") ||
+              raw.includes("&amp;")
+            ) {
               return raw
                 .replace(/&amp;/g, "&")
                 .replace(/&lt;/g, "<")
@@ -201,7 +205,8 @@ export default function TicketsCreatePage() {
           description: decodedDescription || form.description,
           priority_id: ticket.priority_id ?? form.priority_id,
           category_id: ticket.category_id ?? form.category_id,
-          assigned_to: ticket.assigned_to ?? ticket.assignee?.id ?? form.assigned_to,
+          assigned_to:
+            ticket.assigned_to ?? ticket.assignee?.id ?? form.assigned_to,
           team_id: ticket.team_id ?? ticket.team?.id ?? form.team_id,
           bucket_id: ticket.bucket_id ?? ticket.bucket?.id ?? form.bucket_id,
           status_id: ticket.status_id ?? form.status_id,
@@ -213,11 +218,34 @@ export default function TicketsCreatePage() {
         // Ensure meta options contain selected team/bucket so Select shows them
         setMeta((prevMeta: any) => {
           const updated = { ...prevMeta };
-          if (nextForm.team_id && !(updated.teams || []).some((t: any) => String(t.id) === String(nextForm.team_id))) {
-            updated.teams = [...(updated.teams || []), { id: nextForm.team_id, name: ticket.team?.name || `Team #${nextForm.team_id}` }];
+          if (
+            nextForm.team_id &&
+            !(updated.teams || []).some(
+              (t: any) => String(t.id) === String(nextForm.team_id),
+            )
+          ) {
+            updated.teams = [
+              ...(updated.teams || []),
+              {
+                id: nextForm.team_id,
+                name: ticket.team?.name || `Team #${nextForm.team_id}`,
+              },
+            ];
           }
-          if (nextForm.bucket_id && !(updated.buckets || []).some((b: any) => String(b.id) === String(nextForm.bucket_id))) {
-            updated.buckets = [...(updated.buckets || []), { id: nextForm.bucket_id, name: ticket.bucket?.name || `Bucket #${nextForm.bucket_id}`, team_id: nextForm.team_id }];
+          if (
+            nextForm.bucket_id &&
+            !(updated.buckets || []).some(
+              (b: any) => String(b.id) === String(nextForm.bucket_id),
+            )
+          ) {
+            updated.buckets = [
+              ...(updated.buckets || []),
+              {
+                id: nextForm.bucket_id,
+                name: ticket.bucket?.name || `Bucket #${nextForm.bucket_id}`,
+                team_id: nextForm.team_id,
+              },
+            ];
           }
           return updated;
         });

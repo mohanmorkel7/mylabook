@@ -48,7 +48,7 @@ export class ApiClient {
     if (typeof window === "undefined") return;
     this.probeIntervalId = window.setInterval(async () => {
       try {
-        const url = `${API_BASE_URL}/status`;
+        const url = `${API_BASE_URL}`;
         const res = await fetch(url, { method: "GET" });
         if (res && res.ok) {
           // Server is back

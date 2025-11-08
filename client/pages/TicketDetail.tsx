@@ -112,7 +112,21 @@ export default function TicketDetailPage() {
             <CardContent>
               <div
                 className="prose max-w-none"
-                dangerouslySetInnerHTML={{ __html: ticket.description || "" }}
+                dangerouslySetInnerHTML={{
+                  __html: ((): string => {
+                    try {
+                      const raw = ticket.description || "";
+                      if (raw.includes("&lt;") || raw.includes("&gt;")) {
+                        const parser = new DOMParser();
+                        return parser.parseFromString(raw, "text/html").body
+                          .textContent || "";
+                      }
+                      return raw;
+                    } catch (e) {
+                      return ticket.description || "";
+                    }
+                  })(),
+                }}
               />
             </CardContent>
           </Card>

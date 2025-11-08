@@ -197,12 +197,13 @@ export default function TicketsCreatePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Team select (always shown) */}
               <div>
-                <Label className="mb-2">Team</Label>
+                <Label className="mb-2">Team<span className="text-red-500 ml-1">*</span></Label>
                 <Select
                   value={form.team_id ? String(form.team_id) : ""}
                   onValueChange={(v) => {
                     const teamId = v ? parseInt(v) : undefined;
                     setForm({ ...form, team_id: teamId, bucket_id: undefined });
+                    setErrors((prev) => ({ ...prev, team_id: undefined }));
                   }}
                 >
                   <SelectTrigger>
@@ -223,6 +224,7 @@ export default function TicketsCreatePage() {
                     )}
                   </SelectContent>
                 </Select>
+                {errors.team_id && <div className="text-sm text-red-600 mt-1">{errors.team_id}</div>}
               </div>
 
               {/* Bucket select (always shown) - filtered by selected team */}

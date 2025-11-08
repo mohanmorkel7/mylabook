@@ -507,7 +507,7 @@ router.post(
         if (req.files && Array.isArray(req.files)) {
           for (const file of req.files) {
             try {
-              // Persist attachment record
+              // Persist attachment record (primary schema)
               await pool.query(
                 `INSERT INTO ticket_attachments (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type, uploaded_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
@@ -528,7 +528,26 @@ router.post(
                 file.filename,
               );
             } catch (aErr) {
-              console.error("Failed to save attachment record:", aErr);
+              console.warn("Primary insert failed, attempting fallback for attachment:", aErr.message || aErr);
+              // Attempt fallback schema (uploaded_by, file_name)
+              try {
+                await pool.query(
+                  `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+                  [
+                    ticket.id,
+                    null,
+                    createdBy,
+                    file.filename || file.originalname,
+                    `/uploads/tickets/${file.filename}`,
+                    file.size,
+                    file.mimetype,
+                  ],
+                );
+                console.log("Saved attachment (fallback) for ticket:", ticket.id, file.filename);
+              } catch (fbErr) {
+                console.error("Failed to save attachment record (fallback):", fbErr);
+              }
             }
           }
         }

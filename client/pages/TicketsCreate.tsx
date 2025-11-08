@@ -326,15 +326,10 @@ export default function TicketsCreatePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label className="mb-2">Priority</Label>
+                <Label className="mb-2">Priority<span className="text-red-500 ml-1">*</span></Label>
                 <Select
                   value={form.priority_id?.toString() || ""}
-                  onValueChange={(v) =>
-                    setForm({
-                      ...form,
-                      priority_id: v ? parseInt(v) : undefined,
-                    })
-                  }
+                  onValueChange={(v) => { setForm({ ...form, priority_id: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, priority_id: undefined })); }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
@@ -348,6 +343,7 @@ export default function TicketsCreatePage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.priority_id && <div className="text-sm text-red-600 mt-1">{errors.priority_id}</div>}
               </div>
 
               <div>

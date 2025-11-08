@@ -534,6 +534,11 @@ router.post(
               );
               // Attempt fallback schema (uploaded_by, file_name)
               try {
+                const safeFileName =
+                  file && (file.filename || file.originalname)
+                    ? (file.filename || file.originalname)
+                    : `ticket-${Date.now()}${path.extname((file && file.originalname) || "")}`;
+                const safeFilePath = `/uploads/tickets/${(file && file.filename) || safeFileName}`;
                 await pool.query(
                   `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
@@ -541,22 +546,15 @@ router.post(
                     ticket.id,
                     null,
                     createdBy,
-                    file.filename || file.originalname,
-                    `/uploads/tickets/${file.filename}`,
+                    safeFileName,
+                    safeFilePath,
                     file.size,
                     file.mimetype,
                   ],
                 );
-                console.log(
-                  "Saved attachment (fallback) for ticket:",
-                  ticket.id,
-                  file.filename,
-                );
+                console.log("Saved attachment (fallback) for ticket:", ticket.id, safeFileName);
               } catch (fbErr) {
-                console.error(
-                  "Failed to save attachment record (fallback):",
-                  fbErr,
-                );
+                console.error("Failed to save attachment record (fallback):", fbErr);
               }
             }
           }
@@ -927,6 +925,11 @@ router.post(
           );
           // Fallback for alternate schema
           try {
+            const safeFileName =
+              req.file && (req.file.filename || req.file.originalname)
+                ? (req.file.filename || req.file.originalname)
+                : `ticket-${Date.now()}${path.extname((req.file && req.file.originalname) || "")}`;
+            const safeFilePath = `/uploads/tickets/${(req.file && req.file.filename) || safeFileName}`;
             const insertRes2 = await pool.query(
               `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
@@ -934,8 +937,8 @@ router.post(
                 ticketId,
                 commentId || null,
                 userId,
-                req.file.filename || req.file.originalname,
-                `/uploads/tickets/${req.file.filename}`,
+                safeFileName,
+                safeFilePath,
                 req.file.size,
                 req.file.mimetype,
               ],

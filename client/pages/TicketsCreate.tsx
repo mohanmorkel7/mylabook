@@ -118,6 +118,30 @@ export default function TicketsCreatePage() {
             ? metaObj.statuses
             : defaultStatuses;
 
+        // Restrict priorities to High, Medium, Low (preferred order)
+        const allowedPriorityNames = ["High", "Medium", "Low"];
+        if (metaObj.priorities && metaObj.priorities.length > 0) {
+          const prioritiesMap: Record<string, any> = {};
+          metaObj.priorities.forEach((p: any) => {
+            prioritiesMap[String(p.name).toLowerCase()] = p;
+          });
+          const ordered: any[] = [];
+          let idCounter = 1;
+          for (const name of allowedPriorityNames) {
+            const found = prioritiesMap[name.toLowerCase()];
+            if (found) ordered.push(found);
+            else ordered.push({ id: idCounter++, name });
+          }
+          metaObj.priorities = ordered;
+        } else {
+          // Provide client-side defaults
+          metaObj.priorities = [
+            { id: 3, name: "High", level: 3, color: "#EF4444" },
+            { id: 2, name: "Medium", level: 2, color: "#F59E0B" },
+            { id: 1, name: "Low", level: 1, color: "#10B981" },
+          ];
+        }
+
         // Fetch users list for assignee dropdown
         try {
           const usersResp = await apiClient.request("/users/list/mitra");

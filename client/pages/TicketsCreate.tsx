@@ -126,6 +126,16 @@ export default function TicketsCreatePage() {
           metaObj.users = [];
         }
         setMeta(metaObj);
+
+        // Set default status to 'Open' if not already set
+        try {
+          const openStatus = (metaObj.statuses || []).find((s: any) => String(s.name).toLowerCase() === "open");
+          if (openStatus) {
+            setForm((prev: any) => ({ ...prev, status_id: prev.status_id || openStatus.id }));
+          }
+        } catch (e) {
+          // ignore
+        }
       } catch (e) {
         console.warn(e);
       }

@@ -144,7 +144,8 @@ export default function TicketsCreatePage() {
 
         // Fetch users list for assignee dropdown
         try {
-          const usersResp = await apiClient.request("/users/list/mitra");
+          // Load users from local users table (server-side users endpoint)
+          const usersResp = await apiClient.request("/users");
           metaObj.users = usersResp || [];
         } catch (uErr) {
           console.warn("Failed to load users for assignee dropdown", uErr);

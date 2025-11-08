@@ -87,11 +87,40 @@ export class ApiClient {
 
     const url = `${API_BASE_URL}${endpoint}`;
 
+    // Build headers: allow FormData to set its own Content-Type
+    const headers: Record<string, string> = {};
+    // Merge provided headers first
+    if (options.headers) {
+      try {
+        Object.assign(headers, options.headers as Record<string, string>);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // If body is not FormData and Content-Type not already set, default to JSON
+    const bodyIsFormData = options.body instanceof FormData;
+    if (!bodyIsFormData && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    // Attach x-user-id from localStorage if available (backend middleware accepts this)
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const stored = localStorage.getItem("banani_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.id) {
+            headers["x-user-id"] = String(parsed.id);
+          }
+        }
+      }
+    } catch (e) {
+      // ignore localStorage parsing errors
+    }
+
     const config: RequestInit = {
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers,
       ...options,
     };
 

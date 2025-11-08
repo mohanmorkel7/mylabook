@@ -112,6 +112,31 @@ export default function TicketsPage() {
           >
             Assigned by me
           </Button>
+          {/* Show All tab for admin users */}
+          {(() => {
+            try {
+              const raw = localStorage.getItem("banani_user");
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && String(parsed.role).toLowerCase() === "admin") {
+                  return (
+                    <Button
+                      variant={tab === "all" ? "default" : "ghost"}
+                      onClick={() => {
+                        setTab("all");
+                        setPage(1);
+                      }}
+                    >
+                      All
+                    </Button>
+                  );
+                }
+              }
+            } catch (e) {
+              return null;
+            }
+            return null;
+          })()}
         </div>
       </div>
 

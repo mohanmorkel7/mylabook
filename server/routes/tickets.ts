@@ -186,6 +186,11 @@ router.get("/metadata", async (req: Request, res: Response) => {
 // Get all tickets with filtering and pagination
 router.get("/", async (req: Request, res: Response) => {
   try {
+    // Ensure API responses are not cached to avoid 304 Not Modified for dynamic data
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const filters: TicketFilters = {
       status_id: req.query.status_id
         ? parseInt(req.query.status_id as string)

@@ -622,7 +622,13 @@ export default function TicketsCreatePage() {
                 Cancel
               </Button>
               <Button type="button" onClick={submit} disabled={loading}>
-                {loading ? (ticketIdParam ? "Updating..." : "Creating...") : ticketIdParam ? "Update Ticket" : "Create Ticket"}
+                {loading
+                  ? ticketIdParam
+                    ? "Updating..."
+                    : "Creating..."
+                  : ticketIdParam
+                    ? "Update Ticket"
+                    : "Create Ticket"}
               </Button>
             </div>
           </div>

@@ -34,6 +34,7 @@ export default function TicketsCreatePage() {
     bucket_id: undefined,
     status_id: undefined,
     demand: 0,
+    reason: "",
   });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);

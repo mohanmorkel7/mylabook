@@ -501,10 +501,18 @@ export default function ManageTickets() {
                             )}
 
                             <div className="ml-auto flex items-center gap-2">
-                              <Link to={`/tickets/${ticket.id}`} className="p-1 rounded hover:bg-gray-100" title="View">
+                              <Link
+                                to={`/tickets/${ticket.id}`}
+                                className="p-1 rounded hover:bg-gray-100"
+                                title="View"
+                              >
                                 <Search size={16} />
                               </Link>
-                              <Link to={`/tickets/${ticket.id}/edit`} className="p-1 rounded hover:bg-gray-100" title="Edit">
+                              <Link
+                                to={`/tickets/${ticket.id}/edit`}
+                                className="p-1 rounded hover:bg-gray-100"
+                                title="Edit"
+                              >
                                 <Edit size={16} />
                               </Link>
                               <button
@@ -515,11 +523,20 @@ export default function ManageTickets() {
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(ticket.id);
-                                    setTickets((prev) => prev.filter((p) => p.id !== ticket.id));
-                                    toast({ title: "Deleted", description: "Ticket deleted" });
+                                    setTickets((prev) =>
+                                      prev.filter((p) => p.id !== ticket.id),
+                                    );
+                                    toast({
+                                      title: "Deleted",
+                                      description: "Ticket deleted",
+                                    });
                                   } catch (delErr) {
                                     console.error("Delete failed", delErr);
-                                    toast({ title: "Error", description: "Failed to delete ticket", variant: "destructive" });
+                                    toast({
+                                      title: "Error",
+                                      description: "Failed to delete ticket",
+                                      variant: "destructive",
+                                    });
                                   }
                                 }}
                               >

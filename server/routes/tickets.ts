@@ -66,14 +66,18 @@ router.get("/metadata", async (req: Request, res: Response) => {
       let teams = [];
       let buckets = [];
       try {
-        const tRes = await pool.query(`SELECT id, name, description FROM ticket_teams ORDER BY name`);
+        const tRes = await pool.query(
+          `SELECT id, name, description FROM ticket_teams ORDER BY name`,
+        );
         teams = tRes.rows || [];
       } catch (e) {
         teams = [];
       }
 
       try {
-        const bRes = await pool.query(`SELECT id, team_id, name, description FROM ticket_buckets ORDER BY name`);
+        const bRes = await pool.query(
+          `SELECT id, team_id, name, description FROM ticket_buckets ORDER BY name`,
+        );
         buckets = bRes.rows || [];
       } catch (e) {
         buckets = [];
@@ -159,17 +163,17 @@ router.get("/metadata", async (req: Request, res: Response) => {
           },
         ],
         teams: [
-          { id: 1, name: 'Product', description: 'Product team' },
-          { id: 2, name: 'Infra', description: 'Infrastructure' },
-          { id: 3, name: 'Development', description: 'Development' },
-          { id: 4, name: 'Design', description: 'Design' },
-          { id: 5, name: 'Finops', description: 'FinOps' },
+          { id: 1, name: "Product", description: "Product team" },
+          { id: 2, name: "Infra", description: "Infrastructure" },
+          { id: 3, name: "Development", description: "Development" },
+          { id: 4, name: "Design", description: "Design" },
+          { id: 5, name: "Finops", description: "FinOps" },
         ],
         buckets: [
-          { id: 1, team_id: 3, name: 'Bug fixes', description: '' },
-          { id: 2, team_id: 3, name: 'Enhancements', description: '' },
-          { id: 3, team_id: 1, name: 'Roadmap', description: '' },
-          { id: 4, team_id: 5, name: 'Daily Ops', description: '' },
+          { id: 1, team_id: 3, name: "Bug fixes", description: "" },
+          { id: 2, team_id: 3, name: "Enhancements", description: "" },
+          { id: 3, team_id: 1, name: "Roadmap", description: "" },
+          { id: 4, team_id: 5, name: "Daily Ops", description: "" },
         ],
       });
     }
@@ -370,7 +374,8 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const ticketData: CreateTicketRequest = req.body;
-      const createdBy = (req as any).userId || normalizeUserId(req.body.created_by || "1");
+      const createdBy =
+        (req as any).userId || normalizeUserId(req.body.created_by || "1");
 
       // Parse JSON fields if they're strings
       if (typeof ticketData.tags === "string") {
@@ -382,22 +387,26 @@ router.post(
 
       // Server-side validation for required fields
       const requiredFields = [
-        { key: 'team_id', label: 'team' },
-        { key: 'bucket_id', label: 'bucket' },
-        { key: 'subject', label: 'title' },
-        { key: 'description', label: 'description' },
-        { key: 'priority_id', label: 'priority' },
-        { key: 'demand', label: 'demand' },
-        { key: 'assigned_to', label: 'assignee' },
+        { key: "team_id", label: "team" },
+        { key: "bucket_id", label: "bucket" },
+        { key: "subject", label: "title" },
+        { key: "description", label: "description" },
+        { key: "priority_id", label: "priority" },
+        { key: "demand", label: "demand" },
+        { key: "assigned_to", label: "assignee" },
       ];
 
       const missing = requiredFields.filter((f) => {
         const val = (ticketData as any)[f.key];
-        return val === undefined || val === null || val === '';
+        return val === undefined || val === null || val === "";
       });
 
       if (missing.length > 0) {
-        return res.status(400).json({ error: `Missing required fields: ${missing.map(m=>m.label).join(', ')}` });
+        return res
+          .status(400)
+          .json({
+            error: `Missing required fields: ${missing.map((m) => m.label).join(", ")}`,
+          });
       }
 
       // Normalize numeric fields
@@ -408,8 +417,10 @@ router.post(
       ticketData.assigned_to = parseInt(ticketData.assigned_to as any);
 
       // Ensure demand is within allowed range 0|1|2
-      if (![0,1,2].includes(Number(ticketData.demand))) {
-        return res.status(400).json({ error: 'Invalid demand value. Allowed: 0, 1, 2' });
+      if (![0, 1, 2].includes(Number(ticketData.demand))) {
+        return res
+          .status(400)
+          .json({ error: "Invalid demand value. Allowed: 0, 1, 2" });
       }
 
       if (await isDatabaseAvailable()) {
@@ -470,22 +481,34 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
     if (await isDatabaseAvailable()) {
       // Permission: only admin or creator can update
       const userId = (req as any).userId || updatedBy;
-      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
+      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [
+        userId,
+      ]);
       const role = userRes.rows[0]?.role;
       const existing = await TicketRepository.getById(id);
       if (role !== "admin" && existing.created_by !== userId) {
-        return res.status(403).json({ error: "Forbidden: not allowed to update ticket" });
+        return res
+          .status(403)
+          .json({ error: "Forbidden: not allowed to update ticket" });
       }
 
       // If status is being changed to an 'Overdue' status, require reason
       if (updateData.status_id) {
         try {
-          const statusRes = await pool.query("SELECT name FROM ticket_statuses WHERE id = $1", [updateData.status_id]);
+          const statusRes = await pool.query(
+            "SELECT name FROM ticket_statuses WHERE id = $1",
+            [updateData.status_id],
+          );
           const statusName = statusRes.rows[0]?.name || "";
           if (String(statusName).toLowerCase().includes("overdue")) {
-            const reasonVal = updateData.reason || (existing && (existing as any).reason);
+            const reasonVal =
+              updateData.reason || (existing && (existing as any).reason);
             if (!reasonVal || String(reasonVal).trim() === "") {
-              return res.status(400).json({ error: "Reason is required when marking a ticket as overdue" });
+              return res
+                .status(400)
+                .json({
+                  error: "Reason is required when marking a ticket as overdue",
+                });
             }
           }
         } catch (e) {
@@ -517,143 +540,160 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
 });
 
 // Delete ticket (authenticated + permission check)
-router.delete("/:id", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: "Invalid ticket ID" });
-    }
-
-    if (await isDatabaseAvailable()) {
-      // Permission: only admin or creator can delete
-      const userId = (req as any).userId;
-      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
-      const role = userRes.rows[0]?.role;
-      const existing = await TicketRepository.getById(id);
-      if (role !== "admin" && existing.created_by !== userId) {
-        return res.status(403).json({ error: "Forbidden: not allowed to delete ticket" });
+router.delete(
+  "/:id",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid ticket ID" });
       }
 
-      await TicketRepository.delete(id);
-      res.status(204).send();
-    } else {
-      // Mock deletion
-      console.log("Mock ticket deletion for ID:", id);
-      res.status(204).send();
+      if (await isDatabaseAvailable()) {
+        // Permission: only admin or creator can delete
+        const userId = (req as any).userId;
+        const userRes = await pool.query(
+          "SELECT role FROM users WHERE id = $1",
+          [userId],
+        );
+        const role = userRes.rows[0]?.role;
+        const existing = await TicketRepository.getById(id);
+        if (role !== "admin" && existing.created_by !== userId) {
+          return res
+            .status(403)
+            .json({ error: "Forbidden: not allowed to delete ticket" });
+        }
+
+        await TicketRepository.delete(id);
+        res.status(204).send();
+      } else {
+        // Mock deletion
+        console.log("Mock ticket deletion for ID:", id);
+        res.status(204).send();
+      }
+    } catch (error) {
+      console.error("Error deleting ticket:", error);
+      res.status(500).json({ error: "Failed to delete ticket" });
     }
-  } catch (error) {
-    console.error("Error deleting ticket:", error);
-    res.status(500).json({ error: "Failed to delete ticket" });
-  }
-});
+  },
+);
 
 // Get comments for a ticket
-router.get("/:id/comments", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const ticketId = parseInt(req.params.id);
-    if (isNaN(ticketId)) {
-      return res.status(400).json({ error: "Invalid ticket ID" });
-    }
+router.get(
+  "/:id/comments",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id);
+      if (isNaN(ticketId)) {
+        return res.status(400).json({ error: "Invalid ticket ID" });
+      }
 
-    if (await isDatabaseAvailable()) {
-      const comments = await TicketRepository.getComments(ticketId);
-      res.json(comments);
-    } else {
-      // Mock comments
-      res.json([
-        {
-          id: 1,
-          ticket_id: ticketId,
-          user_id: 1,
-          content:
-            "<p>This is the <strong>initial comment</strong> for the ticket with <em>rich formatting</em>.</p>",
-          is_internal: false,
-          created_at: new Date("2024-01-15T10:05:00Z"),
-          attachments: [],
-          user: { id: 1, name: "John Doe", email: "admin@banani.com" },
-        },
-        {
-          id: 2,
-          ticket_id: ticketId,
-          user_id: 2,
-          content:
-            "<p>I'm investigating this issue. See attached <a href='#'>documentation</a>.</p>",
-          is_internal: true,
-          created_at: new Date("2024-01-15T11:00:00Z"),
-          attachments: [
-            {
-              id: 1,
-              filename: "investigation-notes.pdf",
-              original_filename: "investigation-notes.pdf",
-              file_path: "/uploads/tickets/investigation-notes.pdf",
-              file_size: 1024000,
-              mime_type: "application/pdf",
-              uploaded_at: new Date("2024-01-15T11:00:00Z"),
-            },
-          ],
-          user: { id: 2, name: "Jane Smith", email: "sales@banani.com" },
-        },
-      ]);
+      if (await isDatabaseAvailable()) {
+        const comments = await TicketRepository.getComments(ticketId);
+        res.json(comments);
+      } else {
+        // Mock comments
+        res.json([
+          {
+            id: 1,
+            ticket_id: ticketId,
+            user_id: 1,
+            content:
+              "<p>This is the <strong>initial comment</strong> for the ticket with <em>rich formatting</em>.</p>",
+            is_internal: false,
+            created_at: new Date("2024-01-15T10:05:00Z"),
+            attachments: [],
+            user: { id: 1, name: "John Doe", email: "admin@banani.com" },
+          },
+          {
+            id: 2,
+            ticket_id: ticketId,
+            user_id: 2,
+            content:
+              "<p>I'm investigating this issue. See attached <a href='#'>documentation</a>.</p>",
+            is_internal: true,
+            created_at: new Date("2024-01-15T11:00:00Z"),
+            attachments: [
+              {
+                id: 1,
+                filename: "investigation-notes.pdf",
+                original_filename: "investigation-notes.pdf",
+                file_path: "/uploads/tickets/investigation-notes.pdf",
+                file_size: 1024000,
+                mime_type: "application/pdf",
+                uploaded_at: new Date("2024-01-15T11:00:00Z"),
+              },
+            ],
+            user: { id: 2, name: "Jane Smith", email: "sales@banani.com" },
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error fetching ticket comments:", error);
+      res.status(500).json({ error: "Failed to fetch comments" });
     }
-  } catch (error) {
-    console.error("Error fetching ticket comments:", error);
-    res.status(500).json({ error: "Failed to fetch comments" });
-  }
-});
+  },
+);
 
 // Add comment to ticket (authenticated)
-router.post("/:id/comments", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const ticketId = parseInt(req.params.id);
-    if (isNaN(ticketId)) {
-      return res.status(400).json({ error: "Invalid ticket ID" });
-    }
+router.post(
+  "/:id/comments",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const ticketId = parseInt(req.params.id);
+      if (isNaN(ticketId)) {
+        return res.status(400).json({ error: "Invalid ticket ID" });
+      }
 
-    const {
-      content,
-      is_internal = false,
-      parent_comment_id,
-      mentions,
-    } = req.body;
-    const userId = normalizeUserId(req.body.user_id || "1");
-
-    if (!content) {
-      return res.status(400).json({ error: "Comment content is required" });
-    }
-
-    if (await isDatabaseAvailable()) {
-      const comment = await TicketRepository.addComment(
-        ticketId,
-        userId,
+      const {
         content,
-        is_internal,
+        is_internal = false,
         parent_comment_id,
         mentions,
-      );
-      res.status(201).json(comment);
-    } else {
-      // Mock comment creation
-      const mockComment = {
-        id: Math.floor(Math.random() * 1000),
-        ticket_id: ticketId,
-        user_id: userId,
-        content,
-        is_internal,
-        parent_comment_id,
-        mentions,
-        created_at: new Date(),
-        updated_at: new Date(),
-        user: { id: userId, name: "Current User", email: "user@banani.com" },
-      };
+      } = req.body;
+      const userId = normalizeUserId(req.body.user_id || "1");
 
-      console.log("Mock comment created for ticket:", ticketId);
-      res.status(201).json(mockComment);
+      if (!content) {
+        return res.status(400).json({ error: "Comment content is required" });
+      }
+
+      if (await isDatabaseAvailable()) {
+        const comment = await TicketRepository.addComment(
+          ticketId,
+          userId,
+          content,
+          is_internal,
+          parent_comment_id,
+          mentions,
+        );
+        res.status(201).json(comment);
+      } else {
+        // Mock comment creation
+        const mockComment = {
+          id: Math.floor(Math.random() * 1000),
+          ticket_id: ticketId,
+          user_id: userId,
+          content,
+          is_internal,
+          parent_comment_id,
+          mentions,
+          created_at: new Date(),
+          updated_at: new Date(),
+          user: { id: userId, name: "Current User", email: "user@banani.com" },
+        };
+
+        console.log("Mock comment created for ticket:", ticketId);
+        res.status(201).json(mockComment);
+      }
+    } catch (error) {
+      console.error("Error adding comment:", error);
+      res.status(500).json({ error: "Failed to add comment" });
     }
-  } catch (error) {
-    console.error("Error adding comment:", error);
-    res.status(500).json({ error: "Failed to add comment" });
-  }
-});
+  },
+);
 
 // Get user notifications
 router.get("/notifications/:userId", async (req: Request, res: Response) => {

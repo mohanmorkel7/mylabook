@@ -15,7 +15,7 @@ export default function TicketsPage() {
     pages: 0,
   });
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"assignedToMe" | "assignedByMe">(
+  const [tab, setTab] = useState<"assignedToMe" | "assignedByMe" | "all">(
     "assignedToMe",
   );
   const [search, setSearch] = useState("");

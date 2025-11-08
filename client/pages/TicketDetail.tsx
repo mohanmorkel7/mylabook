@@ -119,8 +119,10 @@ export default function TicketDetailPage() {
                       const raw = ticket.description || "";
                       if (raw.includes("&lt;") || raw.includes("&gt;")) {
                         const parser = new DOMParser();
-                        return parser.parseFromString(raw, "text/html").body
-                          .textContent || "";
+                        return (
+                          parser.parseFromString(raw, "text/html").body
+                            .textContent || ""
+                        );
                       }
                       return raw;
                     } catch (e) {

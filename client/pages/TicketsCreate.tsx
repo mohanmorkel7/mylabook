@@ -262,12 +262,10 @@ export default function TicketsCreatePage() {
               </div>
 
               <div>
-                <Label className="mb-2">Status</Label>
+                <Label className="mb-2">Status<span className="text-red-500 ml-1">*</span></Label>
                 <Select
                   value={form.status_id ? String(form.status_id) : ""}
-                  onValueChange={(v) =>
-                    setForm({ ...form, status_id: v ? parseInt(v) : undefined })
-                  }
+                  onValueChange={(v) => { setForm({ ...form, status_id: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, status_id: undefined })); }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
@@ -281,6 +279,7 @@ export default function TicketsCreatePage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.status_id && <div className="text-sm text-red-600 mt-1">{errors.status_id}</div>}
               </div>
             </div>
 

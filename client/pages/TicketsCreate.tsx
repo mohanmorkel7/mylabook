@@ -318,7 +318,7 @@ export default function TicketsCreatePage() {
                     {(() => {
                       const teamId = form.team_id;
                       const buckets = (meta.buckets || []).filter((b: any) =>
-                        teamId ? b.team_id === teamId : true,
+                        teamId ? String(b.team_id) === String(teamId) : true,
                       );
                       if (buckets.length === 0)
                         return (

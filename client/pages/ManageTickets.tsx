@@ -487,25 +487,61 @@ export default function ManageTickets() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-lg font-semibold text-gray-900">
-                              #{ticket.id}: {ticket.subject}
+                              {ticket.track_id || `TKT-${String(ticket.id).padStart(4, "0")}`}: {ticket.subject}
                             </h3>
                             {ticket.created_from_mail_config && (
                               <Badge className="bg-green-100 text-green-800">
                                 From Mail Config
                               </Badge>
                             )}
+
+                            <div className="ml-auto flex items-center gap-3">
+                              <Link to={`/tickets/${ticket.id}`} className="text-sm text-blue-600">View</Link>
+                              <Link to={`/tickets/${ticket.id}/edit`} className="text-sm text-indigo-600">Edit</Link>
+                              <button
+                                className="text-sm text-red-600"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!confirm("Delete this ticket?")) return;
+                                  try {
+                                    await api.deleteTicket(ticket.id);
+                                    setTickets((prev) => prev.filter((p) => p.id !== ticket.id));
+                                    toast({ title: "Deleted", description: "Ticket deleted" });
+                                  } catch (delErr) {
+                                    console.error("Delete failed", delErr);
+                                    toast({ title: "Error", description: "Failed to delete ticket", variant: "destructive" });
+                                  }
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                            {ticket.description}
-                          </p>
+
+                          <div className="mt-3 mb-3 text-sm text-gray-700">
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: ((): string => {
+                                  try {
+                                    const parser = new DOMParser();
+                                    const decoded = parser.parseFromString(
+                                      ticket.description || "",
+                                      "text/html",
+                                    ).body.textContent || "";
+                                    return decoded;
+                                  } catch (e) {
+                                    return ticket.description || "";
+                                  }
+                                })(),
+                              }}
+                            />
+                          </div>
 
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                             <div>
                               <p className="text-gray-600">Status</p>
                               <Badge variant="outline" className="mt-1">
-                                {typeof ticket.status === "object"
-                                  ? ticket.status?.name
-                                  : ticket.status}
+                                {typeof ticket.status === "object" ? ticket.status?.name : ticket.status}
                               </Badge>
                             </div>
                             <div>
@@ -525,9 +561,7 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Created</p>
                               <p className="font-medium mt-1">
-                                {new Date(
-                                  ticket.created_at,
-                                ).toLocaleDateString()}
+                                {new Date(ticket.created_at).toLocaleDateString()}
                               </p>
                             </div>
                           </div>

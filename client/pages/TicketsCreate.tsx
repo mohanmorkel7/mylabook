@@ -224,9 +224,6 @@ export default function TicketsCreatePage() {
     return name.includes(s) || (u.email || "").toLowerCase().includes(s);
   });
 
-  const params = useParams();
-  const ticketIdParam = params.id ? Number(params.id) : undefined;
-
   const submit = async () => {
     // Client-side validation
     const newErrors: Record<string, string> = {};

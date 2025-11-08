@@ -144,30 +144,31 @@ export default function TicketsPage() {
             </tr>
           </thead>
           <tbody>
-            {ticketsResp.tickets.map((t: any) => (
-              <tr key={t.id} className="border-t">
-                <td className="p-2">{t.track_id}</td>
-                <td className="p-2">
-                  <Link to={`/tickets/${t.id}`} className="text-blue-600">
-                    {t.subject}
-                  </Link>
-                </td>
-                <td className="p-2">{t.priority?.name}</td>
-                <td className="p-2">{t.status?.name}</td>
-                <td className="p-2">{t.assignee?.name || "-"}</td>
-                <td className="p-2">
-                  {new Date(t.created_at).toLocaleString()}
-                </td>
-                <td className="p-2">
-                  <Link
-                    to={`/tickets/${t.id}`}
-                    className="mr-2 text-sm text-blue-600"
-                  >
-                    View
-                  </Link>
+            {ticketsResp.tickets && ticketsResp.tickets.length > 0 ? (
+              ticketsResp.tickets.map((t: any) => (
+                <tr key={t.id} className="border-t">
+                  <td className="p-2">{t.track_id}</td>
+                  <td className="p-2">
+                    <Link to={`/tickets/${t.id}`} className="text-blue-600">
+                      {t.subject}
+                    </Link>
+                  </td>
+                  <td className="p-2">{t.priority?.name}</td>
+                  <td className="p-2">{t.status?.name}</td>
+                  <td className="p-2">{t.assignee?.name || "-"}</td>
+                  <td className="p-2">{t.created_at ? new Date(t.created_at).toLocaleString() : "-"}</td>
+                  <td className="p-2">
+                    <Link to={`/tickets/${t.id}`} className="mr-2 text-sm text-blue-600">View</Link>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="p-4 text-center" colSpan={7}>
+                  {loading ? "Loading tickets..." : "No tickets to display"}
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

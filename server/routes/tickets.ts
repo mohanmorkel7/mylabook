@@ -917,12 +917,29 @@ router.post(
 
       if (await isDatabaseAvailable()) {
         try {
+          // If no commentId was provided, create an empty comment to attach the file to
+          let targetCommentId = commentId || null;
+          if (!targetCommentId) {
+            try {
+              const initComment = await TicketRepository.addComment(
+                ticketId,
+                userId,
+                "",
+                false,
+              );
+              targetCommentId = initComment.id;
+            } catch (cErr) {
+              console.warn("Failed to create comment for attachment upload:", cErr);
+              targetCommentId = null;
+            }
+          }
+
           const insertRes = await pool.query(
             `INSERT INTO ticket_attachments (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type, uploaded_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
             [
               ticketId,
-              commentId || null,
+              targetCommentId,
               userId,
               req.file.filename,
               req.file.originalname,
@@ -947,9 +964,26 @@ router.post(
           );
           // Fallback for alternate schema
           try {
+            // Ensure we have a target comment id for fallback as well
+            let targetCommentId2 = commentId || null;
+            if (!targetCommentId2) {
+              try {
+                const initComment2 = await TicketRepository.addComment(
+                  ticketId,
+                  userId,
+                  "",
+                  false,
+                );
+                targetCommentId2 = initComment2.id;
+              } catch (cErr2) {
+                console.warn("Failed to create comment for fallback attachment:", cErr2);
+                targetCommentId2 = null;
+              }
+            }
+
             const safeFileName =
               req.file && (req.file.filename || req.file.originalname)
-                ? req.file.filename || req.file.originalname
+                ? (req.file.filename || req.file.originalname)
                 : `ticket-${Date.now()}${path.extname((req.file && req.file.originalname) || "")}`;
             const safeFilePath = `/uploads/tickets/${(req.file && req.file.filename) || safeFileName}`;
             const insertRes2 = await pool.query(
@@ -957,7 +991,7 @@ router.post(
                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
               [
                 ticketId,
-                commentId || null,
+                targetCommentId2,
                 userId,
                 safeFileName,
                 safeFilePath,

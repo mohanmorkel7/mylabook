@@ -50,7 +50,9 @@ export default function TicketsPage() {
 
       if (search) localFilters.search = search;
       const resp = await apiClient.getTickets(localFilters, page, limit);
+      console.log("[TicketsPage] API response:", resp);
       setTicketsResp(resp);
+      console.log("[TicketsPage] state updated ticketsResp:", resp.tickets && resp.tickets.length ? resp.tickets.length : 0);
     } catch (err) {
       console.error("Failed to load tickets:", err);
     } finally {

@@ -1419,10 +1419,10 @@ export function VCEnhancedStepItem({
                   {/* Message Input Section */}
                   <div className="border-t pt-4">
                     <div className="space-y-3">
-                      <RichTextEditor
+                      <Textarea
                         value={newMessage}
-                        onChange={setNewMessage}
-                        placeholder="Type your message with rich formatting..."
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type your message..."
                         className="min-h-[100px] border-gray-300"
                       />
 

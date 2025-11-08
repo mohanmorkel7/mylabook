@@ -110,7 +110,14 @@ export default function ManageTickets() {
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
-      setTickets(ticketsArray);
+      // Normalize fields so UI can rely on consistent keys
+      const normalized = ticketsArray.map((t: any) => ({
+        ...t,
+        assigned_to_id: t.assigned_to_id ?? t.assigned_to ?? null,
+        track_id: t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+        description: t.description || "",
+      }));
+      setTickets(normalized);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({

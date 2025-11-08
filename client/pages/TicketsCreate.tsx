@@ -170,29 +170,6 @@ export default function TicketsCreatePage() {
           // ignore
         }
 
-        // If editing, fetch ticket and populate form
-        try {
-          const params = useParams();
-          const ticketIdParam = params.id ? Number(params.id) : undefined;
-          if (ticketIdParam) {
-            const ticket = await apiClient.getTicketById(ticketIdParam);
-            setForm((prev: any) => ({
-              ...prev,
-              subject: ticket.subject || prev.subject,
-              description: ticket.description || prev.description,
-              priority_id: ticket.priority_id || prev.priority_id,
-              category_id: ticket.category_id || prev.category_id,
-              assigned_to: ticket.assigned_to || prev.assigned_to,
-              team_id: ticket.team_id || prev.team_id,
-              bucket_id: ticket.bucket_id || prev.bucket_id,
-              status_id: ticket.status_id || prev.status_id,
-              demand: ticket.demand ?? prev.demand,
-              reason: ticket.reason || prev.reason,
-            }));
-          }
-        } catch (e) {
-          // ignore fetch errors
-        }
       } catch (e) {
         console.warn(e);
       }

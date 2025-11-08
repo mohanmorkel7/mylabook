@@ -187,9 +187,9 @@ router.get("/metadata", async (req: Request, res: Response) => {
 router.get("/", async (req: Request, res: Response) => {
   try {
     // Ensure API responses are not cached to avoid 304 Not Modified for dynamic data
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
 
     const filters: TicketFilters = {
       status_id: req.query.status_id
@@ -435,12 +435,10 @@ router.post(
               [ticketData.assigned_to],
             );
             if (uRes.rows.length === 0) {
-              return res
-                .status(400)
-                .json({
-                  error: "Invalid assignee",
-                  message: `Assigned user id ${ticketData.assigned_to} not found`,
-                });
+              return res.status(400).json({
+                error: "Invalid assignee",
+                message: `Assigned user id ${ticketData.assigned_to} not found`,
+              });
             }
           }
 
@@ -450,12 +448,10 @@ router.post(
               [ticketData.priority_id],
             );
             if (pRes.rows.length === 0) {
-              return res
-                .status(400)
-                .json({
-                  error: "Invalid priority",
-                  message: `Priority id ${ticketData.priority_id} not found`,
-                });
+              return res.status(400).json({
+                error: "Invalid priority",
+                message: `Priority id ${ticketData.priority_id} not found`,
+              });
             }
           }
 
@@ -465,12 +461,10 @@ router.post(
               [ticketData.status_id],
             );
             if (sRes.rows.length === 0) {
-              return res
-                .status(400)
-                .json({
-                  error: "Invalid status",
-                  message: `Status id ${ticketData.status_id} not found`,
-                });
+              return res.status(400).json({
+                error: "Invalid status",
+                message: `Status id ${ticketData.status_id} not found`,
+              });
             }
           }
 
@@ -480,12 +474,10 @@ router.post(
               [ticketData.team_id],
             );
             if (tRes.rows.length === 0) {
-              return res
-                .status(400)
-                .json({
-                  error: "Invalid team",
-                  message: `Team id ${ticketData.team_id} not found`,
-                });
+              return res.status(400).json({
+                error: "Invalid team",
+                message: `Team id ${ticketData.team_id} not found`,
+              });
             }
           }
 
@@ -495,12 +487,10 @@ router.post(
               [ticketData.bucket_id],
             );
             if (bRes.rows.length === 0) {
-              return res
-                .status(400)
-                .json({
-                  error: "Invalid bucket",
-                  message: `Bucket id ${ticketData.bucket_id} not found`,
-                });
+              return res.status(400).json({
+                error: "Invalid bucket",
+                message: `Bucket id ${ticketData.bucket_id} not found`,
+              });
             }
           }
         } catch (fkErr) {

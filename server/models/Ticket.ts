@@ -733,16 +733,22 @@ export class TicketRepository {
       // If column doesn't exist (content), try fallback schema that uses 'comment' and 'user_name'
       if (err && err.code === "42703") {
         try {
-          // Fetch user name for user_name column
+          // Fetch user row and normalize name fields for different schemas
           const uRes = await pool.query(
-            "SELECT first_name, last_name, name FROM users WHERE id = $1 LIMIT 1",
+            "SELECT * FROM users WHERE id = $1 LIMIT 1",
             [userId],
           );
           const u = uRes.rows[0] || {};
-          const userName =
-            u.first_name || u.firstname || ""
-              ? `${u.first_name || u.firstname} ${u.last_name || u.lastname || ""}`.trim()
-              : u.name || "User";
+          const firstName = u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
+          const lastName = u.last_name ?? u.lastname ?? u.lastName ?? u.lname ?? "";
+          let userName = "User";
+          if (firstName || lastName) {
+            userName = `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
+          } else if (u.name) {
+            userName = u.name;
+          } else if (u.login) {
+            userName = u.login;
+          }
 
           const result2 = await pool.query(
             `INSERT INTO ticket_comments (ticket_id, user_id, user_name, comment, comment_type, is_internal, parent_comment_id, mentions)

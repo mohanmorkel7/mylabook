@@ -1907,6 +1907,9 @@ export class ApiClient {
     if (page) params.append("page", String(page));
     if (limit) params.append("limit", String(limit));
 
+    // Add a cache-buster to avoid stale 304 responses from intermediate caches
+    params.append("_ts", String(Date.now()));
+
     if (params.toString()) {
       endpoint += `?${params.toString()}`;
     }

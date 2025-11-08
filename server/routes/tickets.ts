@@ -504,7 +504,22 @@ router.post(
         const ticket = await TicketRepository.create(ticketData, createdBy);
 
         // Handle file attachments
-        if (req.files && Array.isArray(req.files)) {
+        let initialCommentId: number | null = null;
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+          try {
+            // Create an empty initial comment to attach files to so attachments show up in comments list
+            const initComment = await TicketRepository.addComment(
+              ticket.id,
+              createdBy,
+              "",
+              false,
+            );
+            initialCommentId = initComment.id;
+          } catch (commentErr) {
+            console.warn("Failed to create initial comment for attachments:", commentErr);
+            initialCommentId = null;
+          }
+
           for (const file of req.files) {
             try {
               // Persist attachment record (primary schema)
@@ -513,7 +528,7 @@ router.post(
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
                 [
                   ticket.id,
-                  null,
+                  initialCommentId,
                   createdBy,
                   file.filename,
                   file.originalname,
@@ -544,7 +559,7 @@ router.post(
                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
                   [
                     ticket.id,
-                    null,
+                    initialCommentId,
                     createdBy,
                     safeFileName,
                     safeFilePath,

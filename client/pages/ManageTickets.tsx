@@ -496,7 +496,9 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Status</p>
                               <Badge variant="outline" className="mt-1">
-                                {typeof ticket.status === 'object' ? ticket.status?.name : ticket.status}
+                                {typeof ticket.status === "object"
+                                  ? ticket.status?.name
+                                  : ticket.status}
                               </Badge>
                             </div>
                             <div>

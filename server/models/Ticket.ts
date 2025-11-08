@@ -739,15 +739,25 @@ export class TicketRepository {
             [userId],
           );
           const u = uRes.rows[0] || {};
-          const userName = (u.first_name || u.firstname || "")
-            ? `${u.first_name || u.firstname} ${u.last_name || u.lastname || ""}`.trim()
-            : u.name || "User";
+          const userName =
+            u.first_name || u.firstname || ""
+              ? `${u.first_name || u.firstname} ${u.last_name || u.lastname || ""}`.trim()
+              : u.name || "User";
 
           const result2 = await pool.query(
             `INSERT INTO ticket_comments (ticket_id, user_id, user_name, comment, comment_type, is_internal, parent_comment_id, mentions)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
-            [ticketId, userId, userName, content, 'comment', isInternal, parentCommentId, mentions],
+            [
+              ticketId,
+              userId,
+              userName,
+              content,
+              "comment",
+              isInternal,
+              parentCommentId,
+              mentions,
+            ],
           );
 
           const comment2 = result2.rows[0];

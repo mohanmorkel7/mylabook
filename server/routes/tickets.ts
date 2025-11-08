@@ -522,7 +522,11 @@ router.post(
                   file.mimetype,
                 ],
               );
-              console.log("Saved attachment for ticket:", ticket.id, file.filename);
+              console.log(
+                "Saved attachment for ticket:",
+                ticket.id,
+                file.filename,
+              );
             } catch (aErr) {
               console.error("Failed to save attachment record:", aErr);
             }
@@ -880,7 +884,11 @@ router.post(
           );
 
           const saved = insertRes.rows[0];
-          console.log("File uploaded and saved for ticket:", ticketId, saved.filename);
+          console.log(
+            "File uploaded and saved for ticket:",
+            ticketId,
+            saved.filename,
+          );
 
           res.status(201).json(saved);
         } catch (dbErr) {

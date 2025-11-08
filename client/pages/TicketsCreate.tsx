@@ -278,7 +278,7 @@ export default function TicketsCreatePage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Create Support Ticket</h1>
+      <h1 className="text-2xl font-bold mb-4">{ticketIdParam ? 'Edit Support Ticket' : 'Create Support Ticket'}</h1>
 
       <Card>
         <CardHeader>

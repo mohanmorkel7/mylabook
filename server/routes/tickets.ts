@@ -528,7 +528,10 @@ router.post(
                 file.filename,
               );
             } catch (aErr) {
-              console.warn("Primary insert failed, attempting fallback for attachment:", aErr.message || aErr);
+              console.warn(
+                "Primary insert failed, attempting fallback for attachment:",
+                aErr.message || aErr,
+              );
               // Attempt fallback schema (uploaded_by, file_name)
               try {
                 await pool.query(
@@ -544,9 +547,16 @@ router.post(
                     file.mimetype,
                   ],
                 );
-                console.log("Saved attachment (fallback) for ticket:", ticket.id, file.filename);
+                console.log(
+                  "Saved attachment (fallback) for ticket:",
+                  ticket.id,
+                  file.filename,
+                );
               } catch (fbErr) {
-                console.error("Failed to save attachment record (fallback):", fbErr);
+                console.error(
+                  "Failed to save attachment record (fallback):",
+                  fbErr,
+                );
               }
             }
           }
@@ -911,7 +921,10 @@ router.post(
 
           res.status(201).json(saved);
         } catch (dbErr) {
-          console.warn("Primary attachment insert failed, attempting fallback:", dbErr.message || dbErr);
+          console.warn(
+            "Primary attachment insert failed, attempting fallback:",
+            dbErr.message || dbErr,
+          );
           // Fallback for alternate schema
           try {
             const insertRes2 = await pool.query(
@@ -928,10 +941,17 @@ router.post(
               ],
             );
             const saved2 = insertRes2.rows[0];
-            console.log("File uploaded and saved (fallback) for ticket:", ticketId, saved2.file_name || saved2.filename);
+            console.log(
+              "File uploaded and saved (fallback) for ticket:",
+              ticketId,
+              saved2.file_name || saved2.filename,
+            );
             res.status(201).json(saved2);
           } catch (fbErr) {
-            console.error("Failed to save uploaded attachment (fallback):", fbErr);
+            console.error(
+              "Failed to save uploaded attachment (fallback):",
+              fbErr,
+            );
             return res.status(500).json({ error: "Failed to save attachment" });
           }
         }

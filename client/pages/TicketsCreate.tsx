@@ -186,7 +186,9 @@ export default function TicketsCreatePage() {
             const raw = ticket.description || "";
             if (raw.includes("&lt;") || raw.includes("&gt;")) {
               const parser = new DOMParser();
-              return parser.parseFromString(raw, "text/html").body.textContent || raw;
+              return (
+                parser.parseFromString(raw, "text/html").body.textContent || raw
+              );
             }
             return raw;
           } catch (e) {
@@ -199,7 +201,8 @@ export default function TicketsCreatePage() {
           description: decodedDescription || prev.description,
           priority_id: ticket.priority_id ?? prev.priority_id,
           category_id: ticket.category_id ?? prev.category_id,
-          assigned_to: ticket.assigned_to ?? ticket.assignee?.id ?? prev.assigned_to,
+          assigned_to:
+            ticket.assigned_to ?? ticket.assignee?.id ?? prev.assigned_to,
           team_id: ticket.team_id ?? ticket.team?.id ?? prev.team_id,
           bucket_id: ticket.bucket_id ?? ticket.bucket?.id ?? prev.bucket_id,
           status_id: ticket.status_id ?? prev.status_id,

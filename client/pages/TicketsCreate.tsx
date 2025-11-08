@@ -53,6 +53,51 @@ export default function TicketsCreatePage() {
           buckets: m.buckets || [],
           users: [],
         };
+
+        // Provide sensible defaults for teams and buckets when backend doesn't return them
+        const defaultTeams = [
+          { id: 1, name: "Product" },
+          { id: 2, name: "Infra" },
+          { id: 3, name: "Development" },
+          { id: 4, name: "Design" },
+          { id: 5, name: "Finance" },
+          { id: 6, name: "HR" },
+          { id: 7, name: "Finops" },
+          { id: 8, name: "Database" },
+          { id: 9, name: "Switch" },
+        ];
+
+        const defaultBucketsPerTeam: Record<number, string[]> = {
+          1: ["Roadmap", "Feature Requests", "Bugs", "Improvements"],
+          2: ["Deployments", "Monitoring", "CI/CD", "Incidents"],
+          3: ["Backlog", "Sprint", "Hotfixes", "Tech Debt"],
+          4: ["UI", "UX Research", "Prototypes", "Assets"],
+          5: ["Billing", "Invoices", "Expense Requests", "Reconciliations"],
+          6: ["Recruitment", "Onboarding", "Policies", "Payroll"],
+          7: ["Cost Optimization", "Budgeting", "Alerts", "Reporting"],
+          8: ["Migrations", "Backups", "Performance", "Schema Changes"],
+          9: ["Integrations", "Switch Ops", "Switch Incidents", "Releases"],
+        };
+
+        // Use backend teams if available, otherwise fall back to defaults
+        const teamsToUse = (metaObj.teams && metaObj.teams.length > 0) ? metaObj.teams : defaultTeams;
+
+        // Build buckets array expected by the rest of the page: { id, name, team_id }
+        let bucketsToUse: any[] = [];
+        if (metaObj.buckets && metaObj.buckets.length > 0) {
+          bucketsToUse = metaObj.buckets;
+        } else {
+          let bucketId = 1;
+          for (const t of teamsToUse) {
+            const names = defaultBucketsPerTeam[t.id] || [];
+            for (const n of names) {
+              bucketsToUse.push({ id: bucketId++, name: n, team_id: t.id });
+            }
+          }
+        }
+
+        metaObj.teams = teamsToUse;
+        metaObj.buckets = bucketsToUse;
         // Fetch users list for assignee dropdown
         try {
           const usersResp = await apiClient.request("/users/list/mitra");

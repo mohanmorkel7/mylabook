@@ -105,6 +105,20 @@ export function RichTextEditor({
     if (url) editor?.chain().focus().setLink({ href: url }).run();
   };
 
+  // Sync incoming value prop with editor content when it changes
+  useEffect(() => {
+    if (!editor) return;
+    try {
+      const current = editor.getHTML();
+      // Only update if different to avoid resetting cursor
+      if ((value || "") !== current) {
+        editor.commands.setContent(value || "");
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [value, editor]);
+
   if (!editor) return null;
 
   return (

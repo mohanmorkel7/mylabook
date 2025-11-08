@@ -369,12 +369,10 @@ export default function TicketsCreatePage() {
             </div>
 
             <div className="mt-3">
-              <Label className="mb-2">Assignee</Label>
+              <Label className="mb-2">Assignee<span className="text-red-500 ml-1">*</span></Label>
               <Select
                 value={form.assigned_to ? String(form.assigned_to) : ""}
-                onValueChange={(v) =>
-                  setForm({ ...form, assigned_to: v ? parseInt(v) : undefined })
-                }
+                onValueChange={(v) => { setForm({ ...form, assigned_to: v ? parseInt(v) : undefined }); setErrors((prev) => ({ ...prev, assigned_to: undefined })); }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Search and select user" />
@@ -405,6 +403,7 @@ export default function TicketsCreatePage() {
                   </div>
                 </SelectContent>
               </Select>
+              {errors.assigned_to && <div className="text-sm text-red-600 mt-1">{errors.assigned_to}</div>}
             </div>
 
             <div>

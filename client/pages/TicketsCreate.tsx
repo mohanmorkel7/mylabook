@@ -347,12 +347,10 @@ export default function TicketsCreatePage() {
               </div>
 
               <div>
-                <Label className="mb-2">Demand (SLA)</Label>
+                <Label className="mb-2">Demand (SLA)<span className="text-red-500 ml-1">*</span></Label>
                 <Select
                   value={String(form.demand)}
-                  onValueChange={(v) =>
-                    setForm({ ...form, demand: parseInt(v) })
-                  }
+                  onValueChange={(v) => { setForm({ ...form, demand: parseInt(v) }); setErrors((prev) => ({ ...prev, demand: undefined })); }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select demand" />
@@ -363,6 +361,7 @@ export default function TicketsCreatePage() {
                     <SelectItem value="2">Priority 2 — End of day</SelectItem>
                   </SelectContent>
                 </Select>
+                {errors.demand && <div className="text-sm text-red-600 mt-1">{errors.demand}</div>}
                 <div className="text-sm text-muted-foreground mt-1">
                   SLA: {computeSlaLabel(form.demand)}
                 </div>

@@ -775,7 +775,9 @@ export function EnhancedStepItem({
                                 <div className="space-y-2">
                                   <Textarea
                                     value={editMessageText}
-                                    onChange={(e) => setEditMessageText(e.target.value)}
+                                    onChange={(e) =>
+                                      setEditMessageText(e.target.value)
+                                    }
                                     className="min-h-[80px] border-gray-200"
                                     placeholder="Edit your message..."
                                   />

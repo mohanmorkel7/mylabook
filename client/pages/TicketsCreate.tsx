@@ -80,7 +80,10 @@ export default function TicketsCreatePage() {
         };
 
         // Use backend teams if available, otherwise fall back to defaults
-        const teamsToUse = (metaObj.teams && metaObj.teams.length > 0) ? metaObj.teams : defaultTeams;
+        const teamsToUse =
+          metaObj.teams && metaObj.teams.length > 0
+            ? metaObj.teams
+            : defaultTeams;
 
         // Build buckets array expected by the rest of the page: { id, name, team_id }
         let bucketsToUse: any[] = [];

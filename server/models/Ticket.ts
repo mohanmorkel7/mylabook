@@ -690,35 +690,32 @@ export class TicketRepository {
     parentCommentId?: number,
     mentions?: string[],
   ): Promise<TicketComment> {
-    const result = await pool.query(
-      `INSERT INTO ticket_comments (ticket_id, user_id, content, is_internal, parent_comment_id, mentions)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [ticketId, userId, content, isInternal, parentCommentId, mentions],
-    );
+    // Try primary insert (content column). If schema uses 'comment' and 'user_name', fall back.
+    try {
+      const result = await pool.query(
+        `INSERT INTO ticket_comments (ticket_id, user_id, content, is_internal, parent_comment_id, mentions)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [ticketId, userId, content, isInternal, parentCommentId, mentions],
+      );
 
-    const comment = result.rows[0];
+      const comment = result.rows[0];
 
-    // Log activity
-    await this.logActivity(
-      ticketId,
-      userId,
-      "comment_added",
-      undefined,
-      undefined,
-      "Comment added",
-    );
+      // Log activity
+      await this.logActivity(
+        ticketId,
+        userId,
+        "comment_added",
+        undefined,
+        undefined,
+        "Comment added",
+      );
 
-    // Create notifications for mentions
-    if (mentions && mentions.length > 0) {
-      const ticket = await this.getById(ticketId);
-      for (const mention of mentions) {
-        // Handle both user mentions and track_id mentions
-        if (mention.startsWith("@TKT-")) {
-          // Track ID mention - could implement cross-ticket references
-          continue;
-        } else {
-          // User mention
+      // Create notifications for mentions
+      if (mentions && mentions.length > 0) {
+        const ticket = await this.getById(ticketId);
+        for (const mention of mentions) {
+          if (mention.startsWith("@TKT-")) continue;
           const mentionUserId = parseInt(mention.replace("@", ""));
           if (!isNaN(mentionUserId) && mentionUserId !== userId) {
             await this.createNotification(
@@ -730,9 +727,66 @@ export class TicketRepository {
           }
         }
       }
-    }
 
-    return await this.getCommentById(comment.id);
+      return await this.getCommentById(comment.id);
+    } catch (err: any) {
+      // If column doesn't exist (content), try fallback schema that uses 'comment' and 'user_name'
+      if (err && err.code === "42703") {
+        try {
+          // Fetch user name for user_name column
+          const uRes = await pool.query(
+            "SELECT first_name, last_name, name FROM users WHERE id = $1 LIMIT 1",
+            [userId],
+          );
+          const u = uRes.rows[0] || {};
+          const userName = (u.first_name || u.firstname || "")
+            ? `${u.first_name || u.firstname} ${u.last_name || u.lastname || ""}`.trim()
+            : u.name || "User";
+
+          const result2 = await pool.query(
+            `INSERT INTO ticket_comments (ticket_id, user_id, user_name, comment, comment_type, is_internal, parent_comment_id, mentions)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING *`,
+            [ticketId, userId, userName, content, 'comment', isInternal, parentCommentId, mentions],
+          );
+
+          const comment2 = result2.rows[0];
+
+          await this.logActivity(
+            ticketId,
+            userId,
+            "comment_added",
+            undefined,
+            undefined,
+            "Comment added",
+          );
+
+          if (mentions && mentions.length > 0) {
+            const ticket = await this.getById(ticketId);
+            for (const mention of mentions) {
+              if (mention.startsWith("@TKT-")) continue;
+              const mentionUserId = parseInt(mention.replace("@", ""));
+              if (!isNaN(mentionUserId) && mentionUserId !== userId) {
+                await this.createNotification(
+                  ticketId,
+                  mentionUserId,
+                  "mentioned",
+                  `You were mentioned in ticket ${ticket.track_id}: ${ticket.subject}`,
+                );
+              }
+            }
+          }
+
+          return await this.getCommentById(comment2.id);
+        } catch (fbErr) {
+          console.error("Failed to insert comment fallback:", fbErr);
+          throw fbErr;
+        }
+      }
+
+      // Unknown error - rethrow
+      throw err;
+    }
   }
 
   // Get comments for ticket
@@ -811,7 +865,7 @@ export class TicketRepository {
       id: row.id,
       ticket_id: row.ticket_id,
       user_id: row.user_id,
-      content: row.content,
+      content: row.content ?? row.comment,
       is_internal: row.is_internal,
       parent_comment_id: row.parent_comment_id,
       mentions: row.mentions,

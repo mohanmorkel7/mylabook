@@ -40,6 +40,7 @@ export default function TicketsCreatePage() {
   const [loading, setLoading] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const descriptionRef = useRef<HTMLDivElement | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (async () => {

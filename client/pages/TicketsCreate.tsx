@@ -144,9 +144,9 @@ export default function TicketsCreatePage() {
           ];
         }
 
-        // Fetch users list for assignee dropdown (use mitra users for consistency)
+        // Fetch users list for assignee dropdown from public.users
         try {
-          const usersResp = await apiClient.request("/users/list/mitra");
+          const usersResp = await apiClient.request("/users");
           metaObj.users = usersResp || [];
         } catch (uErr) {
           console.warn("Failed to load users for assignee dropdown", uErr);
@@ -180,16 +180,29 @@ export default function TicketsCreatePage() {
     (async () => {
       try {
         const ticket = await apiClient.getTicketById(ticketIdParam);
+        // Decode HTML-escaped description if needed
+        const decodedDescription = (() => {
+          try {
+            const raw = ticket.description || "";
+            if (raw.includes("&lt;") || raw.includes("&gt;")) {
+              const parser = new DOMParser();
+              return parser.parseFromString(raw, "text/html").body.textContent || raw;
+            }
+            return raw;
+          } catch (e) {
+            return ticket.description || "";
+          }
+        })();
         setForm((prev: any) => ({
           ...prev,
           subject: ticket.subject || prev.subject,
-          description: ticket.description || prev.description,
-          priority_id: ticket.priority_id || prev.priority_id,
-          category_id: ticket.category_id || prev.category_id,
-          assigned_to: ticket.assigned_to || prev.assigned_to,
-          team_id: ticket.team_id || prev.team_id,
-          bucket_id: ticket.bucket_id || prev.bucket_id,
-          status_id: ticket.status_id || prev.status_id,
+          description: decodedDescription || prev.description,
+          priority_id: ticket.priority_id ?? prev.priority_id,
+          category_id: ticket.category_id ?? prev.category_id,
+          assigned_to: ticket.assigned_to ?? ticket.assignee?.id ?? prev.assigned_to,
+          team_id: ticket.team_id ?? ticket.team?.id ?? prev.team_id,
+          bucket_id: ticket.bucket_id ?? ticket.bucket?.id ?? prev.bucket_id,
+          status_id: ticket.status_id ?? prev.status_id,
           demand: ticket.demand ?? prev.demand,
           reason: ticket.reason || prev.reason,
         }));

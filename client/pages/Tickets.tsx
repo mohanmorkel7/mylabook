@@ -63,7 +63,20 @@ export default function TicketsPage() {
     }
   };
 
+  // Auto-select 'all' tab for admin users on first render
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem("banani_user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && String(parsed.role).toLowerCase() === "admin") {
+          setTab("all");
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     fetchTickets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, page, limit, tab]);

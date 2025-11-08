@@ -516,7 +516,10 @@ router.post(
             );
             initialCommentId = initComment.id;
           } catch (commentErr) {
-            console.warn("Failed to create initial comment for attachments:", commentErr);
+            console.warn(
+              "Failed to create initial comment for attachments:",
+              commentErr,
+            );
             initialCommentId = null;
           }
 
@@ -929,7 +932,10 @@ router.post(
               );
               targetCommentId = initComment.id;
             } catch (cErr) {
-              console.warn("Failed to create comment for attachment upload:", cErr);
+              console.warn(
+                "Failed to create comment for attachment upload:",
+                cErr,
+              );
               targetCommentId = null;
             }
           }
@@ -976,14 +982,17 @@ router.post(
                 );
                 targetCommentId2 = initComment2.id;
               } catch (cErr2) {
-                console.warn("Failed to create comment for fallback attachment:", cErr2);
+                console.warn(
+                  "Failed to create comment for fallback attachment:",
+                  cErr2,
+                );
                 targetCommentId2 = null;
               }
             }
 
             const safeFileName =
               req.file && (req.file.filename || req.file.originalname)
-                ? (req.file.filename || req.file.originalname)
+                ? req.file.filename || req.file.originalname
                 : `ticket-${Date.now()}${path.extname((req.file && req.file.originalname) || "")}`;
             const safeFilePath = `/uploads/tickets/${(req.file && req.file.filename) || safeFileName}`;
             const insertRes2 = await pool.query(

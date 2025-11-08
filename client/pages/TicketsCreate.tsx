@@ -169,7 +169,7 @@ export default function TicketsCreatePage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label className="mb-2">Priority</Label>
                 <Select value={form.priority_id?.toString() || ""} onValueChange={(v) => setForm({ ...form, priority_id: v ? parseInt(v) : undefined })}>
@@ -180,21 +180,6 @@ export default function TicketsCreatePage() {
                     <SelectItem value="">Select</SelectItem>
                     {meta.priorities.map((p: any) => (
                       <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="mb-2">Category</Label>
-                <Select value={form.category_id?.toString() || ""} onValueChange={(v) => setForm({ ...form, category_id: v ? parseInt(v) : undefined })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Select</SelectItem>
-                    {meta.categories.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

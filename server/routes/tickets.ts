@@ -402,11 +402,9 @@ router.post(
       });
 
       if (missing.length > 0) {
-        return res
-          .status(400)
-          .json({
-            error: `Missing required fields: ${missing.map((m) => m.label).join(", ")}`,
-          });
+        return res.status(400).json({
+          error: `Missing required fields: ${missing.map((m) => m.label).join(", ")}`,
+        });
       }
 
       // Normalize numeric fields
@@ -427,42 +425,84 @@ router.post(
         // Validate referenced foreign keys before attempting insert
         try {
           if (ticketData.assigned_to) {
-            const uRes = await pool.query("SELECT id FROM users WHERE id = $1", [ticketData.assigned_to]);
+            const uRes = await pool.query(
+              "SELECT id FROM users WHERE id = $1",
+              [ticketData.assigned_to],
+            );
             if (uRes.rows.length === 0) {
-              return res.status(400).json({ error: "Invalid assignee", message: `Assigned user id ${ticketData.assigned_to} not found` });
+              return res
+                .status(400)
+                .json({
+                  error: "Invalid assignee",
+                  message: `Assigned user id ${ticketData.assigned_to} not found`,
+                });
             }
           }
 
           if (ticketData.priority_id) {
-            const pRes = await pool.query("SELECT id FROM ticket_priorities WHERE id = $1", [ticketData.priority_id]);
+            const pRes = await pool.query(
+              "SELECT id FROM ticket_priorities WHERE id = $1",
+              [ticketData.priority_id],
+            );
             if (pRes.rows.length === 0) {
-              return res.status(400).json({ error: "Invalid priority", message: `Priority id ${ticketData.priority_id} not found` });
+              return res
+                .status(400)
+                .json({
+                  error: "Invalid priority",
+                  message: `Priority id ${ticketData.priority_id} not found`,
+                });
             }
           }
 
           if (ticketData.status_id) {
-            const sRes = await pool.query("SELECT id FROM ticket_statuses WHERE id = $1", [ticketData.status_id]);
+            const sRes = await pool.query(
+              "SELECT id FROM ticket_statuses WHERE id = $1",
+              [ticketData.status_id],
+            );
             if (sRes.rows.length === 0) {
-              return res.status(400).json({ error: "Invalid status", message: `Status id ${ticketData.status_id} not found` });
+              return res
+                .status(400)
+                .json({
+                  error: "Invalid status",
+                  message: `Status id ${ticketData.status_id} not found`,
+                });
             }
           }
 
           if (ticketData.team_id) {
-            const tRes = await pool.query("SELECT id FROM ticket_teams WHERE id = $1", [ticketData.team_id]);
+            const tRes = await pool.query(
+              "SELECT id FROM ticket_teams WHERE id = $1",
+              [ticketData.team_id],
+            );
             if (tRes.rows.length === 0) {
-              return res.status(400).json({ error: "Invalid team", message: `Team id ${ticketData.team_id} not found` });
+              return res
+                .status(400)
+                .json({
+                  error: "Invalid team",
+                  message: `Team id ${ticketData.team_id} not found`,
+                });
             }
           }
 
           if (ticketData.bucket_id) {
-            const bRes = await pool.query("SELECT id FROM ticket_buckets WHERE id = $1", [ticketData.bucket_id]);
+            const bRes = await pool.query(
+              "SELECT id FROM ticket_buckets WHERE id = $1",
+              [ticketData.bucket_id],
+            );
             if (bRes.rows.length === 0) {
-              return res.status(400).json({ error: "Invalid bucket", message: `Bucket id ${ticketData.bucket_id} not found` });
+              return res
+                .status(400)
+                .json({
+                  error: "Invalid bucket",
+                  message: `Bucket id ${ticketData.bucket_id} not found`,
+                });
             }
           }
         } catch (fkErr) {
           console.error("Foreign key validation error:", fkErr);
-          return res.status(500).json({ error: "Failed to validate references" });
+          return res
+            .status(500)
+            .json({ error: "Failed to validate references" });
         }
 
         // Ensure status default (Open) will be applied by DB if not provided
@@ -545,11 +585,9 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
             const reasonVal =
               updateData.reason || (existing && (existing as any).reason);
             if (!reasonVal || String(reasonVal).trim() === "") {
-              return res
-                .status(400)
-                .json({
-                  error: "Reason is required when marking a ticket as overdue",
-                });
+              return res.status(400).json({
+                error: "Reason is required when marking a ticket as overdue",
+              });
             }
           }
         } catch (e) {

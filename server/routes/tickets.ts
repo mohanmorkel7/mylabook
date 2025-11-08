@@ -536,7 +536,7 @@ router.post(
               try {
                 const safeFileName =
                   file && (file.filename || file.originalname)
-                    ? (file.filename || file.originalname)
+                    ? file.filename || file.originalname
                     : `ticket-${Date.now()}${path.extname((file && file.originalname) || "")}`;
                 const safeFilePath = `/uploads/tickets/${(file && file.filename) || safeFileName}`;
                 await pool.query(
@@ -552,9 +552,16 @@ router.post(
                     file.mimetype,
                   ],
                 );
-                console.log("Saved attachment (fallback) for ticket:", ticket.id, safeFileName);
+                console.log(
+                  "Saved attachment (fallback) for ticket:",
+                  ticket.id,
+                  safeFileName,
+                );
               } catch (fbErr) {
-                console.error("Failed to save attachment record (fallback):", fbErr);
+                console.error(
+                  "Failed to save attachment record (fallback):",
+                  fbErr,
+                );
               }
             }
           }
@@ -927,7 +934,7 @@ router.post(
           try {
             const safeFileName =
               req.file && (req.file.filename || req.file.originalname)
-                ? (req.file.filename || req.file.originalname)
+                ? req.file.filename || req.file.originalname
                 : `ticket-${Date.now()}${path.extname((req.file && req.file.originalname) || "")}`;
             const safeFilePath = `/uploads/tickets/${(req.file && req.file.filename) || safeFileName}`;
             const insertRes2 = await pool.query(

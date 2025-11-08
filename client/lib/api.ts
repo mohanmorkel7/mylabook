@@ -1925,7 +1925,10 @@ export class ApiClient {
   }
 
   async getTicketById(id: number) {
-    return this.request<any>(`/tickets/${id}`);
+    return this.request<any>(`/tickets/${id}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    });
   }
 
   async getTicketByTrackId(trackId: string) {

@@ -238,8 +238,23 @@ export class TicketRepository {
     try {
       if (sla_time) {
         computedSla = sla_time;
+      } else if (priority_id) {
+        // Map priority (id) to SLA hours. Adjust mapping as needed.
+        const PRIORITY_SLA_HOURS: Record<number, number> = {
+          1: 2, // priority 1 -> 2 hours
+          2: 4,
+          3: 8,
+          4: 24,
+          5: 48,
+        };
+        const hours = PRIORITY_SLA_HOURS[Number(priority_id)];
+        if (hours && !isNaN(Number(hours))) {
+          computedSla = `NOW() + INTERVAL '${hours} hours'`;
+        } else {
+          computedSla = null;
+        }
       } else {
-        // Map demand to SLA: 0 => 2 hours, 1 => 5 hours, 2 => end of day (~24 hours)
+        // Fallback to demand mapping for older callers
         if (demand === 0) computedSla = "NOW() + INTERVAL '2 hours'";
         else if (demand === 1) computedSla = "NOW() + INTERVAL '5 hours'";
         else if (demand === 2) computedSla = "NOW() + INTERVAL '24 hours'";

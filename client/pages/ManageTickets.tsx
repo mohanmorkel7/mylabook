@@ -416,7 +416,7 @@ export default function ManageTickets() {
         : NaN;
       if (isNaN(createdTs)) return null;
       const slaTs = createdTs + hours * 3600 * 1000;
-      return slaTs - Date.now();
+      return slaTs - (Date.now() - serverTimeOffsetRef.current);
     } catch (e) {
       console.error("SLA compute error", e);
       return null;

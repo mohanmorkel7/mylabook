@@ -313,16 +313,13 @@ export default function ManageTickets() {
     const earliest = Math.min(...slaTimes);
     const nowLocal = Date.now();
     if (earliest < nowLocal) {
-      // overdue
-      const diff = formatDistanceToNowStrict(new Date(earliest), {
-        addSuffix: true,
-      });
-      return `Overdue ${diff.replace(" ago", "")}`;
+      // overdue: show how long overdue with hh:mm:ss
+      const overdueMs = nowLocal - earliest;
+      return `Overdue ${formatRemaining(overdueMs)}`;
     }
-    const diff = formatDistanceToNowStrict(new Date(earliest), {
-      addSuffix: true,
-    });
-    return `Due ${diff.replace(" in ", "")}`;
+    // not yet due: show remaining time hh:mm:ss + suffix
+    const remainingMs = earliest - nowLocal;
+    return `${formatRemaining(remainingMs)} hours remaining`;
   };
 
   // fetch ticket metadata to discover overdue status id
@@ -509,7 +506,11 @@ export default function ManageTickets() {
                       <span
                         className={`font-medium ${slaMs !== null && slaMs <= 0 ? "text-red-600" : "text-gray-700"}`}
                       >
-                        {formatRemaining(slaMs)}
+                        {slaMs === null
+                          ? "No SLA"
+                          : slaMs <= 0
+                          ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                          : `${formatRemaining(slaMs)} hours remaining`}
                       </span>
                     </li>
                   );
@@ -578,7 +579,11 @@ export default function ManageTickets() {
                       <span
                         className={`font-medium ${slaMs !== null && slaMs <= 0 ? "text-red-600" : "text-gray-700"}`}
                       >
-                        {formatRemaining(slaMs)}
+                        {slaMs === null
+                          ? "No SLA"
+                          : slaMs <= 0
+                          ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                          : `${formatRemaining(slaMs)} hours remaining`}
                       </span>
                     </li>
                   );
@@ -636,7 +641,11 @@ export default function ManageTickets() {
                       <span
                         className={`font-medium ${slaMs !== null && slaMs <= 0 ? "text-red-600" : "text-gray-700"}`}
                       >
-                        {formatRemaining(slaMs)}
+                        {slaMs === null
+                          ? "No SLA"
+                          : slaMs <= 0
+                          ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                          : `${formatRemaining(slaMs)} hours remaining`}
                       </span>
                     </li>
                   );
@@ -940,6 +949,7 @@ export default function ManageTickets() {
             <div className="space-y-4">
               {paginatedTickets.map((ticket) => {
                 const priority = getPriorityBadge(ticket.priority_id);
+                const slaMs = ticket.sla_time ? new Date(ticket.sla_time).getTime() - now : null;
                 return (
                   <Card
                     key={ticket.id}
@@ -1033,7 +1043,7 @@ export default function ManageTickets() {
                             />
                           </div>
 
-                          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
                             <div>
                               <p className="text-gray-600">Status</p>
                               <Badge variant="outline" className="mt-1">
@@ -1071,6 +1081,16 @@ export default function ManageTickets() {
                                 {new Date(
                                   ticket.updated_at,
                                 ).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">SLA</p>
+                              <p className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}>
+                                {slaMs === null
+                                  ? "No SLA"
+                                  : slaMs <= 0
+                                  ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                                  : `${formatRemaining(slaMs)} hours remaining`}
                               </p>
                             </div>
                             <div>

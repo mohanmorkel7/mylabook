@@ -523,7 +523,7 @@ export class TicketRepository {
 
     const pages = Math.ceil(total / limit);
 
-    return { tickets, total, pages };
+    return { tickets, total, pages, server_time: new Date().toISOString() };
   }
 
   // Get ticket by ID

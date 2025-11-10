@@ -76,8 +76,14 @@ export default function ManageTickets() {
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState<number>(Date.now());
   const [overdueStatusId, setOverdueStatusId] = useState<number | null>(null);
-  const autoMarkedRef = React.useRef(new Set<number>());
-  const { user: currentUser } = ({} as any); // placeholder to avoid TypeScript errors
+  const autoMarkedRef = useRef(new Set<number>());
+  const { user: currentUser } = useAuth();
+
+  // realtime clock for countdowns
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
   const [activeTab, setActiveTab] = useState<"all" | "created">("all");
   const [filters, setFilters] = useState<FilterOptions>({
     searchText: "",

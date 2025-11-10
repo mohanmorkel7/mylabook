@@ -488,6 +488,7 @@ export class TicketRepository {
           return null;
         }
       })(),
+      sla_remaining_ms: row.sla_remaining_ms !== undefined ? Number(row.sla_remaining_ms) : null,
       priority: row.priority_name
         ? {
             id: row.priority_id,
@@ -596,6 +597,7 @@ export class TicketRepository {
           return null;
         }
       })(),
+      sla_remaining_ms: row.sla_remaining_ms !== undefined ? Number(row.sla_remaining_ms) : null,
       priority: row.priority_name
         ? {
             id: row.priority_id,

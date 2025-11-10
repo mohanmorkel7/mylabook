@@ -573,7 +573,7 @@ export default function ManageTickets() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredTickets.map((ticket) => {
+              {paginatedTickets.map((ticket) => {
                 const priority = getPriorityBadge(ticket.priority_id);
                 return (
                   <Card

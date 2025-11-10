@@ -596,8 +596,8 @@ export function MailConfigModal({
                 </SelectValue>
               </SelectTrigger>
 
-              <SelectContent className="p-2">
-                <div className="px-2 py-1">
+              <SelectContent className="p-0 max-h-60">
+                <div className="sticky top-0 z-10 bg-popover p-2">
                   <Input
                     placeholder="Search users..."
                     value={searchAssignee}
@@ -605,19 +605,25 @@ export function MailConfigModal({
                     className="w-full"
                   />
                 </div>
-                <SelectItem value="__none">(Select assignee)</SelectItem>
-                {users
-                  .filter((u) =>
-                    getUserName(u)
-                      .toLowerCase()
-                      .includes(searchAssignee.toLowerCase()),
-                  )
-                  .sort((a, b) => getUserName(a).localeCompare(getUserName(b)))
-                  .map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {getUserName(u)}
-                    </SelectItem>
-                  ))}
+                <div className="p-2">
+                  <SelectItem value="__none">(Select assignee)</SelectItem>
+                </div>
+                <div className="px-2 pb-2">
+                  {users
+                    .filter((u) =>
+                      getUserName(u)
+                        .toLowerCase()
+                        .includes(searchAssignee.toLowerCase()),
+                    )
+                    .sort((a, b) =>
+                      getUserName(a).localeCompare(getUserName(b)),
+                    )
+                    .map((u) => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {getUserName(u)}
+                      </SelectItem>
+                    ))}
+                </div>
               </SelectContent>
             </Select>
           </div>

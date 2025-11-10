@@ -187,35 +187,26 @@ export async function processEmailsForConfigs(
           continue;
         }
 
-        // Validate config for Mitra
-        const validation = validateConfigForMitra(config);
-        if (!validation.valid) {
-          result.failed++;
-          const errorMsg = validation.errors.join("; ");
-          await logEmailProcessing(
-            config.id,
-            email.id,
-            email.subject,
-            email.from,
-            "failed",
-            undefined,
-            `Invalid config: ${errorMsg}`,
-          );
-          result.errors.push({
-            emailId: email.id,
-            error: errorMsg,
-          });
-          continue;
-        }
+        // Create ticket in local tickets table
+        try {
+          const ticketData: any = {
+            subject: email.subject || "(No subject)",
+            description:
+              (email.body && (email.body.content || email.body.text)) ||
+              email.bodyPreview ||
+              "",
+            priority_id: config.priority_id,
+            team_id: config.team_id,
+            bucket_id: config.bucket_id,
+            demand: config.demand,
+            assigned_to: config.assigned_to_id,
+          };
 
-        // Create ticket in Mitra
-        const ticketResult = await createTicketInMitra(config, {
-          subject: email.subject,
-          body: email.body,
-          from: email.from,
-        });
+          // createdBy: prefer config.user_id else assigned_to
+          const createdBy = (config as any).user_id || config.assigned_to_id || 1;
 
-        if (ticketResult.success && ticketResult.ticketId) {
+          const ticket = await (await import("../models/Ticket")).TicketRepository.create(ticketData, createdBy);
+
           result.succeeded++;
           await logEmailProcessing(
             config.id,
@@ -223,22 +214,22 @@ export async function processEmailsForConfigs(
             email.subject,
             email.from,
             "success",
-            ticketResult.ticketId,
+            ticket.id,
           );
 
-          // Store created ticket record
+          // Store created ticket record (mitraTicketId left null)
           await storeCreatedTicket(
             email.id,
             config.id,
-            ticketResult.ticketId,
-            ticketResult.ticketId,
+            ticket.id,
+            ticket.id,
             email.subject,
             email.from,
-            ticketResult.response,
+            null,
           );
-        } else {
+        } catch (err) {
           result.failed++;
-          const errorMsg = ticketResult.error || "Unknown error";
+          const errMsg = err instanceof Error ? err.message : String(err);
           await logEmailProcessing(
             config.id,
             email.id,
@@ -246,12 +237,9 @@ export async function processEmailsForConfigs(
             email.from,
             "failed",
             undefined,
-            errorMsg,
+            errMsg,
           );
-          result.errors.push({
-            emailId: email.id,
-            error: errorMsg,
-          });
+          result.errors.push({ emailId: email.id, error: errMsg });
         }
       } catch (error) {
         result.failed++;

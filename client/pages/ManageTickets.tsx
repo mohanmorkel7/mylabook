@@ -129,6 +129,11 @@ export default function ManageTickets() {
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
+      // Capture server time when provided to correct client/server clock skew
+      if (data?.server_time) {
+        const serverMs = new Date(data.server_time).getTime();
+        serverTimeOffsetRef.current = Date.now() - serverMs;
+      }
       // Normalize fields so UI can rely on consistent keys
       const normalized = ticketsArray.map((t: any) => ({
         ...t,

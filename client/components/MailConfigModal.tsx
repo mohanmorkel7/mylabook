@@ -608,7 +608,9 @@ export function MailConfigModal({
                 <SelectItem value="__none">(Select assignee)</SelectItem>
                 {users
                   .filter((u) =>
-                    getUserName(u).toLowerCase().includes(searchAssignee.toLowerCase()),
+                    getUserName(u)
+                      .toLowerCase()
+                      .includes(searchAssignee.toLowerCase()),
                   )
                   .sort((a, b) => getUserName(a).localeCompare(getUserName(b)))
                   .map((u) => (

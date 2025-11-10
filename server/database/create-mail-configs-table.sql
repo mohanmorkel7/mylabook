@@ -20,6 +20,11 @@ CREATE TABLE IF NOT EXISTS mail_configs (
   priority_id INTEGER NOT NULL,
   assigned_to_id INTEGER NOT NULL,
   watcher_user_ids INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+  -- Optional routing and status fields
+  team_id INTEGER REFERENCES ticket_teams(id),
+  bucket_id INTEGER REFERENCES ticket_buckets(id),
+  status_id INTEGER REFERENCES ticket_statuses(id),
+  demand SMALLINT DEFAULT NULL,
 
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT NOW(),

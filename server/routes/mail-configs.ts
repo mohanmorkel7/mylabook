@@ -97,6 +97,10 @@ router.post("/", async (req: Request, res: Response) => {
       priority_id,
       assigned_to_id,
       watcher_user_ids,
+      team_id,
+      bucket_id,
+      status_id,
+      demand,
     } = req.body;
 
     // Validate required fields
@@ -137,6 +141,10 @@ router.post("/", async (req: Request, res: Response) => {
       priority_id,
       assigned_to_id,
       watcher_user_ids: watcher_user_ids || [],
+      team_id: team_id || null,
+      bucket_id: bucket_id || null,
+      status_id: status_id || null,
+      demand: demand !== undefined ? demand : null,
     };
 
     const config = await MailConfigRepository.create(data);
@@ -218,6 +226,5 @@ router.post("/process-emails", async (req: Request, res: Response) => {
     res.status(500).json({ error: (error as any).message });
   }
 });
-
 
 export default router;

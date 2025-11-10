@@ -101,8 +101,47 @@ export function MailConfigModal({
   const { toast } = useToast();
 
   useEffect(() => {
-  setUsers(initialUsers);
-}, [initialUsers]);
+    setUsers(initialUsers);
+  }, [initialUsers]);
+
+  // Fetch users if not provided by parent
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!initialUsers || initialUsers.length === 0) {
+          const res = await api.get("/users");
+          if (Array.isArray(res)) setUsers(res);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch users for mail config modal", e);
+      }
+    })();
+  }, [initialUsers]);
+
+  // Metadata for teams, buckets, statuses
+  const [teams, setTeams] = useState<Array<any>>([]);
+  const [buckets, setBuckets] = useState<Array<any>>([]);
+  const [statuses, setStatuses] = useState<Array<any>>([]);
+  const [demands] = useState<Array<{ id: number; label: string }>>([
+    { id: 0, label: "2 hours" },
+    { id: 1, label: "5 hours" },
+    { id: 2, label: "24 hours" },
+  ]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const meta = await api.get("/tickets/metadata");
+        if (meta) {
+          setTeams(meta.teams || []);
+          setBuckets(meta.buckets || []);
+          setStatuses(meta.statuses || []);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch metadata for mail config modal", e);
+      }
+    })();
+  }, []);
 
   const [searchAssignee, setSearchAssignee] = useState("");
 
@@ -144,10 +183,9 @@ export function MailConfigModal({
   };
 
   const handleAssigneeSelect = (userId: number) => {
-  setConfig({ ...config, assigned_to_id: userId });
-  setOpenAssignee(false);
-};
-
+    setConfig({ ...config, assigned_to_id: userId });
+    setOpenAssignee(false);
+  };
 
   const handleWatcherToggle = (userId: number) => {
     const newWatchers = config.watcher_user_ids.includes(userId)
@@ -159,7 +197,6 @@ export function MailConfigModal({
       watcher_user_ids: newWatchers,
     });
   };
-
 
   const getFieldValueLabel = (fieldType: string): string => {
     switch (fieldType) {
@@ -237,6 +274,10 @@ export function MailConfigModal({
         priority_id: config.priority_id,
         assigned_to_id: config.assigned_to_id,
         watcher_user_ids: config.watcher_user_ids,
+        team_id: config.team_id,
+        bucket_id: config.bucket_id,
+        status_id: config.status_id,
+        demand: config.demand,
       };
 
       // Include user ID if available
@@ -275,26 +316,24 @@ export function MailConfigModal({
   };
 
   // Helper to get user display name from either old or new structure
-const getUserName = (user?: User): string => {
-  if (!user) return "";
-  if (user?.name) return user.name.trim();
-  if (user.firstname || user.lastname)
-    return `${user.firstname || ""} ${user.lastname || ""}`.trim();
-  if ((user as any).first_name || (user as any).last_name)
-    return `${(user as any).first_name || ""} ${(user as any).last_name || ""}`.trim();
-  return "Unknown";
-};
+  const getUserName = (user?: User): string => {
+    if (!user) return "";
+    if (user?.name) return user.name.trim();
+    if (user.firstname || user.lastname)
+      return `${user.firstname || ""} ${user.lastname || ""}`.trim();
+    if ((user as any).first_name || (user as any).last_name)
+      return `${(user as any).first_name || ""} ${(user as any).last_name || ""}`.trim();
+    return "Unknown";
+  };
 
-const filteredWatchers = users.filter((user) => {
-  const displayName = getUserName(user);
-  const email = user.email || "";
-  return (
-    displayName.toLowerCase().includes(searchWatchers.toLowerCase()) ||
-    email.toLowerCase().includes(searchWatchers.toLowerCase())
-  );
-});
-
-
+  const filteredWatchers = users.filter((user) => {
+    const displayName = getUserName(user);
+    const email = user.email || "";
+    return (
+      displayName.toLowerCase().includes(searchWatchers.toLowerCase()) ||
+      email.toLowerCase().includes(searchWatchers.toLowerCase())
+    );
+  });
 
   const assignedUser = users.find((u) => u.id === config.assigned_to_id);
   const selectedWatchers = users.filter((u) =>
@@ -396,6 +435,114 @@ const filteredWatchers = users.filter((user) => {
             </Select>
           </div>
 
+          {/* Team, Bucket, Status, Demand */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="team">Team (optional)</Label>
+              <Select
+                value={(config.team_id || "") as any}
+                onValueChange={(v) =>
+                  setConfig({ ...config, team_id: v ? parseInt(v) : undefined })
+                }
+              >
+                <SelectTrigger id="team">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Not set)</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bucket">Bucket (optional)</Label>
+              <Select
+                value={(config.bucket_id || "") as any}
+                onValueChange={(v) =>
+                  setConfig({
+                    ...config,
+                    bucket_id: v ? parseInt(v) : undefined,
+                  })
+                }
+              >
+                <SelectTrigger id="bucket">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Not set)</SelectItem>
+                  {buckets
+                    .filter(
+                      (b) => !config.team_id || b.team_id === config.team_id,
+                    )
+                    .map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Status (optional)</Label>
+              <Select
+                value={(config.status_id || "") as any}
+                onValueChange={(v) =>
+                  setConfig({
+                    ...config,
+                    status_id: v ? parseInt(v) : undefined,
+                  })
+                }
+              >
+                <SelectTrigger id="status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Not set)</SelectItem>
+                  {statuses.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="demand">Demand / SLA (optional)</Label>
+              <Select
+                value={
+                  config.demand !== undefined && config.demand !== null
+                    ? String(config.demand)
+                    : ""
+                }
+                onValueChange={(v) =>
+                  setConfig({
+                    ...config,
+                    demand: v === "" ? undefined : parseInt(v),
+                  })
+                }
+              >
+                <SelectTrigger id="demand">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Use priority)</SelectItem>
+                  {demands.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Assigned To */}
           <div className="space-y-2">
             <Label>Assigned To *</Label>
@@ -483,7 +630,7 @@ const filteredWatchers = users.filter((user) => {
                   />
                   <CommandEmpty>No user found.</CommandEmpty>
                   <CommandList className="max-h-48">
-                     <CommandGroup>
+                    <CommandGroup>
                       {filteredWatchers.map((user) => (
                         <CommandItem
                           key={user.id}
@@ -499,8 +646,8 @@ const filteredWatchers = users.filter((user) => {
                           {getUserName(user)}
                         </CommandItem>
                       ))}
-                      </CommandGroup>
-                    </CommandList>
+                    </CommandGroup>
+                  </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>

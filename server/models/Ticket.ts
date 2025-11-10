@@ -241,14 +241,15 @@ export class TicketRepository {
       } else if (priority_id) {
         // Map priority (id) to SLA hours. Adjust mapping as needed.
         const PRIORITY_SLA_HOURS: Record<number, number> = {
-          1: 2, // priority 1 -> 2 hours
-          2: 4,
+          0: 2,  // Priority 0 -> 2 hours
+          1: 5,  // Priority 1 -> 5 hours
+          2: 24, // Priority 2 -> End of day -> 24 hours
           3: 8,
           4: 24,
           5: 48,
         };
         const hours = PRIORITY_SLA_HOURS[Number(priority_id)];
-        if (hours && !isNaN(Number(hours))) {
+        if (hours !== undefined && !isNaN(Number(hours))) {
           computedSla = `NOW() + INTERVAL '${hours} hours'`;
         } else {
           computedSla = null;

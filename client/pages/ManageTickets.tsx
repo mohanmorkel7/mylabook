@@ -144,17 +144,19 @@ export default function ManageTickets() {
       const regular = resp.data?.users ?? resp.data ?? [];
 
       // Normalize user fields so getAssignedUserName can handle various shapes
-      const normalized = (regular as any[]).map((u) => ({
-        id: Number(u.id),
-        name:
-          u.name ?? `${u.first_name || u.firstname || ""} ${u.last_name || u.lastname || ""}`.trim() || u.email,
-        first_name: u.first_name,
-        last_name: u.last_name,
-        firstname: u.firstname,
-        lastname: u.lastname,
-        email: u.email,
-        type: u.type,
-      }));
+      const normalized = (regular as any[]).map((u) => {
+        const fullName = `${u.first_name || u.firstname || ""} ${u.last_name || u.lastname || ""}`.trim();
+        return {
+          id: Number(u.id),
+          name: u.name ?? (fullName || u.email),
+          first_name: u.first_name,
+          last_name: u.last_name,
+          firstname: u.firstname,
+          lastname: u.lastname,
+          email: u.email,
+          type: u.type,
+        };
+      });
 
       setUsers(normalized as User[]);
     } catch (error) {

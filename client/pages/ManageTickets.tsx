@@ -348,6 +348,19 @@ export default function ManageTickets() {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   };
 
+  // Helper to parse timestamps from DB as UTC (handles 'YYYY-MM-DD HH:MM:SS' format)
+  const parseTimestampAsUTC = (ts?: string | null) => {
+    if (!ts) return null;
+    try {
+      // If string already contains timezone info or 'Z', parse directly
+      if (/[Tt].*Z$/.test(ts) || /[+\-]\d{2}:\d{2}$/.test(ts)) return new Date(ts);
+      const iso = ts.includes("T") ? ts : ts.replace(" ", "T");
+      return new Date(iso + "Z");
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Compute SLA remaining ms for a ticket. If ticket.sla_time exists, use it.
   // Otherwise, fallback to created_at + priority-based SLA hours.
   const computeSlaMsForTicket = (ticket: any): number | null => {

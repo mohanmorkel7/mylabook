@@ -621,7 +621,7 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Assigned To</p>
                               <p className="font-medium mt-1">
-                                {getAssignedUserName(ticket.assigned_to_id)}
+                                {ticket.assignee?.name || getAssignedUserName(ticket.assigned_to_id)}
                               </p>
                             </div>
                             <div>

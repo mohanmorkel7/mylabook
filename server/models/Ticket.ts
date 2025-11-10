@@ -238,7 +238,12 @@ export class TicketRepository {
     try {
       if (sla_time) {
         const parsed = new Date(sla_time as string);
-        computedSlaValue = !isNaN(parsed.getTime()) ? parsed.toISOString() : null;
+        if (!isNaN(parsed.getTime())) {
+          const pad = (n: number) => String(n).padStart(2, "0");
+          computedSlaValue = `${parsed.getUTCFullYear()}-${pad(parsed.getUTCMonth() + 1)}-${pad(parsed.getUTCDate())} ${pad(parsed.getUTCHours())}:${pad(parsed.getUTCMinutes())}:${pad(parsed.getUTCSeconds())}`;
+        } else {
+          computedSlaValue = null;
+        }
       } else if (priority_id !== undefined && priority_id !== null) {
         const PRIORITY_SLA_HOURS: Record<number, number> = {
           0: 2, // Priority 0 -> 2 hours

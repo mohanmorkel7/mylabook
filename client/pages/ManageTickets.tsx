@@ -130,11 +130,13 @@ export default function ManageTickets() {
       const data = response?.data ?? response;
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
       // Capture server time when provided to correct client/server clock skew
+      let serverMs: number | null = null;
       if (data?.server_time) {
-        const serverMs = new Date(data.server_time).getTime();
+        serverMs = new Date(data.server_time).getTime();
         serverTimeOffsetRef.current = Date.now() - serverMs;
       }
-      // Normalize fields so UI can rely on consistent keys
+      const fetchClientMs = Date.now();
+      // Normalize fields so UI can rely on consistent keys and attach fetch metadata
       const normalized = ticketsArray.map((t: any) => ({
         ...t,
         assigned_to_id:
@@ -146,6 +148,8 @@ export default function ManageTickets() {
         track_id:
           t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
         description: t.description || "",
+        __server_time_ms: serverMs,
+        __fetched_at_ms: fetchClientMs,
       }));
       setTickets(normalized);
     } catch (error) {

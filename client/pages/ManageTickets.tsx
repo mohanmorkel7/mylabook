@@ -352,6 +352,37 @@ export default function ManageTickets() {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   };
 
+  // Compute SLA remaining ms for a ticket. If ticket.sla_time exists, use it.
+  // Otherwise, fallback to created_at + priority-based SLA hours.
+  const computeSlaMsForTicket = (ticket: any): number | null => {
+    try {
+      if (ticket.sla_time) {
+        const ts = new Date(ticket.sla_time).getTime();
+        if (isNaN(ts)) return null;
+        return ts - Date.now();
+      }
+
+      // Fallback mapping (must match server mapping)
+      const PRIORITY_SLA_HOURS: Record<number, number> = {
+        1: 2,
+        2: 4,
+        3: 8,
+        4: 24,
+        5: 48,
+      };
+
+      const pr = Number(ticket.priority_id ?? ticket.priority?.id ?? ticket.priority_id);
+      const hours = PRIORITY_SLA_HOURS[pr];
+      if (!hours) return null;
+      const createdTs = ticket.created_at ? new Date(ticket.created_at).getTime() : NaN;
+      if (isNaN(createdTs)) return null;
+      const slaTs = createdTs + hours * 3600 * 1000;
+      return slaTs - Date.now();
+    } catch (e) {
+      return null;
+    }
+  };
+
   const markOverdue = async (ticket: any) => {
     if (!overdueStatusId) return;
     if (autoMarkedRef.current.has(ticket.id)) return;

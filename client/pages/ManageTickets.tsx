@@ -295,7 +295,10 @@ export default function ManageTickets() {
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredTickets.length / pageSize));
-  const paginatedTickets = filteredTickets.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedTickets = filteredTickets.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="p-6">
@@ -354,31 +357,78 @@ export default function ManageTickets() {
         <Card>
           <CardContent>
             <p className="text-sm text-gray-500">Open</p>
-            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return /open/i.test(String(s || '')); }).length}</p>
+            <p className="text-2xl font-semibold">
+              {
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return /open/i.test(String(s || ""));
+                }).length
+              }
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <p className="text-sm text-gray-500">In Progress</p>
-            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return /in progress/i.test(String(s || '')) || /in_progress/i.test(String(s || '')); }).length}</p>
+            <p className="text-2xl font-semibold">
+              {
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return (
+                    /in progress/i.test(String(s || "")) ||
+                    /in_progress/i.test(String(s || ""))
+                  );
+                }).length
+              }
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <p className="text-sm text-gray-500">Pending</p>
-            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return /pending/i.test(String(s || '')); }).length}</p>
+            <p className="text-2xl font-semibold">
+              {
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return /pending/i.test(String(s || ""));
+                }).length
+              }
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <p className="text-sm text-gray-500">Closed</p>
-            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return (t as any).status?.is_closed === true || /closed/i.test(String(s || '')); }).length}</p>
+            <p className="text-2xl font-semibold">
+              {
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return (
+                    (t as any).status?.is_closed === true ||
+                    /closed/i.test(String(s || ""))
+                  );
+                }).length
+              }
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <p className="text-sm text-gray-500">Overdue</p>
-            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; const isClosed = (t as any).status?.is_closed === true || /closed/i.test(String(s || '')); const sla = (t as any).sla_time; if (!sla) return false; const slaTs = new Date(sla).getTime(); return !isNaN(slaTs) && slaTs < Date.now() && !isClosed; }).length}</p>
+            <p className="text-2xl font-semibold">
+              {
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  const isClosed =
+                    (t as any).status?.is_closed === true ||
+                    /closed/i.test(String(s || ""));
+                  const sla = (t as any).sla_time;
+                  if (!sla) return false;
+                  const slaTs = new Date(sla).getTime();
+                  return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
+                }).length
+              }
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -386,172 +436,174 @@ export default function ManageTickets() {
       {/* Filters Card */}
       {showFilters && (
         <Card className="mb-6">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filters
-            </CardTitle>
-            {isAnyFilterActive && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="text-blue-600 hover:text-blue-700"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Clear All
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Search
-              </label>
-              <div className="relative">
-                <Input
-                  placeholder="Search by subject or description..."
-                  value={filters.searchText}
-                  onChange={(e) =>
-                    setFilters({ ...filters, searchText: e.target.value })
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Filters
+              </CardTitle>
+              {isAnyFilterActive && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-blue-600 hover:text-blue-700"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear All
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Search
+                </label>
+                <div className="relative">
+                  <Input
+                    placeholder="Search by subject or description..."
+                    value={filters.searchText}
+                    onChange={(e) =>
+                      setFilters({ ...filters, searchText: e.target.value })
+                    }
+                    className="pl-10"
+                  />
+                  <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                </div>
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Priority
+                </label>
+                <Select
+                  value={filters.priority}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, priority: value })
                   }
-                  className="pl-10"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Priorities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Priorities</SelectItem>
+                    {Object.entries(PRIORITY_OPTIONS).map(([key, val]) => (
+                      <SelectItem key={key} value={key}>
+                        {val.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <Select
+                  value={filters.status}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, status: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Statuses</SelectItem>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Assigned To */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Assigned To
+                </label>
+                <Select
+                  value={filters.assignedTo}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, assignedTo: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Users" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Users</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id.toString()}>
+                        {getAssignedUserName(user.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Source */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Source
+                </label>
+                <Select
+                  value={filters.source}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, source: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Sources</SelectItem>
+                    <SelectItem value="mail_config">
+                      From Mail Config
+                    </SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Date From */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  From Date
+                </label>
+                <Input
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(e) =>
+                    setFilters({ ...filters, dateFrom: e.target.value })
+                  }
                 />
-                <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+              </div>
+
+              {/* Date To */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To Date
+                </label>
+                <Input
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(e) =>
+                    setFilters({ ...filters, dateTo: e.target.value })
+                  }
+                />
               </div>
             </div>
-
-            {/* Priority */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Priority
-              </label>
-              <Select
-                value={filters.priority}
-                onValueChange={(value) =>
-                  setFilters({ ...filters, priority: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Priorities" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Priorities</SelectItem>
-                  {Object.entries(PRIORITY_OPTIONS).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>
-                      {val.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <Select
-                value={filters.status}
-                onValueChange={(value) =>
-                  setFilters({ ...filters, status: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
-                  {STATUS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Assigned To */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Assigned To
-              </label>
-              <Select
-                value={filters.assignedTo}
-                onValueChange={(value) =>
-                  setFilters({ ...filters, assignedTo: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Users" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Users</SelectItem>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id.toString()}>
-                      {getAssignedUserName(user.id)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Source */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Source
-              </label>
-              <Select
-                value={filters.source}
-                onValueChange={(value) =>
-                  setFilters({ ...filters, source: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All Sources" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Sources</SelectItem>
-                  <SelectItem value="mail_config">From Mail Config</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Date From */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                From Date
-              </label>
-              <Input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) =>
-                  setFilters({ ...filters, dateFrom: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Date To */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                To Date
-              </label>
-              <Input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) =>
-                  setFilters({ ...filters, dateTo: e.target.value })
-                }
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
       )}
 
       {/* Tickets List - Conditional Tab Display */}
@@ -725,26 +777,31 @@ export default function ManageTickets() {
                 );
               })}
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex items-center gap-2">
-                <Button
-                  disabled={currentPage <= 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </Button>
-                <span className="text-sm text-gray-600">Page {currentPage} of {totalPages}</span>
-                <Button
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                </Button>
+              {/* Pagination */}
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    disabled={currentPage >= totalPages}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    Next
+                  </Button>
+                </div>
+                <div className="text-sm text-gray-600">
+                  {filteredTickets.length} items
+                </div>
               </div>
-              <div className="text-sm text-gray-600">{filteredTickets.length} items</div>
-            </div>
-
             </div>
           )}
         </>

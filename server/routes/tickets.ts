@@ -948,43 +948,95 @@ router.post(
             }
           }
 
-          // Compute safe names for primary insert
-          const originalNamePrim2 =
-            (req.file && (req.file.originalname || req.file.filename)) ||
-            "attachment";
-          const extPrim2 = path.extname(originalNamePrim2) || "";
-          const basePrim2 =
-            req.file && req.file.filename
-              ? req.file.filename
-              : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-          const safeFilenamePrim2 =
-            String(basePrim2).slice(0, 255) + (extPrim2 ? extPrim2 : "");
-          const safeOriginalPrim2 = String(originalNamePrim2).slice(0, 255);
-          const safeFilePathPrim2 = `/uploads/tickets/${safeFilenamePrim2}`;
+          // Detect attachment columns (cached)
+          const attachmentColumnsSingle = await (async () => {
+            const cacheAny: any = (global as any)._attachmentColumnsCache || {};
+            if (cacheAny._attachmentColumns) return cacheAny._attachmentColumns;
+            try {
+              const res = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'ticket_attachments'");
+              const cols = new Set(res.rows.map((r: any) => r.column_name));
+              cacheAny._attachmentColumns = cols;
+              (global as any)._attachmentColumnsCache = cacheAny;
+              return cols;
+            } catch (e) {
+              return new Set<string>();
+            }
+          })();
 
-          const insertRes = await pool.query(
-            `INSERT INTO ticket_attachments (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type, uploaded_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
-            [
-              ticketId,
-              targetCommentId,
-              userId,
-              safeFilenamePrim2,
-              safeOriginalPrim2,
-              safeFilePathPrim2,
-              req.file.size,
-              req.file.mimetype,
-            ],
-          );
+          try {
+            const originalName = (req.file && (req.file.originalname || req.file.filename)) || "attachment";
+            const ext = path.extname(originalName) || "";
+            const base = req.file && req.file.filename ? req.file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
+            const safeFileName = String(base).slice(0, 255) + (ext ? ext : "");
+            const safeOriginal = String(originalName).slice(0, 255);
+            const safeFilePath = `/uploads/tickets/${safeFileName}`;
 
-          const saved = insertRes.rows[0];
-          console.log(
-            "File uploaded and saved for ticket:",
-            ticketId,
-            saved.filename || saved.file_name,
-          );
+            const cols: string[] = [];
+            const vals: any[] = [];
 
-          res.status(201).json(saved);
+            cols.push("ticket_id"); vals.push(ticketId);
+            cols.push("comment_id"); vals.push(targetCommentId);
+
+            if (attachmentColumnsSingle.has("user_id")) { cols.push("user_id"); vals.push(userId); }
+            if (attachmentColumnsSingle.has("uploaded_by")) { cols.push("uploaded_by"); vals.push(userId); }
+
+            if (attachmentColumnsSingle.has("filename")) { cols.push("filename"); vals.push(safeFileName); }
+            if (attachmentColumnsSingle.has("original_filename")) { cols.push("original_filename"); vals.push(safeOriginal); }
+            if (attachmentColumnsSingle.has("file_name")) { cols.push("file_name"); vals.push(safeFileName); }
+
+            if (attachmentColumnsSingle.has("file_path")) { cols.push("file_path"); vals.push(safeFilePath); }
+            if (attachmentColumnsSingle.has("file_size")) { cols.push("file_size"); vals.push(req.file.size); }
+            if (attachmentColumnsSingle.has("mime_type")) { cols.push("mime_type"); vals.push(req.file.mimetype); }
+
+            const placeholders = cols.map((_, i) => `$${i + 1}`);
+            const sql = `INSERT INTO ticket_attachments (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+            const insertRes = await pool.query(sql, vals);
+            const saved = insertRes.rows[0];
+
+            console.log("File uploaded and saved for ticket:", ticketId, saved.filename || saved.file_name);
+            res.status(201).json(saved);
+          } catch (aErr) {
+            console.warn("Primary attachment insert failed, attempting fallback:", aErr.message || aErr);
+            // Fallback for alternate schema
+            try {
+              // Ensure we have a target comment id for fallback as well
+              let targetCommentId2 = commentId || null;
+              if (!targetCommentId2) {
+                try {
+                  const initComment2 = await TicketRepository.addComment(
+                    ticketId,
+                    userId,
+                    "",
+                    false,
+                  );
+                  targetCommentId2 = initComment2.id;
+                } catch (cErr2) {
+                  console.warn(
+                    "Failed to create comment for fallback attachment:",
+                    cErr2,
+                  );
+                  targetCommentId2 = null;
+                }
+              }
+
+              const originalName2 = (req.file && (req.file.originalname || req.file.filename)) || "attachment";
+              const ext2 = path.extname(originalName2) || "";
+              const safeBase2 = req.file && req.file.filename ? req.file.filename : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+              const safeFileName2 = String(safeBase2).slice(0, 255) + (ext2 ? ext2 : "");
+              const safeFilePath2 = `/uploads/tickets/${safeFileName2}`;
+              const insertRes2 = await pool.query(
+                `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+                [ticketId, targetCommentId2, userId, safeFileName2, safeFilePath2, req.file.size, req.file.mimetype],
+              );
+              const saved2 = insertRes2.rows[0];
+              console.log("File uploaded and saved (fallback) for ticket:", ticketId, saved2.file_name || saved2.filename);
+              res.status(201).json(saved2);
+            } catch (fbErr) {
+              console.error("Failed to save uploaded attachment (fallback):", fbErr);
+              return res.status(500).json({ error: "Failed to save attachment" });
+            }
+          }
         } catch (dbErr) {
           console.warn(
             "Primary attachment insert failed, attempting fallback:",

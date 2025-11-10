@@ -311,8 +311,8 @@ export default function ManageTickets() {
       .filter((ts) => ts && !isNaN(ts)) as number[];
     if (slaTimes.length === 0) return "No SLA";
     const earliest = Math.min(...slaTimes);
-    const now = Date.now();
-    if (earliest < now) {
+    const nowLocal = Date.now();
+    if (earliest < nowLocal) {
       // overdue
       const diff = formatDistanceToNowStrict(new Date(earliest), {
         addSuffix: true,
@@ -323,6 +323,57 @@ export default function ManageTickets() {
       addSuffix: true,
     });
     return `Due ${diff.replace(" in ", "")}`;
+  };
+
+  // fetch ticket metadata to discover overdue status id
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const meta = await api.getTicketMetadata();
+        const statuses = meta?.data?.statuses ?? meta?.statuses ?? [];
+        const overdue = statuses.find((s: any) => String(s.name).toLowerCase().includes("overdue"));
+        if (mounted && overdue) setOverdueStatusId(Number(overdue.id));
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const formatRemaining = (ms: number | null) => {
+    if (ms === null) return "No SLA";
+    if (ms <= 0) return "Overdue";
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+    return `${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+  };
+
+  const markOverdue = async (ticket: any) => {
+    if (!overdueStatusId) return;
+    if (autoMarkedRef.current.has(ticket.id)) return;
+
+    // Avoid marking if already overdue or closed
+    const sName = (ticket.status && ticket.status.name) || ticket.status;
+    if (String(sName).toLowerCase().includes("overdue")) return;
+    if ((ticket.status && ticket.status.is_closed) || /closed/i.test(String(sName || ""))) return;
+
+    autoMarkedRef.current.add(ticket.id);
+    try {
+      await api.updateTicket(ticket.id, { status_id: overdueStatusId, updated_by: currentUser?.id || 1 });
+      // update local state
+      setTickets((prev) =>
+        prev.map((t) => (t.id === ticket.id ? { ...t, status: { ...(t.status || {}), id: overdueStatusId, name: "Overdue", is_closed: false }, status_id: overdueStatusId } : t)),
+      );
+    } catch (e) {
+      console.error("Failed to mark ticket overdue:", e);
+      autoMarkedRef.current.delete(ticket.id);
+    }
   };
 
   const isAnyFilterActive = Object.values(filters).some((v) => v !== "");

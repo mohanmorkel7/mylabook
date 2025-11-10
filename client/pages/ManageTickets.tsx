@@ -293,6 +293,10 @@ export default function ManageTickets() {
 
   const isAnyFilterActive = Object.values(filters).some((v) => v !== "");
 
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filteredTickets.length / pageSize));
+  const paginatedTickets = filteredTickets.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <div className="p-6">
       <div className="mb-6">

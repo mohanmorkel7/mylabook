@@ -34,6 +34,13 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface TicketDetailsProps {
   ticket: any;

@@ -543,11 +543,9 @@ export default function ManageTickets() {
                   const s = (t as any).status?.name || t.status;
                   return /open/i.test(String(s || ""));
                 })
-                .filter((t) => t.sla_time)
+                .filter((t) => computeSlaMsForTicket(t) !== null)
                 .sort(
-                  (a, b) =>
-                    new Date(a.sla_time).getTime() -
-                    new Date(b.sla_time).getTime(),
+                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {
@@ -614,11 +612,9 @@ export default function ManageTickets() {
                     /in_progress/i.test(String(s || ""))
                   );
                 })
-                .filter((t) => t.sla_time)
+                .filter((t) => computeSlaMsForTicket(t) !== null)
                 .sort(
-                  (a, b) =>
-                    new Date(a.sla_time).getTime() -
-                    new Date(b.sla_time).getTime(),
+                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {
@@ -674,11 +670,9 @@ export default function ManageTickets() {
                   const s = (t as any).status?.name || t.status;
                   return /pending/i.test(String(s || ""));
                 })
-                .filter((t) => t.sla_time)
+                .filter((t) => computeSlaMsForTicket(t) !== null)
                 .sort(
-                  (a, b) =>
-                    new Date(a.sla_time).getTime() -
-                    new Date(b.sla_time).getTime(),
+                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {
@@ -781,9 +775,7 @@ export default function ManageTickets() {
                   return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
                 })
                 .sort(
-                  (a, b) =>
-                    new Date(a.sla_time).getTime() -
-                    new Date(b.sla_time).getTime(),
+                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {

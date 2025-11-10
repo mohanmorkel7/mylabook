@@ -596,9 +596,20 @@ export function MailConfigModal({
                 </SelectValue>
               </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent className="p-2">
+                <div className="px-2 py-1">
+                  <Input
+                    placeholder="Search users..."
+                    value={searchAssignee}
+                    onChange={(e) => setSearchAssignee(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
                 <SelectItem value="__none">(Select assignee)</SelectItem>
                 {users
+                  .filter((u) =>
+                    getUserName(u).toLowerCase().includes(searchAssignee.toLowerCase()),
+                  )
                   .sort((a, b) => getUserName(a).localeCompare(getUserName(b)))
                   .map((u) => (
                     <SelectItem key={u.id} value={String(u.id)}>

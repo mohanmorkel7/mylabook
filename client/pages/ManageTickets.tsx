@@ -576,7 +576,7 @@ export default function ManageTickets() {
                   return (
                     <li key={t.id} className="flex items-center justify-between text-sm">
                       <span className="truncate mr-2">{t.subject}</span>
-                      <span className="font-medium text-red-600">Overdue {formatRemaining(-sinceMs)}</span>
+                      <span className="font-medium text-red-600">Overdue {formatRemaining(sinceMs)}</span>
                     </li>
                   );
                 })}

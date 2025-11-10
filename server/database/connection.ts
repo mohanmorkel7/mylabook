@@ -298,6 +298,21 @@ export async function initializeDatabase() {
       );
     }
 
+    // Ensure mail_configs routing columns exist (team_id, bucket_id, status_id, demand)
+    try {
+      const mailConfigRoutingPath = path.join(__dirname, "add-mail-configs-routing.sql");
+      if (fs.existsSync(mailConfigRoutingPath)) {
+        const mailConfigSql = fs.readFileSync(mailConfigRoutingPath, "utf8");
+        await client.query(mailConfigSql);
+        console.log("Mail configs routing migration applied successfully");
+      }
+    } catch (mailConfigError) {
+      console.log(
+        "Mail configs routing migration already applied or error:",
+        mailConfigError.message,
+      );
+    }
+
     // Update investor_category allowed values (add accelerator, individual)
     try {
       const vcInvestorCategoryMigrationPath = path.join(

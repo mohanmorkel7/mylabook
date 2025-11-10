@@ -131,11 +131,28 @@ export function MailConfigModal({
   useEffect(() => {
     (async () => {
       try {
+        // Try fetching consolidated metadata first
         const meta = await api.get("/tickets/metadata");
-        if (meta) {
+        if (meta && (meta.teams || meta.buckets || meta.statuses)) {
           setTeams(meta.teams || []);
           setBuckets(meta.buckets || []);
           setStatuses(meta.statuses || []);
+          return;
+        }
+
+        // Fallback to individual endpoints if available
+        try {
+          const [teamsRes, bucketsRes, statusesRes] = await Promise.all([
+            api.get("/tickets/teams").catch(() => []),
+            api.get("/tickets/buckets").catch(() => []),
+            api.get("/tickets/statuses").catch(() => []),
+          ]);
+
+          setTeams(teamsRes || []);
+          setBuckets(bucketsRes || []);
+          setStatuses(statusesRes || []);
+        } catch (innerErr) {
+          console.warn("Fallback metadata fetch failed", innerErr);
         }
       } catch (e) {
         console.warn("Failed to fetch metadata for mail config modal", e);
@@ -342,7 +359,7 @@ export function MailConfigModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl w-full sm:w-[900px] overflow-visible">
         <DialogHeader>
           <DialogTitle>
             {config.id ? "Edit Mail Config" : "Create New Mail Config"}
@@ -440,16 +457,19 @@ export function MailConfigModal({
             <div className="space-y-2">
               <Label htmlFor="team">Team (optional)</Label>
               <Select
-                value={(config.team_id || "") as any}
+                value={config.team_id ? String(config.team_id) : "__none"}
                 onValueChange={(v) =>
-                  setConfig({ ...config, team_id: v ? parseInt(v) : undefined })
+                  setConfig({
+                    ...config,
+                    team_id: v && v !== "__none" ? parseInt(v) : undefined,
+                  })
                 }
               >
                 <SelectTrigger id="team">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Not set)</SelectItem>
+                  <SelectItem value="__none">(Not set)</SelectItem>
                   {teams.map((t) => (
                     <SelectItem key={t.id} value={String(t.id)}>
                       {t.name}
@@ -462,11 +482,11 @@ export function MailConfigModal({
             <div className="space-y-2">
               <Label htmlFor="bucket">Bucket (optional)</Label>
               <Select
-                value={(config.bucket_id || "") as any}
+                value={config.bucket_id ? String(config.bucket_id) : "__none"}
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
-                    bucket_id: v ? parseInt(v) : undefined,
+                    bucket_id: v && v !== "__none" ? parseInt(v) : undefined,
                   })
                 }
               >
@@ -474,7 +494,7 @@ export function MailConfigModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Not set)</SelectItem>
+                  <SelectItem value="__none">(Not set)</SelectItem>
                   {buckets
                     .filter(
                       (b) => !config.team_id || b.team_id === config.team_id,
@@ -491,11 +511,11 @@ export function MailConfigModal({
             <div className="space-y-2">
               <Label htmlFor="status">Status (optional)</Label>
               <Select
-                value={(config.status_id || "") as any}
+                value={config.status_id ? String(config.status_id) : "__none"}
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
-                    status_id: v ? parseInt(v) : undefined,
+                    status_id: v && v !== "__none" ? parseInt(v) : undefined,
                   })
                 }
               >
@@ -503,7 +523,7 @@ export function MailConfigModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Not set)</SelectItem>
+                  <SelectItem value="__none">(Not set)</SelectItem>
                   {statuses.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}
@@ -519,12 +539,13 @@ export function MailConfigModal({
                 value={
                   config.demand !== undefined && config.demand !== null
                     ? String(config.demand)
-                    : ""
+                    : "__none"
                 }
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
-                    demand: v === "" ? undefined : parseInt(v),
+                    demand:
+                      v === "" || v === "__none" ? undefined : parseInt(v),
                   })
                 }
               >
@@ -532,7 +553,7 @@ export function MailConfigModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Use priority)</SelectItem>
+                  <SelectItem value="__none">(Use priority)</SelectItem>
                   {demands.map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>
                       {d.label}

@@ -258,10 +258,17 @@ export class TicketRepository {
           computedSlaValue = null;
         }
       } else {
-        if (demand === 0) computedSlaValue = new Date(Date.now() + 2 * 3600 * 1000).toISOString();
-        else if (demand === 1) computedSlaValue = new Date(Date.now() + 5 * 3600 * 1000).toISOString();
-        else if (demand === 2) computedSlaValue = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
-        else computedSlaValue = null;
+        const pad = (n: number) => String(n).padStart(2, "0");
+        if (demand === 0) {
+          const d = new Date(Date.now() + 2 * 3600 * 1000);
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+        } else if (demand === 1) {
+          const d = new Date(Date.now() + 5 * 3600 * 1000);
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+        } else if (demand === 2) {
+          const d = new Date(Date.now() + 24 * 3600 * 1000);
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+        } else computedSlaValue = null;
       }
     } catch (e) {
       computedSlaValue = null;

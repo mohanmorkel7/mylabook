@@ -359,7 +359,7 @@ export function MailConfigModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl w-full sm:w-[900px] overflow-visible">
+      <DialogContent className="max-w-4xl w-full sm:w-[900px] max-h-[80vh] overflow-auto">
         <DialogHeader>
           <DialogTitle>
             {config.id ? "Edit Mail Config" : "Create New Mail Config"}

@@ -131,11 +131,28 @@ export function MailConfigModal({
   useEffect(() => {
     (async () => {
       try {
+        // Try fetching consolidated metadata first
         const meta = await api.get("/tickets/metadata");
-        if (meta) {
+        if (meta && (meta.teams || meta.buckets || meta.statuses)) {
           setTeams(meta.teams || []);
           setBuckets(meta.buckets || []);
           setStatuses(meta.statuses || []);
+          return;
+        }
+
+        // Fallback to individual endpoints if available
+        try {
+          const [teamsRes, bucketsRes, statusesRes] = await Promise.all([
+            api.get("/tickets/teams").catch(() => []),
+            api.get("/tickets/buckets").catch(() => []),
+            api.get("/tickets/statuses").catch(() => []),
+          ]);
+
+          setTeams(teamsRes || []);
+          setBuckets(bucketsRes || []);
+          setStatuses(statusesRes || []);
+        } catch (innerErr) {
+          console.warn("Fallback metadata fetch failed", innerErr);
         }
       } catch (e) {
         console.warn("Failed to fetch metadata for mail config modal", e);
@@ -342,7 +359,7 @@ export function MailConfigModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl w-full sm:w-[900px] overflow-visible">
         <DialogHeader>
           <DialogTitle>
             {config.id ? "Edit Mail Config" : "Create New Mail Config"}

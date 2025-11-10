@@ -145,7 +145,8 @@ export default function ManageTickets() {
 
       // Normalize user fields so getAssignedUserName can handle various shapes
       const normalized = (regular as any[]).map((u) => {
-        const fullName = `${u.first_name || u.firstname || ""} ${u.last_name || u.lastname || ""}`.trim();
+        const fullName =
+          `${u.first_name || u.firstname || ""} ${u.last_name || u.lastname || ""}`.trim();
         return {
           id: Number(u.id),
           name: u.name ?? (fullName || u.email),

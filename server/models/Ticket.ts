@@ -233,39 +233,38 @@ export class TicketRepository {
       custom_fields,
     } = ticketData;
 
-    // Compute SLA time if not explicitly provided
-    let computedSla: string | null = null;
+    // Compute SLA time on server (UTC) if not explicitly provided
+    let computedSlaValue: string | null = null;
     try {
       if (sla_time) {
-        computedSla = sla_time;
-      } else if (priority_id) {
-        // Map priority (id) to SLA hours. Adjust mapping as needed.
+        const parsed = new Date(sla_time as string);
+        computedSlaValue = !isNaN(parsed.getTime()) ? parsed.toISOString() : null;
+      } else if (priority_id !== undefined && priority_id !== null) {
         const PRIORITY_SLA_HOURS: Record<number, number> = {
           0: 2, // Priority 0 -> 2 hours
           1: 5, // Priority 1 -> 5 hours
-          2: 24, // Priority 2 -> End of day -> 24 hours
+          2: 24, // Priority 2 -> 24 hours
           3: 8,
           4: 24,
           5: 48,
         };
         const hours = PRIORITY_SLA_HOURS[Number(priority_id)];
         if (hours !== undefined && !isNaN(Number(hours))) {
-          computedSla = `NOW() + INTERVAL '${hours} hours'`;
+          computedSlaValue = new Date(Date.now() + hours * 3600 * 1000).toISOString();
         } else {
-          computedSla = null;
+          computedSlaValue = null;
         }
       } else {
-        // Fallback to demand mapping for older callers
-        if (demand === 0) computedSla = "NOW() + INTERVAL '2 hours'";
-        else if (demand === 1) computedSla = "NOW() + INTERVAL '5 hours'";
-        else if (demand === 2) computedSla = "NOW() + INTERVAL '24 hours'";
-        else computedSla = null;
+        if (demand === 0) computedSlaValue = new Date(Date.now() + 2 * 3600 * 1000).toISOString();
+        else if (demand === 1) computedSlaValue = new Date(Date.now() + 5 * 3600 * 1000).toISOString();
+        else if (demand === 2) computedSlaValue = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+        else computedSlaValue = null;
       }
     } catch (e) {
-      computedSla = null;
+      computedSlaValue = null;
     }
 
-    // Build insert query dynamically to support computedSla
+    // Build insert query and include sla_time as parameter if computed on server
     const cols = [
       "subject",
       "description",
@@ -302,18 +301,13 @@ export class TicketRepository {
       createdBy,
     ];
 
-    // Prepare placeholders; if computedSla is a SQL expression, we'll inject it directly
-    const placeholders = cols.map((_, i) => `$${i + 1}`);
+    if (computedSlaValue) {
+      cols.push("sla_time");
+      values.push(computedSlaValue);
+    }
 
-    let insertSql = `INSERT INTO tickets (${cols.join(", ")}`;
-    if (computedSla) {
-      insertSql += ", sla_time";
-    }
-    insertSql += `) VALUES (${placeholders.join(", ")}`;
-    if (computedSla) {
-      insertSql += `, ${computedSla}`;
-    }
-    insertSql += `) RETURNING *`;
+    const placeholders = cols.map((_, i) => `$${i + 1}`);
+    const insertSql = `INSERT INTO tickets (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
 
     const result = await pool.query(insertSql, values);
 

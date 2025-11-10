@@ -149,8 +149,11 @@ export default function TicketDetails({
     // Check if ticket is currently overdue and status is being changed
     try {
       const sla = ticket.sla_time;
-      const isClosed = ticket.status?.is_closed === true || /closed/i.test(String(ticket.status?.name || ""));
-      const isOverdue = sla && !isClosed && new Date(sla).getTime() < Date.now();
+      const isClosed =
+        ticket.status?.is_closed === true ||
+        /closed/i.test(String(ticket.status?.name || ""));
+      const isOverdue =
+        sla && !isClosed && new Date(sla).getTime() < Date.now();
       const newStatusId = updateData.status_id;
       if (isOverdue && newStatusId && newStatusId !== ticket.status_id) {
         // Require reason via modal
@@ -464,17 +467,31 @@ export default function TicketDetails({
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Reason required</DialogTitle>
-              <p className="text-sm text-gray-600 mt-2">You are changing the status of an overdue ticket. Please provide a reason for this change.</p>
+              <p className="text-sm text-gray-600 mt-2">
+                You are changing the status of an overdue ticket. Please provide
+                a reason for this change.
+              </p>
             </DialogHeader>
 
             <div className="p-4">
               <Label>Reason</Label>
-              <Textarea value={reasonText} onChange={(e) => setReasonText(e.target.value)} rows={4} />
+              <Textarea
+                value={reasonText}
+                onChange={(e) => setReasonText(e.target.value)}
+                rows={4}
+              />
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowReasonDialog(false)}>Cancel</Button>
-              <Button onClick={handleConfirmReason} className="ml-2">Confirm</Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowReasonDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmReason} className="ml-2">
+                Confirm
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

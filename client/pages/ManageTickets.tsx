@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
-import { formatDistanceToNowStrict } from 'date-fns';
+import { formatDistanceToNowStrict } from "date-fns";
 
 interface Ticket {
   id: number;
@@ -293,21 +293,25 @@ export default function ManageTickets() {
   };
 
   const getSlaTextFor = (ticketSubset: any[]) => {
-    if (!ticketSubset || ticketSubset.length === 0) return "No SLA"
+    if (!ticketSubset || ticketSubset.length === 0) return "No SLA";
     // Find earliest sla_time among tickets that have sla_time
     const slaTimes = ticketSubset
-      .map((t) => t.sla_time ? new Date(t.sla_time).getTime() : null)
+      .map((t) => (t.sla_time ? new Date(t.sla_time).getTime() : null))
       .filter((ts) => ts && !isNaN(ts)) as number[];
-    if (slaTimes.length === 0) return "No SLA"
+    if (slaTimes.length === 0) return "No SLA";
     const earliest = Math.min(...slaTimes);
     const now = Date.now();
     if (earliest < now) {
       // overdue
-      const diff = formatDistanceToNowStrict(new Date(earliest), {addSuffix: true});
-      return `Overdue ${diff.replace(' ago','')}`;
+      const diff = formatDistanceToNowStrict(new Date(earliest), {
+        addSuffix: true,
+      });
+      return `Overdue ${diff.replace(" ago", "")}`;
     }
-    const diff = formatDistanceToNowStrict(new Date(earliest), {addSuffix: true});
-    return `Due ${diff.replace(' in ','')}`;
+    const diff = formatDistanceToNowStrict(new Date(earliest), {
+      addSuffix: true,
+    });
+    return `Due ${diff.replace(" in ", "")}`;
   };
 
   const isAnyFilterActive = Object.values(filters).some((v) => v !== "");
@@ -385,7 +389,12 @@ export default function ManageTickets() {
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; return /open/i.test(String(s || "")); }))}
+              {getSlaTextFor(
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return /open/i.test(String(s || ""));
+                }),
+              )}
             </p>
           </CardContent>
         </Card>
@@ -403,9 +412,19 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">In Progress</p>
+            <p className="mt-2 text-sm font-medium text-gray-600">
+              In Progress
+            </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; return (/in progress/i.test(String(s || "")) || /in_progress/i.test(String(s || ""))); }))}
+              {getSlaTextFor(
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return (
+                    /in progress/i.test(String(s || "")) ||
+                    /in_progress/i.test(String(s || ""))
+                  );
+                }),
+              )}
             </p>
           </CardContent>
         </Card>
@@ -422,7 +441,12 @@ export default function ManageTickets() {
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; return /pending/i.test(String(s || "")); }))}
+              {getSlaTextFor(
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return /pending/i.test(String(s || ""));
+                }),
+              )}
             </p>
           </CardContent>
         </Card>
@@ -441,7 +465,17 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
-            <p className="text-xs text-muted-foreground mt-1">{getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; return ((t as any).status?.is_closed === true || /closed/i.test(String(s || ""))); }))}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {getSlaTextFor(
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  return (
+                    (t as any).status?.is_closed === true ||
+                    /closed/i.test(String(s || ""))
+                  );
+                }),
+              )}
+            </p>
           </CardContent>
         </Card>
 
@@ -462,7 +496,20 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
-            <p className="text-xs text-muted-foreground mt-1">{getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; const isClosed = (t as any).status?.is_closed === true || /closed/i.test(String(s || "")); const sla = (t as any).sla_time; if (!sla) return false; const slaTs = new Date(sla).getTime(); return !isNaN(slaTs) && slaTs < Date.now() && !isClosed; }))}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {getSlaTextFor(
+                tickets.filter((t) => {
+                  const s = (t as any).status?.name || t.status;
+                  const isClosed =
+                    (t as any).status?.is_closed === true ||
+                    /closed/i.test(String(s || ""));
+                  const sla = (t as any).sla_time;
+                  if (!sla) return false;
+                  const slaTs = new Date(sla).getTime();
+                  return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
+                }),
+              )}
+            </p>
           </CardContent>
         </Card>
       </div>

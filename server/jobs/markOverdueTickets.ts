@@ -23,7 +23,10 @@ export async function runMarkOverdueTickets() {
       if (currentStatusId === overdueStatusId) continue;
 
       // Check if current status is closed
-      const stat = await pool.query("SELECT is_closed FROM ticket_statuses WHERE id = $1", [currentStatusId]);
+      const stat = await pool.query(
+        "SELECT is_closed FROM ticket_statuses WHERE id = $1",
+        [currentStatusId],
+      );
       const isClosed = stat.rows[0]?.is_closed === true;
       if (isClosed) continue;
 
@@ -38,16 +41,26 @@ export async function runMarkOverdueTickets() {
         await pool.query(
           `INSERT INTO ticket_status_changes (ticket_id, from_status_id, to_status_id, reason, user_id, created_at)
            VALUES ($1, $2, $3, $4, $5, NOW())`,
-          [ticketId, currentStatusId, overdueStatusId, 'Automatically marked overdue by SLA job', null],
+          [
+            ticketId,
+            currentStatusId,
+            overdueStatusId,
+            "Automatically marked overdue by SLA job",
+            null,
+          ],
         );
       } catch (e) {
-        console.warn('Failed to log overdue status change for ticket', ticketId, e.message || e);
+        console.warn(
+          "Failed to log overdue status change for ticket",
+          ticketId,
+          e.message || e,
+        );
       }
 
       console.log(`Marked ticket ${ticketId} as overdue`);
     }
   } catch (error) {
-    console.error('Error running markOverdueTickets job:', error);
+    console.error("Error running markOverdueTickets job:", error);
   }
 }
 

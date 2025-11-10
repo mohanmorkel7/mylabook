@@ -384,7 +384,8 @@ export default function ManageTickets() {
       </div>
 
       {/* Filters Card */}
-      <Card className="mb-6">
+      {showFilters && (
+        <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -551,6 +552,7 @@ export default function ManageTickets() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Tickets List - Conditional Tab Display */}
       {activeTab === "all" ? (

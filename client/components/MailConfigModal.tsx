@@ -435,6 +435,103 @@ const filteredWatchers = users.filter((user) => {
             </Select>
           </div>
 
+          {/* Team, Bucket, Status, Demand */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="team">Team (optional)</Label>
+              <Select
+                value={(config.team_id || "") as any}
+                onValueChange={(v) =>
+                  setConfig({ ...config, team_id: v ? parseInt(v) : undefined })
+                }
+              >
+                <SelectTrigger id="team">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Not set)</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bucket">Bucket (optional)</Label>
+              <Select
+                value={(config.bucket_id || "") as any}
+                onValueChange={(v) =>
+                  setConfig({ ...config, bucket_id: v ? parseInt(v) : undefined })
+                }
+              >
+                <SelectTrigger id="bucket">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Not set)</SelectItem>
+                  {buckets
+                    .filter((b) => !config.team_id || b.team_id === config.team_id)
+                    .map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Status (optional)</Label>
+              <Select
+                value={(config.status_id || "") as any}
+                onValueChange={(v) =>
+                  setConfig({ ...config, status_id: v ? parseInt(v) : undefined })
+                }
+              >
+                <SelectTrigger id="status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Not set)</SelectItem>
+                  {statuses.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="demand">Demand / SLA (optional)</Label>
+              <Select
+                value={
+                  config.demand !== undefined && config.demand !== null
+                    ? String(config.demand)
+                    : ""
+                }
+                onValueChange={(v) =>
+                  setConfig({ ...config, demand: v === "" ? undefined : parseInt(v) })
+                }
+              >
+                <SelectTrigger id="demand">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">(Use priority)</SelectItem>
+                  {demands.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Assigned To */}
           <div className="space-y-2">
             <Label>Assigned To *</Label>

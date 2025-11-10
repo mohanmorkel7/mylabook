@@ -525,7 +525,15 @@ router.post(
 
           for (const file of req.files) {
             try {
-              // Persist attachment record (primary schema)
+              // Compute safe names so primary insert succeeds even if multer fields are missing
+              const originalNamePrim = (file && (file.originalname || file.filename)) || "attachment";
+              const extPrim = path.extname(originalNamePrim) || "";
+              const basePrim = file && file.filename ? file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
+              const safeFilenamePrim = String(basePrim).slice(0, 255) + (extPrim ? extPrim : "");
+              const safeOriginalPrim = String(originalNamePrim).slice(0, 255);
+              const safeFilePathPrim = `/uploads/tickets/${safeFilenamePrim}`;
+
+              // Persist attachment record (primary schema) using safe values
               await pool.query(
                 `INSERT INTO ticket_attachments (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type, uploaded_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
@@ -533,9 +541,9 @@ router.post(
                   ticket.id,
                   initialCommentId,
                   createdBy,
-                  file.filename,
-                  file.originalname,
-                  `/uploads/tickets/${file.filename}`,
+                  safeFilenamePrim,
+                  safeOriginalPrim,
+                  safeFilePathPrim,
                   file.size,
                   file.mimetype,
                 ],
@@ -543,7 +551,7 @@ router.post(
               console.log(
                 "Saved attachment for ticket:",
                 ticket.id,
-                file.filename,
+                safeFilenamePrim,
               );
             } catch (aErr) {
               console.warn(
@@ -947,6 +955,14 @@ router.post(
             }
           }
 
+          // Compute safe names for primary insert
+          const originalNamePrim2 = (req.file && (req.file.originalname || req.file.filename)) || "attachment";
+          const extPrim2 = path.extname(originalNamePrim2) || "";
+          const basePrim2 = req.file && req.file.filename ? req.file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
+          const safeFilenamePrim2 = String(basePrim2).slice(0, 255) + (extPrim2 ? extPrim2 : "");
+          const safeOriginalPrim2 = String(originalNamePrim2).slice(0, 255);
+          const safeFilePathPrim2 = `/uploads/tickets/${safeFilenamePrim2}`;
+
           const insertRes = await pool.query(
             `INSERT INTO ticket_attachments (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type, uploaded_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
@@ -954,9 +970,9 @@ router.post(
               ticketId,
               targetCommentId,
               userId,
-              req.file.filename,
-              req.file.originalname,
-              `/uploads/tickets/${req.file.filename}`,
+              safeFilenamePrim2,
+              safeOriginalPrim2,
+              safeFilePathPrim2,
               req.file.size,
               req.file.mimetype,
             ],
@@ -966,7 +982,7 @@ router.post(
           console.log(
             "File uploaded and saved for ticket:",
             ticketId,
-            saved.filename,
+            saved.filename || saved.file_name,
           );
 
           res.status(201).json(saved);

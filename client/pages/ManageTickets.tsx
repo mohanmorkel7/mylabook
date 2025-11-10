@@ -114,7 +114,12 @@ export default function ManageTickets() {
       // Normalize fields so UI can rely on consistent keys
       const normalized = ticketsArray.map((t: any) => ({
         ...t,
-        assigned_to_id: t.assigned_to_id ?? (t.assigned_to !== undefined && t.assigned_to !== null ? Number(t.assigned_to) : null) ?? null,
+        assigned_to_id:
+          t.assigned_to_id ??
+          (t.assigned_to !== undefined && t.assigned_to !== null
+            ? Number(t.assigned_to)
+            : null) ??
+          null,
         track_id:
           t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
         description: t.description || "",
@@ -258,7 +263,9 @@ export default function ManageTickets() {
     });
   };
 
-  const getAssignedUserName = (userId: number | string | null | undefined): string => {
+  const getAssignedUserName = (
+    userId: number | string | null | undefined,
+  ): string => {
     if (userId === null || userId === undefined) return "Unassigned";
     const uid = typeof userId === "number" ? userId : parseInt(String(userId));
     if (isNaN(uid)) return "Unassigned";

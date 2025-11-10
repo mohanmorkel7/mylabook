@@ -300,7 +300,10 @@ export async function initializeDatabase() {
 
     // Ensure mail_configs routing columns exist (team_id, bucket_id, status_id, demand)
     try {
-      const mailConfigRoutingPath = path.join(__dirname, "add-mail-configs-routing.sql");
+      const mailConfigRoutingPath = path.join(
+        __dirname,
+        "add-mail-configs-routing.sql",
+      );
       if (fs.existsSync(mailConfigRoutingPath)) {
         const mailConfigSql = fs.readFileSync(mailConfigRoutingPath, "utf8");
         await client.query(mailConfigSql);

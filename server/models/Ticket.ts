@@ -708,13 +708,27 @@ export class TicketRepository {
     const columns = await getAvailableCommentColumns();
 
     // Normalize user name up-front for inserts
-    const uResForName = await pool.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [userId]);
+    const uResForName = await pool.query(
+      "SELECT * FROM users WHERE id = $1 LIMIT 1",
+      [userId],
+    );
     const uForName = uResForName.rows[0] || {};
-    const firstNameForName = uForName.first_name ?? uForName.firstname ?? uForName.firstName ?? uForName.fname ?? "";
-    const lastNameForName = uForName.last_name ?? uForName.lastname ?? uForName.lastName ?? uForName.lname ?? "";
+    const firstNameForName =
+      uForName.first_name ??
+      uForName.firstname ??
+      uForName.firstName ??
+      uForName.fname ??
+      "";
+    const lastNameForName =
+      uForName.last_name ??
+      uForName.lastname ??
+      uForName.lastName ??
+      uForName.lname ??
+      "";
     let resolvedUserName = "User";
     if (firstNameForName || lastNameForName) {
-      resolvedUserName = `${(firstNameForName || "").trim()} ${(lastNameForName || "").trim()}`.trim();
+      resolvedUserName =
+        `${(firstNameForName || "").trim()} ${(lastNameForName || "").trim()}`.trim();
     } else if (uForName.name) {
       resolvedUserName = uForName.name;
     } else if (uForName.login) {

@@ -558,36 +558,28 @@ export default function ManageTickets() {
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="flex flex-col items-center justify-center py-8">
+          <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-red-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  const isClosed =
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""));
-                  const sla = (t as any).sla_time;
-                  if (!sla) return false;
-                  const slaTs = new Date(sla).getTime();
-                  return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
-                }).length
-              }
+              {tickets.filter((t) => { const s = (t as any).status?.name || t.status; const isClosed = (t as any).status?.is_closed === true || /closed/i.test(String(s || "")); const sla = (t as any).sla_time; if (!sla) return false; const slaTs = new Date(sla).getTime(); return !isNaN(slaTs) && slaTs < Date.now() && !isClosed; }).length}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  const isClosed =
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""));
-                  const sla = (t as any).sla_time;
-                  if (!sla) return false;
-                  const slaTs = new Date(sla).getTime();
-                  return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
-                }),
-              )}
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; const isClosed = (t as any).status?.is_closed === true || /closed/i.test(String(s || "")); const sla = (t as any).sla_time; if (!sla) return false; const slaTs = new Date(sla).getTime(); return !isNaN(slaTs) && slaTs < Date.now() && !isClosed; }))}</p>
+
+            <ul className="mt-3 w-full px-4 space-y-2">
+              {tickets
+                .filter((t) => { const s = (t as any).status?.name || t.status; const isClosed = (t as any).status?.is_closed === true || /closed/i.test(String(s || "")); const sla = (t as any).sla_time; if (!sla) return false; const slaTs = new Date(sla).getTime(); return !isNaN(slaTs) && slaTs < Date.now() && !isClosed; })
+                .sort((a, b) => new Date(a.sla_time).getTime() - new Date(b.sla_time).getTime())
+                .slice(0, 3)
+                .map((t) => {
+                  const sinceMs = t.sla_time ? Date.now() - new Date(t.sla_time).getTime() : null;
+                  return (
+                    <li key={t.id} className="flex items-center justify-between text-sm">
+                      <span className="truncate mr-2">{t.subject}</span>
+                      <span className="font-medium text-red-600">Overdue {formatRemaining(-sinceMs)}</span>
+                    </li>
+                  );
+                })}
+            </ul>
           </CardContent>
         </Card>
       </div>

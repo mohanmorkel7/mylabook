@@ -276,6 +276,10 @@ export function MailConfigModal({
         priority_id: config.priority_id,
         assigned_to_id: config.assigned_to_id,
         watcher_user_ids: config.watcher_user_ids,
+        team_id: config.team_id,
+        bucket_id: config.bucket_id,
+        status_id: config.status_id,
+        demand: config.demand,
       };
 
       // Include user ID if available

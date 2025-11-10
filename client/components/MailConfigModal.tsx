@@ -577,17 +577,22 @@ export function MailConfigModal({
             <Label>Assigned To *</Label>
 
             <Select
-              value={config.assigned_to_id ? String(config.assigned_to_id) : "__none"}
+              value={
+                config.assigned_to_id ? String(config.assigned_to_id) : "__none"
+              }
               onValueChange={(v) =>
                 setConfig({
                   ...config,
-                  assigned_to_id: v && v !== "__none" ? parseInt(v, 10) : undefined,
+                  assigned_to_id:
+                    v && v !== "__none" ? parseInt(v, 10) : undefined,
                 })
               }
             >
               <SelectTrigger id="assigned_to">
                 <SelectValue>
-                  {assignedUser ? getUserName(assignedUser) : "Select assignee..."}
+                  {assignedUser
+                    ? getUserName(assignedUser)
+                    : "Select assignee..."}
                 </SelectValue>
               </SelectTrigger>
 

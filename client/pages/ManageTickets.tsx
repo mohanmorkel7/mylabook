@@ -403,8 +403,9 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">
-              In Progress
+            <p className="mt-2 text-sm font-medium text-gray-600">In Progress</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; return (/in progress/i.test(String(s || "")) || /in_progress/i.test(String(s || ""))); }))}
             </p>
           </CardContent>
         </Card>

@@ -99,24 +99,23 @@ export default function MailConfigs() {
   };
 
   interface User {
-  id: number;
-  name: string;
-  firstname: string;
-  lastname: string;
-  type: string;
-}
-
-const fetchUsers = async () => {
-  try {
-    const users = await api.get<User[]>("/users/list/mitra");
-setUsers(users || []);
-console.log("Users fetched:", users);
-
-  } catch (error) {
-    console.error("Error fetching users:", error);
+    id: number;
+    name: string;
+    firstname: string;
+    lastname: string;
+    type: string;
   }
-};
 
+  const fetchUsers = async () => {
+    try {
+      const resp = await api.get("/users");
+      const list = (resp && (resp.users || resp.data || resp)) || [];
+      setUsers(list as User[]);
+      console.log("Users fetched:", list);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  };
 
   const handleCreateNew = () => {
     setSelectedConfig(null);
@@ -200,16 +199,18 @@ console.log("Users fetched:", users);
 
   const getAssignedUserName = (userId: number): string => {
     console.log("Assigned userId:", userId);
-console.log("All user IDs:", users.map(u => u.id));
-  const user = users.find((u) => Number(u.id) === Number(userId));
-  if (!user) return "Unknown";
-  if (user.name?.trim()) return user.name.trim();
-  if (user.firstname && user.lastname) {
-    return `${user.firstname} ${user.lastname}`;
-  }
-  return "Unknown";
-};
-
+    console.log(
+      "All user IDs:",
+      users.map((u) => u.id),
+    );
+    const user = users.find((u) => Number(u.id) === Number(userId));
+    if (!user) return "Unknown";
+    if (user.name?.trim()) return user.name.trim();
+    if (user.firstname && user.lastname) {
+      return `${user.firstname} ${user.lastname}`;
+    }
+    return "Unknown";
+  };
 
   return (
     <div className="p-6">

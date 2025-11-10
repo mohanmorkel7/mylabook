@@ -109,15 +109,9 @@ export function MailConfigModal({
     (async () => {
       try {
         if (!initialUsers || initialUsers.length === 0) {
-          // Try the general users endpoint first
-          let res = await api.get("/users").catch(() => null);
-
-          // If the general endpoint returned no usable list, try mitra list
-          if (!Array.isArray(res) || res.length === 0) {
-            res = await api.get("/users/list/mitra").catch(() => null);
-          }
-
-          if (Array.isArray(res) && res.length > 0) setUsers(res as any);
+          const resp = await api.get("/users");
+          const list = (resp && (resp.users || resp.data || resp)) || [];
+          if (Array.isArray(list) && list.length > 0) setUsers(list as any);
         }
       } catch (e) {
         console.warn("Failed to fetch users for mail config modal", e);

@@ -178,17 +178,11 @@ export default function Mails() {
     // Fetch mitra users for mail config
     const fetchUsers = async () => {
       try {
-        const response = await api.get("/users/list/mitra");
-        setUsers(response.data || []);
+        const resp = await api.get("/users");
+        const list = (resp && (resp.users || resp.data || resp)) || [];
+        setUsers(list as User[]);
       } catch (error) {
-        console.warn("Failed to fetch mitra users:", error);
-        // Fallback to regular users
-        try {
-          const fallbackResponse = await api.get("/users");
-          setUsers(fallbackResponse.data || []);
-        } catch (fallbackError) {
-          console.warn("Failed to fetch users:", fallbackError);
-        }
+        console.warn("Failed to fetch users:", error);
       }
     };
 
@@ -241,7 +235,8 @@ export default function Mails() {
           console.log(
             "Triggering periodic email processing with",
             emails.length,
-            "emails",emails
+            "emails",
+            emails,
           );
           const resp = await api.post("/mail-configs/process-emails", {
             emails,

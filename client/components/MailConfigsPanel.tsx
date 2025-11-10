@@ -94,9 +94,10 @@ export function MailConfigsPanel({
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get<User[]>("/users/list/mitra");
-      console.log("Fetched users:", response);
-      setUsers(response || []);
+      const resp = await api.get("/users");
+      const list = (resp && (resp.users || resp.data || resp)) || [];
+      console.log("Fetched users:", list);
+      setUsers(list as User[]);
     } catch (error) {
       console.error("Error fetching users:", error);
       toast({

@@ -347,13 +347,12 @@ export default function ManageTickets() {
 
   const formatRemaining = (ms: number | null) => {
     if (ms === null) return "No SLA";
-    if (ms <= 0) return "Overdue";
+    if (ms <= 0) return "00:00:00";
     const total = Math.max(0, Math.floor(ms / 1000));
     const hours = Math.floor(total / 3600);
     const minutes = Math.floor((total % 3600) / 60);
     const seconds = total % 60;
-    if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
-    return `${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   };
 
   const markOverdue = async (ticket: any) => {

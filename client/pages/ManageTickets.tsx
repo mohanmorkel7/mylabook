@@ -554,18 +554,9 @@ export default function ManageTickets() {
                   return (
                     <li
                       key={t.id}
-                      className="flex items-center justify-between text-sm"
+                      className="text-sm"
                     >
-                      <span className="truncate mr-2">{t.subject}</span>
-                      <span
-                        className={`font-medium ${slaMs !== null && slaMs <= 0 ? "text-red-600" : "text-gray-700"}`}
-                      >
-                        {slaMs === null
-                          ? "No SLA"
-                          : slaMs <= 0
-                            ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                            : `${formatRemaining(slaMs)} hours remaining`}
-                      </span>
+                      <span className="truncate">{t.subject}</span>
                     </li>
                   );
                 })}
@@ -614,18 +605,9 @@ export default function ManageTickets() {
                   return (
                     <li
                       key={t.id}
-                      className="flex items-center justify-between text-sm"
+                      className="text-sm"
                     >
-                      <span className="truncate mr-2">{t.subject}</span>
-                      <span
-                        className={`font-medium ${slaMs !== null && slaMs <= 0 ? "text-red-600" : "text-gray-700"}`}
-                      >
-                        {slaMs === null
-                          ? "No SLA"
-                          : slaMs <= 0
-                            ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                            : `${formatRemaining(slaMs)} hours remaining`}
-                      </span>
+                      <span className="truncate">{t.subject}</span>
                     </li>
                   );
                 })}
@@ -666,18 +648,9 @@ export default function ManageTickets() {
                   return (
                     <li
                       key={t.id}
-                      className="flex items-center justify-between text-sm"
+                      className="text-sm"
                     >
-                      <span className="truncate mr-2">{t.subject}</span>
-                      <span
-                        className={`font-medium ${slaMs !== null && slaMs <= 0 ? "text-red-600" : "text-gray-700"}`}
-                      >
-                        {slaMs === null
-                          ? "No SLA"
-                          : slaMs <= 0
-                            ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                            : `${formatRemaining(slaMs)} hours remaining`}
-                      </span>
+                      <span className="truncate">{t.subject}</span>
                     </li>
                   );
                 })}
@@ -745,12 +718,9 @@ export default function ManageTickets() {
                   return (
                     <li
                       key={t.id}
-                      className="flex items-center justify-between text-sm"
+                      className="text-sm"
                     >
-                      <span className="truncate mr-2">{t.subject}</span>
-                      <span className="font-medium text-red-600">
-                        Overdue {formatRemaining(sinceMs)}
-                      </span>
+                      <span className="truncate">{t.subject}</span>
                     </li>
                   );
                 })}

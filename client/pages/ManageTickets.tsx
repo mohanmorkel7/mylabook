@@ -353,7 +353,8 @@ export default function ManageTickets() {
     if (!ts) return null;
     try {
       // If string already contains timezone info or 'Z', parse directly
-      if (/[Tt].*Z$/.test(ts) || /[+\-]\d{2}:\d{2}$/.test(ts)) return new Date(ts);
+      if (/[Tt].*Z$/.test(ts) || /[+\-]\d{2}:\d{2}$/.test(ts))
+        return new Date(ts);
       const iso = ts.includes("T") ? ts : ts.replace(" ", "T");
       return new Date(iso + "Z");
     } catch (e) {
@@ -934,37 +935,35 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Created</p>
                               <p className="font-medium mt-1">
-                                {parseTimestampAsUTC(ticket.created_at).toLocaleString(
-                                  "en-GB",
-                                  {
-                                    timeZone: "Asia/Kolkata",
-                                    year: "numeric",
-                                    month: "2-digit",
-                                    day: "2-digit",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    second: "2-digit",
-                                    hour12: true,
-                                  },
-                                )}
+                                {parseTimestampAsUTC(
+                                  ticket.created_at,
+                                ).toLocaleString("en-GB", {
+                                  timeZone: "Asia/Kolkata",
+                                  year: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                })}
                               </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Updated</p>
                               <p className="font-medium mt-1">
-                                {parseTimestampAsUTC(ticket.updated_at).toLocaleString(
-                                  "en-GB",
-                                  {
-                                    timeZone: "Asia/Kolkata",
-                                    year: "numeric",
-                                    month: "2-digit",
-                                    day: "2-digit",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    second: "2-digit",
-                                    hour12: true,
-                                  },
-                                )}
+                                {parseTimestampAsUTC(
+                                  ticket.updated_at,
+                                ).toLocaleString("en-GB", {
+                                  timeZone: "Asia/Kolkata",
+                                  year: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                })}
                               </p>
                             </div>
                             <div>
@@ -1085,19 +1084,18 @@ export default function ManageTickets() {
                           <div>
                             <p className="text-gray-600">Created</p>
                             <p className="font-medium mt-1">
-                              {parseTimestampAsUTC(ticket.created_at).toLocaleString(
-                                "en-GB",
-                                {
-                                  timeZone: "Asia/Kolkata",
-                                  year: "numeric",
-                                  month: "2-digit",
-                                  day: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                  hour12: true,
-                                },
-                              )}
+                              {parseTimestampAsUTC(
+                                ticket.created_at,
+                              ).toLocaleString("en-GB", {
+                                timeZone: "Asia/Kolkata",
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                                hour12: true,
+                              })}
                             </p>
                           </div>
                         </div>

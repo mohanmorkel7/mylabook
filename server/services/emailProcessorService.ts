@@ -4,10 +4,6 @@ import {
   Email,
   MailConfig,
 } from "./emailMatchingService";
-import {
-  createTicketInMitra,
-  validateConfigForMitra,
-} from "./mitraTicketService";
 
 export interface ProcessingResult {
   processed: number;

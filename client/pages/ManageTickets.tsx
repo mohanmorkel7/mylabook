@@ -552,10 +552,7 @@ export default function ManageTickets() {
                     markOverdue(t);
                   }
                   return (
-                    <li
-                      key={t.id}
-                      className="text-sm"
-                    >
+                    <li key={t.id} className="text-sm">
                       <span className="truncate">{t.subject}</span>
                     </li>
                   );
@@ -603,10 +600,7 @@ export default function ManageTickets() {
                     markOverdue(t);
                   }
                   return (
-                    <li
-                      key={t.id}
-                      className="text-sm"
-                    >
+                    <li key={t.id} className="text-sm">
                       <span className="truncate">{t.subject}</span>
                     </li>
                   );
@@ -646,10 +640,7 @@ export default function ManageTickets() {
                     markOverdue(t);
                   }
                   return (
-                    <li
-                      key={t.id}
-                      className="text-sm"
-                    >
+                    <li key={t.id} className="text-sm">
                       <span className="truncate">{t.subject}</span>
                     </li>
                   );
@@ -716,10 +707,7 @@ export default function ManageTickets() {
                         ? Math.abs(computed)
                         : null;
                   return (
-                    <li
-                      key={t.id}
-                      className="text-sm"
-                    >
+                    <li key={t.id} className="text-sm">
                       <span className="truncate">{t.subject}</span>
                     </li>
                   );

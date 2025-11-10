@@ -146,7 +146,45 @@ export default function TicketDetails({
       updated_by: currentUser?.id || "1",
     };
 
+    // Check if ticket is currently overdue and status is being changed
+    try {
+      const sla = ticket.sla_time;
+      const isClosed = ticket.status?.is_closed === true || /closed/i.test(String(ticket.status?.name || ""));
+      const isOverdue = sla && !isClosed && new Date(sla).getTime() < Date.now();
+      const newStatusId = updateData.status_id;
+      if (isOverdue && newStatusId && newStatusId !== ticket.status_id) {
+        // Require reason via modal
+        setShowReasonDialog(true);
+        return;
+      }
+    } catch (e) {
+      // ignore
+    }
+
     updateTicketMutation.mutate(updateData);
+  };
+
+  const handleConfirmReason = () => {
+    const updateData = {
+      ...editForm,
+      priority_id: editForm.priority_id
+        ? parseInt(editForm.priority_id)
+        : undefined,
+      status_id: editForm.status_id ? parseInt(editForm.status_id) : undefined,
+      category_id: editForm.category_id
+        ? parseInt(editForm.category_id)
+        : undefined,
+      assigned_to:
+        editForm.assigned_to && editForm.assigned_to !== "unassigned"
+          ? parseInt(editForm.assigned_to)
+          : undefined,
+      updated_by: currentUser?.id || "1",
+      reason: reasonText,
+    };
+
+    updateTicketMutation.mutate(updateData);
+    setShowReasonDialog(false);
+    setReasonText("");
   };
 
   const handleAddComment = (

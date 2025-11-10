@@ -252,7 +252,14 @@ export class TicketRepository {
           const demandHoursMap: Record<number, number> = { 0: 2, 1: 5, 2: 24 };
           hours = demandHoursMap[Number(demand)];
         } else if (priority_id !== undefined && priority_id !== null) {
-          const PRIORITY_SLA_HOURS: Record<number, number> = { 0: 2, 1: 5, 2: 24, 3: 8, 4: 24, 5: 48 };
+          const PRIORITY_SLA_HOURS: Record<number, number> = {
+            0: 2,
+            1: 5,
+            2: 24,
+            3: 8,
+            4: 24,
+            5: 48,
+          };
           hours = PRIORITY_SLA_HOURS[Number(priority_id)] ?? null;
         }
         if (hours !== null && !isNaN(Number(hours))) {

@@ -56,6 +56,10 @@ export interface UpdateMailConfigData {
   priority_id?: number;
   assigned_to_id?: number;
   watcher_user_ids?: number[];
+  team_id?: number;
+  bucket_id?: number;
+  status_id?: number;
+  demand?: number;
   is_active?: boolean;
 }
 

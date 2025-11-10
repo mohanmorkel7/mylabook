@@ -383,11 +383,9 @@ export default function ManageTickets() {
   // Otherwise, fallback to created_at + priority-based SLA hours.
   const computeSlaMsForTicket = (ticket: any): number | null => {
     try {
-      const IST_OFFSET_MS = 5.5 * 3600 * 1000;
-
       if (ticket.sla_time) {
         const parsed = parseTimestampAsUTC(ticket.sla_time);
-        const ts = parsed ? parsed.getTime() + IST_OFFSET_MS : NaN;
+        const ts = parsed ? parsed.getTime() : NaN;
         if (isNaN(ts)) return null;
         return ts - Date.now();
       }
@@ -408,7 +406,7 @@ export default function ManageTickets() {
       const hours = PRIORITY_SLA_HOURS[pr];
       if (hours === undefined || hours === null) return null;
       const createdTs = ticket.created_at
-        ? parseTimestampAsUTC(ticket.created_at).getTime() + IST_OFFSET_MS
+        ? parseTimestampAsUTC(ticket.created_at).getTime()
         : NaN;
       if (isNaN(createdTs)) return null;
       const slaTs = createdTs + hours * 3600 * 1000;

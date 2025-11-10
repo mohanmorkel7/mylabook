@@ -1254,7 +1254,7 @@ export default function ManageTickets() {
                           <div>
                             <p className="text-gray-600">Created</p>
                             <p className="font-medium mt-1">
-                              {new Date(ticket.created_at).toLocaleDateString()}
+                              {new Date(ticket.created_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
                             </p>
                           </div>
                         </div>

@@ -460,11 +460,10 @@ export default function ManageTickets() {
   };
 
   const nextSlaInfo = React.useMemo(() => {
-    const IST_OFFSET_MS = 5.5 * 3600 * 1000;
     const withSla = tickets
       .map((t) =>
         t.sla_time
-          ? { ...t, slaTs: (parseTimestampAsUTC(t.sla_time)?.getTime() ?? null) + IST_OFFSET_MS }
+          ? { ...t, slaTs: parseTimestampAsUTC(t.sla_time)?.getTime() ?? null }
           : null,
       )
       .filter((x) => x && x.slaTs !== null) as any[];

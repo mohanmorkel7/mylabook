@@ -356,7 +356,7 @@ export default function ManageTickets() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-3xl md:text-4xl font-extrabold text-indigo-600">
+            <p className="text-2xl md:text-3xl font-bold text-indigo-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -370,7 +370,7 @@ export default function ManageTickets() {
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-3xl md:text-4xl font-extrabold text-orange-500">
+            <p className="text-2xl md:text-3xl font-bold text-orange-500">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -387,7 +387,7 @@ export default function ManageTickets() {
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-3xl md:text-4xl font-extrabold text-yellow-600">
+            <p className="text-2xl md:text-3xl font-bold text-yellow-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -401,7 +401,7 @@ export default function ManageTickets() {
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-3xl md:text-4xl font-extrabold text-green-600">
+            <p className="text-2xl md:text-3xl font-bold text-green-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -418,7 +418,7 @@ export default function ManageTickets() {
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-3xl md:text-4xl font-extrabold text-red-600">
+            <p className="text-2xl md:text-3xl font-bold text-red-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;

@@ -526,10 +526,15 @@ router.post(
           for (const file of req.files) {
             try {
               // Compute safe names so primary insert succeeds even if multer fields are missing
-              const originalNamePrim = (file && (file.originalname || file.filename)) || "attachment";
+              const originalNamePrim =
+                (file && (file.originalname || file.filename)) || "attachment";
               const extPrim = path.extname(originalNamePrim) || "";
-              const basePrim = file && file.filename ? file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
-              const safeFilenamePrim = String(basePrim).slice(0, 255) + (extPrim ? extPrim : "");
+              const basePrim =
+                file && file.filename
+                  ? file.filename
+                  : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+              const safeFilenamePrim =
+                String(basePrim).slice(0, 255) + (extPrim ? extPrim : "");
               const safeOriginalPrim = String(originalNamePrim).slice(0, 255);
               const safeFilePathPrim = `/uploads/tickets/${safeFilenamePrim}`;
 
@@ -956,10 +961,16 @@ router.post(
           }
 
           // Compute safe names for primary insert
-          const originalNamePrim2 = (req.file && (req.file.originalname || req.file.filename)) || "attachment";
+          const originalNamePrim2 =
+            (req.file && (req.file.originalname || req.file.filename)) ||
+            "attachment";
           const extPrim2 = path.extname(originalNamePrim2) || "";
-          const basePrim2 = req.file && req.file.filename ? req.file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
-          const safeFilenamePrim2 = String(basePrim2).slice(0, 255) + (extPrim2 ? extPrim2 : "");
+          const basePrim2 =
+            req.file && req.file.filename
+              ? req.file.filename
+              : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+          const safeFilenamePrim2 =
+            String(basePrim2).slice(0, 255) + (extPrim2 ? extPrim2 : "");
           const safeOriginalPrim2 = String(originalNamePrim2).slice(0, 255);
           const safeFilePathPrim2 = `/uploads/tickets/${safeFilenamePrim2}`;
 

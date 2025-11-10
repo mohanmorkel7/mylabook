@@ -644,7 +644,7 @@ export function MailConfigModal({
                     onValueChange={setSearchWatchers}
                   />
                   <CommandEmpty>No user found.</CommandEmpty>
-                  <CommandList className="max-h-48">
+                  <CommandList className="max-h-64">
                     <CommandGroup>
                       {filteredWatchers.map((user) => (
                         <CommandItem

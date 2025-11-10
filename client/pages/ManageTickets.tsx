@@ -381,7 +381,9 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">In Progress</p>
+            <p className="mt-2 text-sm font-medium text-gray-600">
+              In Progress
+            </p>
           </CardContent>
         </Card>
 

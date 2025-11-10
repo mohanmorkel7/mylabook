@@ -690,18 +690,140 @@ export class TicketRepository {
     parentCommentId?: number,
     mentions?: string[],
   ): Promise<TicketComment> {
-    // Try primary insert (content column). If schema uses 'comment' and 'user_name', fall back.
+    // Helper to get available columns for ticket_comments (cached)
+    const getAvailableCommentColumns = async (): Promise<Set<string>> => {
+      // Cache on the function object
+      const anyThis: any = this as any;
+      if (!anyThis._ticketCommentColumns) {
+        const res = await pool.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_name = 'ticket_comments'",
+        );
+        anyThis._ticketCommentColumns = new Set(res.rows.map((r: any) => r.column_name));
+      }
+      return anyThis._ticketCommentColumns;
+    };
+
+    const columns = await getAvailableCommentColumns();
+
+    // Try to build primary insert using the preferred schema
+    const tryPrimaryInsert = async () => {
+      const cols: string[] = [];
+      const vals: any[] = [];
+      const placeholders: string[] = [];
+      let idx = 1;
+
+      // Always include ticket_id and user_id
+      cols.push("ticket_id");
+      vals.push(ticketId);
+      placeholders.push(`$${idx++}`);
+
+      cols.push("user_id");
+      vals.push(userId);
+      placeholders.push(`$${idx++}`);
+
+      if (columns.has("content")) {
+        cols.push("content");
+        vals.push(content);
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("is_internal")) {
+        cols.push("is_internal");
+        vals.push(isInternal);
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("parent_comment_id") && parentCommentId !== undefined) {
+        cols.push("parent_comment_id");
+        vals.push(parentCommentId);
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("mentions") && mentions !== undefined) {
+        cols.push("mentions");
+        vals.push(mentions);
+        placeholders.push(`$${idx++}`);
+      }
+
+      const sql = `INSERT INTO ticket_comments (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+      const res = await pool.query(sql, vals);
+      return res.rows[0];
+    };
+
+    // Fallback insert for alternate schema that uses 'comment' and 'user_name'
+    const tryFallbackInsert = async () => {
+      // Build user name
+      const uRes = await pool.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [userId]);
+      const u = uRes.rows[0] || {};
+      const firstName = u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
+      const lastName = u.last_name ?? u.lastname ?? u.lastName ?? u.lname ?? "";
+      let userName = "User";
+      if (firstName || lastName) {
+        userName = `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
+      } else if (u.name) {
+        userName = u.name;
+      } else if (u.login) {
+        userName = u.login;
+      }
+
+      const cols: string[] = [];
+      const vals: any[] = [];
+      const placeholders: string[] = [];
+      let idx = 1;
+
+      cols.push("ticket_id");
+      vals.push(ticketId);
+      placeholders.push(`$${idx++}`);
+
+      cols.push("user_id");
+      vals.push(userId);
+      placeholders.push(`$${idx++}`);
+
+      if (columns.has("user_name")) {
+        cols.push("user_name");
+        vals.push(userName);
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("comment")) {
+        cols.push("comment");
+        vals.push(content);
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("comment_type")) {
+        cols.push("comment_type");
+        vals.push("comment");
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("is_internal")) {
+        cols.push("is_internal");
+        vals.push(isInternal);
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("parent_comment_id") && parentCommentId !== undefined) {
+        cols.push("parent_comment_id");
+        vals.push(parentCommentId);
+        placeholders.push(`$${idx++}`);
+      }
+
+      if (columns.has("mentions") && mentions !== undefined) {
+        cols.push("mentions");
+        vals.push(mentions);
+        placeholders.push(`$${idx++}`);
+      }
+
+      const sql = `INSERT INTO ticket_comments (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+      const res = await pool.query(sql, vals);
+      return res.rows[0];
+    };
+
+    // Try primary, then fallback
     try {
-      const result = await pool.query(
-        `INSERT INTO ticket_comments (ticket_id, user_id, content, is_internal, parent_comment_id, mentions)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [ticketId, userId, content, isInternal, parentCommentId, mentions],
-      );
+      const comment = await tryPrimaryInsert();
 
-      const comment = result.rows[0];
-
-      // Log activity
       await this.logActivity(
         ticketId,
         userId,
@@ -711,7 +833,6 @@ export class TicketRepository {
         "Comment added",
       );
 
-      // Create notifications for mentions
       if (mentions && mentions.length > 0) {
         const ticket = await this.getById(ticketId);
         for (const mention of mentions) {
@@ -729,47 +850,11 @@ export class TicketRepository {
       }
 
       return await this.getCommentById(comment.id);
-    } catch (err: any) {
-      // If column doesn't exist (content), try fallback schema that uses 'comment' and 'user_name'
-      if (err && err.code === "42703") {
+    } catch (primaryErr: any) {
+      // If it's a missing column error, try fallback insert
+      if (primaryErr && primaryErr.code === "42703") {
         try {
-          // Fetch user row and normalize name fields for different schemas
-          const uRes = await pool.query(
-            "SELECT * FROM users WHERE id = $1 LIMIT 1",
-            [userId],
-          );
-          const u = uRes.rows[0] || {};
-          const firstName =
-            u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
-          const lastName =
-            u.last_name ?? u.lastname ?? u.lastName ?? u.lname ?? "";
-          let userName = "User";
-          if (firstName || lastName) {
-            userName =
-              `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
-          } else if (u.name) {
-            userName = u.name;
-          } else if (u.login) {
-            userName = u.login;
-          }
-
-          const result2 = await pool.query(
-            `INSERT INTO ticket_comments (ticket_id, user_id, user_name, comment, comment_type, is_internal, parent_comment_id, mentions)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             RETURNING *`,
-            [
-              ticketId,
-              userId,
-              userName,
-              content,
-              "comment",
-              isInternal,
-              parentCommentId,
-              mentions,
-            ],
-          );
-
-          const comment2 = result2.rows[0];
+          const comment2 = await tryFallbackInsert();
 
           await this.logActivity(
             ticketId,
@@ -804,7 +889,7 @@ export class TicketRepository {
       }
 
       // Unknown error - rethrow
-      throw err;
+      throw primaryErr;
     }
   }
 

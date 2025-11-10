@@ -390,20 +390,31 @@ export default function ManageTickets() {
   };
 
   // Compute SLA remaining ms for a ticket. If ticket.sla_time exists, use it.
-  // Otherwise, fallback to created_at + priority-based SLA hours.
+  // Otherwise, fallback to created_at + priority-based SLA hours. Adjust server-provided
+  // sla_remaining_ms dynamically so it counts down on the client.
   const computeSlaMsForTicket = (ticket: any): number | null => {
     try {
+      // If server provided a precomputed remaining ms, adjust it based on elapsed time since server computed it
       if (
         ticket.sla_remaining_ms !== undefined &&
         ticket.sla_remaining_ms !== null
       ) {
-        return Number(ticket.sla_remaining_ms);
+        const serverTimeMs = ticket.__server_time_ms ?? null;
+        if (serverTimeMs) {
+          const elapsedSinceServer = Date.now() - serverTimeMs;
+          return Number(ticket.sla_remaining_ms) - elapsedSinceServer;
+        }
+        // Fallback to using client fetch timestamp if server time not available
+        const fetchedAt = ticket.__fetched_at_ms ?? Date.now();
+        const elapsedSinceFetch = Date.now() - fetchedAt;
+        return Number(ticket.sla_remaining_ms) - elapsedSinceFetch;
       }
+
       if (ticket.sla_time) {
         const parsed = parseTimestampAsUTC(ticket.sla_time);
         const ts = parsed ? parsed.getTime() : NaN;
         if (isNaN(ts)) return null;
-        // Fallback: compute relative to server offset
+        // Adjust relative to server offset so client and server agree on remaining time
         return ts - (Date.now() - serverTimeOffsetRef.current);
       }
 

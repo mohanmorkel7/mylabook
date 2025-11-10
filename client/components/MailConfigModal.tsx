@@ -101,8 +101,47 @@ export function MailConfigModal({
   const { toast } = useToast();
 
   useEffect(() => {
-  setUsers(initialUsers);
-}, [initialUsers]);
+    setUsers(initialUsers);
+  }, [initialUsers]);
+
+  // Fetch users if not provided by parent
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!initialUsers || initialUsers.length === 0) {
+          const res = await api.get("/users");
+          if (Array.isArray(res)) setUsers(res);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch users for mail config modal", e);
+      }
+    })();
+  }, [initialUsers]);
+
+  // Metadata for teams, buckets, statuses
+  const [teams, setTeams] = useState<Array<any>>([]);
+  const [buckets, setBuckets] = useState<Array<any>>([]);
+  const [statuses, setStatuses] = useState<Array<any>>([]);
+  const [demands] = useState<Array<{ id: number; label: string }>>([
+    { id: 0, label: "2 hours" },
+    { id: 1, label: "5 hours" },
+    { id: 2, label: "24 hours" },
+  ]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const meta = await api.get("/tickets/metadata");
+        if (meta) {
+          setTeams(meta.teams || []);
+          setBuckets(meta.buckets || []);
+          setStatuses(meta.statuses || []);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch metadata for mail config modal", e);
+      }
+    })();
+  }, []);
 
   const [searchAssignee, setSearchAssignee] = useState("");
 

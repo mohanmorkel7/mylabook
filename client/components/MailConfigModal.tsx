@@ -615,7 +615,9 @@ export function MailConfigModal({
                         .toLowerCase()
                         .includes(searchAssignee.toLowerCase()),
                     )
-                    .sort((a, b) => getUserName(a).localeCompare(getUserName(b)))
+                    .sort((a, b) =>
+                      getUserName(a).localeCompare(getUserName(b)),
+                    )
                     .map((u) => (
                       <SelectItem key={u.id} value={String(u.id)}>
                         {getUserName(u)}

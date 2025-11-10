@@ -553,10 +553,16 @@ router.post(
               // Attempt fallback schema (uploaded_by, file_name)
               try {
                 // Ensure we always have a safe non-empty file name and path
-                const originalName = (file && (file.originalname || file.filename)) || "attachment";
+                const originalName =
+                  (file && (file.originalname || file.filename)) ||
+                  "attachment";
                 const ext = path.extname(originalName) || "";
-                const safeBase = file && file.filename ? file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
-                const safeFileName = String(safeBase).slice(0, 255) + (ext ? ext : "");
+                const safeBase =
+                  file && file.filename
+                    ? file.filename
+                    : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+                const safeFileName =
+                  String(safeBase).slice(0, 255) + (ext ? ext : "");
                 const safeFilePath = `/uploads/tickets/${safeFileName}`;
                 await pool.query(
                   `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
@@ -992,10 +998,16 @@ router.post(
             }
 
             // Ensure we always have a safe non-empty file name and path for single-file upload
-            const originalName2 = (req.file && (req.file.originalname || req.file.filename)) || "attachment";
+            const originalName2 =
+              (req.file && (req.file.originalname || req.file.filename)) ||
+              "attachment";
             const ext2 = path.extname(originalName2) || "";
-            const safeBase2 = req.file && req.file.filename ? req.file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
-            const safeFileName = String(safeBase2).slice(0, 255) + (ext2 ? ext2 : "");
+            const safeBase2 =
+              req.file && req.file.filename
+                ? req.file.filename
+                : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            const safeFileName =
+              String(safeBase2).slice(0, 255) + (ext2 ? ext2 : "");
             const safeFilePath = `/uploads/tickets/${safeFileName}`;
             const insertRes2 = await pool.query(
               `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)

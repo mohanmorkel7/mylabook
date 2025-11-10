@@ -459,6 +459,26 @@ export default function TicketDetails({
           </Card>
         </TabsContent>
 
+        {/* Reason Dialog for changing status of overdue ticket */}
+        <Dialog open={showReasonDialog} onOpenChange={setShowReasonDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Reason required</DialogTitle>
+              <p className="text-sm text-gray-600 mt-2">You are changing the status of an overdue ticket. Please provide a reason for this change.</p>
+            </DialogHeader>
+
+            <div className="p-4">
+              <Label>Reason</Label>
+              <Textarea value={reasonText} onChange={(e) => setReasonText(e.target.value)} rows={4} />
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowReasonDialog(false)}>Cancel</Button>
+              <Button onClick={handleConfirmReason} className="ml-2">Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <TabsContent value="comments" className="space-y-4">
           {/* Add Comment with Rich Text Editor */}
           <div>

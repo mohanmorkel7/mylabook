@@ -421,6 +421,9 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; return /pending/i.test(String(s || "")); }))}
+            </p>
           </CardContent>
         </Card>
 

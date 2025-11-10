@@ -533,31 +533,6 @@ export default function ManageTickets() {
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
 
-            <ul className="mt-3 w-full px-4 space-y-2">
-              {tickets
-                .filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /open/i.test(String(s || ""));
-                })
-                .filter((t) => computeSlaMsForTicket(t) !== null)
-                .sort(
-                  (a, b) =>
-                    (computeSlaMsForTicket(a) ?? Infinity) -
-                    (computeSlaMsForTicket(b) ?? Infinity),
-                )
-                .slice(0, 3)
-                .map((t) => {
-                  const slaMs = computeSlaMsForTicket(t);
-                  if (slaMs !== null && slaMs <= 0) {
-                    markOverdue(t);
-                  }
-                  return (
-                    <li key={t.id} className="text-sm">
-                      <span className="truncate">{t.subject}</span>
-                    </li>
-                  );
-                })}
-            </ul>
           </CardContent>
         </Card>
 
@@ -578,34 +553,6 @@ export default function ManageTickets() {
               In Progress
             </p>
 
-            <ul className="mt-3 w-full px-4 space-y-2">
-              {tickets
-                .filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    /in progress/i.test(String(s || "")) ||
-                    /in_progress/i.test(String(s || ""))
-                  );
-                })
-                .filter((t) => computeSlaMsForTicket(t) !== null)
-                .sort(
-                  (a, b) =>
-                    (computeSlaMsForTicket(a) ?? Infinity) -
-                    (computeSlaMsForTicket(b) ?? Infinity),
-                )
-                .slice(0, 3)
-                .map((t) => {
-                  const slaMs = computeSlaMsForTicket(t);
-                  if (slaMs !== null && slaMs <= 0) {
-                    markOverdue(t);
-                  }
-                  return (
-                    <li key={t.id} className="text-sm">
-                      <span className="truncate">{t.subject}</span>
-                    </li>
-                  );
-                })}
-            </ul>
           </CardContent>
         </Card>
 
@@ -621,31 +568,6 @@ export default function ManageTickets() {
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
 
-            <ul className="mt-3 w-full px-4 space-y-2">
-              {tickets
-                .filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /pending/i.test(String(s || ""));
-                })
-                .filter((t) => computeSlaMsForTicket(t) !== null)
-                .sort(
-                  (a, b) =>
-                    (computeSlaMsForTicket(a) ?? Infinity) -
-                    (computeSlaMsForTicket(b) ?? Infinity),
-                )
-                .slice(0, 3)
-                .map((t) => {
-                  const slaMs = computeSlaMsForTicket(t);
-                  if (slaMs !== null && slaMs <= 0) {
-                    markOverdue(t);
-                  }
-                  return (
-                    <li key={t.id} className="text-sm">
-                      <span className="truncate">{t.subject}</span>
-                    </li>
-                  );
-                })}
-            </ul>
           </CardContent>
         </Card>
 
@@ -682,37 +604,6 @@ export default function ManageTickets() {
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
 
-            <ul className="mt-3 w-full px-4 space-y-2">
-              {tickets
-                .filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  const isClosed =
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""));
-                  const computed = computeSlaMsForTicket(t);
-                  return computed !== null && computed < 0 && !isClosed;
-                })
-                .sort(
-                  (a, b) =>
-                    (computeSlaMsForTicket(a) ?? Infinity) -
-                    (computeSlaMsForTicket(b) ?? Infinity),
-                )
-                .slice(0, 3)
-                .map((t) => {
-                  const computed = computeSlaMsForTicket(t);
-                  const sinceMs =
-                    computed === null
-                      ? null
-                      : computed <= 0
-                        ? Math.abs(computed)
-                        : null;
-                  return (
-                    <li key={t.id} className="text-sm">
-                      <span className="truncate">{t.subject}</span>
-                    </li>
-                  );
-                })}
-            </ul>
           </CardContent>
         </Card>
       </div>

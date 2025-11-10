@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
+import { formatDistanceToNowStrict } from 'date-fns';
 
 interface Ticket {
   id: number;

@@ -141,6 +141,10 @@ router.post("/", async (req: Request, res: Response) => {
       priority_id,
       assigned_to_id,
       watcher_user_ids: watcher_user_ids || [],
+      team_id: team_id || null,
+      bucket_id: bucket_id || null,
+      status_id: status_id || null,
+      demand: demand !== undefined ? demand : null,
     };
 
     const config = await MailConfigRepository.create(data);

@@ -233,11 +233,11 @@ export class TicketRepository {
       custom_fields,
     } = ticketData;
 
-    // Compute SLA time on server (UTC) if not explicitly provided
+    // Compute SLA time: prefer client-provided explicit timestamp; otherwise use DB NOW()+interval (avoid server clock skew)
     let computedSlaValue: string | null = null;
+    let computedSlaExpression: string | null = null;
     try {
       const pad = (n: number) => String(n).padStart(2, "0");
-      // 1) If client provided explicit sla_time, use it
       if (sla_time) {
         const parsed = new Date(sla_time as string);
         if (!isNaN(parsed.getTime())) {
@@ -245,39 +245,26 @@ export class TicketRepository {
         } else {
           computedSlaValue = null;
         }
-      }
-      // 2) If demand (SLA) was explicitly selected in the form, respect it
-      else if (demand === 0 || demand === 1 || demand === 2) {
-        const demandHoursMap: Record<number, number> = { 0: 2, 1: 5, 2: 24 };
-        const hours = demandHoursMap[Number(demand)];
-        const d = new Date(Date.now() + hours * 3600 * 1000);
-        computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-      }
-      // 3) Otherwise fall back to priority mapping
-      else if (priority_id !== undefined && priority_id !== null) {
-        const PRIORITY_SLA_HOURS: Record<number, number> = {
-          0: 2, // Priority 0 -> 2 hours
-          1: 5, // Priority 1 -> 5 hours
-          2: 24, // Priority 2 -> 24 hours
-          3: 8,
-          4: 24,
-          5: 48,
-        };
-        const hours = PRIORITY_SLA_HOURS[Number(priority_id)];
-        if (hours !== undefined && !isNaN(Number(hours))) {
-          const d = new Date(Date.now() + hours * 3600 * 1000);
-          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-        } else {
-          computedSlaValue = null;
-        }
       } else {
-        computedSlaValue = null;
+        // Determine SLA hours from demand (preferred) or priority
+        let hours: number | null = null;
+        if (demand === 0 || demand === 1 || demand === 2) {
+          const demandHoursMap: Record<number, number> = { 0: 2, 1: 5, 2: 24 };
+          hours = demandHoursMap[Number(demand)];
+        } else if (priority_id !== undefined && priority_id !== null) {
+          const PRIORITY_SLA_HOURS: Record<number, number> = { 0: 2, 1: 5, 2: 24, 3: 8, 4: 24, 5: 48 };
+          hours = PRIORITY_SLA_HOURS[Number(priority_id)] ?? null;
+        }
+        if (hours !== null && !isNaN(Number(hours))) {
+          computedSlaExpression = `NOW() + INTERVAL '${hours} hours'`;
+        }
       }
     } catch (e) {
       computedSlaValue = null;
+      computedSlaExpression = null;
     }
 
-    // Build insert query and include sla_time as parameter if computed on server
+    // Build insert query; include sla_time either as parameter (computedSlaValue) or as SQL expression (computedSlaExpression)
     const cols = [
       "subject",
       "description",
@@ -314,13 +301,22 @@ export class TicketRepository {
       createdBy,
     ];
 
+    let insertSql = `INSERT INTO tickets (${cols.join(", ")}`;
     if (computedSlaValue) {
-      cols.push("sla_time");
+      insertSql += ", sla_time";
       values.push(computedSlaValue);
+    } else if (computedSlaExpression) {
+      insertSql += ", sla_time";
     }
-
+    insertSql += `) VALUES (`;
     const placeholders = cols.map((_, i) => `$${i + 1}`);
-    const insertSql = `INSERT INTO tickets (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+    insertSql += placeholders.join(", ");
+    if (computedSlaValue) {
+      insertSql += `, $${placeholders.length + 1}`;
+    } else if (computedSlaExpression) {
+      insertSql += `, ${computedSlaExpression}`;
+    }
+    insertSql += `) RETURNING *`;
 
     const result = await pool.query(insertSql, values);
 

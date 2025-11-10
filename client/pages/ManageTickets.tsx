@@ -722,6 +722,27 @@ export default function ManageTickets() {
                   </Card>
                 );
               })}
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-600">Page {currentPage} of {totalPages}</span>
+                <Button
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+              <div className="text-sm text-gray-600">{filteredTickets.length} items</div>
+            </div>
+
             </div>
           )}
         </>

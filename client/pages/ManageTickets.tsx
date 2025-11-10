@@ -791,9 +791,8 @@ export default function ManageTickets() {
                 )
                 .slice(0, 3)
                 .map((t) => {
-                  const sinceMs = t.sla_time
-                    ? Date.now() - new Date(t.sla_time).getTime()
-                    : null;
+                  const computed = computeSlaMsForTicket(t);
+                  const sinceMs = computed === null ? null : computed <= 0 ? Math.abs(computed) : null;
                   return (
                     <li
                       key={t.id}

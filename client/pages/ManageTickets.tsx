@@ -850,7 +850,7 @@ export default function ManageTickets() {
             </div>
           ) : filteredTickets.length === 0 ? (
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4">
                 <div className="text-center py-12">
                   <p className="text-gray-600 text-lg">
                     {tickets.length === 0
@@ -871,7 +871,7 @@ export default function ManageTickets() {
                     className="hover:shadow-lg transition-shadow cursor-pointer"
                     onClick={() => navigate(`/tickets/${ticket.id}`)}
                   >
-                    <CardContent className="pt-6">
+                    <CardContent className="pt-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
@@ -1057,7 +1057,7 @@ export default function ManageTickets() {
             </div>
           ) : createdTickets.length === 0 ? (
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4">
                 <div className="text-center py-12">
                   <p className="text-gray-600 text-lg">
                     No tickets created from email automation yet
@@ -1072,7 +1072,7 @@ export default function ManageTickets() {
                   key={ticket.id}
                   className="hover:shadow-lg transition-shadow"
                 >
-                  <CardContent className="pt-6">
+                  <CardContent className="pt-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">

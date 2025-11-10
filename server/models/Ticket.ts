@@ -470,7 +470,20 @@ export class TicketRepository {
       actual_hours: row.actual_hours,
       tags: row.tags,
       custom_fields: row.custom_fields,
-      sla_time: (() => { try { const s = row.sla_time; if (!s) return null; if (s instanceof Date) return s.toISOString(); const str = String(s); if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str; if (/\d{4}-\d{2}-\d{2} /.test(str)) return str.replace(' ', 'T') + 'Z'; return str; } catch(e){ return null;} })(),
+      sla_time: (() => {
+        try {
+          const s = row.sla_time;
+          if (!s) return null;
+          if (s instanceof Date) return s.toISOString();
+          const str = String(s);
+          if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
+          if (/\d{4}-\d{2}-\d{2} /.test(str))
+            return str.replace(" ", "T") + "Z";
+          return str;
+        } catch (e) {
+          return null;
+        }
+      })(),
       priority: row.priority_name
         ? {
             id: row.priority_id,
@@ -565,7 +578,20 @@ export class TicketRepository {
       actual_hours: row.actual_hours,
       tags: row.tags,
       custom_fields: row.custom_fields,
-      sla_time: (() => { try { const s = row.sla_time; if (!s) return null; if (s instanceof Date) return s.toISOString(); const str = String(s); if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str; if (/\d{4}-\d{2}-\d{2} /.test(str)) return str.replace(' ', 'T') + 'Z'; return str; } catch(e){ return null;} })(),
+      sla_time: (() => {
+        try {
+          const s = row.sla_time;
+          if (!s) return null;
+          if (s instanceof Date) return s.toISOString();
+          const str = String(s);
+          if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
+          if (/\d{4}-\d{2}-\d{2} /.test(str))
+            return str.replace(" ", "T") + "Z";
+          return str;
+        } catch (e) {
+          return null;
+        }
+      })(),
       priority: row.priority_name
         ? {
             id: row.priority_id,

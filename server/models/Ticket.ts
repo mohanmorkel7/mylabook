@@ -236,15 +236,25 @@ export class TicketRepository {
     // Compute SLA time on server (UTC) if not explicitly provided
     let computedSlaValue: string | null = null;
     try {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      // 1) If client provided explicit sla_time, use it
       if (sla_time) {
         const parsed = new Date(sla_time as string);
         if (!isNaN(parsed.getTime())) {
-          const pad = (n: number) => String(n).padStart(2, "0");
           computedSlaValue = `${parsed.getUTCFullYear()}-${pad(parsed.getUTCMonth() + 1)}-${pad(parsed.getUTCDate())} ${pad(parsed.getUTCHours())}:${pad(parsed.getUTCMinutes())}:${pad(parsed.getUTCSeconds())}`;
         } else {
           computedSlaValue = null;
         }
-      } else if (priority_id !== undefined && priority_id !== null) {
+      }
+      // 2) If demand (SLA) was explicitly selected in the form, respect it
+      else if (demand === 0 || demand === 1 || demand === 2) {
+        const demandHoursMap: Record<number, number> = { 0: 2, 1: 5, 2: 24 };
+        const hours = demandHoursMap[Number(demand)];
+        const d = new Date(Date.now() + hours * 3600 * 1000);
+        computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+      }
+      // 3) Otherwise fall back to priority mapping
+      else if (priority_id !== undefined && priority_id !== null) {
         const PRIORITY_SLA_HOURS: Record<number, number> = {
           0: 2, // Priority 0 -> 2 hours
           1: 5, // Priority 1 -> 5 hours
@@ -256,24 +266,12 @@ export class TicketRepository {
         const hours = PRIORITY_SLA_HOURS[Number(priority_id)];
         if (hours !== undefined && !isNaN(Number(hours))) {
           const d = new Date(Date.now() + hours * 3600 * 1000);
-          // Format as 'YYYY-MM-DD HH:mm:ss' (no timezone) so DB stores the literal UTC instant
-          const pad = (n: number) => String(n).padStart(2, "0");
           computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         } else {
           computedSlaValue = null;
         }
       } else {
-        const pad = (n: number) => String(n).padStart(2, "0");
-        if (demand === 0) {
-          const d = new Date(Date.now() + 2 * 3600 * 1000);
-          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-        } else if (demand === 1) {
-          const d = new Date(Date.now() + 5 * 3600 * 1000);
-          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-        } else if (demand === 2) {
-          const d = new Date(Date.now() + 24 * 3600 * 1000);
-          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-        } else computedSlaValue = null;
+        computedSlaValue = null;
       }
     } catch (e) {
       computedSlaValue = null;

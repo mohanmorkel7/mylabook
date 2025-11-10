@@ -345,6 +345,40 @@ export default function ManageTickets() {
         </div>
       </div>
 
+      {/* Status counts */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <Card>
+          <CardContent>
+            <p className="text-sm text-gray-500">Open</p>
+            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return /open/i.test(String(s || '')); }).length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <p className="text-sm text-gray-500">In Progress</p>
+            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return /in progress/i.test(String(s || '')) || /in_progress/i.test(String(s || '')); }).length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <p className="text-sm text-gray-500">Pending</p>
+            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return /pending/i.test(String(s || '')); }).length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <p className="text-sm text-gray-500">Closed</p>
+            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; return (t as any).status?.is_closed === true || /closed/i.test(String(s || '')); }).length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <p className="text-sm text-gray-500">Overdue</p>
+            <p className="text-2xl font-semibold">{tickets.filter(t => { const s = (t as any).status?.name || t.status; const isClosed = (t as any).status?.is_closed === true || /closed/i.test(String(s || '')); const sla = (t as any).sla_time; if (!sla) return false; const slaTs = new Date(sla).getTime(); return !isNaN(slaTs) && slaTs < Date.now() && !isClosed; }).length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Filters Card */}
       <Card className="mb-6">
         <CardHeader>

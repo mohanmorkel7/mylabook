@@ -576,62 +576,32 @@ export function MailConfigModal({
           <div className="space-y-2">
             <Label>Assigned To *</Label>
 
-            <Popover open={openAssignee} onOpenChange={setOpenAssignee}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openAssignee}
-                  className="w-full justify-between"
-                >
-                  {assignedUser
-                    ? getUserName(assignedUser)
-                    : "Select assignee..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
+            <Select
+              value={config.assigned_to_id ? String(config.assigned_to_id) : "__none"}
+              onValueChange={(v) =>
+                setConfig({
+                  ...config,
+                  assigned_to_id: v && v !== "__none" ? parseInt(v, 10) : undefined,
+                })
+              }
+            >
+              <SelectTrigger id="assigned_to">
+                <SelectValue>
+                  {assignedUser ? getUserName(assignedUser) : "Select assignee..."}
+                </SelectValue>
+              </SelectTrigger>
 
-              <PopoverContent className="w-full p-0">
-                <Command>
-                  <CommandInput
-                    placeholder="Search users..."
-                    value={searchAssignee}
-                    onValueChange={setSearchAssignee}
-                  />
-
-                  <CommandList>
-                    <CommandEmpty>No user found.</CommandEmpty>
-                    <CommandGroup>
-                      {users
-                        .filter((user) =>
-                          getUserName(user)
-                            .toLowerCase()
-                            .includes(searchAssignee.toLowerCase()),
-                        )
-                        .sort((a, b) =>
-                          getUserName(a).localeCompare(getUserName(b)),
-                        )
-                        .map((user) => (
-                          <CommandItem
-                            key={user.id}
-                            value={getUserName(user).toLowerCase()}
-                            onSelect={() => handleAssigneeSelect(user.id)}
-                          >
-                            <Check
-                              className={`mr-2 h-4 w-4 ${
-                                config.assigned_to_id === user.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              }`}
-                            />
-                            {getUserName(user)}
-                          </CommandItem>
-                        ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+              <SelectContent>
+                <SelectItem value="__none">(Select assignee)</SelectItem>
+                {users
+                  .sort((a, b) => getUserName(a).localeCompare(getUserName(b)))
+                  .map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {getUserName(u)}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Watchers */}

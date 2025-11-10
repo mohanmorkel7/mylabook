@@ -108,10 +108,10 @@ export default function MailConfigs() {
 
 const fetchUsers = async () => {
   try {
-    const users = await api.get<User[]>("/users/list/mitra");
-setUsers(users || []);
-console.log("Users fetched:", users);
-
+    const resp = await api.get("/users");
+    const list = (resp && (resp.users || resp.data || resp)) || [];
+    setUsers(list as User[]);
+    console.log("Users fetched:", list);
   } catch (error) {
     console.error("Error fetching users:", error);
   }

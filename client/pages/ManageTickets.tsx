@@ -1007,9 +1007,7 @@ export default function ManageTickets() {
             <div className="space-y-4">
               {paginatedTickets.map((ticket) => {
                 const priority = getPriorityBadge(ticket.priority_id);
-                const slaMs = ticket.sla_time
-                  ? new Date(ticket.sla_time).getTime() - now
-                  : null;
+                const slaMs = computeSlaMsForTicket(ticket);
                 return (
                   <Card
                     key={ticket.id}

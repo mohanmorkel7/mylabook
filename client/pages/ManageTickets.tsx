@@ -305,21 +305,17 @@ export default function ManageTickets() {
 
   const getSlaTextFor = (ticketSubset: any[]) => {
     if (!ticketSubset || ticketSubset.length === 0) return "No SLA";
-    // Find earliest sla_time among tickets that have sla_time
-    const slaTimes = ticketSubset
-      .map((t) => (t.sla_time ? new Date(t.sla_time).getTime() : null))
-      .filter((ts) => ts && !isNaN(ts)) as number[];
-    if (slaTimes.length === 0) return "No SLA";
-    const earliest = Math.min(...slaTimes);
-    const nowLocal = Date.now();
-    if (earliest < nowLocal) {
-      // overdue: show how long overdue with hh:mm:ss
-      const overdueMs = nowLocal - earliest;
-      return `Overdue ${formatRemaining(overdueMs)}`;
+    // Compute remaining ms for each ticket (use helper which falls back to created_at+priority)
+    const remainingMs = ticketSubset
+      .map((t) => computeSlaMsForTicket(t))
+      .filter((m) => m !== null) as number[];
+    if (remainingMs.length === 0) return "No SLA";
+    const earliestRemaining = Math.min(...remainingMs);
+    if (earliestRemaining < 0) {
+      // overdue
+      return `Overdue ${formatRemaining(Math.abs(earliestRemaining))}`;
     }
-    // not yet due: show remaining time hh:mm:ss + suffix
-    const remainingMs = earliest - nowLocal;
-    return `${formatRemaining(remainingMs)} hours remaining`;
+    return `${formatRemaining(earliestRemaining)} hours remaining`;
   };
 
   // fetch ticket metadata to discover overdue status id

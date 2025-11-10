@@ -85,6 +85,11 @@ export default function ManageTickets() {
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const { toast } = useToast();
 
+  // Show/hide filters and pagination state
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
   useEffect(() => {
     fetchTickets();
     fetchUsers();

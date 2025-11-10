@@ -509,8 +509,8 @@ export default function ManageTickets() {
                         {slaMs === null
                           ? "No SLA"
                           : slaMs <= 0
-                          ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                          : `${formatRemaining(slaMs)} hours remaining`}
+                            ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                            : `${formatRemaining(slaMs)} hours remaining`}
                       </span>
                     </li>
                   );
@@ -582,8 +582,8 @@ export default function ManageTickets() {
                         {slaMs === null
                           ? "No SLA"
                           : slaMs <= 0
-                          ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                          : `${formatRemaining(slaMs)} hours remaining`}
+                            ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                            : `${formatRemaining(slaMs)} hours remaining`}
                       </span>
                     </li>
                   );
@@ -644,8 +644,8 @@ export default function ManageTickets() {
                         {slaMs === null
                           ? "No SLA"
                           : slaMs <= 0
-                          ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                          : `${formatRemaining(slaMs)} hours remaining`}
+                            ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                            : `${formatRemaining(slaMs)} hours remaining`}
                       </span>
                     </li>
                   );
@@ -949,7 +949,9 @@ export default function ManageTickets() {
             <div className="space-y-4">
               {paginatedTickets.map((ticket) => {
                 const priority = getPriorityBadge(ticket.priority_id);
-                const slaMs = ticket.sla_time ? new Date(ticket.sla_time).getTime() - now : null;
+                const slaMs = ticket.sla_time
+                  ? new Date(ticket.sla_time).getTime() - now
+                  : null;
                 return (
                   <Card
                     key={ticket.id}
@@ -1085,12 +1087,14 @@ export default function ManageTickets() {
                             </div>
                             <div>
                               <p className="text-gray-600">SLA</p>
-                              <p className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}>
+                              <p
+                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
+                              >
                                 {slaMs === null
                                   ? "No SLA"
                                   : slaMs <= 0
-                                  ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                                  : `${formatRemaining(slaMs)} hours remaining`}
+                                    ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                                    : `${formatRemaining(slaMs)} hours remaining`}
                               </p>
                             </div>
                             <div>

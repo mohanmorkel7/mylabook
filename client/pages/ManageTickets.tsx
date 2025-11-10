@@ -462,6 +462,19 @@ export default function ManageTickets() {
             <Link to="/tickets/create">
               <Button>Create Ticket</Button>
             </Link>
+
+            {currentUser?.role === "admin" && activeTab === "all" && (
+              <div className="ml-4 text-right">
+                <div className="text-xs text-gray-500">Next SLA</div>
+                <div className={`text-sm font-medium ${nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0 ? "text-red-600" : "text-gray-700"}`}>
+                  {nextSlaInfo.ticket
+                    ? nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0
+                      ? `Overdue ${formatRemaining(Math.abs(nextSlaInfo.ms))} — ${String(nextSlaInfo.ticket.subject).slice(0,40)}`
+                      : `${formatRemaining(nextSlaInfo.ms)} hours remaining — ${String(nextSlaInfo.ticket.subject).slice(0,40)}`
+                    : "No SLA"}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

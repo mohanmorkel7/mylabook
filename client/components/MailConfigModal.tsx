@@ -466,7 +466,7 @@ export function MailConfigModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Not set)</SelectItem>
+                  <SelectItem value="__none">(Not set)</SelectItem>
                   {teams.map((t) => (
                     <SelectItem key={t.id} value={String(t.id)}>
                       {t.name}
@@ -491,7 +491,7 @@ export function MailConfigModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Not set)</SelectItem>
+                  <SelectItem value="__none">(Not set)</SelectItem>
                   {buckets
                     .filter(
                       (b) => !config.team_id || b.team_id === config.team_id,
@@ -520,7 +520,7 @@ export function MailConfigModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Not set)</SelectItem>
+                  <SelectItem value="__none">(Not set)</SelectItem>
                   {statuses.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}

@@ -60,6 +60,8 @@ export default function TicketDetails({
   currentUser,
 }: TicketDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showReasonDialog, setShowReasonDialog] = useState(false);
+  const [reasonText, setReasonText] = useState("");
   const [editForm, setEditForm] = useState({
     subject: ticket.subject,
     description: ticket.description || "",

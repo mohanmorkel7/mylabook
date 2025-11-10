@@ -206,15 +206,20 @@ export function MailConfigModal({
     });
   };
 
-  const handleAssigneeSelect = (userId: number) => {
-    setConfig({ ...config, assigned_to_id: userId });
+  const handleAssigneeSelect = (userId: number | string) => {
+    const id = typeof userId === "string" ? parseInt(userId, 10) : userId;
+    setConfig({ ...config, assigned_to_id: id });
     setOpenAssignee(false);
   };
 
-  const handleWatcherToggle = (userId: number) => {
-    const newWatchers = config.watcher_user_ids.includes(userId)
-      ? config.watcher_user_ids.filter((id) => id !== userId)
-      : [...config.watcher_user_ids, userId];
+  const handleWatcherToggle = (userId: number | string) => {
+    const id = typeof userId === "string" ? parseInt(userId, 10) : userId;
+    const exists = config.watcher_user_ids.some(
+      (w) => Number(w) === Number(id),
+    );
+    const newWatchers = exists
+      ? config.watcher_user_ids.filter((w) => Number(w) !== Number(id))
+      : [...config.watcher_user_ids, id];
 
     setConfig({
       ...config,
@@ -359,9 +364,11 @@ export function MailConfigModal({
     );
   });
 
-  const assignedUser = users.find((u) => u.id === config.assigned_to_id);
+  const assignedUser = users.find(
+    (u) => String(u.id) === String(config.assigned_to_id),
+  );
   const selectedWatchers = users.filter((u) =>
-    config.watcher_user_ids.includes(u.id),
+    config.watcher_user_ids.map((w) => String(w)).includes(String(u.id)),
   );
 
   return (

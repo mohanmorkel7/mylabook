@@ -354,10 +354,9 @@ export default function ManageTickets() {
 
       {/* Status counts */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <Card className="">
-          <CardContent>
-            <p className="text-sm font-medium text-gray-700">Open</p>
-            <p className="text-2xl font-semibold text-indigo-600">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <p className="text-3xl md:text-4xl font-extrabold text-indigo-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -365,13 +364,13 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent>
-            <p className="text-sm font-medium text-gray-700">In Progress</p>
-            <p className="text-2xl font-semibold text-orange-500">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <p className="text-3xl md:text-4xl font-extrabold text-orange-500">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -382,13 +381,13 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">In Progress</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent>
-            <p className="text-sm font-medium text-gray-700">Pending</p>
-            <p className="text-2xl font-semibold text-yellow-600">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <p className="text-3xl md:text-4xl font-extrabold text-yellow-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -396,13 +395,13 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent>
-            <p className="text-sm font-medium text-gray-700">Closed</p>
-            <p className="text-2xl font-semibold text-green-600">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <p className="text-3xl md:text-4xl font-extrabold text-green-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -413,13 +412,13 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent>
-            <p className="text-sm font-medium text-gray-700">Overdue</p>
-            <p className="text-2xl font-semibold text-red-600">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <p className="text-3xl md:text-4xl font-extrabold text-red-600">
               {
                 tickets.filter((t) => {
                   const s = (t as any).status?.name || t.status;
@@ -433,6 +432,7 @@ export default function ManageTickets() {
                 }).length
               }
             </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
           </CardContent>
         </Card>
       </div>

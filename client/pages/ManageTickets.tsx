@@ -258,8 +258,11 @@ export default function ManageTickets() {
     });
   };
 
-  const getAssignedUserName = (userId: number): string => {
-    const user = users.find((u) => u.id === userId);
+  const getAssignedUserName = (userId: number | string | null | undefined): string => {
+    if (userId === null || userId === undefined) return "Unassigned";
+    const uid = typeof userId === "number" ? userId : parseInt(String(userId));
+    if (isNaN(uid)) return "Unassigned";
+    const user = users.find((u) => Number(u.id) === uid);
     if (!user) return "Unassigned";
     // Handle new mitra_users structure (firstname + lastname)
     if (user.firstname || user.lastname) {

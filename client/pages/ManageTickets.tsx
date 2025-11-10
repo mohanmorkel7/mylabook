@@ -739,10 +739,8 @@ export default function ManageTickets() {
                   const isClosed =
                     (t as any).status?.is_closed === true ||
                     /closed/i.test(String(s || ""));
-                  const sla = (t as any).sla_time;
-                  if (!sla) return false;
-                  const slaTs = new Date(sla).getTime();
-                  return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
+                  const computed = computeSlaMsForTicket(t);
+                  return computed !== null && computed < 0 && !isClosed;
                 }).length
               }
             </p>
@@ -754,10 +752,8 @@ export default function ManageTickets() {
                   const isClosed =
                     (t as any).status?.is_closed === true ||
                     /closed/i.test(String(s || ""));
-                  const sla = (t as any).sla_time;
-                  if (!sla) return false;
-                  const slaTs = new Date(sla).getTime();
-                  return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
+                  const computed = computeSlaMsForTicket(t);
+                  return computed !== null && computed < 0 && !isClosed;
                 }),
               )}
             </p>
@@ -769,10 +765,8 @@ export default function ManageTickets() {
                   const isClosed =
                     (t as any).status?.is_closed === true ||
                     /closed/i.test(String(s || ""));
-                  const sla = (t as any).sla_time;
-                  if (!sla) return false;
-                  const slaTs = new Date(sla).getTime();
-                  return !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
+                  const computed = computeSlaMsForTicket(t);
+                  return computed !== null && computed < 0 && !isClosed;
                 })
                 .sort(
                   (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),

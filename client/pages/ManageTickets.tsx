@@ -396,12 +396,19 @@ export default function ManageTickets() {
 
   const nextSlaInfo = React.useMemo(() => {
     const withSla = tickets
-      .map((t) => (t.sla_time ? { ...t, slaTs: new Date(t.sla_time).getTime() } : null))
+      .map((t) =>
+        t.sla_time ? { ...t, slaTs: new Date(t.sla_time).getTime() } : null,
+      )
       .filter((x) => x) as any[];
     if (!withSla || withSla.length === 0) return { ticket: null, ms: null };
     // find the earliest SLA timestamp
-    const earliest = withSla.reduce((prev, cur) => (cur.slaTs < prev.slaTs ? cur : prev));
-    const ms = (earliest && typeof earliest.slaTs === 'number') ? earliest.slaTs - Date.now() : null;
+    const earliest = withSla.reduce((prev, cur) =>
+      cur.slaTs < prev.slaTs ? cur : prev,
+    );
+    const ms =
+      earliest && typeof earliest.slaTs === "number"
+        ? earliest.slaTs - Date.now()
+        : null;
     return { ticket: earliest, ms };
   }, [tickets, now]);
 
@@ -466,11 +473,13 @@ export default function ManageTickets() {
             {currentUser?.role === "admin" && activeTab === "all" && (
               <div className="ml-4 text-right">
                 <div className="text-xs text-gray-500">Next SLA</div>
-                <div className={`text-sm font-medium ${nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0 ? "text-red-600" : "text-gray-700"}`}>
+                <div
+                  className={`text-sm font-medium ${nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0 ? "text-red-600" : "text-gray-700"}`}
+                >
                   {nextSlaInfo.ticket
                     ? nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0
-                      ? `Overdue ${formatRemaining(Math.abs(nextSlaInfo.ms))} — ${String(nextSlaInfo.ticket.subject).slice(0,40)}`
-                      : `${formatRemaining(nextSlaInfo.ms)} hours remaining — ${String(nextSlaInfo.ticket.subject).slice(0,40)}`
+                      ? `Overdue ${formatRemaining(Math.abs(nextSlaInfo.ms))} — ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
+                      : `${formatRemaining(nextSlaInfo.ms)} hours remaining — ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
                     : "No SLA"}
                 </div>
               </div>

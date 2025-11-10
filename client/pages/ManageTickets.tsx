@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
 import { formatDistanceToNowStrict } from "date-fns";
+import { useAuth } from "@/lib/auth-context";
 
 interface Ticket {
   id: number;

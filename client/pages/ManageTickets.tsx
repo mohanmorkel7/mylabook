@@ -462,6 +462,7 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
+            <p className="text-xs text-muted-foreground mt-1">{getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; const isClosed = (t as any).status?.is_closed === true || /closed/i.test(String(s || "")); const sla = (t as any).sla_time; if (!sla) return false; const slaTs = new Date(sla).getTime(); return !isNaN(slaTs) && slaTs < Date.now() && !isClosed; }))}</p>
           </CardContent>
         </Card>
       </div>

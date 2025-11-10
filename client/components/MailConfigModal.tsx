@@ -553,7 +553,7 @@ export function MailConfigModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">(Use priority)</SelectItem>
+                  <SelectItem value="__none">(Use priority)</SelectItem>
                   {demands.map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>
                       {d.label}

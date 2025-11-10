@@ -482,7 +482,7 @@ export function MailConfigModal({
             <div className="space-y-2">
               <Label htmlFor="bucket">Bucket (optional)</Label>
               <Select
-                value={(config.bucket_id || "") as any}
+                value={config.bucket_id ? String(config.bucket_id) : "__none"}
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
@@ -511,7 +511,7 @@ export function MailConfigModal({
             <div className="space-y-2">
               <Label htmlFor="status">Status (optional)</Label>
               <Select
-                value={(config.status_id || "") as any}
+                value={config.status_id ? String(config.status_id) : "__none"}
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
@@ -539,7 +539,7 @@ export function MailConfigModal({
                 value={
                   config.demand !== undefined && config.demand !== null
                     ? String(config.demand)
-                    : ""
+                    : "__none"
                 }
                 onValueChange={(v) =>
                   setConfig({

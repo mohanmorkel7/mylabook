@@ -136,6 +136,10 @@ export class MailConfigRepository {
       data.priority_id,
       data.assigned_to_id,
       data.watcher_user_ids || [],
+      data.team_id || null,
+      data.bucket_id || null,
+      data.status_id || null,
+      data.demand !== undefined ? data.demand : null,
     ];
 
     const result = await pool.query(query, values);

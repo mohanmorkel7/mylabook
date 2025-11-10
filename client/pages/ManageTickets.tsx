@@ -362,6 +362,23 @@ export default function ManageTickets() {
     }
   };
 
+  // Format timestamp in IST (Asia/Kolkata) reliably by converting UTC -> IST (+5:30)
+  const formatToIST = (ts?: string | null) => {
+    const d = parseTimestampAsUTC(ts);
+    if (!d || isNaN(d.getTime())) return ts || "-";
+    const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+    const istDate = new Date(d.getTime() + IST_OFFSET_MS);
+    return istDate.toLocaleString("en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  };
+
   // Compute SLA remaining ms for a ticket. If ticket.sla_time exists, use it.
   // Otherwise, fallback to created_at + priority-based SLA hours.
   const computeSlaMsForTicket = (ticket: any): number | null => {

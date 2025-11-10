@@ -241,8 +241,8 @@ export class TicketRepository {
       } else if (priority_id) {
         // Map priority (id) to SLA hours. Adjust mapping as needed.
         const PRIORITY_SLA_HOURS: Record<number, number> = {
-          0: 2,  // Priority 0 -> 2 hours
-          1: 5,  // Priority 1 -> 5 hours
+          0: 2, // Priority 0 -> 2 hours
+          1: 5, // Priority 1 -> 5 hours
           2: 24, // Priority 2 -> End of day -> 24 hours
           3: 8,
           4: 24,

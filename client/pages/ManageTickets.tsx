@@ -139,30 +139,24 @@ export default function ManageTickets() {
 
   const fetchUsers = async () => {
     try {
-      // Try to fetch mitra users first (preferred)
-      const mitraResp = await api.get("/users/list/mitra");
-      const mitraUsers: User[] = mitraResp.data || [];
+      // Use only the regular users API
+      const resp = await api.get("/users");
+      const regular = resp.data?.users ?? resp.data ?? [];
 
-      // Also fetch regular users as a fallback/augmentation so assigned_to IDs from tickets are resolvable
-      let regularUsers: User[] = [];
-      try {
-        const regResp = await api.get("/users");
-        regularUsers = (regResp.data?.users || regResp.data || []) as User[];
-      } catch (e) {
-        // ignore - we already have mitra users
-      }
+      // Normalize user fields so getAssignedUserName can handle various shapes
+      const normalized = (regular as any[]).map((u) => ({
+        id: Number(u.id),
+        name:
+          u.name ?? `${u.first_name || u.firstname || ""} ${u.last_name || u.lastname || ""}`.trim() || u.email,
+        first_name: u.first_name,
+        last_name: u.last_name,
+        firstname: u.firstname,
+        lastname: u.lastname,
+        email: u.email,
+        type: u.type,
+      }));
 
-      // Merge users by id, prefer mitraUsers data when available
-      const mergedMap = new Map<number, User>();
-      for (const u of regularUsers) {
-        if (u && typeof u.id === "number") mergedMap.set(u.id, u);
-      }
-      for (const u of mitraUsers) {
-        if (u && typeof u.id === "number")
-          mergedMap.set(u.id, { ...mergedMap.get(u.id), ...u });
-      }
-      const merged = Array.from(mergedMap.values());
-      setUsers(merged);
+      setUsers(normalized as User[]);
     } catch (error) {
       console.error("Error fetching users:", error);
     }

@@ -367,10 +367,14 @@ export default function ManageTickets() {
         5: 48,
       };
 
-      const pr = Number(ticket.priority_id ?? ticket.priority?.id ?? ticket.priority_id);
+      const pr = Number(
+        ticket.priority_id ?? ticket.priority?.id ?? ticket.priority_id,
+      );
       const hours = PRIORITY_SLA_HOURS[pr];
       if (!hours) return null;
-      const createdTs = ticket.created_at ? new Date(ticket.created_at).getTime() : NaN;
+      const createdTs = ticket.created_at
+        ? new Date(ticket.created_at).getTime()
+        : NaN;
       if (isNaN(createdTs)) return null;
       const slaTs = createdTs + hours * 3600 * 1000;
       return slaTs - Date.now();
@@ -545,7 +549,9 @@ export default function ManageTickets() {
                 })
                 .filter((t) => computeSlaMsForTicket(t) !== null)
                 .sort(
-                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
+                  (a, b) =>
+                    (computeSlaMsForTicket(a) ?? Infinity) -
+                    (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {
@@ -614,7 +620,9 @@ export default function ManageTickets() {
                 })
                 .filter((t) => computeSlaMsForTicket(t) !== null)
                 .sort(
-                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
+                  (a, b) =>
+                    (computeSlaMsForTicket(a) ?? Infinity) -
+                    (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {
@@ -672,7 +680,9 @@ export default function ManageTickets() {
                 })
                 .filter((t) => computeSlaMsForTicket(t) !== null)
                 .sort(
-                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
+                  (a, b) =>
+                    (computeSlaMsForTicket(a) ?? Infinity) -
+                    (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {
@@ -769,12 +779,19 @@ export default function ManageTickets() {
                   return computed !== null && computed < 0 && !isClosed;
                 })
                 .sort(
-                  (a, b) => (computeSlaMsForTicket(a) ?? Infinity) - (computeSlaMsForTicket(b) ?? Infinity),
+                  (a, b) =>
+                    (computeSlaMsForTicket(a) ?? Infinity) -
+                    (computeSlaMsForTicket(b) ?? Infinity),
                 )
                 .slice(0, 3)
                 .map((t) => {
                   const computed = computeSlaMsForTicket(t);
-                  const sinceMs = computed === null ? null : computed <= 0 ? Math.abs(computed) : null;
+                  const sinceMs =
+                    computed === null
+                      ? null
+                      : computed <= 0
+                        ? Math.abs(computed)
+                        : null;
                   return (
                     <li
                       key={t.id}
@@ -1109,13 +1126,37 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Created</p>
                               <p className="font-medium mt-1">
-                                {new Date(ticket.created_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
+                                {new Date(ticket.created_at).toLocaleString(
+                                  "en-GB",
+                                  {
+                                    timeZone: "Asia/Kolkata",
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit",
+                                    hour12: true,
+                                  },
+                                )}
                               </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Updated</p>
                               <p className="font-medium mt-1">
-                                {new Date(ticket.updated_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
+                                {new Date(ticket.updated_at).toLocaleString(
+                                  "en-GB",
+                                  {
+                                    timeZone: "Asia/Kolkata",
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit",
+                                    hour12: true,
+                                  },
+                                )}
                               </p>
                             </div>
                             <div>
@@ -1236,7 +1277,19 @@ export default function ManageTickets() {
                           <div>
                             <p className="text-gray-600">Created</p>
                             <p className="font-medium mt-1">
-                              {new Date(ticket.created_at).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
+                              {new Date(ticket.created_at).toLocaleString(
+                                "en-GB",
+                                {
+                                  timeZone: "Asia/Kolkata",
+                                  year: "numeric",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                },
+                              )}
                             </p>
                           </div>
                         </div>

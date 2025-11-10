@@ -877,7 +877,10 @@ export class TicketRepository {
       return await this.getCommentById(comment.id);
     } catch (primaryErr: any) {
       // If it's a missing column error, try fallback insert
-      if (primaryErr && (primaryErr.code === "42703" || primaryErr.code === "23502")) {
+      if (
+        primaryErr &&
+        (primaryErr.code === "42703" || primaryErr.code === "23502")
+      ) {
         try {
           const comment2 = await tryFallbackInsert();
 

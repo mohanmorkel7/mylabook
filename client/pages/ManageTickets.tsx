@@ -153,7 +153,8 @@ export default function ManageTickets() {
         if (u && typeof u.id === "number") mergedMap.set(u.id, u);
       }
       for (const u of mitraUsers) {
-        if (u && typeof u.id === "number") mergedMap.set(u.id, { ...mergedMap.get(u.id), ...u });
+        if (u && typeof u.id === "number")
+          mergedMap.set(u.id, { ...mergedMap.get(u.id), ...u });
       }
       const merged = Array.from(mergedMap.values());
       setUsers(merged);

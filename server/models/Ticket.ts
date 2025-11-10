@@ -707,6 +707,20 @@ export class TicketRepository {
 
     const columns = await getAvailableCommentColumns();
 
+    // Normalize user name up-front for inserts
+    const uResForName = await pool.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [userId]);
+    const uForName = uResForName.rows[0] || {};
+    const firstNameForName = uForName.first_name ?? uForName.firstname ?? uForName.firstName ?? uForName.fname ?? "";
+    const lastNameForName = uForName.last_name ?? uForName.lastname ?? uForName.lastName ?? uForName.lname ?? "";
+    let resolvedUserName = "User";
+    if (firstNameForName || lastNameForName) {
+      resolvedUserName = `${(firstNameForName || "").trim()} ${(lastNameForName || "").trim()}`.trim();
+    } else if (uForName.name) {
+      resolvedUserName = uForName.name;
+    } else if (uForName.login) {
+      resolvedUserName = uForName.login;
+    }
+
     // Try to build primary insert using the preferred schema
     const tryPrimaryInsert = async () => {
       const cols: string[] = [];
@@ -722,6 +736,13 @@ export class TicketRepository {
       cols.push("user_id");
       vals.push(userId);
       placeholders.push(`$${idx++}`);
+
+      // If schema has user_name, include it (some schemas require it)
+      if (columns.has("user_name")) {
+        cols.push("user_name");
+        vals.push(resolvedUserName);
+        placeholders.push(`$${idx++}`);
+      }
 
       if (columns.has("content")) {
         cols.push("content");
@@ -754,24 +775,7 @@ export class TicketRepository {
 
     // Fallback insert for alternate schema that uses 'comment' and 'user_name'
     const tryFallbackInsert = async () => {
-      // Build user name
-      const uRes = await pool.query(
-        "SELECT * FROM users WHERE id = $1 LIMIT 1",
-        [userId],
-      );
-      const u = uRes.rows[0] || {};
-      const firstName =
-        u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
-      const lastName = u.last_name ?? u.lastname ?? u.lastName ?? u.lname ?? "";
-      let userName = "User";
-      if (firstName || lastName) {
-        userName =
-          `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
-      } else if (u.name) {
-        userName = u.name;
-      } else if (u.login) {
-        userName = u.login;
-      }
+      const userName = resolvedUserName;
 
       const cols: string[] = [];
       const vals: any[] = [];

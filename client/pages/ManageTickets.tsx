@@ -393,7 +393,7 @@ export default function ManageTickets() {
         const parsed = parseTimestampAsUTC(ticket.sla_time);
         const ts = parsed ? parsed.getTime() : NaN;
         if (isNaN(ts)) return null;
-        return ts - Date.now();
+        return ts - (Date.now() - serverTimeOffsetRef.current);
       }
 
       // Fallback mapping (use priority IDs that the UI uses)

@@ -462,9 +462,9 @@ export default function ManageTickets() {
   const nextSlaInfo = React.useMemo(() => {
     const withSla = tickets
       .map((t) =>
-        t.sla_time ? { ...t, slaTs: new Date(t.sla_time).getTime() } : null,
+        t.sla_time ? { ...t, slaTs: parseTimestampAsUTC(t.sla_time)?.getTime() ?? null } : null,
       )
-      .filter((x) => x) as any[];
+      .filter((x) => x && x.slaTs !== null) as any[];
     if (!withSla || withSla.length === 0) return { ticket: null, ms: null };
     // find the earliest SLA timestamp
     const earliest = withSla.reduce((prev, cur) =>

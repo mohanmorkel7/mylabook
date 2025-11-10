@@ -711,7 +711,9 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
         const isExistingOverdue = (() => {
           try {
             const sla = (existing as any).sla_time;
-            const isClosed = (existing as any).status?.is_closed === true || /closed/i.test(String((existing as any).status?.name || ""));
+            const isClosed =
+              (existing as any).status?.is_closed === true ||
+              /closed/i.test(String((existing as any).status?.name || ""));
             if (!sla || isClosed) return false;
             const slaTs = new Date(sla).getTime();
             return !isNaN(slaTs) && slaTs < Date.now();
@@ -720,11 +722,17 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
           }
         })();
 
-        if (isExistingOverdue && updateData.status_id && updateData.status_id !== existing.status_id) {
-          const reasonVal = updateData.reason || (existing && (existing as any).reason);
+        if (
+          isExistingOverdue &&
+          updateData.status_id &&
+          updateData.status_id !== existing.status_id
+        ) {
+          const reasonVal =
+            updateData.reason || (existing && (existing as any).reason);
           if (!reasonVal || String(reasonVal).trim() === "") {
             return res.status(400).json({
-              error: "Reason is required when changing status of an overdue ticket",
+              error:
+                "Reason is required when changing status of an overdue ticket",
             });
           }
         }
@@ -736,7 +744,10 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
 
       // Record status change reason if provided and status changed
       try {
-        if (updateData.status_id && updateData.status_id !== existing.status_id) {
+        if (
+          updateData.status_id &&
+          updateData.status_id !== existing.status_id
+        ) {
           const fromStatusId = existing.status_id;
           const toStatusId = updateData.status_id;
           const reason = updateData.reason || null;
@@ -748,7 +759,10 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
           );
         }
       } catch (logErr) {
-        console.warn("Failed to record ticket status change:", logErr.message || logErr);
+        console.warn(
+          "Failed to record ticket status change:",
+          logErr.message || logErr,
+        );
       }
 
       res.json(ticket);

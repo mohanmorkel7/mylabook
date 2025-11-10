@@ -233,11 +233,11 @@ export class TicketRepository {
       custom_fields,
     } = ticketData;
 
-    // Compute SLA time: prefer client-provided explicit timestamp; otherwise use DB NOW()+interval (avoid server clock skew)
+    // Compute SLA time on the server (UTC) and format as 'YYYY-MM-DD HH:mm:ss'
     let computedSlaValue: string | null = null;
-    let computedSlaExpression: string | null = null;
     try {
       const pad = (n: number) => String(n).padStart(2, "0");
+      // If client explicitly provided sla_time (any timezone), try to parse and normalize to UTC string
       if (sla_time) {
         const parsed = new Date(sla_time as string);
         if (!isNaN(parsed.getTime())) {
@@ -246,7 +246,7 @@ export class TicketRepository {
           computedSlaValue = null;
         }
       } else {
-        // Determine SLA hours from demand (preferred) or priority
+        // Determine SLA hours from demand (preferred) or priority mapping
         let hours: number | null = null;
         if (demand === 0 || demand === 1 || demand === 2) {
           const demandHoursMap: Record<number, number> = { 0: 2, 1: 5, 2: 24 };
@@ -262,16 +262,17 @@ export class TicketRepository {
           };
           hours = PRIORITY_SLA_HOURS[Number(priority_id)] ?? null;
         }
+
         if (hours !== null && !isNaN(Number(hours))) {
-          computedSlaExpression = `NOW() + INTERVAL '${hours} hours'`;
+          const d = new Date(Date.now() + hours * 3600 * 1000);
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         }
       }
     } catch (e) {
       computedSlaValue = null;
-      computedSlaExpression = null;
     }
 
-    // Build insert query; include sla_time either as parameter (computedSlaValue) or as SQL expression (computedSlaExpression)
+    // Build insert query; include sla_time as a parameter if computed
     const cols = [
       "subject",
       "description",
@@ -308,22 +309,13 @@ export class TicketRepository {
       createdBy,
     ];
 
-    let insertSql = `INSERT INTO tickets (${cols.join(", ")}`;
     if (computedSlaValue) {
-      insertSql += ", sla_time";
+      cols.push("sla_time");
       values.push(computedSlaValue);
-    } else if (computedSlaExpression) {
-      insertSql += ", sla_time";
     }
-    insertSql += `) VALUES (`;
+
     const placeholders = cols.map((_, i) => `$${i + 1}`);
-    insertSql += placeholders.join(", ");
-    if (computedSlaValue) {
-      insertSql += `, $${placeholders.length + 1}`;
-    } else if (computedSlaExpression) {
-      insertSql += `, ${computedSlaExpression}`;
-    }
-    insertSql += `) RETURNING *`;
+    const insertSql = `INSERT INTO tickets (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
 
     const result = await pool.query(insertSql, values);
 

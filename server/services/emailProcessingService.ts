@@ -115,10 +115,9 @@ ${bodyText}`;
       // createdBy: prefer config.user_id else assigned_to
       const createdBy = (config as any).user_id || config.assigned_to_id || 1;
 
-      const createdTicket = await (await import("../models/Ticket")).TicketRepository.create(
-        ticketData,
-        createdBy,
-      );
+      const createdTicket = await (
+        await import("../models/Ticket")
+      ).TicketRepository.create(ticketData, createdBy);
 
       return { ticketId: createdTicket.id, success: true };
     } catch (error) {

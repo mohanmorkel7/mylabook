@@ -199,9 +199,12 @@ export async function processEmailsForConfigs(
           };
 
           // createdBy: prefer config.user_id else assigned_to
-          const createdBy = (config as any).user_id || config.assigned_to_id || 1;
+          const createdBy =
+            (config as any).user_id || config.assigned_to_id || 1;
 
-          const ticket = await (await import("../models/Ticket")).TicketRepository.create(ticketData, createdBy);
+          const ticket = await (
+            await import("../models/Ticket")
+          ).TicketRepository.create(ticketData, createdBy);
 
           result.succeeded++;
           await logEmailProcessing(

@@ -183,10 +183,9 @@ export function MailConfigModal({
   };
 
   const handleAssigneeSelect = (userId: number) => {
-  setConfig({ ...config, assigned_to_id: userId });
-  setOpenAssignee(false);
-};
-
+    setConfig({ ...config, assigned_to_id: userId });
+    setOpenAssignee(false);
+  };
 
   const handleWatcherToggle = (userId: number) => {
     const newWatchers = config.watcher_user_ids.includes(userId)
@@ -198,7 +197,6 @@ export function MailConfigModal({
       watcher_user_ids: newWatchers,
     });
   };
-
 
   const getFieldValueLabel = (fieldType: string): string => {
     switch (fieldType) {
@@ -318,26 +316,24 @@ export function MailConfigModal({
   };
 
   // Helper to get user display name from either old or new structure
-const getUserName = (user?: User): string => {
-  if (!user) return "";
-  if (user?.name) return user.name.trim();
-  if (user.firstname || user.lastname)
-    return `${user.firstname || ""} ${user.lastname || ""}`.trim();
-  if ((user as any).first_name || (user as any).last_name)
-    return `${(user as any).first_name || ""} ${(user as any).last_name || ""}`.trim();
-  return "Unknown";
-};
+  const getUserName = (user?: User): string => {
+    if (!user) return "";
+    if (user?.name) return user.name.trim();
+    if (user.firstname || user.lastname)
+      return `${user.firstname || ""} ${user.lastname || ""}`.trim();
+    if ((user as any).first_name || (user as any).last_name)
+      return `${(user as any).first_name || ""} ${(user as any).last_name || ""}`.trim();
+    return "Unknown";
+  };
 
-const filteredWatchers = users.filter((user) => {
-  const displayName = getUserName(user);
-  const email = user.email || "";
-  return (
-    displayName.toLowerCase().includes(searchWatchers.toLowerCase()) ||
-    email.toLowerCase().includes(searchWatchers.toLowerCase())
-  );
-});
-
-
+  const filteredWatchers = users.filter((user) => {
+    const displayName = getUserName(user);
+    const email = user.email || "";
+    return (
+      displayName.toLowerCase().includes(searchWatchers.toLowerCase()) ||
+      email.toLowerCase().includes(searchWatchers.toLowerCase())
+    );
+  });
 
   const assignedUser = users.find((u) => u.id === config.assigned_to_id);
   const selectedWatchers = users.filter((u) =>
@@ -468,7 +464,10 @@ const filteredWatchers = users.filter((user) => {
               <Select
                 value={(config.bucket_id || "") as any}
                 onValueChange={(v) =>
-                  setConfig({ ...config, bucket_id: v ? parseInt(v) : undefined })
+                  setConfig({
+                    ...config,
+                    bucket_id: v ? parseInt(v) : undefined,
+                  })
                 }
               >
                 <SelectTrigger id="bucket">
@@ -477,7 +476,9 @@ const filteredWatchers = users.filter((user) => {
                 <SelectContent>
                   <SelectItem value="">(Not set)</SelectItem>
                   {buckets
-                    .filter((b) => !config.team_id || b.team_id === config.team_id)
+                    .filter(
+                      (b) => !config.team_id || b.team_id === config.team_id,
+                    )
                     .map((b) => (
                       <SelectItem key={b.id} value={String(b.id)}>
                         {b.name}
@@ -492,7 +493,10 @@ const filteredWatchers = users.filter((user) => {
               <Select
                 value={(config.status_id || "") as any}
                 onValueChange={(v) =>
-                  setConfig({ ...config, status_id: v ? parseInt(v) : undefined })
+                  setConfig({
+                    ...config,
+                    status_id: v ? parseInt(v) : undefined,
+                  })
                 }
               >
                 <SelectTrigger id="status">
@@ -518,7 +522,10 @@ const filteredWatchers = users.filter((user) => {
                     : ""
                 }
                 onValueChange={(v) =>
-                  setConfig({ ...config, demand: v === "" ? undefined : parseInt(v) })
+                  setConfig({
+                    ...config,
+                    demand: v === "" ? undefined : parseInt(v),
+                  })
                 }
               >
                 <SelectTrigger id="demand">
@@ -623,7 +630,7 @@ const filteredWatchers = users.filter((user) => {
                   />
                   <CommandEmpty>No user found.</CommandEmpty>
                   <CommandList className="max-h-48">
-                     <CommandGroup>
+                    <CommandGroup>
                       {filteredWatchers.map((user) => (
                         <CommandItem
                           key={user.id}
@@ -639,8 +646,8 @@ const filteredWatchers = users.filter((user) => {
                           {getUserName(user)}
                         </CommandItem>
                       ))}
-                      </CommandGroup>
-                    </CommandList>
+                    </CommandGroup>
+                  </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>

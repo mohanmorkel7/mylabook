@@ -16,6 +16,10 @@ export interface MailConfig {
   priority_id: number;
   assigned_to_id: number;
   watcher_user_ids: number[];
+  team_id?: number;
+  bucket_id?: number;
+  status_id?: number;
+  demand?: number; // 0/1/2 mapping for SLA
   is_active: boolean;
   created_at: string;
   updated_at: string;

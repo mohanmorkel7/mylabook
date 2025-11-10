@@ -532,14 +532,6 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /open/i.test(String(s || ""));
-                }),
-              )}
-            </p>
 
             <ul className="mt-3 w-full px-4 space-y-2">
               {tickets
@@ -597,17 +589,6 @@ export default function ManageTickets() {
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    /in progress/i.test(String(s || "")) ||
-                    /in_progress/i.test(String(s || ""))
-                  );
-                }),
-              )}
-            </p>
 
             <ul className="mt-3 w-full px-4 space-y-2">
               {tickets
@@ -663,14 +644,6 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /pending/i.test(String(s || ""));
-                }),
-              )}
-            </p>
 
             <ul className="mt-3 w-full px-4 space-y-2">
               {tickets
@@ -726,17 +699,6 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""))
-                  );
-                }),
-              )}
-            </p>
           </CardContent>
         </Card>
 
@@ -755,18 +717,6 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  const isClosed =
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""));
-                  const computed = computeSlaMsForTicket(t);
-                  return computed !== null && computed < 0 && !isClosed;
-                }),
-              )}
-            </p>
 
             <ul className="mt-3 w-full px-4 space-y-2">
               {tickets

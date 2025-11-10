@@ -459,7 +459,10 @@ export function MailConfigModal({
               <Select
                 value={(config.team_id || "") as any}
                 onValueChange={(v) =>
-                  setConfig({ ...config, team_id: v ? parseInt(v) : undefined })
+                  setConfig({
+                    ...config,
+                    team_id: v && v !== "__none" ? parseInt(v) : undefined,
+                  })
                 }
               >
                 <SelectTrigger id="team">
@@ -483,7 +486,7 @@ export function MailConfigModal({
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
-                    bucket_id: v ? parseInt(v) : undefined,
+                    bucket_id: v && v !== "__none" ? parseInt(v) : undefined,
                   })
                 }
               >
@@ -512,7 +515,7 @@ export function MailConfigModal({
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
-                    status_id: v ? parseInt(v) : undefined,
+                    status_id: v && v !== "__none" ? parseInt(v) : undefined,
                   })
                 }
               >
@@ -541,7 +544,8 @@ export function MailConfigModal({
                 onValueChange={(v) =>
                   setConfig({
                     ...config,
-                    demand: v === "" ? undefined : parseInt(v),
+                    demand:
+                      v === "" || v === "__none" ? undefined : parseInt(v),
                   })
                 }
               >

@@ -698,7 +698,9 @@ export class TicketRepository {
         const res = await pool.query(
           "SELECT column_name FROM information_schema.columns WHERE table_name = 'ticket_comments'",
         );
-        anyThis._ticketCommentColumns = new Set(res.rows.map((r: any) => r.column_name));
+        anyThis._ticketCommentColumns = new Set(
+          res.rows.map((r: any) => r.column_name),
+        );
       }
       return anyThis._ticketCommentColumns;
     };
@@ -753,13 +755,18 @@ export class TicketRepository {
     // Fallback insert for alternate schema that uses 'comment' and 'user_name'
     const tryFallbackInsert = async () => {
       // Build user name
-      const uRes = await pool.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [userId]);
+      const uRes = await pool.query(
+        "SELECT * FROM users WHERE id = $1 LIMIT 1",
+        [userId],
+      );
       const u = uRes.rows[0] || {};
-      const firstName = u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
+      const firstName =
+        u.first_name ?? u.firstname ?? u.firstName ?? u.fname ?? "";
       const lastName = u.last_name ?? u.lastname ?? u.lastName ?? u.lname ?? "";
       let userName = "User";
       if (firstName || lastName) {
-        userName = `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
+        userName =
+          `${(firstName || "").trim()} ${(lastName || "").trim()}`.trim();
       } else if (u.name) {
         userName = u.name;
       } else if (u.login) {

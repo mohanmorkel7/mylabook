@@ -528,7 +528,9 @@ router.post(
             const cacheAny: any = (global as any)._attachmentColumnsCache || {};
             if (cacheAny._attachmentColumns) return cacheAny._attachmentColumns;
             try {
-              const res = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'ticket_attachments'");
+              const res = await pool.query(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'ticket_attachments'",
+              );
               const cols = new Set(res.rows.map((r: any) => r.column_name));
               cacheAny._attachmentColumns = cols;
               (global as any)._attachmentColumnsCache = cacheAny;
@@ -541,10 +543,15 @@ router.post(
           for (const file of req.files) {
             try {
               // Safe computed values
-              const originalName = (file && (file.originalname || file.filename)) || "attachment";
+              const originalName =
+                (file && (file.originalname || file.filename)) || "attachment";
               const ext = path.extname(originalName) || "";
-              const base = file && file.filename ? file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
-              const safeFileName = String(base).slice(0, 255) + (ext ? ext : "");
+              const base =
+                file && file.filename
+                  ? file.filename
+                  : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+              const safeFileName =
+                String(base).slice(0, 255) + (ext ? ext : "");
               const safeOriginal = String(originalName).slice(0, 255);
               const safeFilePath = `/uploads/tickets/${safeFileName}`;
 
@@ -552,42 +559,96 @@ router.post(
               const cols: string[] = [];
               const vals: any[] = [];
 
-              cols.push("ticket_id"); vals.push(ticket.id);
-              cols.push("comment_id"); vals.push(initialCommentId);
+              cols.push("ticket_id");
+              vals.push(ticket.id);
+              cols.push("comment_id");
+              vals.push(initialCommentId);
 
-              if (attachmentColumns.has("user_id")) { cols.push("user_id"); vals.push(createdBy); }
-              if (attachmentColumns.has("uploaded_by")) { cols.push("uploaded_by"); vals.push(createdBy); }
+              if (attachmentColumns.has("user_id")) {
+                cols.push("user_id");
+                vals.push(createdBy);
+              }
+              if (attachmentColumns.has("uploaded_by")) {
+                cols.push("uploaded_by");
+                vals.push(createdBy);
+              }
 
-              if (attachmentColumns.has("filename")) { cols.push("filename"); vals.push(safeFileName); }
-              if (attachmentColumns.has("original_filename")) { cols.push("original_filename"); vals.push(safeOriginal); }
-              if (attachmentColumns.has("file_name")) { cols.push("file_name"); vals.push(safeFileName); }
+              if (attachmentColumns.has("filename")) {
+                cols.push("filename");
+                vals.push(safeFileName);
+              }
+              if (attachmentColumns.has("original_filename")) {
+                cols.push("original_filename");
+                vals.push(safeOriginal);
+              }
+              if (attachmentColumns.has("file_name")) {
+                cols.push("file_name");
+                vals.push(safeFileName);
+              }
 
-              if (attachmentColumns.has("file_path")) { cols.push("file_path"); vals.push(safeFilePath); }
-              if (attachmentColumns.has("file_size")) { cols.push("file_size"); vals.push(file.size); }
-              if (attachmentColumns.has("mime_type")) { cols.push("mime_type"); vals.push(file.mimetype); }
+              if (attachmentColumns.has("file_path")) {
+                cols.push("file_path");
+                vals.push(safeFilePath);
+              }
+              if (attachmentColumns.has("file_size")) {
+                cols.push("file_size");
+                vals.push(file.size);
+              }
+              if (attachmentColumns.has("mime_type")) {
+                cols.push("mime_type");
+                vals.push(file.mimetype);
+              }
 
               const placeholders = cols.map((_, i) => `$${i + 1}`);
               const sql = `INSERT INTO ticket_attachments (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
               await pool.query(sql, vals);
 
-              console.log("Saved attachment for ticket:", ticket.id, safeFileName);
+              console.log(
+                "Saved attachment for ticket:",
+                ticket.id,
+                safeFileName,
+              );
             } catch (aErr) {
-              console.warn("Primary insert failed, attempting fallback for attachment:", aErr.message || aErr);
+              console.warn(
+                "Primary insert failed, attempting fallback for attachment:",
+                aErr.message || aErr,
+              );
               // Fallback minimal insert for older/newer schemas
               try {
-                const originalNameFb = (file && (file.originalname || file.filename)) || "attachment";
+                const originalNameFb =
+                  (file && (file.originalname || file.filename)) ||
+                  "attachment";
                 const extFb = path.extname(originalNameFb) || "";
-                const safeBaseFb = file && file.filename ? file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
-                const safeFileNameFb = String(safeBaseFb).slice(0, 255) + (extFb ? extFb : "");
+                const safeBaseFb =
+                  file && file.filename
+                    ? file.filename
+                    : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+                const safeFileNameFb =
+                  String(safeBaseFb).slice(0, 255) + (extFb ? extFb : "");
                 const safeFilePathFb = `/uploads/tickets/${safeFileNameFb}`;
                 await pool.query(
                   `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
-                  [ticket.id, initialCommentId, createdBy, safeFileNameFb, safeFilePathFb, file.size, file.mimetype]
+                  [
+                    ticket.id,
+                    initialCommentId,
+                    createdBy,
+                    safeFileNameFb,
+                    safeFilePathFb,
+                    file.size,
+                    file.mimetype,
+                  ],
                 );
-                console.log("Saved attachment (fallback) for ticket:", ticket.id, safeFileNameFb);
+                console.log(
+                  "Saved attachment (fallback) for ticket:",
+                  ticket.id,
+                  safeFileNameFb,
+                );
               } catch (fbErr) {
-                console.error("Failed to save attachment record (fallback):", fbErr);
+                console.error(
+                  "Failed to save attachment record (fallback):",
+                  fbErr,
+                );
               }
             }
           }
@@ -953,7 +1014,9 @@ router.post(
             const cacheAny: any = (global as any)._attachmentColumnsCache || {};
             if (cacheAny._attachmentColumns) return cacheAny._attachmentColumns;
             try {
-              const res = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'ticket_attachments'");
+              const res = await pool.query(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'ticket_attachments'",
+              );
               const cols = new Set(res.rows.map((r: any) => r.column_name));
               cacheAny._attachmentColumns = cols;
               (global as any)._attachmentColumnsCache = cacheAny;
@@ -964,9 +1027,14 @@ router.post(
           })();
 
           try {
-            const originalName = (req.file && (req.file.originalname || req.file.filename)) || "attachment";
+            const originalName =
+              (req.file && (req.file.originalname || req.file.filename)) ||
+              "attachment";
             const ext = path.extname(originalName) || "";
-            const base = req.file && req.file.filename ? req.file.filename : `ticket-${Date.now()}-${Math.floor(Math.random()*1e6)}`;
+            const base =
+              req.file && req.file.filename
+                ? req.file.filename
+                : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const safeFileName = String(base).slice(0, 255) + (ext ? ext : "");
             const safeOriginal = String(originalName).slice(0, 255);
             const safeFilePath = `/uploads/tickets/${safeFileName}`;
@@ -974,29 +1042,62 @@ router.post(
             const cols: string[] = [];
             const vals: any[] = [];
 
-            cols.push("ticket_id"); vals.push(ticketId);
-            cols.push("comment_id"); vals.push(targetCommentId);
+            cols.push("ticket_id");
+            vals.push(ticketId);
+            cols.push("comment_id");
+            vals.push(targetCommentId);
 
-            if (attachmentColumnsSingle.has("user_id")) { cols.push("user_id"); vals.push(userId); }
-            if (attachmentColumnsSingle.has("uploaded_by")) { cols.push("uploaded_by"); vals.push(userId); }
+            if (attachmentColumnsSingle.has("user_id")) {
+              cols.push("user_id");
+              vals.push(userId);
+            }
+            if (attachmentColumnsSingle.has("uploaded_by")) {
+              cols.push("uploaded_by");
+              vals.push(userId);
+            }
 
-            if (attachmentColumnsSingle.has("filename")) { cols.push("filename"); vals.push(safeFileName); }
-            if (attachmentColumnsSingle.has("original_filename")) { cols.push("original_filename"); vals.push(safeOriginal); }
-            if (attachmentColumnsSingle.has("file_name")) { cols.push("file_name"); vals.push(safeFileName); }
+            if (attachmentColumnsSingle.has("filename")) {
+              cols.push("filename");
+              vals.push(safeFileName);
+            }
+            if (attachmentColumnsSingle.has("original_filename")) {
+              cols.push("original_filename");
+              vals.push(safeOriginal);
+            }
+            if (attachmentColumnsSingle.has("file_name")) {
+              cols.push("file_name");
+              vals.push(safeFileName);
+            }
 
-            if (attachmentColumnsSingle.has("file_path")) { cols.push("file_path"); vals.push(safeFilePath); }
-            if (attachmentColumnsSingle.has("file_size")) { cols.push("file_size"); vals.push(req.file.size); }
-            if (attachmentColumnsSingle.has("mime_type")) { cols.push("mime_type"); vals.push(req.file.mimetype); }
+            if (attachmentColumnsSingle.has("file_path")) {
+              cols.push("file_path");
+              vals.push(safeFilePath);
+            }
+            if (attachmentColumnsSingle.has("file_size")) {
+              cols.push("file_size");
+              vals.push(req.file.size);
+            }
+            if (attachmentColumnsSingle.has("mime_type")) {
+              cols.push("mime_type");
+              vals.push(req.file.mimetype);
+            }
 
             const placeholders = cols.map((_, i) => `$${i + 1}`);
             const sql = `INSERT INTO ticket_attachments (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
             const insertRes = await pool.query(sql, vals);
             const saved = insertRes.rows[0];
 
-            console.log("File uploaded and saved for ticket:", ticketId, saved.filename || saved.file_name);
+            console.log(
+              "File uploaded and saved for ticket:",
+              ticketId,
+              saved.filename || saved.file_name,
+            );
             res.status(201).json(saved);
           } catch (aErr) {
-            console.warn("Primary attachment insert failed, attempting fallback:", aErr.message || aErr);
+            console.warn(
+              "Primary attachment insert failed, attempting fallback:",
+              aErr.message || aErr,
+            );
             // Fallback for alternate schema
             try {
               // Ensure we have a target comment id for fallback as well
@@ -1019,22 +1120,45 @@ router.post(
                 }
               }
 
-              const originalName2 = (req.file && (req.file.originalname || req.file.filename)) || "attachment";
+              const originalName2 =
+                (req.file && (req.file.originalname || req.file.filename)) ||
+                "attachment";
               const ext2 = path.extname(originalName2) || "";
-              const safeBase2 = req.file && req.file.filename ? req.file.filename : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-              const safeFileName2 = String(safeBase2).slice(0, 255) + (ext2 ? ext2 : "");
+              const safeBase2 =
+                req.file && req.file.filename
+                  ? req.file.filename
+                  : `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+              const safeFileName2 =
+                String(safeBase2).slice(0, 255) + (ext2 ? ext2 : "");
               const safeFilePath2 = `/uploads/tickets/${safeFileName2}`;
               const insertRes2 = await pool.query(
                 `INSERT INTO ticket_attachments (ticket_id, comment_id, uploaded_by, file_name, file_path, file_size, mime_type, uploaded_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
-                [ticketId, targetCommentId2, userId, safeFileName2, safeFilePath2, req.file.size, req.file.mimetype],
+                [
+                  ticketId,
+                  targetCommentId2,
+                  userId,
+                  safeFileName2,
+                  safeFilePath2,
+                  req.file.size,
+                  req.file.mimetype,
+                ],
               );
               const saved2 = insertRes2.rows[0];
-              console.log("File uploaded and saved (fallback) for ticket:", ticketId, saved2.file_name || saved2.filename);
+              console.log(
+                "File uploaded and saved (fallback) for ticket:",
+                ticketId,
+                saved2.file_name || saved2.filename,
+              );
               res.status(201).json(saved2);
             } catch (fbErr) {
-              console.error("Failed to save uploaded attachment (fallback):", fbErr);
-              return res.status(500).json({ error: "Failed to save attachment" });
+              console.error(
+                "Failed to save uploaded attachment (fallback):",
+                fbErr,
+              );
+              return res
+                .status(500)
+                .json({ error: "Failed to save attachment" });
             }
           }
         } catch (dbErr) {

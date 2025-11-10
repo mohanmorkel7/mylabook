@@ -457,7 +457,7 @@ export function MailConfigModal({
             <div className="space-y-2">
               <Label htmlFor="team">Team (optional)</Label>
               <Select
-                value={(config.team_id || "") as any}
+                value={config.team_id ? String(config.team_id) : "__none"}
                 onValueChange={(v) =>
                   setConfig({
                     ...config,

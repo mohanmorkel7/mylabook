@@ -555,9 +555,7 @@ export default function ManageTickets() {
                 )
                 .slice(0, 3)
                 .map((t) => {
-                  const slaMs = t.sla_time
-                    ? new Date(t.sla_time).getTime() - now
-                    : null;
+                  const slaMs = computeSlaMsForTicket(t);
                   if (slaMs !== null && slaMs <= 0) {
                     markOverdue(t);
                   }
@@ -628,9 +626,7 @@ export default function ManageTickets() {
                 )
                 .slice(0, 3)
                 .map((t) => {
-                  const slaMs = t.sla_time
-                    ? new Date(t.sla_time).getTime() - now
-                    : null;
+                  const slaMs = computeSlaMsForTicket(t);
                   if (slaMs !== null && slaMs <= 0) {
                     markOverdue(t);
                   }
@@ -690,9 +686,7 @@ export default function ManageTickets() {
                 )
                 .slice(0, 3)
                 .map((t) => {
-                  const slaMs = t.sla_time
-                    ? new Date(t.sla_time).getTime() - now
-                    : null;
+                  const slaMs = computeSlaMsForTicket(t);
                   if (slaMs !== null && slaMs <= 0) {
                     markOverdue(t);
                   }

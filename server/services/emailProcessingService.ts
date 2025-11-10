@@ -76,13 +76,6 @@ export class EmailProcessingService {
     config: MailConfig,
   ): Promise<{ ticketId?: number; success: boolean; error?: string }> {
     try {
-      if (!REDMINE_API_KEY) {
-        return {
-          success: false,
-          error: "Redmine API key not configured",
-        };
-      }
-
       // Extract email details
       const subject = email.subject || "(No subject)";
       const fromEmail =
@@ -107,41 +100,26 @@ Received: ${email.receivedDateTime || "Unknown"}
 
 ${bodyText}`;
 
-      // Create ticket payload
-      const payload: TicketPayload = {
-        issue: {
-          project_id: config.project_id,
-          subject: subject,
-          description: description,
-          assigned_to_id: config.assigned_to_id,
-          priority_id: config.priority_id,
-          watcher_user_ids: config.watcher_user_ids || [],
-        },
-      };
-console.log("FETCHED MAIL MATCHES WITH CONFIG",payload)
-      // Call Redmine API to create ticket
-      const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const errorData = await response.text();
-        return {
-          success: false,
-          error: `Redmine API error: ${response.status} - ${errorData}`,
-        };
-      }
+      // Create ticket in app database using TicketRepository
+      const ticketData = {
+        subject,
+        description,
+        priority_id: config.priority_id,
+        team_id: config.team_id,
+        bucket_id: config.bucket_id,
+        demand: config.demand,
+        assigned_to: config.assigned_to_id,
+        project_id: config.project_id,
+      } as any;
 
-      const responseData = (await response.json()) as any;
-      const ticketId = responseData.issue?.id;
+      // createdBy: prefer config.user_id else assigned_to
+      const createdBy = (config as any).user_id || config.assigned_to_id || 1;
 
-      return {
-        ticketId,
-        success: true,
-      };
+      const createdTicket = await (
+        await import("../models/Ticket")
+      ).TicketRepository.create(ticketData, createdBy);
+
+      return { ticketId: createdTicket.id, success: true };
     } catch (error) {
       return {
         success: false,

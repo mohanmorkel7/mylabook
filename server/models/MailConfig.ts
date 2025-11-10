@@ -16,6 +16,10 @@ export interface MailConfig {
   priority_id: number;
   assigned_to_id: number;
   watcher_user_ids: number[];
+  team_id?: number;
+  bucket_id?: number;
+  status_id?: number;
+  demand?: number; // 0/1/2 mapping for SLA
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -52,6 +56,10 @@ export interface UpdateMailConfigData {
   priority_id?: number;
   assigned_to_id?: number;
   watcher_user_ids?: number[];
+  team_id?: number;
+  bucket_id?: number;
+  status_id?: number;
+  demand?: number;
   is_active?: boolean;
 }
 
@@ -60,8 +68,9 @@ export class MailConfigRepository {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
              from_email, to_email, subject_pattern, body_content, body_match_type,
-             project_id, priority_id, assigned_to_id, watcher_user_ids,
-             is_active, created_at, updated_at
+            project_id, priority_id, assigned_to_id, watcher_user_ids,
+            team_id, bucket_id, status_id, demand,
+            is_active, created_at, updated_at
       FROM mail_configs
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -77,8 +86,9 @@ export class MailConfigRepository {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
              from_email, to_email, subject_pattern, body_content, body_match_type,
-             project_id, priority_id, assigned_to_id, watcher_user_ids,
-             is_active, created_at, updated_at
+            project_id, priority_id, assigned_to_id, watcher_user_ids,
+            team_id, bucket_id, status_id, demand,
+            is_active, created_at, updated_at
       FROM mail_configs
       WHERE id = $1 AND user_id = $2
     `;
@@ -90,8 +100,9 @@ export class MailConfigRepository {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
              from_email, to_email, subject_pattern, body_content, body_match_type,
-             project_id, priority_id, assigned_to_id, watcher_user_ids,
-             is_active, created_at, updated_at
+            project_id, priority_id, assigned_to_id, watcher_user_ids,
+            team_id, bucket_id, status_id, demand,
+            is_active, created_at, updated_at
       FROM mail_configs
       WHERE user_id = $1 AND is_active = true
       ORDER BY created_at DESC
@@ -105,12 +116,13 @@ export class MailConfigRepository {
       INSERT INTO mail_configs (
         user_id, name, description, field_type, field_value,
         from_email, to_email, subject_pattern, body_content, body_match_type,
-        project_id, priority_id, assigned_to_id, watcher_user_ids
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        project_id, priority_id, assigned_to_id, watcher_user_ids, team_id, bucket_id, status_id, demand
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING id, user_id, name, description, field_type, field_value,
                 from_email, to_email, subject_pattern, body_content, body_match_type,
-                project_id, priority_id, assigned_to_id, watcher_user_ids,
-                is_active, created_at, updated_at
+            project_id, priority_id, assigned_to_id, watcher_user_ids,
+            team_id, bucket_id, status_id, demand,
+            is_active, created_at, updated_at
     `;
 
     const values = [
@@ -128,6 +140,10 @@ export class MailConfigRepository {
       data.priority_id,
       data.assigned_to_id,
       data.watcher_user_ids || [],
+      data.team_id || null,
+      data.bucket_id || null,
+      data.status_id || null,
+      data.demand !== undefined ? data.demand : null,
     ];
 
     const result = await pool.query(query, values);
@@ -165,8 +181,9 @@ export class MailConfigRepository {
       WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
       RETURNING id, user_id, name, description, field_type, field_value,
                 from_email, to_email, subject_pattern, body_content, body_match_type,
-                project_id, priority_id, assigned_to_id, watcher_user_ids,
-                is_active, created_at, updated_at
+            project_id, priority_id, assigned_to_id, watcher_user_ids,
+            team_id, bucket_id, status_id, demand,
+            is_active, created_at, updated_at
     `;
 
     const result = await pool.query(query, values);

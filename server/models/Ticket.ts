@@ -250,7 +250,10 @@ export class TicketRepository {
         };
         const hours = PRIORITY_SLA_HOURS[Number(priority_id)];
         if (hours !== undefined && !isNaN(Number(hours))) {
-          computedSlaValue = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+          const d = new Date(Date.now() + hours * 3600 * 1000);
+          // Format as 'YYYY-MM-DD HH:mm:ss' (no timezone) so DB stores the literal UTC instant
+          const pad = (n: number) => String(n).padStart(2, "0");
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         } else {
           computedSlaValue = null;
         }

@@ -97,6 +97,10 @@ router.post("/", async (req: Request, res: Response) => {
       priority_id,
       assigned_to_id,
       watcher_user_ids,
+      team_id,
+      bucket_id,
+      status_id,
+      demand,
     } = req.body;
 
     // Validate required fields

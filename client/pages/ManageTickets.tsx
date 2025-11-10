@@ -76,6 +76,7 @@ export default function ManageTickets() {
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState<number>(Date.now());
   const [overdueStatusId, setOverdueStatusId] = useState<number | null>(null);
+  const serverTimeOffsetRef = useRef<number>(0); // clientNow - serverNow (ms) to adjust remaining time calculations
   const autoMarkedRef = useRef(new Set<number>());
   const { user: currentUser } = useAuth();
 

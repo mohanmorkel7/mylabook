@@ -373,7 +373,7 @@ export default function ManageTickets() {
       const hours = PRIORITY_SLA_HOURS[pr];
       if (!hours) return null;
       const createdTs = ticket.created_at
-        ? new Date(ticket.created_at).getTime()
+        ? parseTimestampAsUTC(ticket.created_at).getTime()
         : NaN;
       if (isNaN(createdTs)) return null;
       const slaTs = createdTs + hours * 3600 * 1000;
@@ -921,7 +921,7 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Created</p>
                               <p className="font-medium mt-1">
-                                {new Date(ticket.created_at).toLocaleString(
+                                {parseTimestampAsUTC(ticket.created_at).toLocaleString(
                                   "en-GB",
                                   {
                                     timeZone: "Asia/Kolkata",
@@ -939,7 +939,7 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Updated</p>
                               <p className="font-medium mt-1">
-                                {new Date(ticket.updated_at).toLocaleString(
+                                {parseTimestampAsUTC(ticket.updated_at).toLocaleString(
                                   "en-GB",
                                   {
                                     timeZone: "Asia/Kolkata",
@@ -1072,7 +1072,7 @@ export default function ManageTickets() {
                           <div>
                             <p className="text-gray-600">Created</p>
                             <p className="font-medium mt-1">
-                              {new Date(ticket.created_at).toLocaleString(
+                              {parseTimestampAsUTC(ticket.created_at).toLocaleString(
                                 "en-GB",
                                 {
                                   timeZone: "Asia/Kolkata",

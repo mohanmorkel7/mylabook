@@ -384,15 +384,17 @@ export default function ManageTickets() {
   const computeSlaMsForTicket = (ticket: any): number | null => {
     try {
       if (ticket.sla_time) {
-        const ts = new Date(ticket.sla_time).getTime();
+        const parsed = parseTimestampAsUTC(ticket.sla_time);
+        const ts = parsed ? parsed.getTime() : NaN;
         if (isNaN(ts)) return null;
         return ts - Date.now();
       }
 
-      // Fallback mapping (must match server mapping)
+      // Fallback mapping (use priority IDs that the UI uses)
       const PRIORITY_SLA_HOURS: Record<number, number> = {
-        1: 2,
-        2: 4,
+        0: 2, // Priority 0 -> 2 hours
+        1: 5, // Priority 1 -> 5 hours
+        2: 24, // Priority 2 -> End of day -> 24 hours
         3: 8,
         4: 24,
         5: 48,
@@ -402,7 +404,7 @@ export default function ManageTickets() {
         ticket.priority_id ?? ticket.priority?.id ?? ticket.priority_id,
       );
       const hours = PRIORITY_SLA_HOURS[pr];
-      if (!hours) return null;
+      if (hours === undefined || hours === null) return null;
       const createdTs = ticket.created_at
         ? parseTimestampAsUTC(ticket.created_at).getTime()
         : NaN;
@@ -410,6 +412,7 @@ export default function ManageTickets() {
       const slaTs = createdTs + hours * 3600 * 1000;
       return slaTs - Date.now();
     } catch (e) {
+      console.error('SLA compute error', e);
       return null;
     }
   };

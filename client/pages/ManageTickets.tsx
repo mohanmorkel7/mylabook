@@ -470,32 +470,32 @@ export default function ManageTickets() {
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="flex flex-col items-center justify-center py-8">
+          <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-orange-500">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
+              {tickets.filter((t) => { const s = (t as any).status?.name || t.status; return (/in progress/i.test(String(s || "")) || /in_progress/i.test(String(s || ""))); }).length}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">In Progress</p>
+            <p className="text-xs text-muted-foreground mt-1">{getSlaTextFor(tickets.filter((t) => { const s = (t as any).status?.name || t.status; return (/in progress/i.test(String(s || "")) || /in_progress/i.test(String(s || ""))); }))}</p>
+
+            <ul className="mt-3 w-full px-4 space-y-2">
+              {tickets
+                .filter((t) => { const s = (t as any).status?.name || t.status; return (/in progress/i.test(String(s || "")) || /in_progress/i.test(String(s || ""))); })
+                .filter((t) => t.sla_time)
+                .sort((a, b) => new Date(a.sla_time).getTime() - new Date(b.sla_time).getTime())
+                .slice(0, 3)
+                .map((t) => {
+                  const slaMs = t.sla_time ? new Date(t.sla_time).getTime() - now : null;
+                  if (slaMs !== null && slaMs <= 0) {
+                    markOverdue(t);
+                  }
                   return (
-                    /in progress/i.test(String(s || "")) ||
-                    /in_progress/i.test(String(s || ""))
+                    <li key={t.id} className="flex items-center justify-between text-sm">
+                      <span className="truncate mr-2">{t.subject}</span>
+                      <span className={`font-medium ${slaMs !== null && slaMs <= 0 ? 'text-red-600' : 'text-gray-700'}`}>{formatRemaining(slaMs)}</span>
+                    </li>
                   );
-                }).length
-              }
-            </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">
-              In Progress
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {getSlaTextFor(
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    /in progress/i.test(String(s || "")) ||
-                    /in_progress/i.test(String(s || ""))
-                  );
-                }),
-              )}
-            </p>
+                })}
+            </ul>
           </CardContent>
         </Card>
 

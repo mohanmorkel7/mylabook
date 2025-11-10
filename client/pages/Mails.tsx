@@ -235,7 +235,8 @@ export default function Mails() {
           console.log(
             "Triggering periodic email processing with",
             emails.length,
-            "emails",emails
+            "emails",
+            emails,
           );
           const resp = await api.post("/mail-configs/process-emails", {
             emails,

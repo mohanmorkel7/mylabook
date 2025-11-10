@@ -389,10 +389,14 @@ export default function ManageTickets() {
   // Otherwise, fallback to created_at + priority-based SLA hours.
   const computeSlaMsForTicket = (ticket: any): number | null => {
     try {
+      if (ticket.sla_remaining_ms !== undefined && ticket.sla_remaining_ms !== null) {
+        return Number(ticket.sla_remaining_ms);
+      }
       if (ticket.sla_time) {
         const parsed = parseTimestampAsUTC(ticket.sla_time);
         const ts = parsed ? parsed.getTime() : NaN;
         if (isNaN(ts)) return null;
+        // Fallback: compute relative to server offset
         return ts - (Date.now() - serverTimeOffsetRef.current);
       }
 

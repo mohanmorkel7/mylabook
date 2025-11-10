@@ -292,6 +292,24 @@ export default function ManageTickets() {
     return p ? { name: p.name, color: p.color } : null;
   };
 
+  const getSlaTextFor = (ticketSubset: any[]) => {
+    if (!ticketSubset || ticketSubset.length === 0) return "No SLA"
+    // Find earliest sla_time among tickets that have sla_time
+    const slaTimes = ticketSubset
+      .map((t) => t.sla_time ? new Date(t.sla_time).getTime() : null)
+      .filter((ts) => ts && !isNaN(ts)) as number[];
+    if (slaTimes.length === 0) return "No SLA"
+    const earliest = Math.min(...slaTimes);
+    const now = Date.now();
+    if (earliest < now) {
+      // overdue
+      const diff = formatDistanceToNowStrict(new Date(earliest), {addSuffix: true});
+      return `Overdue ${diff.replace(' ago','')}`;
+    }
+    const diff = formatDistanceToNowStrict(new Date(earliest), {addSuffix: true});
+    return `Due ${diff.replace(' in ','')}`;
+  };
+
   const isAnyFilterActive = Object.values(filters).some((v) => v !== "");
 
   // Pagination calculations

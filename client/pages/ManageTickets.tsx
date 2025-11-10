@@ -532,7 +532,6 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
-
           </CardContent>
         </Card>
 
@@ -552,7 +551,6 @@ export default function ManageTickets() {
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress
             </p>
-
           </CardContent>
         </Card>
 
@@ -567,7 +565,6 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
-
           </CardContent>
         </Card>
 
@@ -603,7 +600,6 @@ export default function ManageTickets() {
               }
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
-
           </CardContent>
         </Card>
       </div>

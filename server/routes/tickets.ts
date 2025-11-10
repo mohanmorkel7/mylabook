@@ -706,29 +706,51 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
           .json({ error: "Forbidden: not allowed to update ticket" });
       }
 
-      // If status is being changed to an 'Overdue' status, require reason
-      if (updateData.status_id) {
-        try {
-          const statusRes = await pool.query(
-            "SELECT name FROM ticket_statuses WHERE id = $1",
-            [updateData.status_id],
-          );
-          const statusName = statusRes.rows[0]?.name || "";
-          if (String(statusName).toLowerCase().includes("overdue")) {
-            const reasonVal =
-              updateData.reason || (existing && (existing as any).reason);
-            if (!reasonVal || String(reasonVal).trim() === "") {
-              return res.status(400).json({
-                error: "Reason is required when marking a ticket as overdue",
-              });
-            }
+      // If the existing ticket is overdue and the status is being changed away, require a reason
+      try {
+        const isExistingOverdue = (() => {
+          try {
+            const sla = (existing as any).sla_time;
+            const isClosed = (existing as any).status?.is_closed === true || /closed/i.test(String((existing as any).status?.name || ""));
+            if (!sla || isClosed) return false;
+            const slaTs = new Date(sla).getTime();
+            return !isNaN(slaTs) && slaTs < Date.now();
+          } catch (e) {
+            return false;
           }
-        } catch (e) {
-          // ignore and proceed
+        })();
+
+        if (isExistingOverdue && updateData.status_id && updateData.status_id !== existing.status_id) {
+          const reasonVal = updateData.reason || (existing && (existing as any).reason);
+          if (!reasonVal || String(reasonVal).trim() === "") {
+            return res.status(400).json({
+              error: "Reason is required when changing status of an overdue ticket",
+            });
+          }
         }
+      } catch (e) {
+        // ignore
       }
 
       const ticket = await TicketRepository.update(id, updateData, updatedBy);
+
+      // Record status change reason if provided and status changed
+      try {
+        if (updateData.status_id && updateData.status_id !== existing.status_id) {
+          const fromStatusId = existing.status_id;
+          const toStatusId = updateData.status_id;
+          const reason = updateData.reason || null;
+          const userId = (req as any).userId || updatedBy;
+          await pool.query(
+            `INSERT INTO ticket_status_changes (ticket_id, from_status_id, to_status_id, reason, user_id, created_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [id, fromStatusId, toStatusId, reason, userId],
+          );
+        }
+      } catch (logErr) {
+        console.warn("Failed to record ticket status change:", logErr.message || logErr);
+      }
+
       res.json(ticket);
     } else {
       // Mock update

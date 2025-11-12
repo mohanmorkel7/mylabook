@@ -707,7 +707,8 @@ export async function getTodayEmails(): Promise<Email[]> {
       console.log(
         `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
       );
-      const hasTableTags = email.body.includes("<table") || email.body.includes("<TABLE");
+      const hasTableTags =
+        email.body.includes("<table") || email.body.includes("<TABLE");
       const hasHTMLTags = /<[^>]+>/.test(email.body);
       console.log(
         `📧 EMAIL Has HTML: ${hasHTMLTags} | Has Tables: ${hasTableTags}`,

@@ -290,16 +290,28 @@ export async function getTodayEmails(): Promise<Email[]> {
       body.append("client_secret", clientSecret);
       body.append("scope", "https://graph.microsoft.com/.default");
 
+      console.log("getTodayEmails: requesting app token from Azure AD");
       const res = await fetch(url, {
         method: "POST",
         body: body.toString(),
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
       if (!res.ok) {
-        console.error("Failed to acquire Azure AD token", await res.text());
+        const text = await res.text();
+        console.error(
+          "Failed to acquire Azure AD token",
+          res.status,
+          res.statusText,
+          text,
+        );
         return null;
       }
       const data = await res.json();
+      if (!data || !data.access_token) {
+        console.error("Azure AD token response missing access_token:", data);
+        return null;
+      }
+      console.log("getTodayEmails: acquired Azure AD token (masked)");
       return data.access_token as string;
     } catch (error) {
       console.error("Error fetching app token:", error);
@@ -308,7 +320,10 @@ export async function getTodayEmails(): Promise<Email[]> {
   }
 
   const token = await getAppToken();
-  if (!token) return [];
+  if (!token) {
+    console.warn("getTodayEmails: no token, aborting");
+    return [];
+  }
 
   // Determine start of today in UTC for filtering
   const now = new Date();
@@ -323,6 +338,7 @@ export async function getTodayEmails(): Promise<Email[]> {
     ),
   );
   const startISO = startOfDay.toISOString();
+  console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
 
   // Get active users with azure_object_id
   let users: { id: number; email: string; azure_object_id: string }[] = [];
@@ -331,6 +347,17 @@ export async function getTodayEmails(): Promise<Email[]> {
       "SELECT DISTINCT id, email, azure_object_id FROM users WHERE status = 'active' AND azure_object_id IS NOT NULL",
     );
     users = res.rows;
+    console.log(
+      `getTodayEmails: found ${users.length} active users with azure_object_id`,
+    );
+    if (users.length > 0) {
+      console.log(
+        "getTodayEmails: sample user identifiers:",
+        users
+          .slice(0, 5)
+          .map((u) => ({ id: u.id, azure: u.azure_object_id, email: u.email })),
+      );
+    }
   } catch (error) {
     console.error("Failed to fetch active users for email fetching:", error);
     return [];
@@ -342,22 +369,48 @@ export async function getTodayEmails(): Promise<Email[]> {
   for (const u of users) {
     const identifier = u.azure_object_id || u.email;
     try {
-      const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(identifier)}/mailFolders/Inbox/messages?$top=50&$filter=receivedDateTime ge ${encodeURIComponent(startISO)}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+      // Build filter: receivedDateTime ge <ISO>
+      // Microsoft Graph filters expect an ISO string; include quotes to be safe
+      const filterValue = encodeURIComponent(`${startISO}`);
+      const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+        identifier,
+      )}/mailFolders/Inbox/messages?$top=50&$filter=receivedDateTime ge ${filterValue}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+
+      console.log(`getTodayEmails: fetching messages for user ${identifier}`);
       const res = await fetch(graphUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       });
+      console.log(
+        `getTodayEmails: graph response for ${identifier}: ${res.status} ${res.statusText}`,
+      );
+
+      const text = await res.text();
+      // Try to parse JSON only when response is JSON
+      let data: any = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (parseErr) {
+        console.warn(
+          `getTodayEmails: failed to parse Graph response JSON for ${identifier}:`,
+          parseErr,
+        );
+        data = { rawText: text };
+      }
+
       if (!res.ok) {
-        const text = await res.text();
         console.warn(
           `Graph fetch failed for ${identifier}: ${res.status} ${res.statusText} - ${text}`,
         );
         continue;
       }
-      const data = await res.json();
-      const items = Array.isArray(data.value) ? data.value : [];
+
+      const items = Array.isArray(data?.value) ? data.value : [];
+      console.log(
+        `getTodayEmails: user ${identifier} returned ${items.length} messages`,
+      );
 
       for (const it of items) {
         const fromAddr =

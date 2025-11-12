@@ -352,143 +352,99 @@ export async function getTodayEmails(): Promise<Email[]> {
   const startISO = startOfDay.toISOString();
   console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
 
-  // Get active users with azure_object_id
-  let users: { id: number; email: string; azure_object_id: string }[] = [];
+  const allEmails: Email[] = [];
+  const reconopsEmail = "reconops@mindeed.in";
+
   try {
-    const res = await pool.query(
-      "SELECT DISTINCT id, email, azure_object_id FROM users WHERE status = 'active' AND azure_object_id IS NOT NULL",
-    );
-    users = res.rows;
-    console.log(
-      `getTodayEmails: found ${users.length} active users with azure_object_id`,
-    );
-    if (users.length > 0) {
-      console.log(
-        "getTodayEmails: sample user identifiers:",
-        users
-          .slice(0, 5)
-          .map((u) => ({ id: u.id, azure: u.azure_object_id, email: u.email })),
-      );
+    console.log(`getTodayEmails: fetching messages from ${reconopsEmail}`);
+
+    // Build filter: receivedDateTime ge <ISO>
+    const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      reconopsEmail,
+    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+
+    // Add 10-second timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    let res;
+    try {
+      res = await fetch(graphUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
     }
-  } catch (error) {
-    console.error("Failed to fetch active users for email fetching:", error);
+
+    console.log(
+      `getTodayEmails: graph response for ${reconopsEmail}: ${res.status} ${res.statusText}`,
+    );
+
+    const text = await res.text();
+    // Try to parse JSON only when response is JSON
+    let data: any = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (parseErr) {
+      console.warn(
+        `getTodayEmails: failed to parse Graph response JSON:`,
+        parseErr,
+      );
+      data = { rawText: text };
+    }
+
+    if (!res.ok) {
+      console.warn(
+        `Graph fetch failed for ${reconopsEmail}: ${res.status} ${res.statusText} - ${text}`,
+      );
+      return [];
+    }
+
+    const items = Array.isArray(data?.value) ? data.value : [];
+    console.log(
+      `getTodayEmails: ${reconopsEmail} mailbox returned ${items.length} messages`,
+    );
+
+    for (const it of items) {
+      const fromAddr =
+        (it.from &&
+          it.from.emailAddress &&
+          (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+        "";
+      const toAddr = Array.isArray(it.toRecipients)
+        ? it.toRecipients
+            .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+            .filter(Boolean)
+            .join(", ")
+        : "";
+      const bodyText =
+        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+
+      allEmails.push({
+        id: String(it.id),
+        subject: it.subject || "",
+        from: fromAddr,
+        to: toAddr,
+        body:
+          typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+        receivedDateTime: it.receivedDateTime,
+      });
+    }
+  } catch (err) {
+    console.error(
+      `Error fetching messages from ${reconopsEmail}:`,
+      (err as any)?.message || err,
+    );
     return [];
   }
 
-  const allEmails: Email[] = [];
-
-  // Fetch messages for each user (sequential to avoid throttling - adjust concurrency if needed)
-  for (const u of users) {
-    const identifier = u.azure_object_id || u.email;
-    try {
-      // Build filter: receivedDateTime ge <ISO>
-      // Microsoft Graph filters expect an ISO string; include quotes to be safe
-      const filterValue = encodeURIComponent(`${startISO}`);
-      const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
-        identifier,
-      )}/mailFolders/Inbox/messages?$top=50&$filter=receivedDateTime ge ${filterValue}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
-
-      console.log(`getTodayEmails: fetching messages for user ${identifier}`);
-
-      // Add 10-second timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      let res;
-      try {
-        res = await fetch(graphUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      console.log(
-        `getTodayEmails: graph response for ${identifier}: ${res.status} ${res.statusText}`,
-      );
-
-      const text = await res.text();
-      // Try to parse JSON only when response is JSON
-      let data: any = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch (parseErr) {
-        console.warn(
-          `getTodayEmails: failed to parse Graph response JSON for ${identifier}:`,
-          parseErr,
-        );
-        data = { rawText: text };
-      }
-
-      if (!res.ok) {
-        console.warn(
-          `Graph fetch failed for ${identifier}: ${res.status} ${res.statusText} - ${text}`,
-        );
-        continue;
-      }
-
-      const items = Array.isArray(data?.value) ? data.value : [];
-      console.log(
-        `getTodayEmails: user ${identifier} returned ${items.length} messages`,
-      );
-
-      for (const it of items) {
-        const fromAddr =
-          (it.from &&
-            it.from.emailAddress &&
-            (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-          "";
-        const toAddr = Array.isArray(it.toRecipients)
-          ? it.toRecipients
-              .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
-              .filter(Boolean)
-              .join(", ")
-          : "";
-        const bodyText =
-          (it.body && (it.body.content || it.body.text)) ||
-          it.bodyPreview ||
-          "";
-
-        allEmails.push({
-          id: String(it.id),
-          subject: it.subject || "",
-          from: fromAddr,
-          to: toAddr,
-          body:
-            typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
-          receivedDateTime: it.receivedDateTime,
-        });
-      }
-    } catch (err) {
-      console.error(
-        `Error fetching messages for user ${identifier}:`,
-        (err as any)?.message || err,
-      );
-    }
-  }
-
   console.log(
-    `getTodayEmails fetched ${allEmails.length} emails from ${users.length} mailboxes`,
+    `getTodayEmails: fetched ${allEmails.length} emails from reconops@mindeed.in`,
   );
-
-  // Filter to only process emails from "reconops@mindeed.in"
-  const allowedSender = "reconops@mindeed.in";
-  const filteredEmails = allEmails.filter((email) => {
-    const matches = email.from.toLowerCase() === allowedSender.toLowerCase();
-    if (!matches) {
-      console.log(
-        `getTodayEmails: filtering out email from ${email.from} (not ${allowedSender})`,
-      );
-    }
-    return matches;
-  });
-
-  console.log(
-    `getTodayEmails: after sender filter, ${filteredEmails.length} emails remain from allowed sender`,
-  );
-  return filteredEmails;
+  return allEmails;
 }

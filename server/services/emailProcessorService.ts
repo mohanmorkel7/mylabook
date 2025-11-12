@@ -268,7 +268,94 @@ export async function processEmailsForConfigs(
  * This function should be called with the Outlook email data
  */
 export async function getTodayEmails(): Promise<Email[]> {
-  // This would typically call the Microsoft Graph API via your existing Mails service
-  // For now, return empty array - integration with Mails.tsx needed
-  return [];
+  // Server-side fetch using Microsoft Graph (client credentials)
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  if (!tenantId || !clientId || !clientSecret) {
+    console.warn("Azure AD credentials not configured, skipping getTodayEmails");
+    return [];
+  }
+
+  // Acquire app token
+  async function getAppToken(): Promise<string | null> {
+    try {
+      const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+      const body = new URLSearchParams();
+      body.append("grant_type", "client_credentials");
+      body.append("client_id", clientId);
+      body.append("client_secret", clientSecret);
+      body.append("scope", "https://graph.microsoft.com/.default");
+
+      const res = await fetch(url, { method: "POST", body: body.toString(), headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+      if (!res.ok) {
+        console.error("Failed to acquire Azure AD token", await res.text());
+        return null;
+      }
+      const data = await res.json();
+      return data.access_token as string;
+    } catch (error) {
+      console.error("Error fetching app token:", error);
+      return null;
+    }
+  }
+
+  const token = await getAppToken();
+  if (!token) return [];
+
+  // Determine start of today in UTC for filtering
+  const now = new Date();
+  const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+  const startISO = startOfDay.toISOString();
+
+  // Get active users with azure_object_id
+  let users: { id: number; email: string; azure_object_id: string }[] = [];
+  try {
+    const res = await pool.query("SELECT DISTINCT id, email, azure_object_id FROM users WHERE status = 'active' AND azure_object_id IS NOT NULL");
+    users = res.rows;
+  } catch (error) {
+    console.error("Failed to fetch active users for email fetching:", error);
+    return [];
+  }
+
+  const allEmails: Email[] = [];
+
+  // Fetch messages for each user (sequential to avoid throttling - adjust concurrency if needed)
+  for (const u of users) {
+    const identifier = u.azure_object_id || u.email;
+    try {
+      const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(identifier)}/mailFolders/Inbox/messages?$top=50&$filter=receivedDateTime ge ${encodeURIComponent(startISO)}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+      const res = await fetch(graphUrl, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn(`Graph fetch failed for ${identifier}: ${res.status} ${res.statusText} - ${text}`);
+        continue;
+      }
+      const data = await res.json();
+      const items = Array.isArray(data.value) ? data.value : [];
+
+      for (const it of items) {
+        const fromAddr = (it.from && it.from.emailAddress && (it.from.emailAddress.address || it.from.emailAddress.name)) || "";
+        const toAddr = Array.isArray(it.toRecipients)
+          ? it.toRecipients.map((r: any) => r.emailAddress?.address || r.emailAddress?.name).filter(Boolean).join(", ")
+          : "";
+        const bodyText = (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+
+        allEmails.push({
+          id: String(it.id),
+          subject: it.subject || "",
+          from: fromAddr,
+          to: toAddr,
+          body: typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+          receivedDateTime: it.receivedDateTime,
+        });
+      }
+    } catch (err) {
+      console.error(`Error fetching messages for user ${identifier}:`, (err as any)?.message || err);
+    }
+  }
+
+  console.log(`getTodayEmails fetched ${allEmails.length} emails from ${users.length} mailboxes`);
+  return allEmails;
 }

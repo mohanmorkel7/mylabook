@@ -123,47 +123,60 @@ export default function TicketDetailPage() {
                   const separatorIndex = lines.findIndex((line) =>
                     line.trim().startsWith("---"),
                   );
-                  let emailHeaders: string[] = [];
+                  let emailHeaderLines: string[] = [];
                   let emailBody: string[] = [];
 
                   if (separatorIndex > -1) {
-                    emailHeaders = lines.slice(0, separatorIndex);
+                    emailHeaderLines = lines.slice(0, separatorIndex);
                     emailBody = lines.slice(separatorIndex + 1);
                   } else {
                     emailBody = lines;
                   }
 
+                  // Process headers to hide long Email ID
+                  const emailHeaders = emailHeaderLines.map((line) => {
+                    if (line.includes("Email ID:")) {
+                      return "Email ID: [Message ID]";
+                    }
+                    return line;
+                  });
+
                   return (
                     <>
                       {/* Email Headers */}
                       {emailHeaders.length > 0 && (
-                        <div className="border-l-4 border-blue-500 bg-blue-50 p-3 rounded text-sm text-gray-700 space-y-1">
+                        <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded text-sm text-gray-700 space-y-1">
                           {emailHeaders.map((line, idx) => (
-                            <div key={idx}>{line}</div>
+                            <div key={idx} className="break-words">{line}</div>
                           ))}
                         </div>
                       )}
 
                       {/* Email Body - Rendered as HTML */}
-                      <div
-                        className="text-gray-800 space-y-3 break-words
-                          [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:my-3
-                          [&_thead]:bg-gray-100
-                          [&_th]:border [&_th]:border-gray-300 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold
-                          [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-2
-                          [&_tr]:hover:bg-gray-50
-                          [&_p]:my-2 [&_p]:leading-relaxed
-                          [&_pre]:bg-gray-100 [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto
-                          [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono
-                          [&_a]:text-blue-600 [&_a]:underline
-                          [&_strong]:font-semibold
-                          [&_em]:italic
-                          [&_hr]:my-4 [&_hr]:border-gray-300
-                          [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:py-2 [&_blockquote]:my-2 [&_blockquote]:text-gray-600"
-                        dangerouslySetInnerHTML={{
-                          __html: emailBody.join("\n"),
-                        }}
-                      />
+                      <div className="w-full overflow-x-auto">
+                        <div
+                          className="text-gray-800 space-y-3 break-words min-w-max
+                            [&_table]:border-collapse [&_table]:text-xs [&_table]:my-4 [&_table]:border [&_table]:border-gray-400
+                            [&_thead]:bg-gray-200
+                            [&_th]:border [&_th]:border-gray-400 [&_th]:px-2 [&_th]:py-2 [&_th]:text-left [&_th]:font-bold [&_th]:bg-gray-200
+                            [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1
+                            [&_tr]:even:bg-gray-50
+                            [&_p]:my-2 [&_p]:leading-relaxed [&_p]:text-gray-800
+                            [&_div]:text-gray-800
+                            [&_pre]:bg-gray-100 [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto [&_pre]:text-xs
+                            [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-xs
+                            [&_a]:text-blue-600 [&_a]:underline
+                            [&_strong]:font-semibold
+                            [&_b]:font-semibold
+                            [&_em]:italic
+                            [&_i]:italic
+                            [&_hr]:my-4 [&_hr]:border-gray-300
+                            [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:py-2 [&_blockquote]:my-2 [&_blockquote]:text-gray-600"
+                          dangerouslySetInnerHTML={{
+                            __html: emailBody.join("\n"),
+                          }}
+                        />
+                      </div>
                     </>
                   );
                 })()}

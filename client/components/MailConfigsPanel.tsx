@@ -115,7 +115,15 @@ export function MailConfigsPanel({
         ? `/mail-configs?userId=${user.id}`
         : "/mail-configs";
       const response = await api.get(endpoint);
-      setConfigs(response);
+      console.log("Fetched mail configs response:", response);
+      console.log("Response type:", typeof response);
+      console.log("Response is array?", Array.isArray(response));
+      console.log("Response length:", response?.length);
+
+      // Handle both array and object responses
+      const configsArray = Array.isArray(response) ? response : response?.data || response?.configs || [];
+      console.log("Final configs array:", configsArray);
+      setConfigs(configsArray);
     } catch (error) {
       console.error("Error fetching mail configs:", error);
       toast({
@@ -123,6 +131,7 @@ export function MailConfigsPanel({
         description: "Failed to load mail configs",
         variant: "destructive",
       });
+      setConfigs([]);
     } finally {
       setIsLoading(false);
     }

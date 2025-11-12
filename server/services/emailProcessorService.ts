@@ -584,7 +584,9 @@ export async function getTodayEmails(): Promise<Email[]> {
 
     if (foldersRes.ok) {
       const foldersData = await foldersRes.json();
-      const folders = Array.isArray(foldersData?.value) ? foldersData.value : [];
+      const folders = Array.isArray(foldersData?.value)
+        ? foldersData.value
+        : [];
       console.log(
         `getTodayEmails: user has ${folders.length} mailFolders available`,
       );
@@ -739,9 +741,7 @@ export async function getTodayEmails(): Promise<Email[]> {
             .join(", ")
         : "";
       const bodyText =
-        (it.body && (it.body.content || it.body.text)) ||
-        it.bodyPreview ||
-        "";
+        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
       const email = {
         id: String(it.id),

@@ -69,6 +69,14 @@ export default function TicketDetailPage() {
     }
   };
 
+  // Inject email body styles (must be before any early returns)
+  useLayoutEffect(() => {
+    const styleEl = document.createElement("style");
+    styleEl.textContent = emailBodyStyles;
+    document.head.appendChild(styleEl);
+    return () => styleEl.remove();
+  }, []);
+
   useEffect(() => {
     load();
   }, [id]);
@@ -101,14 +109,6 @@ export default function TicketDetailPage() {
   };
 
   if (!ticket) return <div className="p-6">Loading...</div>;
-
-  // Inject email body styles
-  useLayoutEffect(() => {
-    const styleEl = document.createElement("style");
-    styleEl.textContent = emailBodyStyles;
-    document.head.appendChild(styleEl);
-    return () => styleEl.remove();
-  }, []);
 
   const assignedName =
     ticket.assignee?.name ||

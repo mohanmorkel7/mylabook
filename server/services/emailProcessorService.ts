@@ -557,30 +557,32 @@ export async function getTodayEmails(): Promise<Email[]> {
   // IST is UTC+5:30, so we need to calculate today's date in IST timezone
   const now = new Date();
 
-  // Convert current UTC time to IST by adding 5.5 hours
-  const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
-  const istNow = new Date(now.getTime() + istOffset);
+  // Step 1: Get current time in IST by adding 5:30 hours to UTC
+  const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+  const istTime = new Date(now.getTime() + istOffsetMs);
 
-  // Get start of day in IST
-  const startOfDay = new Date(
-    Date.UTC(
-      istNow.getUTCFullYear(),
-      istNow.getUTCMonth(),
-      istNow.getUTCDate(),
-      0,
-      0,
-      0,
-    ),
+  // Step 2: Extract IST date components
+  const istYear = istTime.getUTCFullYear();
+  const istMonth = istTime.getUTCMonth();
+  const istDate = istTime.getUTCDate();
+
+  // Step 3: Create start of IST day (00:00:00 IST) and convert to UTC for API
+  // IST 00:00:00 = UTC 18:30:00 (previous day in UTC)
+  const istStartOfDay = new Date(Date.UTC(istYear, istMonth, istDate, 0, 0, 0));
+  const utcStartOfDay = new Date(istStartOfDay.getTime() - istOffsetMs);
+
+  // Step 4: Create end of IST day (24:00:00 IST = 00:00:00 next day IST) and convert to UTC
+  // IST 24:00:00 = UTC 18:30:00 (same day in UTC)
+  const istEndOfDay = new Date(
+    Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0),
   );
+  const utcEndOfDay = new Date(istEndOfDay.getTime() - istOffsetMs);
 
-  // Subtract IST offset to convert back to UTC for API filtering
-  const startISO = new Date(startOfDay.getTime() - istOffset).toISOString();
-
-  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-  const endISO = new Date(endOfDay.getTime() - istOffset).toISOString();
+  const startISO = utcStartOfDay.toISOString();
+  const endISO = utcEndOfDay.toISOString();
 
   console.log(
-    `getTodayEmails: filtering for emails received today (IST) between ${startISO} and ${endISO}`,
+    `getTodayEmails: filtering for emails received today (IST day ${istDate}) between ${startISO} and ${endISO}`,
   );
 
   const allEmails: Email[] = [];

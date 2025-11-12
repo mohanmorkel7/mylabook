@@ -17,18 +17,61 @@ import { Link, useNavigate } from "react-router-dom";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 
+interface StatusInfo {
+  id: number;
+  name: string;
+  color: string;
+  is_closed: boolean;
+  sort_order: number;
+  created_at?: string;
+}
+
+interface TicketAssignee {
+  id: number;
+  name: string;
+  email: string;
+}
+
+interface TicketPriority {
+  id: number;
+  name: string;
+  level: number;
+  color: string;
+  created_at?: string;
+}
+
 interface Ticket {
   id: number;
+  track_id: string;
   subject: string;
   description: string;
-  project_id: number;
-  assigned_to_id: number;
   priority_id: number;
-  status: string;
-  created_from_mail_config: boolean;
+  priority?: TicketPriority;
+  status_id: number;
+  status: StatusInfo;
+  category_id?: number;
+  team_id?: number;
+  bucket_id?: number;
+  demand?: number;
+  assigned_to_id?: number | null;
+  assignee?: TicketAssignee;
+  related_lead_id?: number;
+  related_client_id?: number;
+  created_by?: number;
+  estimated_hours?: number;
+  actual_hours?: number;
+  tags?: string[];
+  custom_fields?: any;
+  sla_time?: string;
+  sla_remaining_ms?: number;
+  resolved_at?: string;
+  closed_at?: string;
+  created_from_mail_config?: boolean;
   mail_config_id?: number;
   created_at: string;
   updated_at: string;
+  __server_time_ms?: number;
+  __fetched_at_ms?: number;
 }
 
 interface User {
@@ -240,7 +283,10 @@ export default function ManageTickets() {
 
     // Status filter
     if (filters.status) {
-      filtered = filtered.filter((t) => t.status === filters.status);
+      filtered = filtered.filter((t) => {
+        const statusName = (t.status as any)?.name || t.status;
+        return String(statusName).toLowerCase() === filters.status.toLowerCase();
+      });
     }
 
     // Assigned to filter

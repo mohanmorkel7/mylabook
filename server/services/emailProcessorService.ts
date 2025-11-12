@@ -684,16 +684,16 @@ export async function getTodayEmails(): Promise<Email[]> {
 
       // Remove Outlook security warnings
       if (typeof bodyText === "string") {
-        // Remove CAUTION message that Outlook adds (multiple patterns to catch variations)
+        // Remove CAUTION message - use very aggressive matching to catch all variations
+        // Match from CAUTION: to the next line or "safe."
         bodyText = bodyText.replace(
-          /CAUTION:\s*This email originated from outside of the organization\.\s*Do not click links or open attachments unless you recognize the sender and know the content is safe\.?\s*/gi,
+          /CAUTION:[^]*?safe\./gi,
           "",
         );
-        // Also try a simpler pattern if the above didn't work
-        bodyText = bodyText.replace(
-          /CAUTION:[^.]*know the content is safe\.?/gi,
-          "",
-        );
+        // If that didn't work, try matching just from CAUTION: to end of line
+        if (bodyText.includes("CAUTION:")) {
+          bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
+        }
         // Clean up extra whitespace
         bodyText = bodyText.trim();
       }

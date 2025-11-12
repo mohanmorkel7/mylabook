@@ -121,7 +121,9 @@ export function MailConfigsPanel({
       console.log("Response length:", response?.length);
 
       // Handle both array and object responses
-      const configsArray = Array.isArray(response) ? response : response?.data || response?.configs || [];
+      const configsArray = Array.isArray(response)
+        ? response
+        : response?.data || response?.configs || [];
       console.log("Final configs array:", configsArray);
       setConfigs(configsArray);
     } catch (error) {

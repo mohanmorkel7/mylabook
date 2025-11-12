@@ -142,12 +142,12 @@ export class EmailProcessingService {
       }
 
       // Remove Outlook security warnings - use aggressive matching to catch all variations
-      // Match from CAUTION: to the next line or "safe."
+      // Match from CAUTION: to "safe." (with any content in between including newlines)
       bodyText = bodyText.replace(
-        /CAUTION:[^]*?safe\./gi,
+        /CAUTION:[\s\S]*?safe\./gi,
         "",
       );
-      // If that didn't work, try matching just from CAUTION: to end of line
+      // If CAUTION is still present, try matching just from CAUTION: to end of line
       if (bodyText.includes("CAUTION:")) {
         bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
       }

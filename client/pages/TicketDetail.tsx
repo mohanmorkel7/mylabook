@@ -114,26 +114,45 @@ export default function TicketDetailPage() {
               <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardContent>
-              <div
-                className="prose max-w-none"
-                dangerouslySetInnerHTML={{
-                  __html: ((): string => {
-                    try {
-                      const raw = ticket.description || "";
-                      if (raw.includes("&lt;") || raw.includes("&gt;")) {
-                        const parser = new DOMParser();
-                        return (
-                          parser.parseFromString(raw, "text/html").body
-                            .textContent || ""
-                        );
-                      }
-                      return raw;
-                    } catch (e) {
-                      return ticket.description || "";
-                    }
-                  })(),
-                }}
-              />
+              <div className="space-y-4">
+                {(() => {
+                  const raw = ticket.description || "";
+                  const lines = raw.split("\n");
+
+                  // Extract email header info (lines before "---")
+                  const separatorIndex = lines.findIndex(line => line.trim().startsWith("---"));
+                  let emailHeaders: string[] = [];
+                  let emailBody: string[] = [];
+
+                  if (separatorIndex > -1) {
+                    emailHeaders = lines.slice(0, separatorIndex);
+                    emailBody = lines.slice(separatorIndex + 1);
+                  } else {
+                    emailBody = lines;
+                  }
+
+                  return (
+                    <>
+                      {/* Email Headers */}
+                      {emailHeaders.length > 0 && (
+                        <div className="border-l-4 border-blue-500 bg-blue-50 p-3 rounded text-sm text-gray-700 space-y-1">
+                          {emailHeaders.map((line, idx) => (
+                            <div key={idx}>{line}</div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Email Body - Rendered as HTML */}
+                      <div
+                        className="prose prose-sm max-w-none text-gray-800 [&>*]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_th]:bg-gray-100"
+                        dangerouslySetInnerHTML={{
+                          __html: emailBody.join("\n"),
+                        }}
+                      />
+                    </>
+                  );
+                })()}
+              </div>
             </CardContent>
           </Card>
 

@@ -373,18 +373,20 @@ export async function getTodayEmails(): Promise<Email[]> {
   const allEmails: Email[] = [];
   const reconopsEmail = "reconops@mindeed.in";
 
-  // Try to access shared mailbox directly using the shared mailbox email
+  // Fetch from user's mailbox (delegated shared mailbox will appear here)
+  // Then filter for emails from/to reconops@mindeed.in
+  const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
   console.log(
-    `getTodayEmails: attempting to fetch messages from shared mailbox ${reconopsEmail}`,
+    `getTodayEmails: fetching messages from user ${userAzureId} mailbox (includes delegated ${reconopsEmail})`,
   );
 
   // Build filter: receivedDateTime ge <ISO>
   const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
 
   try {
-    // Try direct access to shared mailbox (requires app-only Mail.Read permission)
+    // Fetch from user's mailbox (includes delegated shared mailbox)
     const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
-      reconopsEmail,
+      userAzureId,
     )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
 
     // Add 10-second timeout to prevent hanging

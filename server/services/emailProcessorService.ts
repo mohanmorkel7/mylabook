@@ -568,15 +568,13 @@ export async function getTodayEmails(): Promise<Email[]> {
 
   // Step 3: Create start of IST day (00:00:00 IST) and convert to UTC for API
   // IST 00:00:00 = UTC 18:30:00 (previous day in UTC)
-  const istStartOfDay = new Date(
-    Date.UTC(istYear, istMonth, istDate, 0, 0, 0)
-  );
+  const istStartOfDay = new Date(Date.UTC(istYear, istMonth, istDate, 0, 0, 0));
   const utcStartOfDay = new Date(istStartOfDay.getTime() - istOffsetMs);
 
   // Step 4: Create end of IST day (24:00:00 IST = 00:00:00 next day IST) and convert to UTC
   // IST 24:00:00 = UTC 18:30:00 (same day in UTC)
   const istEndOfDay = new Date(
-    Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0)
+    Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0),
   );
   const utcEndOfDay = new Date(istEndOfDay.getTime() - istOffsetMs);
 

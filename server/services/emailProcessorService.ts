@@ -441,12 +441,14 @@ export async function getTodayEmails(): Promise<Email[]> {
 
       allEmails.push(email);
 
-      // Log each email to console
-      console.log(`[EMAIL] Subject: "${email.subject}"`);
-      console.log(`[EMAIL] From: ${email.from}`);
-      console.log(`[EMAIL] To: ${email.to}`);
-      console.log(`[EMAIL] Received: ${email.receivedDateTime}`);
-      console.log(`[EMAIL] Body Preview: ${email.body.substring(0, 200)}...`);
+      // Log each email to console, highlight reconops@mindeed.in emails
+      const isFromReconops = email.from.toLowerCase().includes("reconops@mindeed.in");
+      const marker = isFromReconops ? "🔔 RECONOPS EMAIL 🔔" : "[EMAIL]";
+      console.log(`${marker} Subject: "${email.subject}"`);
+      console.log(`${marker} From: ${email.from}`);
+      console.log(`${marker} To: ${email.to}`);
+      console.log(`${marker} Received: ${email.receivedDateTime}`);
+      console.log(`${marker} Body Preview: ${email.body.substring(0, 200)}...`);
       console.log("---");
     }
   } catch (err) {

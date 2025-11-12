@@ -738,8 +738,8 @@ export async function getTodayEmails(): Promise<Email[]> {
         if (folderEmails.length > 0) {
           const parsedEmails = parseGraphEmails(
             folderEmails,
-            startOfDay,
-            endOfDay,
+            utcStartOfDay,
+            utcEndOfDay,
           );
           console.log(
             `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,

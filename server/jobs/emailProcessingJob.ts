@@ -37,7 +37,9 @@ export function initialize() {
 
           // For debugging: filter emails for each config and log matches
           try {
-            console.log(`Found ${emails.length} emails today. Running config filters (${configs.length} configs)...`);
+            console.log(
+              `Found ${emails.length} emails today. Running config filters (${configs.length} configs)...`,
+            );
             for (const cfg of configs) {
               try {
                 const matches = emails.filter((email: any) => {
@@ -49,19 +51,31 @@ export function initialize() {
                 });
 
                 if (matches.length > 0) {
-                  console.log(`Config ${cfg.id} ("${cfg.name}") matched ${matches.length} email(s):`);
+                  console.log(
+                    `Config ${cfg.id} ("${cfg.name}") matched ${matches.length} email(s):`,
+                  );
                   for (const m of matches) {
-                    console.log(` - emailId=${m.id} subject="${m.subject || "(no subject)"}" from=${m.from || m.sender || "unknown"}`);
+                    console.log(
+                      ` - emailId=${m.id} subject="${m.subject || "(no subject)"}" from=${m.from || m.sender || "unknown"}`,
+                    );
                   }
                 } else {
-                  console.log(`Config ${cfg.id} ("${cfg.name}") matched 0 emails.`);
+                  console.log(
+                    `Config ${cfg.id} ("${cfg.name}") matched 0 emails.`,
+                  );
                 }
               } catch (inner) {
-                console.error(`Error filtering emails for config ${cfg.id}:`, (inner as any)?.message || inner);
+                console.error(
+                  `Error filtering emails for config ${cfg.id}:`,
+                  (inner as any)?.message || inner,
+                );
               }
             }
           } catch (logErr) {
-            console.error("Error while logging config matches:", (logErr as any)?.message || logErr);
+            console.error(
+              "Error while logging config matches:",
+              (logErr as any)?.message || logErr,
+            );
           }
 
           const result = await processEmailsForConfigs(emails, configs);

@@ -274,7 +274,9 @@ export async function getTodayEmails(): Promise<Email[]> {
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
 
   if (!tenantId || !clientId || !clientSecret) {
-    console.warn("Azure AD credentials not configured, skipping getTodayEmails");
+    console.warn(
+      "Azure AD credentials not configured, skipping getTodayEmails",
+    );
     return [];
   }
 
@@ -288,7 +290,11 @@ export async function getTodayEmails(): Promise<Email[]> {
       body.append("client_secret", clientSecret);
       body.append("scope", "https://graph.microsoft.com/.default");
 
-      const res = await fetch(url, { method: "POST", body: body.toString(), headers: { "Content-Type": "application/x-www-form-urlencoded" } });
+      const res = await fetch(url, {
+        method: "POST",
+        body: body.toString(),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
       if (!res.ok) {
         console.error("Failed to acquire Azure AD token", await res.text());
         return null;
@@ -306,13 +312,24 @@ export async function getTodayEmails(): Promise<Email[]> {
 
   // Determine start of today in UTC for filtering
   const now = new Date();
-  const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+  const startOfDay = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+    ),
+  );
   const startISO = startOfDay.toISOString();
 
   // Get active users with azure_object_id
   let users: { id: number; email: string; azure_object_id: string }[] = [];
   try {
-    const res = await pool.query("SELECT DISTINCT id, email, azure_object_id FROM users WHERE status = 'active' AND azure_object_id IS NOT NULL");
+    const res = await pool.query(
+      "SELECT DISTINCT id, email, azure_object_id FROM users WHERE status = 'active' AND azure_object_id IS NOT NULL",
+    );
     users = res.rows;
   } catch (error) {
     console.error("Failed to fetch active users for email fetching:", error);
@@ -326,36 +343,59 @@ export async function getTodayEmails(): Promise<Email[]> {
     const identifier = u.azure_object_id || u.email;
     try {
       const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(identifier)}/mailFolders/Inbox/messages?$top=50&$filter=receivedDateTime ge ${encodeURIComponent(startISO)}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
-      const res = await fetch(graphUrl, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
+      const res = await fetch(graphUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
       if (!res.ok) {
         const text = await res.text();
-        console.warn(`Graph fetch failed for ${identifier}: ${res.status} ${res.statusText} - ${text}`);
+        console.warn(
+          `Graph fetch failed for ${identifier}: ${res.status} ${res.statusText} - ${text}`,
+        );
         continue;
       }
       const data = await res.json();
       const items = Array.isArray(data.value) ? data.value : [];
 
       for (const it of items) {
-        const fromAddr = (it.from && it.from.emailAddress && (it.from.emailAddress.address || it.from.emailAddress.name)) || "";
+        const fromAddr =
+          (it.from &&
+            it.from.emailAddress &&
+            (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+          "";
         const toAddr = Array.isArray(it.toRecipients)
-          ? it.toRecipients.map((r: any) => r.emailAddress?.address || r.emailAddress?.name).filter(Boolean).join(", ")
+          ? it.toRecipients
+              .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+              .filter(Boolean)
+              .join(", ")
           : "";
-        const bodyText = (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+        const bodyText =
+          (it.body && (it.body.content || it.body.text)) ||
+          it.bodyPreview ||
+          "";
 
         allEmails.push({
           id: String(it.id),
           subject: it.subject || "",
           from: fromAddr,
           to: toAddr,
-          body: typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+          body:
+            typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
           receivedDateTime: it.receivedDateTime,
         });
       }
     } catch (err) {
-      console.error(`Error fetching messages for user ${identifier}:`, (err as any)?.message || err);
+      console.error(
+        `Error fetching messages for user ${identifier}:`,
+        (err as any)?.message || err,
+      );
     }
   }
 
-  console.log(`getTodayEmails fetched ${allEmails.length} emails from ${users.length} mailboxes`);
+  console.log(
+    `getTodayEmails fetched ${allEmails.length} emails from ${users.length} mailboxes`,
+  );
   return allEmails;
 }

@@ -42,6 +42,9 @@ router.get("/", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const configs = await MailConfigRepository.findAll(userId);
+    console.log(
+      `Fetching mail configs for userId=${userId}: found ${configs.length} configs`,
+    );
     res.json(configs);
   } catch (error) {
     console.error("Error fetching mail configs:", error);

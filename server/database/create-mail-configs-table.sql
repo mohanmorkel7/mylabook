@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS created_tickets (
   email_from VARCHAR(255),
   created_at TIMESTAMP DEFAULT NOW(),
 
-  FOREIGN KEY (mail_config_id) REFERENCES mail_configs(id) ON DELETE CASCADE
+  FOREIGN KEY (mail_config_id) REFERENCES mail_configs(id) ON DELETE CASCADE,
+  UNIQUE(email_id, mail_config_id)
 );
 
 -- Create indices for better query performance

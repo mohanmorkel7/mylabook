@@ -442,7 +442,9 @@ export async function getTodayEmails(): Promise<Email[]> {
       allEmails.push(email);
 
       // Log each email to console, highlight reconops@mindeed.in emails
-      const isFromReconops = email.from.toLowerCase().includes("reconops@mindeed.in");
+      const isFromReconops = email.from
+        .toLowerCase()
+        .includes("reconops@mindeed.in");
       const marker = isFromReconops ? "🔔 RECONOPS EMAIL 🔔" : "[EMAIL]";
       console.log(`${marker} Subject: "${email.subject}"`);
       console.log(`${marker} From: ${email.from}`);

@@ -458,7 +458,7 @@ export async function getTodayEmails(): Promise<Email[]> {
   }
 
   console.log(
-    `getTodayEmails: fetched ${allEmails.length} emails from reconops@mindeed.in`,
+    `getTodayEmails: SUMMARY - fetched ${allEmails.length} total emails for user ${userAzureId}`,
   );
   return allEmails;
 }

@@ -659,7 +659,11 @@ export async function getTodayEmails(): Promise<Email[]> {
     );
 
     if (sharedEmails.length > 0) {
-      const parsedEmails = parseGraphEmails(sharedEmails, startOfDay, endOfDay);
+      const parsedEmails = parseGraphEmails(
+        sharedEmails,
+        utcStartOfDay,
+        utcEndOfDay,
+      );
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from ${reconopsEmail} (direct access)`,
       );

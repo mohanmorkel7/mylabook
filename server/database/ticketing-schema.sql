@@ -162,20 +162,16 @@ CREATE INDEX IF NOT EXISTS idx_ticket_activities_ticket_id ON ticket_activities(
 CREATE INDEX IF NOT EXISTS idx_ticket_notifications_user_id ON ticket_notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_notifications_is_read ON ticket_notifications(is_read);
 
--- Function to auto-generate track_id
+-- Create sequence for ticket IDs (DROPPED if exists to ensure fresh start)
+DROP SEQUENCE IF EXISTS ticket_track_id_seq CASCADE;
+CREATE SEQUENCE ticket_track_id_seq START WITH 1000 INCREMENT BY 1;
+
+-- Function to auto-generate track_id using SEQUENCE for guaranteed uniqueness
 CREATE OR REPLACE FUNCTION generate_track_id() RETURNS TEXT AS $$
 DECLARE
     new_id TEXT;
-    done BOOLEAN := FALSE;
 BEGIN
-    WHILE NOT done LOOP
-        new_id := 'TKT-' || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0');
-        
-        IF NOT EXISTS (SELECT 1 FROM tickets WHERE track_id = new_id) THEN
-            done := TRUE;
-        END IF;
-    END LOOP;
-    
+    new_id := 'TKT-' || LPAD(nextval('ticket_track_id_seq')::TEXT, 6, '0');
     RETURN new_id;
 END;
 $$ LANGUAGE plpgsql;

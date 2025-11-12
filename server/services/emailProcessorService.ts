@@ -474,23 +474,7 @@ export async function getTodayEmails(): Promise<Email[]> {
   }
 
   console.log(
-    `getTodayEmails fetched ${allEmails.length} emails from ${users.length} mailboxes`,
+    `getTodayEmails: fetched ${allEmails.length} emails from reconops@mindeed.in across ${users.length} mailboxes`,
   );
-
-  // Filter to only process emails from "reconops@mindeed.in"
-  const allowedSender = "reconops@mindeed.in";
-  const filteredEmails = allEmails.filter((email) => {
-    const matches = email.from.toLowerCase() === allowedSender.toLowerCase();
-    if (!matches) {
-      console.log(
-        `getTodayEmails: filtering out email from ${email.from} (not ${allowedSender})`,
-      );
-    }
-    return matches;
-  });
-
-  console.log(
-    `getTodayEmails: after sender filter, ${filteredEmails.length} emails remain from allowed sender`,
-  );
-  return filteredEmails;
+  return allEmails;
 }

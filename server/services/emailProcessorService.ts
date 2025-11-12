@@ -684,6 +684,14 @@ export async function getTodayEmails(): Promise<Email[]> {
       console.log(`📧 EMAIL From: ${email.from}`);
       console.log(`📧 EMAIL To: ${email.to}`);
       console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
+      console.log(
+        `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`
+      );
+      if (!email.body) {
+        console.warn(
+          `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`
+        );
+      }
     }
 
     return emails;

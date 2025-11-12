@@ -8,9 +8,10 @@ import { matchEmailAgainstConfig } from "../services/emailMatchingService";
 
 export function initialize() {
   try {
-    // Skip in environments where cron jobs are not desired
-    if (process.env.DISABLE_EMAIL_PROCESSING_JOB === "true") {
-      console.log("Email processing job disabled via environment variable");
+    // TEMPORARILY DISABLED: Email processing job disabled to prevent memory overflow
+    // Enable by setting ENABLE_EMAIL_PROCESSING_JOB=true
+    if (process.env.ENABLE_EMAIL_PROCESSING_JOB !== "true") {
+      console.log("Email processing job disabled (memory management)");
       return;
     }
 

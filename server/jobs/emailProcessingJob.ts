@@ -14,7 +14,7 @@ export function initialize() {
       return;
     }
 
-    // Schedule job to run every 5 minutes
+    // Schedule job to run every minute
     cron.schedule(
       "* * * * *",
       async () => {

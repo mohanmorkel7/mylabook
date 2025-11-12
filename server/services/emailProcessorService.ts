@@ -141,6 +141,13 @@ export class EmailProcessingService {
         );
       }
 
+      // Remove Outlook security warnings
+      bodyText = bodyText.replace(
+        /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
+        "",
+      );
+      bodyText = bodyText.trim();
+
       const description = `Email from: ${fromName} <${fromEmail}>
 Received: ${email.receivedDateTime || "Unknown"}
 Email ID: ${email.id}
@@ -667,8 +674,19 @@ export async function getTodayEmails(): Promise<Email[]> {
             .filter(Boolean)
             .join(", ")
         : "";
-      const bodyText =
+      let bodyText =
         (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+
+      // Remove Outlook security warnings
+      if (typeof bodyText === "string") {
+        // Remove CAUTION message that Outlook adds
+        bodyText = bodyText.replace(
+          /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
+          "",
+        );
+        // Clean up extra whitespace
+        bodyText = bodyText.trim();
+      }
 
       const email = {
         id: String(it.id),
@@ -688,6 +706,12 @@ export async function getTodayEmails(): Promise<Email[]> {
       console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
       console.log(
         `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
+      );
+      const hasTableTags =
+        email.body.includes("<table") || email.body.includes("<TABLE");
+      const hasHTMLTags = /<[^>]+>/.test(email.body);
+      console.log(
+        `📧 EMAIL Has HTML: ${hasHTMLTags} | Has Tables: ${hasTableTags}`,
       );
       if (!email.body) {
         console.warn(

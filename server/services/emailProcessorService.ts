@@ -362,8 +362,10 @@ export async function getTodayEmails(): Promise<Email[]> {
       `getTodayEmails: fetching messages for user ${userAzureId} (accessing ${reconopsEmail})`,
     );
 
-    // Build filter: receivedDateTime ge <ISO>
-    const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
+    // Build filter: receivedDateTime ge <ISO> AND from sender is reconops@mindeed.in
+    const graphFilter = encodeURIComponent(
+      `receivedDateTime ge ${startISO} and from/emailAddress/address eq 'reconops@mindeed.in'`,
+    );
     const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       userAzureId,
     )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;

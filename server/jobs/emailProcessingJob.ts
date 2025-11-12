@@ -58,9 +58,7 @@ export function initialize() {
                     const isFromReconops = m.from
                       .toLowerCase()
                       .includes("reconops@mindeed.in");
-                    const marker = isFromReconops
-                      ? "🔔 RECONOPS"
-                      : "📧 OTHER";
+                    const marker = isFromReconops ? "🔔 RECONOPS" : "📧 OTHER";
                     console.log(
                       `   ${marker} - subject="${m.subject || "(no subject)"}" from=${m.from}`,
                     );

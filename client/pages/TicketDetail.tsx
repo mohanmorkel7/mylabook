@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useLayoutEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";

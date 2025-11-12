@@ -16,7 +16,7 @@ export function initialize() {
 
     // Schedule job to run every 5 minutes
     cron.schedule(
-      "*/5 * * * *",
+      "* * * * *",
       async () => {
         console.log(
           `[${new Date().toISOString()}] Running email processing job`,
@@ -92,7 +92,7 @@ export function initialize() {
       },
     );
 
-    console.log("Email processing job scheduled (every 5 minutes)");
+    console.log("Email processing job scheduled (every minute)");
   } catch (error) {
     console.error(
       "Failed to initialize email processing job:",

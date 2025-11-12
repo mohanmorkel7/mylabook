@@ -423,9 +423,7 @@ export async function getTodayEmails(): Promise<Email[]> {
             .join(", ")
         : "";
       const bodyText =
-        (it.body && (it.body.content || it.body.text)) ||
-        it.bodyPreview ||
-        "";
+        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
       allEmails.push({
         id: String(it.id),

@@ -764,7 +764,11 @@ export async function getTodayEmails(): Promise<Email[]> {
     );
 
     if (userEmails.length > 0) {
-      const parsedEmails = parseGraphEmails(userEmails, startOfDay, endOfDay);
+      const parsedEmails = parseGraphEmails(
+        userEmails,
+        utcStartOfDay,
+        utcEndOfDay,
+      );
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from main inbox (fallback)`,
       );

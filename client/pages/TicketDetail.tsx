@@ -6,6 +6,49 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, MessageSquare, Paperclip, ArrowLeft } from "lucide-react";
 
+// Inline styles for email content rendering
+const emailBodyStyles = `
+  .email-body-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+  }
+  .email-body-content table tr {
+    border-bottom: 1px solid #d1d5db;
+  }
+  .email-body-content table tr:nth-child(even) {
+    background-color: #f9fafb;
+  }
+  .email-body-content table tr:hover {
+    background-color: #f3f4f6;
+  }
+  .email-body-content table th,
+  .email-body-content table td {
+    border: 1px solid #d1d5db;
+    padding: 0.5rem;
+    text-align: left;
+  }
+  .email-body-content table th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+  }
+  .email-body-content p {
+    margin: 0.5rem 0;
+    line-height: 1.5;
+  }
+  .email-body-content a {
+    color: #2563eb;
+    text-decoration: underline;
+  }
+  .email-body-content strong, .email-body-content b {
+    font-weight: 600;
+  }
+  .email-body-content em, .email-body-content i {
+    font-style: italic;
+  }
+`;
+
 export default function TicketDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();

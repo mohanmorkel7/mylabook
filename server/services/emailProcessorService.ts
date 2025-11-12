@@ -95,6 +95,7 @@ export class EmailProcessingService {
 
       const description = `Email from: ${fromName} <${fromEmail}>
 Received: ${email.receivedDateTime || "Unknown"}
+Email ID: ${email.id}
 
 ---
 
@@ -115,15 +116,43 @@ ${bodyText}`;
       // createdBy: prefer config.user_id else assigned_to
       const createdBy = (config as any).user_id || config.assigned_to_id || 1;
 
-      const createdTicket = await (
-        await import("../models/Ticket")
-      ).TicketRepository.create(ticketData, createdBy);
+      try {
+        const createdTicket = await (
+          await import("../models/Ticket")
+        ).TicketRepository.create(ticketData, createdBy);
 
-      return { ticketId: createdTicket.id, success: true };
+        return { ticketId: createdTicket.id, success: true };
+      } catch (dbError: any) {
+        const errorMsg = (dbError?.message || String(dbError)).toLowerCase();
+
+        // If duplicate key error, it might be a race condition - log but don't fail
+        if (
+          errorMsg.includes("unique") ||
+          errorMsg.includes("duplicate") ||
+          errorMsg.includes("constraint")
+        ) {
+          console.warn(
+            `Duplicate constraint error when creating ticket for email ${email.id}. This may indicate a race condition or retry. Error: ${dbError.message}`,
+          );
+
+          // Try to find existing ticket with same description/subject/email
+          // For now, we'll treat this as a soft error and continue
+          return {
+            success: false,
+            error: `Duplicate ticket constraint (race condition): ${dbError.message}`,
+          };
+        }
+
+        throw dbError;
+      }
     } catch (error) {
+      const errorMsg = (error as any)?.message || String(error);
+      console.error(
+        `Error creating ticket for email ${email.id}: ${errorMsg}`,
+      );
       return {
         success: false,
-        error: (error as any)?.message || "Failed to create ticket",
+        error: errorMsg,
       };
     }
   }

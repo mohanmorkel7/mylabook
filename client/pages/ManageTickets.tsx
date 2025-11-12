@@ -180,20 +180,37 @@ export default function ManageTickets() {
       }
       const fetchClientMs = Date.now();
       // Normalize fields so UI can rely on consistent keys and attach fetch metadata
-      const normalized = ticketsArray.map((t: any) => ({
-        ...t,
-        assigned_to_id:
-          t.assigned_to_id ??
-          (t.assigned_to !== undefined && t.assigned_to !== null
-            ? Number(t.assigned_to)
-            : null) ??
-          null,
-        track_id:
-          t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
-        description: t.description || "",
-        __server_time_ms: serverMs,
-        __fetched_at_ms: fetchClientMs,
-      }));
+      const normalized = ticketsArray.map((t: any) => {
+        // Extract status info - API returns status as object
+        let statusInfo = t.status;
+        if (!statusInfo && t.status_id) {
+          // Fallback: create status object from status_id if status is missing
+          statusInfo = {
+            id: t.status_id,
+            name: t.status_name || "Unknown",
+            color: t.status_color || "#999",
+            is_closed: t.status_is_closed || false,
+            sort_order: 0,
+          };
+        }
+
+        return {
+          ...t,
+          assigned_to_id:
+            t.assigned_to_id ??
+            (t.assigned_to !== undefined && t.assigned_to !== null
+              ? Number(t.assigned_to)
+              : null) ??
+            null,
+          track_id:
+            t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+          description: t.description || "",
+          status: statusInfo,
+          created_from_mail_config: t.created_from_mail_config ?? false,
+          __server_time_ms: serverMs,
+          __fetched_at_ms: fetchClientMs,
+        };
+      });
       setTickets(normalized);
     } catch (error) {
       console.error("Error fetching tickets:", error);
@@ -619,7 +636,7 @@ export default function ManageTickets() {
                 >
                   {nextSlaInfo.ticket
                     ? nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0
-                      ? `Overdue ${formatRemaining(Math.abs(nextSlaInfo.ms))} — ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
+                      ? `Overdue ${formatRemaining(Math.abs(nextSlaInfo.ms))} ��� ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
                       : `${formatRemaining(nextSlaInfo.ms)} hours remaining — ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
                     : "No SLA"}
                 </div>

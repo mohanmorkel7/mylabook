@@ -95,6 +95,7 @@ export class EmailProcessingService {
 
       const description = `Email from: ${fromName} <${fromEmail}>
 Received: ${email.receivedDateTime || "Unknown"}
+Email ID: ${email.id}
 
 ---
 
@@ -115,15 +116,41 @@ ${bodyText}`;
       // createdBy: prefer config.user_id else assigned_to
       const createdBy = (config as any).user_id || config.assigned_to_id || 1;
 
-      const createdTicket = await (
-        await import("../models/Ticket")
-      ).TicketRepository.create(ticketData, createdBy);
+      try {
+        const createdTicket = await (
+          await import("../models/Ticket")
+        ).TicketRepository.create(ticketData, createdBy);
 
-      return { ticketId: createdTicket.id, success: true };
+        return { ticketId: createdTicket.id, success: true };
+      } catch (dbError: any) {
+        const errorMsg = (dbError?.message || String(dbError)).toLowerCase();
+
+        // If duplicate key error, it might be a race condition - log but don't fail
+        if (
+          errorMsg.includes("unique") ||
+          errorMsg.includes("duplicate") ||
+          errorMsg.includes("constraint")
+        ) {
+          console.warn(
+            `Duplicate constraint error when creating ticket for email ${email.id}. This may indicate a race condition or retry. Error: ${dbError.message}`,
+          );
+
+          // Try to find existing ticket with same description/subject/email
+          // For now, we'll treat this as a soft error and continue
+          return {
+            success: false,
+            error: `Duplicate ticket constraint (race condition): ${dbError.message}`,
+          };
+        }
+
+        throw dbError;
+      }
     } catch (error) {
+      const errorMsg = (error as any)?.message || String(error);
+      console.error(`Error creating ticket for email ${email.id}: ${errorMsg}`);
       return {
         success: false,
-        error: (error as any)?.message || "Failed to create ticket",
+        error: errorMsg,
       };
     }
   }
@@ -365,6 +392,24 @@ export async function processEmailsForConfigs(
             email as GraphEmail,
             config,
           );
+
+          // Log the processing result regardless of success/failure
+          try {
+            await MailConfigRepository.logProcessedEmail(
+              config.id,
+              email.id,
+              email.subject || "(No subject)",
+              email.from?.emailAddress?.address ||
+                email.sender?.emailAddress?.address ||
+                "unknown",
+              result.ticketId,
+              result.success ? "success" : "failed",
+              result.error,
+            );
+          } catch (logErr) {
+            console.error(`Failed to log processed email ${email.id}:`, logErr);
+          }
+
           if (result.success) {
             succeeded++;
           } else {
@@ -451,6 +496,56 @@ export async function getTodayEmails(): Promise<Email[]> {
     }
   }
 
+  // Fetch emails from a URL with proper pagination handling
+  async function fetchAllEmailsFromUrl(
+    url: string,
+    token: string,
+  ): Promise<any[]> {
+    const allEmails: any[] = [];
+    let nextLink = url;
+
+    while (nextLink) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        let res;
+        try {
+          res = await fetch(nextLink, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!res.ok) {
+          console.warn(`Graph fetch failed: ${res.status} ${res.statusText}`);
+          break;
+        }
+
+        const data = await res.json();
+        const items = Array.isArray(data?.value) ? data.value : [];
+        console.log(`Fetched ${items.length} emails from this page`);
+        allEmails.push(...items);
+
+        // Handle pagination
+        nextLink = data?.["@odata.nextLink"] || null;
+        if (nextLink) {
+          console.log(`More emails available, fetching next page...`);
+        }
+      } catch (error) {
+        console.error("Error fetching email page:", error);
+        break;
+      }
+    }
+
+    return allEmails;
+  }
+
   // Use app-only token (delegated token support can be added later if needed)
   const token = await getAppToken();
   if (!token) {
@@ -458,7 +553,7 @@ export async function getTodayEmails(): Promise<Email[]> {
     return [];
   }
 
-  // Determine start of today in UTC for filtering
+  // Determine start and end of today in UTC for filtering
   const now = new Date();
   const startOfDay = new Date(
     Date.UTC(
@@ -470,91 +565,94 @@ export async function getTodayEmails(): Promise<Email[]> {
       0,
     ),
   );
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
   const startISO = startOfDay.toISOString();
-  console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
+  const endISO = endOfDay.toISOString();
+  console.log(
+    `getTodayEmails: filtering for emails received today (UTC) between ${startISO} and ${endISO}`,
+  );
 
   const allEmails: Email[] = [];
   const reconopsEmail = "reconops@mylapay.com";
   const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
-  const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
+  // Filter: receivedDateTime >= start of today AND < start of tomorrow
+  const graphFilter = encodeURIComponent(
+    `receivedDateTime ge ${startISO} and receivedDateTime lt ${endISO}`,
+  );
+
+  // Helper to parse GraphEmail items and convert to Email[]
+  function parseGraphEmails(
+    items: any[],
+    startOfDay: Date,
+    endOfDay: Date,
+  ): Email[] {
+    const emails: Email[] = [];
+
+    for (const it of items) {
+      // Validate email is from today
+      const emailDate = new Date(it.receivedDateTime);
+      if (emailDate < startOfDay || emailDate >= endOfDay) {
+        continue;
+      }
+
+      const fromAddr =
+        (it.from &&
+          it.from.emailAddress &&
+          (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+        "";
+      const toAddr = Array.isArray(it.toRecipients)
+        ? it.toRecipients
+            .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+            .filter(Boolean)
+            .join(", ")
+        : "";
+      const bodyText =
+        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+
+      const email = {
+        id: String(it.id),
+        subject: it.subject || "",
+        from: fromAddr,
+        to: toAddr,
+        body:
+          typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+        receivedDateTime: it.receivedDateTime,
+      };
+
+      emails.push(email);
+
+      console.log(`📧 EMAIL Subject: "${email.subject}"`);
+      console.log(`📧 EMAIL From: ${email.from}`);
+      console.log(`📧 EMAIL To: ${email.to}`);
+      console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
+    }
+
+    return emails;
+  }
 
   try {
-    // Try 1: Direct access to shared mailbox
+    // Try 1: Direct access to shared mailbox with pagination
     console.log(
       `getTodayEmails: attempting direct access to shared mailbox ${reconopsEmail}`,
     );
 
     const sharedMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       reconopsEmail,
-    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+    )}/mailFolders/Inbox/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
 
-    const controller1 = new AbortController();
-    const timeoutId1 = setTimeout(() => controller1.abort(), 10000);
-
-    let res;
-    try {
-      res = await fetch(sharedMailboxUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller1.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId1);
-    }
-
+    const sharedEmails = await fetchAllEmailsFromUrl(sharedMailboxUrl, token);
     console.log(
-      `getTodayEmails: direct shared mailbox response: ${res.status} ${res.statusText}`,
+      `getTodayEmails: direct shared mailbox returned ${sharedEmails.length} total messages`,
     );
 
-    if (res.ok) {
-      const data = await res.json();
-      const items = Array.isArray(data?.value) ? data.value : [];
+    if (sharedEmails.length > 0) {
+      const parsedEmails = parseGraphEmails(sharedEmails, startOfDay, endOfDay);
       console.log(
-        `getTodayEmails: shared mailbox ${reconopsEmail} returned ${items.length} messages (direct access)`,
+        `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from ${reconopsEmail} (direct access)`,
       );
-
-      for (const it of items) {
-        const fromAddr =
-          (it.from &&
-            it.from.emailAddress &&
-            (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-          "";
-        const toAddr = Array.isArray(it.toRecipients)
-          ? it.toRecipients
-              .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
-              .filter(Boolean)
-              .join(", ")
-          : "";
-        const bodyText =
-          (it.body && (it.body.content || it.body.text)) ||
-          it.bodyPreview ||
-          "";
-
-        const email = {
-          id: String(it.id),
-          subject: it.subject || "",
-          from: fromAddr,
-          to: toAddr,
-          body:
-            typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
-          receivedDateTime: it.receivedDateTime,
-        };
-
-        allEmails.push(email);
-
-        console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
-        console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
-        console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
-        console.log(`🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`);
-        console.log("---");
-      }
-
-      console.log(
-        `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from ${reconopsEmail} (direct access)`,
-      );
-      return allEmails;
+      return parsedEmails;
     }
 
     // Try 2: Check for delegated shared mailbox in user's mailFolders
@@ -612,79 +710,26 @@ export async function getTodayEmails(): Promise<Email[]> {
           userAzureId,
         )}/mailFolders/${encodeURIComponent(
           reconopsFolder.id,
-        )}/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+        )}/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
 
-        const controller3 = new AbortController();
-        const timeoutId3 = setTimeout(() => controller3.abort(), 10000);
+        const folderEmails = await fetchAllEmailsFromUrl(
+          sharedFolderUrl,
+          token,
+        );
+        console.log(
+          `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
+        );
 
-        let sharedRes;
-        try {
-          sharedRes = await fetch(sharedFolderUrl, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            signal: controller3.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId3);
-        }
-
-        if (sharedRes.ok) {
-          const sharedData = await sharedRes.json();
-          const sharedItems = Array.isArray(sharedData?.value)
-            ? sharedData.value
-            : [];
-          console.log(
-            `getTodayEmails: shared mailbox folder "${reconopsFolder.displayName}" returned ${sharedItems.length} messages`,
+        if (folderEmails.length > 0) {
+          const parsedEmails = parseGraphEmails(
+            folderEmails,
+            startOfDay,
+            endOfDay,
           );
-
-          for (const it of sharedItems) {
-            const fromAddr =
-              (it.from &&
-                it.from.emailAddress &&
-                (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-              "";
-            const toAddr = Array.isArray(it.toRecipients)
-              ? it.toRecipients
-                  .map(
-                    (r: any) => r.emailAddress?.address || r.emailAddress?.name,
-                  )
-                  .filter(Boolean)
-                  .join(", ")
-              : "";
-            const bodyText =
-              (it.body && (it.body.content || it.body.text)) ||
-              it.bodyPreview ||
-              "";
-
-            const email = {
-              id: String(it.id),
-              subject: it.subject || "",
-              from: fromAddr,
-              to: toAddr,
-              body:
-                typeof bodyText === "string"
-                  ? bodyText
-                  : JSON.stringify(bodyText),
-              receivedDateTime: it.receivedDateTime,
-            };
-
-            allEmails.push(email);
-
-            console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
-            console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
-            console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
-            console.log(
-              `🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`,
-            );
-            console.log("---");
-          }
-
           console.log(
-            `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,
+            `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,
           );
-          return allEmails;
+          return parsedEmails;
         }
       }
     }
@@ -696,76 +741,23 @@ export async function getTodayEmails(): Promise<Email[]> {
 
     const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       userAzureId,
-    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+    )}/mailFolders/Inbox/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
 
-    const controller4 = new AbortController();
-    const timeoutId4 = setTimeout(() => controller4.abort(), 10000);
+    const userEmails = await fetchAllEmailsFromUrl(userMailboxUrl, token);
+    console.log(
+      `getTodayEmails: user main inbox returned ${userEmails.length} total messages`,
+    );
 
-    let userRes;
-    try {
-      userRes = await fetch(userMailboxUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller4.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId4);
-    }
-
-    if (!userRes.ok) {
-      const text = await userRes.text();
-      console.warn(
-        `Graph fetch failed for user ${userAzureId}: ${userRes.status} - ${text}`,
+    if (userEmails.length > 0) {
+      const parsedEmails = parseGraphEmails(userEmails, startOfDay, endOfDay);
+      console.log(
+        `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from main inbox (fallback)`,
       );
-      return [];
+      return parsedEmails;
     }
 
-    const userData = await userRes.json();
-    const userItems = Array.isArray(userData?.value) ? userData.value : [];
-    console.log(
-      `getTodayEmails: user main inbox returned ${userItems.length} messages`,
-    );
-
-    for (const it of userItems) {
-      const fromAddr =
-        (it.from &&
-          it.from.emailAddress &&
-          (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-        "";
-      const toAddr = Array.isArray(it.toRecipients)
-        ? it.toRecipients
-            .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
-            .filter(Boolean)
-            .join(", ")
-        : "";
-      const bodyText =
-        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
-
-      const email = {
-        id: String(it.id),
-        subject: it.subject || "",
-        from: fromAddr,
-        to: toAddr,
-        body:
-          typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
-        receivedDateTime: it.receivedDateTime,
-      };
-
-      allEmails.push(email);
-
-      console.log(`📧 EMAIL Subject: "${email.subject}"`);
-      console.log(`📧 EMAIL From: ${email.from}`);
-      console.log(`📧 EMAIL To: ${email.to}`);
-      console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
-      console.log("---");
-    }
-
-    console.log(
-      `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from main inbox (fallback)`,
-    );
-    return allEmails;
+    console.log("getTodayEmails: no emails found");
+    return [];
   } catch (err) {
     console.error(`Error fetching messages:`, (err as any)?.message || err);
     return [];

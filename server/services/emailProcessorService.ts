@@ -596,15 +596,15 @@ export async function getTodayEmails(): Promise<Email[]> {
   // Helper to parse GraphEmail items and convert to Email[]
   function parseGraphEmails(
     items: any[],
-    startOfDay: Date,
-    endOfDay: Date,
+    utcStartOfDay: Date,
+    utcEndOfDay: Date,
   ): Email[] {
     const emails: Email[] = [];
 
     for (const it of items) {
-      // Validate email is from today
+      // Validate email is from today (compare against UTC bounds since receivedDateTime is UTC)
       const emailDate = new Date(it.receivedDateTime);
-      if (emailDate < startOfDay || emailDate >= endOfDay) {
+      if (emailDate < utcStartOfDay || emailDate >= utcEndOfDay) {
         continue;
       }
 
@@ -659,7 +659,11 @@ export async function getTodayEmails(): Promise<Email[]> {
     );
 
     if (sharedEmails.length > 0) {
-      const parsedEmails = parseGraphEmails(sharedEmails, startOfDay, endOfDay);
+      const parsedEmails = parseGraphEmails(
+        sharedEmails,
+        utcStartOfDay,
+        utcEndOfDay,
+      );
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from ${reconopsEmail} (direct access)`,
       );
@@ -734,8 +738,8 @@ export async function getTodayEmails(): Promise<Email[]> {
         if (folderEmails.length > 0) {
           const parsedEmails = parseGraphEmails(
             folderEmails,
-            startOfDay,
-            endOfDay,
+            utcStartOfDay,
+            utcEndOfDay,
           );
           console.log(
             `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,
@@ -760,7 +764,11 @@ export async function getTodayEmails(): Promise<Email[]> {
     );
 
     if (userEmails.length > 0) {
-      const parsedEmails = parseGraphEmails(userEmails, startOfDay, endOfDay);
+      const parsedEmails = parseGraphEmails(
+        userEmails,
+        utcStartOfDay,
+        utcEndOfDay,
+      );
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from main inbox (fallback)`,
       );

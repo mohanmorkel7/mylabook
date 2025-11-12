@@ -458,7 +458,7 @@ export async function getTodayEmails(): Promise<Email[]> {
     return [];
   }
 
-  // Determine start of today in UTC for filtering
+  // Determine start and end of today in UTC for filtering
   const now = new Date();
   const startOfDay = new Date(
     Date.UTC(
@@ -470,13 +470,22 @@ export async function getTodayEmails(): Promise<Email[]> {
       0,
     ),
   );
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
   const startISO = startOfDay.toISOString();
-  console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
+  const endISO = endOfDay.toISOString();
+  console.log(
+    `getTodayEmails: filtering for emails received today (UTC) between ${startISO} and ${endISO}`,
+  );
 
   const allEmails: Email[] = [];
   const reconopsEmail = "reconops@mylapay.com";
   const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
-  const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
+  // Filter: receivedDateTime >= start of today AND < start of tomorrow
+  const graphFilter = encodeURIComponent(
+    `receivedDateTime ge ${startISO} and receivedDateTime lt ${endISO}`,
+  );
 
   try {
     // Try 1: Direct access to shared mailbox

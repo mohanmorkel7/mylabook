@@ -144,7 +144,20 @@ export default function TicketDetailPage() {
 
                       {/* Email Body - Rendered as HTML */}
                       <div
-                        className="prose prose-sm max-w-none text-gray-800 [&>*]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_th]:bg-gray-100"
+                        className="text-gray-800 space-y-3 break-words
+                          [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:my-3
+                          [&_thead]:bg-gray-100
+                          [&_th]:border [&_th]:border-gray-300 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold
+                          [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-2
+                          [&_tr]:hover:bg-gray-50
+                          [&_p]:my-2 [&_p]:leading-relaxed
+                          [&_pre]:bg-gray-100 [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto
+                          [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono
+                          [&_a]:text-blue-600 [&_a]:underline
+                          [&_strong]:font-semibold
+                          [&_em]:italic
+                          [&_hr]:my-4 [&_hr]:border-gray-300
+                          [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:py-2 [&_blockquote]:my-2 [&_blockquote]:text-gray-600"
                         dangerouslySetInnerHTML={{
                           __html: emailBody.join("\n"),
                         }}

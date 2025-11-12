@@ -8,34 +8,45 @@ import { Edit, MessageSquare, Paperclip, ArrowLeft } from "lucide-react";
 
 // Inline styles for email content rendering
 const emailBodyStyles = `
+  .email-body-content {
+    line-height: 1.6;
+    color: #374151;
+  }
   .email-body-content table {
     width: 100%;
     border-collapse: collapse;
-    margin: 1rem 0;
+    margin: 1.5rem 0;
     font-size: 0.875rem;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
   }
-  .email-body-content table tr {
-    border-bottom: 1px solid #d1d5db;
+  .email-body-content table thead {
+    background-color: #f3f4f6;
   }
-  .email-body-content table tr:nth-child(even) {
+  .email-body-content table tbody tr {
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .email-body-content table tbody tr:nth-child(even) {
     background-color: #f9fafb;
   }
-  .email-body-content table tr:hover {
+  .email-body-content table tbody tr:hover {
     background-color: #f3f4f6;
-  }
-  .email-body-content table th,
-  .email-body-content table td {
-    border: 1px solid #d1d5db;
-    padding: 0.5rem;
-    text-align: left;
   }
   .email-body-content table th {
-    background-color: #f3f4f6;
+    border: 1px solid #d1d5db;
+    padding: 0.75rem;
+    text-align: left;
     font-weight: 600;
+    background-color: #f3f4f6;
+  }
+  .email-body-content table td {
+    border: 1px solid #d1d5db;
+    padding: 0.75rem;
+    text-align: left;
   }
   .email-body-content p {
-    margin: 0.5rem 0;
-    line-height: 1.5;
+    margin: 0.75rem 0;
+    line-height: 1.6;
   }
   .email-body-content a {
     color: #2563eb;
@@ -46,6 +57,35 @@ const emailBodyStyles = `
   }
   .email-body-content em, .email-body-content i {
     font-style: italic;
+  }
+  .email-body-content hr {
+    margin: 1rem 0;
+    border: none;
+    border-top: 1px solid #e5e7eb;
+  }
+  .email-body-content blockquote {
+    border-left: 4px solid #d1d5db;
+    padding-left: 1rem;
+    margin-left: 0;
+    color: #6b7280;
+  }
+  .email-body-content pre {
+    background-color: #f3f4f6;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+  }
+  .email-body-content code {
+    background-color: #f3f4f6;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-family: monospace;
+    font-size: 0.875rem;
+  }
+  .email-body-content pre code {
+    background-color: transparent;
+    padding: 0;
   }
 `;
 

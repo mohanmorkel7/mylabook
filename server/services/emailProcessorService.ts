@@ -31,7 +31,7 @@ export class EmailProcessingService {
   /**
    * Check if email matches the given config criteria
    */
-  static matchesConfig(email: GraphEmail, config: MailConfig): boolean {
+  static matchesConfig(email: GraphEmail | any, config: MailConfig): boolean {
     const fieldType = config.field_type;
     const fieldValue = config.field_value.toLowerCase();
 
@@ -43,22 +43,38 @@ export class EmailProcessingService {
         break;
 
       case "fromEmail":
-        const fromEmail =
-          email.from?.emailAddress?.address ||
-          email.sender?.emailAddress?.address ||
-          "";
+        let fromEmail = "";
+        if (email.from?.emailAddress?.address) {
+          fromEmail = email.from.emailAddress.address;
+        } else if (email.from && typeof email.from === "string") {
+          fromEmail = email.from;
+        } else if (email.sender?.emailAddress?.address) {
+          fromEmail = email.sender.emailAddress.address;
+        }
         emailFieldValue = fromEmail.toLowerCase();
         break;
 
       case "toEmail":
         // Extract TO email address from email headers if available
-        emailFieldValue = "";
+        let toEmail = "";
+        if (email.to && typeof email.to === "string") {
+          toEmail = email.to;
+        }
+        emailFieldValue = toEmail.toLowerCase();
         break;
 
       case "body":
-        let bodyText = email.bodyPreview || "";
-        if (email.body?.content) {
+        let bodyText = "";
+        // Handle both GraphEmail format (body as object) and Email format (body as string)
+        if (typeof email.body === "string") {
+          // Email format: body is a string
+          bodyText = email.body;
+        } else if (email.body?.content) {
+          // GraphEmail format: body is an object with content property
           bodyText = email.body.content.replace(/<[^>]*>/g, "");
+        } else if (email.bodyPreview) {
+          // Fallback to preview
+          bodyText = email.bodyPreview;
         }
         emailFieldValue = bodyText.toLowerCase();
         break;
@@ -72,25 +88,57 @@ export class EmailProcessingService {
    * Create a ticket in Redmine based on email and config
    */
   static async createTicket(
-    email: GraphEmail,
+    email: GraphEmail | any,
     config: MailConfig,
   ): Promise<{ ticketId?: number; success: boolean; error?: string }> {
     try {
       // Extract email details
       const subject = email.subject || "(No subject)";
-      const fromEmail =
-        email.from?.emailAddress?.address ||
-        email.sender?.emailAddress?.address ||
-        "unknown@example.com";
-      const fromName =
-        email.from?.emailAddress?.name ||
-        email.sender?.emailAddress?.name ||
-        "Unknown";
+
+      let fromEmail = "unknown@example.com";
+      let fromName = "Unknown";
+
+      // Handle both GraphEmail format and simplified Email format
+      if (email.from?.emailAddress) {
+        fromEmail = email.from.emailAddress.address || fromEmail;
+        fromName = email.from.emailAddress.name || fromName;
+      } else if (email.from && typeof email.from === "string") {
+        fromEmail = email.from;
+      }
+
+      if (email.sender?.emailAddress) {
+        fromEmail = email.sender.emailAddress.address || fromEmail;
+        fromName = email.sender.emailAddress.name || fromName;
+      }
 
       // Build email body for ticket description
-      let bodyText = email.bodyPreview || "";
-      if (email.body?.content) {
+      let bodyText = "";
+
+      // Handle both GraphEmail format (body as object) and Email format (body as string)
+      if (typeof email.body === "string") {
+        // Email format: body is a string
+        bodyText = email.body;
+        // Strip HTML tags if present
+        bodyText = bodyText.replace(/<[^>]*>/g, "");
+        console.log(
+          `✅ Using Email format body (string): ${bodyText.substring(0, 100)}...`,
+        );
+      } else if (email.body?.content) {
+        // GraphEmail format: body is an object with content property
         bodyText = email.body.content.replace(/<[^>]*>/g, "");
+        console.log(
+          `✅ Using GraphEmail format body (object.content): ${bodyText.substring(0, 100)}...`,
+        );
+      } else if (email.bodyPreview) {
+        // Fallback to preview
+        bodyText = email.bodyPreview;
+        console.log(
+          `⚠️ Using bodyPreview fallback: ${bodyText.substring(0, 100)}...`,
+        );
+      } else {
+        console.warn(
+          `⚠️ No body content found for email ${email.id}: body type is ${typeof email.body}, bodyPreview is ${email.bodyPreview ? "present" : "missing"}`,
+        );
       }
 
       const description = `Email from: ${fromName} <${fromEmail}>
@@ -638,6 +686,14 @@ export async function getTodayEmails(): Promise<Email[]> {
       console.log(`📧 EMAIL From: ${email.from}`);
       console.log(`📧 EMAIL To: ${email.to}`);
       console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
+      console.log(
+        `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
+      );
+      if (!email.body) {
+        console.warn(
+          `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
+        );
+      }
     }
 
     return emails;

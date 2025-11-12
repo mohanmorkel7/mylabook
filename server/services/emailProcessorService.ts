@@ -72,25 +72,42 @@ export class EmailProcessingService {
    * Create a ticket in Redmine based on email and config
    */
   static async createTicket(
-    email: GraphEmail,
+    email: GraphEmail | any,
     config: MailConfig,
   ): Promise<{ ticketId?: number; success: boolean; error?: string }> {
     try {
       // Extract email details
       const subject = email.subject || "(No subject)";
-      const fromEmail =
-        email.from?.emailAddress?.address ||
-        email.sender?.emailAddress?.address ||
-        "unknown@example.com";
-      const fromName =
-        email.from?.emailAddress?.name ||
-        email.sender?.emailAddress?.name ||
-        "Unknown";
+
+      let fromEmail = "unknown@example.com";
+      let fromName = "Unknown";
+
+      // Handle both GraphEmail format and simplified Email format
+      if (email.from?.emailAddress) {
+        fromEmail = email.from.emailAddress.address || fromEmail;
+        fromName = email.from.emailAddress.name || fromName;
+      } else if (email.from && typeof email.from === "string") {
+        fromEmail = email.from;
+      }
+
+      if (email.sender?.emailAddress) {
+        fromEmail = email.sender.emailAddress.address || fromEmail;
+        fromName = email.sender.emailAddress.name || fromName;
+      }
 
       // Build email body for ticket description
-      let bodyText = email.bodyPreview || "";
-      if (email.body?.content) {
+      let bodyText = "";
+
+      // Handle both GraphEmail format (body as object) and Email format (body as string)
+      if (typeof email.body === "string") {
+        // Email format: body is a string
+        bodyText = email.body;
+      } else if (email.body?.content) {
+        // GraphEmail format: body is an object with content property
         bodyText = email.body.content.replace(/<[^>]*>/g, "");
+      } else if (email.bodyPreview) {
+        // Fallback to preview
+        bodyText = email.bodyPreview;
       }
 
       const description = `Email from: ${fromName} <${fromEmail}>

@@ -353,15 +353,19 @@ export async function getTodayEmails(): Promise<Email[]> {
   console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
 
   const allEmails: Email[] = [];
+  // Use specific user's azure_object_id to access their mailbox (which has access to shared reconops@mindeed.in)
+  const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
   const reconopsEmail = "reconops@mindeed.in";
 
   try {
-    console.log(`getTodayEmails: fetching messages from ${reconopsEmail}`);
+    console.log(
+      `getTodayEmails: fetching messages for user ${userAzureId} (accessing ${reconopsEmail})`,
+    );
 
     // Build filter: receivedDateTime ge <ISO>
     const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
     const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
-      reconopsEmail,
+      userAzureId,
     )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
 
     // Add 10-second timeout to prevent hanging
@@ -407,7 +411,7 @@ export async function getTodayEmails(): Promise<Email[]> {
 
     const items = Array.isArray(data?.value) ? data.value : [];
     console.log(
-      `getTodayEmails: ${reconopsEmail} mailbox returned ${items.length} messages`,
+      `getTodayEmails: user ${userAzureId} mailbox returned ${items.length} messages`,
     );
 
     for (const it of items) {
@@ -425,7 +429,7 @@ export async function getTodayEmails(): Promise<Email[]> {
       const bodyText =
         (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
-      allEmails.push({
+      const email = {
         id: String(it.id),
         subject: it.subject || "",
         from: fromAddr,
@@ -433,7 +437,17 @@ export async function getTodayEmails(): Promise<Email[]> {
         body:
           typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
         receivedDateTime: it.receivedDateTime,
-      });
+      };
+
+      allEmails.push(email);
+
+      // Log each email to console
+      console.log(`[EMAIL] Subject: "${email.subject}"`);
+      console.log(`[EMAIL] From: ${email.from}`);
+      console.log(`[EMAIL] To: ${email.to}`);
+      console.log(`[EMAIL] Received: ${email.receivedDateTime}`);
+      console.log(`[EMAIL] Body Preview: ${email.body.substring(0, 200)}...`);
+      console.log("---");
     }
   } catch (err) {
     console.error(
@@ -444,7 +458,7 @@ export async function getTodayEmails(): Promise<Email[]> {
   }
 
   console.log(
-    `getTodayEmails: fetched ${allEmails.length} emails from reconops@mindeed.in`,
+    `getTodayEmails: SUMMARY - fetched ${allEmails.length} total emails for user ${userAzureId}`,
   );
   return allEmails;
 }

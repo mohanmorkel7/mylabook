@@ -451,22 +451,8 @@ export async function getTodayEmails(): Promise<Email[]> {
     }
   }
 
-  // Get user's delegated token from database (stored during user sign-in)
-  let delegatedToken: string | null = null;
-  try {
-    // Fetch user's delegated token from database
-    const res = await pool.query(
-      "SELECT ms_access_token FROM users WHERE status = 'active' AND ms_access_token IS NOT NULL LIMIT 1",
-    );
-    if (res.rows.length > 0) {
-      delegatedToken = res.rows[0].ms_access_token;
-      console.log("getTodayEmails: found user delegated token in database");
-    }
-  } catch (error) {
-    console.warn("getTodayEmails: failed to fetch delegated token:", error);
-  }
-
-  const token = delegatedToken || (await getAppToken());
+  // Use app-only token (delegated token support can be added later if needed)
+  const token = await getAppToken();
   if (!token) {
     console.warn("getTodayEmails: no token available, aborting");
     return [];

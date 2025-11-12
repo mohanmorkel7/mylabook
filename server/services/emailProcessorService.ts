@@ -118,12 +118,25 @@ export class EmailProcessingService {
       if (typeof email.body === "string") {
         // Email format: body is a string
         bodyText = email.body;
+        console.log(
+          `✅ Using Email format body (string): ${bodyText.substring(0, 100)}...`
+        );
       } else if (email.body?.content) {
         // GraphEmail format: body is an object with content property
         bodyText = email.body.content.replace(/<[^>]*>/g, "");
+        console.log(
+          `✅ Using GraphEmail format body (object.content): ${bodyText.substring(0, 100)}...`
+        );
       } else if (email.bodyPreview) {
         // Fallback to preview
         bodyText = email.bodyPreview;
+        console.log(
+          `⚠️ Using bodyPreview fallback: ${bodyText.substring(0, 100)}...`
+        );
+      } else {
+        console.warn(
+          `⚠️ No body content found for email ${email.id}: body type is ${typeof email.body}, bodyPreview is ${email.bodyPreview ? "present" : "missing"}`
+        );
       }
 
       const description = `Email from: ${fromName} <${fromEmail}>

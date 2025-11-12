@@ -381,12 +381,14 @@ export async function getTodayEmails(): Promise<Email[]> {
   for (const u of users) {
     const identifier = u.azure_object_id || u.email;
     try {
-      // Build filter: receivedDateTime ge <ISO>
-      // Microsoft Graph filters expect an ISO string; include quotes to be safe
-      const filterValue = encodeURIComponent(`${startISO}`);
+      // Build filter: receivedDateTime ge <ISO> AND from sender is reconops@mindeed.in
+      // Microsoft Graph OData filter syntax for from field
+      const graphFilter = encodeURIComponent(
+        `receivedDateTime ge ${startISO} and from/emailAddress/address eq 'reconops@mindeed.in'`,
+      );
       const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
         identifier,
-      )}/mailFolders/Inbox/messages?$top=50&$filter=receivedDateTime ge ${filterValue}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+      )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
 
       console.log(`getTodayEmails: fetching messages for user ${identifier}`);
 

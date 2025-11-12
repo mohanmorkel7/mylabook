@@ -71,12 +71,14 @@ export class EmailProcessingService {
           bodyText = email.body;
         } else if (email.body?.content) {
           // GraphEmail format: body is an object with content property
-          bodyText = email.body.content.replace(/<[^>]*>/g, "");
+          bodyText = email.body.content;
         } else if (email.bodyPreview) {
           // Fallback to preview
           bodyText = email.bodyPreview;
         }
-        emailFieldValue = bodyText.toLowerCase();
+        // Strip HTML tags only for matching comparison, not for storage
+        const plainTextForMatching = bodyText.replace(/<[^>]*>/g, "");
+        emailFieldValue = plainTextForMatching.toLowerCase();
         break;
     }
 

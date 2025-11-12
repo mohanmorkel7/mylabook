@@ -114,6 +114,9 @@ const STATUS_OPTIONS = [
 export default function ManageTickets() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [totalTickets, setTotalTickets] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -212,6 +215,9 @@ export default function ManageTickets() {
         };
       });
       setTickets(normalized);
+      setTotalTickets(data?.total ?? normalized.length);
+      setTotalPages(data?.pages ?? 1);
+      setCurrentPage(data?.page ?? 1);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -591,7 +597,7 @@ export default function ManageTickets() {
               variant={activeTab === "all" ? "default" : "outline"}
               onClick={() => setActiveTab("all")}
             >
-              All Tickets ({tickets.length})
+              All Tickets ({totalTickets})
             </Button>
             <Button
               variant={activeTab === "created" ? "default" : "outline"}

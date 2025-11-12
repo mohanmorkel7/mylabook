@@ -596,15 +596,15 @@ export async function getTodayEmails(): Promise<Email[]> {
   // Helper to parse GraphEmail items and convert to Email[]
   function parseGraphEmails(
     items: any[],
-    startOfDay: Date,
-    endOfDay: Date,
+    utcStartOfDay: Date,
+    utcEndOfDay: Date,
   ): Email[] {
     const emails: Email[] = [];
 
     for (const it of items) {
-      // Validate email is from today
+      // Validate email is from today (compare against UTC bounds since receivedDateTime is UTC)
       const emailDate = new Date(it.receivedDateTime);
-      if (emailDate < startOfDay || emailDate >= endOfDay) {
+      if (emailDate < utcStartOfDay || emailDate >= utcEndOfDay) {
         continue;
       }
 

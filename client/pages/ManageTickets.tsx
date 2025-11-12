@@ -114,6 +114,9 @@ const STATUS_OPTIONS = [
 export default function ManageTickets() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [totalTickets, setTotalTickets] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -144,10 +147,9 @@ export default function ManageTickets() {
   // Show/hide filters and pagination state
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [pageSize, setPageSize] = useState<number>(10);
-  const [currentPage, setCurrentPage] = useState<number>(1);
 
   useEffect(() => {
-    fetchTickets();
+    fetchTickets(currentPage);
     fetchUsers();
     if (activeTab === "created") {
       fetchCreatedTickets();
@@ -159,16 +161,16 @@ export default function ManageTickets() {
     };
     window.addEventListener("createdTicketsUpdated", handler);
     return () => window.removeEventListener("createdTicketsUpdated", handler);
-  }, [activeTab]);
+  }, [activeTab, currentPage]);
 
   useEffect(() => {
     applyFilters();
   }, [filters, tickets]);
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (page: number = 1) => {
     try {
       setIsLoading(true);
-      const response = await api.get("/tickets");
+      const response = await api.get(`/tickets?page=${page}&limit=20`);
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
@@ -212,6 +214,8 @@ export default function ManageTickets() {
         };
       });
       setTickets(normalized);
+      setTotalTickets(data?.total ?? normalized.length);
+      setTotalPages(data?.pages ?? 1);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -574,12 +578,8 @@ export default function ManageTickets() {
 
   const isAnyFilterActive = Object.values(filters).some((v) => v !== "");
 
-  // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(filteredTickets.length / pageSize));
-  const paginatedTickets = filteredTickets.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
+  // Use filtered tickets directly since server provides pagination
+  const paginatedTickets = filteredTickets;
 
   return (
     <div className="p-6">
@@ -589,9 +589,12 @@ export default function ManageTickets() {
           <div className="flex gap-4">
             <Button
               variant={activeTab === "all" ? "default" : "outline"}
-              onClick={() => setActiveTab("all")}
+              onClick={() => {
+                setActiveTab("all");
+                setCurrentPage(1);
+              }}
             >
-              All Tickets ({tickets.length})
+              All Tickets ({totalTickets})
             </Button>
             <Button
               variant={activeTab === "created" ? "default" : "outline"}

@@ -472,6 +472,60 @@ export async function getTodayEmails(): Promise<Email[]> {
     }
   }
 
+  // Fetch emails from a URL with proper pagination handling
+  async function fetchAllEmailsFromUrl(
+    url: string,
+    token: string,
+  ): Promise<any[]> {
+    const allEmails: any[] = [];
+    let nextLink = url;
+
+    while (nextLink) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        let res;
+        try {
+          res = await fetch(nextLink, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!res.ok) {
+          console.warn(
+            `Graph fetch failed: ${res.status} ${res.statusText}`,
+          );
+          break;
+        }
+
+        const data = await res.json();
+        const items = Array.isArray(data?.value) ? data.value : [];
+        console.log(`Fetched ${items.length} emails from this page`);
+        allEmails.push(...items);
+
+        // Handle pagination
+        nextLink = data?.["@odata.nextLink"] || null;
+        if (nextLink) {
+          console.log(
+            `More emails available, fetching next page...`,
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching email page:", error);
+        break;
+      }
+    }
+
+    return allEmails;
+  }
+
   // Use app-only token (delegated token support can be added later if needed)
   const token = await getAppToken();
   if (!token) {

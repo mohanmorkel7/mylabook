@@ -940,8 +940,12 @@ export default function ManageTickets() {
                                   try {
                                     const raw = ticket.description || "";
                                     const parser = new DOMParser();
-                                    const doc = parser.parseFromString(raw, "text/html");
-                                    const plainText = doc.body.textContent || "";
+                                    const doc = parser.parseFromString(
+                                      raw,
+                                      "text/html",
+                                    );
+                                    const plainText =
+                                      doc.body.textContent || "";
                                     return plainText;
                                   } catch (e) {
                                     return ticket.description || "";

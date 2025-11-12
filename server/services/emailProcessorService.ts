@@ -553,25 +553,34 @@ export async function getTodayEmails(): Promise<Email[]> {
     return [];
   }
 
-  // Determine start and end of today in UTC for filtering
+  // Determine start and end of today in IST (UTC+5:30) for filtering
+  // IST is UTC+5:30, so we need to calculate today's date in IST timezone
   const now = new Date();
+
+  // Convert current UTC time to IST by adding 5.5 hours
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+  const istNow = new Date(now.getTime() + istOffset);
+
+  // Get start of day in IST
   const startOfDay = new Date(
     Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
+      istNow.getUTCFullYear(),
+      istNow.getUTCMonth(),
+      istNow.getUTCDate(),
       0,
       0,
       0,
     ),
   );
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
 
-  const startISO = startOfDay.toISOString();
-  const endISO = endOfDay.toISOString();
+  // Subtract IST offset to convert back to UTC for API filtering
+  const startISO = new Date(startOfDay.getTime() - istOffset).toISOString();
+
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+  const endISO = new Date(endOfDay.getTime() - istOffset).toISOString();
+
   console.log(
-    `getTodayEmails: filtering for emails received today (UTC) between ${startISO} and ${endISO}`,
+    `getTodayEmails: filtering for emails received today (IST) between ${startISO} and ${endISO}`,
   );
 
   const allEmails: Email[] = [];

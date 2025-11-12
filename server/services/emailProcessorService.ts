@@ -474,7 +474,7 @@ export async function getTodayEmails(): Promise<Email[]> {
   console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
 
   const allEmails: Email[] = [];
-  const reconopsEmail = "reconops@mindeed.in";
+  const reconopsEmail = "reconops@mylapay.com";
   const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
   const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
 

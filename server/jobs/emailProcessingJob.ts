@@ -52,16 +52,22 @@ export function initialize() {
 
                 if (matches.length > 0) {
                   console.log(
-                    `Config ${cfg.id} ("${cfg.name}") matched ${matches.length} email(s):`,
+                    `✅ Config ${cfg.id} ("${cfg.name}") [${cfg.field_type}="${cfg.field_value}"] matched ${matches.length} email(s):`,
                   );
                   for (const m of matches) {
+                    const isFromReconops = m.from
+                      .toLowerCase()
+                      .includes("reconops@mindeed.in");
+                    const marker = isFromReconops
+                      ? "🔔 RECONOPS"
+                      : "📧 OTHER";
                     console.log(
-                      ` - emailId=${m.id} subject="${m.subject || "(no subject)"}" from=${m.from || m.sender || "unknown"}`,
+                      `   ${marker} - subject="${m.subject || "(no subject)"}" from=${m.from}`,
                     );
                   }
                 } else {
                   console.log(
-                    `Config ${cfg.id} ("${cfg.name}") matched 0 emails.`,
+                    `❌ Config ${cfg.id} ("${cfg.name}") [${cfg.field_type}="${cfg.field_value}"] matched 0 emails.`,
                   );
                 }
               } catch (inner) {

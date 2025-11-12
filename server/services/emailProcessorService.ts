@@ -268,7 +268,10 @@ export async function processEmailsForConfigs(
  * This function should be called with the Outlook email data
  */
 export async function getTodayEmails(): Promise<Email[]> {
-  // Server-side fetch using Microsoft Graph (client credentials)
+  // For delegated shared mailbox access, we need the user's delegated token
+  // This token should be stored in the database or cache from user sign-in
+  // For now, we'll try to fetch using app-only credentials as fallback
+
   const tenantId = process.env.AZURE_TENANT_ID;
   const clientId = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
@@ -323,7 +326,7 @@ export async function getTodayEmails(): Promise<Email[]> {
         console.error("Azure AD token response missing access_token:", data);
         return null;
       }
-      console.log("getTodayEmails: acquired Azure AD token (masked)");
+      console.log("getTodayEmails: acquired Azure AD app token (masked)");
       return data.access_token as string;
     } catch (error) {
       console.error("Error fetching app token:", error);
@@ -331,9 +334,24 @@ export async function getTodayEmails(): Promise<Email[]> {
     }
   }
 
-  const token = await getAppToken();
+  // Get user's delegated token from database (stored during user sign-in)
+  let delegatedToken: string | null = null;
+  try {
+    // Fetch user's delegated token from database
+    const res = await pool.query(
+      "SELECT ms_access_token FROM users WHERE status = 'active' AND ms_access_token IS NOT NULL LIMIT 1",
+    );
+    if (res.rows.length > 0) {
+      delegatedToken = res.rows[0].ms_access_token;
+      console.log("getTodayEmails: found user delegated token in database");
+    }
+  } catch (error) {
+    console.warn("getTodayEmails: failed to fetch delegated token:", error);
+  }
+
+  const token = delegatedToken || (await getAppToken());
   if (!token) {
-    console.warn("getTodayEmails: no token, aborting");
+    console.warn("getTodayEmails: no token available, aborting");
     return [];
   }
 

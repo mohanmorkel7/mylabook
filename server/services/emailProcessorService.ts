@@ -147,9 +147,7 @@ ${bodyText}`;
       }
     } catch (error) {
       const errorMsg = (error as any)?.message || String(error);
-      console.error(
-        `Error creating ticket for email ${email.id}: ${errorMsg}`,
-      );
+      console.error(`Error creating ticket for email ${email.id}: ${errorMsg}`);
       return {
         success: false,
         error: errorMsg,
@@ -409,10 +407,7 @@ export async function processEmailsForConfigs(
               result.error,
             );
           } catch (logErr) {
-            console.error(
-              `Failed to log processed email ${email.id}:`,
-              logErr,
-            );
+            console.error(`Failed to log processed email ${email.id}:`, logErr);
           }
 
           if (result.success) {
@@ -528,9 +523,7 @@ export async function getTodayEmails(): Promise<Email[]> {
         }
 
         if (!res.ok) {
-          console.warn(
-            `Graph fetch failed: ${res.status} ${res.statusText}`,
-          );
+          console.warn(`Graph fetch failed: ${res.status} ${res.statusText}`);
           break;
         }
 
@@ -542,9 +535,7 @@ export async function getTodayEmails(): Promise<Email[]> {
         // Handle pagination
         nextLink = data?.["@odata.nextLink"] || null;
         if (nextLink) {
-          console.log(
-            `More emails available, fetching next page...`,
-          );
+          console.log(`More emails available, fetching next page...`);
         }
       } catch (error) {
         console.error("Error fetching email page:", error);
@@ -592,7 +583,11 @@ export async function getTodayEmails(): Promise<Email[]> {
   );
 
   // Helper to parse GraphEmail items and convert to Email[]
-  function parseGraphEmails(items: any[], startOfDay: Date, endOfDay: Date): Email[] {
+  function parseGraphEmails(
+    items: any[],
+    startOfDay: Date,
+    endOfDay: Date,
+  ): Email[] {
     const emails: Email[] = [];
 
     for (const it of items) {
@@ -614,9 +609,7 @@ export async function getTodayEmails(): Promise<Email[]> {
             .join(", ")
         : "";
       const bodyText =
-        (it.body && (it.body.content || it.body.text)) ||
-        it.bodyPreview ||
-        "";
+        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
       const email = {
         id: String(it.id),
@@ -655,11 +648,7 @@ export async function getTodayEmails(): Promise<Email[]> {
     );
 
     if (sharedEmails.length > 0) {
-      const parsedEmails = parseGraphEmails(
-        sharedEmails,
-        startOfDay,
-        endOfDay,
-      );
+      const parsedEmails = parseGraphEmails(sharedEmails, startOfDay, endOfDay);
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from ${reconopsEmail} (direct access)`,
       );
@@ -723,7 +712,10 @@ export async function getTodayEmails(): Promise<Email[]> {
           reconopsFolder.id,
         )}/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
 
-        const folderEmails = await fetchAllEmailsFromUrl(sharedFolderUrl, token);
+        const folderEmails = await fetchAllEmailsFromUrl(
+          sharedFolderUrl,
+          token,
+        );
         console.log(
           `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
         );

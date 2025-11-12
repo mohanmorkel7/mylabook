@@ -120,7 +120,9 @@ export default function TicketDetailPage() {
                   const lines = raw.split("\n");
 
                   // Extract email header info (lines before "---")
-                  const separatorIndex = lines.findIndex(line => line.trim().startsWith("---"));
+                  const separatorIndex = lines.findIndex((line) =>
+                    line.trim().startsWith("---"),
+                  );
                   let emailHeaders: string[] = [];
                   let emailBody: string[] = [];
 

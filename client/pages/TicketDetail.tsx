@@ -232,6 +232,15 @@ export default function TicketDetailPage() {
                     return line;
                   });
 
+                  // Check if body looks like plain text table (contains numbers and field names without HTML)
+                  const bodyText = emailBody.join("\n");
+                  const hasHTMLTags = /<[^>]+>/.test(bodyText);
+                  const looksLikeTableData =
+                    !hasHTMLTags &&
+                    /[A-Z][a-z]*\s+[A-Z][a-z]*|Count|Amount|Network|Visa|MasterCard|RuPay|0{3,}/i.test(
+                      bodyText,
+                    );
+
                   return (
                     <>
                       {/* Email Headers */}
@@ -245,14 +254,22 @@ export default function TicketDetailPage() {
                         </div>
                       )}
 
-                      {/* Email Body - Rendered as HTML */}
+                      {/* Email Body - Rendered as HTML or Plain Text */}
                       <div className="w-full overflow-x-auto">
-                        <div
-                          className="email-body-content text-gray-800 break-words"
-                          dangerouslySetInnerHTML={{
-                            __html: emailBody.join("\n"),
-                          }}
-                        />
+                        {looksLikeTableData ? (
+                          // Plain text table data - display as preformatted text with monospace font
+                          <pre className="bg-gray-50 border border-gray-300 rounded p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-words">
+                            <code>{bodyText}</code>
+                          </pre>
+                        ) : (
+                          // HTML content - render with rich formatting
+                          <div
+                            className="email-body-content text-gray-800 break-words"
+                            dangerouslySetInnerHTML={{
+                              __html: bodyText,
+                            }}
+                          />
+                        )}
                       </div>
                     </>
                   );

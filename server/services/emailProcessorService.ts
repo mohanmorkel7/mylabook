@@ -141,11 +141,13 @@ export class EmailProcessingService {
         );
       }
 
-      // Remove Outlook security warnings
-      bodyText = bodyText.replace(
-        /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
-        "",
-      );
+      // Remove Outlook security warnings - use aggressive matching to catch all variations
+      // Match from CAUTION: to "safe." (with any content in between including newlines)
+      bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
+      // If CAUTION is still present, try matching just from CAUTION: to end of line
+      if (bodyText.includes("CAUTION:")) {
+        bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
+      }
       bodyText = bodyText.trim();
 
       const description = `Email from: ${fromName} <${fromEmail}>
@@ -679,11 +681,13 @@ export async function getTodayEmails(): Promise<Email[]> {
 
       // Remove Outlook security warnings
       if (typeof bodyText === "string") {
-        // Remove CAUTION message that Outlook adds
-        bodyText = bodyText.replace(
-          /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
-          "",
-        );
+        // Remove CAUTION message - use very aggressive matching to catch all variations
+        // Match from CAUTION: to "safe." (with any content in between including newlines)
+        bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
+        // If CAUTION is still present, try matching just from CAUTION: to end of line
+        if (bodyText.includes("CAUTION:")) {
+          bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
+        }
         // Clean up extra whitespace
         bodyText = bodyText.trim();
       }

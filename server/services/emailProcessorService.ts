@@ -667,8 +667,19 @@ export async function getTodayEmails(): Promise<Email[]> {
             .filter(Boolean)
             .join(", ")
         : "";
-      const bodyText =
+      let bodyText =
         (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+
+      // Remove Outlook security warnings
+      if (typeof bodyText === "string") {
+        // Remove CAUTION message that Outlook adds
+        bodyText = bodyText.replace(
+          /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
+          "",
+        );
+        // Clean up extra whitespace
+        bodyText = bodyText.trim();
+      }
 
       const email = {
         id: String(it.id),

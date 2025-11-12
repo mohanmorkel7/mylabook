@@ -377,12 +377,24 @@ export async function getTodayEmails(): Promise<Email[]> {
       )}/mailFolders/Inbox/messages?$top=50&$filter=receivedDateTime ge ${filterValue}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
 
       console.log(`getTodayEmails: fetching messages for user ${identifier}`);
-      const res = await fetch(graphUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+
+      // Add 10-second timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      let res;
+      try {
+        res = await fetch(graphUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
       console.log(
         `getTodayEmails: graph response for ${identifier}: ${res.status} ${res.statusText}`,
       );

@@ -143,10 +143,7 @@ export class EmailProcessingService {
 
       // Remove Outlook security warnings - use aggressive matching to catch all variations
       // Match from CAUTION: to "safe." (with any content in between including newlines)
-      bodyText = bodyText.replace(
-        /CAUTION:[\s\S]*?safe\./gi,
-        "",
-      );
+      bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
       // If CAUTION is still present, try matching just from CAUTION: to end of line
       if (bodyText.includes("CAUTION:")) {
         bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
@@ -686,10 +683,7 @@ export async function getTodayEmails(): Promise<Email[]> {
       if (typeof bodyText === "string") {
         // Remove CAUTION message - use very aggressive matching to catch all variations
         // Match from CAUTION: to "safe." (with any content in between including newlines)
-        bodyText = bodyText.replace(
-          /CAUTION:[\s\S]*?safe\./gi,
-          "",
-        );
+        bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
         // If CAUTION is still present, try matching just from CAUTION: to end of line
         if (bodyText.includes("CAUTION:")) {
           bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");

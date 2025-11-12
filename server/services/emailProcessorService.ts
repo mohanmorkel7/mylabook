@@ -141,9 +141,14 @@ export class EmailProcessingService {
         );
       }
 
-      // Remove Outlook security warnings
+      // Remove Outlook security warnings (multiple patterns to catch variations)
       bodyText = bodyText.replace(
-        /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
+        /CAUTION:\s*This email originated from outside of the organization\.\s*Do not click links or open attachments unless you recognize the sender and know the content is safe\.?\s*/gi,
+        "",
+      );
+      // Also try a simpler pattern if the above didn't work
+      bodyText = bodyText.replace(
+        /CAUTION:[^.]*know the content is safe\.?/gi,
         "",
       );
       bodyText = bodyText.trim();
@@ -679,9 +684,14 @@ export async function getTodayEmails(): Promise<Email[]> {
 
       // Remove Outlook security warnings
       if (typeof bodyText === "string") {
-        // Remove CAUTION message that Outlook adds
+        // Remove CAUTION message that Outlook adds (multiple patterns to catch variations)
         bodyText = bodyText.replace(
-          /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
+          /CAUTION:\s*This email originated from outside of the organization\.\s*Do not click links or open attachments unless you recognize the sender and know the content is safe\.?\s*/gi,
+          "",
+        );
+        // Also try a simpler pattern if the above didn't work
+        bodyText = bodyText.replace(
+          /CAUTION:[^.]*know the content is safe\.?/gi,
           "",
         );
         // Clean up extra whitespace

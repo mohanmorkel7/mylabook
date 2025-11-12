@@ -1,41 +1,309 @@
-import { pool } from "../database/connection";
-import {
-  matchEmailAgainstConfig,
-  Email,
-  MailConfig,
-} from "./emailMatchingService";
+import pool from "../database/connection";
+import { MailConfig, MailConfigRepository } from "../models/MailConfig";
 
-export interface ProcessingResult {
-  processed: number;
-  succeeded: number;
-  failed: number;
-  skipped: number;
-  errors: Array<{
-    emailId: string;
-    error: string;
-  }>;
+interface GraphEmail {
+  id: string;
+  subject?: string;
+  from?: { emailAddress?: { name?: string; address?: string } };
+  sender?: { emailAddress?: { name?: string; address?: string } };
+  body?: { contentType?: string; content?: string };
+  bodyPreview?: string;
+  receivedDateTime?: string;
+}
+
+interface TicketPayload {
+  issue: {
+    project_id: number;
+    subject: string;
+    description: string;
+    assigned_to_id: number;
+    priority_id: number;
+    watcher_user_ids: number[];
+  };
+}
+
+// Redmine API configuration
+const REDMINE_API_URL =
+  process.env.REDMINE_API_URL || "https://redmine.example.com/api";
+const REDMINE_API_KEY = process.env.REDMINE_API_KEY || "";
+
+export class EmailProcessingService {
+  /**
+   * Check if email matches the given config criteria
+   */
+  static matchesConfig(email: GraphEmail, config: MailConfig): boolean {
+    const fieldType = config.field_type;
+    const fieldValue = config.field_value.toLowerCase();
+
+    let emailFieldValue = "";
+
+    switch (fieldType) {
+      case "subject":
+        emailFieldValue = (email.subject || "").toLowerCase();
+        break;
+
+      case "fromEmail":
+        const fromEmail =
+          email.from?.emailAddress?.address ||
+          email.sender?.emailAddress?.address ||
+          "";
+        emailFieldValue = fromEmail.toLowerCase();
+        break;
+
+      case "toEmail":
+        // Extract TO email address from email headers if available
+        emailFieldValue = "";
+        break;
+
+      case "body":
+        let bodyText = email.bodyPreview || "";
+        if (email.body?.content) {
+          bodyText = email.body.content.replace(/<[^>]*>/g, "");
+        }
+        emailFieldValue = bodyText.toLowerCase();
+        break;
+    }
+
+    // Simple substring matching (case-insensitive)
+    return emailFieldValue.includes(fieldValue);
+  }
+
+  /**
+   * Create a ticket in Redmine based on email and config
+   */
+  static async createTicket(
+    email: GraphEmail,
+    config: MailConfig,
+  ): Promise<{ ticketId?: number; success: boolean; error?: string }> {
+    try {
+      // Extract email details
+      const subject = email.subject || "(No subject)";
+      const fromEmail =
+        email.from?.emailAddress?.address ||
+        email.sender?.emailAddress?.address ||
+        "unknown@example.com";
+      const fromName =
+        email.from?.emailAddress?.name ||
+        email.sender?.emailAddress?.name ||
+        "Unknown";
+
+      // Build email body for ticket description
+      let bodyText = email.bodyPreview || "";
+      if (email.body?.content) {
+        bodyText = email.body.content.replace(/<[^>]*>/g, "");
+      }
+
+      const description = `Email from: ${fromName} <${fromEmail}>
+Received: ${email.receivedDateTime || "Unknown"}
+
+---
+
+${bodyText}`;
+
+      // Create ticket in app database using TicketRepository
+      const ticketData = {
+        subject,
+        description,
+        priority_id: config.priority_id,
+        team_id: config.team_id,
+        bucket_id: config.bucket_id,
+        demand: config.demand,
+        assigned_to: config.assigned_to_id,
+        project_id: config.project_id,
+      } as any;
+
+      // createdBy: prefer config.user_id else assigned_to
+      const createdBy = (config as any).user_id || config.assigned_to_id || 1;
+
+      const createdTicket = await (
+        await import("../models/Ticket")
+      ).TicketRepository.create(ticketData, createdBy);
+
+      return { ticketId: createdTicket.id, success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: (error as any)?.message || "Failed to create ticket",
+      };
+    }
+  }
+
+  /**
+   * Process emails and create tickets based on matching configs
+   * This is the main service method that can be called by background jobs or cron tasks
+   */
+  static async processEmails(
+    emails: GraphEmail[],
+    userId: number,
+  ): Promise<{
+    processed: number;
+    created: number;
+    failed: number;
+    skipped: number;
+    results: Array<{
+      emailId: string;
+      configId: number;
+      success: boolean;
+      ticketId?: number;
+      error?: string;
+    }>;
+  }> {
+    const results: any[] = [];
+    let processed = 0;
+    let created = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    try {
+      // Get active configs for this user
+      const configs = await MailConfigRepository.getActiveConfigs(userId);
+
+      if (configs.length === 0) {
+        return { processed: 0, created: 0, failed: 0, skipped: 0, results: [] };
+      }
+
+      // Process each email
+      for (const email of emails) {
+        // Check each config for this email
+        for (const config of configs) {
+          // Check if email was already processed
+          const isProcessed = await MailConfigRepository.isEmailProcessed(
+            config.id,
+            email.id,
+          );
+
+          if (isProcessed) {
+            skipped++;
+            continue; // Skip if already processed
+          }
+
+          // Check if email matches config criteria
+          if (this.matchesConfig(email, config)) {
+            // Try to create ticket
+            const ticketResult = await this.createTicket(email, config);
+
+            // Log the processing result
+            await MailConfigRepository.logProcessedEmail(
+              config.id,
+              email.id,
+              email.subject || "(No subject)",
+              email.from?.emailAddress?.address ||
+                email.sender?.emailAddress?.address ||
+                "unknown",
+              ticketResult.ticketId,
+              ticketResult.success ? "success" : "failed",
+              ticketResult.error,
+            );
+
+            if (ticketResult.success) {
+              created++;
+            } else {
+              failed++;
+            }
+
+            results.push({
+              emailId: email.id,
+              configId: config.id,
+              success: ticketResult.success,
+              ticketId: ticketResult.ticketId,
+              error: ticketResult.error,
+            });
+
+            processed++;
+          } else {
+            // Log as skipped (matched config criteria-wise but config didn't match)
+            await MailConfigRepository.logProcessedEmail(
+              config.id,
+              email.id,
+              email.subject || "(No subject)",
+              email.from?.emailAddress?.address ||
+                email.sender?.emailAddress?.address ||
+                "unknown",
+              undefined,
+              "skipped",
+            );
+          }
+        }
+      }
+
+      return { processed, created, failed, skipped, results };
+    } catch (error) {
+      console.error("Error processing emails:", error);
+      return {
+        processed: 0,
+        created: 0,
+        failed: 0,
+        skipped: 0,
+        results: [],
+      };
+    }
+  }
+
+  /**
+   * Get all users for background processing
+   */
+  static async getAllActiveUsers(): Promise<
+    { id: number; email: string; azure_object_id: string }[]
+  > {
+    try {
+      const query = `
+        SELECT DISTINCT u.id, u.email, u.azure_object_id
+        FROM users u
+        WHERE u.status = 'active' AND u.azure_object_id IS NOT NULL
+      `;
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error("Error fetching active users:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get processing statistics
+   */
+  static async getProcessingStats(configId: number): Promise<{
+    total: number;
+    successful: number;
+    failed: number;
+    lastProcessed: string | null;
+  }> {
+    try {
+      const query = `
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
+          SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+          MAX(created_at) as lastProcessed
+        FROM mail_processing_log
+        WHERE mail_config_id = $1
+      `;
+      const result = await pool.query(query, [configId]);
+      const row = result.rows[0];
+      return {
+        total: parseInt(row.total) || 0,
+        successful: parseInt(row.successful) || 0,
+        failed: parseInt(row.failed) || 0,
+        lastProcessed: row.lastprocessed,
+      };
+    } catch (error) {
+      console.error("Error fetching processing stats:", error);
+      return { total: 0, successful: 0, failed: 0, lastProcessed: null };
+    }
+  }
+}
+
+interface Email {
+  id: string;
+  subject: string;
+  from: string;
+  to: string;
+  body: string;
+  receivedDateTime?: string;
 }
 
 /**
- * Get active mail configs for a user
- */
-export async function getActiveConfigs(userId: number): Promise<MailConfig[]> {
-  const query = `
-    SELECT id, user_id, name, description, field_type, field_value,
-           from_email, to_email, subject_pattern, body_content, body_match_type,
-           project_id, priority_id, assigned_to_id, watcher_user_ids,
-           is_active, created_at, updated_at
-    FROM mail_configs
-    WHERE user_id = $1 AND is_active = true
-    ORDER BY created_at DESC
-  `;
-
-  const result = await pool.query(query, [userId]);
-  return result.rows as MailConfig[];
-}
-
-/**
- * Get all active configs across all users
+ * Get all active mail configs
  */
 export async function getAllActiveConfigs(): Promise<
   Array<MailConfig & { user_id: number }>
@@ -55,220 +323,72 @@ export async function getAllActiveConfigs(): Promise<
 }
 
 /**
- * Check if email was already processed for this config
- */
-export async function isEmailProcessed(
-  configId: number,
-  emailId: string,
-): Promise<boolean> {
-  const query = `
-    SELECT id FROM mail_processing_log
-    WHERE mail_config_id = $1 AND email_id = $2
-    LIMIT 1
-  `;
-
-  const result = await pool.query(query, [configId, emailId]);
-  return result.rows.length > 0;
-}
-
-/**
- * Log email processing attempt
- */
-export async function logEmailProcessing(
-  configId: number,
-  emailId: string,
-  emailSubject: string,
-  emailFrom: string,
-  status: "success" | "failed" | "skipped",
-  ticketId?: number,
-  errorMessage?: string,
-): Promise<void> {
-  const query = `
-    INSERT INTO mail_processing_log
-    (mail_config_id, email_id, email_subject, email_from, ticket_id, status, error_message, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-    ON CONFLICT (mail_config_id, email_id) DO UPDATE
-    SET status = $6, ticket_id = $5, error_message = $7, created_at = NOW()
-  `;
-
-  await pool.query(query, [
-    configId,
-    emailId,
-    emailSubject,
-    emailFrom,
-    ticketId || null,
-    status,
-    errorMessage || null,
-  ]);
-}
-
-/**
- * Store created ticket details
- */
-export async function storeCreatedTicket(
-  emailId: string,
-  configId: number,
-  ticketId: number,
-  mitraTicketId: number,
-  emailSubject: string,
-  emailFrom: string,
-  mitraResponse?: any,
-): Promise<void> {
-  const query = `
-    INSERT INTO created_tickets
-    (email_id, mail_config_id, ticket_id, mitra_ticket_id, email_subject, email_from, mitra_response, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-  `;
-
-  await pool.query(query, [
-    emailId,
-    configId,
-    ticketId,
-    mitraTicketId,
-    emailSubject,
-    emailFrom,
-    mitraResponse ? JSON.stringify(mitraResponse) : null,
-  ]);
-}
-
-/**
- * Process today's emails and create tickets based on matching configs
- * This is the main function called by the background job or API endpoint
+ * Process emails against all configs
  */
 export async function processEmailsForConfigs(
   emails: Email[],
   configs: Array<MailConfig & { user_id: number }>,
-): Promise<ProcessingResult> {
-  const result: ProcessingResult = {
-    processed: 0,
-    succeeded: 0,
-    failed: 0,
-    skipped: 0,
-    errors: [],
-  };
+): Promise<{
+  processed: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  errors: string[];
+}> {
+  let processed = 0;
+  let succeeded = 0;
+  let failed = 0;
+  let skipped = 0;
+  const errors: string[] = [];
 
-  for (const email of emails) {
-    for (const config of configs) {
-      result.processed++;
-
-      try {
-        // Check if email already processed for this config
-        const alreadyProcessed = await isEmailProcessed(config.id, email.id);
-        if (alreadyProcessed) {
-          result.skipped++;
-          await logEmailProcessing(
-            config.id,
-            email.id,
-            email.subject,
-            email.from,
-            "skipped",
-            undefined,
-            "Email already processed for this config",
-          );
-          continue;
-        }
-
-        // Check if email matches config criteria
-        if (!matchEmailAgainstConfig(email, config)) {
-          result.skipped++;
-          await logEmailProcessing(
-            config.id,
-            email.id,
-            email.subject,
-            email.from,
-            "skipped",
-            undefined,
-            "Email does not match config criteria",
-          );
-          continue;
-        }
-
-        // Create ticket in local tickets table
-        try {
-          const ticketData: any = {
-            subject: email.subject || "(No subject)",
-            description:
-              (email.body && (email.body.content || email.body.text)) ||
-              email.bodyPreview ||
-              "",
-            priority_id: config.priority_id,
-            team_id: config.team_id,
-            bucket_id: config.bucket_id,
-            demand: config.demand,
-            assigned_to: config.assigned_to_id,
-          };
-
-          // createdBy: prefer config.user_id else assigned_to
-          const createdBy =
-            (config as any).user_id || config.assigned_to_id || 1;
-
-          const ticket = await (
-            await import("../models/Ticket")
-          ).TicketRepository.create(ticketData, createdBy);
-
-          result.succeeded++;
-          await logEmailProcessing(
-            config.id,
-            email.id,
-            email.subject,
-            email.from,
-            "success",
-            ticket.id,
-          );
-
-          // Store created ticket record (mitraTicketId left null)
-          await storeCreatedTicket(
-            email.id,
-            config.id,
-            ticket.id,
-            ticket.id,
-            email.subject,
-            email.from,
-            null,
-          );
-        } catch (err) {
-          result.failed++;
-          const errMsg = err instanceof Error ? err.message : String(err);
-          await logEmailProcessing(
-            config.id,
-            email.id,
-            email.subject,
-            email.from,
-            "failed",
-            undefined,
-            errMsg,
-          );
-          result.errors.push({ emailId: email.id, error: errMsg });
-        }
-      } catch (error) {
-        result.failed++;
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        await logEmailProcessing(
+  for (const config of configs) {
+    try {
+      for (const email of emails) {
+        // Check if already processed
+        const isProcessed = await MailConfigRepository.isEmailProcessed(
           config.id,
           email.id,
-          email.subject,
-          email.from,
-          "failed",
-          undefined,
-          errorMsg,
         );
-        result.errors.push({
-          emailId: email.id,
-          error: errorMsg,
-        });
+
+        if (isProcessed) {
+          skipped++;
+          continue;
+        }
+
+        // Check if matches
+        const matches = EmailProcessingService.matchesConfig(
+          email as GraphEmail,
+          config,
+        );
+        if (matches) {
+          const result = await EmailProcessingService.createTicket(
+            email as GraphEmail,
+            config,
+          );
+          if (result.success) {
+            succeeded++;
+          } else {
+            failed++;
+            if (result.error) errors.push(result.error);
+          }
+          processed++;
+        }
       }
+    } catch (error) {
+      const err = (error as any)?.message || String(error);
+      errors.push(err);
+      console.error(`Error processing config ${config.id}:`, error);
     }
   }
 
-  return result;
+  return { processed, succeeded, failed, skipped, errors };
 }
 
-/**
- * Get today's emails from Outlook (using existing Mails API)
- * This function should be called with the Outlook email data
- */
 export async function getTodayEmails(): Promise<Email[]> {
-  // Server-side fetch using Microsoft Graph (client credentials)
+  // For delegated shared mailbox access, we need the user's delegated token
+  // This token should be stored in the database or cache from user sign-in
+  // For now, we'll try to fetch using app-only credentials as fallback
+
   const tenantId = process.env.AZURE_TENANT_ID;
   const clientId = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
@@ -323,7 +443,7 @@ export async function getTodayEmails(): Promise<Email[]> {
         console.error("Azure AD token response missing access_token:", data);
         return null;
       }
-      console.log("getTodayEmails: acquired Azure AD token (masked)");
+      console.log("getTodayEmails: acquired Azure AD app token (masked)");
       return data.access_token as string;
     } catch (error) {
       console.error("Error fetching app token:", error);
@@ -331,9 +451,24 @@ export async function getTodayEmails(): Promise<Email[]> {
     }
   }
 
-  const token = await getAppToken();
+  // Get user's delegated token from database (stored during user sign-in)
+  let delegatedToken: string | null = null;
+  try {
+    // Fetch user's delegated token from database
+    const res = await pool.query(
+      "SELECT ms_access_token FROM users WHERE status = 'active' AND ms_access_token IS NOT NULL LIMIT 1",
+    );
+    if (res.rows.length > 0) {
+      delegatedToken = res.rows[0].ms_access_token;
+      console.log("getTodayEmails: found user delegated token in database");
+    }
+  } catch (error) {
+    console.warn("getTodayEmails: failed to fetch delegated token:", error);
+  }
+
+  const token = delegatedToken || (await getAppToken());
   if (!token) {
-    console.warn("getTodayEmails: no token, aborting");
+    console.warn("getTodayEmails: no token available, aborting");
     return [];
   }
 
@@ -353,70 +488,129 @@ export async function getTodayEmails(): Promise<Email[]> {
   console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
 
   const allEmails: Email[] = [];
-  // Use specific user's azure_object_id to access their mailbox (which has access to shared reconops@mindeed.in)
-  const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
   const reconopsEmail = "reconops@mindeed.in";
+  const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
+  const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
 
   try {
+    // Try 1: Direct access to shared mailbox
     console.log(
-      `getTodayEmails: fetching messages for user ${userAzureId} (accessing ${reconopsEmail})`,
+      `getTodayEmails: attempting direct access to shared mailbox ${reconopsEmail}`,
     );
 
-    // Build filter: receivedDateTime ge <ISO> AND from sender is reconops@mindeed.in
-    const graphFilter = encodeURIComponent(
-      `receivedDateTime ge ${startISO} and from/emailAddress/address eq 'reconops@mindeed.in'`,
-    );
-    const graphUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
-      userAzureId,
+    const sharedMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      reconopsEmail,
     )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
 
-    // Add 10-second timeout to prevent hanging
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const controller1 = new AbortController();
+    const timeoutId1 = setTimeout(() => controller1.abort(), 10000);
 
     let res;
     try {
-      res = await fetch(graphUrl, {
+      res = await fetch(sharedMailboxUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
+        signal: controller1.signal,
       });
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(timeoutId1);
     }
 
     console.log(
-      `getTodayEmails: graph response for ${reconopsEmail}: ${res.status} ${res.statusText}`,
+      `getTodayEmails: direct shared mailbox response: ${res.status} ${res.statusText}`,
     );
 
-    const text = await res.text();
-    // Try to parse JSON only when response is JSON
-    let data: any = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch (parseErr) {
-      console.warn(
-        `getTodayEmails: failed to parse Graph response JSON:`,
-        parseErr,
+    if (res.ok) {
+      const data = await res.json();
+      const items = Array.isArray(data?.value) ? data.value : [];
+      console.log(
+        `getTodayEmails: shared mailbox ${reconopsEmail} returned ${items.length} messages (direct access)`,
       );
-      data = { rawText: text };
+
+      for (const it of items) {
+        const fromAddr =
+          (it.from &&
+            it.from.emailAddress &&
+            (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+          "";
+        const toAddr = Array.isArray(it.toRecipients)
+          ? it.toRecipients
+              .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+              .filter(Boolean)
+              .join(", ")
+          : "";
+        const bodyText =
+          (it.body && (it.body.content || it.body.text)) ||
+          it.bodyPreview ||
+          "";
+
+        const email = {
+          id: String(it.id),
+          subject: it.subject || "",
+          from: fromAddr,
+          to: toAddr,
+          body:
+            typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+          receivedDateTime: it.receivedDateTime,
+        };
+
+        allEmails.push(email);
+
+        console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
+        console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
+        console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
+        console.log(`🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`);
+        console.log("---");
+      }
+
+      console.log(
+        `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from ${reconopsEmail} (direct access)`,
+      );
+      return allEmails;
     }
 
-    if (!res.ok) {
+    // Try 2: Fallback - fetch from user's mailbox and filter for reconops emails
+    console.log(
+      `getTodayEmails: direct access failed, falling back to user mailbox with filtering for ${reconopsEmail}`,
+    );
+
+    const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      userAzureId,
+    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+
+    const controller2 = new AbortController();
+    const timeoutId2 = setTimeout(() => controller2.abort(), 10000);
+
+    let userRes;
+    try {
+      userRes = await fetch(userMailboxUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller2.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId2);
+    }
+
+    if (!userRes.ok) {
+      const text = await userRes.text();
       console.warn(
-        `Graph fetch failed for ${reconopsEmail}: ${res.status} ${res.statusText} - ${text}`,
+        `Graph fetch failed for user ${userAzureId}: ${userRes.status} - ${text}`,
       );
       return [];
     }
 
-    const items = Array.isArray(data?.value) ? data.value : [];
+    const userData = await userRes.json();
+    const userItems = Array.isArray(userData?.value) ? userData.value : [];
     console.log(
-      `getTodayEmails: user ${userAzureId} mailbox returned ${items.length} messages`,
+      `getTodayEmails: user ${userAzureId} mailbox returned ${userItems.length} messages (filtering for ${reconopsEmail})`,
     );
 
-    for (const it of items) {
+    for (const it of userItems) {
       const fromAddr =
         (it.from &&
           it.from.emailAddress &&
@@ -428,6 +622,17 @@ export async function getTodayEmails(): Promise<Email[]> {
             .filter(Boolean)
             .join(", ")
         : "";
+
+      // Filter: only include emails from or to reconops@mindeed.in
+      const isFromReconops = fromAddr
+        .toLowerCase()
+        .includes("reconops@mindeed.in");
+      const isToReconops = toAddr.toLowerCase().includes("reconops@mindeed.in");
+
+      if (!isFromReconops && !isToReconops) {
+        continue;
+      }
+
       const bodyText =
         (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
@@ -443,24 +648,19 @@ export async function getTodayEmails(): Promise<Email[]> {
 
       allEmails.push(email);
 
-      // Log each email to console
-      console.log(`[EMAIL] Subject: "${email.subject}"`);
-      console.log(`[EMAIL] From: ${email.from}`);
-      console.log(`[EMAIL] To: ${email.to}`);
-      console.log(`[EMAIL] Received: ${email.receivedDateTime}`);
-      console.log(`[EMAIL] Body Preview: ${email.body.substring(0, 200)}...`);
+      console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
+      console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
+      console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
+      console.log(`🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`);
       console.log("---");
     }
-  } catch (err) {
-    console.error(
-      `Error fetching messages from ${reconopsEmail}:`,
-      (err as any)?.message || err,
+
+    console.log(
+      `getTodayEmails: SUMMARY - fetched ${allEmails.length} filtered emails from user mailbox (fallback)`,
     );
+    return allEmails;
+  } catch (err) {
+    console.error(`Error fetching messages:`, (err as any)?.message || err);
     return [];
   }
-
-  console.log(
-    `getTodayEmails: SUMMARY - fetched ${allEmails.length} total emails for user ${userAzureId}`,
-  );
-  return allEmails;
 }

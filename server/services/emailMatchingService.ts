@@ -75,6 +75,36 @@ export function matchEmailAgainstConfig(
   email: Email,
   config: MailConfig,
 ): boolean {
+  // Support new field_type/field_value format
+  if (config.field_type && config.field_value) {
+    const fieldValue = config.field_value.toLowerCase();
+    let emailFieldValue = "";
+
+    switch (config.field_type) {
+      case "subject":
+        emailFieldValue = email.subject.toLowerCase();
+        break;
+      case "fromEmail":
+        emailFieldValue = email.from.toLowerCase();
+        break;
+      case "toEmail":
+        emailFieldValue = email.to.toLowerCase();
+        break;
+      case "body":
+        emailFieldValue = email.body.toLowerCase();
+        break;
+      default:
+        return false;
+    }
+
+    const matches = emailFieldValue.includes(fieldValue);
+    console.log(
+      `[CONFIG MATCH] Config "${config.field_type}" matching: "${fieldValue}" in "${emailFieldValue.substring(0, 100)}..." -> ${matches}`,
+    );
+    return matches;
+  }
+
+  // Fall back to legacy field patterns
   // Check from_email pattern
   if (config.from_email) {
     if (!matchPattern(config.from_email, email.from)) {

@@ -562,83 +562,79 @@ export async function getTodayEmails(): Promise<Email[]> {
     `receivedDateTime ge ${startISO} and receivedDateTime lt ${endISO}`,
   );
 
+  // Helper to parse GraphEmail items and convert to Email[]
+  function parseGraphEmails(items: any[], startOfDay: Date, endOfDay: Date): Email[] {
+    const emails: Email[] = [];
+
+    for (const it of items) {
+      // Validate email is from today
+      const emailDate = new Date(it.receivedDateTime);
+      if (emailDate < startOfDay || emailDate >= endOfDay) {
+        continue;
+      }
+
+      const fromAddr =
+        (it.from &&
+          it.from.emailAddress &&
+          (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+        "";
+      const toAddr = Array.isArray(it.toRecipients)
+        ? it.toRecipients
+            .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+            .filter(Boolean)
+            .join(", ")
+        : "";
+      const bodyText =
+        (it.body && (it.body.content || it.body.text)) ||
+        it.bodyPreview ||
+        "";
+
+      const email = {
+        id: String(it.id),
+        subject: it.subject || "",
+        from: fromAddr,
+        to: toAddr,
+        body:
+          typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+        receivedDateTime: it.receivedDateTime,
+      };
+
+      emails.push(email);
+
+      console.log(`📧 EMAIL Subject: "${email.subject}"`);
+      console.log(`📧 EMAIL From: ${email.from}`);
+      console.log(`📧 EMAIL To: ${email.to}`);
+      console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
+    }
+
+    return emails;
+  }
+
   try {
-    // Try 1: Direct access to shared mailbox
+    // Try 1: Direct access to shared mailbox with pagination
     console.log(
       `getTodayEmails: attempting direct access to shared mailbox ${reconopsEmail}`,
     );
 
     const sharedMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       reconopsEmail,
-    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+    )}/mailFolders/Inbox/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
 
-    const controller1 = new AbortController();
-    const timeoutId1 = setTimeout(() => controller1.abort(), 10000);
-
-    let res;
-    try {
-      res = await fetch(sharedMailboxUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller1.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId1);
-    }
-
+    const sharedEmails = await fetchAllEmailsFromUrl(sharedMailboxUrl, token);
     console.log(
-      `getTodayEmails: direct shared mailbox response: ${res.status} ${res.statusText}`,
+      `getTodayEmails: direct shared mailbox returned ${sharedEmails.length} total messages`,
     );
 
-    if (res.ok) {
-      const data = await res.json();
-      const items = Array.isArray(data?.value) ? data.value : [];
-      console.log(
-        `getTodayEmails: shared mailbox ${reconopsEmail} returned ${items.length} messages (direct access)`,
+    if (sharedEmails.length > 0) {
+      const parsedEmails = parseGraphEmails(
+        sharedEmails,
+        startOfDay,
+        endOfDay,
       );
-
-      for (const it of items) {
-        const fromAddr =
-          (it.from &&
-            it.from.emailAddress &&
-            (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-          "";
-        const toAddr = Array.isArray(it.toRecipients)
-          ? it.toRecipients
-              .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
-              .filter(Boolean)
-              .join(", ")
-          : "";
-        const bodyText =
-          (it.body && (it.body.content || it.body.text)) ||
-          it.bodyPreview ||
-          "";
-
-        const email = {
-          id: String(it.id),
-          subject: it.subject || "",
-          from: fromAddr,
-          to: toAddr,
-          body:
-            typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
-          receivedDateTime: it.receivedDateTime,
-        };
-
-        allEmails.push(email);
-
-        console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
-        console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
-        console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
-        console.log(`🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`);
-        console.log("---");
-      }
-
       console.log(
-        `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from ${reconopsEmail} (direct access)`,
+        `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from ${reconopsEmail} (direct access)`,
       );
-      return allEmails;
+      return parsedEmails;
     }
 
     // Try 2: Check for delegated shared mailbox in user's mailFolders
@@ -696,88 +692,23 @@ export async function getTodayEmails(): Promise<Email[]> {
           userAzureId,
         )}/mailFolders/${encodeURIComponent(
           reconopsFolder.id,
-        )}/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+        )}/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
 
-        const controller3 = new AbortController();
-        const timeoutId3 = setTimeout(() => controller3.abort(), 10000);
+        const folderEmails = await fetchAllEmailsFromUrl(sharedFolderUrl, token);
+        console.log(
+          `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
+        );
 
-        let sharedRes;
-        try {
-          sharedRes = await fetch(sharedFolderUrl, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            signal: controller3.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId3);
-        }
-
-        if (sharedRes.ok) {
-          const sharedData = await sharedRes.json();
-          const sharedItems = Array.isArray(sharedData?.value)
-            ? sharedData.value
-            : [];
-          console.log(
-            `getTodayEmails: shared mailbox folder "${reconopsFolder.displayName}" returned ${sharedItems.length} messages`,
+        if (folderEmails.length > 0) {
+          const parsedEmails = parseGraphEmails(
+            folderEmails,
+            startOfDay,
+            endOfDay,
           );
-
-          for (const it of sharedItems) {
-            // Validate email is from today
-            const emailDate = new Date(it.receivedDateTime);
-            if (emailDate < startOfDay || emailDate >= endOfDay) {
-              console.log(
-                `getTodayEmails: skipping email from ${it.receivedDateTime} (not from today)`,
-              );
-              continue;
-            }
-
-            const fromAddr =
-              (it.from &&
-                it.from.emailAddress &&
-                (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-              "";
-            const toAddr = Array.isArray(it.toRecipients)
-              ? it.toRecipients
-                  .map(
-                    (r: any) => r.emailAddress?.address || r.emailAddress?.name,
-                  )
-                  .filter(Boolean)
-                  .join(", ")
-              : "";
-            const bodyText =
-              (it.body && (it.body.content || it.body.text)) ||
-              it.bodyPreview ||
-              "";
-
-            const email = {
-              id: String(it.id),
-              subject: it.subject || "",
-              from: fromAddr,
-              to: toAddr,
-              body:
-                typeof bodyText === "string"
-                  ? bodyText
-                  : JSON.stringify(bodyText),
-              receivedDateTime: it.receivedDateTime,
-            };
-
-            allEmails.push(email);
-
-            console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
-            console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
-            console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
-            console.log(
-              `🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`,
-            );
-            console.log("---");
-          }
-
           console.log(
-            `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,
+            `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,
           );
-          return allEmails;
+          return parsedEmails;
         }
       }
     }
@@ -789,85 +720,23 @@ export async function getTodayEmails(): Promise<Email[]> {
 
     const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       userAzureId,
-    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+    )}/mailFolders/Inbox/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
 
-    const controller4 = new AbortController();
-    const timeoutId4 = setTimeout(() => controller4.abort(), 10000);
+    const userEmails = await fetchAllEmailsFromUrl(userMailboxUrl, token);
+    console.log(
+      `getTodayEmails: user main inbox returned ${userEmails.length} total messages`,
+    );
 
-    let userRes;
-    try {
-      userRes = await fetch(userMailboxUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller4.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId4);
-    }
-
-    if (!userRes.ok) {
-      const text = await userRes.text();
-      console.warn(
-        `Graph fetch failed for user ${userAzureId}: ${userRes.status} - ${text}`,
+    if (userEmails.length > 0) {
+      const parsedEmails = parseGraphEmails(userEmails, startOfDay, endOfDay);
+      console.log(
+        `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from main inbox (fallback)`,
       );
-      return [];
+      return parsedEmails;
     }
 
-    const userData = await userRes.json();
-    const userItems = Array.isArray(userData?.value) ? userData.value : [];
-    console.log(
-      `getTodayEmails: user main inbox returned ${userItems.length} messages`,
-    );
-
-    for (const it of userItems) {
-      // Validate email is from today
-      const emailDate = new Date(it.receivedDateTime);
-      if (emailDate < startOfDay || emailDate >= endOfDay) {
-        console.log(
-          `getTodayEmails: skipping email from ${it.receivedDateTime} (not from today)`,
-        );
-        continue;
-      }
-
-      const fromAddr =
-        (it.from &&
-          it.from.emailAddress &&
-          (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-        "";
-      const toAddr = Array.isArray(it.toRecipients)
-        ? it.toRecipients
-            .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
-            .filter(Boolean)
-            .join(", ")
-        : "";
-      const bodyText =
-        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
-
-      const email = {
-        id: String(it.id),
-        subject: it.subject || "",
-        from: fromAddr,
-        to: toAddr,
-        body:
-          typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
-        receivedDateTime: it.receivedDateTime,
-      };
-
-      allEmails.push(email);
-
-      console.log(`📧 EMAIL Subject: "${email.subject}"`);
-      console.log(`📧 EMAIL From: ${email.from}`);
-      console.log(`📧 EMAIL To: ${email.to}`);
-      console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
-      console.log("---");
-    }
-
-    console.log(
-      `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from main inbox (fallback)`,
-    );
-    return allEmails;
+    console.log("getTodayEmails: no emails found");
+    return [];
   } catch (err) {
     console.error(`Error fetching messages:`, (err as any)?.message || err);
     return [];

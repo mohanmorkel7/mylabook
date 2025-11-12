@@ -210,6 +210,14 @@ export class TicketRepository {
     return result.rows;
   }
 
+  // Helper function to generate a unique track_id
+  private static generateUniqueTrackId(): string {
+    // Use timestamp + random to minimize collisions
+    const timestamp = Date.now().toString(36); // Convert to base36 for shorter string
+    const random = Math.random().toString(36).substring(2, 8); // 6 random chars
+    return `TKT-${timestamp}${random}`.toUpperCase().substring(0, 20); // Keep it reasonable length
+  }
+
   // Create a new ticket
   static async create(
     ticketData: CreateTicketRequest,

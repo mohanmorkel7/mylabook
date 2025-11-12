@@ -4,6 +4,7 @@ import {
   processEmailsForConfigs,
   getTodayEmails,
 } from "../services/emailProcessorService";
+import { matchEmailAgainstConfig } from "../services/emailMatchingService";
 
 export function initialize() {
   try {

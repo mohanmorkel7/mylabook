@@ -302,7 +302,9 @@ export default function ManageTickets() {
     if (filters.status) {
       filtered = filtered.filter((t) => {
         const statusName = (t.status as any)?.name || t.status;
-        return String(statusName).toLowerCase() === filters.status.toLowerCase();
+        return (
+          String(statusName).toLowerCase() === filters.status.toLowerCase()
+        );
       });
     }
 

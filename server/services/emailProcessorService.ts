@@ -1,4 +1,4 @@
-import pool from "../database/connection";
+import { pool } from "../database/connection";
 import { MailConfig, MailConfigRepository } from "../models/MailConfig";
 
 interface GraphEmail {

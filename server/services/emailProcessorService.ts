@@ -411,7 +411,7 @@ export async function getTodayEmails(): Promise<Email[]> {
 
     const items = Array.isArray(data?.value) ? data.value : [];
     console.log(
-      `getTodayEmails: ${reconopsEmail} mailbox returned ${items.length} messages`,
+      `getTodayEmails: user ${userAzureId} mailbox returned ${items.length} messages`,
     );
 
     for (const it of items) {
@@ -429,7 +429,7 @@ export async function getTodayEmails(): Promise<Email[]> {
       const bodyText =
         (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
-      allEmails.push({
+      const email = {
         id: String(it.id),
         subject: it.subject || "",
         from: fromAddr,
@@ -437,7 +437,17 @@ export async function getTodayEmails(): Promise<Email[]> {
         body:
           typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
         receivedDateTime: it.receivedDateTime,
-      });
+      };
+
+      allEmails.push(email);
+
+      // Log each email to console
+      console.log(`[EMAIL] Subject: "${email.subject}"`);
+      console.log(`[EMAIL] From: ${email.from}`);
+      console.log(`[EMAIL] To: ${email.to}`);
+      console.log(`[EMAIL] Received: ${email.receivedDateTime}`);
+      console.log(`[EMAIL] Body Preview: ${email.body.substring(0, 200)}...`);
+      console.log("---");
     }
   } catch (err) {
     console.error(

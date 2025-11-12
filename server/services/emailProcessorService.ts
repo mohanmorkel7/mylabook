@@ -121,23 +121,23 @@ export class EmailProcessingService {
         // Strip HTML tags if present
         bodyText = bodyText.replace(/<[^>]*>/g, "");
         console.log(
-          `✅ Using Email format body (string): ${bodyText.substring(0, 100)}...`
+          `✅ Using Email format body (string): ${bodyText.substring(0, 100)}...`,
         );
       } else if (email.body?.content) {
         // GraphEmail format: body is an object with content property
         bodyText = email.body.content.replace(/<[^>]*>/g, "");
         console.log(
-          `✅ Using GraphEmail format body (object.content): ${bodyText.substring(0, 100)}...`
+          `✅ Using GraphEmail format body (object.content): ${bodyText.substring(0, 100)}...`,
         );
       } else if (email.bodyPreview) {
         // Fallback to preview
         bodyText = email.bodyPreview;
         console.log(
-          `⚠️ Using bodyPreview fallback: ${bodyText.substring(0, 100)}...`
+          `⚠️ Using bodyPreview fallback: ${bodyText.substring(0, 100)}...`,
         );
       } else {
         console.warn(
-          `⚠️ No body content found for email ${email.id}: body type is ${typeof email.body}, bodyPreview is ${email.bodyPreview ? "present" : "missing"}`
+          `⚠️ No body content found for email ${email.id}: body type is ${typeof email.body}, bodyPreview is ${email.bodyPreview ? "present" : "missing"}`,
         );
       }
 
@@ -687,11 +687,11 @@ export async function getTodayEmails(): Promise<Email[]> {
       console.log(`📧 EMAIL To: ${email.to}`);
       console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
       console.log(
-        `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`
+        `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
       );
       if (!email.body) {
         console.warn(
-          `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`
+          `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
         );
       }
     }

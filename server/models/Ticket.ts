@@ -210,6 +210,14 @@ export class TicketRepository {
     return result.rows;
   }
 
+  // Helper function to generate a unique track_id
+  private static generateUniqueTrackId(): string {
+    // Use timestamp + random to minimize collisions
+    const timestamp = Date.now().toString(36); // Convert to base36 for shorter string
+    const random = Math.random().toString(36).substring(2, 8); // 6 random chars
+    return `TKT-${timestamp}${random}`.toUpperCase().substring(0, 20); // Keep it reasonable length
+  }
+
   // Create a new ticket
   static async create(
     ticketData: CreateTicketRequest,
@@ -272,52 +280,82 @@ export class TicketRepository {
       computedSlaValue = null;
     }
 
-    // Build insert query; include sla_time as a parameter if computed
-    const cols = [
-      "subject",
-      "description",
-      "priority_id",
-      "category_id",
-      "team_id",
-      "bucket_id",
-      "demand",
-      "assigned_to",
-      "related_lead_id",
-      "related_client_id",
-      "estimated_hours",
-      "tags",
-      "custom_fields",
-      "reason",
-      "created_by",
-    ];
+    // Build insert query; include track_id to avoid collision issues with database trigger
+    let trackId = this.generateUniqueTrackId();
+    let retries = 0;
+    const maxRetries = 5;
+    let result;
 
-    const values: any[] = [
-      subject,
-      description,
-      priority_id,
-      category_id,
-      team_id,
-      bucket_id,
-      demand,
-      assigned_to,
-      related_lead_id,
-      related_client_id,
-      estimated_hours,
-      tags,
-      JSON.stringify(custom_fields),
-      reason,
-      createdBy,
-    ];
+    // Retry loop in case of track_id collision
+    while (retries < maxRetries) {
+      try {
+        const cols = [
+          "track_id",
+          "subject",
+          "description",
+          "priority_id",
+          "category_id",
+          "team_id",
+          "bucket_id",
+          "demand",
+          "assigned_to",
+          "related_lead_id",
+          "related_client_id",
+          "estimated_hours",
+          "tags",
+          "custom_fields",
+          "reason",
+          "created_by",
+        ];
 
-    if (computedSlaValue) {
-      cols.push("sla_time");
-      values.push(computedSlaValue);
+        const values: any[] = [
+          trackId,
+          subject,
+          description,
+          priority_id,
+          category_id,
+          team_id,
+          bucket_id,
+          demand,
+          assigned_to,
+          related_lead_id,
+          related_client_id,
+          estimated_hours,
+          tags,
+          JSON.stringify(custom_fields),
+          reason,
+          createdBy,
+        ];
+
+        if (computedSlaValue) {
+          cols.push("sla_time");
+          values.push(computedSlaValue);
+        }
+
+        const placeholders = cols.map((_, i) => `$${i + 1}`);
+        const insertSql = `INSERT INTO tickets (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+
+        result = await pool.query(insertSql, values);
+        break; // Success, exit retry loop
+      } catch (err: any) {
+        const errorMsg = (err?.message || String(err)).toLowerCase();
+        if (
+          errorMsg.includes("unique") &&
+          errorMsg.includes("track_id") &&
+          retries < maxRetries - 1
+        ) {
+          // Track_id collision, retry with new ID
+          retries++;
+          trackId = this.generateUniqueTrackId();
+          console.log(
+            `Track_id collision, retrying with new ID (attempt ${retries}/${maxRetries})`,
+          );
+        } else {
+          // Other error or max retries exceeded
+          throw err;
+        }
+      }
     }
-
-    const placeholders = cols.map((_, i) => `$${i + 1}`);
-    const insertSql = `INSERT INTO tickets (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-
-    const result = await pool.query(insertSql, values);
 
     const ticket = result.rows[0];
 

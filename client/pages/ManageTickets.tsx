@@ -150,7 +150,7 @@ export default function ManageTickets() {
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   useEffect(() => {
-    fetchTickets();
+    fetchTickets(currentPage);
     fetchUsers();
     if (activeTab === "created") {
       fetchCreatedTickets();
@@ -162,16 +162,16 @@ export default function ManageTickets() {
     };
     window.addEventListener("createdTicketsUpdated", handler);
     return () => window.removeEventListener("createdTicketsUpdated", handler);
-  }, [activeTab]);
+  }, [activeTab, currentPage]);
 
   useEffect(() => {
     applyFilters();
   }, [filters, tickets]);
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (page: number = 1) => {
     try {
       setIsLoading(true);
-      const response = await api.get("/tickets");
+      const response = await api.get(`/tickets?page=${page}&limit=20`);
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
@@ -217,7 +217,6 @@ export default function ManageTickets() {
       setTickets(normalized);
       setTotalTickets(data?.total ?? normalized.length);
       setTotalPages(data?.pages ?? 1);
-      setCurrentPage(data?.page ?? 1);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -595,7 +594,10 @@ export default function ManageTickets() {
           <div className="flex gap-4">
             <Button
               variant={activeTab === "all" ? "default" : "outline"}
-              onClick={() => setActiveTab("all")}
+              onClick={() => {
+                setActiveTab("all");
+                setCurrentPage(1);
+              }}
             >
               All Tickets ({totalTickets})
             </Button>

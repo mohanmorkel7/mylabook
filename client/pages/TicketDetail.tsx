@@ -198,7 +198,9 @@ export default function TicketDetailPage() {
                       {emailHeaders.length > 0 && (
                         <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded text-sm text-gray-700 space-y-1">
                           {emailHeaders.map((line, idx) => (
-                            <div key={idx} className="break-words">{line}</div>
+                            <div key={idx} className="break-words">
+                              {line}
+                            </div>
                           ))}
                         </div>
                       )}

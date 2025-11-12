@@ -31,7 +31,7 @@ export class EmailProcessingService {
   /**
    * Check if email matches the given config criteria
    */
-  static matchesConfig(email: GraphEmail, config: MailConfig): boolean {
+  static matchesConfig(email: GraphEmail | any, config: MailConfig): boolean {
     const fieldType = config.field_type;
     const fieldValue = config.field_value.toLowerCase();
 
@@ -43,22 +43,38 @@ export class EmailProcessingService {
         break;
 
       case "fromEmail":
-        const fromEmail =
-          email.from?.emailAddress?.address ||
-          email.sender?.emailAddress?.address ||
-          "";
+        let fromEmail = "";
+        if (email.from?.emailAddress?.address) {
+          fromEmail = email.from.emailAddress.address;
+        } else if (email.from && typeof email.from === "string") {
+          fromEmail = email.from;
+        } else if (email.sender?.emailAddress?.address) {
+          fromEmail = email.sender.emailAddress.address;
+        }
         emailFieldValue = fromEmail.toLowerCase();
         break;
 
       case "toEmail":
         // Extract TO email address from email headers if available
-        emailFieldValue = "";
+        let toEmail = "";
+        if (email.to && typeof email.to === "string") {
+          toEmail = email.to;
+        }
+        emailFieldValue = toEmail.toLowerCase();
         break;
 
       case "body":
-        let bodyText = email.bodyPreview || "";
-        if (email.body?.content) {
+        let bodyText = "";
+        // Handle both GraphEmail format (body as object) and Email format (body as string)
+        if (typeof email.body === "string") {
+          // Email format: body is a string
+          bodyText = email.body;
+        } else if (email.body?.content) {
+          // GraphEmail format: body is an object with content property
           bodyText = email.body.content.replace(/<[^>]*>/g, "");
+        } else if (email.bodyPreview) {
+          // Fallback to preview
+          bodyText = email.bodyPreview;
         }
         emailFieldValue = bodyText.toLowerCase();
         break;

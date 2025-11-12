@@ -141,6 +141,13 @@ export class EmailProcessingService {
         );
       }
 
+      // Remove Outlook security warnings
+      bodyText = bodyText.replace(
+        /CAUTION:\s*This email originated from outside of the organization\.[\s\S]*?know the content is safe\./gi,
+        "",
+      );
+      bodyText = bodyText.trim();
+
       const description = `Email from: ${fromName} <${fromEmail}>
 Received: ${email.receivedDateTime || "Unknown"}
 Email ID: ${email.id}

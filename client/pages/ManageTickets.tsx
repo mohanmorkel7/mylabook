@@ -147,7 +147,6 @@ export default function ManageTickets() {
   // Show/hide filters and pagination state
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [pageSize, setPageSize] = useState<number>(10);
-  const [currentPage, setCurrentPage] = useState<number>(1);
 
   useEffect(() => {
     fetchTickets(currentPage);

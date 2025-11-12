@@ -649,6 +649,15 @@ export async function getTodayEmails(): Promise<Email[]> {
           );
 
           for (const it of sharedItems) {
+            // Validate email is from today
+            const emailDate = new Date(it.receivedDateTime);
+            if (emailDate < startOfDay || emailDate >= endOfDay) {
+              console.log(
+                `getTodayEmails: skipping email from ${it.receivedDateTime} (not from today)`,
+              );
+              continue;
+            }
+
             const fromAddr =
               (it.from &&
                 it.from.emailAddress &&

@@ -291,11 +291,23 @@ export async function getTodayEmails(): Promise<Email[]> {
       body.append("scope", "https://graph.microsoft.com/.default");
 
       console.log("getTodayEmails: requesting app token from Azure AD");
-      const res = await fetch(url, {
-        method: "POST",
-        body: body.toString(),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      });
+
+      // Add 10-second timeout to token acquisition
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          body: body.toString(),
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
       if (!res.ok) {
         const text = await res.text();
         console.error(

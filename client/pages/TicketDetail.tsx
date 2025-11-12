@@ -1,10 +1,53 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useLayoutEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, MessageSquare, Paperclip, ArrowLeft } from "lucide-react";
+
+// Inline styles for email content rendering
+const emailBodyStyles = `
+  .email-body-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+  }
+  .email-body-content table tr {
+    border-bottom: 1px solid #d1d5db;
+  }
+  .email-body-content table tr:nth-child(even) {
+    background-color: #f9fafb;
+  }
+  .email-body-content table tr:hover {
+    background-color: #f3f4f6;
+  }
+  .email-body-content table th,
+  .email-body-content table td {
+    border: 1px solid #d1d5db;
+    padding: 0.5rem;
+    text-align: left;
+  }
+  .email-body-content table th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+  }
+  .email-body-content p {
+    margin: 0.5rem 0;
+    line-height: 1.5;
+  }
+  .email-body-content a {
+    color: #2563eb;
+    text-decoration: underline;
+  }
+  .email-body-content strong, .email-body-content b {
+    font-weight: 600;
+  }
+  .email-body-content em, .email-body-content i {
+    font-style: italic;
+  }
+`;
 
 export default function TicketDetailPage() {
   const navigate = useNavigate();
@@ -58,6 +101,14 @@ export default function TicketDetailPage() {
   };
 
   if (!ticket) return <div className="p-6">Loading...</div>;
+
+  // Inject email body styles
+  useLayoutEffect(() => {
+    const styleEl = document.createElement("style");
+    styleEl.textContent = emailBodyStyles;
+    document.head.appendChild(styleEl);
+    return () => styleEl.remove();
+  }, []);
 
   const assignedName =
     ticket.assignee?.name ||
@@ -123,47 +174,46 @@ export default function TicketDetailPage() {
                   const separatorIndex = lines.findIndex((line) =>
                     line.trim().startsWith("---"),
                   );
-                  let emailHeaders: string[] = [];
+                  let emailHeaderLines: string[] = [];
                   let emailBody: string[] = [];
 
                   if (separatorIndex > -1) {
-                    emailHeaders = lines.slice(0, separatorIndex);
+                    emailHeaderLines = lines.slice(0, separatorIndex);
                     emailBody = lines.slice(separatorIndex + 1);
                   } else {
                     emailBody = lines;
                   }
 
+                  // Process headers to hide long Email ID
+                  const emailHeaders = emailHeaderLines.map((line) => {
+                    if (line.includes("Email ID:")) {
+                      return "Email ID: [Message ID]";
+                    }
+                    return line;
+                  });
+
                   return (
                     <>
                       {/* Email Headers */}
                       {emailHeaders.length > 0 && (
-                        <div className="border-l-4 border-blue-500 bg-blue-50 p-3 rounded text-sm text-gray-700 space-y-1">
+                        <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded text-sm text-gray-700 space-y-1">
                           {emailHeaders.map((line, idx) => (
-                            <div key={idx}>{line}</div>
+                            <div key={idx} className="break-words">
+                              {line}
+                            </div>
                           ))}
                         </div>
                       )}
 
                       {/* Email Body - Rendered as HTML */}
-                      <div
-                        className="text-gray-800 space-y-3 break-words
-                          [&_table]:w-full [&_table]:border-collapse [&_table]:text-sm [&_table]:my-3
-                          [&_thead]:bg-gray-100
-                          [&_th]:border [&_th]:border-gray-300 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold
-                          [&_td]:border [&_td]:border-gray-300 [&_td]:px-3 [&_td]:py-2
-                          [&_tr]:hover:bg-gray-50
-                          [&_p]:my-2 [&_p]:leading-relaxed
-                          [&_pre]:bg-gray-100 [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto
-                          [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono
-                          [&_a]:text-blue-600 [&_a]:underline
-                          [&_strong]:font-semibold
-                          [&_em]:italic
-                          [&_hr]:my-4 [&_hr]:border-gray-300
-                          [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:py-2 [&_blockquote]:my-2 [&_blockquote]:text-gray-600"
-                        dangerouslySetInnerHTML={{
-                          __html: emailBody.join("\n"),
-                        }}
-                      />
+                      <div className="w-full overflow-x-auto">
+                        <div
+                          className="email-body-content text-gray-800 break-words"
+                          dangerouslySetInnerHTML={{
+                            __html: emailBody.join("\n"),
+                          }}
+                        />
+                      </div>
                     </>
                   );
                 })()}

@@ -474,7 +474,7 @@ export async function getTodayEmails(): Promise<Email[]> {
   console.log(`getTodayEmails: start of day (UTC) = ${startISO}`);
 
   const allEmails: Email[] = [];
-  const reconopsEmail = "reconops@mindeed.in";
+  const reconopsEmail = "reconops@mylapay.com";
   const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
   const graphFilter = encodeURIComponent(`receivedDateTime ge ${startISO}`);
 
@@ -557,21 +557,21 @@ export async function getTodayEmails(): Promise<Email[]> {
       return allEmails;
     }
 
-    // Try 2: Fallback - fetch from user's mailbox and filter for reconops emails
+    // Try 2: Check for delegated shared mailbox in user's mailFolders
     console.log(
-      `getTodayEmails: direct access failed, falling back to user mailbox with filtering for ${reconopsEmail}`,
+      `getTodayEmails: direct access failed, checking for delegated ${reconopsEmail} folder`,
     );
 
-    const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+    const mailFoldersUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       userAzureId,
-    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+    )}/mailFolders`;
 
     const controller2 = new AbortController();
     const timeoutId2 = setTimeout(() => controller2.abort(), 10000);
 
-    let userRes;
+    let foldersRes;
     try {
-      userRes = await fetch(userMailboxUrl, {
+      foldersRes = await fetch(mailFoldersUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -580,6 +580,138 @@ export async function getTodayEmails(): Promise<Email[]> {
       });
     } finally {
       clearTimeout(timeoutId2);
+    }
+
+    if (foldersRes.ok) {
+      const foldersData = await foldersRes.json();
+      const folders = Array.isArray(foldersData?.value)
+        ? foldersData.value
+        : [];
+      console.log(
+        `getTodayEmails: user has ${folders.length} mailFolders available`,
+      );
+
+      // Log folder names to help identify shared mailbox
+      for (const folder of folders) {
+        console.log(
+          `  - Folder: "${folder.displayName}" (unreadCount: ${folder.unreadItemCount})`,
+        );
+      }
+
+      // Try to find folder matching reconops
+      const reconopsFolder = folders.find((f: any) =>
+        f.displayName.toLowerCase().includes("reconops"),
+      );
+
+      if (reconopsFolder) {
+        console.log(
+          `getTodayEmails: found shared mailbox folder: "${reconopsFolder.displayName}" - fetching emails from it`,
+        );
+
+        const sharedFolderUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+          userAzureId,
+        )}/mailFolders/${encodeURIComponent(
+          reconopsFolder.id,
+        )}/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+
+        const controller3 = new AbortController();
+        const timeoutId3 = setTimeout(() => controller3.abort(), 10000);
+
+        let sharedRes;
+        try {
+          sharedRes = await fetch(sharedFolderUrl, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            signal: controller3.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId3);
+        }
+
+        if (sharedRes.ok) {
+          const sharedData = await sharedRes.json();
+          const sharedItems = Array.isArray(sharedData?.value)
+            ? sharedData.value
+            : [];
+          console.log(
+            `getTodayEmails: shared mailbox folder "${reconopsFolder.displayName}" returned ${sharedItems.length} messages`,
+          );
+
+          for (const it of sharedItems) {
+            const fromAddr =
+              (it.from &&
+                it.from.emailAddress &&
+                (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+              "";
+            const toAddr = Array.isArray(it.toRecipients)
+              ? it.toRecipients
+                  .map(
+                    (r: any) => r.emailAddress?.address || r.emailAddress?.name,
+                  )
+                  .filter(Boolean)
+                  .join(", ")
+              : "";
+            const bodyText =
+              (it.body && (it.body.content || it.body.text)) ||
+              it.bodyPreview ||
+              "";
+
+            const email = {
+              id: String(it.id),
+              subject: it.subject || "",
+              from: fromAddr,
+              to: toAddr,
+              body:
+                typeof bodyText === "string"
+                  ? bodyText
+                  : JSON.stringify(bodyText),
+              receivedDateTime: it.receivedDateTime,
+            };
+
+            allEmails.push(email);
+
+            console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
+            console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
+            console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
+            console.log(
+              `🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`,
+            );
+            console.log("---");
+          }
+
+          console.log(
+            `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,
+          );
+          return allEmails;
+        }
+      }
+    }
+
+    // Fallback: fetch from user's main inbox
+    console.log(
+      `getTodayEmails: no shared mailbox folder found, fetching from main inbox`,
+    );
+
+    const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      userAzureId,
+    )}/mailFolders/Inbox/messages?$top=50&$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink`;
+
+    const controller4 = new AbortController();
+    const timeoutId4 = setTimeout(() => controller4.abort(), 10000);
+
+    let userRes;
+    try {
+      userRes = await fetch(userMailboxUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller4.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId4);
     }
 
     if (!userRes.ok) {
@@ -593,7 +725,7 @@ export async function getTodayEmails(): Promise<Email[]> {
     const userData = await userRes.json();
     const userItems = Array.isArray(userData?.value) ? userData.value : [];
     console.log(
-      `getTodayEmails: user ${userAzureId} mailbox returned ${userItems.length} messages (filtering for ${reconopsEmail})`,
+      `getTodayEmails: user main inbox returned ${userItems.length} messages`,
     );
 
     for (const it of userItems) {
@@ -608,17 +740,6 @@ export async function getTodayEmails(): Promise<Email[]> {
             .filter(Boolean)
             .join(", ")
         : "";
-
-      // Filter: only include emails from or to reconops@mindeed.in
-      const isFromReconops = fromAddr
-        .toLowerCase()
-        .includes("reconops@mindeed.in");
-      const isToReconops = toAddr.toLowerCase().includes("reconops@mindeed.in");
-
-      if (!isFromReconops && !isToReconops) {
-        continue;
-      }
-
       const bodyText =
         (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
@@ -634,15 +755,15 @@ export async function getTodayEmails(): Promise<Email[]> {
 
       allEmails.push(email);
 
-      console.log(`🔔 RECONOPS EMAIL 🔔 Subject: "${email.subject}"`);
-      console.log(`🔔 RECONOPS EMAIL 🔔 From: ${email.from}`);
-      console.log(`🔔 RECONOPS EMAIL 🔔 To: ${email.to}`);
-      console.log(`🔔 RECONOPS EMAIL 🔔 Received: ${email.receivedDateTime}`);
+      console.log(`📧 EMAIL Subject: "${email.subject}"`);
+      console.log(`📧 EMAIL From: ${email.from}`);
+      console.log(`📧 EMAIL To: ${email.to}`);
+      console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
       console.log("---");
     }
 
     console.log(
-      `getTodayEmails: SUMMARY - fetched ${allEmails.length} filtered emails from user mailbox (fallback)`,
+      `getTodayEmails: SUMMARY - fetched ${allEmails.length} emails from main inbox (fallback)`,
     );
     return allEmails;
   } catch (err) {

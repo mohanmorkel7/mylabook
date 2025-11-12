@@ -71,12 +71,14 @@ export class EmailProcessingService {
           bodyText = email.body;
         } else if (email.body?.content) {
           // GraphEmail format: body is an object with content property
-          bodyText = email.body.content.replace(/<[^>]*>/g, "");
+          bodyText = email.body.content;
         } else if (email.bodyPreview) {
           // Fallback to preview
           bodyText = email.bodyPreview;
         }
-        emailFieldValue = bodyText.toLowerCase();
+        // Strip HTML tags only for matching comparison, not for storage
+        const plainTextForMatching = bodyText.replace(/<[^>]*>/g, "");
+        emailFieldValue = plainTextForMatching.toLowerCase();
         break;
     }
 
@@ -118,14 +120,12 @@ export class EmailProcessingService {
       if (typeof email.body === "string") {
         // Email format: body is a string
         bodyText = email.body;
-        // Strip HTML tags if present
-        bodyText = bodyText.replace(/<[^>]*>/g, "");
         console.log(
           `✅ Using Email format body (string): ${bodyText.substring(0, 100)}...`,
         );
       } else if (email.body?.content) {
         // GraphEmail format: body is an object with content property
-        bodyText = email.body.content.replace(/<[^>]*>/g, "");
+        bodyText = email.body.content;
         console.log(
           `✅ Using GraphEmail format body (object.content): ${bodyText.substring(0, 100)}...`,
         );

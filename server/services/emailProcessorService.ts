@@ -365,6 +365,27 @@ export async function processEmailsForConfigs(
             email as GraphEmail,
             config,
           );
+
+          // Log the processing result regardless of success/failure
+          try {
+            await MailConfigRepository.logProcessedEmail(
+              config.id,
+              email.id,
+              email.subject || "(No subject)",
+              email.from?.emailAddress?.address ||
+                email.sender?.emailAddress?.address ||
+                "unknown",
+              result.ticketId,
+              result.success ? "success" : "failed",
+              result.error,
+            );
+          } catch (logErr) {
+            console.error(
+              `Failed to log processed email ${email.id}:`,
+              logErr,
+            );
+          }
+
           if (result.success) {
             succeeded++;
           } else {

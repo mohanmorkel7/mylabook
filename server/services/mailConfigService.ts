@@ -128,35 +128,49 @@ ${bodyText}`;
 
       for (const email of emails) {
         for (const config of configs) {
-          const isProcessed = await MailConfigRepository.isEmailProcessed(
+          const emailSubject = email.subject || "(No subject)";
+          const emailFrom =
+            email.from?.emailAddress?.address ||
+            email.sender?.emailAddress?.address ||
+            "unknown";
+
+          // Check if email matches config criteria first
+          if (!this.matchesConfig(email, config)) {
+            continue;
+          }
+
+          // Atomically try to reserve the email for processing
+          // This ensures only one process will succeed in claiming the email
+          const reserved = await MailConfigRepository.reserveEmailForProcessing(
             config.id,
             email.id,
+            emailSubject,
+            emailFrom,
           );
-          if (isProcessed) continue;
 
-          if (this.matchesConfig(email, config)) {
-            const ticketResult = await this.createTicket(email, config);
-
-            await MailConfigRepository.logProcessedEmail(
-              config.id,
-              email.id,
-              email.subject || "(No subject)",
-              email.from?.emailAddress?.address ||
-                email.sender?.emailAddress?.address ||
-                "unknown",
-              ticketResult.ticketId,
-              ticketResult.success ? "success" : "failed",
-              ticketResult.error,
-            );
-
-            results.push({
-              emailId: email.id,
-              configId: config.id,
-              success: ticketResult.success,
-              ticketId: ticketResult.ticketId,
-              error: ticketResult.error,
-            });
+          if (!reserved) {
+            continue; // Email is already being/was processed by another process
           }
+
+          // We have reserved the email, now create the ticket
+          const ticketResult = await this.createTicket(email, config);
+
+          // Update the reservation with the result
+          await MailConfigRepository.completeEmailProcessing(
+            config.id,
+            email.id,
+            ticketResult.ticketId,
+            ticketResult.success ? "success" : "failed",
+            ticketResult.error,
+          );
+
+          results.push({
+            emailId: email.id,
+            configId: config.id,
+            success: ticketResult.success,
+            ticketId: ticketResult.ticketId,
+            error: ticketResult.error,
+          });
         }
       }
 

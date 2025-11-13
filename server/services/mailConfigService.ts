@@ -198,6 +198,17 @@ ${bodyText}`;
       const { emailId, configId, payload } = match;
 
       try {
+        // CHECK if email was already processed BEFORE creating ticket
+        const alreadyProcessed = await MailConfigRepository.isEmailProcessed(
+          configId,
+          emailId,
+        );
+
+        if (alreadyProcessed) {
+          // Email already processed, skip it
+          continue;
+        }
+
         // Create the ticket
         const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
           method: "POST",

@@ -192,11 +192,20 @@ ${bodyText}`;
       const { emailId, configId, payload } = match;
 
       try {
-        // Skip duplicates
-        const already = await MailConfigRepository.isEmailProcessed(configId, emailId);
-        if (already) continue;
+        // Atomically try to reserve the email for processing
+        // This ensures only one process will succeed in claiming the email
+        const reserved = await MailConfigRepository.reserveEmailForProcessing(
+          configId,
+          emailId,
+          payload.issue.subject,
+          "unknown",
+        );
 
-        // Create ticket from payload
+        if (!reserved) {
+          continue; // Email is already being/was processed by another process
+        }
+
+        // We have reserved the email, now create the ticket
         const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
           method: "POST",
           headers: {
@@ -204,7 +213,7 @@ ${bodyText}`;
           },
           body: JSON.stringify(payload),
         });
-console.log("Payload send to mitra ",response)
+
         let ticketId: number | undefined;
         let success = true;
         let error: string | undefined;
@@ -217,11 +226,10 @@ console.log("Payload send to mitra ",response)
           ticketId = data.issue?.id;
         }
 
-        await MailConfigRepository.logProcessedEmail(
+        // Update the reservation with the result
+        await MailConfigRepository.completeEmailProcessing(
           configId,
           emailId,
-          payload.issue.subject,
-          "unknown",
           ticketId,
           success ? "success" : "failed",
           error,
@@ -230,6 +238,23 @@ console.log("Payload send to mitra ",response)
         results.push({ emailId, configId, success, ticketId, error });
       } catch (err: any) {
         console.error(`Error processing match for email ${match.emailId}:`, err);
+
+        // Update the reservation with the error
+        try {
+          await MailConfigRepository.completeEmailProcessing(
+            match.configId,
+            match.emailId,
+            undefined,
+            "failed",
+            err.message,
+          );
+        } catch (logErr) {
+          console.error(
+            `Failed to update processing status for email ${match.emailId}:`,
+            logErr,
+          );
+        }
+
         results.push({
           emailId: match.emailId,
           configId: match.configId,

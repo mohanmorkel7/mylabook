@@ -383,21 +383,21 @@ interface Email {
 export async function getAllActiveConfigs(): Promise<
   Array<MailConfig & { user_id: number }>
 > {
-  // const query = `
-  //   SELECT id, user_id, name, description, field_type, field_value,
-  //          from_email, to_email, subject_pattern, body_content, body_match_type,
-  //          project_id, priority_id, assigned_to_id, watcher_user_ids,
-  //          is_active, demand, created_at, updated_at
-  //   FROM mail_configs
-  //   WHERE is_active = true
-  //   ORDER BY user_id, created_at DESC
-  // `;
-
   const query = `
-    SELECT * FROM mail_configs
+    SELECT id, user_id, name, description, field_type, field_value,
+           from_email, to_email, subject_pattern, body_content, body_match_type,
+           project_id, priority_id, assigned_to_id, watcher_user_ids,
+           is_active, demand, created_at, updated_at
+    FROM mail_configs
     WHERE is_active = true
     ORDER BY user_id, created_at DESC
   `;
+
+  // const query = `
+  //   SELECT * FROM mail_configs
+  //   WHERE is_active = true
+  //   ORDER BY user_id, created_at DESC
+  // `;
 
   const result = await pool.query(query);
   return result.rows as Array<MailConfig & { user_id: number }>;

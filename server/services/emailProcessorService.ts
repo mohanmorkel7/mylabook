@@ -424,53 +424,63 @@ export async function processEmailsForConfigs(
   for (const config of configs) {
     try {
       for (const email of emails) {
-        // Check if already processed
-        const isProcessed = await MailConfigRepository.isEmailProcessed(
-          config.id,
-          email.id,
-        );
-
-        if (isProcessed) {
-          skipped++;
-          continue;
-        }
-
-        // Check if matches
+        // Check if email matches config criteria first
         const matches = EmailProcessingService.matchesConfig(
           email as GraphEmail,
           config,
         );
-        if (matches) {
-          const result = await EmailProcessingService.createTicket(
-            email as GraphEmail,
-            config,
-          );
 
-          // Log the processing result regardless of success/failure
-          try {
-            await MailConfigRepository.logProcessedEmail(
-              config.id,
-              email.id,
-              email.subject || "(No subject)",
-              email.from?.emailAddress?.address ||
-                email.sender?.emailAddress?.address ||
-                "unknown",
-              result.ticketId,
-              result.success ? "success" : "failed",
-              result.error,
-            );
-          } catch (logErr) {
-            console.error(`Failed to log processed email ${email.id}:`, logErr);
-          }
-
-          if (result.success) {
-            succeeded++;
-          } else {
-            failed++;
-            if (result.error) errors.push(result.error);
-          }
-          processed++;
+        if (!matches) {
+          skipped++;
+          continue;
         }
+
+        const emailSubject = email.subject || "(No subject)";
+        const emailFrom =
+          email.from?.emailAddress?.address ||
+          email.sender?.emailAddress?.address ||
+          "unknown";
+
+        // Atomically try to reserve the email for processing
+        // This ensures only one process will succeed in claiming the email
+        const reserved = await MailConfigRepository.reserveEmailForProcessing(
+          config.id,
+          email.id,
+          emailSubject,
+          emailFrom,
+        );
+
+        if (!reserved) {
+          skipped++;
+          continue; // Email is already being/was processed by another process
+        }
+
+        // We have reserved the email, now create the ticket
+        const result = await EmailProcessingService.createTicket(
+          email as GraphEmail,
+          config,
+        );
+
+        // Update the reservation with the result
+        try {
+          await MailConfigRepository.completeEmailProcessing(
+            config.id,
+            email.id,
+            result.ticketId,
+            result.success ? "success" : "failed",
+            result.error,
+          );
+        } catch (logErr) {
+          console.error(`Failed to update processing status for email ${email.id}:`, logErr);
+        }
+
+        if (result.success) {
+          succeeded++;
+        } else {
+          failed++;
+          if (result.error) errors.push(result.error);
+        }
+        processed++;
       }
     } catch (error) {
       const err = (error as any)?.message || String(error);

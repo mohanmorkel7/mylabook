@@ -98,9 +98,9 @@ export function matchEmailAgainstConfig(
     }
 
     const matches = emailFieldValue.includes(fieldValue);
-    console.log(
-      `[CONFIG MATCH] Config "${config.field_type}" matching: "${fieldValue}" in "${emailFieldValue.substring(0, 100)}..." -> ${matches}`,
-    );
+    // console.log(
+    //   `[CONFIG MATCH] Config "${config.field_type}" matching: "${fieldValue}" in "${emailFieldValue.substring(0, 100)}..." -> ${matches}`,
+    // );
     return matches;
   }
 

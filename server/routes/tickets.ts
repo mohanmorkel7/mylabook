@@ -307,7 +307,11 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     if (await isDatabaseAvailable()) {
       const ticket = await TicketRepository.getById(id);
-      res.json(ticket);
+      // Add created_from_mail_config flag for frontend
+      res.json({
+        ...ticket,
+        created_from_mail_config: Boolean(ticket.mail_config_id),
+      });
     } else {
       // Mock single ticket
       res.json({

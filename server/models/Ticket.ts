@@ -187,6 +187,23 @@ export interface TicketFilters {
 }
 
 export class TicketRepository {
+  /**
+   * Convert IST timestamp string to UTC ISO format.
+   * Database stores TIMESTAMP without timezone, which is interpreted as IST (UTC+5:30)
+   * This method converts it back to UTC for client consumption.
+   */
+  private static convertISTToUTC(istTimestampStr: string): string {
+    try {
+      const isoStr = istTimestampStr.replace(" ", "T") + "Z";
+      const date = new Date(isoStr);
+      const IST_OFFSET_MS = 5.5 * 3600 * 1000; // IST is UTC+5:30
+      const utcDate = new Date(date.getTime() - IST_OFFSET_MS);
+      return utcDate.toISOString();
+    } catch (e) {
+      return istTimestampStr.replace(" ", "T") + "Z";
+    }
+  }
+
   // Get all priorities
   static async getPriorities(): Promise<TicketPriority[]> {
     const result = await pool.query(

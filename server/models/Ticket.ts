@@ -290,14 +290,21 @@ export class TicketRepository {
         }
 
         if (hours !== null && !isNaN(Number(hours))) {
-          // Calculate SLA in UTC
-          const nowUTC = Date.now();
-          const slaUTC = nowUTC + hours * 3600 * 1000;
-          const d = new Date(slaUTC);
+          // Calculate SLA time: current UTC + SLA hours, then format as IST string
+          // The database stores TIMESTAMP as IST (interpreted by postgres as UTC+5:30)
+          // So we need to format the UTC time shifted by IST offset
+          const IST_OFFSET_MS = 5.5 * 3600 * 1000; // IST is UTC+5:30
+          const nowUTC_ms = Date.now();
 
-          // Store as simple timestamp string
-          // The database will interpret this as UTC based on how the client parses it
-          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+          // Calculate SLA in UTC
+          const slaUTC_ms = nowUTC_ms + hours * 3600 * 1000;
+
+          // Create a date representing IST by shifting the UTC timestamp
+          // When we call getUTC methods on this, it gives us the IST components
+          const slaIST_date = new Date(slaUTC_ms + IST_OFFSET_MS);
+
+          // Format as YYYY-MM-DD HH:mm:ss in IST representation
+          computedSlaValue = `${slaIST_date.getUTCFullYear()}-${pad(slaIST_date.getUTCMonth() + 1)}-${pad(slaIST_date.getUTCDate())} ${pad(slaIST_date.getUTCHours())}:${pad(slaIST_date.getUTCMinutes())}:${pad(slaIST_date.getUTCSeconds())}`;
         }
       }
     } catch (e) {

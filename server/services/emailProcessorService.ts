@@ -471,7 +471,10 @@ export async function processEmailsForConfigs(
             result.error,
           );
         } catch (logErr) {
-          console.error(`Failed to update processing status for email ${email.id}:`, logErr);
+          console.error(
+            `Failed to update processing status for email ${email.id}:`,
+            logErr,
+          );
         }
 
         if (result.success) {

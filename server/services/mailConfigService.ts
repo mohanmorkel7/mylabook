@@ -93,16 +93,16 @@ ${bodyText}`;
           watcher_user_ids: config.watcher_user_ids || [],
         },
       };
-      console.log("PAYLOAD",payload)
+      console.log("PAYLOAD", payload);
       const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
       });
 
-      console.log("DATA1",response)
+      console.log("DATA1", response);
 
       if (!response.ok) {
         const errorData = await response.text();
@@ -115,7 +115,10 @@ ${bodyText}`;
       const data = (await response.json()) as any;
       return { ticketId: data.issue?.id, success: true };
     } catch (error) {
-      return { success: false, error: (error as any)?.message || "Failed to create ticket" };
+      return {
+        success: false,
+        error: (error as any)?.message || "Failed to create ticket",
+      };
     }
   }
 
@@ -209,7 +212,7 @@ ${bodyText}`;
         const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(payload),
         });
@@ -237,7 +240,10 @@ ${bodyText}`;
 
         results.push({ emailId, configId, success, ticketId, error });
       } catch (err: any) {
-        console.error(`Error processing match for email ${match.emailId}:`, err);
+        console.error(
+          `Error processing match for email ${match.emailId}:`,
+          err,
+        );
 
         // Update the reservation with the error
         try {

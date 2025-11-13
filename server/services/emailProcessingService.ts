@@ -166,6 +166,22 @@ ${bodyText}`;
       // Get active configs for this user
       const configs = await MailConfigRepository.getActiveConfigs(userId);
 
+      if (configs.length > 0) {
+        console.log(
+          `[EmailProcessing] Fetched ${configs.length} configs. Config 0 keys: ${Object.keys(configs[0]).join(", ")}`,
+        );
+        console.log(
+          `[EmailProcessing] Config 0 (ID=${configs[0].id}): ${JSON.stringify({
+            id: configs[0].id,
+            name: configs[0].name,
+            priority_id: configs[0].priority_id,
+            demand: configs[0].demand,
+            team_id: configs[0].team_id,
+            bucket_id: configs[0].bucket_id,
+          })}`,
+        );
+      }
+
       if (configs.length === 0) {
         return { processed: 0, created: 0, failed: 0, skipped: 0, results: [] };
       }

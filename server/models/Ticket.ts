@@ -304,21 +304,18 @@ export class TicketRepository {
         }
 
         if (hours !== null && !isNaN(Number(hours))) {
-          // Calculate SLA time: current UTC + SLA hours, then format as IST string
-          // The database stores TIMESTAMP as IST (interpreted by postgres as UTC+5:30)
-          // So we need to format the UTC time shifted by IST offset
-          const IST_OFFSET_MS = 5.5 * 3600 * 1000; // IST is UTC+5:30
+          // Calculate SLA time: current UTC + SLA hours
+          // The database TIMESTAMP column interprets plain text as IST
+          // So we store the UTC deadline formatted as YYYY-MM-DD HH:mm:ss
+          // PostgreSQL will interpret this string as IST time
           const nowUTC_ms = Date.now();
 
-          // Calculate SLA in UTC
+          // Add SLA hours to current UTC time
           const slaUTC_ms = nowUTC_ms + hours * 3600 * 1000;
+          const slaDate = new Date(slaUTC_ms);
 
-          // Create a date representing IST by shifting the UTC timestamp
-          // When we call getUTC methods on this, it gives us the IST components
-          const slaIST_date = new Date(slaUTC_ms + IST_OFFSET_MS);
-
-          // Format as YYYY-MM-DD HH:mm:ss in IST representation
-          computedSlaValue = `${slaIST_date.getUTCFullYear()}-${pad(slaIST_date.getUTCMonth() + 1)}-${pad(slaIST_date.getUTCDate())} ${pad(slaIST_date.getUTCHours())}:${pad(slaIST_date.getUTCMinutes())}:${pad(slaIST_date.getUTCSeconds())}`;
+          // Format as YYYY-MM-DD HH:mm:ss (PostgreSQL will interpret this as IST)
+          computedSlaValue = `${slaDate.getUTCFullYear()}-${pad(slaDate.getUTCMonth() + 1)}-${pad(slaDate.getUTCDate())} ${pad(slaDate.getUTCHours())}:${pad(slaDate.getUTCMinutes())}:${pad(slaDate.getUTCSeconds())}`;
 
           console.log(
             `[SLA] Computed SLA: ${computedSlaValue} (${hours} hours from now)`,

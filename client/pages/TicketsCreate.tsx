@@ -703,9 +703,9 @@ export default function TicketsCreatePage() {
                             <CommandItem
                               key={user.id}
                               onSelect={() => {
-                                const isSelected = (form.watchers || []).includes(
-                                  user.id,
-                                );
+                                const isSelected = (
+                                  form.watchers || []
+                                ).includes(user.id);
                                 const newWatchers = isSelected
                                   ? (form.watchers || []).filter(
                                       (w: number) => w !== user.id,

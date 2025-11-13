@@ -481,7 +481,7 @@ export async function processEmailsForConfigs(
   return { processed, succeeded, failed, skipped, errors };
 }
 
-export async function getTodayEmails(): Promise<Email[]> {
+export async function getTodayEmails(since?: Date): Promise<Email[]> {
   // For delegated shared mailbox access, we need the user's delegated token
   // This token should be stored in the database or cache from user sign-in
   // For now, we'll try to fetch using app-only credentials as fallback
@@ -605,25 +605,34 @@ export async function getTodayEmails(): Promise<Email[]> {
     return [];
   }
 
-  // Determine start and end of today in IST (UTC+5:30) for filtering
-  // IST is UTC+5:30, so we need to calculate today's date in IST timezone
+  // Determine start and end for filtering
+  // If 'since' is provided, use that as the start time (more recent emails only)
+  // Otherwise, use the start of today in IST
   const now = new Date();
-
-  // Step 1: Get current time in IST by adding 5:30 hours to UTC
   const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
   const istTime = new Date(now.getTime() + istOffsetMs);
-
-  // Step 2: Extract IST date components
   const istYear = istTime.getUTCFullYear();
   const istMonth = istTime.getUTCMonth();
   const istDate = istTime.getUTCDate();
 
-  // Step 3: Create start of IST day (00:00:00 IST) and convert to UTC for API
-  // IST 00:00:00 = UTC 18:30:00 (previous day in UTC)
-  const istStartOfDay = new Date(Date.UTC(istYear, istMonth, istDate, 0, 0, 0));
-  const utcStartOfDay = new Date(istStartOfDay.getTime() - istOffsetMs);
+  let utcStartOfDay: Date;
+  if (since) {
+    // Use the provided 'since' timestamp
+    utcStartOfDay = since;
+    console.log(
+      `getTodayEmails: filtering for emails received since ${since.toISOString()}`,
+    );
+  } else {
+    // Create start of IST day (00:00:00 IST) and convert to UTC for API
+    // IST 00:00:00 = UTC 18:30:00 (previous day in UTC)
+    const istStartOfDay = new Date(Date.UTC(istYear, istMonth, istDate, 0, 0, 0));
+    utcStartOfDay = new Date(istStartOfDay.getTime() - istOffsetMs);
+    console.log(
+      `getTodayEmails: filtering for emails received today (IST day ${istDate}) starting from ${utcStartOfDay.toISOString()}`,
+    );
+  }
 
-  // Step 4: Create end of IST day (24:00:00 IST = 00:00:00 next day IST) and convert to UTC
+  // Create end of IST day (24:00:00 IST = 00:00:00 next day IST) and convert to UTC
   // IST 24:00:00 = UTC 18:30:00 (same day in UTC)
   const istEndOfDay = new Date(
     Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0),
@@ -632,10 +641,6 @@ export async function getTodayEmails(): Promise<Email[]> {
 
   const startISO = utcStartOfDay.toISOString();
   const endISO = utcEndOfDay.toISOString();
-
-  console.log(
-    `getTodayEmails: filtering for emails received today (IST day ${istDate}) between ${startISO} and ${endISO}`,
-  );
 
   const allEmails: Email[] = [];
   const reconopsEmail = "reconops@mylapay.com";
@@ -648,15 +653,15 @@ export async function getTodayEmails(): Promise<Email[]> {
   // Helper to parse GraphEmail items and convert to Email[]
   function parseGraphEmails(
     items: any[],
-    utcStartOfDay: Date,
-    utcEndOfDay: Date,
+    filterStartDate: Date,
+    filterEndDate: Date,
   ): Email[] {
     const emails: Email[] = [];
 
     for (const it of items) {
-      // Validate email is from today (compare against UTC bounds since receivedDateTime is UTC)
+      // Validate email is within the filter date range
       const emailDate = new Date(it.receivedDateTime);
-      if (emailDate < utcStartOfDay || emailDate >= utcEndOfDay) {
+      if (emailDate < filterStartDate || emailDate >= filterEndDate) {
         continue;
       }
 
@@ -740,8 +745,8 @@ export async function getTodayEmails(): Promise<Email[]> {
     if (sharedEmails.length > 0) {
       const parsedEmails = parseGraphEmails(
         sharedEmails,
-        utcStartOfDay,
-        utcEndOfDay,
+        new Date(utcStartOfDay),
+        new Date(utcEndOfDay),
       );
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from ${reconopsEmail} (direct access)`,
@@ -817,8 +822,8 @@ export async function getTodayEmails(): Promise<Email[]> {
         if (folderEmails.length > 0) {
           const parsedEmails = parseGraphEmails(
             folderEmails,
-            utcStartOfDay,
-            utcEndOfDay,
+            new Date(utcStartOfDay),
+            new Date(utcEndOfDay),
           );
           console.log(
             `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,
@@ -845,8 +850,8 @@ export async function getTodayEmails(): Promise<Email[]> {
     if (userEmails.length > 0) {
       const parsedEmails = parseGraphEmails(
         userEmails,
-        utcStartOfDay,
-        utcEndOfDay,
+        new Date(utcStartOfDay),
+        new Date(utcEndOfDay),
       );
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from main inbox (fallback)`,

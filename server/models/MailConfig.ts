@@ -252,7 +252,7 @@ export class MailConfigRepository {
     const query = `
       INSERT INTO mail_processing_log (
         mail_config_id, email_id, email_subject, email_from, status
-      ) VALUES ($1, $2, $3, $4, 'processing')
+      ) VALUES ($1, $2, $3, $4, 'success')
       ON CONFLICT (mail_config_id, email_id) DO NOTHING
     `;
 

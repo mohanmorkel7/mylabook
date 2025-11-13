@@ -273,14 +273,13 @@ export class TicketRepository {
         }
 
         if (hours !== null && !isNaN(Number(hours))) {
-          // Calculate SLA in IST (Asia/Kolkata) timezone (UTC+5:30)
-          // Get current time in UTC
+          // Calculate SLA in UTC (for consistency with database)
           const nowUTC = Date.now();
-          // Add SLA hours in milliseconds
           const slaUTC = nowUTC + hours * 3600 * 1000;
-          // Create date from UTC timestamp (this will store the correct UTC time)
           const d = new Date(slaUTC);
-          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+          // Format as ISO string with explicit UTC timezone
+          // This ensures PostgreSQL interprets it as UTC, not local server time
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}+00:00`;
         }
       }
     } catch (e) {

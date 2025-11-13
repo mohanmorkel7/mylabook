@@ -658,12 +658,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /open/i.test(String(s || ""));
-                }).length
-              }
+              {statusCounts["Open"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
           </CardContent>
@@ -672,15 +667,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-orange-500">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    /in progress/i.test(String(s || "")) ||
-                    /in_progress/i.test(String(s || ""))
-                  );
-                }).length
-              }
+              {statusCounts["In Progress"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress
@@ -691,12 +678,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-yellow-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /pending/i.test(String(s || ""));
-                }).length
-              }
+              {statusCounts["Pending"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
           </CardContent>
@@ -705,15 +687,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-8">
             <p className="text-2xl md:text-3xl font-bold text-green-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""))
-                  );
-                }).length
-              }
+              {(statusCounts["Resolved"] ?? 0) + (statusCounts["Closed"] ?? 0)}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
           </CardContent>
@@ -722,16 +696,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-red-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  const isClosed =
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""));
-                  const computed = computeSlaMsForTicket(t);
-                  return computed !== null && computed < 0 && !isClosed;
-                }).length
-              }
+              {statusCounts["Overdue"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
           </CardContent>

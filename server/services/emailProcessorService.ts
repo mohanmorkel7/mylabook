@@ -383,12 +383,18 @@ interface Email {
 export async function getAllActiveConfigs(): Promise<
   Array<MailConfig & { user_id: number }>
 > {
+  // const query = `
+  //   SELECT id, user_id, name, description, field_type, field_value,
+  //          from_email, to_email, subject_pattern, body_content, body_match_type,
+  //          project_id, priority_id, assigned_to_id, watcher_user_ids,
+  //          is_active, demand, created_at, updated_at
+  //   FROM mail_configs
+  //   WHERE is_active = true
+  //   ORDER BY user_id, created_at DESC
+  // `;
+
   const query = `
-    SELECT id, user_id, name, description, field_type, field_value,
-           from_email, to_email, subject_pattern, body_content, body_match_type,
-           project_id, priority_id, assigned_to_id, watcher_user_ids,
-           is_active, created_at, updated_at
-    FROM mail_configs
+    SELECT * FROM mail_configs
     WHERE is_active = true
     ORDER BY user_id, created_at DESC
   `;
@@ -451,6 +457,8 @@ export async function processEmailsForConfigs(
           skipped++;
           continue;
         }
+
+        console.log("config : --------------> ", config);
 
         // Create the ticket
         const result = await EmailProcessingService.createTicket(
@@ -593,7 +601,7 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
 
         const data = await res.json();
         const items = Array.isArray(data?.value) ? data.value : [];
-        console.log(`Fetched ${items.length} emails from this page`);
+        // console.log(`Fetched ${items.length} emails from this page`);
         allEmails.push(...items);
 
         // Handle pagination
@@ -718,13 +726,13 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
 
       emails.push(email);
 
-      console.log(`📧 EMAIL Subject: "${email.subject}"`);
-      console.log(`📧 EMAIL From: ${email.from}`);
-      console.log(`📧 EMAIL To: ${email.to}`);
-      console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
-      console.log(
-        `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
-      );
+      // console.log(`📧 EMAIL Subject: "${email.subject}"`);
+      // console.log(`📧 EMAIL From: ${email.from}`);
+      // console.log(`📧 EMAIL To: ${email.to}`);
+      // console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
+      // console.log(
+      //   `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
+      // );
       const hasTableTags =
         email.body.includes("<table") || email.body.includes("<TABLE");
       const hasHTMLTags = /<[^>]+>/.test(email.body);

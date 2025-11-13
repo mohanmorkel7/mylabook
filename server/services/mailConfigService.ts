@@ -142,38 +142,30 @@ ${bodyText}`;
             continue;
           }
 
-          // Atomically try to reserve the email for processing
-          // This ensures only one process will succeed in claiming the email
-          const reserved = await MailConfigRepository.reserveEmailForProcessing(
+          // Create the ticket
+          const ticketResult = await this.createTicket(email, config);
+
+          // Atomically log the result. If another process beat us, this will return false.
+          const logged = await MailConfigRepository.logProcessedEmailAtomic(
             config.id,
             email.id,
             emailSubject,
             emailFrom,
-          );
-
-          if (!reserved) {
-            continue; // Email is already being/was processed by another process
-          }
-
-          // We have reserved the email, now create the ticket
-          const ticketResult = await this.createTicket(email, config);
-
-          // Update the reservation with the result
-          await MailConfigRepository.completeEmailProcessing(
-            config.id,
-            email.id,
             ticketResult.ticketId,
             ticketResult.success ? "success" : "failed",
             ticketResult.error,
           );
 
-          results.push({
-            emailId: email.id,
-            configId: config.id,
-            success: ticketResult.success,
-            ticketId: ticketResult.ticketId,
-            error: ticketResult.error,
-          });
+          // Only track if we were the first to log this
+          if (logged) {
+            results.push({
+              emailId: email.id,
+              configId: config.id,
+              success: ticketResult.success,
+              ticketId: ticketResult.ticketId,
+              error: ticketResult.error,
+            });
+          }
         }
       }
 
@@ -195,20 +187,7 @@ ${bodyText}`;
       const { emailId, configId, payload } = match;
 
       try {
-        // Atomically try to reserve the email for processing
-        // This ensures only one process will succeed in claiming the email
-        const reserved = await MailConfigRepository.reserveEmailForProcessing(
-          configId,
-          emailId,
-          payload.issue.subject,
-          "unknown",
-        );
-
-        if (!reserved) {
-          continue; // Email is already being/was processed by another process
-        }
-
-        // We have reserved the email, now create the ticket
+        // Create the ticket
         const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
           method: "POST",
           headers: {
@@ -229,34 +208,41 @@ ${bodyText}`;
           ticketId = data.issue?.id;
         }
 
-        // Update the reservation with the result
-        await MailConfigRepository.completeEmailProcessing(
+        // Atomically log the result. If another process beat us, this will return false.
+        const logged = await MailConfigRepository.logProcessedEmailAtomic(
           configId,
           emailId,
+          payload.issue.subject,
+          "unknown",
           ticketId,
           success ? "success" : "failed",
           error,
         );
 
-        results.push({ emailId, configId, success, ticketId, error });
+        // Only track if we were the first to log this
+        if (logged) {
+          results.push({ emailId, configId, success, ticketId, error });
+        }
       } catch (err: any) {
         console.error(
           `Error processing match for email ${match.emailId}:`,
           err,
         );
 
-        // Update the reservation with the error
+        // Try to atomically log the error
         try {
-          await MailConfigRepository.completeEmailProcessing(
+          await MailConfigRepository.logProcessedEmailAtomic(
             match.configId,
             match.emailId,
+            payload.issue.subject,
+            "unknown",
             undefined,
             "failed",
             err.message,
           );
         } catch (logErr) {
           console.error(
-            `Failed to update processing status for email ${match.emailId}:`,
+            `Failed to log error for email ${match.emailId}:`,
             logErr,
           );
         }

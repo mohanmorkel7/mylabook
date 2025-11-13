@@ -239,55 +239,42 @@ export class MailConfigRepository {
   }
 
   /**
-   * Atomically reserve an email for processing.
-   * Returns true if the email was reserved (not yet processed), false if already processing/processed.
-   * This uses an INSERT ... ON CONFLICT ... DO NOTHING pattern to atomically claim the email.
+   * Atomically log a processed email.
+   * Returns true if this process successfully recorded the log (first to process it).
+   * Returns false if another process already processed it.
+   * Uses INSERT ... ON CONFLICT ... DO NOTHING to ensure only one wins.
    */
-  static async reserveEmailForProcessing(
+  static async logProcessedEmailAtomic(
     mailConfigId: number,
     emailId: string,
     emailSubject: string,
     emailFrom: string,
-  ): Promise<boolean> {
-    const query = `
-      INSERT INTO mail_processing_log (
-        mail_config_id, email_id, email_subject, email_from, status
-      ) VALUES ($1, $2, $3, $4, 'processing')
-      ON CONFLICT (mail_config_id, email_id) DO NOTHING
-    `;
-
-    const result = await pool.query(query, [
-      mailConfigId,
-      emailId,
-      emailSubject,
-      emailFrom,
-    ]);
-
-    return result.rowCount > 0;
-  }
-
-  /**
-   * Update a reserved email's processing status after ticket creation
-   */
-  static async completeEmailProcessing(
-    mailConfigId: number,
-    emailId: string,
     ticketId?: number,
     status: string = "success",
     errorMessage?: string,
-  ): Promise<void> {
-    const query = `
-      UPDATE mail_processing_log
-      SET status = $1, ticket_id = $2, error_message = $3
-      WHERE mail_config_id = $4 AND email_id = $5
-    `;
+  ): Promise<boolean> {
+    try {
+      const query = `
+        INSERT INTO mail_processing_log (
+          mail_config_id, email_id, email_subject, email_from, ticket_id, status, error_message
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (mail_config_id, email_id) DO NOTHING
+      `;
 
-    await pool.query(query, [
-      status,
-      ticketId || null,
-      errorMessage || null,
-      mailConfigId,
-      emailId,
-    ]);
+      const result = await pool.query(query, [
+        mailConfigId,
+        emailId,
+        emailSubject,
+        emailFrom,
+        ticketId || null,
+        status,
+        errorMessage || null,
+      ]);
+
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error("Error atomically logging processed email:", error);
+      return false;
+    }
   }
 }

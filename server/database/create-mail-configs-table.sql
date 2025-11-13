@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS mail_processing_log (
   email_subject TEXT,
   email_from TEXT,
   ticket_id INTEGER,
-  status VARCHAR(50) NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'failed', 'skipped')),
+  status VARCHAR(50) NOT NULL DEFAULT 'success' CHECK (status IN ('processing', 'success', 'failed', 'skipped')),
   error_message TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
 

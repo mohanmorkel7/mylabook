@@ -148,15 +148,91 @@ export default function TicketDetailPage() {
   const [openWatchers, setOpenWatchers] = useState(false);
   const [searchWatchers, setSearchWatchers] = useState("");
 
+  const fetchUsers = async () => {
+    try {
+      const resp = await api.get("/users");
+      const usersList = resp.data?.users ?? resp.data ?? [];
+      const normalized = (usersList as any[]).map((u) => {
+        const fullName =
+          `${u.firstname || u.first_name || ""} ${u.lastname || u.last_name || ""}`.trim();
+        return {
+          id: Number(u.id),
+          name: u.name ?? (fullName || u.email),
+          firstname: u.firstname || u.first_name,
+          lastname: u.lastname || u.last_name,
+          email: u.email,
+        };
+      });
+      setUsers(normalized);
+    } catch (e) {
+      console.error("Error fetching users:", e);
+    }
+  };
+
+  const fetchStatuses = async () => {
+    try {
+      const meta = await api.get("/tickets/metadata");
+      if (meta && meta.statuses) {
+        setStatuses(meta.statuses);
+      }
+    } catch (e) {
+      console.error("Error fetching statuses:", e);
+    }
+  };
+
   const load = async () => {
     if (!id) return;
     try {
       const t = await apiClient.getTicketById(parseInt(id));
       setTicket(t);
+      setEditData({
+        status_id: t.status_id,
+        assigned_to_id: t.assigned_to,
+        watcher_user_ids: t.watchers || [],
+      });
       const c = await apiClient.getTicketComments(parseInt(id));
       setComments(c);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const saveChanges = async () => {
+    if (!ticket) return;
+    try {
+      setIsSaving(true);
+      const updateData: any = {};
+      if (editData.status_id !== ticket.status_id) {
+        updateData.status_id = editData.status_id;
+      }
+      if (editData.assigned_to_id !== ticket.assigned_to) {
+        updateData.assigned_to = editData.assigned_to_id;
+      }
+      if (editData.watcher_user_ids.length > 0) {
+        updateData.watchers = editData.watcher_user_ids;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        setIsEditingDetails(false);
+        return;
+      }
+
+      await api.put(`/tickets/${ticket.id}`, updateData);
+      toast({
+        title: "Success",
+        description: "Ticket updated successfully",
+      });
+      setIsEditingDetails(false);
+      load();
+    } catch (e) {
+      console.error("Error saving ticket:", e);
+      toast({
+        title: "Error",
+        description: "Failed to update ticket",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 

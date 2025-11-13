@@ -23,6 +23,7 @@ export interface MailConfig {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  last_processed_at?: string | null;
 }
 
 export interface CreateMailConfigData {
@@ -70,7 +71,7 @@ export class MailConfigRepository {
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at
+            is_active, created_at, updated_at, last_processed_at
       FROM mail_configs
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -88,7 +89,7 @@ export class MailConfigRepository {
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at
+            is_active, created_at, updated_at, last_processed_at
       FROM mail_configs
       WHERE id = $1 AND user_id = $2
     `;
@@ -102,7 +103,7 @@ export class MailConfigRepository {
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at
+            is_active, created_at, updated_at, last_processed_at
       FROM mail_configs
       WHERE user_id = $1 AND is_active = true
       ORDER BY created_at DESC
@@ -122,7 +123,7 @@ export class MailConfigRepository {
                 from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at
+            is_active, created_at, updated_at, last_processed_at
     `;
 
     const values = [
@@ -183,7 +184,7 @@ export class MailConfigRepository {
                 from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at
+            is_active, created_at, updated_at, last_processed_at
     `;
 
     const result = await pool.query(query, values);
@@ -236,6 +237,25 @@ export class MailConfigRepository {
     `;
     const result = await pool.query(query, [mailConfigId, emailId]);
     return result.rows.length > 0;
+  }
+
+  static async updateLastProcessedAt(
+    configId: number,
+    timestamp: Date = new Date(),
+  ): Promise<boolean> {
+    const query = `
+      UPDATE mail_configs
+      SET last_processed_at = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+
+    try {
+      const result = await pool.query(query, [timestamp, configId]);
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error("Error updating last_processed_at:", error);
+      return false;
+    }
   }
 
   /**

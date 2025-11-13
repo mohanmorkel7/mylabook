@@ -116,7 +116,9 @@ ${bodyText}`;
         project_id: config.project_id,
       } as any;
 
-      console.log(`[EmailProcessing] Creating ticket with demand=${ticketData.demand}`);
+      console.log(
+        `[EmailProcessing] Creating ticket with demand=${ticketData.demand}`,
+      );
 
       // createdBy: prefer config.user_id else assigned_to
       const createdBy = (config as any).user_id || config.assigned_to_id || 1;

@@ -440,6 +440,18 @@ export async function processEmailsForConfigs(
           email.sender?.emailAddress?.address ||
           "unknown";
 
+        // CHECK if email was already processed BEFORE creating ticket
+        const alreadyProcessed = await MailConfigRepository.isEmailProcessed(
+          config.id,
+          email.id,
+        );
+
+        if (alreadyProcessed) {
+          // Email already processed, skip it
+          skipped++;
+          continue;
+        }
+
         // Create the ticket
         const result = await EmailProcessingService.createTicket(
           email as GraphEmail,
@@ -467,7 +479,7 @@ export async function processEmailsForConfigs(
           }
           processed++;
         } else {
-          // Another process logged this email first, skip counting
+          // Another process logged this email first (race condition), skip counting
           skipped++;
         }
       }

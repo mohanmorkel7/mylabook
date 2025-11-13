@@ -117,6 +117,7 @@ export default function ManageTickets() {
   const [totalTickets, setTotalTickets] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);

@@ -276,8 +276,13 @@ export class TicketRepository {
         let hours: number | null = null;
 
         // Check demand first (preferred over priority)
-        const demandNum = demand !== undefined && demand !== null ? Number(demand) : null;
-        if (demandNum !== null && !isNaN(demandNum) && (demandNum === 0 || demandNum === 1 || demandNum === 2)) {
+        const demandNum =
+          demand !== undefined && demand !== null ? Number(demand) : null;
+        if (
+          demandNum !== null &&
+          !isNaN(demandNum) &&
+          (demandNum === 0 || demandNum === 1 || demandNum === 2)
+        ) {
           const demandHoursMap: Record<number, number> = { 0: 2, 1: 5, 2: 24 };
           hours = demandHoursMap[demandNum];
           console.log(`[SLA] Using demand ${demandNum} -> ${hours} hours`);
@@ -293,7 +298,9 @@ export class TicketRepository {
           };
           const priorityNum = Number(priority_id);
           hours = PRIORITY_SLA_HOURS[priorityNum] ?? null;
-          console.log(`[SLA] Using priority ${priorityNum} -> ${hours} hours (demand not set: ${demandNum})`);
+          console.log(
+            `[SLA] Using priority ${priorityNum} -> ${hours} hours (demand not set: ${demandNum})`,
+          );
         }
 
         if (hours !== null && !isNaN(Number(hours))) {
@@ -313,7 +320,9 @@ export class TicketRepository {
           // Format as YYYY-MM-DD HH:mm:ss in IST representation
           computedSlaValue = `${slaIST_date.getUTCFullYear()}-${pad(slaIST_date.getUTCMonth() + 1)}-${pad(slaIST_date.getUTCDate())} ${pad(slaIST_date.getUTCHours())}:${pad(slaIST_date.getUTCMinutes())}:${pad(slaIST_date.getUTCSeconds())}`;
 
-          console.log(`[SLA] Computed SLA: ${computedSlaValue} (${hours} hours from now)`);
+          console.log(
+            `[SLA] Computed SLA: ${computedSlaValue} (${hours} hours from now)`,
+          );
         }
       }
     } catch (e) {

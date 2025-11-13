@@ -262,6 +262,7 @@ export class TicketRepository {
           hours = demandHoursMap[Number(demand)];
         } else if (priority_id !== undefined && priority_id !== null) {
           const PRIORITY_SLA_HOURS: Record<number, number> = {
+            0: 2, // Priority 0 -> 2 hours
             1: 2, // Low -> 2 hours
             2: 5, // Normal -> 5 hours
             3: 8, // High -> 8 hours
@@ -272,7 +273,13 @@ export class TicketRepository {
         }
 
         if (hours !== null && !isNaN(Number(hours))) {
-          const d = new Date(Date.now() + hours * 3600 * 1000);
+          // Calculate SLA in IST (Asia/Kolkata) timezone (UTC+5:30)
+          // Get current time in UTC
+          const nowUTC = Date.now();
+          // Add SLA hours in milliseconds
+          const slaUTC = nowUTC + hours * 3600 * 1000;
+          // Create date from UTC timestamp (this will store the correct UTC time)
+          const d = new Date(slaUTC);
           computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         }
       }

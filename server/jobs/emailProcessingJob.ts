@@ -84,55 +84,6 @@ export function initialize() {
             }
           }
 
-          // For debugging: filter emails for each config and log matches
-          try {
-            console.log(
-              `Found ${emails.length} emails today. Running config filters (${configs.length} configs)...`,
-            );
-            for (const cfg of configs) {
-              try {
-                const matches = emails.filter((email: any) => {
-                  try {
-                    return matchEmailAgainstConfig(email, cfg as any);
-                  } catch (e) {
-                    return false;
-                  }
-                });
-
-                if (matches.length > 0) {
-                  console.log(
-                    `✅ Config ${cfg.id} ("${cfg.name}") [${cfg.field_type}="${cfg.field_value}"] matched ${matches.length} email(s):`,
-                  );
-                  for (const m of matches) {
-                    const isFromReconops = m.from
-                      .toLowerCase()
-                      .includes("reconops@mindeed.in");
-                    const marker = isFromReconops ? "🔔 RECONOPS" : "📧 OTHER";
-                    console.log(
-                      `   ${marker} - subject="${m.subject || "(no subject)"}" from=${m.from}`,
-                    );
-                  }
-                } else {
-                  console.log(
-                    `❌ Config ${cfg.id} ("${cfg.name}") [${cfg.field_type}="${cfg.field_value}"] matched 0 emails.`,
-                  );
-                }
-              } catch (inner) {
-                console.error(
-                  `Error filtering emails for config ${cfg.id}:`,
-                  (inner as any)?.message || inner,
-                );
-              }
-            }
-          } catch (logErr) {
-            console.error(
-              "Error while logging config matches:",
-              (logErr as any)?.message || logErr,
-            );
-          }
-
-          const result = await processEmailsForConfigs(emails, configs);
-          console.log("Email processing job result:", result);
         } catch (err) {
           console.error(
             "Error running email processing job:",

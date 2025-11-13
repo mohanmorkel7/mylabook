@@ -250,63 +250,59 @@ ${bodyText}`;
       for (const email of emails) {
         // Check each config for this email
         for (const config of configs) {
-          // Check if email was already processed
-          const isProcessed = await MailConfigRepository.isEmailProcessed(
+          const emailSubject = email.subject || "(No subject)";
+          const emailFrom =
+            email.from?.emailAddress?.address ||
+            email.sender?.emailAddress?.address ||
+            "unknown";
+
+          // Check if email matches config criteria first
+          if (!this.matchesConfig(email, config)) {
+            skipped++;
+            continue; // Skip if doesn't match config
+          }
+
+          // Atomically try to reserve the email for processing
+          // This ensures only one process will succeed in claiming the email
+          const reserved = await MailConfigRepository.reserveEmailForProcessing(
             config.id,
             email.id,
+            emailSubject,
+            emailFrom,
           );
 
-          if (isProcessed) {
+          if (!reserved) {
             skipped++;
-            continue; // Skip if already processed
+            continue; // Email is already being/was processed by another process
           }
 
-          // Check if email matches config criteria
-          if (this.matchesConfig(email, config)) {
-            // Try to create ticket
-            const ticketResult = await this.createTicket(email, config);
+          // We have reserved the email, now create the ticket
+          const ticketResult = await this.createTicket(email, config);
 
-            // Log the processing result
-            await MailConfigRepository.logProcessedEmail(
-              config.id,
-              email.id,
-              email.subject || "(No subject)",
-              email.from?.emailAddress?.address ||
-                email.sender?.emailAddress?.address ||
-                "unknown",
-              ticketResult.ticketId,
-              ticketResult.success ? "success" : "failed",
-              ticketResult.error,
-            );
+          // Update the reservation with the result
+          await MailConfigRepository.completeEmailProcessing(
+            config.id,
+            email.id,
+            ticketResult.ticketId,
+            ticketResult.success ? "success" : "failed",
+            ticketResult.error,
+          );
 
-            if (ticketResult.success) {
-              created++;
-            } else {
-              failed++;
-            }
-
-            results.push({
-              emailId: email.id,
-              configId: config.id,
-              success: ticketResult.success,
-              ticketId: ticketResult.ticketId,
-              error: ticketResult.error,
-            });
-
-            processed++;
+          if (ticketResult.success) {
+            created++;
           } else {
-            // Log as skipped (matched config criteria-wise but config didn't match)
-            await MailConfigRepository.logProcessedEmail(
-              config.id,
-              email.id,
-              email.subject || "(No subject)",
-              email.from?.emailAddress?.address ||
-                email.sender?.emailAddress?.address ||
-                "unknown",
-              undefined,
-              "skipped",
-            );
+            failed++;
           }
+
+          results.push({
+            emailId: email.id,
+            configId: config.id,
+            success: ticketResult.success,
+            ticketId: ticketResult.ticketId,
+            error: ticketResult.error,
+          });
+
+          processed++;
         }
       }
 

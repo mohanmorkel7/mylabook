@@ -282,6 +282,12 @@ export class MailConfigRepository {
       WHERE mail_config_id = $4 AND email_id = $5
     `;
 
-    await pool.query(query, [status, ticketId || null, errorMessage || null, mailConfigId, emailId]);
+    await pool.query(query, [
+      status,
+      ticketId || null,
+      errorMessage || null,
+      mailConfigId,
+      emailId,
+    ]);
   }
 }

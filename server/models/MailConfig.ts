@@ -41,6 +41,10 @@ export interface CreateMailConfigData {
   priority_id: number;
   assigned_to_id: number;
   watcher_user_ids: number[];
+  team_id?: number;
+  bucket_id?: number;
+  status_id?: number;
+  demand?: number; // 0/1/2 mapping for SLA
 }
 
 export interface UpdateMailConfigData {

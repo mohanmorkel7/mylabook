@@ -160,8 +160,30 @@ export class MailConfigRepository {
     const values: any[] = [];
     let paramIndex = 1;
 
+    // Only allow updating specific columns to prevent SQL injection
+    const allowedColumns = [
+      "name",
+      "description",
+      "field_type",
+      "field_value",
+      "from_email",
+      "to_email",
+      "subject_pattern",
+      "body_content",
+      "body_match_type",
+      "project_id",
+      "priority_id",
+      "assigned_to_id",
+      "watcher_user_ids",
+      "team_id",
+      "bucket_id",
+      "status_id",
+      "demand",
+      "is_active",
+    ];
+
     for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined) {
+      if (value !== undefined && allowedColumns.includes(key)) {
         setClause.push(`${key} = $${paramIndex}`);
         values.push(value);
         paramIndex++;

@@ -93,16 +93,16 @@ ${bodyText}`;
           watcher_user_ids: config.watcher_user_ids || [],
         },
       };
-      console.log("PAYLOAD",payload)
+      console.log("PAYLOAD", payload);
       const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
       });
 
-      console.log("DATA1",response)
+      console.log("DATA1", response);
 
       if (!response.ok) {
         const errorData = await response.text();
@@ -115,7 +115,10 @@ ${bodyText}`;
       const data = (await response.json()) as any;
       return { ticketId: data.issue?.id, success: true };
     } catch (error) {
-      return { success: false, error: (error as any)?.message || "Failed to create ticket" };
+      return {
+        success: false,
+        error: (error as any)?.message || "Failed to create ticket",
+      };
     }
   }
 
@@ -128,35 +131,49 @@ ${bodyText}`;
 
       for (const email of emails) {
         for (const config of configs) {
-          const isProcessed = await MailConfigRepository.isEmailProcessed(
+          const emailSubject = email.subject || "(No subject)";
+          const emailFrom =
+            email.from?.emailAddress?.address ||
+            email.sender?.emailAddress?.address ||
+            "unknown";
+
+          // Check if email matches config criteria first
+          if (!this.matchesConfig(email, config)) {
+            continue;
+          }
+
+          // Atomically try to reserve the email for processing
+          // This ensures only one process will succeed in claiming the email
+          const reserved = await MailConfigRepository.reserveEmailForProcessing(
             config.id,
             email.id,
+            emailSubject,
+            emailFrom,
           );
-          if (isProcessed) continue;
 
-          if (this.matchesConfig(email, config)) {
-            const ticketResult = await this.createTicket(email, config);
-
-            await MailConfigRepository.logProcessedEmail(
-              config.id,
-              email.id,
-              email.subject || "(No subject)",
-              email.from?.emailAddress?.address ||
-                email.sender?.emailAddress?.address ||
-                "unknown",
-              ticketResult.ticketId,
-              ticketResult.success ? "success" : "failed",
-              ticketResult.error,
-            );
-
-            results.push({
-              emailId: email.id,
-              configId: config.id,
-              success: ticketResult.success,
-              ticketId: ticketResult.ticketId,
-              error: ticketResult.error,
-            });
+          if (!reserved) {
+            continue; // Email is already being/was processed by another process
           }
+
+          // We have reserved the email, now create the ticket
+          const ticketResult = await this.createTicket(email, config);
+
+          // Update the reservation with the result
+          await MailConfigRepository.completeEmailProcessing(
+            config.id,
+            email.id,
+            ticketResult.ticketId,
+            ticketResult.success ? "success" : "failed",
+            ticketResult.error,
+          );
+
+          results.push({
+            emailId: email.id,
+            configId: config.id,
+            success: ticketResult.success,
+            ticketId: ticketResult.ticketId,
+            error: ticketResult.error,
+          });
         }
       }
 
@@ -178,19 +195,28 @@ ${bodyText}`;
       const { emailId, configId, payload } = match;
 
       try {
-        // Skip duplicates
-        const already = await MailConfigRepository.isEmailProcessed(configId, emailId);
-        if (already) continue;
+        // Atomically try to reserve the email for processing
+        // This ensures only one process will succeed in claiming the email
+        const reserved = await MailConfigRepository.reserveEmailForProcessing(
+          configId,
+          emailId,
+          payload.issue.subject,
+          "unknown",
+        );
 
-        // Create ticket from payload
+        if (!reserved) {
+          continue; // Email is already being/was processed by another process
+        }
+
+        // We have reserved the email, now create the ticket
         const response = await fetch(`${REDMINE_API_URL}/issues.json`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(payload),
         });
-console.log("Payload send to mitra ",response)
+
         let ticketId: number | undefined;
         let success = true;
         let error: string | undefined;
@@ -203,11 +229,10 @@ console.log("Payload send to mitra ",response)
           ticketId = data.issue?.id;
         }
 
-        await MailConfigRepository.logProcessedEmail(
+        // Update the reservation with the result
+        await MailConfigRepository.completeEmailProcessing(
           configId,
           emailId,
-          payload.issue.subject,
-          "unknown",
           ticketId,
           success ? "success" : "failed",
           error,
@@ -215,7 +240,27 @@ console.log("Payload send to mitra ",response)
 
         results.push({ emailId, configId, success, ticketId, error });
       } catch (err: any) {
-        console.error(`Error processing match for email ${match.emailId}:`, err);
+        console.error(
+          `Error processing match for email ${match.emailId}:`,
+          err,
+        );
+
+        // Update the reservation with the error
+        try {
+          await MailConfigRepository.completeEmailProcessing(
+            match.configId,
+            match.emailId,
+            undefined,
+            "failed",
+            err.message,
+          );
+        } catch (logErr) {
+          console.error(
+            `Failed to update processing status for email ${match.emailId}:`,
+            logErr,
+          );
+        }
+
         results.push({
           emailId: match.emailId,
           configId: match.configId,

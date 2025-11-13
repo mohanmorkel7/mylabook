@@ -142,6 +142,17 @@ ${bodyText}`;
             continue;
           }
 
+          // CHECK if email was already processed BEFORE creating ticket
+          const alreadyProcessed = await MailConfigRepository.isEmailProcessed(
+            config.id,
+            email.id,
+          );
+
+          if (alreadyProcessed) {
+            // Email already processed, skip it
+            continue;
+          }
+
           // Create the ticket
           const ticketResult = await this.createTicket(email, config);
 

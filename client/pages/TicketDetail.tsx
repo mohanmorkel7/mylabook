@@ -472,27 +472,207 @@ export default function TicketDetailPage() {
         {/* Right: Details */}
         <div className="space-y-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Details</CardTitle>
+              {!isEditingDetails ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingDetails(true)}
+                >
+                  <Edit className="w-4 h-4" />
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingDetails(false)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={saveChanges}
+                    disabled={isSaving}
+                  >
+                    <Check className="w-4 h-4 mr-1" /> {isSaving ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="space-y-4 text-sm">
+                {/* Status */}
                 <div>
-                  <div className="text-gray-500">Assigned To</div>
-                  <div className="font-medium">{assignedName}</div>
+                  <div className="text-gray-500 mb-1">Status</div>
+                  {isEditingDetails ? (
+                    <Select
+                      value={String(editData.status_id || "")}
+                      onValueChange={(v) =>
+                        setEditData({
+                          ...editData,
+                          status_id: parseInt(v),
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statuses.map((s) => (
+                          <SelectItem key={s.id} value={String(s.id)}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="font-medium">{ticket.status?.name || "-"}</div>
+                  )}
                 </div>
+
+                {/* Assigned To */}
                 <div>
-                  <div className="text-gray-500">Status</div>
-                  <div className="font-medium">
-                    {ticket.status?.name || "-"}
+                  <div className="text-gray-500 mb-1">Assigned To</div>
+                  {isEditingDetails ? (
+                    <Select
+                      value={String(editData.assigned_to_id || "")}
+                      onValueChange={(v) =>
+                        setEditData({
+                          ...editData,
+                          assigned_to_id: parseInt(v),
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select user..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.name || u.email || "Unknown"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="font-medium">{assignedName}</div>
+                  )}
+                </div>
+
+                {/* Watchers */}
+                {isEditingDetails && (
+                  <div>
+                    <div className="text-gray-500 mb-1">Watchers (Optional)</div>
+                    <Popover open={openWatchers} onOpenChange={setOpenWatchers}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          {editData.watcher_user_ids.length > 0
+                            ? `${editData.watcher_user_ids.length} selected`
+                            : "Select watchers..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput
+                            placeholder="Search watchers..."
+                            value={searchWatchers}
+                            onValueChange={setSearchWatchers}
+                          />
+                          <CommandEmpty>No user found.</CommandEmpty>
+                          <CommandList className="max-h-64">
+                            <CommandGroup>
+                              {users
+                                .filter((user) =>
+                                  (user.name || "")
+                                    .toLowerCase()
+                                    .includes(searchWatchers.toLowerCase()),
+                                )
+                                .map((user) => (
+                                  <CommandItem
+                                    key={user.id}
+                                    onSelect={() => {
+                                      const isSelected =
+                                        editData.watcher_user_ids.includes(
+                                          user.id,
+                                        );
+                                      const newWatchers = isSelected
+                                        ? editData.watcher_user_ids.filter(
+                                            (w) => w !== user.id,
+                                          )
+                                        : [...editData.watcher_user_ids, user.id];
+                                      setEditData({
+                                        ...editData,
+                                        watcher_user_ids: newWatchers,
+                                      });
+                                    }}
+                                  >
+                                    <Check
+                                      className={`mr-2 h-4 w-4 ${
+                                        editData.watcher_user_ids.includes(
+                                          user.id,
+                                        )
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      }`}
+                                    />
+                                    {user.name || user.email}
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+
+                    {/* Display selected watchers */}
+                    {editData.watcher_user_ids.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {editData.watcher_user_ids.map((watcherId) => {
+                          const watcher = users.find(
+                            (u) => u.id === watcherId,
+                          );
+                          return (
+                            <div
+                              key={watcherId}
+                              className="bg-primary/10 text-primary px-2 py-1 rounded text-xs flex items-center gap-1"
+                            >
+                              {watcher?.name || "Unknown"}
+                              <X
+                                className="h-3 w-3 cursor-pointer"
+                                onClick={() =>
+                                  setEditData({
+                                    ...editData,
+                                    watcher_user_ids:
+                                      editData.watcher_user_ids.filter(
+                                        (w) => w !== watcherId,
+                                      ),
+                                  })
+                                }
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
+
+                {/* Priority */}
                 <div>
                   <div className="text-gray-500">Priority</div>
                   <div className="font-medium">
                     {ticket.priority?.name || "-"}
                   </div>
                 </div>
+
+                {/* Track ID */}
                 <div>
                   <div className="text-gray-500">Track ID</div>
                   <div className="font-medium">
@@ -500,26 +680,31 @@ export default function TicketDetailPage() {
                       `TKT-${String(ticket.id).padStart(4, "0")}`}
                   </div>
                 </div>
+
                 {ticket.team?.name && (
                   <div>
                     <div className="text-gray-500">Team</div>
                     <div className="font-medium">{ticket.team.name}</div>
                   </div>
                 )}
+
                 {ticket.bucket?.name && (
                   <div>
                     <div className="text-gray-500">Bucket</div>
                     <div className="font-medium">{ticket.bucket.name}</div>
                   </div>
                 )}
-                <div className="col-span-2">
+
+                {/* Created */}
+                <div>
                   <div className="text-gray-500">Created</div>
                   <div className="font-medium">
                     {new Date(ticket.created_at).toLocaleString()}
                   </div>
                 </div>
+
                 {ticket.updated_at && (
-                  <div className="col-span-2">
+                  <div>
                     <div className="text-gray-500">Last Updated</div>
                     <div className="font-medium">
                       {new Date(ticket.updated_at).toLocaleString()}

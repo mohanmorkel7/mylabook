@@ -21,65 +21,103 @@ export default function TicketsPage() {
   const [search, setSearch] = useState("");
 
   const fetchTickets = async () => {
-    setLoading(true);
-    try {
-      const localFilters = { ...filters };
+  setLoading(true);
 
-      // Read current user from localStorage (if available)
-      let currentUser: any = null;
-      try {
-        const raw = localStorage.getItem("banani_user");
-        if (raw) currentUser = JSON.parse(raw);
-      } catch (e) {
-        currentUser = null;
-      }
+  console.log("working...");
 
-      // Admin users should see all tickets (no assigned/created_by filter)
-      const isAdmin =
-        currentUser && String(currentUser.role).toLowerCase() === "admin";
+  try {
+    const localFilters: any = { ...filters };
 
-      if (!isAdmin) {
-        if (tab === "assignedToMe") {
-          if (currentUser && currentUser.id)
-            localFilters.assigned_to = currentUser.id;
-        } else {
-          if (currentUser && currentUser.id)
-            localFilters.created_by = currentUser.id;
-        }
-      }
-
-      if (search) localFilters.search = search;
-      const resp = await apiClient.getTickets(localFilters, page, limit);
-      console.log("[TicketsPage] API response:", resp);
-      setTicketsResp(resp);
-      console.log(
-        "[TicketsPage] state updated ticketsResp:",
-        resp.tickets && resp.tickets.length ? resp.tickets.length : 0,
-      );
-    } catch (err) {
-      console.error("Failed to load tickets:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Auto-select 'all' tab for admin users on first render
-  useEffect(() => {
+    // ✅ Get current user from localStorage
+    let currentUser: any = null;
     try {
       const raw = localStorage.getItem("banani_user");
+      if (raw) currentUser = JSON.parse(raw);
+    } catch (e) {
+      console.warn("Failed to parse user data:", e);
+    }
+
+    // ✅ Check admin role
+    const isAdmin = currentUser?.role?.toLowerCase?.() === "admin";
+
+    
+
+    // ✅ Apply filters based on role & tab
+    if (!isAdmin) {
+      if (tab === "assignedToMe" && currentUser?.id) {
+        localFilters.assigned_to = currentUser.id;
+      } else if (tab === "assignedByMe" && currentUser?.id) {
+        localFilters.created_by = currentUser.id;
+      }
+      // 🔹 Non-admin "all" tab could show everything they created or assigned
+      else if (tab === "all" && currentUser?.id) {
+        localFilters.created_or_assigned_to = currentUser.id;
+      }
+    } else {
+      // ✅ Admin — no filters (see ALL tickets)
+      if (tab === "all") {
+        Object.keys(localFilters).forEach((key) => delete localFilters[key]);
+      }
+    }
+
+    // ✅ Apply search
+    if (search) localFilters.search = search;
+
+    console.log("[TicketsPage] Filters applied:", localFilters);
+
+    // ✅ Fetch tickets from backend
+    const resp = await apiClient.getTickets(localFilters, page, limit);
+    console.log("[TicketsPage] API response:", resp);
+    setTicketsResp(resp);
+  } catch (err) {
+    console.error("Failed to load tickets:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// 1️⃣ Run once on mount: set admin tab (if needed) and then fetch tickets
+useEffect(() => {
+
+  
+
+  const init = async () => {
+    try {
+      const raw = localStorage.getItem("banani_user");
+      let defaultTab: "assignedToMe" | "assignedByMe" | "all" = "assignedToMe";
+
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && String(parsed.role).toLowerCase() === "admin") {
-          setTab("all");
+          defaultTab = "all";
         }
       }
-    } catch (e) {
-      // ignore
-    }
 
+      setTab(defaultTab); // this triggers re-render
+      // wait until tab state updates before fetching
+      await new Promise((r) => setTimeout(r, 0)); 
+      fetchTickets(); // ✅ guaranteed to run once on mount
+    } catch (e) {
+      console.warn("Error reading user from localStorage:", e);
+      fetchTickets(); // still call if user not found
+    }
+  };
+
+  init();
+}, []);
+
+// 2️⃣ Re-fetch when filters, page, limit, tab, or search change
+useEffect(() => {
+
+  console.log("🔥 First useEffect running");
+  
+  if (!loading) {
+    console.log("[TicketsPage] auto refetch due to state change");
     fetchTickets();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, page, limit, tab]);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [filters, page, limit, tab, search]);
+
 
   return (
     <div className="p-4">

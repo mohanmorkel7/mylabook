@@ -18,7 +18,7 @@ export function initialize() {
 
     // Schedule job to run every minute
     cron.schedule(
-      "* * * * *",
+      "*/1 * * * *",
       async () => {
         console.log(
           `[${new Date().toISOString()}] Running email processing job`,

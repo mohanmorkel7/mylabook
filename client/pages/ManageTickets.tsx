@@ -635,7 +635,7 @@ export default function ManageTickets() {
               <Button>Create Ticket</Button>
             </Link>
 
-            {currentUser?.role === "admin" && activeTab === "all" && (
+            {/* {currentUser?.role === "admin" && activeTab === "all" && (
               <div className="ml-4 text-right">
                 <div className="text-xs text-gray-500">Next SLA</div>
                 <div
@@ -648,7 +648,7 @@ export default function ManageTickets() {
                     : "No SLA"}
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         </div>
       </div>

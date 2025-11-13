@@ -516,6 +516,7 @@ export class TicketRepository {
       assigned_to: row.assigned_to,
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
+      mail_config_id: row.mail_config_id || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       resolved_at: row.resolved_at,

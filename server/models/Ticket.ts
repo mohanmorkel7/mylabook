@@ -290,27 +290,19 @@ export class TicketRepository {
         }
 
         if (hours !== null && !isNaN(Number(hours))) {
-          // Get current time in IST
-          const nowMs = Date.now();
-          const istNow = new Date(nowMs + 5.5 * 3600 * 1000); // Convert to IST
+          // Calculate SLA time in IST
+          // Get current time and convert to IST for calculation
+          const IST_OFFSET_MS = 5.5 * 3600 * 1000; // IST is UTC+5:30
+          const nowUTC = Date.now();
+          const nowIST = nowUTC + IST_OFFSET_MS;
 
-          // Add SLA hours to IST time
-          const slaIstMs = nowMs + (hours * 3600 * 1000) + (5.5 * 3600 * 1000);
-          const d = new Date(slaIstMs);
+          // Add hours to IST time
+          const slaIST = nowIST + hours * 3600 * 1000;
+          const d = new Date(slaIST);
 
-          // Format as YYYY-MM-DD HH:mm:ss (which PostgreSQL will interpret as IST)
-          const year = Math.floor(d.getTime() / (365.25 * 24 * 3600 * 1000)) + 1970;
-          const isoStr = d.toISOString();
-          const [datePart, timePart] = isoStr.split('T');
-          const [hours, mins, secs] = timePart.substring(0, 8).split(':');
-          const istHour = parseInt(hours) + 5;
-          const istMin = parseInt(mins) + 30;
-
-          const istHourStr = String(istHour % 24).padStart(2, '0');
-          const istMinStr = String(istMin % 60).padStart(2, '0');
-          const istSecStr = secs;
-
-          computedSlaValue = `${datePart} ${istHourStr}:${istMinStr}:${istSecStr}`;
+          // Format as YYYY-MM-DD HH:mm:ss
+          // This string will be stored in TIMESTAMP column and interpreted as IST by PostgreSQL
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         }
       }
     } catch (e) {

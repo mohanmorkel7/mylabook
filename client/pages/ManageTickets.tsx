@@ -491,12 +491,11 @@ export default function ManageTickets() {
 
       // Fallback mapping (use priority IDs that the UI uses)
       const PRIORITY_SLA_HOURS: Record<number, number> = {
-        0: 2, // Priority 0 -> 2 hours
-        1: 5, // Priority 1 -> 5 hours
-        2: 24, // Priority 2 -> End of day -> 24 hours
-        3: 8,
-        4: 24,
-        5: 48,
+        1: 2, // Low -> 2 hours
+        2: 5, // Normal -> 5 hours
+        3: 8, // High -> 8 hours
+        4: 24, // Urgent -> 24 hours
+        5: 48, // Immediate -> 48 hours
       };
 
       const pr = Number(

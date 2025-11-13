@@ -263,6 +263,9 @@ export class TicketRepository {
     let computedSlaValue: string | null = null;
     try {
       const pad = (n: number) => String(n).padStart(2, "0");
+
+      console.log(`[Ticket.create] Input: demand=${demand}, priority_id=${priority_id}, sla_time=${sla_time}`);
+
       // If client explicitly provided sla_time (any timezone), try to parse and normalize to UTC string
       if (sla_time) {
         const parsed = new Date(sla_time as string);

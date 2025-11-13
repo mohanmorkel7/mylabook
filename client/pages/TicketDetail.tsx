@@ -4,7 +4,30 @@ import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, MessageSquare, Paperclip, ArrowLeft } from "lucide-react";
+import { Edit, MessageSquare, Paperclip, ArrowLeft, X, Check } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ChevronsUpDown } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import api from "@/lib/api";
 
 // Inline styles for email content rendering
 const emailBodyStyles = `

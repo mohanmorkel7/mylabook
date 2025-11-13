@@ -187,6 +187,23 @@ export interface TicketFilters {
 }
 
 export class TicketRepository {
+  /**
+   * Convert IST timestamp string to UTC ISO format.
+   * Database stores TIMESTAMP without timezone, which is interpreted as IST (UTC+5:30)
+   * This method converts it back to UTC for client consumption.
+   */
+  private static convertISTToUTC(istTimestampStr: string): string {
+    try {
+      const isoStr = istTimestampStr.replace(" ", "T") + "Z";
+      const date = new Date(isoStr);
+      const IST_OFFSET_MS = 5.5 * 3600 * 1000; // IST is UTC+5:30
+      const utcDate = new Date(date.getTime() - IST_OFFSET_MS);
+      return utcDate.toISOString();
+    } catch (e) {
+      return istTimestampStr.replace(" ", "T") + "Z";
+    }
+  }
+
   // Get all priorities
   static async getPriorities(): Promise<TicketPriority[]> {
     const result = await pool.query(
@@ -262,6 +279,7 @@ export class TicketRepository {
           hours = demandHoursMap[Number(demand)];
         } else if (priority_id !== undefined && priority_id !== null) {
           const PRIORITY_SLA_HOURS: Record<number, number> = {
+            0: 2, // Priority 0 -> 2 hours
             1: 2, // Low -> 2 hours
             2: 5, // Normal -> 5 hours
             3: 8, // High -> 8 hours
@@ -272,7 +290,13 @@ export class TicketRepository {
         }
 
         if (hours !== null && !isNaN(Number(hours))) {
-          const d = new Date(Date.now() + hours * 3600 * 1000);
+          // Calculate SLA in UTC
+          const nowUTC = Date.now();
+          const slaUTC = nowUTC + hours * 3600 * 1000;
+          const d = new Date(slaUTC);
+
+          // Store as simple timestamp string
+          // The database will interpret this as UTC based on how the client parses it
           computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         }
       }
@@ -533,7 +557,7 @@ export class TicketRepository {
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
           if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return str.replace(" ", "T") + "Z";
+            return TicketRepository.convertISTToUTC(str);
           return str;
         } catch (e) {
           return null;
@@ -652,7 +676,7 @@ export class TicketRepository {
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
           if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return str.replace(" ", "T") + "Z";
+            return TicketRepository.convertISTToUTC(str);
           return str;
         } catch (e) {
           return null;

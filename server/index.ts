@@ -1,4 +1,5 @@
 import "dotenv/config";
+// Force Vite rebuild - emailProcessorService hotfix applied
 import express from "express";
 import cors from "cors";
 

@@ -566,10 +566,36 @@ export class TicketRepository {
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
       mail_config_id: row.mail_config_id || null,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      resolved_at: row.resolved_at,
-      closed_at: row.closed_at,
+      created_at: (() => {
+        try {
+          const c = row.created_at;
+          if (!c) return c;
+          if (c instanceof Date) return c.toISOString();
+          const str = String(c);
+          if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
+          if (/\d{4}-\d{2}-\d{2} /.test(str))
+            return TicketRepository.convertISTToUTC(str);
+          return str;
+        } catch (e) {
+          return c;
+        }
+      })(),
+      updated_at: (() => {
+        try {
+          const u = row.updated_at;
+          if (!u) return u;
+          if (u instanceof Date) return u.toISOString();
+          const str = String(u);
+          if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
+          if (/\d{4}-\d{2}-\d{2} /.test(str))
+            return TicketRepository.convertISTToUTC(str);
+          return str;
+        } catch (e) {
+          return u;
+        }
+      })(),
+      resolved_at: row.resolved_at ? TicketRepository.convertISTToUTC(String(row.resolved_at)) : null,
+      closed_at: row.closed_at ? TicketRepository.convertISTToUTC(String(row.closed_at)) : null,
       estimated_hours: row.estimated_hours,
       actual_hours: row.actual_hours,
       tags: row.tags,

@@ -758,8 +758,8 @@ router.get("/", async (req: Request, res: Response) => {
         );
       }
 
-      console.log("📊 Follow-ups query:", query);
-      console.log("��� Query params:", queryParams);
+      // console.log("📊 Follow-ups query:", query);
+      // console.log("��� Query params:", queryParams);
 
       const result = await pool.query(query, queryParams);
 

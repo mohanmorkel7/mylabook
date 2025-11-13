@@ -217,6 +217,7 @@ export default function ManageTickets() {
       setTickets(normalized);
       setTotalTickets(data?.total ?? normalized.length);
       setTotalPages(data?.pages ?? 1);
+      setStatusCounts(data?.status_counts ?? {});
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({

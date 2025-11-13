@@ -51,10 +51,13 @@ export default function TicketsCreatePage() {
     status_id: undefined,
     demand: 0,
     reason: "",
+    watchers: [],
   });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [openWatchers, setOpenWatchers] = useState(false);
+  const [searchWatchers, setSearchWatchers] = useState("");
   const descriptionRef = useRef<HTMLDivElement | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 

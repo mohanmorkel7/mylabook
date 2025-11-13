@@ -112,13 +112,41 @@ const emailBodyStyles = `
   }
 `;
 
+interface User {
+  id: number;
+  name?: string;
+  firstname?: string;
+  lastname?: string;
+  email?: string;
+}
+
+interface TicketStatus {
+  id: number;
+  name: string;
+  color: string;
+  is_closed: boolean;
+  sort_order: number;
+}
+
 export default function TicketDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { toast } = useToast();
   const [ticket, setTicket] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [editData, setEditData] = useState({
+    status_id: null,
+    assigned_to_id: null,
+    watcher_user_ids: [],
+  });
+  const [users, setUsers] = useState<User[]>([]);
+  const [statuses, setStatuses] = useState<TicketStatus[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [openWatchers, setOpenWatchers] = useState(false);
+  const [searchWatchers, setSearchWatchers] = useState("");
 
   const load = async () => {
     if (!id) return;

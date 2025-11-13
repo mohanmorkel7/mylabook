@@ -11,6 +11,20 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ChevronsUpDown, X, Check } from "lucide-react";
 import apiClient from "@/lib/api";
 import RichTextEditor from "@/components/RichTextEditor";
 
@@ -37,10 +51,13 @@ export default function TicketsCreatePage() {
     status_id: undefined,
     demand: 0,
     reason: "",
+    watchers: [],
   });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [openWatchers, setOpenWatchers] = useState(false);
+  const [searchWatchers, setSearchWatchers] = useState("");
   const descriptionRef = useRef<HTMLDivElement | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -212,6 +229,7 @@ export default function TicketsCreatePage() {
           status_id: ticket.status_id ?? form.status_id,
           demand: ticket.demand ?? form.demand,
           reason: ticket.reason || form.reason,
+          watchers: ticket.watchers || [],
         } as any;
         setForm(nextForm);
 
@@ -639,6 +657,115 @@ export default function TicketsCreatePage() {
               {errors.assigned_to && (
                 <div className="text-sm text-red-600 mt-1">
                   {errors.assigned_to}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3">
+              <Label className="mb-2">Watchers (Optional)</Label>
+              <Popover open={openWatchers} onOpenChange={setOpenWatchers}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between"
+                  >
+                    {form.watchers && form.watchers.length > 0
+                      ? `${form.watchers.length} selected`
+                      : "Select watchers..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search watchers..."
+                      value={searchWatchers}
+                      onValueChange={setSearchWatchers}
+                    />
+                    <CommandEmpty>No user found.</CommandEmpty>
+                    <CommandList className="max-h-64">
+                      <CommandGroup>
+                        {(meta.users || [])
+                          .filter((user: any) => {
+                            if (!searchWatchers) return true;
+                            const s = searchWatchers.toLowerCase();
+                            const name = (
+                              user.name ||
+                              `${user.firstname || user.first_name || ""} ${user.lastname || user.last_name || ""}`
+                            ).toLowerCase();
+                            return (
+                              name.includes(s) ||
+                              (user.email || "").toLowerCase().includes(s)
+                            );
+                          })
+                          .map((user: any) => (
+                            <CommandItem
+                              key={user.id}
+                              onSelect={() => {
+                                const isSelected = (
+                                  form.watchers || []
+                                ).includes(user.id);
+                                const newWatchers = isSelected
+                                  ? (form.watchers || []).filter(
+                                      (w: number) => w !== user.id,
+                                    )
+                                  : [...(form.watchers || []), user.id];
+                                setForm({
+                                  ...form,
+                                  watchers: newWatchers,
+                                });
+                              }}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${
+                                  (form.watchers || []).includes(user.id)
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                }`}
+                              />
+                              {user.firstname || user.first_name
+                                ? `${user.firstname || user.first_name} ${user.lastname || user.last_name}`.trim()
+                                : user.name || user.email}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {/* Display selected watchers */}
+              {form.watchers && form.watchers.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {form.watchers.map((watcherId: number) => {
+                    const watcher = meta.users.find(
+                      (u: any) => u.id === watcherId,
+                    );
+                    return (
+                      <div
+                        key={watcherId}
+                        className="bg-primary/10 text-primary px-2 py-1 rounded text-sm flex items-center gap-1"
+                      >
+                        {watcher
+                          ? watcher.firstname || watcher.first_name
+                            ? `${watcher.firstname || watcher.first_name} ${watcher.lastname || watcher.last_name}`.trim()
+                            : watcher.name || watcher.email
+                          : "Unknown"}
+                        <X
+                          className="h-3 w-3 cursor-pointer"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              watchers: (form.watchers || []).filter(
+                                (w: number) => w !== watcherId,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -117,6 +117,7 @@ export default function ManageTickets() {
   const [totalTickets, setTotalTickets] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -216,6 +217,7 @@ export default function ManageTickets() {
       setTickets(normalized);
       setTotalTickets(data?.total ?? normalized.length);
       setTotalPages(data?.pages ?? 1);
+      setStatusCounts(data?.status_counts ?? {});
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -489,12 +491,11 @@ export default function ManageTickets() {
 
       // Fallback mapping (use priority IDs that the UI uses)
       const PRIORITY_SLA_HOURS: Record<number, number> = {
-        0: 2, // Priority 0 -> 2 hours
-        1: 5, // Priority 1 -> 5 hours
-        2: 24, // Priority 2 -> End of day -> 24 hours
-        3: 8,
-        4: 24,
-        5: 48,
+        1: 2, // Low -> 2 hours
+        2: 5, // Normal -> 5 hours
+        3: 8, // High -> 8 hours
+        4: 24, // Urgent -> 24 hours
+        5: 48, // Immediate -> 48 hours
       };
 
       const pr = Number(
@@ -656,12 +657,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /open/i.test(String(s || ""));
-                }).length
-              }
+              {statusCounts["Open"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
           </CardContent>
@@ -670,15 +666,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-orange-500">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    /in progress/i.test(String(s || "")) ||
-                    /in_progress/i.test(String(s || ""))
-                  );
-                }).length
-              }
+              {statusCounts["In Progress"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress
@@ -689,12 +677,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-yellow-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return /pending/i.test(String(s || ""));
-                }).length
-              }
+              {statusCounts["Pending"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
           </CardContent>
@@ -703,15 +686,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-8">
             <p className="text-2xl md:text-3xl font-bold text-green-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  return (
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""))
-                  );
-                }).length
-              }
+              {(statusCounts["Resolved"] ?? 0) + (statusCounts["Closed"] ?? 0)}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
           </CardContent>
@@ -720,16 +695,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-red-600">
-              {
-                tickets.filter((t) => {
-                  const s = (t as any).status?.name || t.status;
-                  const isClosed =
-                    (t as any).status?.is_closed === true ||
-                    /closed/i.test(String(s || ""));
-                  const computed = computeSlaMsForTicket(t);
-                  return computed !== null && computed < 0 && !isClosed;
-                }).length
-              }
+              {statusCounts["Overdue"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
           </CardContent>

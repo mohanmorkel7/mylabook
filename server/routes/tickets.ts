@@ -218,7 +218,15 @@ router.get("/", async (req: Request, res: Response) => {
 
     if (await isDatabaseAvailable()) {
       const result = await TicketRepository.getAll(filters, page, limit);
-      res.json(result);
+      // Add created_from_mail_config flag for frontend
+      const ticketsWithFlag = result.tickets.map((ticket: any) => ({
+        ...ticket,
+        created_from_mail_config: Boolean(ticket.mail_config_id),
+      }));
+      res.json({
+        ...result,
+        tickets: ticketsWithFlag,
+      });
     } else {
       // Mock tickets for development
       const mockTickets = [

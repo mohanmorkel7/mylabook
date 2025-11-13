@@ -33,7 +33,9 @@ export function initialize() {
           // Process each config independently with its own timestamp
           for (const config of configs) {
             try {
-              const since = config.last_processed_at ? new Date(config.last_processed_at) : undefined;
+              const since = config.last_processed_at
+                ? new Date(config.last_processed_at)
+                : undefined;
 
               console.log(
                 `Processing config ${config.id} ("${config.name}") ${since ? `since ${since.toISOString()}` : "from beginning of today"}`,
@@ -42,13 +44,17 @@ export function initialize() {
               // Fetch emails since last processing for this config
               const emails = await getTodayEmails(since);
               if (!emails || emails.length === 0) {
-                console.log(`No new emails found for config ${config.id}, skipping`);
+                console.log(
+                  `No new emails found for config ${config.id}, skipping`,
+                );
                 // Still update the timestamp to mark we checked
                 await MailConfigRepository.updateLastProcessedAt(config.id);
                 continue;
               }
 
-              console.log(`Found ${emails.length} emails for config ${config.id}`);
+              console.log(
+                `Found ${emails.length} emails for config ${config.id}`,
+              );
 
               // Filter and process emails for this specific config
               const matchedEmails = emails.filter((email: any) => {
@@ -60,7 +66,9 @@ export function initialize() {
               });
 
               if (matchedEmails.length === 0) {
-                console.log(`No matching emails for config ${config.id}, updating timestamp`);
+                console.log(
+                  `No matching emails for config ${config.id}, updating timestamp`,
+                );
                 // Update timestamp even if no matches
                 await MailConfigRepository.updateLastProcessedAt(config.id);
                 continue;
@@ -71,7 +79,9 @@ export function initialize() {
               );
 
               // Process matched emails
-              const result = await processEmailsForConfigs(matchedEmails, [config as any]);
+              const result = await processEmailsForConfigs(matchedEmails, [
+                config as any,
+              ]);
               console.log(`Config ${config.id} processing result:`, result);
 
               // Update the last_processed_at timestamp after successful processing
@@ -83,7 +93,6 @@ export function initialize() {
               );
             }
           }
-
         } catch (err) {
           console.error(
             "Error running email processing job:",

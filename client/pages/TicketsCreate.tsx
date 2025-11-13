@@ -229,6 +229,7 @@ export default function TicketsCreatePage() {
           status_id: ticket.status_id ?? form.status_id,
           demand: ticket.demand ?? form.demand,
           reason: ticket.reason || form.reason,
+          watchers: ticket.watchers || [],
         } as any;
         setForm(nextForm);
 

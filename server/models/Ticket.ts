@@ -594,8 +594,12 @@ export class TicketRepository {
           return u;
         }
       })(),
-      resolved_at: row.resolved_at ? TicketRepository.convertISTToUTC(String(row.resolved_at)) : null,
-      closed_at: row.closed_at ? TicketRepository.convertISTToUTC(String(row.closed_at)) : null,
+      resolved_at: row.resolved_at
+        ? TicketRepository.convertISTToUTC(String(row.resolved_at))
+        : null,
+      closed_at: row.closed_at
+        ? TicketRepository.convertISTToUTC(String(row.closed_at))
+        : null,
       estimated_hours: row.estimated_hours,
       actual_hours: row.actual_hours,
       tags: row.tags,
@@ -739,8 +743,12 @@ export class TicketRepository {
           return u;
         }
       })(),
-      resolved_at: row.resolved_at ? TicketRepository.convertISTToUTC(String(row.resolved_at)) : null,
-      closed_at: row.closed_at ? TicketRepository.convertISTToUTC(String(row.closed_at)) : null,
+      resolved_at: row.resolved_at
+        ? TicketRepository.convertISTToUTC(String(row.resolved_at))
+        : null,
+      closed_at: row.closed_at
+        ? TicketRepository.convertISTToUTC(String(row.closed_at))
+        : null,
       estimated_hours: row.estimated_hours,
       actual_hours: row.actual_hours,
       tags: row.tags,

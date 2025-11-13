@@ -274,10 +274,15 @@ export class TicketRepository {
       } else {
         // Determine SLA hours from demand (preferred) or priority mapping
         let hours: number | null = null;
-        if (demand === 0 || demand === 1 || demand === 2) {
+
+        // Check demand first (preferred over priority)
+        const demandNum = demand !== undefined && demand !== null ? Number(demand) : null;
+        if (demandNum !== null && !isNaN(demandNum) && (demandNum === 0 || demandNum === 1 || demandNum === 2)) {
           const demandHoursMap: Record<number, number> = { 0: 2, 1: 5, 2: 24 };
-          hours = demandHoursMap[Number(demand)];
+          hours = demandHoursMap[demandNum];
+          console.log(`[SLA] Using demand ${demandNum} -> ${hours} hours`);
         } else if (priority_id !== undefined && priority_id !== null) {
+          // Fallback to priority if demand not set
           const PRIORITY_SLA_HOURS: Record<number, number> = {
             0: 2, // Priority 0 -> 2 hours
             1: 2, // Low -> 2 hours
@@ -286,7 +291,9 @@ export class TicketRepository {
             4: 24, // Urgent -> 24 hours
             5: 48, // Immediate -> 48 hours
           };
-          hours = PRIORITY_SLA_HOURS[Number(priority_id)] ?? null;
+          const priorityNum = Number(priority_id);
+          hours = PRIORITY_SLA_HOURS[priorityNum] ?? null;
+          console.log(`[SLA] Using priority ${priorityNum} -> ${hours} hours (demand not set: ${demandNum})`);
         }
 
         if (hours !== null && !isNaN(Number(hours))) {

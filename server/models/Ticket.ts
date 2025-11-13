@@ -44,6 +44,7 @@ export interface Ticket {
   assigned_to?: number;
   related_lead_id?: number;
   related_client_id?: number;
+  mail_config_id?: number | null; // For tickets created from email automation
   created_at: Date;
   updated_at: Date;
   resolved_at?: Date;

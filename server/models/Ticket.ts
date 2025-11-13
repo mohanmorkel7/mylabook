@@ -278,15 +278,9 @@ export class TicketRepository {
           const slaUTC = nowUTC + hours * 3600 * 1000;
           const d = new Date(slaUTC);
 
-          // IMPORTANT: The sla_time column is TIMESTAMP (no timezone info)
-          // PostgreSQL interprets it as local server time (IST = UTC+5:30)
-          // To store a UTC time, we need to add IST offset so when PostgreSQL
-          // interprets it as IST, it gives back the correct UTC time.
-          // UTC 09:30 -> Store as 15:00 (09:30 + 5:30) -> PostgreSQL reads as 15:00 IST = 09:30 UTC
-          const IST_OFFSET_MS = 5.5 * 3600 * 1000; // 5 hours 30 minutes in ms
-          const d_adjusted = new Date(slaUTC + IST_OFFSET_MS);
-
-          computedSlaValue = `${d_adjusted.getUTCFullYear()}-${pad(d_adjusted.getUTCMonth() + 1)}-${pad(d_adjusted.getUTCDate())} ${pad(d_adjusted.getUTCHours())}:${pad(d_adjusted.getUTCMinutes())}:${pad(d_adjusted.getUTCSeconds())}`;
+          // Store as simple timestamp string
+          // The database will interpret this as UTC based on how the client parses it
+          computedSlaValue = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         }
       }
     } catch (e) {

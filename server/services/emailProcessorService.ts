@@ -400,6 +400,10 @@ export async function getAllActiveConfigs(): Promise<
 /**
  * Process emails against all configs
  */
+/**
+ * Process emails against all active configurations.
+ * Uses atomic logging to prevent duplicate ticket creation.
+ */
 export async function processEmailsForConfigs(
   emails: Email[],
   configs: Array<MailConfig & { user_id: number }>,

@@ -312,6 +312,8 @@ export class TicketRepository {
 
           // Format as YYYY-MM-DD HH:mm:ss in IST representation
           computedSlaValue = `${slaIST_date.getUTCFullYear()}-${pad(slaIST_date.getUTCMonth() + 1)}-${pad(slaIST_date.getUTCDate())} ${pad(slaIST_date.getUTCHours())}:${pad(slaIST_date.getUTCMinutes())}:${pad(slaIST_date.getUTCSeconds())}`;
+
+          console.log(`[SLA] Computed SLA: ${computedSlaValue} (${hours} hours from now)`);
         }
       }
     } catch (e) {

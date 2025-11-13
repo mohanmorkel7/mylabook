@@ -262,47 +262,42 @@ ${bodyText}`;
             continue; // Skip if doesn't match config
           }
 
-          // Atomically try to reserve the email for processing
-          // This ensures only one process will succeed in claiming the email
-          const reserved = await MailConfigRepository.reserveEmailForProcessing(
+          // Try to create ticket
+          const ticketResult = await this.createTicket(email, config);
+
+          // Atomically log the result. If another process beat us, this will return false.
+          // But the ticket was created successfully regardless, so we still count it.
+          const logged = await MailConfigRepository.logProcessedEmailAtomic(
             config.id,
             email.id,
             emailSubject,
             emailFrom,
-          );
-
-          if (!reserved) {
-            skipped++;
-            continue; // Email is already being/was processed by another process
-          }
-
-          // We have reserved the email, now create the ticket
-          const ticketResult = await this.createTicket(email, config);
-
-          // Update the reservation with the result
-          await MailConfigRepository.completeEmailProcessing(
-            config.id,
-            email.id,
             ticketResult.ticketId,
             ticketResult.success ? "success" : "failed",
             ticketResult.error,
           );
 
-          if (ticketResult.success) {
-            created++;
+          // Only count if we successfully logged it (we were the first to process this email)
+          if (logged) {
+            if (ticketResult.success) {
+              created++;
+            } else {
+              failed++;
+            }
+
+            results.push({
+              emailId: email.id,
+              configId: config.id,
+              success: ticketResult.success,
+              ticketId: ticketResult.ticketId,
+              error: ticketResult.error,
+            });
+
+            processed++;
           } else {
-            failed++;
+            // Another process logged this email first, skip counting
+            skipped++;
           }
-
-          results.push({
-            emailId: email.id,
-            configId: config.id,
-            success: ticketResult.success,
-            ticketId: ticketResult.ticketId,
-            error: ticketResult.error,
-          });
-
-          processed++;
         }
       }
 
@@ -441,49 +436,36 @@ export async function processEmailsForConfigs(
           email.sender?.emailAddress?.address ||
           "unknown";
 
-        // Atomically try to reserve the email for processing
-        // This ensures only one process will succeed in claiming the email
-        const reserved = await MailConfigRepository.reserveEmailForProcessing(
-          config.id,
-          email.id,
-          emailSubject,
-          emailFrom,
-        );
-
-        if (!reserved) {
-          skipped++;
-          continue; // Email is already being/was processed by another process
-        }
-
-        // We have reserved the email, now create the ticket
+        // Create the ticket
         const result = await EmailProcessingService.createTicket(
           email as GraphEmail,
           config,
         );
 
-        // Update the reservation with the result
-        try {
-          await MailConfigRepository.completeEmailProcessing(
-            config.id,
-            email.id,
-            result.ticketId,
-            result.success ? "success" : "failed",
-            result.error,
-          );
-        } catch (logErr) {
-          console.error(
-            `Failed to update processing status for email ${email.id}:`,
-            logErr,
-          );
-        }
+        // Atomically log the result. If another process beat us, this will return false.
+        const logged = await MailConfigRepository.logProcessedEmailAtomic(
+          config.id,
+          email.id,
+          emailSubject,
+          emailFrom,
+          result.ticketId,
+          result.success ? "success" : "failed",
+          result.error,
+        );
 
-        if (result.success) {
-          succeeded++;
+        // Only count if we successfully logged it (we were the first to process this email)
+        if (logged) {
+          if (result.success) {
+            succeeded++;
+          } else {
+            failed++;
+            if (result.error) errors.push(result.error);
+          }
+          processed++;
         } else {
-          failed++;
-          if (result.error) errors.push(result.error);
+          // Another process logged this email first, skip counting
+          skipped++;
         }
-        processed++;
       }
     } catch (error) {
       const err = (error as any)?.message || String(error);

@@ -5,6 +5,7 @@ import {
   getTodayEmails,
 } from "../services/emailProcessorService";
 import { matchEmailAgainstConfig } from "../services/emailMatchingService";
+import { MailConfigRepository } from "../models/MailConfig";
 
 export function initialize() {
   try {
@@ -29,62 +30,69 @@ export function initialize() {
             return;
           }
 
-          // Fetch today's emails (integration point) - getTodayEmails returns Email[]
-          const emails = await getTodayEmails();
-          if (!emails || emails.length === 0) {
-            console.log("No emails found for today, skipping");
-            return;
-          }
+          // Process each config independently with its own timestamp
+          for (const config of configs) {
+            try {
+              const since = config.last_processed_at
+                ? new Date(config.last_processed_at)
+                : undefined;
 
-          // For debugging: filter emails for each config and log matches
-          try {
-            console.log(
-              `Found ${emails.length} emails today. Running config filters (${configs.length} configs)...`,
-            );
-            for (const cfg of configs) {
-              try {
-                const matches = emails.filter((email: any) => {
-                  try {
-                    return matchEmailAgainstConfig(email, cfg as any);
-                  } catch (e) {
-                    return false;
-                  }
-                });
+              console.log(
+                `Processing config ${config.id} ("${config.name}") ${since ? `since ${since.toISOString()}` : "from beginning of today"}`,
+              );
 
-                if (matches.length > 0) {
-                  console.log(
-                    `✅ Config ${cfg.id} ("${cfg.name}") [${cfg.field_type}="${cfg.field_value}"] matched ${matches.length} email(s):`,
-                  );
-                  for (const m of matches) {
-                    const isFromReconops = m.from
-                      .toLowerCase()
-                      .includes("reconops@mindeed.in");
-                    const marker = isFromReconops ? "🔔 RECONOPS" : "📧 OTHER";
-                    console.log(
-                      `   ${marker} - subject="${m.subject || "(no subject)"}" from=${m.from}`,
-                    );
-                  }
-                } else {
-                  console.log(
-                    `❌ Config ${cfg.id} ("${cfg.name}") [${cfg.field_type}="${cfg.field_value}"] matched 0 emails.`,
-                  );
-                }
-              } catch (inner) {
-                console.error(
-                  `Error filtering emails for config ${cfg.id}:`,
-                  (inner as any)?.message || inner,
+              // Fetch emails since last processing for this config
+              const emails = await getTodayEmails(since);
+              if (!emails || emails.length === 0) {
+                console.log(
+                  `No new emails found for config ${config.id}, skipping`,
                 );
+                // Still update the timestamp to mark we checked
+                await MailConfigRepository.updateLastProcessedAt(config.id);
+                continue;
               }
-            }
-          } catch (logErr) {
-            console.error(
-              "Error while logging config matches:",
-              (logErr as any)?.message || logErr,
-            );
-          }
 
-          const result = await processEmailsForConfigs(emails, configs);
-          console.log("Email processing job result:", result);
+              console.log(
+                `Found ${emails.length} emails for config ${config.id}`,
+              );
+
+              // Filter and process emails for this specific config
+              const matchedEmails = emails.filter((email: any) => {
+                try {
+                  return matchEmailAgainstConfig(email, config as any);
+                } catch (e) {
+                  return false;
+                }
+              });
+
+              if (matchedEmails.length === 0) {
+                console.log(
+                  `No matching emails for config ${config.id}, updating timestamp`,
+                );
+                // Update timestamp even if no matches
+                await MailConfigRepository.updateLastProcessedAt(config.id);
+                continue;
+              }
+
+              console.log(
+                `✅ Config ${config.id} ("${config.name}") matched ${matchedEmails.length} email(s)`,
+              );
+
+              // Process matched emails
+              const result = await processEmailsForConfigs(matchedEmails, [
+                config as any,
+              ]);
+              console.log(`Config ${config.id} processing result:`, result);
+
+              // Update the last_processed_at timestamp after successful processing
+              await MailConfigRepository.updateLastProcessedAt(config.id);
+            } catch (configError) {
+              console.error(
+                `Error processing config ${config.id}:`,
+                (configError as any)?.message || configError,
+              );
+            }
+          }
         } catch (err) {
           console.error(
             "Error running email processing job:",

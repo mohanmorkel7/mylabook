@@ -387,7 +387,13 @@ export class TicketRepository {
     filters: TicketFilters = {},
     page: number = 1,
     limit: number = 20,
-  ): Promise<{ tickets: Ticket[]; total: number; pages: number }> {
+  ): Promise<{
+    tickets: Ticket[];
+    total: number;
+    pages: number;
+    status_counts?: Record<string, number>;
+    server_time?: string;
+  }> {
     const offset = (page - 1) * limit;
 
     let whereConditions: string[] = [];
@@ -450,12 +456,26 @@ export class TicketRepository {
 
     // Get total count
     const countQuery = `
-      SELECT COUNT(*) 
-      FROM tickets t 
+      SELECT COUNT(*)
+      FROM tickets t
       ${whereClause}
     `;
     const countResult = await pool.query(countQuery, queryParams);
     const total = parseInt(countResult.rows[0].count);
+
+    // Get status counts (without filters to show total counts per status)
+    const statusCountsQuery = `
+      SELECT ts.name, COUNT(*) as count
+      FROM tickets t
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      GROUP BY ts.name
+      ORDER BY ts.name
+    `;
+    const statusCountsResult = await pool.query(statusCountsQuery, []);
+    const status_counts: Record<string, number> = {};
+    statusCountsResult.rows.forEach((row: any) => {
+      status_counts[row.name || "Unknown"] = parseInt(row.count);
+    });
 
     // Get tickets with joins
     const ticketsQuery = `

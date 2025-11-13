@@ -246,6 +246,8 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     load();
+    fetchUsers();
+    fetchStatuses();
   }, [id]);
 
   const postComment = async () => {

@@ -101,6 +101,10 @@ Received: ${email.receivedDateTime || "Unknown"}
 ${bodyText}`;
 
       // Create ticket in app database using TicketRepository
+      console.log(
+        `[EmailProcessing] Config details: id=${config.id}, priority_id=${config.priority_id}, demand=${config.demand}, team_id=${config.team_id}`,
+      );
+
       const ticketData = {
         subject,
         description,
@@ -111,6 +115,10 @@ ${bodyText}`;
         assigned_to: config.assigned_to_id,
         project_id: config.project_id,
       } as any;
+
+      console.log(
+        `[EmailProcessing] Creating ticket with demand=${ticketData.demand}`,
+      );
 
       // createdBy: prefer config.user_id else assigned_to
       const createdBy = (config as any).user_id || config.assigned_to_id || 1;

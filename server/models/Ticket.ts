@@ -44,6 +44,7 @@ export interface Ticket {
   assigned_to?: number;
   related_lead_id?: number;
   related_client_id?: number;
+  mail_config_id?: number | null; // For tickets created from email automation
   created_at: Date;
   updated_at: Date;
   resolved_at?: Date;
@@ -261,12 +262,11 @@ export class TicketRepository {
           hours = demandHoursMap[Number(demand)];
         } else if (priority_id !== undefined && priority_id !== null) {
           const PRIORITY_SLA_HOURS: Record<number, number> = {
-            0: 2,
-            1: 5,
-            2: 24,
-            3: 8,
-            4: 24,
-            5: 48,
+            1: 2, // Low -> 2 hours
+            2: 5, // Normal -> 5 hours
+            3: 8, // High -> 8 hours
+            4: 24, // Urgent -> 24 hours
+            5: 48, // Immediate -> 48 hours
           };
           hours = PRIORITY_SLA_HOURS[Number(priority_id)] ?? null;
         }
@@ -387,7 +387,13 @@ export class TicketRepository {
     filters: TicketFilters = {},
     page: number = 1,
     limit: number = 20,
-  ): Promise<{ tickets: Ticket[]; total: number; pages: number }> {
+  ): Promise<{
+    tickets: Ticket[];
+    total: number;
+    pages: number;
+    status_counts?: Record<string, number>;
+    server_time?: string;
+  }> {
     const offset = (page - 1) * limit;
 
     let whereConditions: string[] = [];
@@ -450,12 +456,26 @@ export class TicketRepository {
 
     // Get total count
     const countQuery = `
-      SELECT COUNT(*) 
-      FROM tickets t 
+      SELECT COUNT(*)
+      FROM tickets t
       ${whereClause}
     `;
     const countResult = await pool.query(countQuery, queryParams);
     const total = parseInt(countResult.rows[0].count);
+
+    // Get status counts (without filters to show total counts per status)
+    const statusCountsQuery = `
+      SELECT ts.name, COUNT(*) as count
+      FROM tickets t
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      GROUP BY ts.name
+      ORDER BY ts.name
+    `;
+    const statusCountsResult = await pool.query(statusCountsQuery, []);
+    const status_counts: Record<string, number> = {};
+    statusCountsResult.rows.forEach((row: any) => {
+      status_counts[row.name || "Unknown"] = parseInt(row.count);
+    });
 
     // Get tickets with joins
     const ticketsQuery = `
@@ -496,6 +516,7 @@ export class TicketRepository {
       assigned_to: row.assigned_to,
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
+      mail_config_id: row.mail_config_id || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       resolved_at: row.resolved_at,
@@ -565,7 +586,13 @@ export class TicketRepository {
 
     const pages = Math.ceil(total / limit);
 
-    return { tickets, total, pages, server_time: new Date().toISOString() };
+    return {
+      tickets,
+      total,
+      pages,
+      status_counts,
+      server_time: new Date().toISOString(),
+    };
   }
 
   // Get ticket by ID
@@ -608,6 +635,7 @@ export class TicketRepository {
       assigned_to: row.assigned_to,
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
+      mail_config_id: row.mail_config_id || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       resolved_at: row.resolved_at,

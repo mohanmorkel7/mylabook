@@ -316,6 +316,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Ensure mail_config_id column exists in tickets table
+    try {
+      const mailConfigIdPath = path.join(
+        __dirname,
+        "add-mail-config-id-to-tickets.sql",
+      );
+      if (fs.existsSync(mailConfigIdPath)) {
+        const mailConfigIdSql = fs.readFileSync(mailConfigIdPath, "utf8");
+        await client.query(mailConfigIdSql);
+        console.log("Mail config ID column migration applied successfully");
+      }
+    } catch (mailConfigIdError) {
+      console.log(
+        "Mail config ID column migration already applied or error:",
+        mailConfigIdError.message,
+      );
+    }
+
     // Update investor_category allowed values (add accelerator, individual)
     try {
       const vcInvestorCategoryMigrationPath = path.join(

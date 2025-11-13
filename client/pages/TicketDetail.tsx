@@ -4,7 +4,14 @@ import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, MessageSquare, Paperclip, ArrowLeft, X, Check } from "lucide-react";
+import {
+  Edit,
+  MessageSquare,
+  Paperclip,
+  ArrowLeft,
+  X,
+  Check,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -491,12 +498,9 @@ export default function TicketDetailPage() {
                   >
                     <X className="w-4 h-4" />
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={saveChanges}
-                    disabled={isSaving}
-                  >
-                    <Check className="w-4 h-4 mr-1" /> {isSaving ? "Saving..." : "Save"}
+                  <Button size="sm" onClick={saveChanges} disabled={isSaving}>
+                    <Check className="w-4 h-4 mr-1" />{" "}
+                    {isSaving ? "Saving..." : "Save"}
                   </Button>
                 </div>
               )}
@@ -528,7 +532,9 @@ export default function TicketDetailPage() {
                       </SelectContent>
                     </Select>
                   ) : (
-                    <div className="font-medium">{ticket.status?.name || "-"}</div>
+                    <div className="font-medium">
+                      {ticket.status?.name || "-"}
+                    </div>
                   )}
                 </div>
 
@@ -564,7 +570,9 @@ export default function TicketDetailPage() {
                 {/* Watchers */}
                 {isEditingDetails && (
                   <div>
-                    <div className="text-gray-500 mb-1">Watchers (Optional)</div>
+                    <div className="text-gray-500 mb-1">
+                      Watchers (Optional)
+                    </div>
                     <Popover open={openWatchers} onOpenChange={setOpenWatchers}>
                       <PopoverTrigger asChild>
                         <Button
@@ -606,7 +614,10 @@ export default function TicketDetailPage() {
                                         ? editData.watcher_user_ids.filter(
                                             (w) => w !== user.id,
                                           )
-                                        : [...editData.watcher_user_ids, user.id];
+                                        : [
+                                            ...editData.watcher_user_ids,
+                                            user.id,
+                                          ];
                                       setEditData({
                                         ...editData,
                                         watcher_user_ids: newWatchers,
@@ -635,9 +646,7 @@ export default function TicketDetailPage() {
                     {editData.watcher_user_ids.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {editData.watcher_user_ids.map((watcherId) => {
-                          const watcher = users.find(
-                            (u) => u.id === watcherId,
-                          );
+                          const watcher = users.find((u) => u.id === watcherId);
                           return (
                             <div
                               key={watcherId}

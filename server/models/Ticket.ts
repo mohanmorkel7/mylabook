@@ -557,7 +557,7 @@ export class TicketRepository {
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
           if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return str.replace(" ", "T") + "Z";
+            return TicketRepository.convertISTToUTC(str);
           return str;
         } catch (e) {
           return null;
@@ -676,7 +676,7 @@ export class TicketRepository {
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
           if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return str.replace(" ", "T") + "Z";
+            return TicketRepository.convertISTToUTC(str);
           return str;
         } catch (e) {
           return null;

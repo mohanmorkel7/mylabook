@@ -625,7 +625,9 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
   } else {
     // Create start of IST day (00:00:00 IST) and convert to UTC for API
     // IST 00:00:00 = UTC 18:30:00 (previous day in UTC)
-    const istStartOfDay = new Date(Date.UTC(istYear, istMonth, istDate, 0, 0, 0));
+    const istStartOfDay = new Date(
+      Date.UTC(istYear, istMonth, istDate, 0, 0, 0),
+    );
     utcStartOfDay = new Date(istStartOfDay.getTime() - istOffsetMs);
     console.log(
       `getTodayEmails: filtering for emails received today (IST day ${istDate}) starting from ${utcStartOfDay.toISOString()}`,

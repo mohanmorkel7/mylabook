@@ -969,10 +969,11 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
     );
 
     if (sharedEmails.length > 0) {
-      const parsedEmails = parseGraphEmails(
+      const parsedEmails = await parseGraphEmails(
         sharedEmails,
         new Date(utcStartOfDay),
         new Date(utcEndOfDay),
+        token,
       );
       console.log(
         `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from ${reconopsEmail} (direct access)`,
@@ -1046,10 +1047,11 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
         );
 
         if (folderEmails.length > 0) {
-          const parsedEmails = parseGraphEmails(
+          const parsedEmails = await parseGraphEmails(
             folderEmails,
             new Date(utcStartOfDay),
             new Date(utcEndOfDay),
+            token,
           );
           console.log(
             `getTodayEmails: SUMMARY - fetched ${parsedEmails.length} emails from shared mailbox folder "${reconopsFolder.displayName}"`,

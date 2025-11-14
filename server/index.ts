@@ -179,7 +179,8 @@ export function createServer() {
   app.use("/api", (req, res, next) => {
     // Set cache control headers to prevent browser caching and 304 responses
     res.set({
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      "Cache-Control":
+        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
       Pragma: "no-cache",
       Expires: "0",
     });

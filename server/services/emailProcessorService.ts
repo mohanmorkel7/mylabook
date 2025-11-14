@@ -509,6 +509,190 @@ export async function processEmailsForConfigs(
   return { processed, succeeded, failed, skipped, errors };
 }
 
+/**
+ * Fetch attachments from Microsoft Graph API and convert image attachments to base64 data URLs
+ */
+async function fetchAttachmentData(
+  token: string,
+  emailId: string,
+  attachmentId: string,
+  contentType: string,
+): Promise<string | null> {
+  try {
+    const reconopsEmail = "reconops@mylapay.com";
+    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      reconopsEmail,
+    )}/messages/${encodeURIComponent(
+      emailId,
+    )}/attachments/${encodeURIComponent(attachmentId)}?$select=id,name,contentType,contentId,contentLocation,isInline`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!res.ok) {
+      console.warn(`Failed to fetch attachment: ${res.status}`);
+      return null;
+    }
+
+    const attachmentData = await res.json();
+
+    // If it's an item attachment, we need to fetch it differently
+    // For now, we'll handle file attachments which have @odata.type = "#microsoft.graph.fileAttachment"
+    if (attachmentData["@odata.type"] === "#microsoft.graph.fileAttachment") {
+      // For file attachments, we need to fetch the raw bytes
+      const bytesUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+        reconopsEmail,
+      )}/messages/${encodeURIComponent(
+        emailId,
+      )}/attachments/${encodeURIComponent(
+        attachmentId,
+      )}/$value`;
+
+      const bytesRes = await fetch(bytesUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!bytesRes.ok) {
+        console.warn(`Failed to fetch attachment bytes: ${bytesRes.status}`);
+        return null;
+      }
+
+      const buffer = await bytesRes.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      return `data:${contentType};base64,${base64}`;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching attachment data:", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch all attachments for an email and return mapping of contentId -> dataUrl
+ */
+async function fetchEmailAttachments(
+  token: string,
+  emailId: string,
+): Promise<Map<string, string>> {
+  const attachmentMap = new Map<string, string>();
+
+  try {
+    const reconopsEmail = "reconops@mylapay.com";
+    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      reconopsEmail,
+    )}/messages/${encodeURIComponent(
+      emailId,
+    )}/attachments?$select=id,name,contentType,contentId,contentLocation,isInline&$filter=isInline eq true`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!res.ok) {
+      console.warn(
+        `Failed to fetch email attachments: ${res.status} ${res.statusText}`,
+      );
+      return attachmentMap;
+    }
+
+    const data = await res.json();
+    const attachments = Array.isArray(data?.value) ? data.value : [];
+
+    console.log(`[EmailAttachments] Found ${attachments.length} inline attachments for email ${emailId}`);
+
+    // Fetch each inline attachment and convert to data URL
+    for (const attachment of attachments) {
+      // Only process image attachments
+      const contentType = attachment.contentType || "";
+      if (!contentType.startsWith("image/")) {
+        continue;
+      }
+
+      const contentId = attachment.contentId || attachment.id;
+      const dataUrl = await fetchAttachmentData(
+        token,
+        emailId,
+        attachment.id,
+        contentType,
+      );
+
+      if (dataUrl) {
+        // Store with both contentId variations
+        attachmentMap.set(contentId, dataUrl);
+        // Also store without angle brackets if present
+        if (contentId.startsWith("<") && contentId.endsWith(">")) {
+          attachmentMap.set(
+            contentId.slice(1, -1),
+            dataUrl,
+          );
+        }
+        console.log(
+          `[EmailAttachments] Converted attachment "${contentId}" to data URL`,
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching email attachments:", error);
+  }
+
+  return attachmentMap;
+}
+
+/**
+ * Replace CID references in email body with data URLs
+ */
+function replaceCidReferences(
+  htmlContent: string,
+  attachmentMap: Map<string, string>,
+): string {
+  if (!htmlContent || attachmentMap.size === 0) {
+    return htmlContent;
+  }
+
+  let modified = htmlContent;
+
+  // Replace cid: references with data URLs
+  for (const [contentId, dataUrl] of attachmentMap.entries()) {
+    // Match src="cid:contentId" and replace with data URL
+    const cidPattern = new RegExp(
+      `src\\s*=\\s*["\']cid:${contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["\']`,
+      "gi",
+    );
+    modified = modified.replace(cidPattern, `src="${dataUrl}"`);
+  }
+
+  return modified;
+}
+
 export async function getTodayEmails(since?: Date): Promise<Email[]> {
   // For delegated shared mailbox access, we need the user's delegated token
   // This token should be stored in the database or cache from user sign-in

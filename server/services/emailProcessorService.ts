@@ -593,11 +593,12 @@ async function fetchEmailAttachments(
 
   try {
     const reconopsEmail = "reconops@mylapay.com";
+    // Remove filter - fetch all attachments and filter on client side
     const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       reconopsEmail,
     )}/messages/${encodeURIComponent(
       emailId,
-    )}/attachments?$select=id,name,contentType,contentId,contentLocation,isInline&$filter=isInline eq true`;
+    )}/attachments?$select=id,name,contentType,contentId,contentLocation`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -617,27 +618,50 @@ async function fetchEmailAttachments(
 
     if (!res.ok) {
       console.warn(
-        `Failed to fetch email attachments: ${res.status} ${res.statusText}`,
+        `[EmailAttachments] Failed to fetch attachments list: ${res.status} ${res.statusText}`,
       );
       return attachmentMap;
     }
 
     const data = await res.json();
-    const attachments = Array.isArray(data?.value) ? data.value : [];
+    const allAttachments = Array.isArray(data?.value) ? data.value : [];
+
+    console.log(`[EmailAttachments] Email ${emailId} has ${allAttachments.length} total attachments`);
+
+    // Log attachment details for debugging
+    for (const att of allAttachments) {
+      console.log(
+        `[EmailAttachments] - ${att.name} (type: ${att.contentType}, contentId: ${att.contentId || "N/A"})`,
+      );
+    }
+
+    // Filter for image attachments only
+    const imageAttachments = allAttachments.filter((att: any) => {
+      const contentType = att.contentType || "";
+      return contentType.startsWith("image/");
+    });
 
     console.log(
-      `[EmailAttachments] Found ${attachments.length} inline attachments for email ${emailId}`,
+      `[EmailAttachments] Found ${imageAttachments.length} image attachments for email ${emailId}`,
     );
 
-    // Fetch each inline attachment and convert to data URL
-    for (const attachment of attachments) {
-      // Only process image attachments
-      const contentType = attachment.contentType || "";
-      if (!contentType.startsWith("image/")) {
-        continue;
+    // Fetch each image attachment and convert to data URL
+    for (const attachment of imageAttachments) {
+      const contentType = attachment.contentType || "image/png";
+
+      // Try contentId first, fall back to name or id
+      let contentId = attachment.contentId;
+      if (!contentId) {
+        // Extract filename without extension as contentId if not provided
+        contentId = attachment.name
+          ? attachment.name.replace(/\.[^.]+$/, "")
+          : attachment.id;
       }
 
-      const contentId = attachment.contentId || attachment.id;
+      console.log(
+        `[EmailAttachments] Processing attachment: name="${attachment.name}", contentId="${contentId}"`,
+      );
+
       const dataUrl = await fetchAttachmentData(
         token,
         emailId,
@@ -646,19 +670,37 @@ async function fetchEmailAttachments(
       );
 
       if (dataUrl) {
-        // Store with both contentId variations
+        // Store with contentId
         attachmentMap.set(contentId, dataUrl);
+
         // Also store without angle brackets if present
         if (contentId.startsWith("<") && contentId.endsWith(">")) {
-          attachmentMap.set(contentId.slice(1, -1), dataUrl);
+          const cleanId = contentId.slice(1, -1);
+          attachmentMap.set(cleanId, dataUrl);
+          console.log(
+            `[EmailAttachments] Stored with both "${contentId}" and "${cleanId}"`,
+          );
         }
+
+        // Also store by name for additional matching
+        if (attachment.name && attachment.name !== contentId) {
+          attachmentMap.set(attachment.name, dataUrl);
+          console.log(
+            `[EmailAttachments] Also stored by filename "${attachment.name}"`,
+          );
+        }
+
         console.log(
-          `[EmailAttachments] Converted attachment "${contentId}" to data URL`,
+          `[EmailAttachments] ✓ Converted "${attachment.name}" to data URL (${dataUrl.substring(0, 50)}...)`,
+        );
+      } else {
+        console.warn(
+          `[EmailAttachments] Failed to fetch data for "${attachment.name}"`,
         );
       }
     }
   } catch (error) {
-    console.error("Error fetching email attachments:", error);
+    console.error("[EmailAttachments] Error fetching attachments:", error);
   }
 
   return attachmentMap;
@@ -942,7 +984,7 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
       );
       if (!email.body) {
         console.warn(
-          `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
+          `���️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
         );
       }
     }

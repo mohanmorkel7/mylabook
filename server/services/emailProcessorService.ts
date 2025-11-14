@@ -557,9 +557,7 @@ async function fetchAttachmentData(
         reconopsEmail,
       )}/messages/${encodeURIComponent(
         emailId,
-      )}/attachments/${encodeURIComponent(
-        attachmentId,
-      )}/$value`;
+      )}/attachments/${encodeURIComponent(attachmentId)}/$value`;
 
       const bytesRes = await fetch(bytesUrl, {
         headers: {
@@ -627,7 +625,9 @@ async function fetchEmailAttachments(
     const data = await res.json();
     const attachments = Array.isArray(data?.value) ? data.value : [];
 
-    console.log(`[EmailAttachments] Found ${attachments.length} inline attachments for email ${emailId}`);
+    console.log(
+      `[EmailAttachments] Found ${attachments.length} inline attachments for email ${emailId}`,
+    );
 
     // Fetch each inline attachment and convert to data URL
     for (const attachment of attachments) {
@@ -650,10 +650,7 @@ async function fetchEmailAttachments(
         attachmentMap.set(contentId, dataUrl);
         // Also store without angle brackets if present
         if (contentId.startsWith("<") && contentId.endsWith(">")) {
-          attachmentMap.set(
-            contentId.slice(1, -1),
-            dataUrl,
-          );
+          attachmentMap.set(contentId.slice(1, -1), dataUrl);
         }
         console.log(
           `[EmailAttachments] Converted attachment "${contentId}" to data URL`,

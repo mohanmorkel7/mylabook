@@ -62,7 +62,12 @@ router.get("/", async (req: Request, res: Response) => {
 router.get("/active", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
-    const configs = await MailConfigRepository.getActiveConfigs(userId);
+    const user = await UserRepository.findById(userId);
+    const isAdmin = user?.role === "admin";
+
+    const configs = await MailConfigRepository.getActiveConfigs(
+      isAdmin ? null : userId
+    );
     res.json(configs);
   } catch (error) {
     console.error("Error fetching active mail configs:", error);
@@ -74,8 +79,15 @@ router.get("/active", async (req: Request, res: Response) => {
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
+    const user = await UserRepository.findById(userId);
+    const isAdmin = user?.role === "admin";
     const { id } = req.params;
-    const config = await MailConfigRepository.findById(parseInt(id), userId);
+
+    const config = await MailConfigRepository.findById(
+      parseInt(id),
+      userId,
+      isAdmin
+    );
 
     if (!config) {
       return res.status(404).json({ error: "Mail config not found" });

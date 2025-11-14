@@ -741,12 +741,35 @@ export class ApiClient {
     }
 
     try {
+      // Build headers with x-user-id like the main request method
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      // Attach x-user-id from localStorage if available
+      try {
+        if (typeof window !== "undefined" && window.localStorage) {
+          const stored = localStorage.getItem("banani_user");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.id) {
+              headers["x-user-id"] = String(parsed.id);
+            }
+          }
+        }
+      } catch (e) {
+        // ignore localStorage parsing errors
+      }
+
       const response = await fetch(`${API_BASE_URL}${path}`, {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
       });
+
+      // Handle 304 Not Modified by returning empty array
+      if (response.status === 304) {
+        return [] as unknown as T;
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

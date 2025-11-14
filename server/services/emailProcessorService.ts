@@ -528,7 +528,9 @@ async function fetchAttachmentData(
       emailId,
     )}/attachments/${encodeURIComponent(attachmentId)}/$value`;
 
-    console.log(`[FetchAttachmentData] Fetching bytes from: ${bytesUrl.substring(0, 80)}...`);
+    console.log(
+      `[FetchAttachmentData] Fetching bytes from: ${bytesUrl.substring(0, 80)}...`,
+    );
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 20000);
@@ -553,7 +555,9 @@ async function fetchAttachmentData(
       // Try to get error details
       try {
         const errorText = await bytesRes.text();
-        console.warn(`[FetchAttachmentData] Error response: ${errorText.substring(0, 200)}`);
+        console.warn(
+          `[FetchAttachmentData] Error response: ${errorText.substring(0, 200)}`,
+        );
       } catch (e) {
         // Ignore
       }
@@ -574,7 +578,10 @@ async function fetchAttachmentData(
     );
     return dataUrl;
   } catch (error) {
-    console.error("[FetchAttachmentData] Error fetching attachment data:", error);
+    console.error(
+      "[FetchAttachmentData] Error fetching attachment data:",
+      error,
+    );
     return null;
   }
 }
@@ -623,7 +630,9 @@ async function fetchEmailAttachments(
     const data = await res.json();
     const allAttachments = Array.isArray(data?.value) ? data.value : [];
 
-    console.log(`[EmailAttachments] Email ${emailId} has ${allAttachments.length} total attachments`);
+    console.log(
+      `[EmailAttachments] Email ${emailId} has ${allAttachments.length} total attachments`,
+    );
 
     // Log attachment details for debugging
     for (const att of allAttachments) {
@@ -726,7 +735,8 @@ function replaceCidReferences(
   );
 
   // First, try to find all cid: references in the HTML to debug
-  const cidMatches = htmlContent.match(/src\s*=\s*["\']cid:[^"\']*["\']*/gi) || [];
+  const cidMatches =
+    htmlContent.match(/src\s*=\s*["\']cid:[^"\']*["\']*/gi) || [];
   console.log(
     `[ReplaceCID] Found ${cidMatches.length} cid: references in HTML: ${cidMatches.slice(0, 5).join(", ")}${cidMatches.length > 5 ? "..." : ""}`,
   );
@@ -744,7 +754,10 @@ function replaceCidReferences(
       // Exact match with quotes
       new RegExp(`src\\s*=\\s*["\']cid:${escapedId}["\']`, "gi"),
       // With optional URL encoding
-      new RegExp(`src\\s*=\\s*["\']cid:${escapedId.replace(/@/g, "%40")}["\']`, "gi"),
+      new RegExp(
+        `src\\s*=\\s*["\']cid:${escapedId.replace(/@/g, "%40")}["\']`,
+        "gi",
+      ),
     ];
 
     let found = false;

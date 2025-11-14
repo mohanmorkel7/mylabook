@@ -9,6 +9,14 @@ interface GraphEmail {
   body?: { contentType?: string; content?: string };
   bodyPreview?: string;
   receivedDateTime?: string;
+  hasAttachments?: boolean;
+  attachments?: Array<{
+    id: string;
+    name: string;
+    contentType?: string;
+    contentId?: string;
+    contentLocation?: string;
+  }>;
 }
 
 interface TicketPayload {

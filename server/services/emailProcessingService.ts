@@ -1,5 +1,6 @@
 import { pool } from "../database/connection";
 import { MailConfigRepository, MailConfig } from "../models/MailConfig";
+import DOMPurify from "isomorphic-dompurify";
 
 interface GraphEmail {
   id: string;

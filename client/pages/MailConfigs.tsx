@@ -85,7 +85,7 @@ export default function MailConfigs() {
     try {
       setIsLoading(true);
       const response = await api.get("/mail-configs");
-      setConfigs(response.data || []);
+      setConfigs(Array.isArray(response) ? response : response.data || []);
     } catch (error) {
       console.error("Error fetching mail configs:", error);
       toast({

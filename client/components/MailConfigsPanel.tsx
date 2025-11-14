@@ -111,23 +111,41 @@ export function MailConfigsPanel({
   const fetchConfigs = async () => {
     try {
       setIsLoading(true);
+      // Debug: Check user ID from multiple sources
+      const userIdFromAuth = user?.id;
+      const userIdFromStorage = (() => {
+        try {
+          const stored = localStorage.getItem("banani_user");
+          return stored ? JSON.parse(stored).id : null;
+        } catch (e) {
+          return null;
+        }
+      })();
+
+      console.log("🔍 Mail Config Fetch Debug:");
+      console.log("  - User from auth context:", userIdFromAuth);
+      console.log("  - User from localStorage:", userIdFromStorage);
+
       const endpoint = user?.id
         ? `/mail-configs?userId=${user.id}`
         : "/mail-configs";
+
+      console.log("  - Fetching from endpoint:", endpoint);
       const response = await api.get(endpoint);
-      console.log("Fetched mail configs response:", response);
-      console.log("Response type:", typeof response);
-      console.log("Response is array?", Array.isArray(response));
-      console.log("Response length:", response?.length);
+
+      console.log("✅ Fetched mail configs response:", response);
+      console.log("  - Response type:", typeof response);
+      console.log("  - Response is array?", Array.isArray(response));
+      console.log("  - Response length:", response?.length);
 
       // Handle both array and object responses
       const configsArray = Array.isArray(response)
         ? response
         : response?.data || response?.configs || [];
-      console.log("Final configs array:", configsArray);
+      console.log("  - Final configs array:", configsArray);
       setConfigs(configsArray);
     } catch (error) {
-      console.error("Error fetching mail configs:", error);
+      console.error("❌ Error fetching mail configs:", error);
       toast({
         title: "Error",
         description: "Failed to load mail configs",

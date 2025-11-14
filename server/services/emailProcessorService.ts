@@ -865,11 +865,12 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
   );
 
   // Helper to parse GraphEmail items and convert to Email[]
-  function parseGraphEmails(
+  async function parseGraphEmails(
     items: any[],
     filterStartDate: Date,
     filterEndDate: Date,
-  ): Email[] {
+    graphToken: string,
+  ): Promise<Email[]> {
     const emails: Email[] = [];
 
     for (const it of items) {
@@ -904,6 +905,17 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
         }
         // Clean up extra whitespace
         bodyText = bodyText.trim();
+      }
+
+      // Process attachments if email has them
+      if (it.hasAttachments) {
+        const attachmentMap = await fetchEmailAttachments(graphToken, it.id);
+        if (attachmentMap.size > 0) {
+          bodyText = replaceCidReferences(bodyText, attachmentMap);
+          console.log(
+            `[EmailProcessing] Replaced ${attachmentMap.size} CID references in email ${it.id}`,
+          );
+        }
       }
 
       const email = {

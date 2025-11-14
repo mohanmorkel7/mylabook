@@ -8,6 +8,16 @@ import { MailConfigService } from "../services/mailConfigService";
 
 const router = express.Router();
 
+// Disable caching for all mail-configs endpoints
+router.use((req, res, next) => {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
+  next();
+});
+
 // Middleware to get user ID from request
 function getUserId(req: Request): number {
   // Try to get user ID from various sources

@@ -91,7 +91,58 @@ export class EmailProcessingService {
       // Build email body for ticket description
       let bodyText = email.bodyPreview || "";
       if (email.body?.content) {
-        bodyText = email.body.content.replace(/<[^>]*>/g, "");
+        // Sanitize HTML to remove XSS attacks while preserving images and formatting
+        const cleanHtml = DOMPurify.sanitize(email.body.content, {
+          ALLOWED_TAGS: [
+            "p",
+            "br",
+            "strong",
+            "b",
+            "em",
+            "i",
+            "u",
+            "a",
+            "img",
+            "table",
+            "tr",
+            "td",
+            "th",
+            "thead",
+            "tbody",
+            "tfoot",
+            "colspan",
+            "rowspan",
+            "blockquote",
+            "pre",
+            "code",
+            "div",
+            "span",
+            "hr",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "ul",
+            "ol",
+            "li",
+          ],
+          ALLOWED_ATTR: [
+            "href",
+            "src",
+            "alt",
+            "title",
+            "width",
+            "height",
+            "style",
+            "class",
+            "colspan",
+            "rowspan",
+          ],
+          ALLOW_DATA_ATTR: false,
+        });
+        bodyText = cleanHtml;
       }
 
       const description = `Email from: ${fromName} <${fromEmail}>

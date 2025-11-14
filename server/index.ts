@@ -175,6 +175,17 @@ export function createServer() {
     next();
   });
 
+  // Disable caching for API routes to prevent 304 responses
+  app.use("/api", (req, res, next) => {
+    // Set cache control headers to prevent browser caching and 304 responses
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+    next();
+  });
+
   // API routes
   app.get("/api/ping", (_req, res) => {
     const ping = process.env.PING_MESSAGE ?? "ping";

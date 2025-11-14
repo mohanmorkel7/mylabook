@@ -718,32 +718,60 @@ function replaceCidReferences(
   let modified = htmlContent;
   let replacementCount = 0;
 
-  console.log(`[ReplaceCID] Processing ${attachmentMap.size} attachments for CID replacement`);
+  console.log(
+    `[ReplaceCID] Processing ${attachmentMap.size} attachments for CID replacement in HTML (length: ${htmlContent.length})`,
+  );
+  console.log(
+    `[ReplaceCID] Available CIDs: ${Array.from(attachmentMap.keys()).join(", ")}`,
+  );
+
+  // First, try to find all cid: references in the HTML to debug
+  const cidMatches = htmlContent.match(/src\s*=\s*["\']cid:[^"\']*["\']*/gi) || [];
+  console.log(
+    `[ReplaceCID] Found ${cidMatches.length} cid: references in HTML: ${cidMatches.slice(0, 5).join(", ")}${cidMatches.length > 5 ? "..." : ""}`,
+  );
 
   // Replace cid: references with data URLs
   for (const [contentId, dataUrl] of attachmentMap.entries()) {
     console.log(`[ReplaceCID] Looking for CID: "${contentId}"`);
 
-    // Match src="cid:anything" pattern more flexibly
-    // The CID value can contain special characters, so we use a more flexible pattern
+    // Match src="cid:contentId" pattern - be very flexible
+    // Match cid: followed by anything until the closing quote
     const escapedId = contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const cidPattern = new RegExp(
-      `src\\s*=\\s*["\']cid:${escapedId}["\']`,
-      "gi",
-    );
 
-    const before = modified;
-    modified = modified.replace(cidPattern, `src="${dataUrl}"`);
+    // Try multiple pattern variations
+    const patterns = [
+      // Exact match with quotes
+      new RegExp(`src\\s*=\\s*["\']cid:${escapedId}["\']`, "gi"),
+      // With optional URL encoding
+      new RegExp(`src\\s*=\\s*["\']cid:${escapedId.replace(/@/g, "%40")}["\']`, "gi"),
+    ];
 
-    if (modified !== before) {
-      replacementCount++;
-      console.log(`[ReplaceCID] ✓ Replaced CID "${contentId}"`);
-    } else {
-      console.log(`[ReplaceCID] No matches found for CID "${contentId}"`);
+    let found = false;
+    for (const pattern of patterns) {
+      const before = modified;
+      modified = modified.replace(pattern, `src="${dataUrl}"`);
+
+      if (modified !== before) {
+        replacementCount++;
+        found = true;
+        console.log(`[ReplaceCID] ✓ Replaced CID "${contentId}" using pattern`);
+        break;
+      }
+    }
+
+    if (!found) {
+      console.log(`[ReplaceCID] ⚠️  No matches found for CID "${contentId}"`);
     }
   }
 
-  console.log(`[ReplaceCID] Total replacements: ${replacementCount}`);
+  console.log(`[ReplaceCID] Total replacements made: ${replacementCount}`);
+  if (replacementCount === 0) {
+    console.warn(
+      "[ReplaceCID] WARNING: No CID references were replaced! Check if CIDs match attachment names.",
+    );
+  }
+
   return modified;
 }
 

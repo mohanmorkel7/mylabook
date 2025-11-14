@@ -69,18 +69,28 @@ export interface UpdateMailConfigData {
 }
 
 export class MailConfigRepository {
-  static async findAll(userId: number): Promise<MailConfig[]> {
-    const query = `
+  static async findAll(userId?: number | null): Promise<MailConfig[]> {
+    let query = `
       SELECT id, user_id, name, description, field_type, field_value,
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
             is_active, created_at, updated_at, last_processed_at
       FROM mail_configs
-      WHERE user_id = $1
-      ORDER BY created_at DESC
     `;
-    const result = await pool.query(query, [userId]);
+
+    const params: any[] = [];
+
+    // If userId is provided, filter by that user. If null/undefined, return all configs
+    if (userId !== null && userId !== undefined) {
+      query += `WHERE user_id = $1
+      ORDER BY created_at DESC`;
+      params.push(userId);
+    } else {
+      query += `ORDER BY created_at DESC`;
+    }
+
+    const result = await pool.query(query, params);
     return result.rows;
   }
 

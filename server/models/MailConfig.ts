@@ -97,17 +97,26 @@ export class MailConfigRepository {
   static async findById(
     id: number,
     userId: number,
+    isAdmin: boolean = false,
   ): Promise<MailConfig | null> {
-    const query = `
+    let query = `
       SELECT id, user_id, name, description, field_type, field_value,
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
             is_active, created_at, updated_at, last_processed_at
       FROM mail_configs
-      WHERE id = $1 AND user_id = $2
-    `;
-    const result = await pool.query(query, [id, userId]);
+      WHERE id = $1`;
+
+    const params: any[] = [id];
+
+    // If not admin, also check user_id
+    if (!isAdmin) {
+      query += ` AND user_id = $2`;
+      params.push(userId);
+    }
+
+    const result = await pool.query(query, params);
     return result.rows[0] || null;
   }
 

@@ -40,6 +40,16 @@ function getUserId(req: Request): number {
 // GET all mail configs for current user
 router.get("/", async (req: Request, res: Response) => {
   try {
+    // Debug: log all possible user ID sources
+    const sources = {
+      "req.userId": (req as any).userId,
+      "req.user?.id": (req as any).user?.id,
+      "req.body?.userId": req.body?.userId,
+      "req.query?.userId": req.query?.userId,
+      "req.headers['x-user-id']": req.headers["x-user-id"],
+    };
+    console.log("User ID sources:", sources);
+
     const userId = getUserId(req);
     const configs = await MailConfigRepository.findAll(userId);
     console.log(

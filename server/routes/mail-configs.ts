@@ -32,23 +32,24 @@ function getUserId(req: Request): number {
   return numericUserId;
 }
 
-// GET all mail configs for current user
+// GET all mail configs for current user (or all configs if admin)
 router.get("/", async (req: Request, res: Response) => {
   try {
-    // Debug: log all possible user ID sources
-    const sources = {
-      "req.userId": (req as any).userId,
-      "req.user?.id": (req as any).user?.id,
-      "req.body?.userId": req.body?.userId,
-      "req.query?.userId": req.query?.userId,
-      "req.headers['x-user-id']": req.headers["x-user-id"],
-    };
-    console.log("User ID sources:", sources);
-
     const userId = getUserId(req);
-    const configs = await MailConfigRepository.findAll(userId);
+
+    // Check if user is an admin
+    const user = await UserRepository.findById(userId);
+    const isAdmin = user?.role === "admin";
+
+    console.log(`User ${userId} requesting mail configs (admin=${isAdmin})`);
+
+    // If admin, fetch all configs. Otherwise, fetch only their own.
+    const configs = await MailConfigRepository.findAll(
+      isAdmin ? null : userId
+    );
+
     console.log(
-      `Fetching mail configs for userId=${userId}: found ${configs.length} configs`,
+      `Returning ${configs.length} mail configs for userId=${userId} (admin=${isAdmin})`,
     );
     res.json(configs);
   } catch (error) {

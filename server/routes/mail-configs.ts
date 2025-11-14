@@ -10,22 +10,16 @@ const router = express.Router();
 
 // Middleware to get user ID from request
 function getUserId(req: Request): number {
-  // Try to get user ID from various sources
+  // Prioritize authenticated user ID sources over query parameters
   let userId: any =
     (req as any).userId ||
     (req as any).user?.id ||
+    req.headers["x-user-id"] ||
     req.body?.userId ||
-    req.query?.userId ||
-    req.headers["x-user-id"];
+    req.query?.userId;
 
   if (!userId) {
-    // For development/testing, default to user ID 1 if not provided
-    // In production, this should require proper authentication
-    userId = process.env.NODE_ENV === "production" ? null : 1;
-  }
-
-  if (!userId) {
-    throw new Error("User ID not provided");
+    throw new Error("User ID not provided. Please ensure you are authenticated.");
   }
 
   // Convert to number if it's a string

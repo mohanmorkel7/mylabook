@@ -207,9 +207,11 @@ router.put("/:id", async (req: Request, res: Response) => {
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
+    const user = await UserRepository.findById(userId);
+    const isAdmin = user?.role === "admin";
     const { id } = req.params;
 
-    const deleted = await MailConfigRepository.delete(parseInt(id), userId);
+    const deleted = await MailConfigRepository.delete(parseInt(id), userId, isAdmin);
 
     if (!deleted) {
       return res.status(404).json({ error: "Mail config not found" });

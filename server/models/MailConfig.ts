@@ -244,9 +244,21 @@ export class MailConfigRepository {
     return result.rows[0] || null;
   }
 
-  static async delete(id: number, userId: number): Promise<boolean> {
-    const query = "DELETE FROM mail_configs WHERE id = $1 AND user_id = $2";
-    const result = await pool.query(query, [id, userId]);
+  static async delete(
+    id: number,
+    userId: number,
+    isAdmin: boolean = false,
+  ): Promise<boolean> {
+    let query = "DELETE FROM mail_configs WHERE id = $1";
+    const params: any[] = [id];
+
+    // If not admin, also check user_id
+    if (!isAdmin) {
+      query += " AND user_id = $2";
+      params.push(userId);
+    }
+
+    const result = await pool.query(query, params);
     return result.rowCount > 0;
   }
 

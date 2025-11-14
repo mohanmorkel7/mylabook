@@ -59,6 +59,7 @@ export class EmailProcessingService {
       case "body":
         let bodyText = email.bodyPreview || "";
         if (email.body?.content) {
+          // Strip HTML tags for text matching (keeps content readable for pattern matching)
           bodyText = email.body.content.replace(/<[^>]*>/g, "");
         }
         emailFieldValue = bodyText.toLowerCase();

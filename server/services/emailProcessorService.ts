@@ -714,21 +714,39 @@ function replaceCidReferences(
   attachmentMap: Map<string, string>,
 ): string {
   if (!htmlContent || attachmentMap.size === 0) {
+    console.log("[ReplaceCID] No attachments to process");
     return htmlContent;
   }
 
   let modified = htmlContent;
+  let replacementCount = 0;
+
+  console.log(`[ReplaceCID] Processing ${attachmentMap.size} attachments for CID replacement`);
 
   // Replace cid: references with data URLs
   for (const [contentId, dataUrl] of attachmentMap.entries()) {
-    // Match src="cid:contentId" and replace with data URL
+    console.log(`[ReplaceCID] Looking for CID: "${contentId}"`);
+
+    // Match src="cid:anything" pattern more flexibly
+    // The CID value can contain special characters, so we use a more flexible pattern
+    const escapedId = contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const cidPattern = new RegExp(
-      `src\\s*=\\s*["\']cid:${contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["\']`,
+      `src\\s*=\\s*["\']cid:${escapedId}["\']`,
       "gi",
     );
+
+    const before = modified;
     modified = modified.replace(cidPattern, `src="${dataUrl}"`);
+
+    if (modified !== before) {
+      replacementCount++;
+      console.log(`[ReplaceCID] ✓ Replaced CID "${contentId}"`);
+    } else {
+      console.log(`[ReplaceCID] No matches found for CID "${contentId}"`);
+    }
   }
 
+  console.log(`[ReplaceCID] Total replacements: ${replacementCount}`);
   return modified;
 }
 
@@ -984,7 +1002,7 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
       );
       if (!email.body) {
         console.warn(
-          `���️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
+          `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
         );
       }
     }

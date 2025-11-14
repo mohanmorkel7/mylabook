@@ -20,7 +20,9 @@ function getUserId(req: Request): number {
     req.query?.userId;
 
   if (!userId) {
-    throw new Error("User ID not provided. Please ensure you are authenticated.");
+    throw new Error(
+      "User ID not provided. Please ensure you are authenticated.",
+    );
   }
 
   // Convert to number if it's a string
@@ -44,9 +46,7 @@ router.get("/", async (req: Request, res: Response) => {
     console.log(`User ${userId} requesting mail configs (admin=${isAdmin})`);
 
     // If admin, fetch all configs. Otherwise, fetch only their own.
-    const configs = await MailConfigRepository.findAll(
-      isAdmin ? null : userId
-    );
+    const configs = await MailConfigRepository.findAll(isAdmin ? null : userId);
 
     console.log(
       `Returning ${configs.length} mail configs for userId=${userId} (admin=${isAdmin})`,
@@ -66,7 +66,7 @@ router.get("/active", async (req: Request, res: Response) => {
     const isAdmin = user?.role === "admin";
 
     const configs = await MailConfigRepository.getActiveConfigs(
-      isAdmin ? null : userId
+      isAdmin ? null : userId,
     );
     res.json(configs);
   } catch (error) {
@@ -86,7 +86,7 @@ router.get("/:id", async (req: Request, res: Response) => {
     const config = await MailConfigRepository.findById(
       parseInt(id),
       userId,
-      isAdmin
+      isAdmin,
     );
 
     if (!config) {
@@ -211,7 +211,11 @@ router.delete("/:id", async (req: Request, res: Response) => {
     const isAdmin = user?.role === "admin";
     const { id } = req.params;
 
-    const deleted = await MailConfigRepository.delete(parseInt(id), userId, isAdmin);
+    const deleted = await MailConfigRepository.delete(
+      parseInt(id),
+      userId,
+      isAdmin,
+    );
 
     if (!deleted) {
       return res.status(404).json({ error: "Mail config not found" });

@@ -520,21 +520,24 @@ async function fetchAttachmentData(
 ): Promise<string | null> {
   try {
     const reconopsEmail = "reconops@mylapay.com";
-    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+
+    // For file attachments, fetch the raw bytes using the $value endpoint
+    const bytesUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       reconopsEmail,
     )}/messages/${encodeURIComponent(
       emailId,
-    )}/attachments/${encodeURIComponent(attachmentId)}?$select=id,name,contentType,contentId,contentLocation,isInline`;
+    )}/attachments/${encodeURIComponent(attachmentId)}/$value`;
+
+    console.log(`[FetchAttachmentData] Fetching bytes from: ${bytesUrl.substring(0, 80)}...`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-    let res;
+    let bytesRes;
     try {
-      res = await fetch(url, {
+      bytesRes = await fetch(bytesUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
         },
         signal: controller.signal,
       });
@@ -542,42 +545,36 @@ async function fetchAttachmentData(
       clearTimeout(timeoutId);
     }
 
-    if (!res.ok) {
-      console.warn(`Failed to fetch attachment: ${res.status}`);
+    if (!bytesRes.ok) {
+      console.warn(
+        `[FetchAttachmentData] Failed to fetch bytes: ${bytesRes.status} ${bytesRes.statusText}`,
+      );
+
+      // Try to get error details
+      try {
+        const errorText = await bytesRes.text();
+        console.warn(`[FetchAttachmentData] Error response: ${errorText.substring(0, 200)}`);
+      } catch (e) {
+        // Ignore
+      }
+
       return null;
     }
 
-    const attachmentData = await res.json();
-
-    // If it's an item attachment, we need to fetch it differently
-    // For now, we'll handle file attachments which have @odata.type = "#microsoft.graph.fileAttachment"
-    if (attachmentData["@odata.type"] === "#microsoft.graph.fileAttachment") {
-      // For file attachments, we need to fetch the raw bytes
-      const bytesUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
-        reconopsEmail,
-      )}/messages/${encodeURIComponent(
-        emailId,
-      )}/attachments/${encodeURIComponent(attachmentId)}/$value`;
-
-      const bytesRes = await fetch(bytesUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!bytesRes.ok) {
-        console.warn(`Failed to fetch attachment bytes: ${bytesRes.status}`);
-        return null;
-      }
-
-      const buffer = await bytesRes.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString("base64");
-      return `data:${contentType};base64,${base64}`;
+    const buffer = await bytesRes.arrayBuffer();
+    if (buffer.byteLength === 0) {
+      console.warn(`[FetchAttachmentData] Empty attachment data`);
+      return null;
     }
 
-    return null;
+    const base64 = Buffer.from(buffer).toString("base64");
+    const dataUrl = `data:${contentType};base64,${base64}`;
+    console.log(
+      `[FetchAttachmentData] ✓ Created data URL (size: ${base64.length} chars)`,
+    );
+    return dataUrl;
   } catch (error) {
-    console.error("Error fetching attachment data:", error);
+    console.error("[FetchAttachmentData] Error fetching attachment data:", error);
     return null;
   }
 }

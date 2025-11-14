@@ -468,7 +468,7 @@ export default function Mails() {
             "Invoice" in the subject.
           </p> */}
         </div>
-        {!needsAuth && (
+        {/* {!needsAuth && (
           <Button
             onClick={() => setConfigPanelOpen(true)}
             variant="outline"
@@ -478,7 +478,17 @@ export default function Mails() {
             <Settings className="h-5 w-5" />
             Config
           </Button>
-        )}
+        )} */}
+
+        <Button
+            onClick={() => setConfigPanelOpen(true)}
+            variant="outline"
+            size="lg"
+            className="flex items-center gap-2"
+          >
+            <Settings className="h-5 w-5" />
+            Config
+          </Button>
       </div>
 
       <Card>

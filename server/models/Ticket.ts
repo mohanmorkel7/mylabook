@@ -701,6 +701,19 @@ export class TicketRepository {
     }
 
     const row = result.rows[0];
+
+    // Fetch watchers for this ticket
+    let watchers: number[] = [];
+    try {
+      const watchersResult = await pool.query(
+        "SELECT user_id FROM ticket_watchers WHERE ticket_id = $1 ORDER BY user_id",
+        [id],
+      );
+      watchers = watchersResult.rows.map((r: any) => r.user_id);
+    } catch (e) {
+      console.warn("Failed to fetch ticket watchers:", e);
+    }
+
     return {
       id: row.id,
       track_id: row.track_id,

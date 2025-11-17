@@ -269,31 +269,21 @@ export default function TicketDetailPage() {
   const saveChanges = async () => {
     if (!ticket) return;
     try {
-      // If ticket is overdue and status is being changed, ensure reason is provided
-      const isExistingOverdue = (() => {
-        try {
-          const sla = (ticket as any).sla_time;
-          const isClosed =
-            (ticket as any).status?.is_closed === true ||
-            /closed/i.test(String((ticket as any).status?.name || ""));
-          if (!sla || isClosed) return false;
-          const slaTs = new Date(sla).getTime();
-          return !isNaN(slaTs) && slaTs < Date.now();
-        } catch (e) {
-          return false;
-        }
-      })();
+      // If the ticket currently has status 'Overdue' and the update moves it away from Overdue,
+      // require a reason. (Automatic or manual moves into Overdue do NOT require reason.)
+      const existingStatusName = String((ticket as any).status?.name || "");
+      const existingIsOverdue = /overdue/i.test(existingStatusName);
+      const willChangeStatus = editData.status_id && editData.status_id !== ticket.status_id;
+      let targetIsOverdue = false;
+      if (willChangeStatus) {
+        const targetStatus = statuses.find((s) => s.id === editData.status_id);
+        targetIsOverdue = /overdue/i.test(String(targetStatus?.name || ""));
+      }
 
-      if (
-        isExistingOverdue &&
-        editData.status_id &&
-        editData.status_id !== ticket.status_id &&
-        (!reason || String(reason).trim() === "")
-      ) {
+      if (existingIsOverdue && willChangeStatus && !targetIsOverdue && (!reason || String(reason).trim() === "")) {
         toast({
           title: "Reason required",
-          description:
-            "Please provide a reason for changing status of an overdue ticket.",
+          description: "Please provide a reason when moving a ticket from Overdue to another status.",
           variant: "destructive",
         });
         return;

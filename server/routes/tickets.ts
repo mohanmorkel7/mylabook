@@ -720,8 +720,13 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
 
       // If the existing status is 'Overdue' and the update moves it to a non-overdue status, require a reason
       try {
-        if (updateData.status_id && updateData.status_id !== existing.status_id) {
-          const existingStatusName = String((existing as any).status?.name || "");
+        if (
+          updateData.status_id &&
+          updateData.status_id !== existing.status_id
+        ) {
+          const existingStatusName = String(
+            (existing as any).status?.name || "",
+          );
           const existingIsOverdue = /overdue/i.test(existingStatusName);
 
           // Lookup target status name
@@ -733,10 +738,12 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
           const targetIsOverdue = /overdue/i.test(String(targetStatusName));
 
           if (existingIsOverdue && !targetIsOverdue) {
-            const reasonVal = updateData.reason || (existing && (existing as any).reason);
+            const reasonVal =
+              updateData.reason || (existing && (existing as any).reason);
             if (!reasonVal || String(reasonVal).trim() === "") {
               return res.status(400).json({
-                error: "Reason is required when moving a ticket from 'Overdue' to another status",
+                error:
+                  "Reason is required when moving a ticket from 'Overdue' to another status",
               });
             }
           }

@@ -1,6 +1,8 @@
 import { pool } from "../database/connection";
 import { MailConfig, MailConfigRepository } from "../models/MailConfig";
 import DOMPurify from "isomorphic-dompurify";
+import { simpleParser } from 'mailparser';
+import fetch from 'node-fetch';
 
 interface GraphEmail {
   id: string;
@@ -118,6 +120,12 @@ export class EmailProcessingService {
         headers: { Authorization: `Bearer ${token_var}` },
       },
     );
+
+    const rawEmail = await res.text();
+    const parsed = await simpleParser(rawEmail);
+
+    console.log(parsed.html); // HTML with inline images replaced by data URLs
+    console.log(parsed.attachments); // contains actual files + inline images
 
     try {
       // Extract email details

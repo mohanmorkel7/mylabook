@@ -627,29 +627,20 @@ export default function TicketDetailPage() {
 
                       {/* If changing status for an overdue ticket, show reason input */}
                       {(() => {
-                        const sla = (ticket as any).sla_time;
-                        const isClosed =
-                          (ticket as any).status?.is_closed === true ||
-                          /closed/i.test(
-                            String((ticket as any).status?.name || ""),
-                          );
-                        const slaTs = sla ? new Date(sla).getTime() : NaN;
-                        const isExistingOverdue =
-                          !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
-                        const willChangeStatus =
-                          editData.status_id &&
-                          editData.status_id !== ticket.status_id;
-                        if (isExistingOverdue && willChangeStatus) {
+                        const existingStatusName = String((ticket as any).status?.name || "");
+                        const existingIsOverdue = /overdue/i.test(existingStatusName);
+                        const willChangeStatus = editData.status_id && editData.status_id !== ticket.status_id;
+                        const targetStatus = statuses.find((s) => s.id === editData.status_id);
+                        const targetIsOverdue = /overdue/i.test(String(targetStatus?.name || ""));
+                        if (existingIsOverdue && willChangeStatus && !targetIsOverdue) {
                           return (
                             <div className="mt-2">
-                              <label className="block text-sm text-gray-600 mb-1">
-                                Reason
-                              </label>
+                              <label className="block text-sm text-gray-600 mb-1">Reason</label>
                               <textarea
                                 className="w-full border rounded p-2 text-sm"
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
-                                placeholder="Reason for changing status of overdue ticket"
+                                placeholder="Reason for moving ticket from Overdue to another status"
                               />
                             </div>
                           );

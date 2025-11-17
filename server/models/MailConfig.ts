@@ -94,31 +94,31 @@ export class MailConfigRepository {
     return result.rows;
   }
 
-  static async findById(
-    id: number,
-    userId: number,
-    isAdmin: boolean = false,
-  ): Promise<MailConfig | null> {
-    let query = `
-      SELECT id, user_id, name, description, field_type, field_value,
-             from_email, to_email, subject_pattern, body_content, body_match_type,
-            project_id, priority_id, assigned_to_id, watcher_user_ids,
-            team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
-      FROM mail_configs
-      WHERE id = $1`;
+  // static async findById(
+  //   id: number,
+  //   userId: number,
+  //   isAdmin: boolean = false,
+  // ): Promise<MailConfig | null> {
+  //   let query = `
+  //     SELECT id, user_id, name, description, field_type, field_value,
+  //            from_email, to_email, subject_pattern, body_content, body_match_type,
+  //           project_id, priority_id, assigned_to_id, watcher_user_ids,
+  //           team_id, bucket_id, status_id, demand,
+  //           is_active, created_at, updated_at, last_processed_at
+  //     FROM mail_configs
+  //     WHERE id = $1`;
 
-    const params: any[] = [id];
+  //   const params: any[] = [id];
 
-    // If not admin, also check user_id
-    if (!isAdmin) {
-      query += ` AND user_id = $2`;
-      params.push(userId);
-    }
+  //   // If not admin, also check user_id
+  //   if (!isAdmin) {
+  //     query += ` AND user_id = $2`;
+  //     params.push(userId);
+  //   }
 
-    const result = await pool.query(query, params);
-    return result.rows[0] || null;
-  }
+  //   const result = await pool.query(query, params);
+  //   return result.rows[0] || null;
+  // }
 
   static async getActiveConfigs(userId?: number | null): Promise<MailConfig[]> {
     let query = `
@@ -141,6 +141,22 @@ export class MailConfigRepository {
     query += ` ORDER BY created_at DESC`;
     const result = await pool.query(query, params);
     return result.rows;
+  }
+
+
+  static async findById(id: number): Promise<MailConfig | null> {
+    const query = `
+      SELECT id, user_id, name, description, field_type, field_value,
+            from_email, to_email, subject_pattern, body_content, body_match_type,
+            project_id, priority_id, assigned_to_id, watcher_user_ids,
+            team_id, bucket_id, status_id, demand,
+            is_active, created_at, updated_at, last_processed_at
+      FROM mail_configs
+      WHERE id = $1
+    `;
+
+    const result = await pool.query(query, [id]);
+    return result.rows[0] || null;
   }
 
   static async create(data: CreateMailConfigData): Promise<MailConfig> {
@@ -183,66 +199,70 @@ export class MailConfigRepository {
   }
 
   static async update(
-    id: number,
-    userId: number,
-    data: UpdateMailConfigData,
-  ): Promise<MailConfig | null> {
-    const setClause: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
+  id: number,
+  userId: number, // no longer used for filtering
+  data: UpdateMailConfigData,
+): Promise<MailConfig | null> {
+  const setClause: string[] = [];
+  const values: any[] = [];
+  let paramIndex = 1;
 
-    // Only allow updating specific columns to prevent SQL injection
-    const allowedColumns = [
-      "name",
-      "description",
-      "field_type",
-      "field_value",
-      "from_email",
-      "to_email",
-      "subject_pattern",
-      "body_content",
-      "body_match_type",
-      "project_id",
-      "priority_id",
-      "assigned_to_id",
-      "watcher_user_ids",
-      "team_id",
-      "bucket_id",
-      "status_id",
-      "demand",
-      "is_active",
-    ];
+  // Only allow updating specific columns
+  const allowedColumns = [
+    "name",
+    "description",
+    "field_type",
+    "field_value",
+    "from_email",
+    "to_email",
+    "subject_pattern",
+    "body_content",
+    "body_match_type",
+    "project_id",
+    "priority_id",
+    "assigned_to_id",
+    "watcher_user_ids",
+    "team_id",
+    "bucket_id",
+    "status_id",
+    "demand",
+    "is_active",
+  ];
 
-    for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined && allowedColumns.includes(key)) {
-        setClause.push(`${key} = $${paramIndex}`);
-        values.push(value);
-        paramIndex++;
-      }
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined && allowedColumns.includes(key)) {
+      setClause.push(`${key} = $${paramIndex}`);
+      values.push(value);
+      paramIndex++;
     }
-
-    if (setClause.length === 0) {
-      return this.findById(id, userId);
-    }
-
-    setClause.push(`updated_at = CURRENT_TIMESTAMP`);
-    values.push(id);
-    values.push(userId);
-
-    const query = `
-      UPDATE mail_configs
-      SET ${setClause.join(", ")}
-      WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
-      RETURNING id, user_id, name, description, field_type, field_value,
-                from_email, to_email, subject_pattern, body_content, body_match_type,
-            project_id, priority_id, assigned_to_id, watcher_user_ids,
-            team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
-    `;
-
-    const result = await pool.query(query, values);
-    return result.rows[0] || null;
   }
+
+  if (setClause.length === 0) {
+    // return config regardless of user
+    return this.findById(id);
+  }
+
+  // Always update timestamp
+  setClause.push(`updated_at = CURRENT_TIMESTAMP`);
+
+  // Add id for WHERE
+  values.push(id);
+
+  const query = `
+    UPDATE mail_configs
+    SET ${setClause.join(", ")}
+    WHERE id = $${paramIndex}
+    RETURNING id, user_id, name, description, field_type, field_value,
+              from_email, to_email, subject_pattern, body_content, body_match_type,
+              project_id, priority_id, assigned_to_id, watcher_user_ids,
+              team_id, bucket_id, status_id, demand,
+              is_active, created_at, updated_at, last_processed_at;
+  `;
+
+  const result = await pool.query(query, values);
+  return result.rows[0] || null;
+}
+
 
   static async delete(
     id: number,

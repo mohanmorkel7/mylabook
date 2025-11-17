@@ -865,7 +865,6 @@ async function fetchAttachmentData(
 
 
 // import fetch from 'node-fetch';
-// import { simpleParser } from 'mailparser';
 
 /**
  * Fetches an email's inline images and replaces cid references in the HTML body.
@@ -1242,7 +1241,7 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
   //     );
   //     if (!email.body) {
   //       console.warn(
-  //         `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
+  //         `⚠�� EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
   //       );
   //     }
   //   }

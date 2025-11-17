@@ -842,7 +842,11 @@ export class TicketRepository {
     const values: any[] = [];
     let paramIndex = 1;
 
-    // Build dynamic update query
+    // Separate watchers from other fields since it's stored in a separate table
+    const watchers = (updateData as any).watchers;
+    delete (updateData as any).watchers;
+
+    // Build dynamic update query (excluding watchers)
     Object.entries(updateData).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
         if (key === "custom_fields") {
@@ -855,19 +859,50 @@ export class TicketRepository {
       }
     });
 
-    if (updates.length === 0) {
-      return currentTicket;
+    if (updates.length > 0) {
+      values.push(id);
+      const updateQuery = `
+        UPDATE tickets
+        SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $${paramIndex}
+        RETURNING *
+      `;
+
+      await pool.query(updateQuery, values);
     }
 
-    values.push(id);
-    const updateQuery = `
-      UPDATE tickets 
-      SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $${paramIndex}
-      RETURNING *
-    `;
+    // Handle watchers separately
+    if (watchers && Array.isArray(watchers)) {
+      try {
+        // Delete existing watchers
+        await pool.query(
+          "DELETE FROM ticket_watchers WHERE ticket_id = $1",
+          [id],
+        );
 
-    await pool.query(updateQuery, values);
+        // Insert new watchers
+        if (watchers.length > 0) {
+          const watcherValues: any[] = [];
+          let watcherParamIndex = 1;
+          const placeholders = watchers
+            .map((watcherId) => {
+              watcherValues.push(id, watcherId);
+              const ph = `($${watcherParamIndex++}, $${watcherParamIndex++})`;
+              return ph;
+            })
+            .join(", ");
+
+          await pool.query(
+            `INSERT INTO ticket_watchers (ticket_id, user_id) VALUES ${placeholders}`,
+            watcherValues,
+          );
+
+          console.log(`[Ticket.update] Updated watchers for ticket ${id}: ${watchers.join(", ")}`);
+        }
+      } catch (e) {
+        console.warn("Failed to update ticket watchers:", e);
+      }
+    }
 
     // Log activities for changes
     for (const [field, newValue] of Object.entries(updateData)) {

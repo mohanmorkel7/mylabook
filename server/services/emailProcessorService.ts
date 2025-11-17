@@ -864,7 +864,6 @@ async function fetchAttachmentData(
 // }
 
 
-// import fetch from 'node-fetch';
 
 /**
  * Fetches an email's inline images and replaces cid references in the HTML body.

@@ -586,26 +586,62 @@ export default function TicketDetailPage() {
                 <div>
                   <div className="text-gray-500 mb-1">Assigned To</div>
                   {isEditingDetails ? (
-                    <Select
-                      value={String(editData.assigned_to_id || "")}
-                      onValueChange={(v) =>
-                        setEditData({
-                          ...editData,
-                          assigned_to_id: parseInt(v),
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select user..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users.map((u) => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            {u.name || u.email || "Unknown"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={openAssignedTo} onOpenChange={setOpenAssignedTo}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          {editData.assigned_to_id
+                            ? users.find((u) => u.id === editData.assigned_to_id)?.name || "Unknown"
+                            : "Select user..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command>
+                          <CommandInput
+                            placeholder="Search users..."
+                            value={searchAssignedTo}
+                            onValueChange={setSearchAssignedTo}
+                          />
+                          <CommandEmpty>No user found.</CommandEmpty>
+                          <CommandList className="max-h-64">
+                            <CommandGroup>
+                              {users
+                                .filter((user) =>
+                                  (user.name || "")
+                                    .toLowerCase()
+                                    .includes(searchAssignedTo.toLowerCase()),
+                                )
+                                .map((user) => (
+                                  <CommandItem
+                                    key={user.id}
+                                    onSelect={() => {
+                                      setEditData({
+                                        ...editData,
+                                        assigned_to_id: user.id,
+                                      });
+                                      setOpenAssignedTo(false);
+                                      setSearchAssignedTo("");
+                                    }}
+                                  >
+                                    <Check
+                                      className={`mr-2 h-4 w-4 ${
+                                        editData.assigned_to_id === user.id
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      }`}
+                                    />
+                                    {user.name || user.email}
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   ) : (
                     <div className="font-medium">{assignedName}</div>
                   )}

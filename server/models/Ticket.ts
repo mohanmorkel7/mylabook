@@ -60,6 +60,7 @@ export interface Ticket {
   category?: TicketCategory;
   creator?: { id: number; name: string; email: string };
   assignee?: { id: number; name: string; email: string };
+  watchers?: number[]; // Array of user IDs watching this ticket
 }
 
 export interface TicketComment {

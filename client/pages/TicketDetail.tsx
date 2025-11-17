@@ -196,6 +196,8 @@ export default function TicketDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [openWatchers, setOpenWatchers] = useState(false);
   const [searchWatchers, setSearchWatchers] = useState("");
+  const [openAssignedTo, setOpenAssignedTo] = useState(false);
+  const [searchAssignedTo, setSearchAssignedTo] = useState("");
 
   const fetchUsers = async () => {
     try {

@@ -229,6 +229,9 @@ Received: ${email.receivedDateTime || "Unknown"}
 
 ${parsed.html}`;
 
+
+console.log("config : ", config);
+
       // Create ticket in app database using TicketRepository
       const ticketData = {
         subject,
@@ -332,6 +335,8 @@ ${parsed.html}`;
             skipped++;
             continue; // Skip if doesn't match config
           }
+
+          console.log("MAin config : ", config)
 
           // Try to create ticket
           const ticketResult = await this.createTicket(email, config);
@@ -457,7 +462,7 @@ export async function getAllActiveConfigs(): Promise<
   const query = `
     SELECT id, user_id, name, description, field_type, field_value,
            from_email, to_email, subject_pattern, body_content, body_match_type,
-           project_id, priority_id, assigned_to_id, watcher_user_ids,
+           project_id, team_id, bucket_id, priority_id, assigned_to_id, watcher_user_ids,
            is_active, demand, created_at, updated_at
     FROM mail_configs
     WHERE is_active = true
@@ -529,7 +534,7 @@ export async function processEmailsForConfigs(
           continue;
         }
 
-        // console.log("config : --------------> ", config);
+        console.log("config : --------------> ", config);
 
         // Create the ticket
         const result = await EmailProcessingService.createTicket(

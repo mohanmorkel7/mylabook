@@ -1,5 +1,7 @@
 import { pool } from "../database/connection";
 import { MailConfig, MailConfigRepository } from "../models/MailConfig";
+import { simpleParser } from 'mailparser';
+import fetch from 'node-fetch';
 
 interface GraphEmail {
   id: string;
@@ -34,6 +36,8 @@ interface TicketPayload {
 const REDMINE_API_URL =
   process.env.REDMINE_API_URL || "https://redmine.example.com/api";
 const REDMINE_API_KEY = process.env.REDMINE_API_KEY || "";
+
+let token_var = "";
 
 export class EmailProcessingService {
   /**
@@ -101,6 +105,29 @@ export class EmailProcessingService {
     email: GraphEmail | any,
     config: MailConfig,
   ): Promise<{ ticketId?: number; success: boolean; error?: string }> {
+
+
+    console.log("token_var : ", token_var)
+    console.log("E mail for create ticket ----------############ >>>>>>>", email.id)
+
+
+    // https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/messages/AAMkADdlMmY5Y2YwLTZmMWUtNGVlMS1hMGMxLWQxNGZiMmY3YzNhMgBGAAAAAACEwkCa8QXVTZa1ldQEESI6BwAcHcQmrQiYRIGeV23A2n8mAAAAAAEMAAAcHcQmrQiYRIGeV23A2n8mAAAWIeBBAAA=/$value
+
+
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/messages/${email.id}/$value`,
+      {
+        headers: { Authorization: `Bearer ${token_var}` },
+      }
+    );
+
+    const rawEmail = await res.text();
+    const parsed = await simpleParser(rawEmail);
+
+    console.log(parsed.html); // HTML with inline images replaced by data URLs
+    console.log(parsed.attachments); // contains actual files + inline images
+
+    
     try {
       // Extract email details
       const subject = email.subject || "(No subject)";
@@ -124,47 +151,87 @@ export class EmailProcessingService {
       // Build email body for ticket description
       let bodyText = "";
 
-      // Handle both GraphEmail format (body as object) and Email format (body as string)
-      if (typeof email.body === "string") {
-        // Email format: body is a string
-        bodyText = email.body;
-        console.log(
-          `✅ Using Email format body (string): ${bodyText.substring(0, 100)}...`,
-        );
-      } else if (email.body?.content) {
-        // GraphEmail format: body is an object with content property
-        bodyText = email.body.content;
-        console.log(
-          `✅ Using GraphEmail format body (object.content): ${bodyText.substring(0, 100)}...`,
-        );
-      } else if (email.bodyPreview) {
-        // Fallback to preview
-        bodyText = email.bodyPreview;
-        console.log(
-          `⚠️ Using bodyPreview fallback: ${bodyText.substring(0, 100)}...`,
-        );
-      } else {
-        console.warn(
-          `⚠️ No body content found for email ${email.id}: body type is ${typeof email.body}, bodyPreview is ${email.bodyPreview ? "present" : "missing"}`,
-        );
-      }
+      // // Handle both GraphEmail format (body as object) and Email format (body as string)
+      // if (typeof email.body === "string") {
+      //   // Email format: body is a string
+      //   bodyText = email.body;
+      //   console.log(
+      //     `✅ Using Email format body (string)------>>>>>>>>>>>>>>>: ${bodyText.substring(0, 100)}...`,
+      //   );
 
-      // Remove Outlook security warnings - use aggressive matching to catch all variations
-      // Match from CAUTION: to "safe." (with any content in between including newlines)
-      bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
-      // If CAUTION is still present, try matching just from CAUTION: to end of line
-      if (bodyText.includes("CAUTION:")) {
-        bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
-      }
-      bodyText = bodyText.trim();
 
-      const description = `Email from: ${fromName} <${fromEmail}>
+      //   bodyText = bodyText.replace(
+      //     /<img\s+[^>]*src=["']([^"']+)["'][^>]*>/gi,
+      //     (match, src) => {
+      //       // Already a data URL
+      //       if (src.startsWith("data:")) return match;
+
+      //       // Normalize CID
+      //       let cid = src.replace(/^cid:/i, "").replace(/[<>]/g, "").trim();
+
+      //       console.log("cid value :::::::::::::::: ", cid)
+
+      //       // Try to find attachment
+      //       let attachment =
+      //         email.attachments?.find((a: any) => a.id?.replace(/[<>]/g, "").trim() === cid) ||
+      //         email.attachments?.find((a: any) => a.contentId?.replace(/[<>]/g, "").trim() === cid);
+
+      //       console.log("attachment value :::::::::::::::: ", attachment)
+
+      //       if (attachment && attachment.contentBytes) {
+      //         const contentType = attachment.contentType || "image/png";
+      //         const dataUrl = `data:${contentType};base64,${attachment.contentBytes}`;
+      //         return match.replace(src, dataUrl);
+      //       }
+
+      //       // Optional: handle Outlook inline images with no attachment
+      //       if (src.includes("data-outlook-trace")) {
+      //         return match.replace(src, "data:image/png;base64,"); // blank placeholder
+      //       }
+
+      //       return match; // leave external images untouched
+      //     }
+      //   );
+
+      //   console.log(
+      //     `✅ bodyText------>>>>>>>>>>>>>>>: ${bodyText.substring(0, 100)}...`,
+      //   );
+
+
+
+      // } else if (email.body?.content) {
+      //   // GraphEmail format: body is an object with content property
+      //   bodyText = email.body.content;
+      //   console.log(
+      //     `✅ Using GraphEmail format body (object.content): ${bodyText.substring(0, 100)}...`,
+      //   );
+      // } else if (email.bodyPreview) {
+      //   // Fallback to preview
+      //   bodyText = email.bodyPreview;
+      //   console.log(
+      //     `⚠️ Using bodyPreview fallback: ${bodyText.substring(0, 100)}...`,
+      //   );
+      // } else {
+      //   console.warn(
+      //     `⚠️ No body content found for email ${email.id}: body type is ${typeof email.body}, bodyPreview is ${email.bodyPreview ? "present" : "missing"}`,
+      //   );
+      // }
+
+      // // Remove Outlook security warnings - use aggressive matching to catch all variations
+      // // Match from CAUTION: to "safe." (with any content in between including newlines)
+      // bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
+      // // If CAUTION is still present, try matching just from CAUTION: to end of line
+      // if (bodyText.includes("CAUTION:")) {
+      //   bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
+      // }
+      // bodyText = bodyText.trim();
+
+      const description = `Email from: ${fromEmail}
 Received: ${email.receivedDateTime || "Unknown"}
-Email ID: ${email.id}
 
 ---
 
-${bodyText}`;
+${parsed.html}`;
 
       // Create ticket in app database using TicketRepository
       const ticketData = {
@@ -466,7 +533,7 @@ export async function processEmailsForConfigs(
           continue;
         }
 
-        console.log("config : --------------> ", config);
+        // console.log("config : --------------> ", config);
 
         // Create the ticket
         const result = await EmailProcessingService.createTicket(
@@ -589,128 +656,289 @@ async function fetchAttachmentData(
 /**
  * Fetch all attachments for an email and return mapping of contentId -> dataUrl
  */
-async function fetchEmailAttachments(
-  token: string,
-  emailId: string,
-): Promise<Map<string, string>> {
+// async function fetchEmailAttachments(
+//   token: string,
+//   emailId: string,
+// ): Promise<Map<string, string>> {
+//   const attachmentMap = new Map<string, string>();
+
+//   try {
+//     const reconopsEmail = "reconops@mylapay.com";
+//     // Remove filter - fetch all attachments and filter on client side
+//     const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+//       reconopsEmail,
+//     )}/messages/${encodeURIComponent(
+//       emailId,
+//     )}/attachments?$select=id,name,contentType,contentId,contentLocation`;
+
+//     const controller = new AbortController();
+//     const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+//     let res;
+//     try {
+//       res = await fetch(url, {
+//         headers: {
+//           Authorization: `Bearer ${token}`,
+//           "Content-Type": "application/json",
+//         },
+//         signal: controller.signal,
+//       });
+//     } finally {
+//       clearTimeout(timeoutId);
+//     }
+
+//     if (!res.ok) {
+//       console.warn(
+//         `[EmailAttachments] Failed to fetch attachments list: ${res.status} ${res.statusText}`,
+//       );
+//       return attachmentMap;
+//     }
+
+//     const data = await res.json();
+//     const allAttachments = Array.isArray(data?.value) ? data.value : [];
+
+//     console.log(
+//       `[EmailAttachments] Email ${emailId} has ${allAttachments.length} total attachments`,
+//     );
+
+//     // Log attachment details for debugging
+//     for (const att of allAttachments) {
+//       console.log(
+//         `[EmailAttachments] - ${att.name} (type: ${att.contentType}, contentId: ${att.contentId || "N/A"})`,
+//       );
+//     }
+
+//     // Filter for image attachments only
+//     const imageAttachments = allAttachments.filter((att: any) => {
+//       const contentType = att.contentType || "";
+//       return contentType.startsWith("image/");
+//     });
+
+//     console.log(
+//       `[EmailAttachments] Found ${imageAttachments.length} image attachments for email ${emailId}`,
+//     );
+
+//     // Fetch each image attachment and convert to data URL
+//     for (const attachment of imageAttachments) {
+//       const contentType = attachment.contentType || "image/png";
+
+//       // Try contentId first, fall back to name or id
+//       let contentId = attachment.contentId;
+//       if (!contentId) {
+//         // Extract filename without extension as contentId if not provided
+//         contentId = attachment.name
+//           ? attachment.name.replace(/\.[^.]+$/, "")
+//           : attachment.id;
+//       }
+
+//       console.log(
+//         `[EmailAttachments] Processing attachment: name="${attachment.name}", contentId="${contentId}"`,
+//       );
+
+//       const dataUrl = await fetchAttachmentData(
+//         token,
+//         emailId,
+//         attachment.id,
+//         contentType,
+//       );
+
+//       if (dataUrl) {
+//         // Store with contentId
+//         attachmentMap.set(contentId, dataUrl);
+
+//         // Also store without angle brackets if present
+//         if (contentId.startsWith("<") && contentId.endsWith(">")) {
+//           const cleanId = contentId.slice(1, -1);
+//           attachmentMap.set(cleanId, dataUrl);
+//           console.log(
+//             `[EmailAttachments] Stored with both "${contentId}" and "${cleanId}"`,
+//           );
+//         }
+
+//         // Also store by name for additional matching
+//         if (attachment.name && attachment.name !== contentId) {
+//           attachmentMap.set(attachment.name, dataUrl);
+//           console.log(
+//             `[EmailAttachments] Also stored by filename "${attachment.name}"`,
+//           );
+//         }
+
+//         console.log(
+//           `[EmailAttachments] ✓ Converted "${attachment.name}" to data URL (${dataUrl.substring(0, 50)}...)`,
+//         );
+//       } else {
+//         console.warn(
+//           `[EmailAttachments] Failed to fetch data for "${attachment.name}"`,
+//         );
+//       }
+//     }
+//   } catch (error) {
+//     console.error("[EmailAttachments] Error fetching attachments:", error);
+//   }
+
+//   return attachmentMap;
+// }
+
+
+// async function fetchEmailAttachments(graphToken: string, messageId: string) {
+//   try {
+//     const response = await fetch(
+//       `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments`, {
+//         method: 'GET',
+//         headers: {
+//           'Authorization': `Bearer ${graphToken}`,
+//           'Content-Type': 'application/json',
+//         },
+//       }
+//     );
+    
+//     if (!response.ok) {
+//       console.error(`[EmailAttachments] Failed to fetch attachments for message ${messageId}: ${response.statusText}`);
+//       return new Map();  // Return empty map on failure
+//     }
+
+//     const data = await response.json();
+//     const attachmentMap = new Map();
+//     if (data.value) {
+//       data.value.forEach((attachment: any) => {
+//         // Map each attachment by its ID (or CID if you're using it)
+//         attachmentMap.set(attachment.id, attachment);
+//       });
+//     }
+
+//     return attachmentMap;
+//   } catch (error) {
+//     console.error('[EmailAttachments] Error fetching attachments:', error);
+//     return new Map();  // Return empty map on error
+//   }
+// }
+
+// async function fetchEmailAttachments(
+//   graphToken: string,
+//   messageId: string,
+//   mailbox: string // e.g., "reconops@mylapay.com"
+// ): Promise<Map<string, string>> {
+//   const attachmentMap = new Map<string, string>();
+
+//   try {
+//     const response = await fetch(
+//       `https://graph.microsoft.com/v1.0/users/${mailbox}/messages/${messageId}/attachments`,
+//       {
+//         method: 'GET',
+//         headers: {
+//           Authorization: `Bearer ${graphToken}`,
+//           'Content-Type': 'application/json',
+//         },
+//       }
+//     );
+
+   
+
+//     if (!response.ok) {
+//       console.error(
+//         `[EmailAttachments] Failed to fetch attachments for message ${messageId}: ${response.status} ${response.statusText}`
+//       );
+//       return attachmentMap; // empty map
+//     }
+
+//     const data = await response.json();
+
+     
+
+//     if (data.value && data.value.length > 0) {
+//       for (const att of data.value) {
+
+//         if(att.isInline)
+//         {
+//           console.log("data.value ----------->>>>>>>>>>>>>>>>", data.value)
+//         }
+//         else{
+//           console.log("not inline data.value ----------->>>>>>>>>>>>>>>>", data.value)
+//         }
+//         // Only process inline images
+//         if (att.isInline && att.contentType?.startsWith('image/') && att.contentId && att.contentBytes) {
+//           const dataUrl = `data:${att.contentType};base64,${att.contentBytes}`;
+//           attachmentMap.set(att.contentId, dataUrl);
+
+//           console.log("attachmentMap----------->>>>>>>>>>>>>>>>", attachmentMap)
+//         }
+//       }
+//     }
+//   } catch (error) {
+//     console.error('[EmailAttachments] Error fetching attachments:', error);
+//   }
+
+//   return attachmentMap;
+// }
+
+
+// import fetch from 'node-fetch';
+// import { simpleParser } from 'mailparser';
+
+/**
+ * Fetches an email's inline images and replaces cid references in the HTML body.
+ * @param graphToken - Microsoft Graph API token
+ * @param messageId - The message ID to fetch
+ * @param mailbox - The mailbox (e.g., "reconops@mylapay.com")
+ */
+export async function fetchEmailAttachments(
+  graphToken: string,
+  messageId: string,
+  mailbox: string
+): Promise<{ htmlBody: string; attachmentMap: Map<string, string> }> {
   const attachmentMap = new Map<string, string>();
+  let htmlBody = '';
 
   try {
-    const reconopsEmail = "reconops@mylapay.com";
-    // Remove filter - fetch all attachments and filter on client side
-    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
-      reconopsEmail,
-    )}/messages/${encodeURIComponent(
-      emailId,
-    )}/attachments?$select=id,name,contentType,contentId,contentLocation`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    let res;
-    try {
-      res = await fetch(url, {
+    // Fetch raw MIME content of the email
+    const response = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages/${messageId}/$value`,
+      {
+        method: 'GET',
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+          Authorization: `Bearer ${graphToken}`,
         },
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    if (!res.ok) {
-      console.warn(
-        `[EmailAttachments] Failed to fetch attachments list: ${res.status} ${res.statusText}`,
-      );
-      return attachmentMap;
-    }
-
-    const data = await res.json();
-    const allAttachments = Array.isArray(data?.value) ? data.value : [];
-
-    console.log(
-      `[EmailAttachments] Email ${emailId} has ${allAttachments.length} total attachments`,
+      }
     );
 
-    // Log attachment details for debugging
-    for (const att of allAttachments) {
-      console.log(
-        `[EmailAttachments] - ${att.name} (type: ${att.contentType}, contentId: ${att.contentId || "N/A"})`,
+    if (!response.ok) {
+      console.error(
+        `[EmailInlineImages] Failed to fetch email ${messageId}: ${response.status} ${response.statusText}`
       );
+      return { htmlBody, attachmentMap };
     }
 
-    // Filter for image attachments only
-    const imageAttachments = allAttachments.filter((att: any) => {
-      const contentType = att.contentType || "";
-      return contentType.startsWith("image/");
-    });
+    const rawEmail = await response.text();
 
-    console.log(
-      `[EmailAttachments] Found ${imageAttachments.length} image attachments for email ${emailId}`,
-    );
+    // Parse the raw email using mailparser
+    const parsed = await simpleParser(rawEmail);
 
-    // Fetch each image attachment and convert to data URL
-    for (const attachment of imageAttachments) {
-      const contentType = attachment.contentType || "image/png";
+    // console.log("parsed fetchEmailAttachments.........................", parsed.subject)
 
-      // Try contentId first, fall back to name or id
-      let contentId = attachment.contentId;
-      if (!contentId) {
-        // Extract filename without extension as contentId if not provided
-        contentId = attachment.name
-          ? attachment.name.replace(/\.[^.]+$/, "")
-          : attachment.id;
-      }
+    htmlBody = parsed.html || parsed.textAsHtml || '';
 
-      console.log(
-        `[EmailAttachments] Processing attachment: name="${attachment.name}", contentId="${contentId}"`,
-      );
-
-      const dataUrl = await fetchAttachmentData(
-        token,
-        emailId,
-        attachment.id,
-        contentType,
-      );
-
-      if (dataUrl) {
-        // Store with contentId
-        attachmentMap.set(contentId, dataUrl);
-
-        // Also store without angle brackets if present
-        if (contentId.startsWith("<") && contentId.endsWith(">")) {
-          const cleanId = contentId.slice(1, -1);
-          attachmentMap.set(cleanId, dataUrl);
-          console.log(
-            `[EmailAttachments] Stored with both "${contentId}" and "${cleanId}"`,
-          );
-        }
-
-        // Also store by name for additional matching
-        if (attachment.name && attachment.name !== contentId) {
-          attachmentMap.set(attachment.name, dataUrl);
-          console.log(
-            `[EmailAttachments] Also stored by filename "${attachment.name}"`,
-          );
-        }
-
-        console.log(
-          `[EmailAttachments] ✓ Converted "${attachment.name}" to data URL (${dataUrl.substring(0, 50)}...)`,
-        );
-      } else {
-        console.warn(
-          `[EmailAttachments] Failed to fetch data for "${attachment.name}"`,
-        );
+    // Extract inline images from attachments
+    for (const att of parsed.attachments) {
+      if (att.contentId) {
+        const dataUrl = `data:${att.contentType};base64,${att.content.toString('base64')}`;
+        attachmentMap.set(att.contentId, dataUrl);
       }
     }
+
+    // Replace all cid references in HTML body with data URLs
+    for (const [cid, dataUrl] of attachmentMap.entries()) {
+      const regex = new RegExp(`cid:${cid}`, 'g');
+      htmlBody = htmlBody.replace(regex, dataUrl);
+    }
+
   } catch (error) {
-    console.error("[EmailAttachments] Error fetching attachments:", error);
+    console.error('[EmailInlineImages] Error fetching or parsing email:', error);
   }
 
-  return attachmentMap;
+  return { htmlBody, attachmentMap };
 }
+
+
 
 /**
  * Replace CID references in email body with data URLs
@@ -893,9 +1121,9 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
 
         // Handle pagination
         nextLink = data?.["@odata.nextLink"] || null;
-        if (nextLink) {
-          console.log(`More emails available, fetching next page...`);
-        }
+        // if (nextLink) {
+        //   console.log(`More emails available, fetching next page...`);
+        // }
       } catch (error) {
         console.error("Error fetching email page:", error);
         break;
@@ -907,6 +1135,10 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
 
   // Use app-only token (delegated token support can be added later if needed)
   const token = await getAppToken();
+
+  // console.log("token : " , token)
+
+  token_var = token;
   if (!token) {
     console.warn("getTodayEmails: no token available, aborting");
     return [];
@@ -959,94 +1191,510 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
     `receivedDateTime ge ${startISO} and receivedDateTime lt ${endISO}`,
   );
 
-  // Helper to parse GraphEmail items and convert to Email[]
-  async function parseGraphEmails(
-    items: any[],
-    filterStartDate: Date,
-    filterEndDate: Date,
-    graphToken: string,
-  ): Promise<Email[]> {
-    const emails: Email[] = [];
+  // // Helper to parse GraphEmail items and convert to Email[]
+  // async function parseGraphEmails(
+  //   items: any[],
+  //   filterStartDate: Date,
+  //   filterEndDate: Date,
+  //   graphToken: string,
+  // ): Promise<Email[]> {
+  //   const emails: Email[] = [];
 
-    for (const it of items) {
-      // Validate email is within the filter date range
-      const emailDate = new Date(it.receivedDateTime);
-      if (emailDate < filterStartDate || emailDate >= filterEndDate) {
-        continue;
-      }
+  //   for (const it of items) {
+  //     // Validate email is within the filter date range
+  //     const emailDate = new Date(it.receivedDateTime);
+  //     if (emailDate < filterStartDate || emailDate >= filterEndDate) {
+  //       continue;
+  //     }
 
-      const fromAddr =
-        (it.from &&
-          it.from.emailAddress &&
-          (it.from.emailAddress.address || it.from.emailAddress.name)) ||
-        "";
-      const toAddr = Array.isArray(it.toRecipients)
-        ? it.toRecipients
-            .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
-            .filter(Boolean)
-            .join(", ")
-        : "";
-      let bodyText =
-        (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+  //     const fromAddr =
+  //       (it.from &&
+  //         it.from.emailAddress &&
+  //         (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+  //       "";
+  //     const toAddr = Array.isArray(it.toRecipients)
+  //       ? it.toRecipients
+  //           .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+  //           .filter(Boolean)
+  //           .join(", ")
+  //       : "";
+  //     let bodyText =
+  //       (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
 
-      // Remove Outlook security warnings
-      if (typeof bodyText === "string") {
-        // Remove CAUTION message - use very aggressive matching to catch all variations
-        // Match from CAUTION: to "safe." (with any content in between including newlines)
-        bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
-        // If CAUTION is still present, try matching just from CAUTION: to end of line
-        if (bodyText.includes("CAUTION:")) {
-          bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
-        }
-        // Clean up extra whitespace
-        bodyText = bodyText.trim();
-      }
+  //     // Remove Outlook security warnings
+  //     if (typeof bodyText === "string") {
+  //       // Remove CAUTION message - use very aggressive matching to catch all variations
+  //       // Match from CAUTION: to "safe." (with any content in between including newlines)
+  //       bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
+  //       // If CAUTION is still present, try matching just from CAUTION: to end of line
+  //       if (bodyText.includes("CAUTION:")) {
+  //         bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
+  //       }
+  //       // Clean up extra whitespace
+  //       bodyText = bodyText.trim();
+  //     }
 
-      // Process attachments if email has them
-      if (it.hasAttachments) {
-        const attachmentMap = await fetchEmailAttachments(graphToken, it.id);
-        if (attachmentMap.size > 0) {
-          bodyText = replaceCidReferences(bodyText, attachmentMap);
-          console.log(
-            `[EmailProcessing] Replaced ${attachmentMap.size} CID references in email ${it.id}`,
-          );
-        }
-      }
+  //     // Process attachments if email has them
+  //     if (it.hasAttachments) {
+  //       const attachmentMap = await fetchEmailAttachments(graphToken, it.id);
+  //       if (attachmentMap.size > 0) {
+  //         bodyText = replaceCidReferences(bodyText, attachmentMap);
+  //         console.log(
+  //           `[EmailProcessing] Replaced ${attachmentMap.size} CID references in email ${it.id}`,
+  //         );
+  //       }
+  //     }
 
-      const email = {
-        id: String(it.id),
-        subject: it.subject || "",
-        from: fromAddr,
-        to: toAddr,
-        body:
-          typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
-        receivedDateTime: it.receivedDateTime,
-      };
+  //     const email = {
+  //       id: String(it.id),
+  //       subject: it.subject || "",
+  //       from: fromAddr,
+  //       to: toAddr,
+  //       body:
+  //         typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+  //       receivedDateTime: it.receivedDateTime,
+  //     };
 
-      emails.push(email);
+  //     emails.push(email);
 
-      // console.log(`📧 EMAIL Subject: "${email.subject}"`);
-      // console.log(`📧 EMAIL From: ${email.from}`);
-      // console.log(`📧 EMAIL To: ${email.to}`);
-      // console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
-      // console.log(
-      //   `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
-      // );
-      const hasTableTags =
-        email.body.includes("<table") || email.body.includes("<TABLE");
-      const hasHTMLTags = /<[^>]+>/.test(email.body);
-      console.log(
-        `📧 EMAIL Has HTML: ${hasHTMLTags} | Has Tables: ${hasTableTags}`,
+  //     // console.log(`📧 EMAIL Subject: "${email.subject}"`);
+  //     // console.log(`📧 EMAIL From: ${email.from}`);
+  //     // console.log(`📧 EMAIL To: ${email.to}`);
+  //     // console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);
+  //     // console.log(
+  //     //   `📧 EMAIL Body Length: ${email.body.length} chars | First 150 chars: "${email.body.substring(0, 150)}..."`,
+  //     // );
+  //     const hasTableTags =
+  //       email.body.includes("<table") || email.body.includes("<TABLE");
+  //     const hasHTMLTags = /<[^>]+>/.test(email.body);
+  //     console.log(
+  //       `📧 EMAIL Has HTML: ${hasHTMLTags} | Has Tables: ${hasTableTags}`,
+  //     );
+  //     if (!email.body) {
+  //       console.warn(
+  //         `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
+  //       );
+  //     }
+  //   }
+
+  //   return emails;
+  // }
+
+//  // Helper to parse GraphEmail items and convert to Email[]
+// async function parseGraphEmails(
+//   items: any[],
+//   filterStartDate: Date,
+//   filterEndDate: Date,
+//   graphToken: string,
+// ): Promise<Email[]> {
+//   const emails: Email[] = [];
+
+//   for (const it of items) {
+//     // Validate email is within the filter date range
+//     const emailDate = new Date(it.receivedDateTime);
+//     if (emailDate < filterStartDate || emailDate >= filterEndDate) {
+//       continue;
+//     }
+
+//     const fromAddr =
+//       (it.from &&
+//         it.from.emailAddress &&
+//         (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+//       "";
+//     const toAddr = Array.isArray(it.toRecipients)
+//       ? it.toRecipients
+//           .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+//           .filter(Boolean)
+//           .join(", ")
+//       : "";
+//     let bodyText =
+//       (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+
+//     // Remove Outlook security warnings
+//     if (typeof bodyText === "string") {
+//       bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
+//       if (bodyText.includes("CAUTION:")) {
+//         bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
+//       }
+//       bodyText = bodyText.trim();
+//     }
+
+//     // console.log("Token : ", graphToken)
+
+//     // Process attachments if email has them
+//     if (it.hasAttachments) {
+//       const attachmentMap = await fetchEmailAttachments(graphToken, it.id, "reconops@mylapay.com");
+      
+//       if (attachmentMap.size > 0) {
+//         // Replace CID references with image data URLs in both body and attachments
+//         bodyText = await replaceCidReferencesWithDataUrls(bodyText, attachmentMap, graphToken);
+
+
+//         console.log(
+//           `[EmailProcessing] Replaced ${bodyText} CID references in email ${it.id}`
+//         );
+//       }
+//     }
+
+//     const email = {
+//       id: String(it.id),
+//       subject: it.subject || "",
+//       from: fromAddr,
+//       to: toAddr,
+//       body:
+//         typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+//       receivedDateTime: it.receivedDateTime,
+//     };
+
+//     emails.push(email);
+
+//     // Check for HTML and Table tags in the body
+//     const hasTableTags =
+//       email.body.includes("<table") || email.body.includes("<TABLE");
+//     const hasHTMLTags = /<[^>]+>/.test(email.body);
+//     console.log(
+//       `📧 EMAIL Has HTML: ${hasHTMLTags} | Has Tables: ${hasTableTags}`
+//     );
+
+//     if (!email.body) {
+//       console.warn(
+//         `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`
+//       );
+//     }
+//   }
+
+//   return emails;
+// }
+
+
+// Helper to parse GraphEmail items and convert to Email[]
+async function parseGraphEmails(
+  items: any[],
+  filterStartDate: Date,
+  filterEndDate: Date,
+  graphToken: string
+): Promise<Email[]> {
+
+  const emails: Email[] = [];
+  const sharedMailbox = "reconops@mylapay.com"; // STATIC mailbox used for attachments
+
+  for (const it of items) {
+
+    // Skip emails outside date filter
+    const emailDate = new Date(it.receivedDateTime);
+    if (emailDate < filterStartDate || emailDate >= filterEndDate) {
+      continue;
+    }
+
+    const fromAddr =
+      (it.from &&
+        it.from.emailAddress &&
+        (it.from.emailAddress.address || it.from.emailAddress.name)) ||
+      "";
+
+    const toAddr = Array.isArray(it.toRecipients)
+      ? it.toRecipients
+          .map((r: any) => r.emailAddress?.address || r.emailAddress?.name)
+          .filter(Boolean)
+          .join(", ")
+      : "";
+
+    let bodyText =
+      (it.body && (it.body.content || it.body.text)) || it.bodyPreview || "";
+
+    // Remove Outlook security warnings
+    if (typeof bodyText === "string") {
+      bodyText = bodyText.replace(/CAUTION:[\s\S]*?safe\./gi, "");
+      bodyText = bodyText.replace(/CAUTION:[^\n\r]*[\n\r]*/gi, "");
+      bodyText = bodyText.trim();
+    }
+
+    // ---------------------------
+    // PROCESS ATTACHMENTS + CID REPLACEMENT
+    // ---------------------------
+    if (it.hasAttachments) {
+      const attachmentMap = await fetchEmailAttachments(
+        graphToken,
+        it.id,
+        sharedMailbox
       );
-      if (!email.body) {
-        console.warn(
-          `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(it.body)} | it.bodyPreview=${it.bodyPreview}`,
+
+      if (attachmentMap.size > 0) {
+        bodyText = await replaceCidReferencesWithDataUrls(
+          bodyText,
+          attachmentMap,
+          graphToken,
+          sharedMailbox, // MUST PASS
+          it.id          // MUST PASS
+        );
+
+        console.log(
+          `[EmailProcessing] Replaced CID references in email ${it.id}`
         );
       }
     }
 
-    return emails;
+    // Build final email object
+    const email = {
+      id: String(it.id),
+      subject: it.subject || "",
+      from: fromAddr,
+      to: toAddr,
+      body: typeof bodyText === "string" ? bodyText : JSON.stringify(bodyText),
+      receivedDateTime: it.receivedDateTime,
+    };
+
+
+    // console.log("email : ", email)
+
+    // console.log("Message_id : ", it.id)
+
+    
+    emails.push(email);
+
+    // Detect HTML + tables for logging
+    const hasTableTags =
+      email.body.includes("<table") || email.body.includes("<TABLE");
+    const hasHTMLTags = /<[^>]+>/.test(email.body);
+
+    // console.log(
+    //   `📧 EMAIL Has HTML: ${hasHTMLTags} | Has Tables: ${hasTableTags}`
+    // );
+
+    // if (!email.body) {
+    //   console.warn(
+    //     `⚠️ EMPTY BODY for email ${email.id}: it.body=${JSON.stringify(
+    //       it.body
+    //     )} | it.bodyPreview=${it.bodyPreview}`
+    //   );
+    // }
   }
+
+  return emails;
+}
+
+
+// // Helper function to replace CID references with data URLs for inline images (both attachments and embedded)
+// async function replaceCidReferencesWithDataUrls(
+//   bodyText: string,
+//   attachmentMap: Map<string, any>,
+//   graphToken: string
+// ): Promise<string> {
+//   // Regex to find CID references in the email body (e.g., "cid:xxxxx")
+//   const cidRegex = /cid:([a-zA-Z0-9_\-\.]+)/g;
+//   let matches;
+  
+//   while ((matches = cidRegex.exec(bodyText)) !== null) {
+//     const cid = matches[1];
+    
+//     // Check if this CID exists in the attachment map
+//     const attachment = attachmentMap.get(cid);
+//     if (attachment) {
+//       // Fetch the image content using the attachment ID
+//       const imageDataUrl = await getImageDataUrl(graphToken, attachment.id);
+      
+//       // Replace CID reference with the data URL in the email body
+//       bodyText = bodyText.replace(matches[0], imageDataUrl);
+//       console.log(`[EmailProcessing] Replaced CID: ${cid} with Data URL.`);
+//     } else {
+//       console.warn(`[EmailProcessing] CID: ${cid} not found in attachments.`);
+//     }
+//   }
+
+//   return bodyText;
+// }
+
+// // Helper function to fetch the image data URL for a given attachment ID
+// async function getImageDataUrl(graphToken: string, attachmentId: string): Promise<string> {
+//   const imageData = await fetchAttachmentData(graphToken, attachmentId);
+//   const dataUrl = `data:${imageData.contentType};base64,${imageData.content}`;
+//   return dataUrl;
+// }
+
+
+function normalizeCid(cid: string): string {
+  return cid.replace(/^<|>$/g, "").trim();
+}
+
+function findAttachment(attachmentMap: Map<string, any>, cid: string) {
+  const normalized = normalizeCid(cid);
+
+  // 1. Try direct CID match
+  if (attachmentMap.has(normalized)) {
+    return attachmentMap.get(normalized);
+  }
+
+  // 2. Try filename match fallback (image001.png)
+  for (const att of attachmentMap.values()) {
+    if (att.name && normalized.startsWith(att.name)) {
+      return att;
+    }
+  }
+
+  return null;
+}
+
+
+// -----------------------------------------------------
+// REPLACE cid:XXXXX REFERENCES WITH DATA URL IMAGES
+// -----------------------------------------------------
+async function replaceCidReferencesWithDataUrls(
+  bodyText: string,
+  attachmentMap: Map<string, any>,
+  graphToken: string,
+  sharedMailbox: string,
+  messageId: string
+): Promise<string> {
+
+  const cidRegex = /cid:<?([^"' >]+)>?/g;
+  const matches = Array.from(bodyText.matchAll(cidRegex));
+
+  for (const match of matches) {
+    const fullCid = match[0];
+    const cid = normalizeCid(match[1]);
+
+    // console.log("attachmentMap : ", attachmentMap);
+
+    const attachment = findAttachment(attachmentMap, cid);
+
+    
+
+    if(cid =="image002.png@01DC5558.54BC1E90")
+    {
+      console.log("cid : ", cid);
+      console.log("attachment : ", attachment);
+    }
+
+    if (!attachment) {
+      console.warn(`⚠ CID not found in attachments: ${cid}`);
+      continue;
+    }
+
+
+    // try {
+    //   const dataUrl = await getImageDataUrl(
+    //     graphToken,
+    //     sharedMailbox,
+    //     messageId,
+    //     attachment.id
+    //   );
+
+    //   bodyText = bodyText.split(fullCid).join(dataUrl);
+    //   console.log(`[OK] Replaced CID: ${cid}`);
+    // } catch (err) {
+    //   console.error(`❌ Failed CID replace: ${cid}`, err);
+    // }
+
+    // if(attachment.startsWith("data:image/"))
+    // {
+    //   // console.log("working in data:image/ ------------------------------------------>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    //   bodyText = bodyText.split(fullCid).join(attachment);
+    // }
+    // else
+    // {
+
+    //     console.log("working without data:image/ ------------------------------------------>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
+    //     console.log(attachment);
+    //   try {
+    //         const dataUrl = await getImageDataUrl(
+    //           graphToken,
+    //           sharedMailbox,
+    //           messageId,
+    //           attachment.id
+    //         );
+
+    //         bodyText = bodyText.split(fullCid).join(dataUrl);
+    //         console.log(`[OK] Replaced CID: ${cid}`);
+    //       } catch (err) {
+    //         console.error(`❌ Failed CID replace: ${cid}`, err);
+    //       }
+    // }
+
+    
+  }
+
+  return bodyText;
+}
+
+
+/**
+ * Example function to fetch attachment content from Microsoft Graph and return a Data URL.
+ * Replace this with your actual Graph API call.
+ */
+// async function getImageDataUrl(graphToken: string, attachmentId: string): Promise<string> {
+//   // Example using fetch to Microsoft Graph API
+//   const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${attachmentId}/$value`, {
+//     headers: { Authorization: `Bearer ${graphToken}` },
+//   });
+//   const blob = await response.blob();
+//   return new Promise<string>((resolve, reject) => {
+//     const reader = new FileReader();
+//     reader.onloadend = () => resolve(reader.result as string);
+//     reader.onerror = reject;
+//     reader.readAsDataURL(blob);
+//   });
+// }
+
+
+async function getImageDataUrl(
+  graphToken: string, 
+  sharedMailbox: string,
+  messageId: string,
+  attachmentId: string
+): Promise<string> {
+
+  console.log("sharedMailbox : ", sharedMailbox)
+  console.log("messageId : ", messageId)
+  console.log("attachmentId : ", attachmentId)
+
+  const url = `https://graph.microsoft.com/v1.0/users/${sharedMailbox}/messages/${messageId}/attachments/${attachmentId}/$value`;
+
+  const response = await fetch(url, {
+    headers: { 
+      Authorization: `Bearer ${graphToken}` 
+    }
+  });
+
+  if (!response.ok) {
+    console.error(`❌ Failed to load attachment ${attachmentId}: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to fetch attachment content`);
+  }
+
+  const blob = await response.blob();
+
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+
+
+// Helper function to fetch the attachment data (binary content)
+async function fetchAttachmentData(graphToken: string, attachmentId: string): Promise<{ contentType: string, content: string }> {
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/me/messages/${attachmentId}/$value`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${graphToken}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  
+  const contentType = response.headers.get("Content-Type");
+  const buffer = await response.arrayBuffer();
+  const base64Content = Buffer.from(buffer).toString('base64');
+  
+  return {
+    contentType: contentType || 'image/jpeg', // Default to image/jpeg if content type is missing
+    content: base64Content,
+  };
+}
+
 
   try {
     // Try 1: Direct access to shared mailbox with pagination

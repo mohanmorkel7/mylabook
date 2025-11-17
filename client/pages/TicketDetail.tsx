@@ -586,7 +586,10 @@ export default function TicketDetailPage() {
                 <div>
                   <div className="text-gray-500 mb-1">Assigned To</div>
                   {isEditingDetails ? (
-                    <Popover open={openAssignedTo} onOpenChange={setOpenAssignedTo}>
+                    <Popover
+                      open={openAssignedTo}
+                      onOpenChange={setOpenAssignedTo}
+                    >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
@@ -594,7 +597,9 @@ export default function TicketDetailPage() {
                           className="w-full justify-between"
                         >
                           {editData.assigned_to_id
-                            ? users.find((u) => u.id === editData.assigned_to_id)?.name || "Unknown"
+                            ? users.find(
+                                (u) => u.id === editData.assigned_to_id,
+                              )?.name || "Unknown"
                             : "Select user..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>

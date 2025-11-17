@@ -1,7 +1,6 @@
 import { pool } from "../database/connection";
 import { MailConfig, MailConfigRepository } from "../models/MailConfig";
-import { simpleParser } from 'mailparser';
-import fetch from 'node-fetch';
+import DOMPurify from "isomorphic-dompurify";
 
 interface GraphEmail {
   id: string;

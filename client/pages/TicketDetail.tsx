@@ -202,15 +202,29 @@ export default function TicketDetailPage() {
   const fetchUsers = async () => {
     try {
       const resp = await api.get("/users");
-      const usersList = resp.data?.users ?? resp.data ?? [];
+
+      // Normalize different possible response shapes. api.get returns parsed JSON.
+      let usersList: any[] = [];
+      if (Array.isArray(resp)) {
+        usersList = resp as any[];
+      } else if (resp && Array.isArray((resp as any).users)) {
+        usersList = (resp as any).users;
+      } else if (resp && Array.isArray((resp as any).data)) {
+        usersList = (resp as any).data;
+      } else if (resp && Array.isArray((resp as any).result)) {
+        usersList = (resp as any).result;
+      } else if (resp && typeof resp === "object") {
+        // Fallback: collect object values that look like user objects
+        usersList = Object.values(resp).filter((v) => v && typeof v === "object");
+      }
+
       const normalized = (usersList as any[]).map((u) => {
-        const fullName =
-          `${u.firstname || u.first_name || ""} ${u.lastname || u.last_name || ""}`.trim();
+        const fullName = `${u.firstname || u.first_name || u.firstName || ""} ${u.lastname || u.last_name || u.lastName || ""}`.trim();
         return {
           id: Number(u.id),
           name: u.name ?? (fullName || u.email),
-          firstname: u.firstname || u.first_name,
-          lastname: u.lastname || u.last_name,
+          firstname: u.firstname || u.first_name || u.firstName,
+          lastname: u.lastname || u.last_name || u.lastName,
           email: u.email,
         };
       });

@@ -825,6 +825,7 @@ export class TicketRepository {
             email: row.assignee_email,
           }
         : undefined,
+      watchers,
     };
   }
 

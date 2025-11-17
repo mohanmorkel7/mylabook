@@ -292,7 +292,8 @@ export default function TicketDetailPage() {
       ) {
         toast({
           title: "Reason required",
-          description: "Please provide a reason for changing status of an overdue ticket.",
+          description:
+            "Please provide a reason for changing status of an overdue ticket.",
           variant: "destructive",
         });
         return;
@@ -639,14 +640,21 @@ export default function TicketDetailPage() {
                         const sla = (ticket as any).sla_time;
                         const isClosed =
                           (ticket as any).status?.is_closed === true ||
-                          /closed/i.test(String((ticket as any).status?.name || ""));
+                          /closed/i.test(
+                            String((ticket as any).status?.name || ""),
+                          );
                         const slaTs = sla ? new Date(sla).getTime() : NaN;
-                        const isExistingOverdue = !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
-                        const willChangeStatus = editData.status_id && editData.status_id !== ticket.status_id;
+                        const isExistingOverdue =
+                          !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
+                        const willChangeStatus =
+                          editData.status_id &&
+                          editData.status_id !== ticket.status_id;
                         if (isExistingOverdue && willChangeStatus) {
                           return (
                             <div className="mt-2">
-                              <label className="block text-sm text-gray-600 mb-1">Reason</label>
+                              <label className="block text-sm text-gray-600 mb-1">
+                                Reason
+                              </label>
                               <textarea
                                 className="w-full border rounded p-2 text-sm"
                                 value={reason}

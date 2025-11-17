@@ -273,17 +273,24 @@ export default function TicketDetailPage() {
       // require a reason. (Automatic or manual moves into Overdue do NOT require reason.)
       const existingStatusName = String((ticket as any).status?.name || "");
       const existingIsOverdue = /overdue/i.test(existingStatusName);
-      const willChangeStatus = editData.status_id && editData.status_id !== ticket.status_id;
+      const willChangeStatus =
+        editData.status_id && editData.status_id !== ticket.status_id;
       let targetIsOverdue = false;
       if (willChangeStatus) {
         const targetStatus = statuses.find((s) => s.id === editData.status_id);
         targetIsOverdue = /overdue/i.test(String(targetStatus?.name || ""));
       }
 
-      if (existingIsOverdue && willChangeStatus && !targetIsOverdue && (!reason || String(reason).trim() === "")) {
+      if (
+        existingIsOverdue &&
+        willChangeStatus &&
+        !targetIsOverdue &&
+        (!reason || String(reason).trim() === "")
+      ) {
         toast({
           title: "Reason required",
-          description: "Please provide a reason when moving a ticket from Overdue to another status.",
+          description:
+            "Please provide a reason when moving a ticket from Overdue to another status.",
           variant: "destructive",
         });
         return;
@@ -627,15 +634,31 @@ export default function TicketDetailPage() {
 
                       {/* If changing status for an overdue ticket, show reason input */}
                       {(() => {
-                        const existingStatusName = String((ticket as any).status?.name || "");
-                        const existingIsOverdue = /overdue/i.test(existingStatusName);
-                        const willChangeStatus = editData.status_id && editData.status_id !== ticket.status_id;
-                        const targetStatus = statuses.find((s) => s.id === editData.status_id);
-                        const targetIsOverdue = /overdue/i.test(String(targetStatus?.name || ""));
-                        if (existingIsOverdue && willChangeStatus && !targetIsOverdue) {
+                        const existingStatusName = String(
+                          (ticket as any).status?.name || "",
+                        );
+                        const existingIsOverdue = /overdue/i.test(
+                          existingStatusName,
+                        );
+                        const willChangeStatus =
+                          editData.status_id &&
+                          editData.status_id !== ticket.status_id;
+                        const targetStatus = statuses.find(
+                          (s) => s.id === editData.status_id,
+                        );
+                        const targetIsOverdue = /overdue/i.test(
+                          String(targetStatus?.name || ""),
+                        );
+                        if (
+                          existingIsOverdue &&
+                          willChangeStatus &&
+                          !targetIsOverdue
+                        ) {
                           return (
                             <div className="mt-2">
-                              <label className="block text-sm text-gray-600 mb-1">Reason</label>
+                              <label className="block text-sm text-gray-600 mb-1">
+                                Reason
+                              </label>
                               <textarea
                                 className="w-full border rounded p-2 text-sm"
                                 value={reason}

@@ -718,38 +718,26 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
           .json({ error: "Forbidden: not allowed to update ticket" });
       }
 
-      // If the existing ticket is overdue and the status is being changed away, require a reason
+      // If the update is changing the status to an "Overdue" status, require a reason
       try {
-        const isExistingOverdue = (() => {
-          try {
-            const sla = (existing as any).sla_time;
-            const isClosed =
-              (existing as any).status?.is_closed === true ||
-              /closed/i.test(String((existing as any).status?.name || ""));
-            if (!sla || isClosed) return false;
-            const slaTs = new Date(sla).getTime();
-            return !isNaN(slaTs) && slaTs < Date.now();
-          } catch (e) {
-            return false;
-          }
-        })();
-
-        if (
-          isExistingOverdue &&
-          updateData.status_id &&
-          updateData.status_id !== existing.status_id
-        ) {
-          const reasonVal =
-            updateData.reason || (existing && (existing as any).reason);
-          if (!reasonVal || String(reasonVal).trim() === "") {
-            return res.status(400).json({
-              error:
-                "Reason is required when changing status of an overdue ticket",
-            });
+        if (updateData.status_id && updateData.status_id !== existing.status_id) {
+          // Lookup target status name
+          const statusRes = await pool.query(
+            "SELECT name FROM ticket_statuses WHERE id = $1",
+            [updateData.status_id],
+          );
+          const targetStatusName = statusRes.rows[0]?.name || "";
+          if (/overdue/i.test(String(targetStatusName))) {
+            const reasonVal = updateData.reason || (existing && (existing as any).reason);
+            if (!reasonVal || String(reasonVal).trim() === "") {
+              return res.status(400).json({
+                error: "Reason is required when changing status to 'Overdue'",
+              });
+            }
           }
         }
       } catch (e) {
-        // ignore
+        // ignore and continue
       }
 
       const ticket = await TicketRepository.update(id, updateData, updatedBy);

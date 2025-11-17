@@ -318,6 +318,15 @@ export default function TicketDetailPage() {
     fetchStatuses();
   }, [id]);
 
+  // Clear search input when popovers open so stale filters don't hide users
+  useEffect(() => {
+    if (openAssignedTo) setSearchAssignedTo("");
+  }, [openAssignedTo]);
+
+  useEffect(() => {
+    if (openWatchers) setSearchWatchers("");
+  }, [openWatchers]);
+
   const postComment = async () => {
     if (!id || !commentText) return;
     try {
@@ -632,11 +641,15 @@ export default function TicketDetailPage() {
                           <CommandList className="max-h-64">
                             <CommandGroup>
                               {users
-                                .filter((user) =>
-                                  (user.name || "")
-                                    .toLowerCase()
-                                    .includes(searchAssignedTo.toLowerCase()),
-                                )
+                                .filter((user) => {
+                                  const displayName =
+                                    user.name || `${user.firstname || ''} ${user.lastname || ''}`.trim();
+                                  const q = searchAssignedTo.toLowerCase();
+                                  return (
+                                    displayName.toLowerCase().includes(q) ||
+                                    (user.email || '').toLowerCase().includes(q)
+                                  );
+                                })
                                 .map((user) => (
                                   <CommandItem
                                     key={user.id}
@@ -656,7 +669,7 @@ export default function TicketDetailPage() {
                                           : "opacity-0"
                                       }`}
                                     />
-                                    {user.name || user.email}
+                                    {user.name || user.email || `${user.firstname || ''} ${user.lastname || ''}`}
                                   </CommandItem>
                                 ))}
                             </CommandGroup>
@@ -699,11 +712,15 @@ export default function TicketDetailPage() {
                           <CommandList className="max-h-64">
                             <CommandGroup>
                               {users
-                                .filter((user) =>
-                                  (user.name || "")
-                                    .toLowerCase()
-                                    .includes(searchWatchers.toLowerCase()),
-                                )
+                                .filter((user) => {
+                                  const displayName =
+                                    user.name || `${user.firstname || ''} ${user.lastname || ''}`.trim();
+                                  const q = searchWatchers.toLowerCase();
+                                  return (
+                                    displayName.toLowerCase().includes(q) ||
+                                    (user.email || '').toLowerCase().includes(q)
+                                  );
+                                })
                                 .map((user) => (
                                   <CommandItem
                                     key={user.id}
@@ -735,7 +752,7 @@ export default function TicketDetailPage() {
                                           : "opacity-0"
                                       }`}
                                     />
-                                    {user.name || user.email}
+                                    {user.name || user.email || `${user.firstname || ''} ${user.lastname || ''}`}
                                   </CommandItem>
                                 ))}
                             </CommandGroup>

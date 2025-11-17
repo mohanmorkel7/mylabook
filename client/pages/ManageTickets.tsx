@@ -968,26 +968,18 @@ export default function ManageTickets() {
                             </div>
                           </div>
 
-                          <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: ((): string => {
-                                  try {
-                                    const raw = ticket.description || "";
-                                    const parser = new DOMParser();
-                                    const doc = parser.parseFromString(
-                                      raw,
-                                      "text/html",
-                                    );
-                                    const plainText =
-                                      doc.body.textContent || "";
-                                    return plainText;
-                                  } catch (e) {
-                                    return ticket.description || "";
-                                  }
-                                })(),
-                              }}
-                            />
+                          <div className="mt-2 mb-3 text-sm text-gray-700 whitespace-pre-wrap">
+                            {(() => {
+                              try {
+                                const raw = ticket.description || "";
+                                const parser = new DOMParser();
+                                const doc = parser.parseFromString(raw, "text/html");
+                                const plainText = doc.body.textContent || "";
+                                return <div>{plainText}</div>;
+                              } catch (e) {
+                                return <div>{ticket.description || ""}</div>;
+                              }
+                            })()}
                           </div>
 
                           <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">

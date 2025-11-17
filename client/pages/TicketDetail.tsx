@@ -643,11 +643,12 @@ export default function TicketDetailPage() {
                               {users
                                 .filter((user) => {
                                   const displayName =
-                                    user.name || `${user.firstname || ''} ${user.lastname || ''}`.trim();
+                                    user.name ||
+                                    `${user.firstname || ""} ${user.lastname || ""}`.trim();
                                   const q = searchAssignedTo.toLowerCase();
                                   return (
                                     displayName.toLowerCase().includes(q) ||
-                                    (user.email || '').toLowerCase().includes(q)
+                                    (user.email || "").toLowerCase().includes(q)
                                   );
                                 })
                                 .map((user) => (
@@ -669,7 +670,9 @@ export default function TicketDetailPage() {
                                           : "opacity-0"
                                       }`}
                                     />
-                                    {user.name || user.email || `${user.firstname || ''} ${user.lastname || ''}`}
+                                    {user.name ||
+                                      user.email ||
+                                      `${user.firstname || ""} ${user.lastname || ""}`}
                                   </CommandItem>
                                 ))}
                             </CommandGroup>
@@ -714,11 +717,12 @@ export default function TicketDetailPage() {
                               {users
                                 .filter((user) => {
                                   const displayName =
-                                    user.name || `${user.firstname || ''} ${user.lastname || ''}`.trim();
+                                    user.name ||
+                                    `${user.firstname || ""} ${user.lastname || ""}`.trim();
                                   const q = searchWatchers.toLowerCase();
                                   return (
                                     displayName.toLowerCase().includes(q) ||
-                                    (user.email || '').toLowerCase().includes(q)
+                                    (user.email || "").toLowerCase().includes(q)
                                   );
                                 })
                                 .map((user) => (
@@ -752,7 +756,9 @@ export default function TicketDetailPage() {
                                           : "opacity-0"
                                       }`}
                                     />
-                                    {user.name || user.email || `${user.firstname || ''} ${user.lastname || ''}`}
+                                    {user.name ||
+                                      user.email ||
+                                      `${user.firstname || ""} ${user.lastname || ""}`}
                                   </CommandItem>
                                 ))}
                             </CommandGroup>

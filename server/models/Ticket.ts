@@ -890,10 +890,9 @@ export class TicketRepository {
     if (watchers && Array.isArray(watchers)) {
       try {
         // Delete existing watchers
-        await pool.query(
-          "DELETE FROM ticket_watchers WHERE ticket_id = $1",
-          [id],
-        );
+        await pool.query("DELETE FROM ticket_watchers WHERE ticket_id = $1", [
+          id,
+        ]);
 
         // Insert new watchers
         if (watchers.length > 0) {
@@ -912,7 +911,9 @@ export class TicketRepository {
             watcherValues,
           );
 
-          console.log(`[Ticket.update] Updated watchers for ticket ${id}: ${watchers.join(", ")}`);
+          console.log(
+            `[Ticket.update] Updated watchers for ticket ${id}: ${watchers.join(", ")}`,
+          );
         }
       } catch (e) {
         console.warn("Failed to update ticket watchers:", e);

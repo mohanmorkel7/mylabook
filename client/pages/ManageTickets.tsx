@@ -908,9 +908,9 @@ export default function ManageTickets() {
                   >
                     <CardContent className="pt-4">
                       <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">
+                            <h3 className="text-lg font-semibold text-gray-900 truncate">
                               {ticket.track_id ||
                                 `TKT-${String(ticket.id).padStart(4, "0")}`}
                               : {ticket.subject}
@@ -968,7 +968,7 @@ export default function ManageTickets() {
                             </div>
                           </div>
 
-                          <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline">
+                          <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
                             <div
                               dangerouslySetInnerHTML={{
                                 __html: ((): string => {
@@ -1106,9 +1106,9 @@ export default function ManageTickets() {
                 >
                   <CardContent className="pt-4">
                     <div className="flex items-start justify-between">
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">
+                          <h3 className="text-lg font-semibold text-gray-900 truncate">
                             {ticket.email_subject}
                           </h3>
                           <Badge className="bg-blue-100 text-blue-800">

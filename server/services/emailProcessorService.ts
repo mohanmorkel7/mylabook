@@ -900,28 +900,6 @@ export async function fetchEmailAttachments(
       return { htmlBody, attachmentMap };
     }
 
-    const rawEmail = await response.text();
-
-    // Parse the raw email using mailparser
-    const parsed = await simpleParser(rawEmail);
-
-    // console.log("parsed fetchEmailAttachments.........................", parsed.subject)
-
-    htmlBody = parsed.html || parsed.textAsHtml || '';
-
-    // Extract inline images from attachments
-    for (const att of parsed.attachments) {
-      if (att.contentId) {
-        const dataUrl = `data:${att.contentType};base64,${att.content.toString('base64')}`;
-        attachmentMap.set(att.contentId, dataUrl);
-      }
-    }
-
-    // Replace all cid references in HTML body with data URLs
-    for (const [cid, dataUrl] of attachmentMap.entries()) {
-      const regex = new RegExp(`cid:${cid}`, 'g');
-      htmlBody = htmlBody.replace(regex, dataUrl);
-    }
 
   } catch (error) {
     console.error('[EmailInlineImages] Error fetching or parsing email:', error);

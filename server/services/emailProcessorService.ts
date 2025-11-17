@@ -120,13 +120,6 @@ export class EmailProcessingService {
       }
     );
 
-    const rawEmail = await res.text();
-    const parsed = await simpleParser(rawEmail);
-
-    console.log(parsed.html); // HTML with inline images replaced by data URLs
-    console.log(parsed.attachments); // contains actual files + inline images
-
-    
     try {
       // Extract email details
       const subject = email.subject || "(No subject)";

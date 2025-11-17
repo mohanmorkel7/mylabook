@@ -198,6 +198,7 @@ export default function TicketDetailPage() {
   const [searchWatchers, setSearchWatchers] = useState("");
   const [openAssignedTo, setOpenAssignedTo] = useState(false);
   const [searchAssignedTo, setSearchAssignedTo] = useState("");
+  const [reason, setReason] = useState("");
 
   const fetchUsers = async () => {
     try {
@@ -268,10 +269,40 @@ export default function TicketDetailPage() {
   const saveChanges = async () => {
     if (!ticket) return;
     try {
+      // If ticket is overdue and status is being changed, ensure reason is provided
+      const isExistingOverdue = (() => {
+        try {
+          const sla = (ticket as any).sla_time;
+          const isClosed =
+            (ticket as any).status?.is_closed === true ||
+            /closed/i.test(String((ticket as any).status?.name || ""));
+          if (!sla || isClosed) return false;
+          const slaTs = new Date(sla).getTime();
+          return !isNaN(slaTs) && slaTs < Date.now();
+        } catch (e) {
+          return false;
+        }
+      })();
+
+      if (
+        isExistingOverdue &&
+        editData.status_id &&
+        editData.status_id !== ticket.status_id &&
+        (!reason || String(reason).trim() === "")
+      ) {
+        toast({
+          title: "Reason required",
+          description: "Please provide a reason for changing status of an overdue ticket.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setIsSaving(true);
       const updateData: any = {};
       if (editData.status_id !== ticket.status_id) {
         updateData.status_id = editData.status_id;
+        if (reason && String(reason).trim() !== "") updateData.reason = reason;
       }
       if (editData.assigned_to_id !== ticket.assigned_to) {
         updateData.assigned_to = editData.assigned_to_id;
@@ -581,26 +612,53 @@ export default function TicketDetailPage() {
                 <div>
                   <div className="text-gray-500 mb-1">Status</div>
                   {isEditingDetails ? (
-                    <Select
-                      value={String(editData.status_id || "")}
-                      onValueChange={(v) =>
-                        setEditData({
-                          ...editData,
-                          status_id: parseInt(v),
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {statuses.map((s) => (
-                          <SelectItem key={s.id} value={String(s.id)}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <>
+                      <Select
+                        value={String(editData.status_id || "")}
+                        onValueChange={(v) =>
+                          setEditData({
+                            ...editData,
+                            status_id: parseInt(v),
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statuses.map((s) => (
+                            <SelectItem key={s.id} value={String(s.id)}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* If changing status for an overdue ticket, show reason input */}
+                      {(() => {
+                        const sla = (ticket as any).sla_time;
+                        const isClosed =
+                          (ticket as any).status?.is_closed === true ||
+                          /closed/i.test(String((ticket as any).status?.name || ""));
+                        const slaTs = sla ? new Date(sla).getTime() : NaN;
+                        const isExistingOverdue = !isNaN(slaTs) && slaTs < Date.now() && !isClosed;
+                        const willChangeStatus = editData.status_id && editData.status_id !== ticket.status_id;
+                        if (isExistingOverdue && willChangeStatus) {
+                          return (
+                            <div className="mt-2">
+                              <label className="block text-sm text-gray-600 mb-1">Reason</label>
+                              <textarea
+                                className="w-full border rounded p-2 text-sm"
+                                value={reason}
+                                onChange={(e) => setReason(e.target.value)}
+                                placeholder="Reason for changing status of overdue ticket"
+                              />
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </>
                   ) : (
                     <div className="font-medium">
                       {ticket.status?.name || "-"}

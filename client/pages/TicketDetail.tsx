@@ -215,11 +215,14 @@ export default function TicketDetailPage() {
         usersList = (resp as any).result;
       } else if (resp && typeof resp === "object") {
         // Fallback: collect object values that look like user objects
-        usersList = Object.values(resp).filter((v) => v && typeof v === "object");
+        usersList = Object.values(resp).filter(
+          (v) => v && typeof v === "object",
+        );
       }
 
       const normalized = (usersList as any[]).map((u) => {
-        const fullName = `${u.firstname || u.first_name || u.firstName || ""} ${u.lastname || u.last_name || u.lastName || ""}`.trim();
+        const fullName =
+          `${u.firstname || u.first_name || u.firstName || ""} ${u.lastname || u.last_name || u.lastName || ""}`.trim();
         return {
           id: Number(u.id),
           name: u.name ?? (fullName || u.email),

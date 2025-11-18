@@ -730,6 +730,8 @@ export class TicketRepository {
             email: row.assignee_email,
           }
         : undefined,
+      // Expose watcher_user_ids column if available
+      watchers: row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
     }));
 
     const pages = Math.ceil(total / limit);

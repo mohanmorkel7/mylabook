@@ -308,11 +308,14 @@ export default function ManageTickets() {
         if (filters.dateFrom) params.append("date_from", filters.dateFrom);
         if (filters.dateTo) params.append("date_to", filters.dateTo);
         if (filters.priority) params.append("priority_id", filters.priority);
-        if (filters.assignedTo) params.append("assigned_user_id", filters.assignedTo);
+        if (filters.assignedTo)
+          params.append("assigned_user_id", filters.assignedTo);
       }
 
       const query = params.toString() ? `?${params}` : "";
-      const response = await api.get(`/email-processing/created-tickets${query}`);
+      const response = await api.get(
+        `/email-processing/created-tickets${query}`,
+      );
       const payload =
         response && !Array.isArray(response) && response.tickets
           ? response

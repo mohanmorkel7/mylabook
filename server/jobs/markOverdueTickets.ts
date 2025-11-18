@@ -12,6 +12,8 @@ export async function runMarkOverdueTickets() {
     }
     const overdueStatusId = statusRes.rows[0].id;
 
+    console.log(`[markOverdueTickets] Overdue status id: ${overdueStatusId}`);
+
     // Find tickets that have sla_time in the past
     const ticketsRes = await pool.query(
       `SELECT t.id, t.status_id, ts.name as status_name, ts.is_closed
@@ -20,12 +22,21 @@ export async function runMarkOverdueTickets() {
        WHERE t.sla_time IS NOT NULL AND t.sla_time < NOW()`,
     );
 
+    console.log(`[markOverdueTickets] Found ${ticketsRes.rows.length} tickets with sla_time < NOW()`);
+
     for (const row of ticketsRes.rows) {
       const ticketId = row.id;
       const currentStatusId = row.status_id;
       const currentStatusName = String(row.status_name || "").toLowerCase();
 
-      if (currentStatusId === overdueStatusId) continue;
+      console.log(
+        `[markOverdueTickets] Ticket ${ticketId} currentStatusId=${currentStatusId} currentStatusName='${String(row.status_name || "")}', is_closed=${row.is_closed}`,
+      );
+
+      if (currentStatusId === overdueStatusId) {
+        console.log(`[markOverdueTickets] Skipping ticket ${ticketId} because already overdue`);
+        continue;
+      }
 
       // Skip if current status is 'In Progress' (do not auto-mark)
       if (
@@ -33,20 +44,28 @@ export async function runMarkOverdueTickets() {
         currentStatusName.includes("inprogress")
       ) {
         console.log(
-          `Skipping ticket ${ticketId} because status is In Progress`,
+          `[markOverdueTickets] Skipping ticket ${ticketId} because status is In Progress`,
         );
         continue;
       }
 
       // Check if current status is closed
       const isClosed = row.is_closed === true;
-      if (isClosed) continue;
+      if (isClosed) {
+        console.log(`[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`);
+        continue;
+      }
 
       // Update ticket to overdue status
-      await pool.query(
-        `UPDATE tickets SET status_id = $1, updated_at = NOW() WHERE id = $2`,
+      const updateRes = await pool.query(
+        `UPDATE tickets SET status_id = $1, updated_at = NOW() WHERE id = $2 RETURNING id`,
         [overdueStatusId, ticketId],
       );
+
+      if (updateRes.rowCount === 0) {
+        console.warn(`[markOverdueTickets] Failed to update ticket ${ticketId} to overdue status`);
+        continue;
+      }
 
       // Log the change in ticket_status_changes
       try {

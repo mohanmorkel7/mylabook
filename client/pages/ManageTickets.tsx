@@ -306,12 +306,15 @@ export default function ManageTickets() {
         response && !Array.isArray(response) && response.tickets
           ? response
           : response.data || response;
+      console.debug("[ManageTickets] fetchCreatedTickets response:", response);
+      console.debug("[ManageTickets] fetchCreatedTickets payload:", payload);
       const ticketsList = Array.isArray(payload)
         ? payload
         : payload.tickets || payload.data?.tickets || [];
       setCreatedTickets(ticketsList);
       const total =
         payload.pagination?.total ?? payload.total ?? (ticketsList.length || 0);
+      console.debug("[ManageTickets] fetchCreatedTickets total:", total);
       setCreatedTicketsCount(Number(total) || 0);
     } catch (error) {
       console.error("Error fetching created tickets:", error);

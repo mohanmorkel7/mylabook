@@ -133,6 +133,7 @@ export interface CreateTicketRequest {
   category_id?: number;
   team_id?: number;
   bucket_id?: number;
+  status_id?: number;
   demand?: number; // 0,1,2
   sla_time?: string | null;
   reason?: string | null;
@@ -251,6 +252,7 @@ export class TicketRepository {
       bucket_id,
       demand,
       sla_time,
+      status_id,
       reason,
       assigned_to,
       related_lead_id,
@@ -349,6 +351,7 @@ export class TicketRepository {
           "category_id",
           "team_id",
           "bucket_id",
+          "status_id",
           "demand",
           "assigned_to",
           "related_lead_id",
@@ -368,6 +371,7 @@ export class TicketRepository {
           category_id,
           team_id,
           bucket_id,
+          status_id,
           demand,
           assigned_to,
           related_lead_id,

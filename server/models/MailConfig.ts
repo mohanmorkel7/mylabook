@@ -439,7 +439,10 @@ export class MailConfigRepository {
         emailFrom || null,
       ]);
     } catch (error) {
-      console.warn("Failed to insert into created_tickets (best-effort):", error?.message || error);
+      console.warn(
+        "Failed to insert into created_tickets (best-effort):",
+        error?.message || error,
+      );
     }
   }
 }

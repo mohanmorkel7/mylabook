@@ -1210,7 +1210,11 @@ export default function ManageTickets() {
               {effectiveCreatedTickets.map((ticket) => (
                 <Card
                   key={ticket.id}
-                  className="hover:shadow-lg transition-shadow"
+                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => {
+                    const targetId = ticket.ticket_id ?? ticket.__source_ticket?.id ?? ticket.id;
+                    if (targetId) navigate(`/tickets/${targetId}`);
+                  }}
                 >
                   <CardContent className="pt-4">
                     <div className="flex items-start justify-between">

@@ -28,8 +28,13 @@ export async function runMarkOverdueTickets() {
       if (currentStatusId === overdueStatusId) continue;
 
       // Skip if current status is 'In Progress' (do not auto-mark)
-      if (currentStatusName.includes("in progress") || currentStatusName.includes("inprogress")) {
-        console.log(`Skipping ticket ${ticketId} because status is In Progress`);
+      if (
+        currentStatusName.includes("in progress") ||
+        currentStatusName.includes("inprogress")
+      ) {
+        console.log(
+          `Skipping ticket ${ticketId} because status is In Progress`,
+        );
         continue;
       }
 

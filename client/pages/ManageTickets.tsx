@@ -670,6 +670,23 @@ export default function ManageTickets() {
   // Use filtered tickets directly since server provides pagination
   const paginatedTickets = filteredTickets;
 
+  const effectiveCreatedTickets = React.useMemo(() => {
+    if (createdTickets && createdTickets.length > 0) return createdTickets;
+    const local = tickets.filter((t) => t.created_from_mail_config);
+    if (!local || local.length === 0) return [];
+    return local.map((t: any) => ({
+      id: t.id,
+      email_subject: t.subject || t.track_id,
+      email_from: (t.creator && (t.creator.email || t.creator.name)) || "Unknown",
+      config_name: t.mail_config_id ? `Config #${t.mail_config_id}` : "",
+      assigned_to: t.assignee || (t.assigned_to ? { id: t.assigned_to, name: "Unassigned" } : null),
+      priority_id: t.priority_id,
+      mitra_ticket_id: t.mitra_ticket_id || null,
+      created_at: t.created_at,
+      __source_ticket: t,
+    }));
+  }, [createdTickets, tickets]);
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -1178,7 +1195,7 @@ export default function ManageTickets() {
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
             </div>
-          ) : createdTickets.length === 0 ? (
+          ) : effectiveCreatedTickets.length === 0 ? (
             <Card>
               <CardContent className="pt-4">
                 <div className="text-center py-12">
@@ -1190,7 +1207,7 @@ export default function ManageTickets() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {createdTickets.map((ticket) => (
+              {effectiveCreatedTickets.map((ticket) => (
                 <Card
                   key={ticket.id}
                   className="hover:shadow-lg transition-shadow"

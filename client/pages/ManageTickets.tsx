@@ -628,7 +628,7 @@ export default function ManageTickets() {
               variant={activeTab === "created" ? "default" : "outline"}
               onClick={() => setActiveTab("created")}
             >
-              Created from Email ({createdTickets.length})
+              Created from Email ({createdTicketsCount})
             </Button>
           </div>
 

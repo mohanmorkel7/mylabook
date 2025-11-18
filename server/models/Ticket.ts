@@ -334,8 +334,21 @@ export class TicketRepository {
       computedSlaValue = null;
     }
 
-    // Build insert query; include track_id to avoid collision issues with database trigger
-    let trackId = this.generateUniqueTrackId();
+    // Attempt to get a sequential display ID from DB sequence for '#MYLA-xxxx' format
+    let trackId: string;
+    try {
+      const seqRes = await pool.query("SELECT nextval('ticket_display_seq') as v");
+      const seqVal = seqRes?.rows?.[0]?.v;
+      if (seqVal) {
+        trackId = `#MYLA-${String(seqVal)}`;
+      } else {
+        trackId = this.generateUniqueTrackId();
+      }
+    } catch (e) {
+      // Sequence may not exist yet; fallback to generated ID
+      trackId = this.generateUniqueTrackId();
+    }
+
     let retries = 0;
     const maxRetries = 5;
     let result;
@@ -363,7 +376,7 @@ export class TicketRepository {
           "created_by",
         ];
 
-        // Separate watchers from other fields (we'll persist them after creating the ticket)
+        // Separate watchers from other fields
         const watchers = (ticketData as any).watchers;
         delete (ticketData as any).watchers;
 
@@ -398,29 +411,44 @@ export class TicketRepository {
           values.push((ticketData as any).mail_config_id);
         }
 
+        // Persist watchers directly into watcher_user_ids column if provided
+        if (watchers && Array.isArray(watchers) && watchers.length > 0) {
+          cols.push("watcher_user_ids");
+          values.push(watchers);
+        }
+
         const placeholders = cols.map((_, i) => `$${i + 1}`);
         const insertSql = `INSERT INTO tickets (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
 
         result = await pool.query(insertSql, values);
 
-        // Persist watchers if provided
+        // Backwards-compatibility: if watcher_user_ids column wasn't accepted, fallback to ticket_watchers table
         if (watchers && Array.isArray(watchers) && watchers.length > 0) {
           try {
             const insertedTicketId = result.rows[0].id;
-            const watcherValues: any[] = [];
-            let watcherParamIndex = 1;
-            const placeholders = watchers
-              .map((watcherId: number) => {
-                watcherValues.push(insertedTicketId, watcherId);
-                const ph = `($${watcherParamIndex++}, $${watcherParamIndex++})`;
-                return ph;
-              })
-              .join(", ");
+            // Attempt to update watcher_user_ids column (in case insert didn't set it)
+            try {
+              await pool.query(
+                "UPDATE tickets SET watcher_user_ids = $1 WHERE id = $2",
+                [watchers, insertedTicketId],
+              );
+            } catch (updErr) {
+              // Fallback to inserting into ticket_watchers table if column not present
+              const watcherValues: any[] = [];
+              let watcherParamIndex = 1;
+              const placeholders = watchers
+                .map((watcherId: number) => {
+                  watcherValues.push(insertedTicketId, watcherId);
+                  const ph = `($${watcherParamIndex++}, $${watcherParamIndex++})`;
+                  return ph;
+                })
+                .join(", ");
 
-            await pool.query(
-              `INSERT INTO ticket_watchers (ticket_id, user_id) VALUES ${placeholders}`,
-              watcherValues,
-            );
+              await pool.query(
+                `INSERT INTO ticket_watchers (ticket_id, user_id) VALUES ${placeholders}`,
+                watcherValues,
+              );
+            }
           } catch (e) {
             console.warn("Failed to persist ticket watchers on create:", e);
           }

@@ -401,6 +401,14 @@ router.post(
       if (typeof ticketData.custom_fields === "string") {
         ticketData.custom_fields = JSON.parse(ticketData.custom_fields);
       }
+      // Ensure watchers (optional) sent via FormData are parsed from JSON string
+      if (typeof (ticketData as any).watchers === "string") {
+        try {
+          (ticketData as any).watchers = JSON.parse((ticketData as any).watchers);
+        } catch (e) {
+          // ignore parse errors and leave as-is
+        }
+      }
 
       // Server-side validation for required fields
       const requiredFields = [

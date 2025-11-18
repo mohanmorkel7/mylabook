@@ -220,7 +220,9 @@ export default function ManageTickets() {
       });
       setTickets(normalized);
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
-      const localCreatedCount = normalized.filter((t: any) => t.created_from_mail_config).length;
+      const localCreatedCount = normalized.filter(
+        (t: any) => t.created_from_mail_config,
+      ).length;
       setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
       setTotalTickets(data?.total ?? normalized.length);
       setTotalPages(data?.pages ?? 1);

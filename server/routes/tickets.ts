@@ -224,15 +224,25 @@ router.get("/", async (req: Request, res: Response) => {
         const headerUserId = req.headers["x-user-id"] as string | undefined;
         if (headerUserId) {
           viewerId = normalizeUserId(headerUserId);
-          const roleRes = await pool.query("SELECT role FROM users WHERE id = $1", [viewerId]);
+          const roleRes = await pool.query(
+            "SELECT role FROM users WHERE id = $1",
+            [viewerId],
+          );
           const role = roleRes.rows[0]?.role;
-          if (role && String(role).toLowerCase() !== "admin") restrictToViewer = true;
+          if (role && String(role).toLowerCase() !== "admin")
+            restrictToViewer = true;
         }
       } catch (e) {
         // ignore and default to unrestricted listing
       }
 
-      const result = await TicketRepository.getAll(filters, page, limit, viewerId, restrictToViewer);
+      const result = await TicketRepository.getAll(
+        filters,
+        page,
+        limit,
+        viewerId,
+        restrictToViewer,
+      );
       // Add created_from_mail_config flag for frontend
       const ticketsWithFlag = result.tickets.map((ticket: any) => ({
         ...ticket,
@@ -419,7 +429,9 @@ router.post(
       // Ensure watchers (optional) sent via FormData are parsed from JSON string
       if (typeof (ticketData as any).watchers === "string") {
         try {
-          (ticketData as any).watchers = JSON.parse((ticketData as any).watchers);
+          (ticketData as any).watchers = JSON.parse(
+            (ticketData as any).watchers,
+          );
         } catch (e) {
           // ignore parse errors and leave as-is
         }

@@ -1140,14 +1140,17 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">SLA</p>
                               <p
-                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
-                              >
-                                {slaMs === null
-                                  ? "No SLA"
-                                  : slaMs <= 0
-                                    ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                                    : `${formatRemaining(slaMs)} hours remaining`}
-                              </p>
+                              className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
+                            >
+                              {(() => {
+                                const statusName = (ticket.status && (ticket.status.name || ticket.status)) || "";
+                                const isInProgress = String(statusName).toLowerCase().includes("in progress") || String(statusName).toLowerCase().includes("inprogress");
+                                if (isInProgress) return "No SLA";
+                                if (slaMs === null) return "No SLA";
+                                if (slaMs <= 0) return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
+                                return `${formatRemaining(slaMs)} hours remaining`;
+                              })()}
+                            </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Track ID</p>

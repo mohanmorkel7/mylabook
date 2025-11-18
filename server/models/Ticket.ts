@@ -363,6 +363,10 @@ export class TicketRepository {
           "created_by",
         ];
 
+        // Separate watchers from other fields (we'll persist them after creating the ticket)
+        const watchers = (ticketData as any).watchers;
+        delete (ticketData as any).watchers;
+
         const values: any[] = [
           trackId,
           subject,
@@ -388,10 +392,40 @@ export class TicketRepository {
           values.push(computedSlaValue);
         }
 
+        // Support persisting mail_config_id if provided
+        if ((ticketData as any).mail_config_id) {
+          cols.push("mail_config_id");
+          values.push((ticketData as any).mail_config_id);
+        }
+
         const placeholders = cols.map((_, i) => `$${i + 1}`);
         const insertSql = `INSERT INTO tickets (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
 
         result = await pool.query(insertSql, values);
+
+        // Persist watchers if provided
+        if (watchers && Array.isArray(watchers) && watchers.length > 0) {
+          try {
+            const insertedTicketId = result.rows[0].id;
+            const watcherValues: any[] = [];
+            let watcherParamIndex = 1;
+            const placeholders = watchers
+              .map((watcherId: number) => {
+                watcherValues.push(insertedTicketId, watcherId);
+                const ph = `($${watcherParamIndex++}, $${watcherParamIndex++})`;
+                return ph;
+              })
+              .join(", ");
+
+            await pool.query(
+              `INSERT INTO ticket_watchers (ticket_id, user_id) VALUES ${placeholders}`,
+              watcherValues,
+            );
+          } catch (e) {
+            console.warn("Failed to persist ticket watchers on create:", e);
+          }
+        }
+
         break; // Success, exit retry loop
       } catch (err: any) {
         const errorMsg = (err?.message || String(err)).toLowerCase();

@@ -269,7 +269,10 @@ ${parsed.html}`;
             fromEmail,
           );
         } catch (e) {
-          console.warn("Failed to record created_tickets after ticket creation:", e?.message || e);
+          console.warn(
+            "Failed to record created_tickets after ticket creation:",
+            e?.message || e,
+          );
         }
 
         return { ticketId: createdTicket.id, success: true };

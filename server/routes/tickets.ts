@@ -217,7 +217,22 @@ router.get("/", async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 20;
 
     if (await isDatabaseAvailable()) {
-      const result = await TicketRepository.getAll(filters, page, limit);
+      // Determine viewer from x-user-id header (if provided) to enforce non-admin visibility restrictions
+      let viewerId: number | undefined = undefined;
+      let restrictToViewer = false;
+      try {
+        const headerUserId = req.headers["x-user-id"] as string | undefined;
+        if (headerUserId) {
+          viewerId = normalizeUserId(headerUserId);
+          const roleRes = await pool.query("SELECT role FROM users WHERE id = $1", [viewerId]);
+          const role = roleRes.rows[0]?.role;
+          if (role && String(role).toLowerCase() !== "admin") restrictToViewer = true;
+        }
+      } catch (e) {
+        // ignore and default to unrestricted listing
+      }
+
+      const result = await TicketRepository.getAll(filters, page, limit, viewerId, restrictToViewer);
       // Add created_from_mail_config flag for frontend
       const ticketsWithFlag = result.tickets.map((ticket: any) => ({
         ...ticket,

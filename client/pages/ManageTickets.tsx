@@ -322,11 +322,19 @@ export default function ManageTickets() {
       const ticketsList = Array.isArray(payload)
         ? payload
         : payload.tickets || payload.data?.tickets || [];
-      setCreatedTickets(ticketsList);
-      const total =
-        payload.pagination?.total ?? payload.total ?? (ticketsList.length || 0);
-      console.debug("[ManageTickets] fetchCreatedTickets total:", total);
-      setCreatedTicketsCount(Number(total) || 0);
+      // Fallback to local tickets when server returns empty created_tickets
+      const localFallback = tickets.filter((t) => t.created_from_mail_config);
+      if ((!ticketsList || ticketsList.length === 0) && localFallback.length > 0) {
+        console.debug("[ManageTickets] Using local fallback for created tickets", localFallback.length);
+        setCreatedTickets(localFallback);
+        setCreatedTicketsCount((prev) => Math.max(prev || 0, localFallback.length));
+      } else {
+        setCreatedTickets(ticketsList);
+        const total =
+          payload.pagination?.total ?? payload.total ?? (ticketsList.length || 0);
+        console.debug("[ManageTickets] fetchCreatedTickets total:", total);
+        setCreatedTicketsCount(Number(total) || 0);
+      }
     } catch (error) {
       console.error("Error fetching created tickets:", error);
       toast({

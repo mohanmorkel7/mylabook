@@ -1,8 +1,8 @@
 import { pool } from "../database/connection";
 import { MailConfig, MailConfigRepository } from "../models/MailConfig";
 import DOMPurify from "isomorphic-dompurify";
-import { simpleParser } from 'mailparser';
-import fetch from 'node-fetch';
+import { simpleParser } from "mailparser";
+import fetch from "node-fetch";
 
 interface GraphEmail {
   id: string;
@@ -229,8 +229,7 @@ Received: ${email.receivedDateTime || "Unknown"}
 
 ${parsed.html}`;
 
-
-console.log("config : ", config);
+      console.log("config : ", config);
 
       // Create ticket in app database using TicketRepository
       const ticketData = {
@@ -341,7 +340,7 @@ console.log("config : ", config);
             continue; // Skip if doesn't match config
           }
 
-          console.log("MAin config : ", config)
+          console.log("MAin config : ", config);
 
           // Try to create ticket
           const ticketResult = await this.createTicket(email, config);

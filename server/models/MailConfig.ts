@@ -143,7 +143,6 @@ export class MailConfigRepository {
     return result.rows;
   }
 
-
   static async findById(id: number): Promise<MailConfig | null> {
     const query = `
       SELECT id, user_id, name, description, field_type, field_value,
@@ -199,56 +198,56 @@ export class MailConfigRepository {
   }
 
   static async update(
-  id: number,
-  userId: number, // no longer used for filtering
-  data: UpdateMailConfigData,
-): Promise<MailConfig | null> {
-  const setClause: string[] = [];
-  const values: any[] = [];
-  let paramIndex = 1;
+    id: number,
+    userId: number, // no longer used for filtering
+    data: UpdateMailConfigData,
+  ): Promise<MailConfig | null> {
+    const setClause: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
 
-  // Only allow updating specific columns
-  const allowedColumns = [
-    "name",
-    "description",
-    "field_type",
-    "field_value",
-    "from_email",
-    "to_email",
-    "subject_pattern",
-    "body_content",
-    "body_match_type",
-    "project_id",
-    "priority_id",
-    "assigned_to_id",
-    "watcher_user_ids",
-    "team_id",
-    "bucket_id",
-    "status_id",
-    "demand",
-    "is_active",
-  ];
+    // Only allow updating specific columns
+    const allowedColumns = [
+      "name",
+      "description",
+      "field_type",
+      "field_value",
+      "from_email",
+      "to_email",
+      "subject_pattern",
+      "body_content",
+      "body_match_type",
+      "project_id",
+      "priority_id",
+      "assigned_to_id",
+      "watcher_user_ids",
+      "team_id",
+      "bucket_id",
+      "status_id",
+      "demand",
+      "is_active",
+    ];
 
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined && allowedColumns.includes(key)) {
-      setClause.push(`${key} = $${paramIndex}`);
-      values.push(value);
-      paramIndex++;
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined && allowedColumns.includes(key)) {
+        setClause.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
     }
-  }
 
-  if (setClause.length === 0) {
-    // return config regardless of user
-    return this.findById(id);
-  }
+    if (setClause.length === 0) {
+      // return config regardless of user
+      return this.findById(id);
+    }
 
-  // Always update timestamp
-  setClause.push(`updated_at = CURRENT_TIMESTAMP`);
+    // Always update timestamp
+    setClause.push(`updated_at = CURRENT_TIMESTAMP`);
 
-  // Add id for WHERE
-  values.push(id);
+    // Add id for WHERE
+    values.push(id);
 
-  const query = `
+    const query = `
     UPDATE mail_configs
     SET ${setClause.join(", ")}
     WHERE id = $${paramIndex}
@@ -259,10 +258,9 @@ export class MailConfigRepository {
               is_active, created_at, updated_at, last_processed_at;
   `;
 
-  const result = await pool.query(query, values);
-  return result.rows[0] || null;
-}
-
+    const result = await pool.query(query, values);
+    return result.rows[0] || null;
+  }
 
   static async delete(
     id: number,
@@ -387,10 +385,21 @@ export class MailConfigRepository {
           await pool.query(
             `INSERT INTO created_tickets (email_id, mail_config_id, ticket_id, mitra_ticket_id, mitra_response, email_subject, email_from)
              VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (email_id, mail_config_id) DO NOTHING`,
-            [emailId, mailConfigId, ticketId, mitraTicketId, null, emailSubject, emailFrom],
+            [
+              emailId,
+              mailConfigId,
+              ticketId,
+              mitraTicketId,
+              null,
+              emailSubject,
+              emailFrom,
+            ],
           );
         } catch (e) {
-          console.warn("Failed to insert into created_tickets:", e.message || e);
+          console.warn(
+            "Failed to insert into created_tickets:",
+            e.message || e,
+          );
         }
       }
 

@@ -608,10 +608,14 @@ export default function ManageTickets() {
     if (autoMarkedRef.current.has(ticket.id)) return;
 
     // Avoid marking if already overdue, closed, or if status is In Progress
-    const sName = (ticket.status && (ticket.status.name || ticket.status)) || ticket.status || "";
+    const sName =
+      (ticket.status && (ticket.status.name || ticket.status)) ||
+      ticket.status ||
+      "";
     const sNameLower = String(sName).toLowerCase();
     if (sNameLower.includes("overdue")) return;
-    if (sNameLower.includes("in progress") || sNameLower.includes("inprogress")) return;
+    if (sNameLower.includes("in progress") || sNameLower.includes("inprogress"))
+      return;
     if (
       (ticket.status && ticket.status.is_closed) ||
       /closed/i.test(String(sName || ""))
@@ -1142,17 +1146,27 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">SLA</p>
                               <p
-                              className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
-                            >
-                              {(() => {
-                                const statusName = (ticket.status && (ticket.status.name || ticket.status)) || "";
-                                const isInProgress = String(statusName).toLowerCase().includes("in progress") || String(statusName).toLowerCase().includes("inprogress");
-                                if (isInProgress) return "No SLA";
-                                if (slaMs === null) return "No SLA";
-                                if (slaMs <= 0) return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
-                                return `${formatRemaining(slaMs)} hours remaining`;
-                              })()}
-                            </p>
+                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
+                              >
+                                {(() => {
+                                  const statusName =
+                                    (ticket.status &&
+                                      (ticket.status.name || ticket.status)) ||
+                                    "";
+                                  const isInProgress =
+                                    String(statusName)
+                                      .toLowerCase()
+                                      .includes("in progress") ||
+                                    String(statusName)
+                                      .toLowerCase()
+                                      .includes("inprogress");
+                                  if (isInProgress) return "No SLA";
+                                  if (slaMs === null) return "No SLA";
+                                  if (slaMs <= 0)
+                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
+                                  return `${formatRemaining(slaMs)} hours remaining`;
+                                })()}
+                              </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Track ID</p>

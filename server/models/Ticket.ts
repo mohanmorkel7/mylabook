@@ -505,6 +505,8 @@ export class TicketRepository {
     filters: TicketFilters = {},
     page: number = 1,
     limit: number = 20,
+    viewerId?: number,
+    restrictToViewer: boolean = false,
   ): Promise<{
     tickets: Ticket[];
     total: number;

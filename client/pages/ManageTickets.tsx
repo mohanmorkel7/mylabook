@@ -271,7 +271,11 @@ export default function ManageTickets() {
       const response = await api.get(
         `/email-processing/created-tickets?${params}`,
       );
-      setCreatedTickets(response.data?.tickets || []);
+      // ApiClient returns parsed JSON directly, but some endpoints return { data: ... }
+      const ticketsList = Array.isArray(response)
+        ? response
+        : response.tickets || response.data?.tickets || [];
+      setCreatedTickets(ticketsList);
     } catch (error) {
       console.error("Error fetching created tickets:", error);
       toast({

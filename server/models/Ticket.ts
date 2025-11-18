@@ -961,32 +961,39 @@ export class TicketRepository {
     // Handle watchers separately
     if (watchers && Array.isArray(watchers)) {
       try {
-        // Delete existing watchers
-        await pool.query("DELETE FROM ticket_watchers WHERE ticket_id = $1", [
-          id,
-        ]);
-
-        // Insert new watchers
-        if (watchers.length > 0) {
-          const watcherValues: any[] = [];
-          let watcherParamIndex = 1;
-          const placeholders = watchers
-            .map((watcherId) => {
-              watcherValues.push(id, watcherId);
-              const ph = `($${watcherParamIndex++}, $${watcherParamIndex++})`;
-              return ph;
-            })
-            .join(", ");
-
+        // Try to persist watchers into watcher_user_ids column
+        try {
           await pool.query(
-            `INSERT INTO ticket_watchers (ticket_id, user_id) VALUES ${placeholders}`,
-            watcherValues,
+            "UPDATE tickets SET watcher_user_ids = $1 WHERE id = $2",
+            [watchers, id],
           );
+        } catch (colErr) {
+          // Fallback to legacy ticket_watchers table
+          await pool.query("DELETE FROM ticket_watchers WHERE ticket_id = $1", [
+            id,
+          ]);
 
-          console.log(
-            `[Ticket.update] Updated watchers for ticket ${id}: ${watchers.join(", ")}`,
-          );
+          if (watchers.length > 0) {
+            const watcherValues: any[] = [];
+            let watcherParamIndex = 1;
+            const placeholders = watchers
+              .map((watcherId) => {
+                watcherValues.push(id, watcherId);
+                const ph = `($${watcherParamIndex++}, $${watcherParamIndex++})`;
+                return ph;
+              })
+              .join(", ");
+
+            await pool.query(
+              `INSERT INTO ticket_watchers (ticket_id, user_id) VALUES ${placeholders}`,
+              watcherValues,
+            );
+          }
         }
+
+        console.log(
+          `[Ticket.update] Updated watchers for ticket ${id}: ${watchers.join(", ")}`,
+        );
       } catch (e) {
         console.warn("Failed to update ticket watchers:", e);
       }

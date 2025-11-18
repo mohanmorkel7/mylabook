@@ -153,6 +153,8 @@ export default function ManageTickets() {
   useEffect(() => {
     fetchTickets(currentPage);
     fetchUsers();
+    // Always refresh created tickets count so the tab displays an accurate value
+    fetchCreatedTicketsCount();
     if (activeTab === "created") {
       fetchCreatedTickets();
     }
@@ -160,6 +162,7 @@ export default function ManageTickets() {
     // Listen for created tickets updates from other parts of the app (e.g., Mails)
     const handler = () => {
       if (activeTab === "created") fetchCreatedTickets();
+      fetchCreatedTicketsCount();
     };
     window.addEventListener("createdTicketsUpdated", handler);
     return () => window.removeEventListener("createdTicketsUpdated", handler);

@@ -337,7 +337,9 @@ export class TicketRepository {
     // Attempt to get a sequential display ID from DB sequence for '#MYLA-xxxx' format
     let trackId: string;
     try {
-      const seqRes = await pool.query("SELECT nextval('ticket_display_seq') as v");
+      const seqRes = await pool.query(
+        "SELECT nextval('ticket_display_seq') as v",
+      );
       const seqVal = seqRes?.rows?.[0]?.v;
       if (seqVal) {
         trackId = `#MYLA-${String(seqVal)}`;
@@ -571,7 +573,9 @@ export class TicketRepository {
 
     // If requested, restrict results to tickets visible to a specific viewer (non-admin users)
     if (restrictToViewer && viewerId) {
-      whereConditions.push(`(t.assigned_to = $${paramIndex} OR $${paramIndex} = ANY(t.watcher_user_ids))`);
+      whereConditions.push(
+        `(t.assigned_to = $${paramIndex} OR $${paramIndex} = ANY(t.watcher_user_ids))`,
+      );
       queryParams.push(viewerId);
       paramIndex++;
     }
@@ -740,7 +744,8 @@ export class TicketRepository {
           }
         : undefined,
       // Expose watcher_user_ids column if available
-      watchers: row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
+      watchers:
+        row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
     }));
 
     const pages = Math.ceil(total / limit);

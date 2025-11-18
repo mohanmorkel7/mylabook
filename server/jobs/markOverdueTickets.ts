@@ -12,22 +12,29 @@ export async function runMarkOverdueTickets() {
     }
     const overdueStatusId = statusRes.rows[0].id;
 
-    // Find tickets that have sla_time in the past, are not closed and not already marked overdue
+    // Find tickets that have sla_time in the past
     const ticketsRes = await pool.query(
-      `SELECT id, status_id FROM tickets WHERE sla_time IS NOT NULL AND sla_time < NOW()`,
+      `SELECT t.id, t.status_id, ts.name as status_name, ts.is_closed
+       FROM tickets t
+       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+       WHERE t.sla_time IS NOT NULL AND t.sla_time < NOW()`,
     );
 
     for (const row of ticketsRes.rows) {
       const ticketId = row.id;
       const currentStatusId = row.status_id;
+      const currentStatusName = String(row.status_name || "").toLowerCase();
+
       if (currentStatusId === overdueStatusId) continue;
 
+      // Skip if current status is 'In Progress' (do not auto-mark)
+      if (currentStatusName.includes("in progress") || currentStatusName.includes("inprogress")) {
+        console.log(`Skipping ticket ${ticketId} because status is In Progress`);
+        continue;
+      }
+
       // Check if current status is closed
-      const stat = await pool.query(
-        "SELECT is_closed FROM ticket_statuses WHERE id = $1",
-        [currentStatusId],
-      );
-      const isClosed = stat.rows[0]?.is_closed === true;
+      const isClosed = row.is_closed === true;
       if (isClosed) continue;
 
       // Update ticket to overdue status

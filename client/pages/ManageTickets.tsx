@@ -335,10 +335,18 @@ export default function ManageTickets() {
           "[ManageTickets] Using local fallback for created tickets",
           localFallback.length,
         );
-        setCreatedTickets(localFallback);
-        setCreatedTicketsCount((prev) =>
-          Math.max(prev || 0, localFallback.length),
-        );
+        const mapped = localFallback.map((t: any) => ({
+          id: t.id,
+          email_subject: t.subject || t.track_id,
+          email_from: (t.creator && (t.creator.email || t.creator.name)) || "Unknown",
+          config_name: t.mail_config_id ? `Config #${t.mail_config_id}` : "",
+          assigned_to: t.assignee || (t.assigned_to ? { id: t.assigned_to, name: "Unassigned" } : null),
+          priority_id: t.priority_id,
+          mitra_ticket_id: t.mitra_ticket_id || null,
+          created_at: t.created_at,
+        }));
+        setCreatedTickets(mapped);
+        setCreatedTicketsCount((prev) => Math.max(prev || 0, mapped.length));
       } else {
         setCreatedTickets(ticketsList);
         const total =

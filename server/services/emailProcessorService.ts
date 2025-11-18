@@ -240,9 +240,13 @@ console.log("config : ", config);
         team_id: config.team_id,
         bucket_id: config.bucket_id,
         demand: config.demand,
-        status_id:config.status_id,
+        status_id: config.status_id,
         assigned_to: config.assigned_to_id,
         project_id: config.project_id,
+        // Mark this ticket as created from this mail config so UI can surface it
+        mail_config_id: config.id,
+        // Pass watcher IDs so TicketRepository.create can persist them into ticket_watchers
+        watchers: config.watcher_user_ids || config.watcher_ids || [],
       } as any;
 
       // createdBy: prefer config.user_id else assigned_to

@@ -262,6 +262,22 @@ export default function ManageTickets() {
     }
   };
 
+  const fetchCreatedTicketsCount = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.dateFrom) params.append("date_from", filters.dateFrom);
+      if (filters.dateTo) params.append("date_to", filters.dateTo);
+      params.append("limit", "1");
+
+      const response = await api.get(`/email-processing/created-tickets?${params}`);
+      const payload = response && !Array.isArray(response) && response.tickets ? response : response.data || response;
+      const total = payload.pagination?.total ?? payload.total ?? (Array.isArray(payload) ? payload.length : 0);
+      setCreatedTicketsCount(Number(total) || 0);
+    } catch (error) {
+      console.error("Error fetching created tickets count:", error);
+    }
+  };
+
   const fetchCreatedTickets = async () => {
     try {
       setIsLoading(true);
@@ -275,11 +291,13 @@ export default function ManageTickets() {
       const response = await api.get(
         `/email-processing/created-tickets?${params}`,
       );
-      // ApiClient returns parsed JSON directly, but some endpoints return { data: ... }
-      const ticketsList = Array.isArray(response)
-        ? response
-        : response.tickets || response.data?.tickets || [];
+      const payload = response && !Array.isArray(response) && response.tickets ? response : response.data || response;
+      const ticketsList = Array.isArray(payload)
+        ? payload
+        : payload.tickets || payload.data?.tickets || [];
       setCreatedTickets(ticketsList);
+      const total = payload.pagination?.total ?? payload.total ?? (ticketsList.length || 0);
+      setCreatedTicketsCount(Number(total) || 0);
     } catch (error) {
       console.error("Error fetching created tickets:", error);
       toast({

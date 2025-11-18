@@ -376,7 +376,25 @@ export class MailConfigRepository {
         errorMessage || null,
       ]);
 
-      return result.rowCount > 0;
+      const inserted = result.rowCount > 0;
+
+      // If we successfully recorded the mail_processing_log and we have a ticketId,
+      // also insert into created_tickets for UI listing (best effort).
+      if (inserted && ticketId) {
+        try {
+          // mitra_ticket_id is optional - if not available we store the local ticket id to keep the row non-null
+          const mitraTicketId = ticketId;
+          await pool.query(
+            `INSERT INTO created_tickets (email_id, mail_config_id, ticket_id, mitra_ticket_id, mitra_response, email_subject, email_from)
+             VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (email_id, mail_config_id) DO NOTHING`,
+            [emailId, mailConfigId, ticketId, mitraTicketId, null, emailSubject, emailFrom],
+          );
+        } catch (e) {
+          console.warn("Failed to insert into created_tickets:", e.message || e);
+        }
+      }
+
+      return inserted;
     } catch (error) {
       console.error("Error atomically logging processed email:", error);
       return false;

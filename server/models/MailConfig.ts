@@ -409,4 +409,37 @@ export class MailConfigRepository {
       return false;
     }
   }
+
+  /**
+   * Best-effort insert into created_tickets to surface created tickets in UI.
+   * Uses ON CONFLICT DO NOTHING to avoid duplicates.
+   */
+  static async insertCreatedTicket(
+    mailConfigId: number,
+    emailId: string,
+    ticketId: number,
+    mitraTicketId: number | null,
+    mitraResponse: any | null,
+    emailSubject: string,
+    emailFrom: string,
+  ): Promise<void> {
+    try {
+      const query = `
+        INSERT INTO created_tickets (email_id, mail_config_id, ticket_id, mitra_ticket_id, mitra_response, email_subject, email_from)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT (email_id, mail_config_id) DO NOTHING
+      `;
+      await pool.query(query, [
+        emailId,
+        mailConfigId,
+        ticketId,
+        mitraTicketId || null,
+        mitraResponse ? JSON.stringify(mitraResponse) : null,
+        emailSubject || null,
+        emailFrom || null,
+      ]);
+    } catch (error) {
+      console.warn("Failed to insert into created_tickets (best-effort):", error?.message || error);
+    }
+  }
 }

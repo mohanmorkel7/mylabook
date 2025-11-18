@@ -569,6 +569,13 @@ export class TicketRepository {
       queryParams.push(filters.date_to);
     }
 
+    // If requested, restrict results to tickets visible to a specific viewer (non-admin users)
+    if (restrictToViewer && viewerId) {
+      whereConditions.push(`(t.assigned_to = $${paramIndex} OR $${paramIndex} = ANY(t.watcher_user_ids))`);
+      queryParams.push(viewerId);
+      paramIndex++;
+    }
+
     const whereClause =
       whereConditions.length > 0
         ? `WHERE ${whereConditions.join(" AND ")}`

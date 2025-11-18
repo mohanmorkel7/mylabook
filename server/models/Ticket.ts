@@ -769,14 +769,18 @@ export class TicketRepository {
 
     const row = result.rows[0];
 
-    // Fetch watchers for this ticket
+    // Read watchers from watcher_user_ids column if present, otherwise fallback to ticket_watchers table
     let watchers: number[] = [];
     try {
-      const watchersResult = await pool.query(
-        "SELECT user_id FROM ticket_watchers WHERE ticket_id = $1 ORDER BY user_id",
-        [id],
-      );
-      watchers = watchersResult.rows.map((r: any) => r.user_id);
+      if (row.watcher_user_ids !== undefined) {
+        watchers = row.watcher_user_ids || [];
+      } else {
+        const watchersResult = await pool.query(
+          "SELECT user_id FROM ticket_watchers WHERE ticket_id = $1 ORDER BY user_id",
+          [id],
+        );
+        watchers = watchersResult.rows.map((r: any) => r.user_id);
+      }
     } catch (e) {
       console.warn("Failed to fetch ticket watchers:", e);
     }

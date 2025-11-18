@@ -36,6 +36,7 @@ import connectionsRouter from "./routes/connections";
 import mailConfigsRouter from "./routes/mail-configs";
 import emailProcessingRouter from "./routes/email-processing";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
+import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
 
 // Production routes (database-only, no mock fallback)
 import templatesProductionRouter from "./routes/templates-production";
@@ -77,6 +78,26 @@ export function createServer() {
       "Failed to initialize Email Processing Job:",
       (e as any)?.message,
     );
+  }
+
+  // Start Overdue Ticket Job: run every 30 seconds
+  try {
+    // Delay startup slightly to allow DB initialization to begin
+    setTimeout(() => {
+      // Run immediately once, then schedule periodically
+      runMarkOverdueTickets().catch((err) =>
+        console.error("Initial run of markOverdueTickets failed:", err),
+      );
+
+      // Schedule recurring run every 30 seconds
+      setInterval(() => {
+        runMarkOverdueTickets().catch((err) =>
+          console.error("Scheduled run of markOverdueTickets failed:", err),
+        );
+      }, 30 * 1000);
+    }, 1200);
+  } catch (e) {
+    console.error("Failed to start Overdue Ticket Job:", (e as any)?.message);
   }
 
   // Middleware

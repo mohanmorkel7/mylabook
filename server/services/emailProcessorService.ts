@@ -256,6 +256,22 @@ ${parsed.html}`;
           await import("../models/Ticket")
         ).TicketRepository.create(ticketData, createdBy);
 
+        // Best-effort: record created_tickets entry so UI can list created-from-email tickets
+        try {
+          const MailConfigRepo = await import("../models/MailConfig");
+          await MailConfigRepo.MailConfig.insertCreatedTicket(
+            config.id,
+            email.id,
+            createdTicket.id,
+            null,
+            null,
+            subject,
+            fromEmail,
+          );
+        } catch (e) {
+          console.warn("Failed to record created_tickets after ticket creation:", e?.message || e);
+        }
+
         return { ticketId: createdTicket.id, success: true };
       } catch (dbError: any) {
         const errorMsg = (dbError?.message || String(dbError)).toLowerCase();

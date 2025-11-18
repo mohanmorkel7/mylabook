@@ -76,7 +76,7 @@ export async function runMarkOverdueTickets() {
   }
 }
 
-// If run directly via node, execute once
-if (require.main === module) {
+// If run directly via node (CommonJS) execute once — guard against ESM where `require`/`module` may be undefined
+if (typeof require !== "undefined" && typeof module !== "undefined" && (require as any).main === module) {
   runMarkOverdueTickets().then(() => process.exit(0));
 }

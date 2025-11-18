@@ -673,7 +673,11 @@ export default function ManageTickets() {
             </Button>
             <Button
               variant={activeTab === "created" ? "default" : "outline"}
-              onClick={() => setActiveTab("created")}
+              onClick={() => {
+                setActiveTab("created");
+                // Fetch created tickets ignoring current filters so tab shows items
+                fetchCreatedTickets(true);
+              }}
             >
               Created from Email ({createdTicketsCount})
             </Button>

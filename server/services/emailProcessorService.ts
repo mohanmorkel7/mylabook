@@ -240,6 +240,7 @@ console.log("config : ", config);
         team_id: config.team_id,
         bucket_id: config.bucket_id,
         demand: config.demand,
+        status_id:config.status_id,
         assigned_to: config.assigned_to_id,
         project_id: config.project_id,
       } as any;
@@ -462,7 +463,7 @@ export async function getAllActiveConfigs(): Promise<
   const query = `
     SELECT id, user_id, name, description, field_type, field_value,
            from_email, to_email, subject_pattern, body_content, body_match_type,
-           project_id, team_id, bucket_id, priority_id, assigned_to_id, watcher_user_ids,
+           project_id, team_id, bucket_id, status_id, priority_id, assigned_to_id, watcher_user_ids,
            is_active, demand, created_at, updated_at
     FROM mail_configs
     WHERE is_active = true

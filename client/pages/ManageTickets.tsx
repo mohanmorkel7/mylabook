@@ -677,9 +677,12 @@ export default function ManageTickets() {
     return local.map((t: any) => ({
       id: t.id,
       email_subject: t.subject || t.track_id,
-      email_from: (t.creator && (t.creator.email || t.creator.name)) || "Unknown",
+      email_from:
+        (t.creator && (t.creator.email || t.creator.name)) || "Unknown",
       config_name: t.mail_config_id ? `Config #${t.mail_config_id}` : "",
-      assigned_to: t.assignee || (t.assigned_to ? { id: t.assigned_to, name: "Unassigned" } : null),
+      assigned_to:
+        t.assignee ||
+        (t.assigned_to ? { id: t.assigned_to, name: "Unassigned" } : null),
       priority_id: t.priority_id,
       mitra_ticket_id: t.mitra_ticket_id || null,
       created_at: t.created_at,
@@ -1212,7 +1215,10 @@ export default function ManageTickets() {
                   key={ticket.id}
                   className="hover:shadow-lg transition-shadow cursor-pointer"
                   onClick={() => {
-                    const targetId = ticket.ticket_id ?? ticket.__source_ticket?.id ?? ticket.id;
+                    const targetId =
+                      ticket.ticket_id ??
+                      ticket.__source_ticket?.id ??
+                      ticket.id;
                     if (targetId) navigate(`/tickets/${targetId}`);
                   }}
                 >

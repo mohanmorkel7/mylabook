@@ -276,8 +276,14 @@ export default function ManageTickets() {
         response && !Array.isArray(response) && response.tickets
           ? response
           : response.data || response;
-      console.debug("[ManageTickets] fetchCreatedTicketsCount response:", response);
-      console.debug("[ManageTickets] fetchCreatedTicketsCount payload:", payload);
+      console.debug(
+        "[ManageTickets] fetchCreatedTicketsCount response:",
+        response,
+      );
+      console.debug(
+        "[ManageTickets] fetchCreatedTicketsCount payload:",
+        payload,
+      );
       const total =
         payload.pagination?.total ??
         payload.total ??

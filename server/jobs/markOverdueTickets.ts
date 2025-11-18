@@ -22,7 +22,9 @@ export async function runMarkOverdueTickets() {
        WHERE t.sla_time IS NOT NULL AND t.sla_time < NOW()`,
     );
 
-    console.log(`[markOverdueTickets] Found ${ticketsRes.rows.length} tickets with sla_time < NOW()`);
+    console.log(
+      `[markOverdueTickets] Found ${ticketsRes.rows.length} tickets with sla_time < NOW()`,
+    );
 
     for (const row of ticketsRes.rows) {
       const ticketId = row.id;
@@ -34,7 +36,9 @@ export async function runMarkOverdueTickets() {
       );
 
       if (currentStatusId === overdueStatusId) {
-        console.log(`[markOverdueTickets] Skipping ticket ${ticketId} because already overdue`);
+        console.log(
+          `[markOverdueTickets] Skipping ticket ${ticketId} because already overdue`,
+        );
         continue;
       }
 
@@ -52,7 +56,9 @@ export async function runMarkOverdueTickets() {
       // Check if current status is closed
       const isClosed = row.is_closed === true;
       if (isClosed) {
-        console.log(`[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`);
+        console.log(
+          `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`,
+        );
         continue;
       }
 
@@ -63,7 +69,9 @@ export async function runMarkOverdueTickets() {
       );
 
       if (updateRes.rowCount === 0) {
-        console.warn(`[markOverdueTickets] Failed to update ticket ${ticketId} to overdue status`);
+        console.warn(
+          `[markOverdueTickets] Failed to update ticket ${ticketId} to overdue status`,
+        );
         continue;
       }
 
@@ -96,6 +104,10 @@ export async function runMarkOverdueTickets() {
 }
 
 // If run directly via node (CommonJS) execute once — guard against ESM where `require`/`module` may be undefined
-if (typeof require !== "undefined" && typeof module !== "undefined" && (require as any).main === module) {
+if (
+  typeof require !== "undefined" &&
+  typeof module !== "undefined" &&
+  (require as any).main === module
+) {
   runMarkOverdueTickets().then(() => process.exit(0));
 }

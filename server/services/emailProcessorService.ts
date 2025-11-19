@@ -593,6 +593,7 @@ export async function processEmailsForConfigs(
           processed++;
         } else {
           // Another process logged this email first (race condition), skip counting
+          console.log(`[EmailProcessing] Email ${email.id} for config ${config.id} was already logged by another process (logProcessedEmailAtomic returned false)`);
           skipped++;
         }
       }

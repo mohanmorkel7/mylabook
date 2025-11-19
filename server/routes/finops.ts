@@ -1672,12 +1672,42 @@ router.patch(
       const subtaskId = Number(req.params.subtaskId);
       const { status, user_name, delay_reason, delay_notes, date } = req.body;
       let userName = typeof user_name === "string" ? user_name.trim() : "";
-      if (
-        !userName ||
-        /undefined|null/i.test(userName) ||
-        userName.replace(/\s+/g, "") === ""
-      ) {
-        userName = "Unknown User";
+
+      // If user_name not provided, try headers (x-user-name or x-user-id) before defaulting
+      if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+        const headerName = (req.headers["x-user-name"] as string) || "";
+        const headerUserId = (req.headers["x-user-id"] as string) || "";
+        if (headerName && typeof headerName === "string" && headerName.trim() !== "") {
+          userName = headerName.trim();
+        } else if (headerUserId && String(headerUserId).trim() !== "") {
+          // Try to resolve numeric user id or azure id/email
+          try {
+            const uid = String(headerUserId).trim();
+            let userRes;
+            if (/^\d+$/.test(uid)) {
+              userRes = await pool.query(
+                `SELECT first_name, last_name, email FROM users WHERE id = $1 LIMIT 1`,
+                [Number(uid)],
+              );
+            } else {
+              // Try azure_object_id or email
+              userRes = await pool.query(
+                `SELECT first_name, last_name, email FROM users WHERE azure_object_id = $1 OR LOWER(email) = LOWER($1) LIMIT 1`,
+                [uid],
+              );
+            }
+            if (userRes && userRes.rows.length > 0) {
+              const u = userRes.rows[0];
+              userName = `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() || u.email || "Unknown User";
+            }
+          } catch (e) {
+            // ignore and fallback
+          }
+        }
+
+        if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+          userName = "Unknown User";
+        }
       }
 
       // Use passed date or default to today (preserve time component for timestamps)

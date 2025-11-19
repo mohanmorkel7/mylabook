@@ -34,12 +34,26 @@ function getUserId(req: Request): number {
   return numericUserId;
 }
 
-// GET all mail configs for current user (or all configs if admin)
+// GET all mail configs for current user (or all configs if admin). If no user context provided, return all configs.
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const userId = getUserId(req);
+    // Determine user context if present, but allow anonymous access to list all configs
+    let userId: number | null = null;
+    try {
+      userId = getUserId(req);
+    } catch (e) {
+      // No user id provided or invalid format — treat as public request to list all configs
+      userId = null;
+    }
 
-    // Check if user is an admin
+    if (userId === null) {
+      console.log(`Anonymous request to list all mail configs`);
+      const configs = await MailConfigRepository.findAll(null);
+      console.log(`Returning ${configs.length} mail configs (anonymous)`);
+      return res.json(configs);
+    }
+
+    // Authenticated request — check admin status
     const user = await UserRepository.findById(userId);
     const isAdmin = user?.role === "admin";
 
@@ -58,10 +72,22 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
-// GET active mail configs (for email processing)
+// GET active mail configs (for email processing). Allow anonymous to fetch all active configs.
 router.get("/active", async (req: Request, res: Response) => {
   try {
-    const userId = getUserId(req);
+    let userId: number | null = null;
+    try {
+      userId = getUserId(req);
+    } catch (e) {
+      userId = null;
+    }
+
+    if (userId === null) {
+      console.log(`Anonymous request to list all active mail configs`);
+      const configs = await MailConfigRepository.getActiveConfigs(null);
+      return res.json(configs);
+    }
+
     const user = await UserRepository.findById(userId);
     const isAdmin = user?.role === "admin";
 

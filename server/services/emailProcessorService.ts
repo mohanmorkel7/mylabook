@@ -535,6 +535,11 @@ export async function processEmailsForConfigs(
         );
 
         if (!matches) {
+          console.log(`[EmailProcessing] Skipping email ${email.id} for config ${config.id} because it did not match criteria. field_type=${config.field_type} field_value='${config.field_value}' subject='${String(
+            email.subject || "(No subject)"
+          ).replace(/\n/g, " ")}' from='${String(
+            (email.from && (email.from.emailAddress?.address || email.from)) || (email.sender && email.sender.emailAddress?.address) || "unknown"
+          )}'`);
           skipped++;
           continue;
         }
@@ -553,6 +558,7 @@ export async function processEmailsForConfigs(
 
         if (alreadyProcessed) {
           // Email already processed, skip it
+          console.log(`[EmailProcessing] Skipping email ${email.id} for config ${config.id} because it was already processed (mail_processing_log exists)`);
           skipped++;
           continue;
         }

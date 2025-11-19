@@ -853,7 +853,39 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
     const subtaskId = parseInt(req.params.id);
-    const { approver_name, note, tracker_id } = req.body || {};
+    let { approver_name, note, tracker_id } = req.body || {};
+
+    // Allow approver to be provided via header x-user-name or x-user-id
+    if (!approver_name || /undefined|null/i.test(String(approver_name))) {
+      const headerName = (req.headers["x-user-name"] as string) || "";
+      const headerUserId = (req.headers["x-user-id"] as string) || "";
+      if (headerName && typeof headerName === "string" && headerName.trim() !== "") {
+        approver_name = headerName.trim();
+      } else if (headerUserId && String(headerUserId).trim() !== "") {
+        try {
+          const uid = String(headerUserId).trim();
+          let userRes;
+          if (/^\d+$/.test(uid)) {
+            userRes = await pool.query(
+              `SELECT first_name, last_name, email FROM users WHERE id = $1 LIMIT 1`,
+              [Number(uid)],
+            );
+          } else {
+            userRes = await pool.query(
+              `SELECT first_name, last_name, email FROM users WHERE azure_object_id = $1 OR LOWER(email) = LOWER($1) LIMIT 1`,
+              [uid],
+            );
+          }
+          if (userRes && userRes.rows.length > 0) {
+            const u = userRes.rows[0];
+            approver_name = `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() || u.email || approver_name;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
     if (!approver_name)
       return res.status(400).json({ error: "approver_name is required" });
 

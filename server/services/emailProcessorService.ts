@@ -231,11 +231,52 @@ ${parsed.html}`;
 
       console.log("config : ", config);
 
+      // Ensure priority_id exists in ticket_priorities; if not, fallback to a safe default
+      let effectivePriorityId = config.priority_id;
+      try {
+        if (effectivePriorityId !== undefined && effectivePriorityId !== null) {
+          const priRes = await pool.query(
+            "SELECT id FROM ticket_priorities WHERE id = $1 LIMIT 1",
+            [effectivePriorityId],
+          );
+          if (priRes.rows.length === 0) {
+            console.warn(
+              `[EmailProcessing] Mail config ${config.id} references missing priority_id=${effectivePriorityId}. Falling back to default priority`,
+            );
+            effectivePriorityId = null;
+          }
+        }
+
+        // If no effective priority, use the first available priority as default (best-effort)
+        if (effectivePriorityId === null || effectivePriorityId === undefined) {
+          const defaultPri = await pool.query(
+            "SELECT id FROM ticket_priorities ORDER BY level ASC LIMIT 1",
+          );
+          if (defaultPri.rows.length > 0) {
+            effectivePriorityId = defaultPri.rows[0].id;
+            console.log(
+              `[EmailProcessing] Using default priority_id=${effectivePriorityId} for mail config ${config.id}`,
+            );
+          } else {
+            console.warn(
+              `[EmailProcessing] No priorities found in ticket_priorities table; will insert ticket without priority`,
+            );
+            effectivePriorityId = null;
+          }
+        }
+      } catch (e) {
+        console.error(
+          `[EmailProcessing] Error validating/fetching priority for config ${config.id}:`,
+          e,
+        );
+        effectivePriorityId = null;
+      }
+
       // Create ticket in app database using TicketRepository
       const ticketData = {
         subject,
         description,
-        priority_id: config.priority_id,
+        priority_id: effectivePriorityId,
         team_id: config.team_id,
         bucket_id: config.bucket_id,
         demand: config.demand,

@@ -215,14 +215,16 @@ ${bodyText}`;
       const { emailId, configId, payload } = match;
 
       try {
-        // CHECK if email was already processed BEFORE creating ticket
-        const alreadyProcessed = await MailConfigRepository.isEmailProcessed(
+        // Atomically claim the email for processing to avoid duplicate ticket creation
+        const claimed = await MailConfigRepository.claimEmailProcessing(
           configId,
           emailId,
+          payload.issue.subject,
+          "unknown",
         );
 
-        if (alreadyProcessed) {
-          // Email already processed, skip it
+        if (!claimed) {
+          // Email already claimed/processed by another process, skip
           continue;
         }
 
@@ -247,8 +249,8 @@ ${bodyText}`;
           ticketId = data.issue?.id;
         }
 
-        // Atomically log the result. If another process beat us, this will return false.
-        const logged = await MailConfigRepository.logProcessedEmailAtomic(
+        // Finalize the processing log (insert or update)
+        await MailConfigRepository.logProcessedEmail(
           configId,
           emailId,
           payload.issue.subject,
@@ -258,10 +260,25 @@ ${bodyText}`;
           error,
         );
 
-        // Only track if we were the first to log this
-        if (logged) {
-          results.push({ emailId, configId, success, ticketId, error });
+        // Best-effort: record created_tickets row if we have a ticket id
+        if (ticketId) {
+          try {
+            await MailConfigRepository.insertCreatedTicket(
+              configId,
+              emailId,
+              ticketId,
+              null,
+              null,
+              payload.issue.subject,
+              "unknown",
+            );
+          } catch (e) {
+            console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+          }
         }
+
+        // Track result since we were the claimer
+        results.push({ emailId, configId, success, ticketId, error });
       } catch (err: any) {
         console.error(
           `Error processing match for email ${match.emailId}:`,

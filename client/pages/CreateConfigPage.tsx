@@ -123,7 +123,45 @@ export default function CreateConfigPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+    if (isEditMode && id) {
+      fetchConfigData(id);
+    }
+  }, [isEditMode, id]);
+
+  const fetchConfigData = async (configId: string) => {
+    try {
+      setIsFetching(true);
+      const response = await api.get(`/mail-configs/${configId}`);
+      if (response) {
+        // Map database config to form state
+        const sources = response.sources || [];
+        const prioritySlaMap: Record<number, string> = {
+          4: "2 Hours",
+          3: "5 Hours",
+          2: "24 Hours",
+        };
+
+        setForm({
+          configName: response.name || "",
+          description: response.description || "",
+          team: response.team || "",
+          sources: sources.length > 0 ? sources : [],
+          assignedTo: response.assigned_to_id || null,
+          watchers: response.watcher_user_ids || [],
+          prioritySla: prioritySlaMap[response.priority_id] || "",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching config:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load configuration",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFetching(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {

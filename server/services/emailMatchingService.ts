@@ -122,7 +122,9 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
     if (!match) return false;
     const actualDomain = match[2].toLowerCase();
     // normalize configured domain (allow values like "@razorpay.com" or "razorpay.com")
-    const configuredDomain = domain.startsWith("@") ? domain.substring(1) : domain;
+    const configuredDomain = domain.startsWith("@")
+      ? domain.substring(1)
+      : domain;
     return actualDomain === configuredDomain;
   }
 

@@ -28,7 +28,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import api from "@/lib/api";
-import { Check, ChevronsUpDown, X, Plus, Trash2, CheckCircle } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  X,
+  Plus,
+  Trash2,
+  CheckCircle,
+} from "lucide-react";
 
 interface User {
   id: number;
@@ -75,12 +82,7 @@ const EMAIL_SOURCES = [
   "wavegate@pauswiff.com",
   "custom",
 ];
-const DOMAINS = [
-  "@razorpay.com",
-  "@payswiff.com",
-  "@camspay.com",
-  "custom",
-];
+const DOMAINS = ["@razorpay.com", "@payswiff.com", "@camspay.com", "custom"];
 const FIELD_TYPES = ["From", "To", "Cc", "Subject", "Body"];
 const OPERATORS = {
   From: ["domain"],
@@ -215,7 +217,7 @@ export default function CreateConfigPage() {
     setForm({
       ...form,
       sources: form.sources.map((s) =>
-        s.id === sourceId ? { ...s, ...updates } : s
+        s.id === sourceId ? { ...s, ...updates } : s,
       ),
     });
   };
@@ -261,7 +263,7 @@ export default function CreateConfigPage() {
   const updateEmailRule = (
     sourceId: string,
     ruleId: string,
-    updates: Partial<EmailRule>
+    updates: Partial<EmailRule>,
   ) => {
     setForm({
       ...form,
@@ -270,7 +272,7 @@ export default function CreateConfigPage() {
           return {
             ...s,
             emailRules: s.emailRules.map((r) =>
-              r.id === ruleId ? { ...r, ...updates } : r
+              r.id === ruleId ? { ...r, ...updates } : r,
             ),
           };
         }
@@ -281,7 +283,10 @@ export default function CreateConfigPage() {
 
   const addCustomEmailSource = () => {
     if (tempCustomEmailSource.trim()) {
-      setCustomEmailSources([...customEmailSources, tempCustomEmailSource.trim()]);
+      setCustomEmailSources([
+        ...customEmailSources,
+        tempCustomEmailSource.trim(),
+      ]);
       setTempCustomEmailSource("");
     }
   };
@@ -306,11 +311,11 @@ export default function CreateConfigPage() {
   };
 
   const filteredUsers = users.filter((u) =>
-    getUserName(u).toLowerCase().includes(searchAssignee.toLowerCase())
+    getUserName(u).toLowerCase().includes(searchAssignee.toLowerCase()),
   );
 
   const filteredWatchers = users.filter((u) =>
-    getUserName(u).toLowerCase().includes(searchWatchers.toLowerCase())
+    getUserName(u).toLowerCase().includes(searchWatchers.toLowerCase()),
   );
 
   const assignedUser = users.find((u) => u.id === form.assignedTo);
@@ -372,7 +377,8 @@ export default function CreateConfigPage() {
           if (source.emailRules.length === 0) {
             toast({
               title: "Validation Error",
-              description: "At least one email rule is required per email source",
+              description:
+                "At least one email rule is required per email source",
               variant: "destructive",
             });
             return;
@@ -428,9 +434,10 @@ export default function CreateConfigPage() {
 
       if (firstSource.type === "Email" && firstSource.emailSource) {
         fieldType = "fromEmail";
-        fieldValue = firstSource.emailSource === "custom"
-          ? firstSource.customEmailSource || form.configName
-          : firstSource.emailSource;
+        fieldValue =
+          firstSource.emailSource === "custom"
+            ? firstSource.customEmailSource || form.configName
+            : firstSource.emailSource;
       } else if (firstSource.type === "Slack") {
         fieldType = "body";
         fieldValue = firstSource.slackName || form.configName;
@@ -441,7 +448,8 @@ export default function CreateConfigPage() {
         description: form.description,
         field_type: fieldType,
         field_value: fieldValue,
-        from_email: firstSource.type === "Email" ? firstSource.emailSource : undefined,
+        from_email:
+          firstSource.type === "Email" ? firstSource.emailSource : undefined,
         project_id: 28,
         priority_id: priorityMap[form.prioritySla] || 3,
         assigned_to_id: form.assignedTo,
@@ -473,7 +481,8 @@ export default function CreateConfigPage() {
       console.error("Error creating config:", error);
       toast({
         title: "Error",
-        description: (error as any)?.message || "Failed to create configuration",
+        description:
+          (error as any)?.message || "Failed to create configuration",
         variant: "destructive",
       });
     } finally {
@@ -540,7 +549,10 @@ export default function CreateConfigPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="team">Team *</Label>
-                <Select value={form.team} onValueChange={(value) => setForm({ ...form, team: value })}>
+                <Select
+                  value={form.team}
+                  onValueChange={(value) => setForm({ ...form, team: value })}
+                >
                   <SelectTrigger id="team">
                     <SelectValue placeholder="Select team" />
                   </SelectTrigger>
@@ -580,9 +592,14 @@ export default function CreateConfigPage() {
               ) : (
                 <div className="space-y-6">
                   {form.sources.map((source, sourceIndex) => (
-                    <div key={source.id} className="border rounded-lg p-4 space-y-4">
+                    <div
+                      key={source.id}
+                      className="border rounded-lg p-4 space-y-4"
+                    >
                       <div className="flex justify-between items-center">
-                        <h3 className="font-semibold text-sm">Source {sourceIndex + 1}</h3>
+                        <h3 className="font-semibold text-sm">
+                          Source {sourceIndex + 1}
+                        </h3>
                         <Button
                           type="button"
                           variant="ghost"
@@ -596,7 +613,9 @@ export default function CreateConfigPage() {
 
                       {/* Source Type Selection */}
                       <div className="space-y-2">
-                        <Label htmlFor={`source-type-${source.id}`}>Source Type *</Label>
+                        <Label htmlFor={`source-type-${source.id}`}>
+                          Source Type *
+                        </Label>
                         <Select
                           value={source.type}
                           onValueChange={(value) =>
@@ -683,7 +702,7 @@ export default function CreateConfigPage() {
                                     if (source.customEmailSource?.trim()) {
                                       if (
                                         !customEmailSources.includes(
-                                          source.customEmailSource
+                                          source.customEmailSource,
                                         )
                                       ) {
                                         setCustomEmailSources([
@@ -707,7 +726,9 @@ export default function CreateConfigPage() {
                           {/* Email Rules */}
                           <div className="border-t pt-4 space-y-4">
                             <div className="flex justify-between items-center">
-                              <h4 className="font-semibold text-sm">Rule Config *</h4>
+                              <h4 className="font-semibold text-sm">
+                                Rule Config *
+                              </h4>
                               <Button
                                 type="button"
                                 variant="outline"
@@ -722,7 +743,10 @@ export default function CreateConfigPage() {
                             <div className="space-y-3">
                               {source.emailRules &&
                                 source.emailRules.map((rule, ruleIndex) => (
-                                  <div key={rule.id} className="space-y-3 bg-gray-50 p-3 rounded">
+                                  <div
+                                    key={rule.id}
+                                    className="space-y-3 bg-gray-50 p-3 rounded"
+                                  >
                                     <div className="grid grid-cols-2 gap-3">
                                       <div className="space-y-2">
                                         <Label htmlFor={`field-${rule.id}`}>
@@ -737,18 +761,24 @@ export default function CreateConfigPage() {
                                               {
                                                 fieldType: value as any,
                                                 operator:
-                                                  (OPERATORS as any)[value]?.[0] ||
-                                                  "domain",
-                                              }
+                                                  (OPERATORS as any)[
+                                                    value
+                                                  ]?.[0] || "domain",
+                                              },
                                             )
                                           }
                                         >
-                                          <SelectTrigger id={`field-${rule.id}`}>
+                                          <SelectTrigger
+                                            id={`field-${rule.id}`}
+                                          >
                                             <SelectValue />
                                           </SelectTrigger>
                                           <SelectContent>
                                             {FIELD_TYPES.map((field) => (
-                                              <SelectItem key={field} value={field}>
+                                              <SelectItem
+                                                key={field}
+                                                value={field}
+                                              >
                                                 {field}
                                               </SelectItem>
                                             ))}
@@ -766,23 +796,23 @@ export default function CreateConfigPage() {
                                             updateEmailRule(
                                               source.id,
                                               rule.id,
-                                              { operator: value as any }
+                                              { operator: value as any },
                                             )
                                           }
                                         >
-                                          <SelectTrigger id={`operator-${rule.id}`}>
+                                          <SelectTrigger
+                                            id={`operator-${rule.id}`}
+                                          >
                                             <SelectValue />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            {(
-                                              OPERATORS as any
-                                            )[rule.fieldType]?.map(
-                                              (op: string) => (
-                                                <SelectItem key={op} value={op}>
-                                                  {op}
-                                                </SelectItem>
-                                              )
-                                            )}
+                                            {(OPERATORS as any)[
+                                              rule.fieldType
+                                            ]?.map((op: string) => (
+                                              <SelectItem key={op} value={op}>
+                                                {op}
+                                              </SelectItem>
+                                            ))}
                                           </SelectContent>
                                         </Select>
                                       </div>
@@ -800,21 +830,29 @@ export default function CreateConfigPage() {
                                               updateEmailRule(
                                                 source.id,
                                                 rule.id,
-                                                { domain: value }
+                                                { domain: value },
                                               )
                                             }
                                           >
-                                            <SelectTrigger id={`domain-${rule.id}`}>
+                                            <SelectTrigger
+                                              id={`domain-${rule.id}`}
+                                            >
                                               <SelectValue placeholder="Select domain" />
                                             </SelectTrigger>
                                             <SelectContent>
                                               {DOMAINS.map((domain) => (
-                                                <SelectItem key={domain} value={domain}>
+                                                <SelectItem
+                                                  key={domain}
+                                                  value={domain}
+                                                >
                                                   {domain}
                                                 </SelectItem>
                                               ))}
                                               {customDomains.map((domain) => (
-                                                <SelectItem key={domain} value={domain}>
+                                                <SelectItem
+                                                  key={domain}
+                                                  value={domain}
+                                                >
                                                   {domain}
                                                 </SelectItem>
                                               ))}
@@ -824,7 +862,9 @@ export default function CreateConfigPage() {
 
                                         {rule.domain === "custom" && (
                                           <div className="space-y-2">
-                                            <Label htmlFor={`custom-domain-${rule.id}`}>
+                                            <Label
+                                              htmlFor={`custom-domain-${rule.id}`}
+                                            >
                                               Custom Domain
                                             </Label>
                                             <div className="flex gap-2">
@@ -833,7 +873,9 @@ export default function CreateConfigPage() {
                                                 placeholder="e.g., @custom.com"
                                                 value={tempCustomDomain}
                                                 onChange={(e) =>
-                                                  setTempCustomDomain(e.target.value)
+                                                  setTempCustomDomain(
+                                                    e.target.value,
+                                                  )
                                                 }
                                               />
                                               <Button
@@ -850,7 +892,9 @@ export default function CreateConfigPage() {
                                       </div>
                                     ) : (
                                       <div className="space-y-2">
-                                        <Label htmlFor={`value-${rule.id}`}>Value</Label>
+                                        <Label htmlFor={`value-${rule.id}`}>
+                                          Value
+                                        </Label>
                                         <Input
                                           id={`value-${rule.id}`}
                                           placeholder="Enter value"
@@ -859,7 +903,7 @@ export default function CreateConfigPage() {
                                             updateEmailRule(
                                               source.id,
                                               rule.id,
-                                              { value: e.target.value }
+                                              { value: e.target.value },
                                             )
                                           }
                                         />
@@ -877,17 +921,25 @@ export default function CreateConfigPage() {
                                             updateEmailRule(
                                               source.id,
                                               rule.id,
-                                              { nextOperator: value as any }
+                                              { nextOperator: value as any },
                                             )
                                           }
                                         >
-                                          <SelectTrigger id={`next-op-${rule.id}`}>
+                                          <SelectTrigger
+                                            id={`next-op-${rule.id}`}
+                                          >
                                             <SelectValue />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            <SelectItem value="AND">AND</SelectItem>
-                                            <SelectItem value="OR">OR</SelectItem>
-                                            <SelectItem value="END">END</SelectItem>
+                                            <SelectItem value="AND">
+                                              AND
+                                            </SelectItem>
+                                            <SelectItem value="OR">
+                                              OR
+                                            </SelectItem>
+                                            <SelectItem value="END">
+                                              END
+                                            </SelectItem>
                                           </SelectContent>
                                         </Select>
                                       </div>
@@ -899,7 +951,10 @@ export default function CreateConfigPage() {
                                             variant="ghost"
                                             size="sm"
                                             onClick={() =>
-                                              removeEmailRule(source.id, rule.id)
+                                              removeEmailRule(
+                                                source.id,
+                                                rule.id,
+                                              )
                                             }
                                             className="text-red-600"
                                           >
@@ -999,7 +1054,7 @@ export default function CreateConfigPage() {
                     <div className="px-2 pb-2">
                       {filteredUsers
                         .sort((a, b) =>
-                          getUserName(a).localeCompare(getUserName(b))
+                          getUserName(a).localeCompare(getUserName(b)),
                         )
                         .map((u) => (
                           <SelectItem key={u.id} value={String(u.id)}>
@@ -1082,7 +1137,9 @@ export default function CreateConfigPage() {
                 <Label htmlFor="priority-sla">Priority SLA *</Label>
                 <Select
                   value={form.prioritySla}
-                  onValueChange={(value) => setForm({ ...form, prioritySla: value })}
+                  onValueChange={(value) =>
+                    setForm({ ...form, prioritySla: value })
+                  }
                 >
                   <SelectTrigger id="priority-sla">
                     <SelectValue placeholder="Select SLA" />

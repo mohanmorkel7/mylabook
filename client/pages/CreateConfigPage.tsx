@@ -503,15 +503,23 @@ export default function CreateConfigPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {isEditMode ? "Edit Config" : "Create Config for Ticket"}
-          </h1>
-          <p className="text-gray-600 mt-2">
-            {isEditMode
-              ? "Update the email and Slack sources for automatic ticket creation"
-              : "Configure email and Slack sources for automatic ticket creation"}
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {isEditMode ? "Edit Config" : "Create Config for Ticket"}
+            </h1>
+            <p className="text-gray-600 mt-2">
+              {isEditMode
+                ? "Update the email and Slack sources for automatic ticket creation"
+                : "Configure email and Slack sources for automatic ticket creation"}
+            </p>
+          </div>
+
+          <div className="ml-4">
+            <Button variant="outline" onClick={() => navigate('/mail-configs')}>
+              Back to Mail Configs
+            </Button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">

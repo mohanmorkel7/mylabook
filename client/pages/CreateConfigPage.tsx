@@ -516,7 +516,7 @@ export default function CreateConfigPage() {
           </div>
 
           <div className="ml-4">
-            <Button variant="outline" onClick={() => navigate('/mail-configs')}>
+            <Button variant="outline" onClick={() => navigate("/mail-configs")}>
               Back to Mail Configs
             </Button>
           </div>

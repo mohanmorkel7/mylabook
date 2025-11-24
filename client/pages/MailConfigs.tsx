@@ -410,12 +410,25 @@ export default function MailConfigs() {
                                       >
                                         {rIdx + 1}. {rule.fieldType}
                                         {rule.domain ? (
-                                          <span className='ml-1'> = <span className='font-mono'>{escapeHtml(rule.domain)}</span></span>
+                                          <span className="ml-1">
+                                            {" "}
+                                            ={" "}
+                                            <span className="font-mono">
+                                              {escapeHtml(rule.domain)}
+                                            </span>
+                                          </span>
                                         ) : (
-                                          <span className='ml-1'> {rule.operator} "<span className='font-mono'>{escapeHtml(rule.value)}</span>"</span>
+                                          <span className="ml-1">
+                                            {" "}
+                                            {rule.operator} "
+                                            <span className="font-mono">
+                                              {escapeHtml(rule.value)}
+                                            </span>
+                                            "
+                                          </span>
                                         )}
-                                        {rule.nextOperator !== 'END' && (
-                                          <span className='font-medium ml-1'>
+                                        {rule.nextOperator !== "END" && (
+                                          <span className="font-medium ml-1">
                                             {rule.nextOperator}
                                           </span>
                                         )}

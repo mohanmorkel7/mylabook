@@ -57,8 +57,9 @@ export function initialize() {
               if (sources.length > 0) {
                 for (const s of sources) {
                   if (s.type === "Email") {
-                    const mailbox =
-                      s.customEmailSource || s.emailSource || null;
+                    // Prefer the actual emailSource (UPN/email) for mailbox access. customEmailSource
+                    // is a friendly label and should not be used to call Graph unless emailSource is missing.
+                    const mailbox = s.emailSource || s.customEmailSource || null;
                     if (mailbox) emailSources.push(mailbox);
                   }
                 }

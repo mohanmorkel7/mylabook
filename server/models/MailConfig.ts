@@ -118,7 +118,7 @@ export class MailConfigRepository {
     }
 
     result = await pool.query(query, params);
-    return result.rows.map(row => this.parseRow(row));
+    return result.rows.map((row) => this.parseRow(row));
   }
 
   // static async findById(
@@ -167,16 +167,16 @@ export class MailConfigRepository {
 
     query += ` ORDER BY created_at DESC`;
     const result = await pool.query(query, params);
-    return result.rows.map(row => this.parseRow(row));
+    return result.rows.map((row) => this.parseRow(row));
   }
 
   private static parseRow(row: any): MailConfig {
     // Ensure sources is properly parsed if it's a string
-    if (row.sources && typeof row.sources === 'string') {
+    if (row.sources && typeof row.sources === "string") {
       try {
         row.sources = JSON.parse(row.sources);
       } catch (e) {
-        console.warn('Failed to parse sources JSON:', e);
+        console.warn("Failed to parse sources JSON:", e);
         row.sources = null;
       }
     }
@@ -277,7 +277,11 @@ export class MailConfigRepository {
       if (value !== undefined && allowedColumns.includes(key)) {
         setClause.push(`${key} = $${paramIndex}`);
         // Handle JSONB fields - stringify if they're objects
-        if (key === "sources" && typeof value === "object" && !Array.isArray(value)) {
+        if (
+          key === "sources" &&
+          typeof value === "object" &&
+          !Array.isArray(value)
+        ) {
           values.push(JSON.stringify(value));
         } else if (key === "sources" && Array.isArray(value)) {
           values.push(JSON.stringify(value));

@@ -89,16 +89,17 @@ router.get(
         offset = 0,
       } = req.query;
 
+      // List tickets created by mail configs (use main tickets table)
       let query = `
-      SELECT 
-        ct.id,
-        ct.email_id,
-        ct.mail_config_id,
-        ct.ticket_id,
-        ct.mitra_ticket_id,
-        ct.email_subject,
-        ct.email_from,
-        ct.created_at,
+      SELECT
+        t.id as ticket_id,
+        NULL::varchar AS email_id,
+        mc.id as mail_config_id,
+        t.id as ticket_ref_id,
+        NULL::integer AS mitra_ticket_id,
+        t.subject as email_subject,
+        NULL::varchar AS email_from,
+        t.created_at,
         mc.name as config_name,
         mc.project_id,
         mc.priority_id,
@@ -106,10 +107,10 @@ router.get(
         mu.firstname,
         mu.lastname,
         mc.watcher_user_ids
-      FROM created_tickets ct
-      LEFT JOIN mail_configs mc ON ct.mail_config_id = mc.id
+      FROM tickets t
+      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
       LEFT JOIN mitra_users mu ON mc.assigned_to_id = mu.id
-      WHERE 1=1
+      WHERE t.mail_config_id IS NOT NULL
     `;
 
       const values: any[] = [];

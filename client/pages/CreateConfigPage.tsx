@@ -73,7 +73,6 @@ interface CreateConfigForm {
   sources: SourceConfig[];
   assignedTo: number | null;
   watchers: number[];
-  prioritySla: string;
   statusName?: string;
   demand?: number | null;
 }

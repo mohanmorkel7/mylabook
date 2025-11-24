@@ -67,6 +67,7 @@ const PRIORITY_COLORS: Record<number, string> = {
 };
 
 export default function MailConfigs() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [configs, setConfigs] = useState<MailConfig[]>([]);
   const [users, setUsers] = useState<User[]>([]);

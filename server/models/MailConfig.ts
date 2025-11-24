@@ -188,13 +188,14 @@ export class MailConfigRepository {
       INSERT INTO mail_configs (
         user_id, name, description, field_type, field_value,
         from_email, to_email, subject_pattern, body_content, body_match_type,
-        project_id, priority_id, assigned_to_id, watcher_user_ids, team_id, bucket_id, status_id, demand
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        project_id, priority_id, assigned_to_id, watcher_user_ids, team_id, bucket_id, status_id, demand,
+        sources, team
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING id, user_id, name, description, field_type, field_value,
                 from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
     `;
 
     const values = [
@@ -216,6 +217,8 @@ export class MailConfigRepository {
       data.bucket_id || null,
       data.status_id || null,
       data.demand !== undefined ? data.demand : null,
+      data.sources ? JSON.stringify(data.sources) : null,
+      data.team || null,
     ];
 
     const result = await pool.query(query, values);

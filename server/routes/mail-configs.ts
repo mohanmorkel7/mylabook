@@ -256,10 +256,30 @@ router.put("/:id", async (req: Request, res: Response) => {
     // Allow status_name in update payload and resolve it to status_id
     if (!(updateData as any).status_id && (req.body as any)?.status_name) {
       try {
-        const statusRes = await pool.query(
+        const name = (req.body as any).status_name;
+        let statusRes = await pool.query(
           "SELECT id FROM ticket_statuses WHERE LOWER(name) = LOWER($1) LIMIT 1",
-          [(req.body as any).status_name],
+          [name],
         );
+        if (statusRes.rows.length === 0) {
+          statusRes = await pool.query(
+            "SELECT id FROM ticket_statuses WHERE LOWER(name) LIKE LOWER($1) LIMIT 1",
+            [`%${name}%`],
+          );
+        }
+
+        if (statusRes.rows.length === 0) {
+          if (name.toLowerCase() === "pending") {
+            statusRes = await pool.query(
+              "SELECT id FROM ticket_statuses WHERE LOWER(name) LIKE '%wait%' LIMIT 1",
+            );
+          } else if (name.toLowerCase() === "overdue") {
+            statusRes = await pool.query(
+              "SELECT id FROM ticket_statuses WHERE LOWER(name) LIKE '%overdue%' LIMIT 1",
+            );
+          }
+        }
+
         if (statusRes.rows.length > 0) {
           (updateData as any).status_id = statusRes.rows[0].id;
         }

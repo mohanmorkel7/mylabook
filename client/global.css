@@ -215,7 +215,9 @@
   }
 
   /* Ensure full-height layout so internal scroll containers work correctly and avoid duplicate browser scrollbars */
-  html, body, #root {
+  html,
+  body,
+  #root {
     height: 100%;
   }
 

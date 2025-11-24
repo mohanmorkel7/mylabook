@@ -3,7 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit2, Trash2, Plus, Eye, AlertCircle, ChevronDown } from "lucide-react";
+import {
+  Edit2,
+  Trash2,
+  Plus,
+  Eye,
+  AlertCircle,
+  ChevronDown,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import api from "@/lib/api";
@@ -100,7 +107,8 @@ export default function MailConfigs() {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<number | null>(null);
-  const [selectedConfigPreview, setSelectedConfigPreview] = useState<MailConfig | null>(null);
+  const [selectedConfigPreview, setSelectedConfigPreview] =
+    useState<MailConfig | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const { toast } = useToast();
 
@@ -180,7 +188,7 @@ export default function MailConfigs() {
     if (!config.sources || config.sources.length === 0) return 0;
     return config.sources.reduce(
       (total, source) => total + (source.emailRules?.length || 0),
-      0
+      0,
     );
   };
 
@@ -193,7 +201,9 @@ export default function MailConfigs() {
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mail Configurations</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Mail Configurations
+          </h1>
           <p className="text-gray-600 mt-2">
             Manage email-to-ticket automation configurations
           </p>
@@ -254,9 +264,14 @@ export default function MailConfigs() {
 
           {/* Table Rows */}
           {configs.map((config) => (
-            <div key={config.id} className="border-b hover:bg-gray-50 transition-colors">
+            <div
+              key={config.id}
+              className="border-b hover:bg-gray-50 transition-colors"
+            >
               {/* Main Row */}
-              <div className={`grid grid-cols-12 gap-4 p-4 items-center ${!config.is_active ? "opacity-60" : ""}`}>
+              <div
+                className={`grid grid-cols-12 gap-4 p-4 items-center ${!config.is_active ? "opacity-60" : ""}`}
+              >
                 <div className="col-span-3 min-w-0">
                   <h3 className="text-sm font-semibold text-gray-900 truncate">
                     {config.name}
@@ -297,7 +312,9 @@ export default function MailConfigs() {
                 </div>
 
                 <div className="col-span-2 flex items-center gap-2">
-                  <Badge className={`text-xs ${PRIORITY_COLORS[config.priority_id]}`}>
+                  <Badge
+                    className={`text-xs ${PRIORITY_COLORS[config.priority_id]}`}
+                  >
                     {PRIORITY_SLA_MAP[config.priority_id] ||
                       PRIORITY_NAMES[config.priority_id]}
                   </Badge>
@@ -355,7 +372,10 @@ export default function MailConfigs() {
                     </summary>
                     <div className="mt-3 space-y-2 text-gray-600">
                       {config.sources.map((source, idx) => (
-                        <div key={source.id} className="bg-white p-2 rounded border">
+                        <div
+                          key={source.id}
+                          className="bg-white p-2 rounded border"
+                        >
                           <p className="font-medium text-gray-900">
                             {source.type} Source {idx + 1}
                           </p>
@@ -364,7 +384,8 @@ export default function MailConfigs() {
                               <p>
                                 <span className="text-gray-500">Email:</span>{" "}
                                 <span className="font-mono">
-                                  {source.customEmailSource || source.emailSource}
+                                  {source.customEmailSource ||
+                                    source.emailSource}
                                 </span>
                               </p>
                               {source.emailRules &&
@@ -401,7 +422,9 @@ export default function MailConfigs() {
                               </p>
                               <p>
                                 <span className="text-gray-500">Name:</span>{" "}
-                                <span className="font-mono">{source.slackName}</span>
+                                <span className="font-mono">
+                                  {source.slackName}
+                                </span>
                               </p>
                             </div>
                           )}
@@ -436,9 +459,15 @@ export default function MailConfigs() {
                     {selectedConfigPreview.is_active ? "Active" : "Inactive"}
                   </Badge>
                   {selectedConfigPreview.team && (
-                    <Badge variant="secondary">{selectedConfigPreview.team}</Badge>
+                    <Badge variant="secondary">
+                      {selectedConfigPreview.team}
+                    </Badge>
                   )}
-                  <Badge className={PRIORITY_COLORS[selectedConfigPreview.priority_id]}>
+                  <Badge
+                    className={
+                      PRIORITY_COLORS[selectedConfigPreview.priority_id]
+                    }
+                  >
                     {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
                       PRIORITY_NAMES[selectedConfigPreview.priority_id]}
                   </Badge>
@@ -493,7 +522,8 @@ export default function MailConfigs() {
                                   Email Address
                                 </p>
                                 <p className="text-sm font-mono font-semibold text-gray-900">
-                                  {source.customEmailSource || source.emailSource}
+                                  {source.customEmailSource ||
+                                    source.emailSource}
                                 </p>
                               </div>
 
@@ -517,7 +547,10 @@ export default function MailConfigs() {
                                           </span>
                                           {rule.domain ? (
                                             <span className="text-gray-700 ml-2">
-                                              = <span className="font-mono">{rule.domain}</span>
+                                              ={" "}
+                                              <span className="font-mono">
+                                                {rule.domain}
+                                              </span>
                                             </span>
                                           ) : (
                                             <span className="text-gray-700 ml-2">
@@ -544,7 +577,9 @@ export default function MailConfigs() {
                           {source.type === "Slack" && (
                             <div className="space-y-2 text-sm">
                               <div className="bg-gray-50 p-2 rounded">
-                                <p className="text-xs text-gray-600 mb-1">Type</p>
+                                <p className="text-xs text-gray-600 mb-1">
+                                  Type
+                                </p>
                                 <p className="font-medium text-gray-900">
                                   {source.slackType}
                                 </p>
@@ -577,7 +612,7 @@ export default function MailConfigs() {
                     </p>
                     <p className="text-sm font-semibold text-gray-900">
                       {getAssignedUserName(
-                        selectedConfigPreview.assigned_to_id
+                        selectedConfigPreview.assigned_to_id,
                       )}
                     </p>
                   </div>
@@ -586,7 +621,11 @@ export default function MailConfigs() {
                     <p className="text-xs text-gray-600 mb-2 font-semibold">
                       PRIORITY
                     </p>
-                    <Badge className={PRIORITY_COLORS[selectedConfigPreview.priority_id]}>
+                    <Badge
+                      className={
+                        PRIORITY_COLORS[selectedConfigPreview.priority_id]
+                      }
+                    >
                       {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
                         PRIORITY_NAMES[selectedConfigPreview.priority_id]}
                     </Badge>
@@ -596,19 +635,27 @@ export default function MailConfigs() {
                     selectedConfigPreview.watcher_user_ids.length > 0 && (
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                         <p className="text-xs text-gray-600 mb-2 font-semibold">
-                          WATCHERS ({selectedConfigPreview.watcher_user_ids.length})
+                          WATCHERS (
+                          {selectedConfigPreview.watcher_user_ids.length})
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {selectedConfigPreview.watcher_user_ids
                             .slice(0, 3)
                             .map((id) => (
-                              <Badge key={id} variant="secondary" className="text-xs">
+                              <Badge
+                                key={id}
+                                variant="secondary"
+                                className="text-xs"
+                              >
                                 {getAssignedUserName(id).split(" ")[0]}
                               </Badge>
                             ))}
-                          {selectedConfigPreview.watcher_user_ids.length > 3 && (
+                          {selectedConfigPreview.watcher_user_ids.length >
+                            3 && (
                             <Badge variant="outline" className="text-xs">
-                              +{selectedConfigPreview.watcher_user_ids.length - 3}
+                              +
+                              {selectedConfigPreview.watcher_user_ids.length -
+                                3}
                             </Badge>
                           )}
                         </div>
@@ -644,7 +691,8 @@ export default function MailConfigs() {
                   {new Date(selectedConfigPreview.updated_at).toLocaleString()}
                 </p>
                 <p>
-                  <span className="font-semibold">Config ID:</span> #{selectedConfigPreview.id}
+                  <span className="font-semibold">Config ID:</span> #
+                  {selectedConfigPreview.id}
                 </p>
               </div>
             </CardContent>

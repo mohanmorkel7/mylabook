@@ -118,13 +118,13 @@ router.get(
 
       // Add optional filters
       if (date_from) {
-        query += ` AND ct.created_at >= $${paramCount}`;
+        query += ` AND t.created_at >= $${paramCount}`;
         values.push(date_from);
         paramCount++;
       }
 
       if (date_to) {
-        query += ` AND ct.created_at <= $${paramCount}`;
+        query += ` AND t.created_at <= $${paramCount}`;
         values.push(date_to);
         paramCount++;
       }
@@ -147,7 +147,7 @@ router.get(
         paramCount++;
       }
 
-      query += ` ORDER BY ct.created_at DESC`;
+      query += ` ORDER BY t.created_at DESC`;
       query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
       values.push(limit);
       values.push(offset);
@@ -156,11 +156,11 @@ router.get(
 
       // Format response with assigned user display name
       const tickets = result.rows.map((row) => ({
-        id: row.id,
+        id: row.ticket_ref_id || row.ticket_id || null,
         email_id: row.email_id,
         mail_config_id: row.mail_config_id,
         config_name: row.config_name,
-        ticket_id: row.ticket_id,
+        ticket_id: row.ticket_ref_id || row.ticket_id || null,
         mitra_ticket_id: row.mitra_ticket_id,
         email_subject: row.email_subject,
         email_from: row.email_from,

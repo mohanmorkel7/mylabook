@@ -91,6 +91,15 @@ function normalizeText(input: string | undefined): string {
   return (input || "").toLowerCase();
 }
 
+function stripSubjectPrefixes(subject: string | undefined): string {
+  if (!subject) return "";
+  // Remove common prefixes like Re:, Fwd:, FW: (possibly repeated) and any surrounding whitespace
+  let s = subject;
+  // Remove sequences like Re: Re: or Fwd: Re:
+  s = s.replace(/^((re|fwd|fw)[:\s]*)+/i, "");
+  return s.trim();
+}
+
 function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   const fieldType = rule.fieldType;
   const operator = rule.operator || "Contains";

@@ -5,6 +5,7 @@ import {
   UpdateMailConfigData,
 } from "../models/MailConfig";
 import { MailConfigService } from "../services/mailConfigService";
+import { pool } from "../database/connection";
 import { UserRepository } from "../models/User";
 
 const router = express.Router();

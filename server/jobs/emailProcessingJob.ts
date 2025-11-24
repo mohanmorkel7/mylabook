@@ -109,8 +109,7 @@ export function initialize() {
                   if (Array.isArray((config as any).sources)) {
                     sourceForMatching = (config as any).sources.find(
                       (s: any) => {
-                        const candidate =
-                          s.customEmailSource || s.emailSource || null;
+                        const candidate = s.emailSource || s.customEmailSource || null;
                         return (
                           candidate &&
                           candidate.toLowerCase() === mailbox.toLowerCase()

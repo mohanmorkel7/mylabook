@@ -89,6 +89,8 @@ export interface UpdateMailConfigData {
   status_id?: number;
   demand?: number;
   is_active?: boolean;
+  sources?: SourceConfig[];
+  team?: string;
 }
 
 export class MailConfigRepository {

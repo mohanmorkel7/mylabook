@@ -116,8 +116,14 @@ export function initialize() {
                   // Debug: log one sample email and the source's rules to help diagnose matching failures
                   try {
                     const debugSample = emails[0];
-                    const rules = sourceForMatching ? (sourceForMatching.emailRules || []) : (configToUse.sources && configToUse.sources.length ? configToUse.sources[0].emailRules || [] : []);
-                    console.log(`Email matching debug: sampleEmailId=${debugSample.id} subject="${(debugSample.subject||"").substring(0,120)}" from="${(debugSample.from||"").substring(0,80)}" sourceMailbox=${mailbox} rules=${JSON.stringify(rules)}`);
+                    const rules = sourceForMatching
+                      ? sourceForMatching.emailRules || []
+                      : configToUse.sources && configToUse.sources.length
+                        ? configToUse.sources[0].emailRules || []
+                        : [];
+                    console.log(
+                      `Email matching debug: sampleEmailId=${debugSample.id} subject="${(debugSample.subject || "").substring(0, 120)}" from="${(debugSample.from || "").substring(0, 80)}" sourceMailbox=${mailbox} rules=${JSON.stringify(rules)}`,
+                    );
                   } catch (dbg) {
                     // ignore
                   }

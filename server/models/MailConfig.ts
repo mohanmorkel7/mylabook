@@ -195,7 +195,7 @@ export class MailConfigRepository {
     `;
 
     const result = await pool.query(query, [id]);
-    return result.rows[0] || null;
+    return result.rows[0] ? this.parseRow(result.rows[0]) : null;
   }
 
   static async create(data: CreateMailConfigData): Promise<MailConfig> {

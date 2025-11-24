@@ -181,10 +181,32 @@ router.post("/", async (req: Request, res: Response) => {
     const statusNameFromBody = (req.body as any)?.status_name;
     if (!resolvedStatusId && statusNameFromBody) {
       try {
-        const statusRes = await pool.query(
+        // Try exact match first
+        let statusRes = await pool.query(
           "SELECT id FROM ticket_statuses WHERE LOWER(name) = LOWER($1) LIMIT 1",
           [statusNameFromBody],
         );
+        if (statusRes.rows.length === 0) {
+          // Try a LIKE search
+          statusRes = await pool.query(
+            "SELECT id FROM ticket_statuses WHERE LOWER(name) LIKE LOWER($1) LIMIT 1",
+            [`%${statusNameFromBody}%`],
+          );
+        }
+
+        // Handle common synonyms
+        if (statusRes.rows.length === 0) {
+          if (statusNameFromBody.toLowerCase() === "pending") {
+            statusRes = await pool.query(
+              "SELECT id FROM ticket_statuses WHERE LOWER(name) LIKE '%wait%' LIMIT 1",
+            );
+          } else if (statusNameFromBody.toLowerCase() === "overdue") {
+            statusRes = await pool.query(
+              "SELECT id FROM ticket_statuses WHERE LOWER(name) LIKE '%overdue%' LIMIT 1",
+            );
+          }
+        }
+
         if (statusRes.rows.length > 0) {
           resolvedStatusId = statusRes.rows[0].id;
         }

@@ -413,12 +413,25 @@ ${parsed.html}`;
 
           console.log("MAin config : ", config);
 
-          // Try to create ticket
+          // Atomically claim the email for processing to avoid duplicate ticket creation
+          const claimed = await MailConfigRepository.claimEmailProcessing(
+            config.id,
+            email.id,
+            emailSubject,
+            emailFrom,
+          );
+
+          if (!claimed) {
+            // Another process already claimed or processed this email
+            skipped++;
+            continue;
+          }
+
+          // We hold the claim — proceed to create the ticket
           const ticketResult = await this.createTicket(email, config);
 
-          // Atomically log the result. If another process beat us, this will return false.
-          // But the ticket was created successfully regardless, so we still count it.
-          const logged = await MailConfigRepository.logProcessedEmailAtomic(
+          // Finalize the processing log (insert or update) with result
+          await MailConfigRepository.logProcessedEmail(
             config.id,
             email.id,
             emailSubject,
@@ -428,27 +441,39 @@ ${parsed.html}`;
             ticketResult.error,
           );
 
-          // Only count if we successfully logged it (we were the first to process this email)
-          if (logged) {
-            if (ticketResult.success) {
-              created++;
-            } else {
-              failed++;
+          // Record created_tickets row if we have a ticket id
+          if (ticketResult.ticketId) {
+            try {
+              await MailConfigRepository.insertCreatedTicket(
+                config.id,
+                email.id,
+                ticketResult.ticketId,
+                null,
+                null,
+                emailSubject,
+                emailFrom,
+              );
+            } catch (e) {
+              console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
             }
-
-            results.push({
-              emailId: email.id,
-              configId: config.id,
-              success: ticketResult.success,
-              ticketId: ticketResult.ticketId,
-              error: ticketResult.error,
-            });
-
-            processed++;
-          } else {
-            // Another process logged this email first, skip counting
-            skipped++;
           }
+
+          // Count results (we were the claimer so we are responsible for the counts)
+          if (ticketResult.success) {
+            created++;
+          } else {
+            failed++;
+          }
+
+          results.push({
+            emailId: email.id,
+            configId: config.id,
+            success: ticketResult.success,
+            ticketId: ticketResult.ticketId,
+            error: ticketResult.error,
+          });
+
+          processed++;
         }
       }
 

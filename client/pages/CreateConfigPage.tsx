@@ -94,7 +94,6 @@ const OPERATORS = {
   Body: ["Starts with", "Contains", "Ends with"],
 };
 const SLACK_TYPES = ["Channel", "Workspace"];
-const PRIORITY_SLAS = ["2 Hours", "5 Hours", "24 Hours"];
 const STATUS_OPTIONS = ["Open", "In Progress", "Pending", "Overdue", "Closed"];
 
 export default function CreateConfigPage() {

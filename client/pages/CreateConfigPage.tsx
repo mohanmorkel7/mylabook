@@ -501,7 +501,7 @@ export default function CreateConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="bg-gray-50 min-h-full p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8 flex items-start justify-between">
           <div>

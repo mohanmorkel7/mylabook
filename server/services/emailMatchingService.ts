@@ -100,7 +100,8 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   let target = "";
   switch (fieldType) {
     case "Subject":
-      target = normalizeText(email.subject);
+      // Normalize subject by stripping common prefixes like Re:, Fwd:, FW:, and trimming
+      target = normalizeText(stripSubjectPrefixes(email.subject));
       break;
     case "Body":
       target = normalizeText(

@@ -540,7 +540,19 @@ export async function getAllActiveConfigs(): Promise<
   // `;
 
   const result = await pool.query(query);
-  return result.rows as Array<MailConfig & { user_id: number }>;
+  // Ensure sources is parsed for each row
+  const rows = result.rows.map((row: any) => {
+    if (row.sources && typeof row.sources === "string") {
+      try {
+        row.sources = JSON.parse(row.sources);
+      } catch (e) {
+        console.warn("Failed to parse sources JSON for mail config:", e);
+        row.sources = null;
+      }
+    }
+    return row;
+  });
+  return rows as Array<MailConfig & { user_id: number }>;
 }
 
 /**
@@ -1309,7 +1321,7 @@ export async function getTodayEmails(
 
   //     emails.push(email);
 
-  //     // console.log(`��� EMAIL Subject: "${email.subject}"`);
+  //     // console.log(`📧 EMAIL Subject: "${email.subject}"`);
   //     // console.log(`📧 EMAIL From: ${email.from}`);
   //     // console.log(`📧 EMAIL To: ${email.to}`);
   //     // console.log(`📧 EMAIL Received: ${email.receivedDateTime}`);

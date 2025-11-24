@@ -182,7 +182,10 @@ ${bodyText}`;
                 emailFrom,
               );
             } catch (e) {
-              console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+              console.warn(
+                "Failed to insert created_tickets after claim flow:",
+                e?.message || e,
+              );
             }
           }
 
@@ -273,7 +276,10 @@ ${bodyText}`;
               "unknown",
             );
           } catch (e) {
-            console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+            console.warn(
+              "Failed to insert created_tickets after claim flow:",
+              e?.message || e,
+            );
           }
         }
 

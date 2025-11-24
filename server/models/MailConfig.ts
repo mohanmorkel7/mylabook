@@ -165,7 +165,20 @@ export class MailConfigRepository {
 
     query += ` ORDER BY created_at DESC`;
     const result = await pool.query(query, params);
-    return result.rows;
+    return result.rows.map(row => this.parseRow(row));
+  }
+
+  private static parseRow(row: any): MailConfig {
+    // Ensure sources is properly parsed if it's a string
+    if (row.sources && typeof row.sources === 'string') {
+      try {
+        row.sources = JSON.parse(row.sources);
+      } catch (e) {
+        console.warn('Failed to parse sources JSON:', e);
+        row.sources = null;
+      }
+    }
+    return row as MailConfig;
   }
 
   static async findById(id: number): Promise<MailConfig | null> {

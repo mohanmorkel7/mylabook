@@ -123,10 +123,41 @@ export default function CreateConfigPage() {
   // Keep priority_id when editing; default priority_id for new configs
   const [formPriorityId, setFormPriorityId] = useState<number | null>(null);
 
-  const [customEmailSources, setCustomEmailSources] = useState<string[]>([]);
-  const [customDomains, setCustomDomains] = useState<string[]>([]);
+  const [customEmailSources, setCustomEmailSources] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("customEmailSources");
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [customDomains, setCustomDomains] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("customDomains");
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [tempCustomEmailSource, setTempCustomEmailSource] = useState("");
   const [tempCustomDomain, setTempCustomDomain] = useState("");
+
+  // Persist custom lists to localStorage so newly added values appear in future create/edit sessions
+  useEffect(() => {
+    try {
+      localStorage.setItem("customEmailSources", JSON.stringify(customEmailSources));
+    } catch (e) {
+      /* ignore */
+    }
+  }, [customEmailSources]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("customDomains", JSON.stringify(customDomains));
+    } catch (e) {
+      /* ignore */
+    }
+  }, [customDomains]);
 
   useEffect(() => {
     fetchUsers();

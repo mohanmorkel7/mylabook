@@ -167,6 +167,11 @@ const navigationItems: NavigationItem[] = [
         href: "/admin/users",
         roles: ["admin"],
       },
+      {
+        name: "Mail Config",
+        href: "/mail-configs",
+        roles: ["admin"],
+      },
     ],
   },
 ];

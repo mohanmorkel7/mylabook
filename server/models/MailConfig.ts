@@ -261,7 +261,12 @@ export class MailConfigRepository {
     for (const [key, value] of Object.entries(data)) {
       if (value !== undefined && allowedColumns.includes(key)) {
         setClause.push(`${key} = $${paramIndex}`);
-        values.push(value);
+        // Handle JSONB fields - stringify if they're objects
+        if ((key === "sources" || key === "watcher_user_ids") && typeof value === "object") {
+          values.push(JSON.stringify(value));
+        } else {
+          values.push(value);
+        }
         paramIndex++;
       }
     }

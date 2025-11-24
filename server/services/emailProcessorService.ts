@@ -1065,7 +1065,7 @@ function replaceCidReferences(
   return modified;
 }
 
-export async function getTodayEmails(since?: Date): Promise<Email[]> {
+export async function getTodayEmails(since?: Date, mailbox?: string): Promise<Email[]> {
   // For delegated shared mailbox access, we need the user's delegated token
   // This token should be stored in the database or cache from user sign-in
   // For now, we'll try to fetch using app-only credentials as fallback
@@ -1233,7 +1233,7 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
   const endISO = utcEndOfDay.toISOString();
 
   const allEmails: Email[] = [];
-  const reconopsEmail = "reconops@mylapay.com";
+  const reconopsEmail = mailbox || "reconops@mylapay.com";
   const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
   // Filter: receivedDateTime >= start of today AND < start of tomorrow
   const graphFilter = encodeURIComponent(
@@ -1422,7 +1422,7 @@ export async function getTodayEmails(since?: Date): Promise<Email[]> {
     graphToken: string,
   ): Promise<Email[]> {
     const emails: Email[] = [];
-    const sharedMailbox = "reconops@mylapay.com"; // STATIC mailbox used for attachments
+    const sharedMailbox = mailbox || "reconops@mylapay.com"; // STATIC mailbox used for attachments
 
     for (const it of items) {
       // Skip emails outside date filter

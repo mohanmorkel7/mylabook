@@ -116,10 +116,12 @@ export default function CreateConfigPage() {
     sources: [],
     assignedTo: null,
     watchers: [],
-    prioritySla: "",
     statusName: undefined,
     demand: null,
   });
+
+  // Keep priority_id when editing; default priority_id for new configs
+  const [formPriorityId, setFormPriorityId] = useState<number | null>(null);
 
   const [customEmailSources, setCustomEmailSources] = useState<string[]>([]);
   const [customDomains, setCustomDomains] = useState<string[]>([]);

@@ -120,8 +120,7 @@ export default function MailConfigs() {
   };
 
   const handleCreateNew = () => {
-    setSelectedConfig(null);
-    setIsModalOpen(true);
+    navigate("/mail-configs/create");
   };
 
   const handleEdit = (config: MailConfig) => {

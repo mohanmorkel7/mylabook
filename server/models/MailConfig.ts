@@ -1,5 +1,24 @@
 import { pool } from "../database/connection";
 
+export interface EmailRule {
+  id: string;
+  fieldType: "From" | "To" | "Cc" | "Subject" | "Body";
+  operator?: "Starts with" | "Contains" | "Ends with" | "domain";
+  value: string;
+  domain?: string;
+  nextOperator: "AND" | "OR" | "END";
+}
+
+export interface SourceConfig {
+  id: string;
+  type: "Email" | "Slack";
+  emailSource?: string;
+  customEmailSource?: string;
+  slackType?: "Channel" | "Workspace";
+  slackName?: string;
+  emailRules?: EmailRule[];
+}
+
 export interface MailConfig {
   id: number;
   user_id: number;
@@ -24,6 +43,8 @@ export interface MailConfig {
   created_at: string;
   updated_at: string;
   last_processed_at?: string | null;
+  sources?: SourceConfig[];
+  team?: string;
 }
 
 export interface CreateMailConfigData {

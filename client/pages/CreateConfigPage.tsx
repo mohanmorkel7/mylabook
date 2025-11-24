@@ -145,7 +145,10 @@ export default function CreateConfigPage() {
   // Persist custom lists to localStorage so newly added values appear in future create/edit sessions
   useEffect(() => {
     try {
-      localStorage.setItem("customEmailSources", JSON.stringify(customEmailSources));
+      localStorage.setItem(
+        "customEmailSources",
+        JSON.stringify(customEmailSources),
+      );
     } catch (e) {
       /* ignore */
     }
@@ -200,16 +203,29 @@ export default function CreateConfigPage() {
 
           if (Array.isArray(sources)) {
             for (const s of sources) {
-              if (s?.emailSource && !EMAIL_SOURCES.includes(s.emailSource) && !customEmailSources.includes(s.emailSource)) {
+              if (
+                s?.emailSource &&
+                !EMAIL_SOURCES.includes(s.emailSource) &&
+                !customEmailSources.includes(s.emailSource)
+              ) {
                 discoveredEmailSources.push(s.emailSource);
               }
               if (Array.isArray(s.emailRules)) {
                 for (const r of s.emailRules) {
-                  if (r?.domain && !DOMAINS.includes(r.domain) && !customDomains.includes(r.domain)) {
+                  if (
+                    r?.domain &&
+                    !DOMAINS.includes(r.domain) &&
+                    !customDomains.includes(r.domain)
+                  ) {
                     discoveredDomains.push(r.domain);
                   }
                   // if rule value looks like a custom domain (startsWith @)
-                  if (r?.value && r.value.startsWith("@") && !DOMAINS.includes(r.value) && !customDomains.includes(r.value)) {
+                  if (
+                    r?.value &&
+                    r.value.startsWith("@") &&
+                    !DOMAINS.includes(r.value) &&
+                    !customDomains.includes(r.value)
+                  ) {
                     discoveredDomains.push(r.value);
                   }
                 }
@@ -218,10 +234,14 @@ export default function CreateConfigPage() {
           }
 
           if (discoveredEmailSources.length > 0) {
-            setCustomEmailSources((prev) => Array.from(new Set([...prev, ...discoveredEmailSources])));
+            setCustomEmailSources((prev) =>
+              Array.from(new Set([...prev, ...discoveredEmailSources])),
+            );
           }
           if (discoveredDomains.length > 0) {
-            setCustomDomains((prev) => Array.from(new Set([...prev, ...discoveredDomains])));
+            setCustomDomains((prev) =>
+              Array.from(new Set([...prev, ...discoveredDomains])),
+            );
           }
         } catch (e) {
           // ignore discovery errors
@@ -956,12 +976,22 @@ export default function CreateConfigPage() {
                                                 variant="outline"
                                                 onClick={() => {
                                                   if (tempCustomDomain.trim()) {
-                                                    const v = tempCustomDomain.trim();
-                                                    if (!customDomains.includes(v)) {
-                                                      setCustomDomains([...customDomains, v]);
+                                                    const v =
+                                                      tempCustomDomain.trim();
+                                                    if (
+                                                      !customDomains.includes(v)
+                                                    ) {
+                                                      setCustomDomains([
+                                                        ...customDomains,
+                                                        v,
+                                                      ]);
                                                     }
                                                     // update the current rule to use the new custom domain
-                                                    updateEmailRule(source.id, rule.id, { domain: v });
+                                                    updateEmailRule(
+                                                      source.id,
+                                                      rule.id,
+                                                      { domain: v },
+                                                    );
                                                     setTempCustomDomain("");
                                                   }
                                                 }}

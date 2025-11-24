@@ -1,8 +1,9 @@
 import cron from "node-cron";
 import {
   getAllActiveConfigs,
-  processEmailsForConfigs,
+  // processEmailsForConfigs,
   getTodayEmails,
+  EmailProcessingService,
 } from "../services/emailProcessorService";
 import { matchEmailAgainstConfig } from "../services/emailMatchingService";
 import { MailConfigRepository } from "../models/MailConfig";
@@ -41,51 +42,152 @@ export function initialize() {
                 `Processing config ${config.id} ("${config.name}") ${since ? `since ${since.toISOString()}` : "from beginning of today"}`,
               );
 
-              // Fetch emails since last processing for this config
-              const emails = await getTodayEmails(since);
-              if (!emails || emails.length === 0) {
-                console.log(
-                  `No new emails found for config ${config.id}, skipping`,
-                );
-                // Still update the timestamp to mark we checked
-                await MailConfigRepository.updateLastProcessedAt(config.id);
-                continue;
-              }
+              // Determine email sources for this config
+              const sources = Array.isArray((config as any).sources)
+                ? (config as any).sources
+                : [];
 
-              console.log(
-                `Found ${emails.length} emails for config ${config.id}`,
-              );
-
-              // Filter and process emails for this specific config
-              const matchedEmails = emails.filter((email: any) => {
-                try {
-                  return matchEmailAgainstConfig(email, config as any);
-                } catch (e) {
-                  return false;
+              // If there are no sources defined, fallback to config-level from_email/to_email
+              const emailSources: string[] = [];
+              if (sources.length > 0) {
+                for (const s of sources) {
+                  if (s.type === "Email") {
+                    const mailbox = s.customEmailSource || s.emailSource || null;
+                    if (mailbox) emailSources.push(mailbox);
+                  }
                 }
-              });
+              } else {
+                if ((config as any).from_email) emailSources.push((config as any).from_email);
+                if ((config as any).to_email) emailSources.push((config as any).to_email);
+              }
 
-              if (matchedEmails.length === 0) {
+              if (emailSources.length === 0) {
                 console.log(
-                  `No matching emails for config ${config.id}, updating timestamp`,
+                  `No email source configured for config ${config.id}, skipping`,
                 );
-                // Update timestamp even if no matches
+                // Update timestamp to avoid re-checking constantly
                 await MailConfigRepository.updateLastProcessedAt(config.id);
                 continue;
               }
 
-              console.log(
-                `✅ Config ${config.id} ("${config.name}") matched ${matchedEmails.length} email(s)`,
-              );
+              let anyMatched = false;
 
-              // Process matched emails
-              const result = await processEmailsForConfigs(matchedEmails, [
-                config as any,
-              ]);
-              console.log(`Config ${config.id} processing result:`, result);
+              // For each email source mailbox, fetch emails and apply the config/source-specific rules
+              for (const mailbox of emailSources) {
+                try {
+                  console.log(
+                    `Fetching emails for config ${config.id} from mailbox ${mailbox}`,
+                  );
+                  const emails = await getTodayEmails(since, mailbox);
 
-              // Update the last_processed_at timestamp after successful processing
+                  if (!emails || emails.length === 0) {
+                    console.log(
+                      `No new emails found in mailbox ${mailbox} for config ${config.id}`,
+                    );
+                    continue;
+                  }
+
+                  console.log(
+                    `Found ${emails.length} emails in ${mailbox} for config ${config.id}`,
+                  );
+
+                  // Filter emails using config rules; restrict matching to the current source if available
+                  let sourceForMatching = undefined;
+                  if (Array.isArray((config as any).sources)) {
+                    sourceForMatching = (config as any).sources.find((s: any) => {
+                      const candidate = s.customEmailSource || s.emailSource || null;
+                      return candidate && candidate.toLowerCase() === mailbox.toLowerCase();
+                    });
+                  }
+
+                  const configToUse = sourceForMatching
+                    ? { ...config, sources: [sourceForMatching] }
+                    : config;
+
+                  const matchedEmails = emails.filter((email: any) => {
+                    try {
+                      return matchEmailAgainstConfig(email, configToUse as any);
+                    } catch (e) {
+                      return false;
+                    }
+                  });
+
+                  if (matchedEmails.length === 0) {
+                    console.log(
+                      `No matching emails in mailbox ${mailbox} for config ${config.id}`,
+                    );
+                    continue;
+                  }
+
+                  anyMatched = true;
+                  console.log(
+                    `✅ Config ${config.id} ("${config.name}") matched ${matchedEmails.length} email(s) in ${mailbox}`,
+                  );
+
+                  // Process matched emails sequentially to create tickets and log atomically
+                  for (const email of matchedEmails) {
+                    try {
+                      // Skip if already processed
+                      const already = await MailConfigRepository.isEmailProcessed(
+                        config.id,
+                        email.id,
+                      );
+                      if (already) {
+                        console.log(
+                          `Email ${email.id} already processed for config ${config.id}, skipping`,
+                        );
+                        continue;
+                      }
+
+                      const ticketResult = await EmailProcessingService.createTicket(
+                        email,
+                        config as any,
+                      );
+
+                      // Attempt to atomically log processing result. If another process logged first,
+                      // this will return false and we ignore counting.
+                      const logged = await MailConfigRepository.logProcessedEmailAtomic(
+                        config.id,
+                        email.id,
+                        email.subject || "(No subject)",
+                        (email.from && (email.from.emailAddress?.address || email.from)) || (email.sender && email.sender.emailAddress?.address) || "unknown",
+                        ticketResult.ticketId,
+                        ticketResult.success ? "success" : "failed",
+                        ticketResult.error,
+                      );
+
+                      if (logged) {
+                        console.log(
+                          `Processed email ${email.id} for config ${config.id}: success=${ticketResult.success}`,
+                        );
+                      } else {
+                        console.log(
+                          `Another process logged email ${email.id} for config ${config.id} first; skipping`,
+                        );
+                      }
+                    } catch (emailErr) {
+                      console.error(
+                        `Error processing email ${email.id} for config ${config.id}:`,
+                        (emailErr as any)?.message || emailErr,
+                      );
+                    }
+                  }
+                } catch (mailboxErr) {
+                  console.error(
+                    `Error fetching/processing emails from mailbox ${mailbox} for config ${config.id}:`,
+                    (mailboxErr as any)?.message || mailboxErr,
+                  );
+                }
+              }
+
+              // Update the last_processed_at timestamp after processing this config
               await MailConfigRepository.updateLastProcessedAt(config.id);
+
+              if (!anyMatched) {
+                console.log(
+                  `No emails matched for config ${config.id} across all sources`,
+                );
+              }
             } catch (configError) {
               console.error(
                 `Error processing config ${config.id}:`,

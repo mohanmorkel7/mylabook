@@ -7,6 +7,25 @@ export interface Email {
   receivedDateTime?: string;
 }
 
+export interface EmailRule {
+  id: string;
+  fieldType: "From" | "To" | "Cc" | "Subject" | "Body";
+  operator?: "Starts with" | "Contains" | "Ends with" | "domain";
+  value: string;
+  domain?: string;
+  nextOperator: "AND" | "OR" | "END";
+}
+
+export interface SourceConfig {
+  id: string;
+  type: "Email" | "Slack";
+  emailSource?: string;
+  customEmailSource?: string;
+  slackType?: "Channel" | "Workspace";
+  slackName?: string;
+  emailRules?: EmailRule[];
+}
+
 export interface MailConfig {
   id: number;
   from_email?: string;
@@ -16,6 +35,7 @@ export interface MailConfig {
   body_match_type?: "word" | "full";
   field_type?: string;
   field_value?: string;
+  sources?: SourceConfig[];
 }
 
 /**
@@ -24,7 +44,7 @@ export interface MailConfig {
  */
 export function patternToRegex(pattern: string): RegExp {
   const escaped = pattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/[.+^${}()|[\\]\\]/g, "\\$&")
     .replace(/\*/g, ".*")
     .replace(/\?/g, ".");
   return new RegExp(`^${escaped}$`, "i");
@@ -67,6 +87,82 @@ export function matchBodyContent(
   }
 }
 
+function normalizeText(input: string | undefined): string {
+  return (input || "").toLowerCase();
+}
+
+function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
+  const fieldType = rule.fieldType;
+  const operator = rule.operator || "Contains";
+  const value = (rule.value || "").toLowerCase();
+  const domain = (rule.domain || "").toLowerCase();
+
+  let target = "";
+  switch (fieldType) {
+    case "Subject":
+      target = normalizeText(email.subject);
+      break;
+    case "Body":
+      target = normalizeText(email.body.replace(/<[^>]*>/g, ""));
+      break;
+    case "From":
+      target = normalizeText(email.from);
+      break;
+    case "To":
+    case "Cc":
+      target = normalizeText(email.to);
+      break;
+    default:
+      target = "";
+  }
+
+  if (operator === "domain") {
+    // extract domain from target (take first email address if multiple)
+    const match = target.match(/([a-z0-9._%+-]+)@([a-z0-9.-]+\.[a-z]{2,})/i);
+    if (!match) return false;
+    const actualDomain = match[2].toLowerCase();
+    return actualDomain === domain;
+  }
+
+  if (operator === "Starts with") return target.startsWith(value);
+  if (operator === "Ends with") return target.endsWith(value);
+  // default Contains
+  return target.includes(value);
+}
+
+/**
+ * Evaluate a chain of rules (respecting AND/OR/END operators)
+ */
+export function evaluateRuleChain(rules: EmailRule[] | undefined, email: Email): boolean {
+  if (!rules || rules.length === 0) return true;
+
+  // Evaluate sequentially combining with nextOperator of current rule
+  let result = evaluateSingleRule(rules[0], email);
+
+  for (let i = 1; i < rules.length; i++) {
+    const prev = rules[i - 1];
+    const op = prev.nextOperator || "END";
+    if (op === "END") break;
+    const currentVal = evaluateSingleRule(rules[i], email);
+    if (op === "AND") {
+      result = result && currentVal;
+    } else if (op === "OR") {
+      result = result || currentVal;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Check if email matches a given source's emailRules
+ */
+export function matchEmailAgainstSource(email: Email, source: SourceConfig): boolean {
+  if (!source) return true;
+  if (!source.emailRules || source.emailRules.length === 0) return true;
+  return evaluateRuleChain(source.emailRules, email);
+}
+
 /**
  * Check if email matches the mail config criteria
  * Returns true if all configured criteria match
@@ -75,6 +171,26 @@ export function matchEmailAgainstConfig(
   email: Email,
   config: MailConfig,
 ): boolean {
+  // If config has sources, try to match any email source rules
+  if (config.sources && Array.isArray(config.sources) && config.sources.length > 0) {
+    // If config.sources includes multiple sources, possibly only one applies.
+    // We'll succeed if any source of type Email matches the email using its rules.
+    for (const src of config.sources) {
+      if (src.type === "Email") {
+        // If this source has emailRules, evaluate them
+        if (src.emailRules && src.emailRules.length > 0) {
+          const ok = matchEmailAgainstSource(email, src);
+          if (ok) return true;
+        } else {
+          // No rules for this source -> default accept
+          return true;
+        }
+      }
+    }
+    // No email source matched
+    return false;
+  }
+
   // Support new field_type/field_value format
   if (config.field_type && config.field_value) {
     const fieldValue = config.field_value.toLowerCase();
@@ -98,39 +214,30 @@ export function matchEmailAgainstConfig(
     }
 
     const matches = emailFieldValue.includes(fieldValue);
-    // console.log(
-    //   `[CONFIG MATCH] Config "${config.field_type}" matching: "${fieldValue}" in "${emailFieldValue.substring(0, 100)}..." -> ${matches}`,
-    // );
     return matches;
   }
 
   // Fall back to legacy field patterns
-  // Check from_email pattern
-  if (config.from_email) {
-    if (!matchPattern(config.from_email, email.from)) {
+  if ((config as any).from_email) {
+    if (!matchPattern((config as any).from_email, email.from)) {
       return false;
     }
   }
 
-  // Check to_email pattern
-  if (config.to_email) {
-    if (!matchPattern(config.to_email, email.to)) {
+  if ((config as any).to_email) {
+    if (!matchPattern((config as any).to_email, email.to)) {
       return false;
     }
   }
 
-  // Check subject_pattern
-  if (config.subject_pattern) {
-    if (!matchPattern(config.subject_pattern, email.subject)) {
+  if ((config as any).subject_pattern) {
+    if (!matchPattern((config as any).subject_pattern, email.subject)) {
       return false;
     }
   }
 
-  // Check body_content with match type
-  if (config.body_content) {
-    if (
-      !matchBodyContent(config.body_content, email.body, config.body_match_type)
-    ) {
+  if ((config as any).body_content) {
+    if (!matchBodyContent((config as any).body_content, email.body, (config as any).body_match_type)) {
       return false;
     }
   }

@@ -175,6 +175,23 @@ router.post("/", async (req: Request, res: Response) => {
       });
     }
 
+    // Support resolving status by name if provided
+    let resolvedStatusId = status_id !== undefined ? status_id : null;
+    const statusNameFromBody = (req.body as any)?.status_name;
+    if (!resolvedStatusId && statusNameFromBody) {
+      try {
+        const statusRes = await pool.query(
+          "SELECT id FROM ticket_statuses WHERE LOWER(name) = LOWER($1) LIMIT 1",
+          [statusNameFromBody],
+        );
+        if (statusRes.rows.length > 0) {
+          resolvedStatusId = statusRes.rows[0].id;
+        }
+      } catch (e) {
+        console.warn("Failed to resolve status_name to id:", e?.message || e);
+      }
+    }
+
     const data: CreateMailConfigData = {
       user_id: userId,
       name,
@@ -192,7 +209,7 @@ router.post("/", async (req: Request, res: Response) => {
       watcher_user_ids: watcher_user_ids || [],
       team_id: team_id || null,
       bucket_id: bucket_id || null,
-      status_id: status_id || null,
+      status_id: resolvedStatusId || null,
       demand: demand !== undefined ? demand : null,
       sources: sources || null,
       team: team || null,

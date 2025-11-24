@@ -94,9 +94,12 @@ const PRIORITY_SLAS = ["2 Hours", "5 Hours", "24 Hours"];
 
 export default function CreateConfigPage() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(!!id);
   const [users, setUsers] = useState<User[]>([]);
   const [searchAssignee, setSearchAssignee] = useState("");
   const [searchWatchers, setSearchWatchers] = useState("");

@@ -180,9 +180,9 @@ router.get(
       // Get total count for pagination
       let countQuery = `
       SELECT COUNT(*) as total
-      FROM created_tickets ct
-      LEFT JOIN mail_configs mc ON ct.mail_config_id = mc.id
-      WHERE 1=1
+      FROM tickets t
+      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+      WHERE t.mail_config_id IS NOT NULL
     `;
 
       const countValues: any[] = [];

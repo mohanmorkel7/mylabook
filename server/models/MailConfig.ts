@@ -494,7 +494,7 @@ export class MailConfigRepository {
 
       return result.rowCount > 0;
     } catch (error) {
-      console.error('Error claiming email for processing:', error);
+      console.error("Error claiming email for processing:", error);
       return false;
     }
   }

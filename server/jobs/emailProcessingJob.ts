@@ -161,16 +161,17 @@ export function initialize() {
                   for (const email of matchedEmails) {
                     try {
                       // Atomically claim the email for processing to avoid duplicate ticket creation
-                      const claimed = await MailConfigRepository.claimEmailProcessing(
-                        config.id,
-                        email.id,
-                        email.subject || "(No subject)",
-                        (email.from &&
-                          (email.from.emailAddress?.address || email.from)) ||
-                          (email.sender &&
-                            email.sender.emailAddress?.address) ||
-                          "unknown",
-                      );
+                      const claimed =
+                        await MailConfigRepository.claimEmailProcessing(
+                          config.id,
+                          email.id,
+                          email.subject || "(No subject)",
+                          (email.from &&
+                            (email.from.emailAddress?.address || email.from)) ||
+                            (email.sender &&
+                              email.sender.emailAddress?.address) ||
+                            "unknown",
+                        );
 
                       if (!claimed) {
                         console.log(
@@ -213,13 +214,17 @@ export function initialize() {
                               null,
                               email.subject || "(No subject)",
                               (email.from &&
-                                (email.from.emailAddress?.address || email.from)) ||
+                                (email.from.emailAddress?.address ||
+                                  email.from)) ||
                                 (email.sender &&
                                   email.sender.emailAddress?.address) ||
                                 "unknown",
                             );
                           } catch (e) {
-                            console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+                            console.warn(
+                              "Failed to insert created_tickets after claim flow:",
+                              e?.message || e,
+                            );
                           }
                         }
 

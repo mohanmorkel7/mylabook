@@ -454,7 +454,10 @@ ${parsed.html}`;
                 emailFrom,
               );
             } catch (e) {
-              console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+              console.warn(
+                "Failed to insert created_tickets after claim flow:",
+                e?.message || e,
+              );
             }
           }
 
@@ -693,7 +696,10 @@ export async function processEmailsForConfigs(
               emailFrom,
             );
           } catch (e) {
-            console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+            console.warn(
+              "Failed to insert created_tickets after claim flow:",
+              e?.message || e,
+            );
           }
         }
 

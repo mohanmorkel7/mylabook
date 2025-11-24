@@ -371,15 +371,6 @@ export default function CreateConfigPage() {
         return;
       }
 
-      if (!form.prioritySla) {
-        toast({
-          title: "Validation Error",
-          description: "Priority SLA is required",
-          variant: "destructive",
-        });
-        return;
-      }
-
       // Validate email rules
       for (const source of form.sources) {
         if (source.type === "Email" && source.emailRules) {

@@ -160,29 +160,35 @@ export function initialize() {
                   // Process matched emails sequentially to create tickets and log atomically
                   for (const email of matchedEmails) {
                     try {
-                      // Skip if already processed
-                      const already =
-                        await MailConfigRepository.isEmailProcessed(
-                          config.id,
-                          email.id,
-                        );
-                      if (already) {
+                      // Atomically claim the email for processing to avoid duplicate ticket creation
+                      const claimed = await MailConfigRepository.claimEmailProcessing(
+                        config.id,
+                        email.id,
+                        email.subject || "(No subject)",
+                        (email.from &&
+                          (email.from.emailAddress?.address || email.from)) ||
+                          (email.sender &&
+                            email.sender.emailAddress?.address) ||
+                          "unknown",
+                      );
+
+                      if (!claimed) {
                         console.log(
-                          `Email ${email.id} already processed for config ${config.id}, skipping`,
+                          `Another process claimed/processed email ${email.id} for config ${config.id}; skipping`,
                         );
                         continue;
                       }
 
+                      // We hold the claim — proceed to create the ticket
                       const ticketResult =
                         await EmailProcessingService.createTicket(
                           email,
                           config as any,
                         );
 
-                      // Attempt to atomically log processing result. If another process logged first,
-                      // this will return false and we ignore counting.
-                      const logged =
-                        await MailConfigRepository.logProcessedEmailAtomic(
+                      // Finalize the processing log (insert or update) with result
+                      try {
+                        await MailConfigRepository.logProcessedEmail(
                           config.id,
                           email.id,
                           email.subject || "(No subject)",
@@ -196,13 +202,34 @@ export function initialize() {
                           ticketResult.error,
                         );
 
-                      if (logged) {
+                        // Best-effort: record created_tickets row if we have a ticket id
+                        if (ticketResult.ticketId) {
+                          try {
+                            await MailConfigRepository.insertCreatedTicket(
+                              config.id,
+                              email.id,
+                              ticketResult.ticketId,
+                              null,
+                              null,
+                              email.subject || "(No subject)",
+                              (email.from &&
+                                (email.from.emailAddress?.address || email.from)) ||
+                                (email.sender &&
+                                  email.sender.emailAddress?.address) ||
+                                "unknown",
+                            );
+                          } catch (e) {
+                            console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+                          }
+                        }
+
                         console.log(
                           `Processed email ${email.id} for config ${config.id}: success=${ticketResult.success}`,
                         );
-                      } else {
-                        console.log(
-                          `Another process logged email ${email.id} for config ${config.id} first; skipping`,
+                      } catch (logErr) {
+                        console.error(
+                          `Failed to finalize processing log for email ${email.id} config ${config.id}:`,
+                          (logErr as any)?.message || logErr,
                         );
                       }
                     } catch (emailErr) {

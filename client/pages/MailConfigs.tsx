@@ -560,14 +560,14 @@ export default function MailConfigs() {
                                             <span className="text-gray-700 ml-2">
                                               ={" "}
                                               <span className="font-mono">
-                                                {rule.domain}
+                                                {escapeHtml(rule.domain)}
                                               </span>
                                             </span>
                                           ) : (
                                             <span className="text-gray-700 ml-2">
                                               {rule.operator} &quot;
                                               <span className="font-mono">
-                                                {rule.value}
+                                                {escapeHtml(rule.value)}
                                               </span>
                                               &quot;
                                             </span>

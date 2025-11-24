@@ -644,16 +644,18 @@ export async function processEmailsForConfigs(
           email.sender?.emailAddress?.address ||
           "unknown";
 
-        // CHECK if email was already processed BEFORE creating ticket
-        const alreadyProcessed = await MailConfigRepository.isEmailProcessed(
+        // Atomically claim the email for processing to avoid duplicate ticket creation
+        const claimed = await MailConfigRepository.claimEmailProcessing(
           config.id,
           email.id,
+          emailSubject,
+          emailFrom,
         );
 
-        if (alreadyProcessed) {
-          // Email already processed, skip it
+        if (!claimed) {
+          // Email already claimed/processed by another process, skip it
           console.log(
-            `[EmailProcessing] Skipping email ${email.id} for config ${config.id} because it was already processed (mail_processing_log exists)`,
+            `[EmailProcessing] Skipping email ${email.id} for config ${config.id} because another process claimed it`,
           );
           skipped++;
           continue;
@@ -667,8 +669,8 @@ export async function processEmailsForConfigs(
           config,
         );
 
-        // Atomically log the result. If another process beat us, this will return false.
-        const logged = await MailConfigRepository.logProcessedEmailAtomic(
+        // Finalize the processing log (insert or update) with result
+        await MailConfigRepository.logProcessedEmail(
           config.id,
           email.id,
           emailSubject,
@@ -678,22 +680,31 @@ export async function processEmailsForConfigs(
           result.error,
         );
 
-        // Only count if we successfully logged it (we were the first to process this email)
-        if (logged) {
-          if (result.success) {
-            succeeded++;
-          } else {
-            failed++;
-            if (result.error) errors.push(result.error);
+        // Best-effort: insert into created_tickets
+        if (result.ticketId) {
+          try {
+            await MailConfigRepository.insertCreatedTicket(
+              config.id,
+              email.id,
+              result.ticketId,
+              null,
+              null,
+              emailSubject,
+              emailFrom,
+            );
+          } catch (e) {
+            console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
           }
-          processed++;
-        } else {
-          // Another process logged this email first (race condition), skip counting
-          console.log(
-            `[EmailProcessing] Email ${email.id} for config ${config.id} was already logged by another process (logProcessedEmailAtomic returned false)`,
-          );
-          skipped++;
         }
+
+        // Count results (we were the claimer)
+        if (result.success) {
+          succeeded++;
+        } else {
+          failed++;
+          if (result.error) errors.push(result.error);
+        }
+        processed++;
       }
     } catch (error) {
       const err = (error as any)?.message || String(error);

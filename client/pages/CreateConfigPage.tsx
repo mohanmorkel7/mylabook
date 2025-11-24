@@ -361,32 +361,39 @@ export default function CreateConfigPage() {
 
       setIsLoading(true);
 
+      // Map priority SLA to priority_id
+      const priorityMap: Record<string, number> = {
+        "2 Hours": 4,
+        "5 Hours": 3,
+        "24 Hours": 2,
+      };
+
+      // Create a payload for each source, as the current API expects one config per source
+      const firstSource = form.sources[0];
+      let fieldType = "subject";
+      let fieldValue = form.configName;
+
+      if (firstSource.type === "Email" && firstSource.emailSource) {
+        fieldType = "fromEmail";
+        fieldValue = firstSource.emailSource === "custom"
+          ? firstSource.customEmailSource || form.configName
+          : firstSource.emailSource;
+      } else if (firstSource.type === "Slack") {
+        fieldType = "body";
+        fieldValue = firstSource.slackName || form.configName;
+      }
+
       const payload = {
         name: form.configName,
         description: form.description,
-        team: form.team,
-        sources: form.sources.map((source) => ({
-          type: source.type,
-          emailSource: source.emailSource,
-          customEmailSource:
-            source.emailSource === "custom" ? source.customEmailSource : undefined,
-          slackType: source.slackType,
-          slackName: source.slackName,
-          emailRules: source.emailRules?.map((rule) => ({
-            fieldType: rule.fieldType,
-            operator: rule.operator,
-            value: rule.value,
-            domain: rule.domain,
-            nextOperator: rule.nextOperator,
-          })),
-        })),
+        field_type: fieldType,
+        field_value: fieldValue,
+        from_email: firstSource.type === "Email" ? firstSource.emailSource : undefined,
+        project_id: 28,
+        priority_id: priorityMap[form.prioritySla] || 3,
         assigned_to_id: form.assignedTo,
         watcher_user_ids: form.watchers,
-        priority_sla: form.prioritySla,
-        project_id: 28,
-        priority_id: 3,
-        field_type: "subject",
-        field_value: "ticket",
+        userId: user?.id ? parseInt(user.id, 10) : undefined,
       };
 
       const response = await api.post("/mail-configs", payload);

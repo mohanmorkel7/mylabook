@@ -103,7 +103,7 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
       target = normalizeText(email.subject);
       break;
     case "Body":
-      target = normalizeText(email.body.replace(/<[^>]*>/g, ""));
+      target = normalizeText(email.body ? email.body.replace(/<[^>]*>/g, "") : "");
       break;
     case "From":
       target = normalizeText(email.from);
@@ -116,22 +116,38 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
       target = "";
   }
 
+  // Debug logging when enabled
+  const debug = process.env.DEBUG_EMAIL_MATCHING === "true";
+  if (debug) {
+    try {
+      console.log(`[emailMatching] Evaluating rule ${rule.id} field=${fieldType} operator=${operator} value="${value}" domain="${domain}" against target="${(target || "").substring(0,200)}"`);
+    } catch (e) {
+      // ignore
+    }
+  }
+
   if (operator === "domain") {
     // extract domain from target (take first email address if multiple)
     const match = target.match(/([a-z0-9._%+-]+)@([a-z0-9.-]+\.[a-z]{2,})/i);
-    if (!match) return false;
+    if (!match) {
+      if (debug) console.log(`[emailMatching] domain rule: no email address found in target for rule ${rule.id}`);
+      return false;
+    }
     const actualDomain = match[2].toLowerCase();
     // normalize configured domain (allow values like "@razorpay.com" or "razorpay.com")
-    const configuredDomain = domain.startsWith("@")
-      ? domain.substring(1)
-      : domain;
-    return actualDomain === configuredDomain;
+    const configuredDomain = domain.startsWith("@") ? domain.substring(1) : domain;
+    const matches = actualDomain === configuredDomain;
+    if (debug) console.log(`[emailMatching] domain check: actual=${actualDomain} configured=${configuredDomain} => ${matches}`);
+    return matches;
   }
 
-  if (operator === "Starts with") return target.startsWith(value);
-  if (operator === "Ends with") return target.endsWith(value);
-  // default Contains
-  return target.includes(value);
+  let result = false;
+  if (operator === "Starts with") result = target.startsWith(value);
+  else if (operator === "Ends with") result = target.endsWith(value);
+  else result = target.includes(value); // default Contains
+
+  if (debug) console.log(`[emailMatching] text check: operator=${operator} value="${value}" => ${result}`);
+  return result;
 }
 
 /**

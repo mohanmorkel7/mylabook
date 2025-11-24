@@ -66,6 +66,8 @@ export interface CreateMailConfigData {
   bucket_id?: number;
   status_id?: number;
   demand?: number; // 0/1/2 mapping for SLA
+  sources?: SourceConfig[];
+  team?: string;
 }
 
 export interface UpdateMailConfigData {

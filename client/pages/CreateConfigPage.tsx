@@ -954,7 +954,17 @@ export default function CreateConfigPage() {
                                                 type="button"
                                                 size="sm"
                                                 variant="outline"
-                                                onClick={addCustomDomain}
+                                                onClick={() => {
+                                                  if (tempCustomDomain.trim()) {
+                                                    const v = tempCustomDomain.trim();
+                                                    if (!customDomains.includes(v)) {
+                                                      setCustomDomains([...customDomains, v]);
+                                                    }
+                                                    // update the current rule to use the new custom domain
+                                                    updateEmailRule(source.id, rule.id, { domain: v });
+                                                    setTempCustomDomain("");
+                                                  }
+                                                }}
                                               >
                                                 <CheckCircle className="w-4 h-4" />
                                               </Button>

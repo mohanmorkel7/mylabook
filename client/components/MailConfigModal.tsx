@@ -159,7 +159,28 @@ export function MailConfigModal({
         console.warn("Failed to fetch metadata for mail config modal", e);
       }
     })();
-  }, []);
+
+    // Lock body scroll when modal is open to avoid double scrollbars
+    if (isOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+    return;
+  }, [isOpen]);
+
+  // Utility to escape any HTML in user-provided values to avoid accidental rendering
+  const escapeHtml = (unsafe: string | undefined) => {
+    if (!unsafe) return "";
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
 
   const [searchAssignee, setSearchAssignee] = useState("");
 

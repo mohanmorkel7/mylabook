@@ -1131,28 +1131,6 @@ export default function CreateConfigPage() {
                 )}
               </div>
 
-              {/* Priority SLA */}
-              <div className="space-y-2">
-                <Label htmlFor="priority-sla">Priority SLA *</Label>
-                <Select
-                  value={form.prioritySla}
-                  onValueChange={(value) =>
-                    setForm({ ...form, prioritySla: value })
-                  }
-                >
-                  <SelectTrigger id="priority-sla">
-                    <SelectValue placeholder="Select SLA" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRIORITY_SLAS.map((sla) => (
-                      <SelectItem key={sla} value={sla}>
-                        {sla}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Status */}
               <div className="space-y-2">
                 <Label htmlFor="status-select">Status</Label>

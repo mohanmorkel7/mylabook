@@ -1157,9 +1157,16 @@ export default function CreateConfigPage() {
               <div className="space-y-2">
                 <Label htmlFor="demand">Demand (optional)</Label>
                 <Select
-                  value={form.demand === null || form.demand === undefined ? "" : String(form.demand)}
+                  value={
+                    form.demand === null || form.demand === undefined
+                      ? ""
+                      : String(form.demand)
+                  }
                   onValueChange={(value) =>
-                    setForm({ ...form, demand: value === "" ? null : Number(value) })
+                    setForm({
+                      ...form,
+                      demand: value === "" ? null : Number(value),
+                    })
                   }
                 >
                   <SelectTrigger id="demand">

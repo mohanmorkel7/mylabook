@@ -284,7 +284,10 @@ router.put("/:id", async (req: Request, res: Response) => {
           (updateData as any).status_id = statusRes.rows[0].id;
         }
       } catch (e) {
-        console.warn("Failed to resolve status_name during update:", e?.message || e);
+        console.warn(
+          "Failed to resolve status_name during update:",
+          e?.message || e,
+        );
       }
     }
 

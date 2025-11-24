@@ -142,22 +142,24 @@ ${bodyText}`;
             continue;
           }
 
-          // CHECK if email was already processed BEFORE creating ticket
-          const alreadyProcessed = await MailConfigRepository.isEmailProcessed(
+          // Atomically claim the email for processing to avoid duplicate ticket creation
+          const claimed = await MailConfigRepository.claimEmailProcessing(
             config.id,
             email.id,
+            emailSubject,
+            emailFrom,
           );
 
-          if (alreadyProcessed) {
-            // Email already processed, skip it
+          if (!claimed) {
+            // Email already claimed/processed by another process, skip
             continue;
           }
 
           // Create the ticket
           const ticketResult = await this.createTicket(email, config);
 
-          // Atomically log the result. If another process beat us, this will return false.
-          const logged = await MailConfigRepository.logProcessedEmailAtomic(
+          // Finalize the processing log (insert or update) with result
+          await MailConfigRepository.logProcessedEmail(
             config.id,
             email.id,
             emailSubject,
@@ -167,16 +169,31 @@ ${bodyText}`;
             ticketResult.error,
           );
 
-          // Only track if we were the first to log this
-          if (logged) {
-            results.push({
-              emailId: email.id,
-              configId: config.id,
-              success: ticketResult.success,
-              ticketId: ticketResult.ticketId,
-              error: ticketResult.error,
-            });
+          // Best-effort: record created_tickets row if we have a ticket id
+          if (ticketResult.ticketId) {
+            try {
+              await MailConfigRepository.insertCreatedTicket(
+                config.id,
+                email.id,
+                ticketResult.ticketId,
+                null,
+                null,
+                emailSubject,
+                emailFrom,
+              );
+            } catch (e) {
+              console.warn("Failed to insert created_tickets after claim flow:", e?.message || e);
+            }
           }
+
+          // Track result since we were the claimer
+          results.push({
+            emailId: email.id,
+            configId: config.id,
+            success: ticketResult.success,
+            ticketId: ticketResult.ticketId,
+            error: ticketResult.error,
+          });
         }
       }
 

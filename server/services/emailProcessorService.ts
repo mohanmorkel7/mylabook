@@ -1764,7 +1764,7 @@ export async function getTodayEmails(
 
     const sharedMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       reconopsEmail,
-    )}/mailFolders/Inbox/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
+    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
 
     const sharedEmails = await fetchAllEmailsFromUrl(sharedMailboxUrl, token);
     console.log(
@@ -1839,7 +1839,7 @@ export async function getTodayEmails(
           userAzureId,
         )}/mailFolders/${encodeURIComponent(
           reconopsFolder.id,
-        )}/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
+        )}/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
 
         const folderEmails = await fetchAllEmailsFromUrl(
           sharedFolderUrl,
@@ -1871,7 +1871,7 @@ export async function getTodayEmails(
 
     const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       userAzureId,
-    )}/mailFolders/Inbox/messages?$filter=${graphFilter}&$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc`;
+    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
 
     const userEmails = await fetchAllEmailsFromUrl(userMailboxUrl, token);
     console.log(

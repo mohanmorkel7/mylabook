@@ -240,116 +240,178 @@ export default function MailConfigs() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-0 border rounded-lg overflow-hidden">
+          {/* Table Header */}
+          <div className="bg-gray-50 border-b grid grid-cols-12 gap-4 p-4 font-semibold text-sm text-gray-700">
+            <div className="col-span-3">Configuration</div>
+            <div className="col-span-2">Team</div>
+            <div className="col-span-1 text-center">Sources</div>
+            <div className="col-span-1 text-center">Rules</div>
+            <div className="col-span-2">Assigned To</div>
+            <div className="col-span-2">SLA / Status</div>
+            <div className="col-span-1 text-right">Actions</div>
+          </div>
+
+          {/* Table Rows */}
           {configs.map((config) => (
-            <Card
-              key={config.id}
-              className={`hover:shadow-lg transition-shadow ${
-                !config.is_active ? "opacity-60" : ""
-              }`}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  {/* Left side - Config details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-3">
-                      <h3 className="text-lg font-semibold text-gray-900 truncate">
-                        {config.name}
-                      </h3>
-                      <Badge
-                        variant="outline"
-                        className={
-                          config.is_active
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
-                        }
-                      >
-                        {config.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-
-                    {config.description && (
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                        {config.description}
-                      </p>
-                    )}
-
-                    {/* Metadata grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                      {/* Team */}
-                      {config.team && (
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Team</p>
-                          <Badge variant="secondary">{config.team}</Badge>
-                        </div>
-                      )}
-
-                      {/* Sources count */}
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Sources</p>
-                        <Badge variant="outline">
-                          {config.sources?.length || 0}
-                        </Badge>
-                      </div>
-
-                      {/* Rules count */}
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Rules</p>
-                        <Badge variant="outline">{countRules(config)}</Badge>
-                      </div>
-
-                      {/* Assigned To */}
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Assigned To</p>
-                        <p className="text-sm font-medium truncate">
-                          {getAssignedUserName(config.assigned_to_id)}
-                        </p>
-                      </div>
-
-                      {/* Priority SLA */}
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">SLA</p>
-                        <Badge className={PRIORITY_COLORS[config.priority_id]}>
-                          {PRIORITY_SLA_MAP[config.priority_id] ||
-                            PRIORITY_NAMES[config.priority_id]}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right side - Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenPreview(config)}
-                      title="View details"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => navigate(`/mail-configs/edit/${config.id}`)}
-                      title="Edit config"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteClick(config.id)}
-                      className="text-red-600 hover:text-red-700"
-                      title="Delete config"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+            <div key={config.id} className="border-b hover:bg-gray-50 transition-colors">
+              {/* Main Row */}
+              <div className={`grid grid-cols-12 gap-4 p-4 items-center ${!config.is_active ? "opacity-60" : ""}`}>
+                <div className="col-span-3 min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 truncate">
+                    {config.name}
+                  </h3>
+                  {config.description && (
+                    <p className="text-xs text-gray-600 truncate mt-1">
+                      {config.description}
+                    </p>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
+
+                <div className="col-span-2">
+                  {config.team ? (
+                    <Badge variant="secondary" className="text-xs">
+                      {config.team}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-gray-500">-</span>
+                  )}
+                </div>
+
+                <div className="col-span-1 text-center">
+                  <Badge variant="outline" className="text-xs">
+                    {config.sources?.length || 0}
+                  </Badge>
+                </div>
+
+                <div className="col-span-1 text-center">
+                  <Badge variant="outline" className="text-xs">
+                    {countRules(config)}
+                  </Badge>
+                </div>
+
+                <div className="col-span-2">
+                  <p className="text-sm text-gray-900 truncate">
+                    {getAssignedUserName(config.assigned_to_id)}
+                  </p>
+                </div>
+
+                <div className="col-span-2 flex items-center gap-2">
+                  <Badge className={`text-xs ${PRIORITY_COLORS[config.priority_id]}`}>
+                    {PRIORITY_SLA_MAP[config.priority_id] ||
+                      PRIORITY_NAMES[config.priority_id]}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${
+                      config.is_active
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {config.is_active ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+
+                <div className="col-span-1 flex justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleOpenPreview(config)}
+                    title="View details"
+                    className="h-8 w-8 p-0"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(`/mail-configs/edit/${config.id}`)}
+                    title="Edit config"
+                    className="h-8 w-8 p-0"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteClick(config.id)}
+                    className="text-red-600 hover:text-red-700 h-8 w-8 p-0"
+                    title="Delete config"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Expandable Details */}
+              {config.sources && config.sources.length > 0 && (
+                <div className="bg-gray-50 border-t px-4 py-2 text-xs">
+                  <details className="cursor-pointer">
+                    <summary className="font-medium text-gray-700 py-2">
+                      Email Rules & Configuration Details
+                    </summary>
+                    <div className="mt-3 space-y-2 text-gray-600">
+                      {config.sources.map((source, idx) => (
+                        <div key={source.id} className="bg-white p-2 rounded border">
+                          <p className="font-medium text-gray-900">
+                            {source.type} Source {idx + 1}
+                          </p>
+                          {source.type === "Email" && (
+                            <div className="text-xs space-y-1 mt-1">
+                              <p>
+                                <span className="text-gray-500">Email:</span>{" "}
+                                <span className="font-mono">
+                                  {source.customEmailSource || source.emailSource}
+                                </span>
+                              </p>
+                              {source.emailRules &&
+                                source.emailRules.length > 0 && (
+                                  <div>
+                                    <p className="text-gray-500 mb-1">Rules:</p>
+                                    {source.emailRules.map((rule, rIdx) => (
+                                      <div
+                                        key={rule.id}
+                                        className="text-gray-600 ml-2"
+                                      >
+                                        {rIdx + 1}. {rule.fieldType}
+                                        {rule.domain
+                                          ? ` = ${rule.domain}`
+                                          : ` ${rule.operator} "${rule.value}"`}
+                                        {rule.nextOperator !== "END" && (
+                                          <span className="font-medium ml-1">
+                                            {rule.nextOperator}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                            </div>
+                          )}
+                          {source.type === "Slack" && (
+                            <div className="text-xs space-y-1 mt-1">
+                              <p>
+                                <span className="text-gray-500">Type:</span>{" "}
+                                <span className="font-medium">
+                                  {source.slackType}
+                                </span>
+                              </p>
+                              <p>
+                                <span className="text-gray-500">Name:</span>{" "}
+                                <span className="font-mono">{source.slackName}</span>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}

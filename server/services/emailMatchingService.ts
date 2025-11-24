@@ -121,7 +121,9 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
     const match = target.match(/([a-z0-9._%+-]+)@([a-z0-9.-]+\.[a-z]{2,})/i);
     if (!match) return false;
     const actualDomain = match[2].toLowerCase();
-    return actualDomain === domain;
+    // normalize configured domain (allow values like "@razorpay.com" or "razorpay.com")
+    const configuredDomain = domain.startsWith("@") ? domain.substring(1) : domain;
+    return actualDomain === configuredDomain;
   }
 
   if (operator === "Starts with") return target.startsWith(value);

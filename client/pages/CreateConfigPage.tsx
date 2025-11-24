@@ -95,6 +95,7 @@ const OPERATORS = {
 };
 const SLACK_TYPES = ["Channel", "Workspace"];
 const PRIORITY_SLAS = ["2 Hours", "5 Hours", "24 Hours"];
+const STATUS_OPTIONS = ["Open", "In Progress", "Pending", "Overdue", "Closed"];
 
 export default function CreateConfigPage() {
   const navigate = useNavigate();
@@ -118,6 +119,8 @@ export default function CreateConfigPage() {
     assignedTo: null,
     watchers: [],
     prioritySla: "",
+    statusName: undefined,
+    demand: null,
   });
 
   const [customEmailSources, setCustomEmailSources] = useState<string[]>([]);
@@ -145,6 +148,14 @@ export default function CreateConfigPage() {
           2: "24 Hours",
         };
 
+        // Map status_id to a friendly name if possible
+        const statusMap: Record<number, string> = {
+          1: "Open",
+          2: "In Progress",
+          3: "Pending",
+          4: "Resolved",
+          5: "Closed",
+        };
         setForm({
           configName: response.name || "",
           description: response.description || "",
@@ -153,6 +164,8 @@ export default function CreateConfigPage() {
           assignedTo: response.assigned_to_id || null,
           watchers: response.watcher_user_ids || [],
           prioritySla: prioritySlaMap[response.priority_id] || "",
+          statusName: statusMap[response.status_id] || undefined,
+          demand: response.demand !== undefined ? response.demand : null,
         });
       }
     } catch (error) {
@@ -445,7 +458,7 @@ export default function CreateConfigPage() {
         fieldValue = firstSource.slackName || form.configName;
       }
 
-      const payload = {
+      const payload: any = {
         name: form.configName,
         description: form.description,
         field_type: fieldType,
@@ -460,6 +473,11 @@ export default function CreateConfigPage() {
         team: form.team,
         userId: user?.id ? parseInt(user.id, 10) : undefined,
       };
+
+      // Include status and demand when provided
+      if (form.statusName) payload.status_name = form.statusName;
+      if (form.demand !== undefined && form.demand !== null)
+        payload.demand = Number(form.demand);
 
       let response;
       if (isEditMode && id) {

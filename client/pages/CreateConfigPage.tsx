@@ -1173,6 +1173,41 @@ export default function CreateConfigPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Status */}
+              <div className="space-y-2">
+                <Label htmlFor="status-select">Status</Label>
+                <Select
+                  value={form.statusName || ""}
+                  onValueChange={(value) =>
+                    setForm({ ...form, statusName: value })
+                  }
+                >
+                  <SelectTrigger id="status-select">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Demand */}
+              <div className="space-y-2">
+                <Label htmlFor="demand">Demand (optional)</Label>
+                <Input
+                  id="demand"
+                  placeholder="Enter demand (numeric)"
+                  value={form.demand === null || form.demand === undefined ? "" : String(form.demand)}
+                  onChange={(e) =>
+                    setForm({ ...form, demand: e.target.value ? Number(e.target.value) : null })
+                  }
+                />
+              </div>
             </CardContent>
           </Card>
 

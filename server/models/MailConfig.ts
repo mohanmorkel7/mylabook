@@ -482,9 +482,9 @@ export class MailConfigRepository {
     try {
       const query = `
         INSERT INTO created_tickets (email_id, mail_config_id, ticket_id, mitra_ticket_id, mitra_response, email_subject, email_from)
-        SELECT $1,$2,$3,$4,$5,$6,$7
+        SELECT CAST($1 AS VARCHAR), CAST($2 AS INTEGER), CAST($3 AS INTEGER), CAST($4 AS INTEGER), $5::jsonb, $6::text, $7::text
         WHERE NOT EXISTS (
-          SELECT 1 FROM created_tickets WHERE email_id = $1 AND mail_config_id = $2
+          SELECT 1 FROM created_tickets WHERE email_id = CAST($1 AS VARCHAR) AND mail_config_id = CAST($2 AS INTEGER)
         )
       `;
       await pool.query(query, [

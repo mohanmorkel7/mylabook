@@ -1821,9 +1821,14 @@ export async function getTodayEmails(
         const d = new Date(it.receivedDateTime);
         return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
       }).length;
-      console.log(`getTodayEmails: diagnostic - ${inRange} of fetched shared mailbox messages are within the ${startISO}..${endISO} window`);
+      console.log(
+        `getTodayEmails: diagnostic - ${inRange} of fetched shared mailbox messages are within the ${startISO}..${endISO} window`,
+      );
     } catch (e) {
-      console.warn("getTodayEmails: diagnostic - failed to compute in-range count:", e);
+      console.warn(
+        "getTodayEmails: diagnostic - failed to compute in-range count:",
+        e,
+      );
     }
 
     if (sharedEmails.length > 0) {
@@ -1911,9 +1916,14 @@ export async function getTodayEmails(
             const d = new Date(it.receivedDateTime);
             return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
           }).length;
-          console.log(`getTodayEmails: diagnostic - ${inRange} of fetched shared folder messages are within the ${startISO}..${endISO} window`);
+          console.log(
+            `getTodayEmails: diagnostic - ${inRange} of fetched shared folder messages are within the ${startISO}..${endISO} window`,
+          );
         } catch (e) {
-          console.warn("getTodayEmails: diagnostic - failed to compute in-range count for folder:", e);
+          console.warn(
+            "getTodayEmails: diagnostic - failed to compute in-range count for folder:",
+            e,
+          );
         }
 
         if (folderEmails.length > 0) {
@@ -1952,9 +1962,14 @@ export async function getTodayEmails(
         const d = new Date(it.receivedDateTime);
         return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
       }).length;
-      console.log(`getTodayEmails: diagnostic - ${inRange} of fetched user inbox messages are within the ${startISO}..${endISO} window`);
+      console.log(
+        `getTodayEmails: diagnostic - ${inRange} of fetched user inbox messages are within the ${startISO}..${endISO} window`,
+      );
     } catch (e) {
-      console.warn("getTodayEmails: diagnostic - failed to compute in-range count for user inbox:", e);
+      console.warn(
+        "getTodayEmails: diagnostic - failed to compute in-range count for user inbox:",
+        e,
+      );
     }
 
     if (userEmails.length > 0) {

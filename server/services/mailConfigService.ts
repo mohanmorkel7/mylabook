@@ -287,7 +287,7 @@ ${bodyText}`;
 
         // Try to atomically log the error
         try {
-          await MailConfigRepository.logProcessedEmailAtomic(
+          await MailConfigRepository.logProcessedEmail(
             match.configId,
             match.emailId,
             payload.issue.subject,

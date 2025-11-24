@@ -100,7 +100,7 @@ export class MailConfigRepository {
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
       FROM mail_configs
     `;
 
@@ -151,7 +151,7 @@ export class MailConfigRepository {
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
       FROM mail_configs
       WHERE is_active = true`;
 
@@ -174,7 +174,7 @@ export class MailConfigRepository {
             from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
       FROM mail_configs
       WHERE id = $1
     `;
@@ -254,6 +254,8 @@ export class MailConfigRepository {
       "status_id",
       "demand",
       "is_active",
+      "sources",
+      "team",
     ];
 
     for (const [key, value] of Object.entries(data)) {
@@ -283,7 +285,7 @@ export class MailConfigRepository {
               from_email, to_email, subject_pattern, body_content, body_match_type,
               project_id, priority_id, assigned_to_id, watcher_user_ids,
               team_id, bucket_id, status_id, demand,
-              is_active, created_at, updated_at, last_processed_at;
+              is_active, created_at, updated_at, last_processed_at, sources, team;
   `;
 
     const result = await pool.query(query, values);

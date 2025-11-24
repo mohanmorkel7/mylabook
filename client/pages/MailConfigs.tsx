@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit2, Trash2, Plus, MoreVertical, AlertCircle } from "lucide-react";
+import { Edit2, Trash2, Plus, Eye, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { MailConfigModal } from "@/components/MailConfigModal";
 import { useAuth } from "@/lib/auth-context";
 import api from "@/lib/api";
 import {
@@ -16,12 +16,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 
 interface User {
   id: number;
@@ -32,6 +26,25 @@ interface User {
   lastname?: string;
   type?: string;
   email?: string;
+}
+
+interface EmailRule {
+  id: string;
+  fieldType: "From" | "To" | "Cc" | "Subject" | "Body";
+  operator?: "Starts with" | "Contains" | "Ends with" | "domain";
+  value: string;
+  domain?: string;
+  nextOperator: "AND" | "OR" | "END";
+}
+
+interface SourceConfig {
+  id: string;
+  type: "Email" | "Slack";
+  emailSource?: string;
+  customEmailSource?: string;
+  slackType?: "Channel" | "Workspace";
+  slackName?: string;
+  emailRules?: EmailRule[];
 }
 
 interface MailConfig {
@@ -47,6 +60,8 @@ interface MailConfig {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  sources?: SourceConfig[];
+  team?: string;
 }
 
 const PRIORITY_NAMES: Record<number, string> = {
@@ -65,15 +80,22 @@ const PRIORITY_COLORS: Record<number, string> = {
   5: "bg-red-200 text-red-900",
 };
 
+const PRIORITY_SLA_MAP: Record<number, string> = {
+  4: "2 Hours",
+  3: "5 Hours",
+  2: "24 Hours",
+};
+
 export default function MailConfigs() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [configs, setConfigs] = useState<MailConfig[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedConfig, setSelectedConfig] = useState<MailConfig | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<number | null>(null);
+  const [selectedConfigPreview, setSelectedConfigPreview] = useState<MailConfig | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -98,37 +120,14 @@ export default function MailConfigs() {
     }
   };
 
-  interface User {
-    id: number;
-    name: string;
-    firstname: string;
-    lastname: string;
-    type: string;
-  }
-
   const fetchUsers = async () => {
     try {
       const resp = await api.get("/users");
       const list = (resp && (resp.users || resp.data || resp)) || [];
       setUsers(list as User[]);
-      console.log("Users fetched:", list);
     } catch (error) {
       console.error("Error fetching users:", error);
     }
-  };
-
-  const handleCreateNew = () => {
-    setSelectedConfig(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (config: MailConfig) => {
-    setSelectedConfig(config);
-    setIsModalOpen(true);
-  };
-
-  const handleConfigSaved = () => {
-    fetchConfigs();
   };
 
   const handleDeleteClick = (configId: number) => {
@@ -158,70 +157,42 @@ export default function MailConfigs() {
     }
   };
 
-  const handleToggleActive = async (config: MailConfig) => {
-    try {
-      const payload: any = {
-        is_active: !config.is_active,
-      };
-      if (user?.id) {
-        payload.userId = parseInt(user.id, 10);
-      }
-      const updatedConfig = await api.put(
-        `/mail-configs/${config.id}`,
-        payload,
-      );
-      setConfigs(
-        configs.map((c) => (c.id === config.id ? updatedConfig.data : c)),
-      );
-      toast({
-        title: "Success",
-        description: `Mail config ${updatedConfig.data.is_active ? "enabled" : "disabled"}`,
-      });
-    } catch (error) {
-      console.error("Error updating mail config:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update mail config",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const getFieldTypeLabel = (fieldType: string): string => {
-    const labels: Record<string, string> = {
-      subject: "Subject",
-      fromEmail: "From Email",
-      toEmail: "To Email",
-      body: "Body",
-    };
-    return labels[fieldType] || fieldType;
-  };
-
   const getAssignedUserName = (userId: number): string => {
-    console.log("Assigned userId:", userId);
-    console.log(
-      "All user IDs:",
-      users.map((u) => u.id),
-    );
     const user = users.find((u) => Number(u.id) === Number(userId));
-    if (!user) return "Unknown";
+    if (!user) return "Unassigned";
     if (user.name?.trim()) return user.name.trim();
     if (user.firstname && user.lastname) {
       return `${user.firstname} ${user.lastname}`;
     }
-    return "Unknown";
+    if (user.first_name && user.last_name) {
+      return `${user.first_name} ${user.last_name}`;
+    }
+    return user.email || "Unknown";
+  };
+
+  const countRules = (config: MailConfig): number => {
+    if (!config.sources || config.sources.length === 0) return 0;
+    return config.sources.reduce(
+      (total, source) => total + (source.emailRules?.length || 0),
+      0
+    );
+  };
+
+  const handleOpenPreview = (config: MailConfig) => {
+    setSelectedConfigPreview(config);
+    setPreviewOpen(true);
   };
 
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900">Mail Configs</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Mail Configurations</h1>
           <p className="text-gray-600 mt-2">
             Manage email-to-ticket automation configurations
           </p>
         </div>
-        <Button onClick={handleCreateNew} size="lg">
+        <Button onClick={() => navigate("/mail-configs/create")} size="lg">
           <Plus className="h-5 w-5 mr-2" />
           Create Config
         </Button>
@@ -236,8 +207,8 @@ export default function MailConfigs() {
               <p className="font-semibold text-blue-900">How it works</p>
               <p className="text-sm text-blue-800 mt-1">
                 Configurations are processed in the background. When matching
-                emails are received, tickets are automatically created in
-                Redmine with the specified details.
+                emails are received, tickets are automatically created with the
+                specified details.
               </p>
             </div>
           </div>
@@ -263,19 +234,22 @@ export default function MailConfigs() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
+        <div className="space-y-4">
           {configs.map((config) => (
             <Card
               key={config.id}
-              className={`${!config.is_active ? "opacity-60" : ""} border-l-4 ${
-                config.is_active ? "border-l-green-500" : "border-l-gray-300"
+              className={`hover:shadow-lg transition-shadow ${
+                !config.is_active ? "opacity-60" : ""
               }`}
             >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <CardTitle>{config.name}</CardTitle>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  {/* Left side - Config details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate">
+                        {config.name}
+                      </h3>
                       <Badge
                         variant="outline"
                         className={
@@ -287,81 +261,86 @@ export default function MailConfigs() {
                         {config.is_active ? "Active" : "Inactive"}
                       </Badge>
                     </div>
+
                     {config.description && (
-                      <p className="text-sm text-gray-600 mt-2">
+                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">
                         {config.description}
                       </p>
                     )}
+
+                    {/* Metadata grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                      {/* Team */}
+                      {config.team && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Team</p>
+                          <Badge variant="secondary">{config.team}</Badge>
+                        </div>
+                      )}
+
+                      {/* Sources count */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Sources</p>
+                        <Badge variant="outline">
+                          {config.sources?.length || 0}
+                        </Badge>
+                      </div>
+
+                      {/* Rules count */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Rules</p>
+                        <Badge variant="outline">{countRules(config)}</Badge>
+                      </div>
+
+                      {/* Assigned To */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Assigned To</p>
+                        <p className="text-sm font-medium truncate">
+                          {getAssignedUserName(config.assigned_to_id)}
+                        </p>
+                      </div>
+
+                      {/* Priority SLA */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">SLA</p>
+                        <Badge className={PRIORITY_COLORS[config.priority_id]}>
+                          {PRIORITY_SLA_MAP[config.priority_id] ||
+                            PRIORITY_NAMES[config.priority_id]}
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEdit(config)}>
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleToggleActive(config)}
-                      >
-                        {config.is_active ? "Disable" : "Enable"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteClick(config.id)}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
+                  {/* Right side - Actions */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenPreview(config)}
+                      title="View details"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
 
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Field Type</p>
-                    <p className="font-medium">
-                      {getFieldTypeLabel(config.field_type)}
-                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate(`/mail-configs/edit/${config.id}`)}
+                      title="Edit config"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteClick(config.id)}
+                      className="text-red-600 hover:text-red-700"
+                      title="Delete config"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-
-                  <div>
-                    <p className="text-sm text-gray-600">Priority</p>
-                    <Badge className={PRIORITY_COLORS[config.priority_id]}>
-                      {PRIORITY_NAMES[config.priority_id]}
-                    </Badge>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-600">Assigned To</p>
-                    <p className="font-medium text-sm">
-                      {getAssignedUserName(config.assigned_to_id)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-600">Watchers</p>
-                    <p className="text-sm font-medium">
-                      {config.watcher_user_ids.length} watcher(s)
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 p-3 bg-gray-100 rounded">
-                  <p className="text-xs text-gray-600">Field Value</p>
-                  <p className="font-mono text-sm break-all">
-                    {config.field_value}
-                  </p>
-                </div>
-
-                <div className="mt-3 text-xs text-gray-500">
-                  Created: {new Date(config.created_at).toLocaleDateString()}
                 </div>
               </CardContent>
             </Card>
@@ -369,32 +348,170 @@ export default function MailConfigs() {
         </div>
       )}
 
-      <MailConfigModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedConfig(null);
-        }}
-        onConfigSaved={handleConfigSaved}
-        initialConfig={
-          selectedConfig
-            ? {
-                id: selectedConfig.id,
-                name: selectedConfig.name,
-                description: selectedConfig.description,
-                field_type: selectedConfig.field_type,
-                field_value: selectedConfig.field_value,
-                project_id: selectedConfig.project_id,
-                priority_id: selectedConfig.priority_id,
-                assigned_to_id: selectedConfig.assigned_to_id,
-                watcher_user_ids: selectedConfig.watcher_user_ids,
-                is_active: selectedConfig.is_active,
-              }
-            : undefined
-        }
-        users={users}
-      />
+      {/* Preview Dialog */}
+      {previewOpen && selectedConfigPreview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[80vh] overflow-auto">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
+              <CardTitle>{selectedConfigPreview.name}</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPreviewOpen(false)}
+              >
+                ✕
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Config Info */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Configuration</h4>
+                <div className="space-y-2">
+                  {selectedConfigPreview.description && (
+                    <div>
+                      <p className="text-sm text-gray-600">Description</p>
+                      <p className="text-sm text-gray-900">
+                        {selectedConfigPreview.description}
+                      </p>
+                    </div>
+                  )}
+                  {selectedConfigPreview.team && (
+                    <div>
+                      <p className="text-sm text-gray-600">Team</p>
+                      <Badge variant="secondary">
+                        {selectedConfigPreview.team}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
 
+              {/* Sources */}
+              {selectedConfigPreview.sources &&
+                selectedConfigPreview.sources.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-3">
+                      Sources ({selectedConfigPreview.sources.length})
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedConfigPreview.sources.map((source, idx) => (
+                        <div key={source.id} className="bg-gray-50 p-3 rounded">
+                          <p className="font-medium text-sm mb-2">
+                            Source {idx + 1}: {source.type}
+                          </p>
+                          {source.type === "Email" && (
+                            <div className="text-sm space-y-1">
+                              <p className="text-gray-600">
+                                Email:{" "}
+                                <span className="font-mono">
+                                  {source.customEmailSource || source.emailSource}
+                                </span>
+                              </p>
+                              {source.emailRules &&
+                                source.emailRules.length > 0 && (
+                                  <div>
+                                    <p className="text-gray-600 mb-1">
+                                      Rules:
+                                    </p>
+                                    {source.emailRules.map((rule, rIdx) => (
+                                      <div
+                                        key={rule.id}
+                                        className="text-xs text-gray-600 ml-2"
+                                      >
+                                        {rIdx + 1}. {rule.fieldType}
+                                        {rule.domain
+                                          ? ` = ${rule.domain}`
+                                          : ` ${rule.operator} "${rule.value}"`}
+                                        {rule.nextOperator !== "END" && (
+                                          <span className="font-medium">
+                                            {" "}
+                                            {rule.nextOperator}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                            </div>
+                          )}
+                          {source.type === "Slack" && (
+                            <div className="text-sm space-y-1">
+                              <p className="text-gray-600">
+                                Type:{" "}
+                                <span className="font-medium">
+                                  {source.slackType}
+                                </span>
+                              </p>
+                              <p className="text-gray-600">
+                                Name:{" "}
+                                <span className="font-mono">
+                                  {source.slackName}
+                                </span>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Allocation */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Allocation</h4>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-sm text-gray-600">Assigned To</p>
+                    <p className="text-sm font-medium">
+                      {getAssignedUserName(
+                        selectedConfigPreview.assigned_to_id
+                      )}
+                    </p>
+                  </div>
+                  {selectedConfigPreview.watcher_user_ids &&
+                    selectedConfigPreview.watcher_user_ids.length > 0 && (
+                      <div>
+                        <p className="text-sm text-gray-600">Watchers</p>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {selectedConfigPreview.watcher_user_ids.map((id) => (
+                            <Badge key={id} variant="outline">
+                              {getAssignedUserName(id)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  <div>
+                    <p className="text-sm text-gray-600">Priority</p>
+                    <Badge
+                      className={
+                        PRIORITY_COLORS[selectedConfigPreview.priority_id]
+                      }
+                    >
+                      {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
+                        PRIORITY_NAMES[selectedConfigPreview.priority_id]}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadata */}
+              <div className="text-xs text-gray-500 space-y-1 border-t pt-4">
+                <p>
+                  Created:{" "}
+                  {new Date(selectedConfigPreview.created_at).toLocaleDateString()}
+                </p>
+                <p>
+                  Updated:{" "}
+                  {new Date(selectedConfigPreview.updated_at).toLocaleDateString()}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -404,10 +521,15 @@ export default function MailConfigs() {
               cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogAction onClick={handleConfirmDelete}>
-            Delete
-          </AlertDialogAction>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <div className="flex gap-3 justify-end">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>

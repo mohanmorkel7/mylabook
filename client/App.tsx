@@ -148,6 +148,7 @@ import TicketsCreate from "@/pages/TicketsCreate";
 import TicketDetail from "@/pages/TicketDetail";
 import Mails from "@/pages/Mails";
 import MailConfigs from "@/pages/MailConfigs";
+import CreateConfigPage from "@/pages/CreateConfigPage";
 import AdminTemplates from "@/pages/AdminTemplates";
 import FinOpsDashboard from "@/pages/FinOpsDashboard";
 import FinOpsAutomation from "@/pages/FinOpsAutomation";
@@ -357,6 +358,28 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
             <DashboardLayout>
               <MailConfigs />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/mail-configs/create"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
+            <DashboardLayout>
+              <CreateConfigPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/mail-configs/edit/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
+            <DashboardLayout>
+              <CreateConfigPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

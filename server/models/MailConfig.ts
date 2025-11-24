@@ -1,5 +1,24 @@
 import { pool } from "../database/connection";
 
+export interface EmailRule {
+  id: string;
+  fieldType: "From" | "To" | "Cc" | "Subject" | "Body";
+  operator?: "Starts with" | "Contains" | "Ends with" | "domain";
+  value: string;
+  domain?: string;
+  nextOperator: "AND" | "OR" | "END";
+}
+
+export interface SourceConfig {
+  id: string;
+  type: "Email" | "Slack";
+  emailSource?: string;
+  customEmailSource?: string;
+  slackType?: "Channel" | "Workspace";
+  slackName?: string;
+  emailRules?: EmailRule[];
+}
+
 export interface MailConfig {
   id: number;
   user_id: number;
@@ -24,6 +43,8 @@ export interface MailConfig {
   created_at: string;
   updated_at: string;
   last_processed_at?: string | null;
+  sources?: SourceConfig[];
+  team?: string;
 }
 
 export interface CreateMailConfigData {
@@ -45,6 +66,8 @@ export interface CreateMailConfigData {
   bucket_id?: number;
   status_id?: number;
   demand?: number; // 0/1/2 mapping for SLA
+  sources?: SourceConfig[];
+  team?: string;
 }
 
 export interface UpdateMailConfigData {
@@ -66,6 +89,8 @@ export interface UpdateMailConfigData {
   status_id?: number;
   demand?: number;
   is_active?: boolean;
+  sources?: SourceConfig[];
+  team?: string;
 }
 
 export class MailConfigRepository {
@@ -75,7 +100,7 @@ export class MailConfigRepository {
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
       FROM mail_configs
     `;
 
@@ -126,7 +151,7 @@ export class MailConfigRepository {
              from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
       FROM mail_configs
       WHERE is_active = true`;
 
@@ -149,7 +174,7 @@ export class MailConfigRepository {
             from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
       FROM mail_configs
       WHERE id = $1
     `;
@@ -163,13 +188,14 @@ export class MailConfigRepository {
       INSERT INTO mail_configs (
         user_id, name, description, field_type, field_value,
         from_email, to_email, subject_pattern, body_content, body_match_type,
-        project_id, priority_id, assigned_to_id, watcher_user_ids, team_id, bucket_id, status_id, demand
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        project_id, priority_id, assigned_to_id, watcher_user_ids, team_id, bucket_id, status_id, demand,
+        sources, team
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING id, user_id, name, description, field_type, field_value,
                 from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
-            is_active, created_at, updated_at, last_processed_at
+            is_active, created_at, updated_at, last_processed_at, sources, team
     `;
 
     const values = [
@@ -191,6 +217,8 @@ export class MailConfigRepository {
       data.bucket_id || null,
       data.status_id || null,
       data.demand !== undefined ? data.demand : null,
+      data.sources ? JSON.stringify(data.sources) : null,
+      data.team || null,
     ];
 
     const result = await pool.query(query, values);
@@ -226,6 +254,8 @@ export class MailConfigRepository {
       "status_id",
       "demand",
       "is_active",
+      "sources",
+      "team",
     ];
 
     for (const [key, value] of Object.entries(data)) {
@@ -255,7 +285,7 @@ export class MailConfigRepository {
               from_email, to_email, subject_pattern, body_content, body_match_type,
               project_id, priority_id, assigned_to_id, watcher_user_ids,
               team_id, bucket_id, status_id, demand,
-              is_active, created_at, updated_at, last_processed_at;
+              is_active, created_at, updated_at, last_processed_at, sources, team;
   `;
 
     const result = await pool.query(query, values);

@@ -148,6 +148,8 @@ router.post("/", async (req: Request, res: Response) => {
       bucket_id,
       status_id,
       demand,
+      sources,
+      team,
     } = req.body;
 
     // Validate required fields
@@ -192,6 +194,8 @@ router.post("/", async (req: Request, res: Response) => {
       bucket_id: bucket_id || null,
       status_id: status_id || null,
       demand: demand !== undefined ? demand : null,
+      sources: sources || null,
+      team: team || null,
     };
 
     const config = await MailConfigRepository.create(data);

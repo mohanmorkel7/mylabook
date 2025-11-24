@@ -434,16 +434,27 @@ export default function CreateConfigPage() {
         priority_id: priorityMap[form.prioritySla] || 3,
         assigned_to_id: form.assignedTo,
         watcher_user_ids: form.watchers,
+        sources: form.sources,
+        team: form.team,
         userId: user?.id ? parseInt(user.id, 10) : undefined,
       };
 
-      const response = await api.post("/mail-configs", payload);
-
-      if (response && response.id) {
+      let response;
+      if (isEditMode && id) {
+        response = await api.put(`/mail-configs/${id}`, payload);
+        toast({
+          title: "Success",
+          description: "Configuration updated successfully",
+        });
+      } else {
+        response = await api.post("/mail-configs", payload);
         toast({
           title: "Success",
           description: "Configuration created successfully",
         });
+      }
+
+      if (response && response.id) {
         navigate("/mail-configs");
       }
     } catch (error) {

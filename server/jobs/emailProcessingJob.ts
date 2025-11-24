@@ -34,12 +34,17 @@ export function initialize() {
           // Process each config independently with its own timestamp
           for (const config of configs) {
             try {
-              const since = config.last_processed_at
+              const rawSince = config.last_processed_at
                 ? new Date(config.last_processed_at)
                 : undefined;
 
+              // Add a small overlap buffer (30s) to avoid missing messages due to clock skew
+              const since = rawSince
+                ? new Date(rawSince.getTime() - 30 * 1000)
+                : undefined;
+
               console.log(
-                `Processing config ${config.id} ("${config.name}") ${since ? `since ${since.toISOString()}` : "from beginning of today"}`,
+                `Processing config ${config.id} ("${config.name}") ${since ? `since ${since.toISOString()} (buffered from ${rawSince?.toISOString()})` : "from beginning of today"}`,
               );
 
               // Determine email sources for this config

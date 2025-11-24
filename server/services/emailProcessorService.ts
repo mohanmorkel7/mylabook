@@ -1231,6 +1231,9 @@ export async function getTodayEmails(
     return [];
   }
 
+  // Resolve reconops mailbox variable early so diagnostics can use it
+  const reconopsEmail = mailbox || "reconops@mylapay.com";
+
   // Diagnostic: verify we can resolve the target mailbox and log its displayName (helps detect permission issues)
   try {
     const diagUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(reconopsEmail)}`;
@@ -1300,7 +1303,6 @@ export async function getTodayEmails(
   const endISO = utcEndOfDay.toISOString();
 
   const allEmails: Email[] = [];
-  const reconopsEmail = mailbox || "reconops@mylapay.com";
   const userAzureId = "a416d1c8-bc01-4acd-8cad-3210a78d01a9";
   // Filter: receivedDateTime >= start of today AND < start of tomorrow
   const graphFilter = encodeURIComponent(
@@ -1812,6 +1814,18 @@ export async function getTodayEmails(
       `getTodayEmails: direct shared mailbox returned ${sharedEmails.length} total messages`,
     );
 
+    // Diagnostic: count how many fetched messages fall within our client-side time window
+    try {
+      const inRange = sharedEmails.filter((it: any) => {
+        if (!it || !it.receivedDateTime) return false;
+        const d = new Date(it.receivedDateTime);
+        return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
+      }).length;
+      console.log(`getTodayEmails: diagnostic - ${inRange} of fetched shared mailbox messages are within the ${startISO}..${endISO} window`);
+    } catch (e) {
+      console.warn("getTodayEmails: diagnostic - failed to compute in-range count:", e);
+    }
+
     if (sharedEmails.length > 0) {
       const parsedEmails = await parseGraphEmails(
         sharedEmails,
@@ -1890,6 +1904,18 @@ export async function getTodayEmails(
           `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
         );
 
+        // Diagnostic: count in-range
+        try {
+          const inRange = folderEmails.filter((it: any) => {
+            if (!it || !it.receivedDateTime) return false;
+            const d = new Date(it.receivedDateTime);
+            return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
+          }).length;
+          console.log(`getTodayEmails: diagnostic - ${inRange} of fetched shared folder messages are within the ${startISO}..${endISO} window`);
+        } catch (e) {
+          console.warn("getTodayEmails: diagnostic - failed to compute in-range count for folder:", e);
+        }
+
         if (folderEmails.length > 0) {
           const parsedEmails = await parseGraphEmails(
             folderEmails,
@@ -1918,6 +1944,18 @@ export async function getTodayEmails(
     console.log(
       `getTodayEmails: user main inbox returned ${userEmails.length} total messages`,
     );
+
+    // Diagnostic: count in-range
+    try {
+      const inRange = userEmails.filter((it: any) => {
+        if (!it || !it.receivedDateTime) return false;
+        const d = new Date(it.receivedDateTime);
+        return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
+      }).length;
+      console.log(`getTodayEmails: diagnostic - ${inRange} of fetched user inbox messages are within the ${startISO}..${endISO} window`);
+    } catch (e) {
+      console.warn("getTodayEmails: diagnostic - failed to compute in-range count for user inbox:", e);
+    }
 
     if (userEmails.length > 0) {
       const parsedEmails = await parseGraphEmails(

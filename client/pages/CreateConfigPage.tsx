@@ -74,6 +74,8 @@ interface CreateConfigForm {
   assignedTo: number | null;
   watchers: number[];
   prioritySla: string;
+  statusName?: string;
+  demand?: number | null;
 }
 
 const TEAMS = ["FinOps", "Product", "Sales"];

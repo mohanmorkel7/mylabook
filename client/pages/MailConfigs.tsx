@@ -1,4 +1,15 @@
 import React, { useState, useEffect } from "react";
+
+// Utility to escape HTML in values to avoid accidental rendering of user-supplied content
+const escapeHtml = (unsafe: string | undefined) => {
+  if (!unsafe) return "";
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

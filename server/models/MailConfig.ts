@@ -117,8 +117,8 @@ export class MailConfigRepository {
       query += `ORDER BY created_at DESC`;
     }
 
-    const result = await pool.query(query, params);
-    return result.rows;
+    result = await pool.query(query, params);
+    return result.rows.map(row => this.parseRow(row));
   }
 
   // static async findById(

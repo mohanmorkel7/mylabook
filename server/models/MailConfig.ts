@@ -467,6 +467,39 @@ export class MailConfigRepository {
   }
 
   /**
+   * Attempt to claim an email for processing by inserting a 'processing' row.
+   * Returns true if this process won the claim and should proceed to create the ticket.
+   * Returns false if another process already claimed/processed this email.
+   */
+  static async claimEmailProcessing(
+    mailConfigId: number,
+    emailId: string,
+    emailSubject: string,
+    emailFrom: string,
+  ): Promise<boolean> {
+    try {
+      const query = `
+        INSERT INTO mail_processing_log (
+          mail_config_id, email_id, email_subject, email_from, status
+        ) VALUES ($1, $2, $3, $4, 'processing')
+        ON CONFLICT (mail_config_id, email_id) DO NOTHING
+      `;
+
+      const result = await pool.query(query, [
+        mailConfigId,
+        emailId,
+        emailSubject,
+        emailFrom,
+      ]);
+
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error('Error claiming email for processing:', error);
+      return false;
+    }
+  }
+
+  /**
    * Best-effort insert into created_tickets to surface created tickets in UI.
    * Uses ON CONFLICT DO NOTHING to avoid duplicates.
    */

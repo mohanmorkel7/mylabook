@@ -140,7 +140,7 @@ const navigationItems: NavigationItem[] = [
     name: "Support Tickets",
     href: "/tickets",
     icon: Ticket,
-    roles: ["admin", "sales", "product", "switch_team"],
+    roles: ["admin", "sales", "product", "switch_team", "finops"],
   },
   // l) Alerts & notifications
   {

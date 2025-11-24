@@ -59,7 +59,8 @@ export function initialize() {
                   if (s.type === "Email") {
                     // Prefer the actual emailSource (UPN/email) for mailbox access. customEmailSource
                     // is a friendly label and should not be used to call Graph unless emailSource is missing.
-                    const mailbox = s.emailSource || s.customEmailSource || null;
+                    const mailbox =
+                      s.emailSource || s.customEmailSource || null;
                     if (mailbox) emailSources.push(mailbox);
                   }
                 }
@@ -109,7 +110,8 @@ export function initialize() {
                   if (Array.isArray((config as any).sources)) {
                     sourceForMatching = (config as any).sources.find(
                       (s: any) => {
-                        const candidate = s.emailSource || s.customEmailSource || null;
+                        const candidate =
+                          s.emailSource || s.customEmailSource || null;
                         return (
                           candidate &&
                           candidate.toLowerCase() === mailbox.toLowerCase()

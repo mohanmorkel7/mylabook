@@ -379,13 +379,25 @@ export default function CreateConfigPage() {
           }
 
           for (const rule of source.emailRules) {
-            if (!rule.value.trim()) {
-              toast({
-                title: "Validation Error",
-                description: "All rule values are required",
-                variant: "destructive",
-              });
-              return;
+            // Check the appropriate field based on operator type
+            if (rule.operator === "domain") {
+              if (!rule.domain?.trim()) {
+                toast({
+                  title: "Validation Error",
+                  description: `Domain is required for ${rule.fieldType} rule`,
+                  variant: "destructive",
+                });
+                return;
+              }
+            } else {
+              if (!rule.value?.trim()) {
+                toast({
+                  title: "Validation Error",
+                  description: `Value is required for ${rule.fieldType} rule`,
+                  variant: "destructive",
+                });
+                return;
+              }
             }
           }
         } else if (source.type === "Slack") {

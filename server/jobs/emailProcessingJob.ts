@@ -221,7 +221,14 @@ export function initialize() {
               }
 
               // Update the last_processed_at timestamp after processing this config
-              await MailConfigRepository.updateLastProcessedAt(config.id);
+              // Only update if at least one mailbox fetch succeeded to avoid advancing the timestamp on transient failures
+              if (anyFetchSucceeded) {
+                await MailConfigRepository.updateLastProcessedAt(config.id);
+              } else {
+                console.log(
+                  `Skipping update of last_processed_at for config ${config.id} because no mailbox fetch succeeded`,
+                );
+              }
 
               if (!anyMatched) {
                 console.log(

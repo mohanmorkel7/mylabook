@@ -419,103 +419,144 @@ export default function MailConfigs() {
       {/* Preview Dialog */}
       {previewOpen && selectedConfigPreview && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl max-h-[80vh] overflow-auto">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
-              <CardTitle>{selectedConfigPreview.name}</CardTitle>
+          <Card className="w-full max-w-3xl max-h-[90vh] overflow-auto">
+            <CardHeader className="sticky top-0 bg-white border-b flex flex-row items-center justify-between space-y-0 pb-4">
+              <div className="flex-1">
+                <CardTitle className="text-2xl mb-2">
+                  {selectedConfigPreview.name}
+                </CardTitle>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <Badge
+                    className={
+                      selectedConfigPreview.is_active
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-800"
+                    }
+                  >
+                    {selectedConfigPreview.is_active ? "Active" : "Inactive"}
+                  </Badge>
+                  {selectedConfigPreview.team && (
+                    <Badge variant="secondary">{selectedConfigPreview.team}</Badge>
+                  )}
+                  <Badge className={PRIORITY_COLORS[selectedConfigPreview.priority_id]}>
+                    {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
+                      PRIORITY_NAMES[selectedConfigPreview.priority_id]}
+                  </Badge>
+                </div>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setPreviewOpen(false)}
+                className="h-8 w-8 p-0"
               >
                 ✕
               </Button>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Config Info */}
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Configuration</h4>
-                <div className="space-y-2">
-                  {selectedConfigPreview.description && (
-                    <div>
-                      <p className="text-sm text-gray-600">Description</p>
-                      <p className="text-sm text-gray-900">
-                        {selectedConfigPreview.description}
-                      </p>
-                    </div>
-                  )}
-                  {selectedConfigPreview.team && (
-                    <div>
-                      <p className="text-sm text-gray-600">Team</p>
-                      <Badge variant="secondary">
-                        {selectedConfigPreview.team}
-                      </Badge>
-                    </div>
-                  )}
+            <CardContent className="space-y-6 pt-6">
+              {/* Description */}
+              {selectedConfigPreview.description && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-blue-900 mb-2">
+                    Description
+                  </h4>
+                  <p className="text-sm text-blue-800">
+                    {selectedConfigPreview.description}
+                  </p>
                 </div>
-              </div>
+              )}
 
-              {/* Sources */}
+              {/* Sources Section */}
               {selectedConfigPreview.sources &&
                 selectedConfigPreview.sources.length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-3">
-                      Sources ({selectedConfigPreview.sources.length})
+                    <h4 className="font-semibold text-gray-900 mb-4 text-lg">
+                      Email Sources ({selectedConfigPreview.sources.length})
                     </h4>
                     <div className="space-y-3">
                       {selectedConfigPreview.sources.map((source, idx) => (
-                        <div key={source.id} className="bg-gray-50 p-3 rounded">
-                          <p className="font-medium text-sm mb-2">
-                            Source {idx + 1}: {source.type}
-                          </p>
+                        <div
+                          key={source.id}
+                          className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="font-semibold text-gray-900">
+                              Source {idx + 1}: {source.type}
+                            </p>
+                            <Badge variant="outline">{source.type}</Badge>
+                          </div>
+
                           {source.type === "Email" && (
-                            <div className="text-sm space-y-1">
-                              <p className="text-gray-600">
-                                Email:{" "}
-                                <span className="font-mono">
+                            <div className="space-y-3">
+                              <div className="bg-gray-50 p-3 rounded">
+                                <p className="text-xs text-gray-600 mb-1">
+                                  Email Address
+                                </p>
+                                <p className="text-sm font-mono font-semibold text-gray-900">
                                   {source.customEmailSource || source.emailSource}
-                                </span>
-                              </p>
+                                </p>
+                              </div>
+
                               {source.emailRules &&
                                 source.emailRules.length > 0 && (
                                   <div>
-                                    <p className="text-gray-600 mb-1">
-                                      Rules:
+                                    <p className="text-sm font-semibold text-gray-900 mb-2">
+                                      Email Rules ({source.emailRules.length})
                                     </p>
-                                    {source.emailRules.map((rule, rIdx) => (
-                                      <div
-                                        key={rule.id}
-                                        className="text-xs text-gray-600 ml-2"
-                                      >
-                                        {rIdx + 1}. {rule.fieldType}
-                                        {rule.domain
-                                          ? ` = ${rule.domain}`
-                                          : ` ${rule.operator} "${rule.value}"`}
-                                        {rule.nextOperator !== "END" && (
-                                          <span className="font-medium">
-                                            {" "}
-                                            {rule.nextOperator}
+                                    <div className="space-y-2">
+                                      {source.emailRules.map((rule, rIdx) => (
+                                        <div
+                                          key={rule.id}
+                                          className="bg-gray-50 p-2 rounded text-sm"
+                                        >
+                                          <span className="inline-block bg-gray-200 text-gray-800 px-2 py-1 rounded text-xs mr-2 font-semibold">
+                                            {rIdx + 1}
                                           </span>
-                                        )}
-                                      </div>
-                                    ))}
+                                          <span className="font-medium text-gray-900">
+                                            {rule.fieldType}
+                                          </span>
+                                          {rule.domain ? (
+                                            <span className="text-gray-700 ml-2">
+                                              = <span className="font-mono">{rule.domain}</span>
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-700 ml-2">
+                                              {rule.operator} &quot;
+                                              <span className="font-mono">
+                                                {rule.value}
+                                              </span>
+                                              &quot;
+                                            </span>
+                                          )}
+                                          {rule.nextOperator !== "END" && (
+                                            <span className="ml-2 font-semibold text-blue-600">
+                                              {rule.nextOperator}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
                             </div>
                           )}
+
                           {source.type === "Slack" && (
-                            <div className="text-sm space-y-1">
-                              <p className="text-gray-600">
-                                Type:{" "}
-                                <span className="font-medium">
+                            <div className="space-y-2 text-sm">
+                              <div className="bg-gray-50 p-2 rounded">
+                                <p className="text-xs text-gray-600 mb-1">Type</p>
+                                <p className="font-medium text-gray-900">
                                   {source.slackType}
-                                </span>
-                              </p>
-                              <p className="text-gray-600">
-                                Name:{" "}
-                                <span className="font-mono">
+                                </p>
+                              </div>
+                              <div className="bg-gray-50 p-2 rounded">
+                                <p className="text-xs text-gray-600 mb-1">
+                                  Channel/Workspace
+                                </p>
+                                <p className="font-mono text-gray-900">
                                   {source.slackName}
-                                </span>
-                              </p>
+                                </p>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -524,54 +565,86 @@ export default function MailConfigs() {
                   </div>
                 )}
 
-              {/* Allocation */}
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Allocation</h4>
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-sm text-gray-600">Assigned To</p>
-                    <p className="text-sm font-medium">
+              {/* Allocation Section */}
+              <div className="border-t pt-6">
+                <h4 className="font-semibold text-gray-900 mb-4 text-lg">
+                  Ticket Allocation
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <p className="text-xs text-gray-600 mb-2 font-semibold">
+                      ASSIGNED TO
+                    </p>
+                    <p className="text-sm font-semibold text-gray-900">
                       {getAssignedUserName(
                         selectedConfigPreview.assigned_to_id
                       )}
                     </p>
                   </div>
-                  {selectedConfigPreview.watcher_user_ids &&
-                    selectedConfigPreview.watcher_user_ids.length > 0 && (
-                      <div>
-                        <p className="text-sm text-gray-600">Watchers</p>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {selectedConfigPreview.watcher_user_ids.map((id) => (
-                            <Badge key={id} variant="outline">
-                              {getAssignedUserName(id)}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  <div>
-                    <p className="text-sm text-gray-600">Priority</p>
-                    <Badge
-                      className={
-                        PRIORITY_COLORS[selectedConfigPreview.priority_id]
-                      }
-                    >
+
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <p className="text-xs text-gray-600 mb-2 font-semibold">
+                      PRIORITY
+                    </p>
+                    <Badge className={PRIORITY_COLORS[selectedConfigPreview.priority_id]}>
                       {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
                         PRIORITY_NAMES[selectedConfigPreview.priority_id]}
                     </Badge>
                   </div>
+
+                  {selectedConfigPreview.watcher_user_ids &&
+                    selectedConfigPreview.watcher_user_ids.length > 0 && (
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <p className="text-xs text-gray-600 mb-2 font-semibold">
+                          WATCHERS ({selectedConfigPreview.watcher_user_ids.length})
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedConfigPreview.watcher_user_ids
+                            .slice(0, 3)
+                            .map((id) => (
+                              <Badge key={id} variant="secondary" className="text-xs">
+                                {getAssignedUserName(id).split(" ")[0]}
+                              </Badge>
+                            ))}
+                          {selectedConfigPreview.watcher_user_ids.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{selectedConfigPreview.watcher_user_ids.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
                 </div>
+
+                {selectedConfigPreview.watcher_user_ids &&
+                  selectedConfigPreview.watcher_user_ids.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-semibold text-gray-900 mb-2">
+                        All Watchers
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedConfigPreview.watcher_user_ids.map((id) => (
+                          <Badge key={id} variant="outline">
+                            {getAssignedUserName(id)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
               </div>
 
-              {/* Metadata */}
-              <div className="text-xs text-gray-500 space-y-1 border-t pt-4">
+              {/* Metadata Footer */}
+              <div className="border-t pt-4 text-xs text-gray-500 space-y-1 bg-gray-50 p-4 rounded">
                 <p>
-                  Created:{" "}
-                  {new Date(selectedConfigPreview.created_at).toLocaleDateString()}
+                  <span className="font-semibold">Created:</span>{" "}
+                  {new Date(selectedConfigPreview.created_at).toLocaleString()}
                 </p>
                 <p>
-                  Updated:{" "}
-                  {new Date(selectedConfigPreview.updated_at).toLocaleDateString()}
+                  <span className="font-semibold">Updated:</span>{" "}
+                  {new Date(selectedConfigPreview.updated_at).toLocaleString()}
+                </p>
+                <p>
+                  <span className="font-semibold">Config ID:</span> #{selectedConfigPreview.id}
                 </p>
               </div>
             </CardContent>

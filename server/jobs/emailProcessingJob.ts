@@ -52,13 +52,16 @@ export function initialize() {
               if (sources.length > 0) {
                 for (const s of sources) {
                   if (s.type === "Email") {
-                    const mailbox = s.customEmailSource || s.emailSource || null;
+                    const mailbox =
+                      s.customEmailSource || s.emailSource || null;
                     if (mailbox) emailSources.push(mailbox);
                   }
                 }
               } else {
-                if ((config as any).from_email) emailSources.push((config as any).from_email);
-                if ((config as any).to_email) emailSources.push((config as any).to_email);
+                if ((config as any).from_email)
+                  emailSources.push((config as any).from_email);
+                if ((config as any).to_email)
+                  emailSources.push((config as any).to_email);
               }
 
               if (emailSources.length === 0) {
@@ -94,10 +97,16 @@ export function initialize() {
                   // Filter emails using config rules; restrict matching to the current source if available
                   let sourceForMatching = undefined;
                   if (Array.isArray((config as any).sources)) {
-                    sourceForMatching = (config as any).sources.find((s: any) => {
-                      const candidate = s.customEmailSource || s.emailSource || null;
-                      return candidate && candidate.toLowerCase() === mailbox.toLowerCase();
-                    });
+                    sourceForMatching = (config as any).sources.find(
+                      (s: any) => {
+                        const candidate =
+                          s.customEmailSource || s.emailSource || null;
+                        return (
+                          candidate &&
+                          candidate.toLowerCase() === mailbox.toLowerCase()
+                        );
+                      },
+                    );
                   }
 
                   const configToUse = sourceForMatching
@@ -128,10 +137,11 @@ export function initialize() {
                   for (const email of matchedEmails) {
                     try {
                       // Skip if already processed
-                      const already = await MailConfigRepository.isEmailProcessed(
-                        config.id,
-                        email.id,
-                      );
+                      const already =
+                        await MailConfigRepository.isEmailProcessed(
+                          config.id,
+                          email.id,
+                        );
                       if (already) {
                         console.log(
                           `Email ${email.id} already processed for config ${config.id}, skipping`,
@@ -139,22 +149,28 @@ export function initialize() {
                         continue;
                       }
 
-                      const ticketResult = await EmailProcessingService.createTicket(
-                        email,
-                        config as any,
-                      );
+                      const ticketResult =
+                        await EmailProcessingService.createTicket(
+                          email,
+                          config as any,
+                        );
 
                       // Attempt to atomically log processing result. If another process logged first,
                       // this will return false and we ignore counting.
-                      const logged = await MailConfigRepository.logProcessedEmailAtomic(
-                        config.id,
-                        email.id,
-                        email.subject || "(No subject)",
-                        (email.from && (email.from.emailAddress?.address || email.from)) || (email.sender && email.sender.emailAddress?.address) || "unknown",
-                        ticketResult.ticketId,
-                        ticketResult.success ? "success" : "failed",
-                        ticketResult.error,
-                      );
+                      const logged =
+                        await MailConfigRepository.logProcessedEmailAtomic(
+                          config.id,
+                          email.id,
+                          email.subject || "(No subject)",
+                          (email.from &&
+                            (email.from.emailAddress?.address || email.from)) ||
+                            (email.sender &&
+                              email.sender.emailAddress?.address) ||
+                            "unknown",
+                          ticketResult.ticketId,
+                          ticketResult.success ? "success" : "failed",
+                          ticketResult.error,
+                        );
 
                       if (logged) {
                         console.log(

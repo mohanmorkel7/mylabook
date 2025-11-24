@@ -1065,7 +1065,10 @@ function replaceCidReferences(
   return modified;
 }
 
-export async function getTodayEmails(since?: Date, mailbox?: string): Promise<Email[]> {
+export async function getTodayEmails(
+  since?: Date,
+  mailbox?: string,
+): Promise<Email[]> {
   // For delegated shared mailbox access, we need the user's delegated token
   // This token should be stored in the database or cache from user sign-in
   // For now, we'll try to fetch using app-only credentials as fallback

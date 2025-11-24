@@ -133,7 +133,10 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
 /**
  * Evaluate a chain of rules (respecting AND/OR/END operators)
  */
-export function evaluateRuleChain(rules: EmailRule[] | undefined, email: Email): boolean {
+export function evaluateRuleChain(
+  rules: EmailRule[] | undefined,
+  email: Email,
+): boolean {
   if (!rules || rules.length === 0) return true;
 
   // Evaluate sequentially combining with nextOperator of current rule
@@ -157,7 +160,10 @@ export function evaluateRuleChain(rules: EmailRule[] | undefined, email: Email):
 /**
  * Check if email matches a given source's emailRules
  */
-export function matchEmailAgainstSource(email: Email, source: SourceConfig): boolean {
+export function matchEmailAgainstSource(
+  email: Email,
+  source: SourceConfig,
+): boolean {
   if (!source) return true;
   if (!source.emailRules || source.emailRules.length === 0) return true;
   return evaluateRuleChain(source.emailRules, email);
@@ -172,7 +178,11 @@ export function matchEmailAgainstConfig(
   config: MailConfig,
 ): boolean {
   // If config has sources, try to match any email source rules
-  if (config.sources && Array.isArray(config.sources) && config.sources.length > 0) {
+  if (
+    config.sources &&
+    Array.isArray(config.sources) &&
+    config.sources.length > 0
+  ) {
     // If config.sources includes multiple sources, possibly only one applies.
     // We'll succeed if any source of type Email matches the email using its rules.
     for (const src of config.sources) {
@@ -237,7 +247,13 @@ export function matchEmailAgainstConfig(
   }
 
   if ((config as any).body_content) {
-    if (!matchBodyContent((config as any).body_content, email.body, (config as any).body_match_type)) {
+    if (
+      !matchBodyContent(
+        (config as any).body_content,
+        email.body,
+        (config as any).body_match_type,
+      )
+    ) {
       return false;
     }
   }

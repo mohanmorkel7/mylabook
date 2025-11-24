@@ -228,7 +228,22 @@ router.put("/:id", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const { id } = req.params;
-    const updateData: UpdateMailConfigData = req.body;
+    const updateData: UpdateMailConfigData = req.body as any;
+
+    // Allow status_name in update payload and resolve it to status_id
+    if (!(updateData as any).status_id && (req.body as any)?.status_name) {
+      try {
+        const statusRes = await pool.query(
+          "SELECT id FROM ticket_statuses WHERE LOWER(name) = LOWER($1) LIMIT 1",
+          [(req.body as any).status_name],
+        );
+        if (statusRes.rows.length > 0) {
+          (updateData as any).status_id = statusRes.rows[0].id;
+        }
+      } catch (e) {
+        console.warn("Failed to resolve status_name during update:", e?.message || e);
+      }
+    }
 
     // Remove user_id from update data if present
     delete (updateData as any).user_id;

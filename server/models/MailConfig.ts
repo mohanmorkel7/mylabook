@@ -104,6 +104,8 @@ export class MailConfigRepository {
       FROM mail_configs
     `;
 
+    let result;
+
     const params: any[] = [];
 
     // If userId is provided, filter by that user. If null/undefined, return all configs

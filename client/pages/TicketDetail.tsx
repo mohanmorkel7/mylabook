@@ -517,7 +517,10 @@ export default function TicketDetailPage() {
 
                       {/* Email Body - Accordion */}
                       <Accordion type="single" collapsible className="w-full">
-                        <AccordionItem value="email-body" className="border rounded">
+                        <AccordionItem
+                          value="email-body"
+                          className="border rounded"
+                        >
                           <AccordionTrigger className="px-4 hover:no-underline hover:bg-gray-50">
                             <div className="flex items-center gap-3 text-left flex-1">
                               <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />

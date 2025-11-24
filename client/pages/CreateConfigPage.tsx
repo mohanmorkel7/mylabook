@@ -142,12 +142,6 @@ export default function CreateConfigPage() {
       if (response) {
         // Map database config to form state
         const sources = response.sources || [];
-        const prioritySlaMap: Record<number, string> = {
-          4: "2 Hours",
-          3: "5 Hours",
-          2: "24 Hours",
-        };
-
         // Map status_id to a friendly name if possible
         const statusMap: Record<number, string> = {
           1: "Open",
@@ -163,10 +157,10 @@ export default function CreateConfigPage() {
           sources: sources.length > 0 ? sources : [],
           assignedTo: response.assigned_to_id || null,
           watchers: response.watcher_user_ids || [],
-          prioritySla: prioritySlaMap[response.priority_id] || "",
           statusName: statusMap[response.status_id] || undefined,
           demand: response.demand !== undefined ? response.demand : null,
         });
+        setFormPriorityId(response.priority_id || null);
       }
     } catch (error) {
       console.error("Error fetching config:", error);

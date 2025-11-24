@@ -79,6 +79,7 @@ export function initialize() {
               }
 
               let anyMatched = false;
+              let anyFetchSucceeded = false; // track whether any mailbox fetch completed successfully
 
               // For each email source mailbox, fetch emails and apply the config/source-specific rules
               for (const mailbox of emailSources) {
@@ -87,6 +88,9 @@ export function initialize() {
                     `Fetching emails for config ${config.id} from mailbox ${mailbox}`,
                   );
                   const emails = await getTodayEmails(since, mailbox);
+
+                  // Mark that fetch completed (even if 0 results) so we can advance last_processed_at safely
+                  anyFetchSucceeded = true;
 
                   if (!emails || emails.length === 0) {
                     console.log(

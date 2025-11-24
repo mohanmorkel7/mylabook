@@ -445,7 +445,7 @@ export default function TicketDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Description</CardTitle>
+              <CardTitle>Overview</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -484,6 +484,24 @@ export default function TicketDetailPage() {
                       bodyText,
                     );
 
+                  // Get first 100 characters as preview (truncate at word boundary)
+                  const getPreview = (text: string, maxLength = 100) => {
+                    if (text.length <= maxLength) return text;
+                    const truncated = text.substring(0, maxLength);
+                    const lastSpace = truncated.lastIndexOf(" ");
+                    return (
+                      (lastSpace > 0
+                        ? truncated.substring(0, lastSpace)
+                        : truncated) + "..."
+                    );
+                  };
+
+                  const previewText = looksLikeTableData
+                    ? bodyText.split("\n")[0]
+                    : getPreview(
+                        bodyText.replace(/<[^>]+>/g, "").substring(0, 150),
+                      );
+
                   return (
                     <>
                       {/* Email Headers */}
@@ -497,23 +515,98 @@ export default function TicketDetailPage() {
                         </div>
                       )}
 
-                      {/* Email Body - Rendered as HTML or Plain Text */}
-                      <div className="w-full overflow-x-auto">
-                        {looksLikeTableData ? (
-                          // Plain text table data - display as preformatted text with monospace font
-                          <pre className="bg-gray-50 border border-gray-300 rounded p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-words">
-                            <code>{bodyText}</code>
-                          </pre>
-                        ) : (
-                          // HTML content - render with rich formatting
-                          <div
-                            className="email-body-content text-gray-800 break-words"
-                            dangerouslySetInnerHTML={{
-                              __html: bodyText,
-                            }}
-                          />
-                        )}
-                      </div>
+                      {/* Email Body - Accordion */}
+                      <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value="email-body" className="border rounded">
+                          <AccordionTrigger className="px-4 hover:no-underline hover:bg-gray-50">
+                            <div className="flex items-center gap-3 text-left flex-1">
+                              <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-gray-900">
+                                  Email Content
+                                </p>
+                                <p className="text-sm text-gray-600 truncate mt-1">
+                                  {previewText}
+                                </p>
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="bg-gray-50 border-t">
+                            <div className="w-full overflow-x-auto">
+                              {looksLikeTableData ? (
+                                // Plain text table data - display as preformatted text with monospace font
+                                <pre className="bg-white border border-gray-300 rounded p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-words">
+                                  <code>{bodyText}</code>
+                                </pre>
+                              ) : (
+                                // HTML content - render with rich formatting
+                                <div
+                                  className="email-body-content text-gray-800 break-words"
+                                  dangerouslySetInnerHTML={{
+                                    __html: bodyText,
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+
+                      {/* Attachments Section */}
+                      {(() => {
+                        // Extract attachments from email body if present
+                        // Look for common attachment patterns in email headers
+                        const attachmentPattern =
+                          /Attachment[s]?:\s*(.+?)(?:\n|$)/gi;
+                        const matches = raw.matchAll(attachmentPattern);
+                        const attachments: {
+                          name: string;
+                          size?: string;
+                        }[] = [];
+
+                        for (const match of matches) {
+                          const attachmentInfo = match[1]
+                            .split(",")
+                            .map((s) => s.trim());
+                          for (const info of attachmentInfo) {
+                            attachments.push({
+                              name: info,
+                            });
+                          }
+                        }
+
+                        if (attachments.length > 0) {
+                          return (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Paperclip className="h-5 w-5 text-amber-600" />
+                                <h4 className="font-semibold text-amber-900">
+                                  Attachments ({attachments.length})
+                                </h4>
+                              </div>
+                              <div className="space-y-2">
+                                {attachments.map((attachment, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center gap-2 bg-white p-2 rounded border border-amber-100 text-sm"
+                                  >
+                                    <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                    <span className="text-gray-900 truncate flex-1">
+                                      {attachment.name}
+                                    </span>
+                                    {attachment.size && (
+                                      <span className="text-xs text-gray-500">
+                                        {attachment.size}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </>
                   );
                 })()}

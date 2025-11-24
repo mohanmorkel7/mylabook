@@ -429,13 +429,6 @@ export default function CreateConfigPage() {
 
       setIsLoading(true);
 
-      // Map priority SLA to priority_id
-      const priorityMap: Record<string, number> = {
-        "2 Hours": 4,
-        "5 Hours": 3,
-        "24 Hours": 2,
-      };
-
       // Create a payload for each source, as the current API expects one config per source
       const firstSource = form.sources[0];
       let fieldType = "subject";
@@ -460,7 +453,8 @@ export default function CreateConfigPage() {
         from_email:
           firstSource.type === "Email" ? firstSource.emailSource : undefined,
         project_id: 28,
-        priority_id: priorityMap[form.prioritySla] || 3,
+        // Use existing priority for edit or default to 3
+        priority_id: formPriorityId || 3,
         assigned_to_id: form.assignedTo,
         watcher_user_ids: form.watchers,
         sources: form.sources,

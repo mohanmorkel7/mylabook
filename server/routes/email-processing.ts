@@ -189,13 +189,13 @@ router.get(
       let countParamCount = 1;
 
       if (date_from) {
-        countQuery += ` AND ct.created_at >= $${countParamCount}`;
+        countQuery += ` AND t.created_at >= $${countParamCount}`;
         countValues.push(date_from);
         countParamCount++;
       }
 
       if (date_to) {
-        countQuery += ` AND ct.created_at <= $${countParamCount}`;
+        countQuery += ` AND t.created_at <= $${countParamCount}`;
         countValues.push(date_to);
         countParamCount++;
       }

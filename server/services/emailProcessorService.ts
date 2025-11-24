@@ -1192,6 +1192,14 @@ export async function getTodayEmails(
         const data = await res.json();
         const items = Array.isArray(data?.value) ? data.value : [];
         // console.log(`Fetched ${items.length} emails from this page`);
+        if (items.length === 0) {
+          try {
+            const snippet = JSON.stringify(data).substring(0, 1000);
+            console.log(`Graph page returned 0 items. Raw response snippet: ${snippet}`);
+          } catch (e) {
+            console.log("Graph page returned 0 items and failed to stringify response");
+          }
+        }
         allEmails.push(...items);
 
         // Handle pagination
@@ -1217,6 +1225,23 @@ export async function getTodayEmails(
   if (!token) {
     console.warn("getTodayEmails: no token available, aborting");
     return [];
+  }
+
+  // Diagnostic: verify we can resolve the target mailbox and log its displayName (helps detect permission issues)
+  try {
+    const diagUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(reconopsEmail)}`;
+    const diagRes = await fetch(diagUrl, {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    if (!diagRes.ok) {
+      const diagText = await diagRes.text().catch(() => "<failed-to-read-body>");
+      console.warn(`getTodayEmails: diagnostic user lookup failed: ${diagRes.status} ${diagRes.statusText} - ${diagText.substring(0,1000)}`);
+    } else {
+      const diagJson = await diagRes.json().catch(() => null);
+      console.log(`getTodayEmails: diagnostic user lookup succeeded for ${reconopsEmail}: displayName=${diagJson?.displayName || "(unknown)"}`);
+    }
+  } catch (diagErr) {
+    console.warn("getTodayEmails: diagnostic user lookup threw error:", diagErr);
   }
 
   // Determine start and end for filtering
@@ -1629,7 +1654,7 @@ export async function getTodayEmails(
       }
 
       if (!attachment) {
-        console.warn(`⚠ CID not found in attachments: ${cid}`);
+        console.warn(`��� CID not found in attachments: ${cid}`);
         continue;
       }
 

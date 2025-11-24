@@ -237,7 +237,7 @@ export class MailConfigRepository {
     ];
 
     const result = await pool.query(query, values);
-    return result.rows[0];
+    return result.rows[0] ? this.parseRow(result.rows[0]) : null;
   }
 
   static async update(

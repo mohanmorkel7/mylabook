@@ -482,8 +482,10 @@ export class MailConfigRepository {
     try {
       const query = `
         INSERT INTO created_tickets (email_id, mail_config_id, ticket_id, mitra_ticket_id, mitra_response, email_subject, email_from)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT (email_id, mail_config_id) DO NOTHING
+        SELECT $1,$2,$3,$4,$5,$6,$7
+        WHERE NOT EXISTS (
+          SELECT 1 FROM created_tickets WHERE email_id = $1 AND mail_config_id = $2
+        )
       `;
       await pool.query(query, [
         emailId,

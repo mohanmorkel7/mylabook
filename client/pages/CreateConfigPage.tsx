@@ -78,8 +78,8 @@ interface CreateConfigForm {
 
 const TEAMS = ["FinOps", "Product", "Sales"];
 const EMAIL_SOURCES = [
-  "reconops@mindeed.in",
-  "wavegate@pauswiff.com",
+  "reconops@mylapay.com",
+  "support.wavegate@payswiff.com",
   "custom",
 ];
 const DOMAINS = ["@razorpay.com", "@payswiff.com", "@camspay.com", "custom"];

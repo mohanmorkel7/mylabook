@@ -192,6 +192,40 @@ export default function CreateConfigPage() {
           demand: response.demand !== undefined ? response.demand : null,
         });
         setFormPriorityId(response.priority_id || null);
+
+        // Ensure any custom email sources or domains used in this config are available in the local custom lists
+        try {
+          const discoveredEmailSources: string[] = [];
+          const discoveredDomains: string[] = [];
+
+          if (Array.isArray(sources)) {
+            for (const s of sources) {
+              if (s?.emailSource && !EMAIL_SOURCES.includes(s.emailSource) && !customEmailSources.includes(s.emailSource)) {
+                discoveredEmailSources.push(s.emailSource);
+              }
+              if (Array.isArray(s.emailRules)) {
+                for (const r of s.emailRules) {
+                  if (r?.domain && !DOMAINS.includes(r.domain) && !customDomains.includes(r.domain)) {
+                    discoveredDomains.push(r.domain);
+                  }
+                  // if rule value looks like a custom domain (startsWith @)
+                  if (r?.value && r.value.startsWith("@") && !DOMAINS.includes(r.value) && !customDomains.includes(r.value)) {
+                    discoveredDomains.push(r.value);
+                  }
+                }
+              }
+            }
+          }
+
+          if (discoveredEmailSources.length > 0) {
+            setCustomEmailSources((prev) => Array.from(new Set([...prev, ...discoveredEmailSources])));
+          }
+          if (discoveredDomains.length > 0) {
+            setCustomDomains((prev) => Array.from(new Set([...prev, ...discoveredDomains])));
+          }
+        } catch (e) {
+          // ignore discovery errors
+        }
       }
     } catch (error) {
       console.error("Error fetching config:", error);

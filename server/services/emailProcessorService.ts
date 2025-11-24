@@ -300,15 +300,20 @@ ${parsed.html}`;
         // Best-effort: record created_tickets entry so UI can list created-from-email tickets
         try {
           const MailConfigRepo = await import("../models/MailConfig");
-          await MailConfigRepo.MailConfig.insertCreatedTicket(
-            config.id,
-            email.id,
-            createdTicket.id,
-            null,
-            null,
-            subject,
-            fromEmail,
-          );
+          const repo = MailConfigRepo.MailConfigRepository || MailConfigRepo.MailConfig || MailConfigRepo.default || MailConfigRepo;
+          if (repo && typeof repo.insertCreatedTicket === "function") {
+            await repo.insertCreatedTicket(
+              config.id,
+              email.id,
+              createdTicket.id,
+              null,
+              null,
+              subject,
+              fromEmail,
+            );
+          } else {
+            console.warn("MailConfig repository does not expose insertCreatedTicket");
+          }
         } catch (e) {
           console.warn(
             "Failed to record created_tickets after ticket creation:",

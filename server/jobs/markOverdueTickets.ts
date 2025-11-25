@@ -22,23 +22,23 @@ export async function runMarkOverdueTickets() {
        WHERE t.sla_time IS NOT NULL AND t.sla_time < NOW()`,
     );
 
-    console.log(
-      `[markOverdueTickets] Found ${ticketsRes.rows.length} tickets with sla_time < NOW()`,
-    );
+    // console.log(
+    //   `[markOverdueTickets] Found ${ticketsRes.rows.length} tickets with sla_time < NOW()`,
+    // );
 
     for (const row of ticketsRes.rows) {
       const ticketId = row.id;
       const currentStatusId = row.status_id;
       const currentStatusName = String(row.status_name || "").toLowerCase();
 
-      console.log(
-        `[markOverdueTickets] Ticket ${ticketId} currentStatusId=${currentStatusId} currentStatusName='${String(row.status_name || "")}', is_closed=${row.is_closed}`,
-      );
+      // console.log(
+      //   `[markOverdueTickets] Ticket ${ticketId} currentStatusId=${currentStatusId} currentStatusName='${String(row.status_name || "")}', is_closed=${row.is_closed}`,
+      // );
 
       if (currentStatusId === overdueStatusId) {
-        console.log(
-          `[markOverdueTickets] Skipping ticket ${ticketId} because already overdue`,
-        );
+        // console.log(
+        //   `[markOverdueTickets] Skipping ticket ${ticketId} because already overdue`,
+        // );
         continue;
       }
 
@@ -47,18 +47,18 @@ export async function runMarkOverdueTickets() {
         currentStatusName.includes("in progress") ||
         currentStatusName.includes("inprogress")
       ) {
-        console.log(
-          `[markOverdueTickets] Skipping ticket ${ticketId} because status is In Progress`,
-        );
+        // console.log(
+        //   `[markOverdueTickets] Skipping ticket ${ticketId} because status is In Progress`,
+        // );
         continue;
       }
 
       // Check if current status is closed
       const isClosed = row.is_closed === true;
       if (isClosed) {
-        console.log(
-          `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`,
-        );
+        // console.log(
+        //   `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`,
+        // );
         continue;
       }
 
@@ -69,9 +69,9 @@ export async function runMarkOverdueTickets() {
       );
 
       if (updateRes.rowCount === 0) {
-        console.warn(
-          `[markOverdueTickets] Failed to update ticket ${ticketId} to overdue status`,
-        );
+        // console.warn(
+        //   `[markOverdueTickets] Failed to update ticket ${ticketId} to overdue status`,
+        // );
         continue;
       }
 

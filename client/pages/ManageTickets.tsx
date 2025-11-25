@@ -1456,7 +1456,7 @@ export default function ManageTickets() {
                               <p
                                 className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
                               >
-                                {(() => {
+                                {/* {(() => {
                                   const statusName =
                                     (source.status &&
                                       (source.status.name || source.status)) ||
@@ -1473,7 +1473,27 @@ export default function ManageTickets() {
                                   if (slaMs <= 0)
                                     return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
                                   return `${formatRemaining(slaMs)} hours remaining`;
+                                })()} */}
+
+                                {(() => {
+                                  const statusName =
+                                    (ticket.status &&
+                                      (ticket.status.name || ticket.status)) ||
+                                    "";
+                                  const isInProgress =
+                                    String(statusName)
+                                      .toLowerCase()
+                                      .includes("in progress") ||
+                                    String(statusName)
+                                      .toLowerCase()
+                                      .includes("inprogress");
+                                  if (isInProgress) return "No SLA";
+                                  if (slaMs === null) return "No SLA";
+                                  if (slaMs <= 0)
+                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
+                                  return `${formatRemaining(slaMs)} hours remaining`;
                                 })()}
+                                
                               </p>
                             </div>
                             <div>

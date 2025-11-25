@@ -1543,7 +1543,7 @@ export async function getTodayEmails(
         if (debugForConfigId === 28) {
           try {
             console.log(
-              `getTodayEmails: [DEBUG] Skipping item id=${it.id} subject="${(it.subject||"").substring(0,120)}" received=${it.receivedDateTime} because it is outside ${filterStartDate.toISOString()}..${filterEndDate.toISOString()}`,
+              `getTodayEmails: [DEBUG] Skipping item id=${it.id} subject="${(it.subject || "").substring(0, 120)}" received=${it.receivedDateTime} because it is outside ${filterStartDate.toISOString()}..${filterEndDate.toISOString()}`,
             );
           } catch (e) {
             // ignore
@@ -1869,15 +1869,20 @@ export async function getTodayEmails(
     // If debugging for a specific config, log raw fetched items (first 20)
     if (debugForConfigId === 28) {
       try {
-        console.log(`getTodayEmails: [DEBUG] listing up to 20 raw fetched items from shared mailbox ${reconopsEmail}:`);
+        console.log(
+          `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from shared mailbox ${reconopsEmail}:`,
+        );
         for (let i = 0; i < Math.min(20, sharedEmails.length); i++) {
           const it = sharedEmails[i];
           console.log(
-            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject||"").substring(0,120)}" from="${(it.from?.emailAddress?.address||it.from||"").substring(0,80)}" receivedDateTime=${it.receivedDateTime}`,
+            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
           );
         }
       } catch (e) {
-        console.warn("getTodayEmails: [DEBUG] failed to print raw sharedEmails", e);
+        console.warn(
+          "getTodayEmails: [DEBUG] failed to print raw sharedEmails",
+          e,
+        );
       }
     }
 
@@ -1978,15 +1983,20 @@ export async function getTodayEmails(
 
         if (debugForConfigId === 28) {
           try {
-            console.log(`getTodayEmails: [DEBUG] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`);
+            console.log(
+              `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`,
+            );
             for (let i = 0; i < Math.min(20, folderEmails.length); i++) {
               const it = folderEmails[i];
               console.log(
-                `  [RAW] idx=${i} id=${it.id} subject="${(it.subject||"").substring(0,120)}" from="${(it.from?.emailAddress?.address||it.from||"").substring(0,80)}" receivedDateTime=${it.receivedDateTime}`,
+                `  [RAW] idx=${i} id=${it.id} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
               );
             }
           } catch (e) {
-            console.warn("getTodayEmails: [DEBUG] failed to print raw folderEmails", e);
+            console.warn(
+              "getTodayEmails: [DEBUG] failed to print raw folderEmails",
+              e,
+            );
           }
         }
 
@@ -2038,15 +2048,20 @@ export async function getTodayEmails(
 
     if (debugForConfigId === 28) {
       try {
-        console.log(`getTodayEmails: [DEBUG] listing up to 20 raw fetched items from user inbox:`);
+        console.log(
+          `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from user inbox:`,
+        );
         for (let i = 0; i < Math.min(20, userEmails.length); i++) {
           const it = userEmails[i];
           console.log(
-            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject||"").substring(0,120)}" from="${(it.from?.emailAddress?.address||it.from||"").substring(0,80)}" receivedDateTime=${it.receivedDateTime}`,
+            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
           );
         }
       } catch (e) {
-        console.warn("getTodayEmails: [DEBUG] failed to print raw userEmails", e);
+        console.warn(
+          "getTodayEmails: [DEBUG] failed to print raw userEmails",
+          e,
+        );
       }
     }
 

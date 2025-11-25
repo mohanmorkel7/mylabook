@@ -1967,6 +1967,20 @@ export async function getTodayEmails(
           `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
         );
 
+        if (debugForConfigId === 28) {
+          try {
+            console.log(`getTodayEmails: [DEBUG] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`);
+            for (let i = 0; i < Math.min(20, folderEmails.length); i++) {
+              const it = folderEmails[i];
+              console.log(
+                `  [RAW] idx=${i} id=${it.id} subject="${(it.subject||"").substring(0,120)}" from="${(it.from?.emailAddress?.address||it.from||"").substring(0,80)}" receivedDateTime=${it.receivedDateTime}`,
+              );
+            }
+          } catch (e) {
+            console.warn("getTodayEmails: [DEBUG] failed to print raw folderEmails", e);
+          }
+        }
+
         // Diagnostic: count in-range
         try {
           const inRange = folderEmails.filter((it: any) => {

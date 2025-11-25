@@ -449,7 +449,7 @@ ${parsed.html}`;
                 email.id,
                 ticketResult.ticketId,
                 null,
-                null,
+                { email_body: (email.body || null) },
                 emailSubject,
                 emailFrom,
               );
@@ -910,7 +910,7 @@ async function fetchAttachmentData(
 //         }
 
 //         console.log(
-//           `[EmailAttachments] ✓ Converted "${attachment.name}" to data URL (${dataUrl.substring(0, 50)}...)`,
+//           `[EmailAttachments] �� Converted "${attachment.name}" to data URL (${dataUrl.substring(0, 50)}...)`,
 //         );
 //       } else {
 //         console.warn(

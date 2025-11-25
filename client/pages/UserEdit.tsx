@@ -92,6 +92,8 @@ export default function UserEdit() {
         role: role,
         status: originalUser.status || "active",
         department: department,
+        department_admin: originalUser.department_admin || false,
+        admin_for_department: originalUser.admin_for_department || "",
         start_date: originalUser.start_date || "",
         notes: originalUser.notes || "",
         two_factor_enabled: originalUser.two_factor_enabled || false,

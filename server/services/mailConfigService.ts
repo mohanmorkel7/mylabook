@@ -172,15 +172,37 @@ ${bodyText}`;
           // Best-effort: record created_tickets row if we have a ticket id
           if (ticketResult.ticketId) {
             try {
-              await MailConfigRepository.insertCreatedTicket(
-                config.id,
-                email.id,
-                ticketResult.ticketId,
-                null,
-                { email_body: ticketResult.emailBody || email.body || null },
-                emailSubject,
-                emailFrom,
-              );
+              // Normalize email body to avoid storing boolean values
+          const rawEmailBody = ticketResult.emailBody ?? null;
+          let normalizedEmailBody: string | null = null;
+          if (typeof rawEmailBody === "string") normalizedEmailBody = rawEmailBody;
+          else if (rawEmailBody == null) {
+            if (email.body && typeof email.body === "object" && typeof (email.body as any).content === "string") {
+              normalizedEmailBody = (email.body as any).content;
+            } else if (typeof email.body === "string") {
+              normalizedEmailBody = email.body;
+            } else if (typeof email.bodyPreview === "string") {
+              normalizedEmailBody = email.bodyPreview;
+            } else {
+              normalizedEmailBody = null;
+            }
+          } else {
+            try {
+              normalizedEmailBody = String(rawEmailBody);
+            } catch (e) {
+              normalizedEmailBody = null;
+            }
+          }
+
+          await MailConfigRepository.insertCreatedTicket(
+            config.id,
+            email.id,
+            ticketResult.ticketId,
+            null,
+            { email_body: normalizedEmailBody },
+            emailSubject,
+            emailFrom,
+          );
             } catch (e) {
               console.warn(
                 "Failed to insert created_tickets after claim flow:",

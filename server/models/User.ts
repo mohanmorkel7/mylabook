@@ -153,11 +153,11 @@ export class UserRepository {
     const passwordHash = await bcrypt.hash(userData.password, 10);
 
     const query = `
-      INSERT INTO users (first_name, last_name, email, phone, password_hash, role, 
-                        department, manager_id, start_date, two_factor_enabled, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id, first_name, last_name, email, phone, role, department, 
-                manager_id, status, start_date, last_login, two_factor_enabled, 
+      INSERT INTO users (first_name, last_name, email, phone, password_hash, role,
+                        department, department_admin, admin_for_department, manager_id, start_date, two_factor_enabled, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, first_name, last_name, email, phone, role, department, department_admin, admin_for_department,
+                manager_id, status, start_date, last_login, two_factor_enabled,
                 notes, created_at, updated_at
     `;
 

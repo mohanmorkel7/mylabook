@@ -114,18 +114,100 @@ export class EmailProcessingService {
 
     // https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/messages/AAMkADdlMmY5Y2YwLTZmMWUtNGVlMS1hMGMxLWQxNGZiMmY3YzNhMgBGAAAAAACEwkCa8QXVTZa1ldQEESI6BwAcHcQmrQiYRIGeV23A2n8mAAAAAAEMAAAcHcQmrQiYRIGeV23A2n8mAAAWIeBBAAA=/$value
 
-    const res = await fetch(
-      `https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/messages/${email.id}/$value`,
-      {
+    // Fetch raw MIME content with retries/backoff to handle transient 429s
+    const fetchWithRetries = async (
+      url: string,
+      options: any,
+      maxRetries = 4,
+    ) => {
+      let attempt = 0;
+      let backoff = 500; // start at 500ms
+      while (attempt <= maxRetries) {
+        try {
+          const r = await fetch(url, options);
+          if (r.status === 429) {
+            // Respect Retry-After header if provided
+            const retryAfter = r.headers.get("retry-after");
+            const waitMs = retryAfter ? Number(retryAfter) * 1000 : backoff;
+            console.warn(
+              `[EmailProcessing] Received 429 from Graph for ${email.id}. Attempt ${attempt}/${maxRetries}. Waiting ${waitMs}ms before retrying.`,
+            );
+            if (attempt === maxRetries) return r; // return last response
+            await new Promise((res) => setTimeout(res, waitMs));
+            attempt++;
+            backoff *= 2;
+            continue;
+          }
+
+          return r;
+        } catch (err) {
+          // Network error - retry
+          if (attempt === maxRetries) throw err;
+          console.warn(
+            `[EmailProcessing] Network error fetching email ${email.id} (attempt ${attempt}):`,
+            err?.message || err,
+          );
+          await new Promise((res) => setTimeout(res, backoff));
+          attempt++;
+          backoff *= 2;
+        }
+      }
+      throw new Error("Failed to fetch email after retries");
+    };
+
+    const url = `https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/messages/${email.id}/$value`;
+    let rawEmail = null;
+    let parsed: any = null;
+
+    try {
+      const res = await fetchWithRetries(url, {
         headers: { Authorization: `Bearer ${token_var}` },
-      },
+      });
+
+      if (res && res.ok) {
+        rawEmail = await res.text();
+        parsed = await simpleParser(rawEmail);
+      } else {
+        console.warn(
+          `[EmailProcessing] Failed to fetch raw email for ${email.id} from Graph. Status: ${res?.status}`,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[EmailProcessing] Error fetching raw email for ${email.id}:`,
+        err?.message || err,
+      );
+    }
+
+    // If parsed is still null, attempt to fallback to any HTML/text present on the email object
+    if (!parsed) {
+      parsed = {
+        html:
+          (email.body &&
+            typeof email.body === "object" &&
+            email.body.content) ||
+          email.bodyPreview ||
+          null,
+        text:
+          (email.body &&
+            typeof email.body === "object" &&
+            email.body.content) ||
+          email.bodyPreview ||
+          null,
+        attachments: email.attachments || [],
+      } as any;
+    }
+
+    // Sanitize HTML for storage/display
+    const sanitizedHtml = parsed.html
+      ? DOMPurify.sanitize(parsed.html, { WHOLE_DOCUMENT: false })
+      : null;
+
+    console.log(
+      sanitizedHtml
+        ? "Parsed HTML length:" + sanitizedHtml.length
+        : "No parsed HTML available",
     );
-
-    const rawEmail = await res.text();
-    const parsed = await simpleParser(rawEmail);
-
-    console.log(parsed.html); // HTML with inline images replaced by data URLs
-    console.log(parsed.attachments); // contains actual files + inline images
 
     try {
       // Extract email details
@@ -227,7 +309,7 @@ Received: ${email.receivedDateTime || "Unknown"}
 
 ---
 
-${parsed.html}`;
+${sanitizedHtml || parsed?.text || ""}`;
 
       console.log("config : ", config);
 
@@ -305,13 +387,16 @@ ${parsed.html}`;
             MailConfigRepo.MailConfig ||
             MailConfigRepo.default ||
             MailConfigRepo;
+          const emailBodyForRecord =
+            sanitizedHtml || parsed?.text || email.body || null;
+
           if (repo && typeof repo.insertCreatedTicket === "function") {
             await repo.insertCreatedTicket(
               config.id,
               email.id,
               createdTicket.id,
               null,
-              { email_body: email.body || null },
+              { email_body: emailBodyForRecord },
               subject,
               fromEmail,
             );
@@ -327,7 +412,11 @@ ${parsed.html}`;
           );
         }
 
-        return { ticketId: createdTicket.id, success: true };
+        return {
+          ticketId: createdTicket.id,
+          success: true,
+          emailBody: emailBodyForRecord,
+        };
       } catch (dbError: any) {
         const errorMsg = (dbError?.message || String(dbError)).toLowerCase();
 
@@ -449,7 +538,7 @@ ${parsed.html}`;
                 email.id,
                 ticketResult.ticketId,
                 null,
-                { email_body: email.body || null },
+                { email_body: ticketResult.emailBody || email.body || null },
                 emailSubject,
                 emailFrom,
               );

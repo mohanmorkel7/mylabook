@@ -51,6 +51,9 @@ export default function UserEdit() {
     role: "sales",
     status: "active",
     department: "",
+    // New fields for department admin
+    department_admin: false,
+    admin_for_department: "",
     start_date: "",
     notes: "",
     two_factor_enabled: false,

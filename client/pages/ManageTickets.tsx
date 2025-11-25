@@ -592,7 +592,10 @@ export default function ManageTickets() {
       // Derive a single server reference timestamp (ms)
       const serverNowMs = (() => {
         // If the ticket explicitly provides server time when sla_remaining_ms was computed, use it
-        if (ticket.__server_time_ms && typeof ticket.__server_time_ms === "number")
+        if (
+          ticket.__server_time_ms &&
+          typeof ticket.__server_time_ms === "number"
+        )
           return Number(ticket.__server_time_ms);
         // If we have a global server offset (clientNow - serverNow), derive serverNow
         if (

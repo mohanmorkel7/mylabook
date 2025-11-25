@@ -80,24 +80,28 @@ export function createServer() {
     );
   }
 
-  // Start Overdue Ticket Job: run every 30 seconds
+  // Start Overdue Ticket Job: run every 30 seconds (guarded)
   try {
-    // Delay startup slightly to allow DB initialization to begin
-    setTimeout(() => {
-      // Run immediately once, then schedule periodically
-      runMarkOverdueTickets().catch((err) =>
-        console.error("Initial run of markOverdueTickets failed:", err),
-      );
-
-      // Schedule recurring run every 30 seconds
-      setInterval(() => {
-
-        console.log("every 30 sec call for runMarkOverdueTickets................")
+    const enableOverdue = String(process.env.ENABLE_OVERDUE_JOB || "false").toLowerCase() === "true";
+    if (!enableOverdue) {
+      console.log("Overdue Ticket Job disabled via ENABLE_OVERDUE_JOB");
+    } else {
+      // Delay startup slightly to allow DB initialization to begin
+      setTimeout(() => {
+        // Run immediately once, then schedule periodically
         runMarkOverdueTickets().catch((err) =>
-          console.error("Scheduled run of markOverdueTickets failed:", err),
+          console.error("Initial run of markOverdueTickets failed:", err),
         );
-      }, 30 * 1000);
-    }, 1200);
+
+        // Schedule recurring run every 30 seconds
+        setInterval(() => {
+          console.log("every 30 sec call for runMarkOverdueTickets................");
+          runMarkOverdueTickets().catch((err) =>
+            console.error("Scheduled run of markOverdueTickets failed:", err),
+          );
+        }, 30 * 1000);
+      }, 1200);
+    }
   } catch (e) {
     console.error("Failed to start Overdue Ticket Job:", (e as any)?.message);
   }

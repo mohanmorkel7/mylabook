@@ -131,19 +131,19 @@ router.get(
       }
 
       if (assigned_user_id) {
-        query += ` AND mc.assigned_to_id = $${paramCount}`;
+        query += ` AND t.assigned_to = $${paramCount}`;
         values.push(assigned_user_id);
         paramCount++;
       }
 
       if (priority_id) {
-        query += ` AND mc.priority_id = $${paramCount}`;
+        query += ` AND t.priority_id = $${paramCount}`;
         values.push(priority_id);
         paramCount++;
       }
 
       if (project_id) {
-        query += ` AND mc.project_id = $${paramCount}`;
+        query += ` AND t.project_id = $${paramCount}`;
         values.push(project_id);
         paramCount++;
       }

@@ -1288,7 +1288,12 @@ export default function ManageTickets() {
                     track_id: ticket.track_id,
                     subject: ticket.email_subject || ticket.subject || "",
                     // Prefer mitra_response email_body if available
-                    description: (ticket.mitra_response && ticket.mitra_response.email_body) || ticket.description || ticket.email_subject || "",
+                    description:
+                      (ticket.mitra_response &&
+                        ticket.mitra_response.email_body) ||
+                      ticket.description ||
+                      ticket.email_subject ||
+                      "",
                     created_from_mail_config: true,
                     created_at: ticket.created_at,
                     updated_at: ticket.created_at,

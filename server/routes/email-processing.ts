@@ -203,7 +203,11 @@ router.get(
         },
         watchers: row.watcher_user_ids || [],
         created_at: row.created_at,
-        mitra_response: row.mitra_response ? (typeof row.mitra_response === "string" ? JSON.parse(row.mitra_response) : row.mitra_response) : null,
+        mitra_response: row.mitra_response
+          ? typeof row.mitra_response === "string"
+            ? JSON.parse(row.mitra_response)
+            : row.mitra_response
+          : null,
       }));
 
       // Get total count for pagination

@@ -219,7 +219,7 @@ export function initialize() {
                               email.id,
                               ticketResult.ticketId,
                               null,
-                              { email_body: (email.body || null) },
+                              { email_body: email.body || null },
                               email.subject || "(No subject)",
                               (email.from &&
                                 (email.from.emailAddress?.address ||

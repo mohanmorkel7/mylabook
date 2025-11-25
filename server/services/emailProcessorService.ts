@@ -183,11 +183,17 @@ export class EmailProcessingService {
     if (!parsed) {
       parsed = {
         html:
-          (email.body && typeof email.body === "object" && typeof (email.body as any).content === "string" && (email.body as any).content) ||
+          (email.body &&
+            typeof email.body === "object" &&
+            typeof (email.body as any).content === "string" &&
+            (email.body as any).content) ||
           (typeof email.bodyPreview === "string" ? email.bodyPreview : null) ||
           null,
         text:
-          (email.body && typeof email.body === "object" && typeof (email.body as any).content === "string" && (email.body as any).content) ||
+          (email.body &&
+            typeof email.body === "object" &&
+            typeof (email.body as any).content === "string" &&
+            (email.body as any).content) ||
           (typeof email.bodyPreview === "string" ? email.bodyPreview : null) ||
           null,
         attachments: email.attachments || [],
@@ -195,8 +201,10 @@ export class EmailProcessingService {
     }
 
     // Normalize parsed html/text to strings only (avoid boolean/other types)
-    const rawHtml = parsed && typeof parsed.html === "string" ? parsed.html : null;
-    const rawText = parsed && typeof parsed.text === "string" ? parsed.text : null;
+    const rawHtml =
+      parsed && typeof parsed.html === "string" ? parsed.html : null;
+    const rawText =
+      parsed && typeof parsed.text === "string" ? parsed.text : null;
     const sanitizedHtml = rawHtml
       ? DOMPurify.sanitize(rawHtml, { WHOLE_DOCUMENT: false })
       : null;
@@ -386,7 +394,10 @@ ${sanitizedHtml || rawText || ""}`;
             MailConfigRepo.default ||
             MailConfigRepo;
           const emailBodyForRecord =
-            sanitizedHtml || rawText || (typeof email.body === 'string' ? email.body : null) || null;
+            sanitizedHtml ||
+            rawText ||
+            (typeof email.body === "string" ? email.body : null) ||
+            null;
 
           if (repo && typeof repo.insertCreatedTicket === "function") {
             await repo.insertCreatedTicket(

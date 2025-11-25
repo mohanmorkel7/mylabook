@@ -188,6 +188,30 @@ router.get(
       const result = await pool.query(query, values);
 
       // Format response with assigned user display name
+      // Helper to convert DB timestamp (IST string) to UTC ISO similar to TicketRepository
+      const convertIstToUtc = (val: any) => {
+        try {
+          if (!val) return val;
+          if (val instanceof Date) return val.toISOString();
+          const str = String(val);
+          if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
+          if (/\d{4}-\d{2}-\d{2} /.test(str)) {
+            // Treat as IST local datetime string -> convert to UTC ISO
+            const parts = str.split(" ");
+            const datePart = parts[0];
+            const timePart = parts[1] || "00:00:00";
+            const iso = `${datePart}T${timePart}Z`;
+            const date = new Date(iso);
+            const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+            const utcDate = new Date(date.getTime() - IST_OFFSET_MS);
+            return utcDate.toISOString();
+          }
+          return str;
+        } catch (e) {
+          return val;
+        }
+      };
+
       const tickets = result.rows.map((row) => ({
         id: row.ticket_ref_id || row.ticket_id || null,
         email_id: row.email_id,
@@ -207,9 +231,9 @@ router.get(
               : "Unassigned",
         },
         watchers: row.watcher_user_ids || [],
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        sla_time: row.sla_time,
+        created_at: convertIstToUtc(row.created_at),
+        updated_at: convertIstToUtc(row.updated_at),
+        sla_time: convertIstToUtc(row.sla_time),
         status: row.status_name
           ? { id: row.status_id, name: row.status_name }
           : null,

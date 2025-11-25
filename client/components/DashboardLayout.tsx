@@ -373,12 +373,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       if (item.submenu && item.submenu.length > 0) {
         const filteredSubmenu = item.submenu.filter((sub) => {
           // Special-case: allow Mail Config if user is department admin for finops
-          if (
-            sub.name === "Mail Config" &&
-            ((user as any).admin_for_department === "finops" ||
-              user.role === "admin")
-          ) {
-            return true;
+          if (sub.name === "Mail Config") {
+            const adminDept = (user as any).admin_for_department;
+            const isDeptAdmin = !!(user as any).department_admin || !!adminDept;
+            const adminDeptMatchesFinops =
+              typeof adminDept === "string" &&
+              adminDept.toLowerCase() === "finops";
+            if (adminDeptMatchesFinops || user.role === "admin") {
+              return true;
+            }
           }
 
           if (sub.permissions) return hasAnyPermission(sub.permissions);

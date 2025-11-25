@@ -311,7 +311,7 @@ ${parsed.html}`;
               email.id,
               createdTicket.id,
               null,
-              null,
+              { email_body: (email.body || null) },
               subject,
               fromEmail,
             );

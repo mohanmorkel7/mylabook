@@ -326,7 +326,25 @@ router.get("/", async (req: Request, res: Response) => {
 // Returns counts grouped by assigned user and by status for a date range
 router.get("/summary", async (req: Request, res: Response) => {
   try {
-    const { date_from, date_to } = req.query;
+    const raw_date_from = req.query.date_from as string | undefined;
+    const raw_date_to = req.query.date_to as string | undefined;
+
+    function expandIstDate(dateStr: string, endOfDay = false) {
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return dateStr;
+      const [y, m, d] = parts.map((p) => parseInt(p, 10));
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+      const hour = endOfDay ? 23 : 0;
+      const minute = endOfDay ? 59 : 0;
+      const second = endOfDay ? 59 : 0;
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+      return new Date(utcTs).toISOString();
+    }
+
+    const date_from = raw_date_from ? expandIstDate(raw_date_from, false) : undefined;
+    const date_to = raw_date_to ? expandIstDate(raw_date_to, true) : undefined;
+
     const values: any[] = [];
     let where = "WHERE 1=1";
     let idx = 1;

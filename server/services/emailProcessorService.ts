@@ -2027,6 +2027,20 @@ export async function getTodayEmails(
       `getTodayEmails: user main inbox returned ${userEmails.length} total messages`,
     );
 
+    if (debugForConfigId === 28) {
+      try {
+        console.log(`getTodayEmails: [DEBUG] listing up to 20 raw fetched items from user inbox:`);
+        for (let i = 0; i < Math.min(20, userEmails.length); i++) {
+          const it = userEmails[i];
+          console.log(
+            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject||"").substring(0,120)}" from="${(it.from?.emailAddress?.address||it.from||"").substring(0,80)}" receivedDateTime=${it.receivedDateTime}`,
+          );
+        }
+      } catch (e) {
+        console.warn("getTodayEmails: [DEBUG] failed to print raw userEmails", e);
+      }
+    }
+
     // Diagnostic: count in-range
     try {
       const inRange = userEmails.filter((it: any) => {

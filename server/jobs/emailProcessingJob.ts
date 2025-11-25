@@ -215,22 +215,32 @@ export function initialize() {
                         if (ticketResult.ticketId) {
                           try {
                             // Normalize email body to avoid storing boolean values
-                            const rawEmailBodyJob = ticketResult.emailBody ?? null;
+                            const rawEmailBodyJob =
+                              ticketResult.emailBody ?? null;
                             let normalizedEmailBodyJob: string | null = null;
-                            if (typeof rawEmailBodyJob === "string") normalizedEmailBodyJob = rawEmailBodyJob;
+                            if (typeof rawEmailBodyJob === "string")
+                              normalizedEmailBodyJob = rawEmailBodyJob;
                             else if (rawEmailBodyJob == null) {
-                              if (email.body && typeof email.body === "object" && typeof (email.body as any).content === "string") {
-                                normalizedEmailBodyJob = (email.body as any).content;
+                              if (
+                                email.body &&
+                                typeof email.body === "object" &&
+                                typeof (email.body as any).content === "string"
+                              ) {
+                                normalizedEmailBodyJob = (email.body as any)
+                                  .content;
                               } else if (typeof email.body === "string") {
                                 normalizedEmailBodyJob = email.body;
-                              } else if (typeof email.bodyPreview === "string") {
+                              } else if (
+                                typeof email.bodyPreview === "string"
+                              ) {
                                 normalizedEmailBodyJob = email.bodyPreview;
                               } else {
                                 normalizedEmailBodyJob = null;
                               }
                             } else {
                               try {
-                                normalizedEmailBodyJob = String(rawEmailBodyJob);
+                                normalizedEmailBodyJob =
+                                  String(rawEmailBodyJob);
                               } catch (e) {
                                 normalizedEmailBodyJob = null;
                               }

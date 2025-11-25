@@ -1540,7 +1540,7 @@ export async function getTodayEmails(
       // Skip emails outside date filter
       const emailDate = new Date(it.receivedDateTime);
       if (emailDate < filterStartDate || emailDate >= filterEndDate) {
-        if (debugForConfigId === 28) {
+        if (debugForConfigId === 30 && it.subject=="Today Payswiff EOD Report") {
           try {
             console.log(
               `getTodayEmails: [DEBUG] Skipping item id=${it.id} subject="${(it.subject || "").substring(0, 120)}" received=${it.receivedDateTime} because it is outside ${filterStartDate.toISOString()}..${filterEndDate.toISOString()}`,
@@ -1867,7 +1867,7 @@ export async function getTodayEmails(
     );
 
     // If debugging for a specific config, log raw fetched items (first 20)
-    if (debugForConfigId === 28) {
+    if (debugForConfigId === 30) {
       try {
         console.log(
           `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from shared mailbox ${reconopsEmail}:`,
@@ -1981,7 +1981,7 @@ export async function getTodayEmails(
           `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
         );
 
-        if (debugForConfigId === 28) {
+        if (debugForConfigId === 30) {
           try {
             console.log(
               `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`,
@@ -2046,7 +2046,7 @@ export async function getTodayEmails(
       `getTodayEmails: user main inbox returned ${userEmails.length} total messages`,
     );
 
-    if (debugForConfigId === 28) {
+    if (debugForConfigId === 30) {
       try {
         console.log(
           `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from user inbox:`,

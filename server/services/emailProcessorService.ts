@@ -1857,6 +1857,21 @@ export async function getTodayEmails(
       `getTodayEmails: direct shared mailbox returned ${sharedEmails.length} total messages`,
     );
 
+    // If debugging for a specific config, log raw fetched items (first 20)
+    if (debugForConfigId === 28) {
+      try {
+        console.log(`getTodayEmails: [DEBUG] listing up to 20 raw fetched items from shared mailbox ${reconopsEmail}:`);
+        for (let i = 0; i < Math.min(20, sharedEmails.length); i++) {
+          const it = sharedEmails[i];
+          console.log(
+            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject||"").substring(0,120)}" from="${(it.from?.emailAddress?.address||it.from||"").substring(0,80)}" receivedDateTime=${it.receivedDateTime}`,
+          );
+        }
+      } catch (e) {
+        console.warn("getTodayEmails: [DEBUG] failed to print raw sharedEmails", e);
+      }
+    }
+
     // Diagnostic: count how many fetched messages fall within our client-side time window
     try {
       const inRange = sharedEmails.filter((it: any) => {

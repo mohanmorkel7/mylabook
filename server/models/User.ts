@@ -93,8 +93,24 @@ export class UserRepository {
       FROM users
       ORDER BY created_at DESC
     `;
-    const result = await pool.query(query);
-    return result.rows;
+    try {
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (err: any) {
+      // If DB schema hasn't been migrated yet (missing columns), fallback to older select
+      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+        const fallbackQuery = `
+      SELECT id, first_name, last_name, email, phone, role, department,
+             manager_id, status, start_date, last_login, two_factor_enabled,
+             notes, created_at, updated_at, azure_object_id, sso_provider, job_title
+      FROM users
+      ORDER BY created_at DESC
+    `;
+        const fallbackRes = await pool.query(fallbackQuery);
+        return fallbackRes.rows;
+      }
+      throw err;
+    }
   }
 
   static async findByAzureObjectId(

@@ -90,7 +90,7 @@ export class EmailProcessingService {
         "Unknown";
 
       // Build email body for ticket description
-      let bodyText = email.bodyPreview || "";
+      let bodyText: any = email.bodyPreview || "";
       if (email.body?.content) {
         // Sanitize HTML to remove XSS attacks while preserving images and formatting
         const cleanHtml = DOMPurify.sanitize(email.body.content, {
@@ -144,6 +144,15 @@ export class EmailProcessingService {
           ALLOW_DATA_ATTR: false,
         });
         bodyText = cleanHtml;
+      }
+
+      // Defensive normalization: ensure bodyText is a string and avoid literal "false" from booleans
+      if (typeof bodyText !== "string") {
+        if (bodyText === false || bodyText === true || bodyText == null) {
+          bodyText = "";
+        } else {
+          bodyText = String(bodyText);
+        }
       }
 
       const description = `Email from: ${fromName} <${fromEmail}>

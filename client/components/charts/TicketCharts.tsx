@@ -22,11 +22,17 @@ export default function TicketCharts({
   const [assigned, setAssigned] = useState<AssignedCount[]>([]);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);
   const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState<"all" | "today" | "7days" | "month">("all");
+  const [range, setRange] = useState<"all" | "today" | "7days" | "month">(
+    "all",
+  );
 
   // Compute date_from/date_to based on selected range (IST day handling)
   const computeRange = () => {
-    if (range === "all") return { df: undefined as string | undefined, dt: undefined as string | undefined };
+    if (range === "all")
+      return {
+        df: undefined as string | undefined,
+        dt: undefined as string | undefined,
+      };
     const now = new Date();
     const istOffsetMs = 5.5 * 60 * 60 * 1000;
     const istNow = new Date(now.getTime() + istOffsetMs);
@@ -34,10 +40,14 @@ export default function TicketCharts({
     const mm = String(istNow.getUTCMonth() + 1).padStart(2, "0");
     const dd = String(istNow.getUTCDate()).padStart(2, "0");
 
-    const isoDate = (y: number, m: number, d: number) => `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const isoDate = (y: number, m: number, d: number) =>
+      `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
     if (range === "today") {
-      return { df: isoDate(yyyy, Number(mm), Number(dd)), dt: isoDate(yyyy, Number(mm), Number(dd)) };
+      return {
+        df: isoDate(yyyy, Number(mm), Number(dd)),
+        dt: isoDate(yyyy, Number(mm), Number(dd)),
+      };
     }
 
     if (range === "7days") {
@@ -45,7 +55,10 @@ export default function TicketCharts({
       const pY = past.getUTCFullYear();
       const pM = past.getUTCMonth() + 1;
       const pD = past.getUTCDate();
-      return { df: isoDate(pY, pM, pD), dt: isoDate(yyyy, Number(mm), Number(dd)) };
+      return {
+        df: isoDate(pY, pM, pD),
+        dt: isoDate(yyyy, Number(mm), Number(dd)),
+      };
     }
 
     if (range === "month") {
@@ -53,9 +66,15 @@ export default function TicketCharts({
       const sY = start.getUTCFullYear();
       const sM = start.getUTCMonth() + 1;
       const sD = 1;
-      return { df: isoDate(sY, sM, sD), dt: isoDate(yyyy, Number(mm), Number(dd)) };
+      return {
+        df: isoDate(sY, sM, sD),
+        dt: isoDate(yyyy, Number(mm), Number(dd)),
+      };
     }
-    return { df: undefined as string | undefined, dt: undefined as string | undefined };
+    return {
+      df: undefined as string | undefined,
+      dt: undefined as string | undefined,
+    };
   };
 
   const { df: computedFrom, dt: computedTo } = computeRange();
@@ -89,7 +108,15 @@ export default function TicketCharts({
   }, [dateFrom, dateTo, range]);
 
   // Vertical bar chart component
-  const VerticalBarChart = ({ items, labelKey, valueKey }: { items: any[]; labelKey: string; valueKey: string }) => {
+  const VerticalBarChart = ({
+    items,
+    labelKey,
+    valueKey,
+  }: {
+    items: any[];
+    labelKey: string;
+    valueKey: string;
+  }) => {
     const max = items.reduce((m, it) => Math.max(m, it[valueKey] || 0), 0) || 1;
     return (
       <div className="flex flex-col h-64">
@@ -106,7 +133,10 @@ export default function TicketCharts({
                     style={{ width: "60%", height: `${heightPct}%` }}
                   />
                 </div>
-                <div className="mt-2 text-xs text-center text-gray-600 truncate" style={{ maxWidth: "6rem" }}>
+                <div
+                  className="mt-2 text-xs text-center text-gray-600 truncate"
+                  style={{ maxWidth: "6rem" }}
+                >
                   {it[labelKey]}
                 </div>
               </div>
@@ -126,7 +156,10 @@ export default function TicketCharts({
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold">Tickets Overview</h3>
-            <div className="text-sm text-gray-600">Total: <span className="font-medium text-gray-900">{totalTickets}</span></div>
+            <div className="text-sm text-gray-600">
+              Total:{" "}
+              <span className="font-medium text-gray-900">{totalTickets}</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -148,28 +181,46 @@ export default function TicketCharts({
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold">Assigned To</h4>
-              <div className="text-sm text-gray-600">Total: <span className="font-medium text-gray-900">{totalAssigned}</span></div>
+              <div className="text-sm text-gray-600">
+                Total:{" "}
+                <span className="font-medium text-gray-900">
+                  {totalAssigned}
+                </span>
+              </div>
             </div>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : assigned.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart items={assigned} labelKey="name" valueKey="count" />
+              <VerticalBarChart
+                items={assigned}
+                labelKey="name"
+                valueKey="count"
+              />
             )}
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold">Status</h4>
-              <div className="text-sm text-gray-600">Total: <span className="font-medium text-gray-900">{totalTickets}</span></div>
+              <div className="text-sm text-gray-600">
+                Total:{" "}
+                <span className="font-medium text-gray-900">
+                  {totalTickets}
+                </span>
+              </div>
             </div>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : statuses.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart items={statuses} labelKey="status" valueKey="count" />
+              <VerticalBarChart
+                items={statuses}
+                labelKey="status"
+                valueKey="count"
+              />
             )}
           </div>
         </div>

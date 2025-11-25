@@ -284,19 +284,29 @@ export const AuthProvider = React.memo(function AuthProvider({
           const updatedUser: User = {
             ...user,
             department: result.department || user.department,
-            department_admin: result.department_admin || user.department_admin || false,
+            department_admin:
+              result.department_admin || user.department_admin || false,
             admin_for_department:
-              result.admin_for_department || result.adminForDepartment || user.admin_for_department || null,
+              result.admin_for_department ||
+              result.adminForDepartment ||
+              user.admin_for_department ||
+              null,
             permissions: result.permissions || user.permissions || [],
             jobTitle: result.job_title || result.jobTitle || user.jobTitle,
-            azureObjectId: result.azure_object_id || result.azureObjectId || user.azureObjectId,
+            azureObjectId:
+              result.azure_object_id ||
+              result.azureObjectId ||
+              user.azureObjectId,
             ssoId: result.sso_id || result.ssoId || user.ssoId,
           };
           safeSetUser(updatedUser);
           try {
             localStorage.setItem("banani_user", JSON.stringify(updatedUser));
           } catch (e) {
-            console.warn("Failed to update localStorage with enriched user:", e);
+            console.warn(
+              "Failed to update localStorage with enriched user:",
+              e,
+            );
           }
         }
       } catch (e) {
@@ -327,13 +337,22 @@ export const AuthProvider = React.memo(function AuthProvider({
           name: displayName,
           email: response.user.email,
           role: response.user.role,
-          department: response.user.department || response.user.department_name || undefined,
+          department:
+            response.user.department ||
+            response.user.department_name ||
+            undefined,
           department_admin: response.user.department_admin || false,
           admin_for_department:
-            response.user.admin_for_department || response.user.adminForDepartment || null,
+            response.user.admin_for_department ||
+            response.user.adminForDepartment ||
+            null,
           permissions: response.user.permissions || [],
-          jobTitle: response.user.job_title || response.user.jobTitle || undefined,
-          azureObjectId: response.user.azure_object_id || response.user.azureObjectId || undefined,
+          jobTitle:
+            response.user.job_title || response.user.jobTitle || undefined,
+          azureObjectId:
+            response.user.azure_object_id ||
+            response.user.azureObjectId ||
+            undefined,
           ssoId: response.user.sso_id || response.user.ssoId || undefined,
         };
 
@@ -524,7 +543,9 @@ export const AuthProvider = React.memo(function AuthProvider({
                 department: ssoResult.user.department,
                 department_admin: ssoResult.user.department_admin || false,
                 admin_for_department:
-                  ssoResult.user.admin_for_department || ssoResult.user.adminForDepartment || null,
+                  ssoResult.user.admin_for_department ||
+                  ssoResult.user.adminForDepartment ||
+                  null,
                 permissions: ssoResult.user.permissions,
                 jobTitle: ssoResult.user.jobTitle,
                 azureObjectId: ssoResult.user.azureObjectId,

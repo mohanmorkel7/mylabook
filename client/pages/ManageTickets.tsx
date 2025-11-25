@@ -1281,20 +1281,25 @@ export default function ManageTickets() {
             <div className="space-y-4">
               {effectiveCreatedTickets.map((ticket) => {
                 // Prefer original source ticket if available so card matches All Tickets layout
-                const source = ticket.__source_ticket ?? {
-                  id: ticket.ticket_id ?? ticket.id,
-                  track_id: ticket.track_id,
-                  subject: ticket.email_subject || ticket.subject || "",
-                  description: ticket.description || "",
-                  created_from_mail_config: true,
-                  created_at: ticket.created_at,
-                  updated_at: ticket.created_at,
-                  status: (ticket as any).status || null,
-                  priority_id: ticket.priority_id,
-                  assignee: ticket.assigned_to || null,
-                  assigned_to_id:
-                    (ticket.assigned_to && (ticket.assigned_to.id ?? ticket.assigned_to_id)) || ticket.assigned_to_id || null,
-                } as any;
+                const source =
+                  ticket.__source_ticket ??
+                  ({
+                    id: ticket.ticket_id ?? ticket.id,
+                    track_id: ticket.track_id,
+                    subject: ticket.email_subject || ticket.subject || "",
+                    description: ticket.description || "",
+                    created_from_mail_config: true,
+                    created_at: ticket.created_at,
+                    updated_at: ticket.created_at,
+                    status: (ticket as any).status || null,
+                    priority_id: ticket.priority_id,
+                    assignee: ticket.assigned_to || null,
+                    assigned_to_id:
+                      (ticket.assigned_to &&
+                        (ticket.assigned_to.id ?? ticket.assigned_to_id)) ||
+                      ticket.assigned_to_id ||
+                      null,
+                  } as any);
 
                 const priority = getPriorityBadge(source.priority_id);
                 const slaMs = computeSlaMsForTicket(source);
@@ -1313,10 +1318,14 @@ export default function ManageTickets() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-lg font-semibold text-gray-900 truncate">
-                              {source.track_id || `TKT-${String(source.id).padStart(4, "0")}`}: {source.subject}
+                              {source.track_id ||
+                                `TKT-${String(source.id).padStart(4, "0")}`}
+                              : {source.subject}
                             </h3>
                             {source.created_from_mail_config && (
-                              <Badge className="bg-green-100 text-green-800">From Mail Config</Badge>
+                              <Badge className="bg-green-100 text-green-800">
+                                From Mail Config
+                              </Badge>
                             )}
 
                             <div className="ml-auto flex items-center gap-2">
@@ -1344,11 +1353,20 @@ export default function ManageTickets() {
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(source.id);
-                                    setTickets((prev) => prev.filter((p) => p.id !== source.id));
-                                    toast({ title: "Deleted", description: "Ticket deleted" });
+                                    setTickets((prev) =>
+                                      prev.filter((p) => p.id !== source.id),
+                                    );
+                                    toast({
+                                      title: "Deleted",
+                                      description: "Ticket deleted",
+                                    });
                                   } catch (delErr) {
                                     console.error("Delete failed", delErr);
-                                    toast({ title: "Error", description: "Failed to delete ticket", variant: "destructive" });
+                                    toast({
+                                      title: "Error",
+                                      description: "Failed to delete ticket",
+                                      variant: "destructive",
+                                    });
                                   }
                                 }}
                               >
@@ -1359,17 +1377,30 @@ export default function ManageTickets() {
 
                           <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
                             <div
-                              dangerouslySetInnerHTML={{ __html: (() => {
-                                try {
-                                  const raw = source.description || ticket.email_subject || "";
-                                  const parser = new DOMParser();
-                                  const doc = parser.parseFromString(raw, "text/html");
-                                  const plainText = doc.body.textContent || "";
-                                  return plainText;
-                                } catch (e) {
-                                  return source.description || ticket.email_subject || "";
-                                }
-                              })() }}
+                              dangerouslySetInnerHTML={{
+                                __html: (() => {
+                                  try {
+                                    const raw =
+                                      source.description ||
+                                      ticket.email_subject ||
+                                      "";
+                                    const parser = new DOMParser();
+                                    const doc = parser.parseFromString(
+                                      raw,
+                                      "text/html",
+                                    );
+                                    const plainText =
+                                      doc.body.textContent || "";
+                                    return plainText;
+                                  } catch (e) {
+                                    return (
+                                      source.description ||
+                                      ticket.email_subject ||
+                                      ""
+                                    );
+                                  }
+                                })(),
+                              }}
                             />
                           </div>
 
@@ -1377,43 +1408,69 @@ export default function ManageTickets() {
                             <div>
                               <p className="text-gray-600">Status</p>
                               <Badge variant="outline" className="mt-1">
-                                {typeof source.status === "object" ? source.status?.name : source.status}
+                                {typeof source.status === "object"
+                                  ? source.status?.name
+                                  : source.status}
                               </Badge>
                             </div>
                             <div>
                               <p className="text-gray-600">Priority</p>
                               {priority && (
-                                <Badge className={`mt-1 ${priority.color}`}>{priority.name}</Badge>
+                                <Badge className={`mt-1 ${priority.color}`}>
+                                  {priority.name}
+                                </Badge>
                               )}
                             </div>
                             <div>
                               <p className="text-gray-600">Assigned To</p>
-                              <p className="font-medium mt-1">{source.assignee?.name || getAssignedUserName(source.assigned_to_id)}</p>
+                              <p className="font-medium mt-1">
+                                {source.assignee?.name ||
+                                  getAssignedUserName(source.assigned_to_id)}
+                              </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Created</p>
-                              <p className="font-medium mt-1">{formatToIST(source.created_at)}</p>
+                              <p className="font-medium mt-1">
+                                {formatToIST(source.created_at)}
+                              </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Updated</p>
-                              <p className="font-medium mt-1">{formatToIST(source.updated_at)}</p>
+                              <p className="font-medium mt-1">
+                                {formatToIST(source.updated_at)}
+                              </p>
                             </div>
                             <div>
                               <p className="text-gray-600">SLA</p>
-                              <p className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}>
+                              <p
+                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
+                              >
                                 {(() => {
-                                  const statusName = (source.status && (source.status.name || source.status)) || "";
-                                  const isInProgress = String(statusName).toLowerCase().includes("in progress") || String(statusName).toLowerCase().includes("inprogress");
+                                  const statusName =
+                                    (source.status &&
+                                      (source.status.name || source.status)) ||
+                                    "";
+                                  const isInProgress =
+                                    String(statusName)
+                                      .toLowerCase()
+                                      .includes("in progress") ||
+                                    String(statusName)
+                                      .toLowerCase()
+                                      .includes("inprogress");
                                   if (isInProgress) return "No SLA";
                                   if (slaMs === null) return "No SLA";
-                                  if (slaMs <= 0) return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
+                                  if (slaMs <= 0)
+                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
                                   return `${formatRemaining(slaMs)} hours remaining`;
                                 })()}
                               </p>
                             </div>
                             <div>
                               <p className="text-gray-600">Track ID</p>
-                              <Badge variant="secondary" className="mt-1">{source.track_id || `TKT-${String(source.id).padStart(4, "0")}`}</Badge>
+                              <Badge variant="secondary" className="mt-1">
+                                {source.track_id ||
+                                  `TKT-${String(source.id).padStart(4, "0")}`}
+                              </Badge>
                             </div>
                           </div>
                         </div>

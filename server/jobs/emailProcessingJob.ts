@@ -82,6 +82,8 @@ export function initialize() {
 
               let anyMatched = false;
               let anyFetchSucceeded = false; // track whether any mailbox fetch completed successfully
+              // Track the maximum receivedDateTime of emails we processed (created tickets for)
+              let processedMaxDate: Date | null = null;
 
               // For each email source mailbox, fetch emails and apply the config/source-specific rules
               for (const mailbox of emailSources) {
@@ -237,6 +239,19 @@ export function initialize() {
                         console.log(
                           `Processed email ${email.id} for config ${config.id}: success=${ticketResult.success}`,
                         );
+                        // Track the latest processed email time so we only advance last_processed_at when we've created tickets
+                        try {
+                          if (email.receivedDateTime) {
+                            const dt = new Date(email.receivedDateTime);
+                            if (!isNaN(dt.getTime())) {
+                              if (!processedMaxDate || dt > processedMaxDate) {
+                                processedMaxDate = dt;
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          // ignore
+                        }
                       } catch (logErr) {
                         console.error(
                           `Failed to finalize processing log for email ${email.id} config ${config.id}:`,
@@ -259,12 +274,17 @@ export function initialize() {
               }
 
               // Update the last_processed_at timestamp after processing this config
-              // Only update if at least one mailbox fetch succeeded to avoid advancing the timestamp on transient failures
-              if (anyFetchSucceeded) {
-                await MailConfigRepository.updateLastProcessedAt(config.id);
-              } else {
+              // Advance only if we actually processed emails (created tickets). This prevents skipping
+              // messages that were fetched but not matched or processed.
+              if (processedMaxDate) {
+                await MailConfigRepository.updateLastProcessedAt(config.id, processedMaxDate);
+              } else if (!anyFetchSucceeded) {
                 console.log(
                   `Skipping update of last_processed_at for config ${config.id} because no mailbox fetch succeeded`,
+                );
+              } else {
+                console.log(
+                  `Not updating last_processed_at for config ${config.id} because no emails were processed (matched/created)`,
                 );
               }
 

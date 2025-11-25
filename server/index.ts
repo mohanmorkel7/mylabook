@@ -82,7 +82,9 @@ export function createServer() {
 
   // Start Overdue Ticket Job: run every 30 seconds (guarded)
   try {
-    const enableOverdue = String(process.env.ENABLE_OVERDUE_JOB || "false").toLowerCase() === "true";
+    const enableOverdue =
+      String(process.env.ENABLE_OVERDUE_JOB || "false").toLowerCase() ===
+      "true";
     if (!enableOverdue) {
       console.log("Overdue Ticket Job disabled via ENABLE_OVERDUE_JOB");
     } else {
@@ -95,7 +97,9 @@ export function createServer() {
 
         // Schedule recurring run every 30 seconds
         setInterval(() => {
-          console.log("every 30 sec call for runMarkOverdueTickets................");
+          console.log(
+            "every 30 sec call for runMarkOverdueTickets................",
+          );
           runMarkOverdueTickets().catch((err) =>
             console.error("Scheduled run of markOverdueTickets failed:", err),
           );

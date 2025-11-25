@@ -16,6 +16,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
+import TicketCharts from "@/components/charts/TicketCharts";
 
 interface StatusInfo {
   id: number;

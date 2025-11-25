@@ -89,7 +89,11 @@ export function initialize() {
                   console.log(
                     `Fetching emails for config ${config.id} from mailbox ${mailbox}`,
                   );
-                  const emails = await getTodayEmails(since, mailbox, config.id);
+                  const emails = await getTodayEmails(
+                    since,
+                    mailbox,
+                    config.id,
+                  );
 
                   // Mark that fetch completed (even if 0 results) so we can advance last_processed_at safely
                   anyFetchSucceeded = true;

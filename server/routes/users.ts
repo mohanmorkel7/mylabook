@@ -2,7 +2,10 @@ import { Router, Request, Response } from "express";
 import { UserRepository, CreateUserData, UpdateUserData } from "../models/User";
 import { MockDataService } from "../services/mockData";
 import bcrypt from "bcryptjs";
-import { isDatabaseAvailable as checkDatabaseAvailable } from "../database/connection";
+import {
+  isDatabaseAvailable as checkDatabaseAvailable,
+  pool,
+} from "../database/connection";
 
 const router = Router();
 
@@ -144,6 +147,20 @@ router.post("/", async (req: Request, res: Response) => {
       if (existingUser) {
         return res.status(409).json({ error: "Email already exists" });
       }
+
+      // If creating a department admin, ensure no other admin exists for that department
+      if (userData.department_admin && userData.admin_for_department) {
+        const conflictRes = await pool.query(
+          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 LIMIT 1",
+          [userData.admin_for_department],
+        );
+        if (conflictRes.rows.length > 0) {
+          return res.status(409).json({
+            error: `Department '${userData.admin_for_department}' already has an admin`,
+          });
+        }
+      }
+
       user = await UserRepository.create(userData);
     } else {
       // Check if email already exists in mock data
@@ -207,6 +224,19 @@ router.put("/:id", async (req: Request, res: Response) => {
         const existingUser = await UserRepository.findByEmail(userData.email);
         if (existingUser && existingUser.id !== id) {
           return res.status(409).json({ error: "Email already exists" });
+        }
+      }
+
+      // If updating to become a department admin, ensure uniqueness
+      if (userData.department_admin && userData.admin_for_department) {
+        const conflictRes = await pool.query(
+          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 AND id != $2 LIMIT 1",
+          [userData.admin_for_department, id],
+        );
+        if (conflictRes.rows.length > 0) {
+          return res.status(409).json({
+            error: `Department '${userData.admin_for_department}' already has an admin`,
+          });
         }
       }
 

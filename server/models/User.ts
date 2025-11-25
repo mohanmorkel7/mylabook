@@ -20,6 +20,9 @@ export interface User {
     | "switch_team"
     | "unknown";
   department?: string;
+  // New: whether user is a department admin (head) and which department they administer
+  department_admin?: boolean;
+  admin_for_department?: string | null;
   manager_id?: number;
   status: "active" | "inactive" | "pending";
   start_date?: string;
@@ -85,7 +88,7 @@ export class UserRepository {
   static async findAll(): Promise<User[]> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
-             manager_id, status, start_date, last_login, two_factor_enabled,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, azure_object_id, sso_provider, job_title
       FROM users
       ORDER BY created_at DESC
@@ -99,7 +102,7 @@ export class UserRepository {
   ): Promise<User | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
-             manager_id, status, start_date, last_login, two_factor_enabled,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, azure_object_id, sso_provider, job_title
       FROM users
       WHERE azure_object_id = $1
@@ -111,7 +114,7 @@ export class UserRepository {
   static async findById(id: number): Promise<User | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
-             manager_id, status, start_date, last_login, two_factor_enabled,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, azure_object_id, sso_provider, job_title
       FROM users
       WHERE id = $1
@@ -125,7 +128,7 @@ export class UserRepository {
   ): Promise<(User & { password_hash: string }) | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
-             manager_id, status, start_date, last_login, two_factor_enabled,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, password_hash, azure_object_id, sso_provider, job_title
       FROM users
       WHERE id = $1
@@ -137,7 +140,7 @@ export class UserRepository {
   static async findByEmail(email: string): Promise<User | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
-             manager_id, status, start_date, last_login, two_factor_enabled,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, password_hash, azure_object_id, sso_provider, job_title
       FROM users
       WHERE email = $1
@@ -150,11 +153,11 @@ export class UserRepository {
     const passwordHash = await bcrypt.hash(userData.password, 10);
 
     const query = `
-      INSERT INTO users (first_name, last_name, email, phone, password_hash, role, 
-                        department, manager_id, start_date, two_factor_enabled, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id, first_name, last_name, email, phone, role, department, 
-                manager_id, status, start_date, last_login, two_factor_enabled, 
+      INSERT INTO users (first_name, last_name, email, phone, password_hash, role,
+                        department, department_admin, admin_for_department, manager_id, start_date, two_factor_enabled, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, first_name, last_name, email, phone, role, department, department_admin, admin_for_department,
+                manager_id, status, start_date, last_login, two_factor_enabled,
                 notes, created_at, updated_at
     `;
 
@@ -166,6 +169,8 @@ export class UserRepository {
       passwordHash,
       userData.role,
       userData.department || null,
+      userData.department_admin || false,
+      userData.admin_for_department || null,
       userData.manager_id || null,
       userData.start_date || null,
       userData.two_factor_enabled || false,
@@ -213,7 +218,7 @@ export class UserRepository {
       SET ${setClause.join(", ")}
       WHERE id = $${paramIndex}
       RETURNING id, first_name, last_name, email, phone, role, department,
-                manager_id, status, start_date, last_login, two_factor_enabled,
+                department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
                 notes, created_at, updated_at, azure_object_id, sso_provider, job_title
     `;
 

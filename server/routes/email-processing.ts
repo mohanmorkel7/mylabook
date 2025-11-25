@@ -170,9 +170,9 @@ router.get(
         assigned_to: {
           id: row.assigned_to_id,
           name:
-            row.firstname && row.lastname
-              ? `${row.firstname} ${row.lastname}`
-              : "Unknown",
+            (row.assignee_firstname || row.assignee_lastname)
+              ? `${row.assignee_firstname || ""} ${row.assignee_lastname || ""}`.trim()
+              : "Unassigned",
         },
         watchers: row.watcher_user_ids || [],
         created_at: row.created_at,

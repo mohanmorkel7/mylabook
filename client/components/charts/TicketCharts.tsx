@@ -86,7 +86,8 @@ export default function TicketCharts({
         setLoading(true);
         const params = new URLSearchParams();
         // Use local range unless explicitly set to 'all' (parent date props were defaulting to today)
-        const useFrom = range === "all" ? undefined : (dateFrom ?? computedFrom);
+        const useFrom =
+          range === "all" ? undefined : (dateFrom ?? computedFrom);
         const useTo = range === "all" ? undefined : (dateTo ?? computedTo);
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);

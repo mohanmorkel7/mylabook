@@ -132,7 +132,11 @@ export default function TicketCharts({
                 <div className="w-full flex items-end" style={{ minHeight: 0 }}>
                   <div
                     className="mx-auto bg-indigo-500 rounded-t transition-all"
-                    style={{ width: "60%", height: `${heightPct}%`, minHeight: 6 }}
+                    style={{
+                      width: "60%",
+                      height: `${heightPct}%`,
+                      minHeight: 6,
+                    }}
                   />
                 </div>
                 <div

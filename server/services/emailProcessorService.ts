@@ -513,7 +513,7 @@ ${parsed.html}`;
                 email.id,
                 ticketResult.ticketId,
                 null,
-                { email_body: email.body || null },
+                { email_body: sanitizedHtml || parsed?.text || email.body || null },
                 emailSubject,
                 emailFrom,
               );

@@ -375,7 +375,7 @@ ${parsed.html}`;
               email.id,
               createdTicket.id,
               null,
-              { email_body: email.body || null },
+              { email_body: sanitizedHtml || parsed?.text || email.body || null },
               subject,
               fromEmail,
             );

@@ -96,7 +96,7 @@ router.get(
         NULL::varchar AS email_id,
         t.mail_config_id as mail_config_id,
         t.id as ticket_ref_id,
-        COALESCE(t.mitra_ticket_id, NULL) as mitra_ticket_id,
+        NULL::integer as mitra_ticket_id,
         t.subject as email_subject,
         creator.email as email_from,
         t.created_at,

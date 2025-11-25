@@ -515,7 +515,7 @@ ${sanitizedHtml || parsed?.text || ""}`;
                 email.id,
                 ticketResult.ticketId,
                 null,
-                { email_body: sanitizedHtml || parsed?.text || email.body || null },
+                { email_body: ticketResult.emailBody || email.body || null },
                 emailSubject,
                 emailFrom,
               );

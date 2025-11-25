@@ -1133,6 +1133,7 @@ function replaceCidReferences(
 export async function getTodayEmails(
   since?: Date,
   mailbox?: string,
+  debugForConfigId?: number,
 ): Promise<Email[]> {
   // For delegated shared mailbox access, we need the user's delegated token
   // This token should be stored in the database or cache from user sign-in

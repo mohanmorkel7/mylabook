@@ -271,7 +271,7 @@ ${bodyText}`;
               emailId,
               ticketId,
               null,
-              null,
+              payload || null,
               payload.issue.subject,
               "unknown",
             );

@@ -619,7 +619,9 @@ export default function ManageTickets() {
         ticket.sla_remaining_ms !== undefined &&
         ticket.sla_remaining_ms !== null
       ) {
-        const baseTime = Number(ticket.__server_time_ms ?? ticket.__fetched_at_ms ?? serverNowMs);
+        const baseTime = Number(
+          ticket.__server_time_ms ?? ticket.__fetched_at_ms ?? serverNowMs,
+        );
         const elapsedSinceBase = serverNowMs - baseTime;
         return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
       }

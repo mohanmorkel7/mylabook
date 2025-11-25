@@ -20,6 +20,9 @@ export interface User {
     | "switch_team"
     | "unknown";
   department?: string;
+  // New: whether user is a department admin (head) and which department they administer
+  department_admin?: boolean;
+  admin_for_department?: string | null;
   manager_id?: number;
   status: "active" | "inactive" | "pending";
   start_date?: string;

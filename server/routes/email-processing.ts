@@ -132,12 +132,17 @@ router.get(
       assignee.first_name as assignee_firstname,
       assignee.last_name as assignee_lastname,
       mc.watcher_user_ids,
-      ct.mitra_response as mitra_response
+      ct.mitra_response as mitra_response,
+      t.status_id,
+      ts.name as status_name,
+      t.sla_time,
+      t.updated_at as updated_at
       FROM tickets t
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
       LEFT JOIN created_tickets ct ON ct.ticket_id = t.id AND ct.mail_config_id = mc.id
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users assignee ON t.assigned_to = assignee.id
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
       WHERE t.mail_config_id IS NOT NULL
     `;
 

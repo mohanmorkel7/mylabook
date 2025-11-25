@@ -1307,47 +1307,38 @@ export async function getTodayEmails(
   }
 
   // Determine start and end for filtering
-  // If 'since' is provided, use that as the start time (more recent emails only)
-  // Otherwise, use the start of today in IST
+  // If 'since' is provided, include any earlier messages from the start of the current IST day.
   const now = new Date();
   const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+  // Shift UTC time into IST by adding offset, then read UTC date parts which correspond to IST components
   const istTime = new Date(now.getTime() + istOffsetMs);
   const istYear = istTime.getUTCFullYear();
   const istMonth = istTime.getUTCMonth();
   const istDate = istTime.getUTCDate();
 
-  let utcStartOfDay: Date;
-  if (since) {
-    // Use the provided 'since' timestamp
-    utcStartOfDay = since;
-    console.log(
-      `getTodayEmails: filtering for emails received since ${since.toISOString()}`,
-    );
-  } else {
-    // Create start of IST day (00:00:00 IST) and convert to UTC for API
-    // IST 00:00:00 = UTC 18:30:00 (previous day in UTC)
-    const istStartOfDay = new Date(
-      Date.UTC(istYear, istMonth, istDate, 0, 0, 0),
-    );
-    utcStartOfDay = new Date(istStartOfDay.getTime() - istOffsetMs);
-    console.log(
-      `getTodayEmails: filtering for emails received today (IST day ${istDate}) starting from ${utcStartOfDay.toISOString()}`,
-    );
-  }
+  // Create start of IST day (00:00:00 IST) and convert to UTC for API
+  // e.g. IST 00:00:00 => UTC previous day 18:30:00
+  const istStartOfDay = new Date(Date.UTC(istYear, istMonth, istDate, 0, 0, 0));
+  const utcStartOfIstDay = new Date(istStartOfDay.getTime() - istOffsetMs);
 
-  // Create end of IST day (24:00:00 IST = 00:00:00 next day IST) and convert to UTC
-  // IST 24:00:00 = UTC 18:30:00 (same day in UTC)
-  const istEndOfDay = new Date(
-    Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0),
-  );
+  // Create end of IST day (00:00:00 next day IST) and convert to UTC
+  const istEndOfDay = new Date(Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0));
   const utcEndOfDay = new Date(istEndOfDay.getTime() - istOffsetMs);
 
-  // Ensure we don't accidentally exclude earlier messages from today when 'since' is
-  // more recent than the start of the IST day. Use the earlier of (since, utcStartOfDay)
-  // so we include all messages from the start of today up to utcEndOfDay.
+  // Choose the earlier of (since, start of IST day) so we don't miss early-day emails
   const filterStartDate = since
-    ? new Date(Math.min(since.getTime(), utcStartOfDay.getTime()))
-    : utcStartOfDay;
+    ? new Date(Math.min(since.getTime(), utcStartOfIstDay.getTime()))
+    : utcStartOfIstDay;
+
+  if (since) {
+    console.log(
+      `getTodayEmails: filtering for emails received since ${since.toISOString()} (effective start ${filterStartDate.toISOString()})`,
+    );
+  } else {
+    console.log(
+      `getTodayEmails: filtering for emails received today (IST day ${istDate}) starting from ${filterStartDate.toISOString()}`,
+    );
+  }
 
   const startISO = filterStartDate.toISOString();
   const endISO = utcEndOfDay.toISOString();

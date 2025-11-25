@@ -520,12 +520,51 @@ export class MailConfigRepository {
           SELECT 1 FROM created_tickets WHERE email_id = CAST($1 AS VARCHAR) AND mail_config_id = CAST($2 AS INTEGER)
         )
       `;
+      // Ensure mitraResponse.email_body is a string or null to avoid storing boolean false
+      let sanitizedMitraResponse: any = null;
+      try {
+        if (mitraResponse && typeof mitraResponse === "object") {
+          sanitizedMitraResponse = { ...mitraResponse };
+          if (
+            sanitizedMitraResponse.email_body === false ||
+            sanitizedMitraResponse.email_body === true
+          ) {
+            // boolean values are not meaningful as body — set to null
+            sanitizedMitraResponse.email_body = null;
+          } else if (
+            sanitizedMitraResponse.email_body != null &&
+            typeof sanitizedMitraResponse.email_body !== "string"
+          ) {
+            try {
+              sanitizedMitraResponse.email_body = String(
+                sanitizedMitraResponse.email_body,
+              );
+            } catch (e) {
+              sanitizedMitraResponse.email_body = null;
+            }
+          }
+        } else if (mitraResponse != null && typeof mitraResponse === "string") {
+          // If a string was provided, attempt to parse JSON; else store as raw string under email_body
+          try {
+            const parsed = JSON.parse(mitraResponse);
+            sanitizedMitraResponse =
+              parsed && typeof parsed === "object"
+                ? parsed
+                : { email_body: String(mitraResponse) };
+          } catch (e) {
+            sanitizedMitraResponse = { email_body: String(mitraResponse) };
+          }
+        }
+      } catch (e) {
+        sanitizedMitraResponse = null;
+      }
+
       await pool.query(query, [
         emailId,
         mailConfigId,
         ticketId,
         mitraTicketId || null,
-        mitraResponse ? JSON.stringify(mitraResponse) : null,
+        sanitizedMitraResponse ? JSON.stringify(sanitizedMitraResponse) : null,
         emailSubject || null,
         emailFrom || null,
       ]);

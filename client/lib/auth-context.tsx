@@ -267,6 +267,47 @@ export const AuthProvider = React.memo(function AuthProvider({
     loadStoredUser();
   }, []);
 
+  // If the loaded user is missing department admin fields, try to enrich from backend
+  React.useEffect(() => {
+    const enrichUser = async () => {
+      try {
+        if (!user || !user.id) return;
+        const adminFlag = (user as any).admin_for_department;
+        if (adminFlag !== undefined && adminFlag !== null) return; // already present
+
+        // Attempt to fetch fresh user data from backend
+        const idNum = parseInt(user.id, 10);
+        if (isNaN(idNum)) return;
+
+        const result: any = await apiClient.getUser(idNum);
+        if (result) {
+          const updatedUser: User = {
+            ...user,
+            department: result.department || user.department,
+            department_admin: result.department_admin || user.department_admin || false,
+            admin_for_department:
+              result.admin_for_department || result.adminForDepartment || user.admin_for_department || null,
+            permissions: result.permissions || user.permissions || [],
+            jobTitle: result.job_title || result.jobTitle || user.jobTitle,
+            azureObjectId: result.azure_object_id || result.azureObjectId || user.azureObjectId,
+            ssoId: result.sso_id || result.ssoId || user.ssoId,
+          };
+          safeSetUser(updatedUser);
+          try {
+            localStorage.setItem("banani_user", JSON.stringify(updatedUser));
+          } catch (e) {
+            console.warn("Failed to update localStorage with enriched user:", e);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to enrich user data:", e);
+      }
+    };
+
+    // Run enrichment once after user becomes available
+    enrichUser();
+  }, [user?.id]);
+
   const login = async (email: string, password: string): Promise<boolean> => {
     safeSetIsLoading(true);
 

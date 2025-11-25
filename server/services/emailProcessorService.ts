@@ -1322,7 +1322,9 @@ export async function getTodayEmails(
   const utcStartOfIstDay = new Date(istStartOfDay.getTime() - istOffsetMs);
 
   // Create end of IST day (00:00:00 next day IST) and convert to UTC
-  const istEndOfDay = new Date(Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0));
+  const istEndOfDay = new Date(
+    Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0),
+  );
   const utcEndOfDay = new Date(istEndOfDay.getTime() - istOffsetMs);
 
   // Choose the earlier of (since, start of IST day) so we don't miss early-day emails

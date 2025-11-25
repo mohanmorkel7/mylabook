@@ -114,7 +114,7 @@ export class UserRepository {
   static async findById(id: number): Promise<User | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
-             manager_id, status, start_date, last_login, two_factor_enabled,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, azure_object_id, sso_provider, job_title
       FROM users
       WHERE id = $1

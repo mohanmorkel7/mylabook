@@ -98,7 +98,11 @@ export class UserRepository {
       return result.rows;
     } catch (err: any) {
       // If DB schema hasn't been migrated yet (missing columns), fallback to older select
-      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
         const fallbackQuery = `
       SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
@@ -127,7 +131,11 @@ export class UserRepository {
       const result = await pool.query(query, [azureObjectId]);
       return result.rows[0] || null;
     } catch (err: any) {
-      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
         const fallback = `
       SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
@@ -154,7 +162,11 @@ export class UserRepository {
       const result = await pool.query(query, [id]);
       return result.rows[0] || null;
     } catch (err: any) {
-      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
         const fallback = `
       SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
@@ -183,7 +195,11 @@ export class UserRepository {
       const result = await pool.query(query, [id]);
       return result.rows[0] || null;
     } catch (err: any) {
-      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
         const fallback = `
       SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
@@ -210,7 +226,11 @@ export class UserRepository {
       const result = await pool.query(query, [email]);
       return result.rows[0] || null;
     } catch (err: any) {
-      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
         const fallback = `
       SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
@@ -257,7 +277,11 @@ export class UserRepository {
       const result = await pool.query(query, values);
       return result.rows[0];
     } catch (err: any) {
-      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
         // Fallback to older insert without department_admin/admin_for_department
         const fallback = `
       INSERT INTO users (first_name, last_name, email, phone, password_hash, role,
@@ -332,9 +356,15 @@ export class UserRepository {
       const result = await pool.query(query, values);
       return result.rows[0] || null;
     } catch (err: any) {
-      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
         // Retry by removing department_admin/admin_for_department from setClause and values
-        const filteredPairs = Object.entries(userData).filter(([k]) => k !== "department_admin" && k !== "admin_for_department");
+        const filteredPairs = Object.entries(userData).filter(
+          ([k]) => k !== "department_admin" && k !== "admin_for_department",
+        );
         const fallbackSet: string[] = [];
         const fallbackVals: any[] = [];
         let idx = 1;

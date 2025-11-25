@@ -279,7 +279,10 @@ export function initialize() {
               if (processedMaxDate) {
                 // Only update if it's forward of the existing timestamp
                 if (!rawSince || processedMaxDate > rawSince) {
-                  await MailConfigRepository.updateLastProcessedAt(config.id, processedMaxDate);
+                  await MailConfigRepository.updateLastProcessedAt(
+                    config.id,
+                    processedMaxDate,
+                  );
                 } else {
                   console.log(
                     `Computed processedMaxDate (${processedMaxDate.toISOString()}) is not newer than existing last_processed_at for config ${config.id}; skipping update`,

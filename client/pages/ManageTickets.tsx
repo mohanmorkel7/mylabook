@@ -724,6 +724,21 @@ export default function ManageTickets() {
           </div>
 
           <div className="ml-auto flex items-center gap-3">
+            {/* Date picker (IST day) placed left of Filters button */}
+            <div>
+              <label className="sr-only">Date</label>
+              <Input
+                type="date"
+                value={filters.dateFrom || ""}
+                onChange={(e) => {
+                  const d = e.target.value;
+                  // Set both from and to to the selected date (full IST day)
+                  setFilters({ ...filters, dateFrom: d, dateTo: d });
+                }}
+                className="mr-2"
+              />
+            </div>
+
             <Button variant="outline" onClick={() => setShowFilters((s) => !s)}>
               Filters
             </Button>

@@ -131,13 +131,19 @@ export default function TicketCharts({
             return (
               <div key={idx} className="flex-1 flex flex-col items-center">
                 <div className="text-sm text-gray-700 mb-2">{val}</div>
-                <div className="w-full flex items-end justify-center" style={{ minHeight: 0 }}>
+                <div
+                  className="w-full flex items-end justify-center"
+                  style={{ minHeight: 0 }}
+                >
                   <div
                     className="bg-indigo-500 rounded-t transition-all"
                     style={{ width: 24, height: h }}
                   />
                 </div>
-                <div className="mt-2 text-xs text-center text-gray-600 truncate" style={{ maxWidth: "6rem" }}>
+                <div
+                  className="mt-2 text-xs text-center text-gray-600 truncate"
+                  style={{ maxWidth: "6rem" }}
+                >
                   {it[labelKey]}
                 </div>
               </div>

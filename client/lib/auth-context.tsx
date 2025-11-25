@@ -369,6 +369,8 @@ export const AuthProvider = React.memo(function AuthProvider({
             email,
             role: "finops",
             department: "FinOps",
+            department_admin: true,
+            admin_for_department: "finops",
           };
         } else if (email === "hr@banani.com") {
           userData = {

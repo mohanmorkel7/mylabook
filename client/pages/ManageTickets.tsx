@@ -601,36 +601,26 @@ export default function ManageTickets() {
 
   // Compute SLA remaining ms for a ticket. If ticket.sla_time exists, use it.
   // Otherwise, fallback to created_at + priority-based SLA hours. Adjust server-provided
-  // sla_remaining_ms dynamically so it counts down on the client. Use a consistent
-  // server reference time when available to avoid clock skew errors.
+  // sla_remaining_ms dynamically so it counts down on the client. Use the client-side
+  // server offset to compute a dynamic serverNowMs so values update each render.
   const computeSlaMsForTicket = (ticket: any): number | null => {
     try {
-      // Derive a single server reference timestamp (ms)
-      const serverNowMs = (() => {
-        // If the ticket explicitly provides server time when sla_remaining_ms was computed, use it
-        if (
-          ticket.__server_time_ms &&
-          typeof ticket.__server_time_ms === "number"
-        )
-          return Number(ticket.__server_time_ms);
-        // If we have a global server offset (clientNow - serverNow), derive serverNow
-        if (
-          typeof serverTimeOffsetRef.current === "number" &&
-          serverTimeOffsetRef.current !== 0
-        )
-          return Date.now() - serverTimeOffsetRef.current;
-        // Fallback to client time
-        return Date.now();
-      })();
+      // Compute current server-aligned 'now' (ms). Prefer clientNow - offset when available
+      // so the value changes on every render (setNow interval triggers rerenders).
+      const clientNowMs = Date.now();
+      const serverNowMs =
+        typeof serverTimeOffsetRef.current === "number" &&
+        serverTimeOffsetRef.current !== 0
+          ? clientNowMs - serverTimeOffsetRef.current
+          : clientNowMs;
 
       // If server provided a precomputed remaining ms, adjust it based on elapsed time since that computation
       if (
         ticket.sla_remaining_ms !== undefined &&
         ticket.sla_remaining_ms !== null
       ) {
-        const baseTime =
-          ticket.__server_time_ms ?? ticket.__fetched_at_ms ?? serverNowMs;
-        const elapsedSinceBase = serverNowMs - Number(baseTime);
+        const baseTime = Number(ticket.__server_time_ms ?? ticket.__fetched_at_ms ?? serverNowMs);
+        const elapsedSinceBase = serverNowMs - baseTime;
         return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
       }
 

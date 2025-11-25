@@ -361,11 +361,11 @@ router.get("/summary", async (req: Request, res: Response) => {
 
     // Assigned to counts
     const assignedQuery = `
-      SELECT u.id as user_id, u.first_name, u.last_name, u.name as fallback_name, COUNT(*) as count
+      SELECT u.id as user_id, u.first_name, u.last_name, COUNT(*) as count
       FROM tickets t
       LEFT JOIN users u ON t.assigned_to = u.id
       ${where}
-      GROUP BY u.id, u.first_name, u.last_name, u.name
+      GROUP BY u.id, u.first_name, u.last_name
       ORDER BY count DESC
       LIMIT 50
     `;

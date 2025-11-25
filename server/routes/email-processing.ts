@@ -117,21 +117,21 @@ router.get(
       // List tickets created by mail configs (use main tickets table)
       let query = `
       SELECT
-        t.id as ticket_id,
-        NULL::varchar AS email_id,
-        t.mail_config_id as mail_config_id,
-        t.id as ticket_ref_id,
-        NULL::integer as mitra_ticket_id,
-        t.subject as email_subject,
-        creator.email as email_from,
-        t.created_at,
-        mc.name as config_name,
-        t.project_id,
-        t.priority_id,
-        t.assigned_to as assigned_to_id,
-        assignee.first_name as assignee_firstname,
-        assignee.last_name as assignee_lastname,
-        mc.watcher_user_ids
+      t.id as ticket_id,
+      NULL::varchar AS email_id,
+      t.mail_config_id as mail_config_id,
+      t.id as ticket_ref_id,
+      NULL::integer as mitra_ticket_id,
+      t.subject as email_subject,
+      creator.email as email_from,
+      t.created_at,
+      mc.name as config_name,
+      mc.project_id as project_id,
+      t.priority_id,
+      t.assigned_to as assigned_to_id,
+      assignee.first_name as assignee_firstname,
+      assignee.last_name as assignee_lastname,
+      mc.watcher_user_ids
       FROM tickets t
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
       LEFT JOIN users creator ON t.created_by = creator.id
@@ -168,7 +168,7 @@ router.get(
       }
 
       if (project_id) {
-        query += ` AND t.project_id = $${paramCount}`;
+        query += ` AND mc.project_id = $${paramCount}`;
         values.push(project_id);
         paramCount++;
       }
@@ -239,7 +239,7 @@ router.get(
       }
 
       if (project_id) {
-        countQuery += ` AND t.project_id = $${countParamCount}`;
+        countQuery += ` AND mc.project_id = $${countParamCount}`;
         countValues.push(project_id);
         countParamCount++;
       }

@@ -94,22 +94,23 @@ router.get(
       SELECT
         t.id as ticket_id,
         NULL::varchar AS email_id,
-        mc.id as mail_config_id,
+        t.mail_config_id as mail_config_id,
         t.id as ticket_ref_id,
-        NULL::integer AS mitra_ticket_id,
+        COALESCE(t.mitra_ticket_id, NULL) as mitra_ticket_id,
         t.subject as email_subject,
-        NULL::varchar AS email_from,
+        creator.email as email_from,
         t.created_at,
         mc.name as config_name,
-        mc.project_id,
-        mc.priority_id,
-        mc.assigned_to_id,
-        mu.firstname,
-        mu.lastname,
+        t.project_id,
+        t.priority_id,
+        t.assigned_to as assigned_to_id,
+        assignee.first_name as assignee_firstname,
+        assignee.last_name as assignee_lastname,
         mc.watcher_user_ids
       FROM tickets t
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
-      LEFT JOIN mitra_users mu ON mc.assigned_to_id = mu.id
+      LEFT JOIN users creator ON t.created_by = creator.id
+      LEFT JOIN users assignee ON t.assigned_to = assignee.id
       WHERE t.mail_config_id IS NOT NULL
     `;
 

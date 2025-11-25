@@ -121,7 +121,7 @@ router.get(
       NULL::varchar AS email_id,
       t.mail_config_id as mail_config_id,
       t.id as ticket_ref_id,
-      NULL::integer as mitra_ticket_id,
+      ct.mitra_ticket_id as mitra_ticket_id,
       t.subject as email_subject,
       creator.email as email_from,
       t.created_at,
@@ -131,9 +131,11 @@ router.get(
       t.assigned_to as assigned_to_id,
       assignee.first_name as assignee_firstname,
       assignee.last_name as assignee_lastname,
-      mc.watcher_user_ids
+      mc.watcher_user_ids,
+      ct.mitra_response as mitra_response
       FROM tickets t
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+      LEFT JOIN created_tickets ct ON ct.ticket_id = t.id AND ct.mail_config_id = mc.id
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users assignee ON t.assigned_to = assignee.id
       WHERE t.mail_config_id IS NOT NULL

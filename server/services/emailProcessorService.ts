@@ -115,7 +115,11 @@ export class EmailProcessingService {
     // https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/messages/AAMkADdlMmY5Y2YwLTZmMWUtNGVlMS1hMGMxLWQxNGZiMmY3YzNhMgBGAAAAAACEwkCa8QXVTZa1ldQEESI6BwAcHcQmrQiYRIGeV23A2n8mAAAAAAEMAAAcHcQmrQiYRIGeV23A2n8mAAAWIeBBAAA=/$value
 
     // Fetch raw MIME content with retries/backoff to handle transient 429s
-    const fetchWithRetries = async (url: string, options: any, maxRetries = 4) => {
+    const fetchWithRetries = async (
+      url: string,
+      options: any,
+      maxRetries = 4,
+    ) => {
       let attempt = 0;
       let backoff = 500; // start at 500ms
       while (attempt <= maxRetries) {
@@ -178,8 +182,18 @@ export class EmailProcessingService {
     // If parsed is still null, attempt to fallback to any HTML/text present on the email object
     if (!parsed) {
       parsed = {
-        html: (email.body && typeof email.body === "object" && email.body.content) || email.bodyPreview || null,
-        text: (email.body && typeof email.body === "object" && email.body.content) || email.bodyPreview || null,
+        html:
+          (email.body &&
+            typeof email.body === "object" &&
+            email.body.content) ||
+          email.bodyPreview ||
+          null,
+        text:
+          (email.body &&
+            typeof email.body === "object" &&
+            email.body.content) ||
+          email.bodyPreview ||
+          null,
         attachments: email.attachments || [],
       } as any;
     }
@@ -189,7 +203,11 @@ export class EmailProcessingService {
       ? DOMPurify.sanitize(parsed.html, { WHOLE_DOCUMENT: false })
       : null;
 
-    console.log(sanitizedHtml ? "Parsed HTML length:" + sanitizedHtml.length : "No parsed HTML available");
+    console.log(
+      sanitizedHtml
+        ? "Parsed HTML length:" + sanitizedHtml.length
+        : "No parsed HTML available",
+    );
 
     try {
       // Extract email details
@@ -369,9 +387,10 @@ ${sanitizedHtml || parsed?.text || ""}`;
             MailConfigRepo.MailConfig ||
             MailConfigRepo.default ||
             MailConfigRepo;
-          const emailBodyForRecord = sanitizedHtml || parsed?.text || email.body || null;
+          const emailBodyForRecord =
+            sanitizedHtml || parsed?.text || email.body || null;
 
-        if (repo && typeof repo.insertCreatedTicket === "function") {
+          if (repo && typeof repo.insertCreatedTicket === "function") {
             await repo.insertCreatedTicket(
               config.id,
               email.id,
@@ -393,7 +412,11 @@ ${sanitizedHtml || parsed?.text || ""}`;
           );
         }
 
-        return { ticketId: createdTicket.id, success: true, emailBody: emailBodyForRecord };
+        return {
+          ticketId: createdTicket.id,
+          success: true,
+          emailBody: emailBodyForRecord,
+        };
       } catch (dbError: any) {
         const errorMsg = (dbError?.message || String(dbError)).toLowerCase();
 

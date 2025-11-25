@@ -358,14 +358,47 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return <Navigate to="/login" replace />;
   }
 
-  const allowedNavItems = navigationItems.filter((item) => {
-    // Check permissions first, fall back to roles for backward compatibility
-    if (item.permissions) {
-      return hasAnyPermission(item.permissions);
-    }
-    const effectiveRole = user.role === "unknown" ? "development" : user.role;
-    return item.roles.includes(effectiveRole as UserRole);
-  });
+  // Determine allowed navigation items, with special handling for Settings -> Mail Config
+  const allowedNavItems = navigationItems
+    .map((item) => {
+      // If item has submenu, filter submenu entries by access and also include Mail Config
+      if (item.submenu && item.submenu.length > 0) {
+        const filteredSubmenu = item.submenu.filter((sub) => {
+          // Special-case: allow Mail Config if user is department admin for finops
+          if (
+            sub.name === "Mail Config" &&
+            ((user as any).admin_for_department === "finops" ||
+              user.role === "admin")
+          ) {
+            return true;
+          }
+
+          if (sub.permissions) return hasAnyPermission(sub.permissions);
+          const effectiveRole =
+            user.role === "unknown" ? "development" : user.role;
+          return sub.roles.includes(effectiveRole as UserRole);
+        });
+        if (filteredSubmenu.length === 0) return null;
+        return { ...item, submenu: filteredSubmenu } as NavigationItem;
+      }
+
+      // Non-submenu items: check permissions then roles
+      if (item.permissions && !hasAnyPermission(item.permissions)) return null;
+      const effectiveRole = user.role === "unknown" ? "development" : user.role;
+
+      // Allow top-level Mail Config link visibility if user is finops department admin (rare case)
+      if (
+        item.name === "Mail Config" &&
+        ((user as any).admin_for_department === "finops" ||
+          user.role === "admin")
+      ) {
+        return item;
+      }
+
+      if (!item.roles.includes(effectiveRole as UserRole)) return null;
+      return item;
+    })
+    .filter(Boolean) as NavigationItem[];
 
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);

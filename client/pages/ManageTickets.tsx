@@ -339,10 +339,29 @@ export default function ManageTickets() {
       const ticketsList = Array.isArray(payload)
         ? payload
         : payload.tickets || payload.data?.tickets || [];
+
+      // If server provided server_time, capture offset so SLA math is consistent
+      try {
+        const srvTime = payload.server_time ?? payload.serverTime ?? null;
+        if (srvTime) {
+          const serverMs = new Date(String(srvTime)).getTime();
+          serverTimeOffsetRef.current = Date.now() - serverMs;
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // Attach fetch metadata to each created ticket so computeSla can use it
+      const annotated = (ticketsList || []).map((t: any) => ({
+        ...t,
+        __server_time_ms: payload.server_time ? new Date(String(payload.server_time)).getTime() : undefined,
+        __fetched_at_ms: Date.now(),
+      }));
+
       // Fallback to local tickets when server returns empty created_tickets
       const localFallback = tickets.filter((t) => t.created_from_mail_config);
       if (
-        (!ticketsList || ticketsList.length === 0) &&
+        (!annotated || annotated.length === 0) &&
         localFallback.length > 0
       ) {
         console.debug(
@@ -370,11 +389,11 @@ export default function ManageTickets() {
         setCreatedTickets(mapped);
         setCreatedTicketsCount((prev) => Math.max(prev || 0, mapped.length));
       } else {
-        setCreatedTickets(ticketsList);
+        setCreatedTickets(annotated);
         const total =
           payload.pagination?.total ??
           payload.total ??
-          (ticketsList.length || 0);
+          (annotated.length || 0);
         console.debug("[ManageTickets] fetchCreatedTickets total:", total);
         setCreatedTicketsCount(Number(total) || 0);
       }

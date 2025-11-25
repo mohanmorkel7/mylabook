@@ -342,7 +342,9 @@ router.get("/summary", async (req: Request, res: Response) => {
       return new Date(utcTs).toISOString();
     }
 
-    const date_from = raw_date_from ? expandIstDate(raw_date_from, false) : undefined;
+    const date_from = raw_date_from
+      ? expandIstDate(raw_date_from, false)
+      : undefined;
     const date_to = raw_date_to ? expandIstDate(raw_date_to, true) : undefined;
 
     const values: any[] = [];

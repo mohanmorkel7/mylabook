@@ -107,8 +107,12 @@ router.get(
         return new Date(utcTs).toISOString();
       }
 
-      const date_from = raw_date_from ? expandIstDate(String(raw_date_from), false) : undefined;
-      const date_to = raw_date_to ? expandIstDate(String(raw_date_to), true) : undefined;
+      const date_from = raw_date_from
+        ? expandIstDate(String(raw_date_from), false)
+        : undefined;
+      const date_to = raw_date_to
+        ? expandIstDate(String(raw_date_to), true)
+        : undefined;
 
       // List tickets created by mail configs (use main tickets table)
       let query = `

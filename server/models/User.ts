@@ -328,8 +328,38 @@ export class UserRepository {
                 notes, created_at, updated_at, azure_object_id, sso_provider, job_title
     `;
 
-    const result = await pool.query(query, values);
-    return result.rows[0] || null;
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0] || null;
+    } catch (err: any) {
+      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+        // Retry by removing department_admin/admin_for_department from setClause and values
+        const filteredPairs = Object.entries(userData).filter(([k]) => k !== "department_admin" && k !== "admin_for_department");
+        const fallbackSet: string[] = [];
+        const fallbackVals: any[] = [];
+        let idx = 1;
+        for (const [k, v] of filteredPairs) {
+          fallbackSet.push(`${k} = $${idx++}`);
+          fallbackVals.push(v === "" && ["start_date"].includes(k) ? null : v);
+        }
+        if (fallbackSet.length === 0) {
+          return this.findById(id);
+        }
+        fallbackSet.push(`updated_at = CURRENT_TIMESTAMP`);
+        fallbackVals.push(id);
+        const fallbackQuery = `
+      UPDATE users
+      SET ${fallbackSet.join(", ")}
+      WHERE id = $${idx}
+      RETURNING id, first_name, last_name, email, phone, role, department,
+                manager_id, status, start_date, last_login, two_factor_enabled,
+                notes, created_at, updated_at, azure_object_id, sso_provider, job_title
+    `;
+        const r2 = await pool.query(fallbackQuery, fallbackVals);
+        return r2.rows[0] || null;
+      }
+      throw err;
+    }
   }
 
   static async delete(id: number): Promise<boolean> {

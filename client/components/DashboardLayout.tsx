@@ -603,15 +603,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   {isExpanded && (
                     <div className="ml-6 mt-2 space-y-1">
                       {item.submenu
-                        .filter((subItem) => {
-                          if (subItem.permissions) {
-                            return hasAnyPermission(subItem.permissions);
-                          }
-                          return subItem.roles.includes(user.role);
-                        })
                         .map((subItem) => {
-                          const isSubActive =
-                            location.pathname === subItem.href;
+                          // Roles and Mail Config special cases were already applied when building allowedNavItems
+                          // Only enforce permissions here if present
+                          if (subItem.permissions && !hasAnyPermission(subItem.permissions)) {
+                            return null;
+                          }
+
+                          const isSubActive = location.pathname === subItem.href;
 
                           return (
                             <Link
@@ -619,15 +618,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                               to={subItem.href}
                               className={cn(
                                 "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                                isSubActive
-                                  ? "bg-primary text-white"
-                                  : "text-gray-600 hover:bg-gray-100",
+                                isSubActive ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-100",
                               )}
                             >
                               <span>{subItem.name}</span>
                             </Link>
                           );
-                        })}
+                        })
+                        .filter(Boolean)}
                     </div>
                   )}
                 </div>

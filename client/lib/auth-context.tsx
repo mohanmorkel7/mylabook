@@ -481,6 +481,9 @@ export const AuthProvider = React.memo(function AuthProvider({
                     ? "admin"
                     : ssoResult.user.role, // Ensure admin role is preserved
                 department: ssoResult.user.department,
+                department_admin: ssoResult.user.department_admin || false,
+                admin_for_department:
+                  ssoResult.user.admin_for_department || ssoResult.user.adminForDepartment || null,
                 permissions: ssoResult.user.permissions,
                 jobTitle: ssoResult.user.jobTitle,
                 azureObjectId: ssoResult.user.azureObjectId,

@@ -359,9 +359,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   // Determine role label (show "<Department> Admin" for department admins)
-  const roleLabel = (user as any).department_admin && (user as any).admin_for_department
-    ? `${((user as any).admin_for_department || "").charAt(0).toUpperCase() + ((user as any).admin_for_department || "").slice(1)} Admin`
-    : (user.role ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)}` : "");
+  const roleLabel =
+    (user as any).department_admin && (user as any).admin_for_department
+      ? `${((user as any).admin_for_department || "").charAt(0).toUpperCase() + ((user as any).admin_for_department || "").slice(1)} Admin`
+      : user.role
+        ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)}`
+        : "";
 
   // Determine allowed navigation items, with special handling for Settings -> Mail Config
   const allowedNavItems = navigationItems

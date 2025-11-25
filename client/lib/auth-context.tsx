@@ -42,6 +42,10 @@ export interface User {
   email: string;
   role: UserRole;
   department?: string;
+  // Whether the user is a department admin (head)
+  department_admin?: boolean;
+  // Which department the user administrates (e.g. "finops")
+  admin_for_department?: string | null;
   permissions?: string[];
   jobTitle?: string;
   avatar?: string;
@@ -282,7 +286,24 @@ export const AuthProvider = React.memo(function AuthProvider({
           name: displayName,
           email: response.user.email,
           role: response.user.role,
+          department: response.user.department || response.user.department_name || undefined,
+          department_admin: response.user.department_admin || false,
+          admin_for_department:
+            response.user.admin_for_department || response.user.adminForDepartment || null,
+          permissions: response.user.permissions || [],
+          jobTitle: response.user.job_title || response.user.jobTitle || undefined,
+          azureObjectId: response.user.azure_object_id || response.user.azureObjectId || undefined,
+          ssoId: response.user.sso_id || response.user.ssoId || undefined,
         };
+
+        // Log useful debug information if admin_for_department is present
+        if (userData.admin_for_department) {
+          console.log(
+            "Loaded admin_for_department for user:",
+            userData.email,
+            userData.admin_for_department,
+          );
+        }
 
         safeSetUser(userData);
         localStorage.setItem("banani_user", JSON.stringify(userData));

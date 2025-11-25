@@ -169,6 +169,8 @@ export class UserRepository {
       passwordHash,
       userData.role,
       userData.department || null,
+      userData.department_admin || false,
+      userData.admin_for_department || null,
       userData.manager_id || null,
       userData.start_date || null,
       userData.two_factor_enabled || false,

@@ -1547,7 +1547,10 @@ export async function getTodayEmails(
       // Skip emails outside date filter
       const emailDate = new Date(it.receivedDateTime);
       if (emailDate < filterStartDate || emailDate >= filterEndDate) {
-        if (debugForConfigId === 30 && it.subject=="Today Payswiff EOD Report") {
+        if (
+          debugForConfigId === 30 &&
+          it.subject == "Today Payswiff EOD Report"
+        ) {
           try {
             console.log(
               `getTodayEmails: [DEBUG] Skipping item id=${it.id} subject="${(it.subject || "").substring(0, 120)}" received=${it.receivedDateTime} because it is outside ${filterStartDate.toISOString()}..${filterEndDate.toISOString()}`,

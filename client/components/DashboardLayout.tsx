@@ -367,13 +367,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           // Special-case: allow Mail Config if user is department admin for finops
           if (
             sub.name === "Mail Config" &&
-            ((user as any).admin_for_department === "finops" || user.role === "admin")
+            ((user as any).admin_for_department === "finops" ||
+              user.role === "admin")
           ) {
             return true;
           }
 
           if (sub.permissions) return hasAnyPermission(sub.permissions);
-          const effectiveRole = user.role === "unknown" ? "development" : user.role;
+          const effectiveRole =
+            user.role === "unknown" ? "development" : user.role;
           return sub.roles.includes(effectiveRole as UserRole);
         });
         if (filteredSubmenu.length === 0) return null;
@@ -387,7 +389,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Allow top-level Mail Config link visibility if user is finops department admin (rare case)
       if (
         item.name === "Mail Config" &&
-        ((user as any).admin_for_department === "finops" || user.role === "admin")
+        ((user as any).admin_for_department === "finops" ||
+          user.role === "admin")
       ) {
         return item;
       }

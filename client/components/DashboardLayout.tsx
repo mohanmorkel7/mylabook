@@ -358,6 +358,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return <Navigate to="/login" replace />;
   }
 
+  // Determine role label (show "<Department> Admin" for department admins)
+  const roleLabel =
+    (user as any).department_admin && (user as any).admin_for_department
+      ? `${((user as any).admin_for_department || "").charAt(0).toUpperCase() + ((user as any).admin_for_department || "").slice(1)} Admin`
+      : user.role
+        ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)}`
+        : "";
+
   // Determine allowed navigation items, with special handling for Settings -> Mail Config
   const allowedNavItems = navigationItems
     .map((item) => {
@@ -778,7 +786,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {user.name}
                 </p>
-                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                <p className="text-xs text-gray-500 capitalize">{roleLabel}</p>
               </div>
             </div>
           </Link>

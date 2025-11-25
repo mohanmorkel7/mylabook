@@ -42,6 +42,10 @@ export interface User {
   email: string;
   role: UserRole;
   department?: string;
+  // Whether the user is a department admin (head)
+  department_admin?: boolean;
+  // Which department the user administrates (e.g. "finops")
+  admin_for_department?: string | null;
   permissions?: string[];
   jobTitle?: string;
   avatar?: string;
@@ -263,6 +267,57 @@ export const AuthProvider = React.memo(function AuthProvider({
     loadStoredUser();
   }, []);
 
+  // If the loaded user is missing department admin fields, try to enrich from backend
+  React.useEffect(() => {
+    const enrichUser = async () => {
+      try {
+        if (!user || !user.id) return;
+        const adminFlag = (user as any).admin_for_department;
+        if (adminFlag !== undefined && adminFlag !== null) return; // already present
+
+        // Attempt to fetch fresh user data from backend
+        const idNum = parseInt(user.id, 10);
+        if (isNaN(idNum)) return;
+
+        const result: any = await apiClient.getUser(idNum);
+        if (result) {
+          const updatedUser: User = {
+            ...user,
+            department: result.department || user.department,
+            department_admin:
+              result.department_admin || user.department_admin || false,
+            admin_for_department:
+              result.admin_for_department ||
+              result.adminForDepartment ||
+              user.admin_for_department ||
+              null,
+            permissions: result.permissions || user.permissions || [],
+            jobTitle: result.job_title || result.jobTitle || user.jobTitle,
+            azureObjectId:
+              result.azure_object_id ||
+              result.azureObjectId ||
+              user.azureObjectId,
+            ssoId: result.sso_id || result.ssoId || user.ssoId,
+          };
+          safeSetUser(updatedUser);
+          try {
+            localStorage.setItem("banani_user", JSON.stringify(updatedUser));
+          } catch (e) {
+            console.warn(
+              "Failed to update localStorage with enriched user:",
+              e,
+            );
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to enrich user data:", e);
+      }
+    };
+
+    // Run enrichment once after user becomes available
+    enrichUser();
+  }, [user?.id]);
+
   const login = async (email: string, password: string): Promise<boolean> => {
     safeSetIsLoading(true);
 
@@ -282,7 +337,33 @@ export const AuthProvider = React.memo(function AuthProvider({
           name: displayName,
           email: response.user.email,
           role: response.user.role,
+          department:
+            response.user.department ||
+            response.user.department_name ||
+            undefined,
+          department_admin: response.user.department_admin || false,
+          admin_for_department:
+            response.user.admin_for_department ||
+            response.user.adminForDepartment ||
+            null,
+          permissions: response.user.permissions || [],
+          jobTitle:
+            response.user.job_title || response.user.jobTitle || undefined,
+          azureObjectId:
+            response.user.azure_object_id ||
+            response.user.azureObjectId ||
+            undefined,
+          ssoId: response.user.sso_id || response.user.ssoId || undefined,
         };
+
+        // Log useful debug information if admin_for_department is present
+        if (userData.admin_for_department) {
+          console.log(
+            "Loaded admin_for_department for user:",
+            userData.email,
+            userData.admin_for_department,
+          );
+        }
 
         safeSetUser(userData);
         localStorage.setItem("banani_user", JSON.stringify(userData));
@@ -348,6 +429,8 @@ export const AuthProvider = React.memo(function AuthProvider({
             email,
             role: "finops",
             department: "FinOps",
+            department_admin: true,
+            admin_for_department: "finops",
           };
         } else if (email === "hr@banani.com") {
           userData = {
@@ -458,6 +541,11 @@ export const AuthProvider = React.memo(function AuthProvider({
                     ? "admin"
                     : ssoResult.user.role, // Ensure admin role is preserved
                 department: ssoResult.user.department,
+                department_admin: ssoResult.user.department_admin || false,
+                admin_for_department:
+                  ssoResult.user.admin_for_department ||
+                  ssoResult.user.adminForDepartment ||
+                  null,
                 permissions: ssoResult.user.permissions,
                 jobTitle: ssoResult.user.jobTitle,
                 azureObjectId: ssoResult.user.azureObjectId,

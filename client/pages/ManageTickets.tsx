@@ -743,7 +743,19 @@ export default function ManageTickets() {
   const paginatedTickets = filteredTickets;
 
   const effectiveCreatedTickets = React.useMemo(() => {
-    if (createdTickets && createdTickets.length > 0) return createdTickets;
+    if (createdTickets && createdTickets.length > 0) {
+      // If we have the full ticket object in `tickets`, prefer that as the source so SLA & metadata match
+      return createdTickets.map((ct: any) => {
+        const ticketId = ct.ticket_id ?? ct.ticket_ref_id ?? ct.id;
+        const authoritative = tickets.find(
+          (t) => Number(t.id) === Number(ticketId),
+        );
+        return {
+          ...ct,
+          __source_ticket: authoritative ?? ct.__source_ticket ?? undefined,
+        };
+      });
+    }
     const local = tickets.filter((t) => t.created_from_mail_config);
     if (!local || local.length === 0) return [];
     return local.map((t: any) => ({

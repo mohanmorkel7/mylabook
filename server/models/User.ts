@@ -123,8 +123,23 @@ export class UserRepository {
       FROM users
       WHERE azure_object_id = $1
     `;
-    const result = await pool.query(query, [azureObjectId]);
-    return result.rows[0] || null;
+    try {
+      const result = await pool.query(query, [azureObjectId]);
+      return result.rows[0] || null;
+    } catch (err: any) {
+      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+        const fallback = `
+      SELECT id, first_name, last_name, email, phone, role, department,
+             manager_id, status, start_date, last_login, two_factor_enabled,
+             notes, created_at, updated_at, azure_object_id, sso_provider, job_title
+      FROM users
+      WHERE azure_object_id = $1
+    `;
+        const r2 = await pool.query(fallback, [azureObjectId]);
+        return r2.rows[0] || null;
+      }
+      throw err;
+    }
   }
 
   static async findById(id: number): Promise<User | null> {

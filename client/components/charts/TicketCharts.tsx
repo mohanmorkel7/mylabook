@@ -119,30 +119,25 @@ export default function TicketCharts({
     valueKey: string;
   }) => {
     const max = items.reduce((m, it) => Math.max(m, it[valueKey] || 0), 0) || 1;
+    // Use pixel heights to avoid percentage resolving issues inside flex containers
+    const MAX_PX = 160;
+    const MIN_PX = 8;
     return (
-      <div className="flex flex-col h-64">
-        {/* Provide an explicit inner height so percentage heights for bars resolve correctly */}
-        <div className="flex-1 flex items-end gap-4 px-2 h-40">
+      <div className="flex flex-col">
+        <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
           {items.map((it, idx) => {
             const val = Number(it[valueKey] || 0);
-            const heightPct = (val / max) * 100;
+            const h = Math.max(MIN_PX, Math.round((val / max) * MAX_PX));
             return (
               <div key={idx} className="flex-1 flex flex-col items-center">
                 <div className="text-sm text-gray-700 mb-2">{val}</div>
-                <div className="w-full flex items-end" style={{ minHeight: 0 }}>
+                <div className="w-full flex items-end justify-center" style={{ minHeight: 0 }}>
                   <div
-                    className="mx-auto bg-indigo-500 rounded-t transition-all"
-                    style={{
-                      width: "60%",
-                      height: `${heightPct}%`,
-                      minHeight: 6,
-                    }}
+                    className="bg-indigo-500 rounded-t transition-all"
+                    style={{ width: 24, height: h }}
                   />
                 </div>
-                <div
-                  className="mt-2 text-xs text-center text-gray-600 truncate"
-                  style={{ maxWidth: "6rem" }}
-                >
+                <div className="mt-2 text-xs text-center text-gray-600 truncate" style={{ maxWidth: "6rem" }}>
                   {it[labelKey]}
                 </div>
               </div>

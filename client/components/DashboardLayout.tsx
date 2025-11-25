@@ -398,12 +398,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       const effectiveRole = user.role === "unknown" ? "development" : user.role;
 
       // Allow top-level Mail Config link visibility if user is finops department admin (rare case)
-      if (
-        item.name === "Mail Config" &&
-        ((user as any).admin_for_department === "finops" ||
-          user.role === "admin")
-      ) {
-        return item;
+      if (item.name === "Mail Config") {
+        const adminDept = (user as any).admin_for_department;
+        const adminDeptMatchesFinops =
+          typeof adminDept === "string" && adminDept.toLowerCase() === "finops";
+        if (adminDeptMatchesFinops || user.role === "admin") {
+          return item;
+        }
       }
 
       if (!item.roles.includes(effectiveRole as UserRole)) return null;

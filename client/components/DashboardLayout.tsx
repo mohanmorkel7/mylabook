@@ -603,13 +603,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   {isExpanded && (
                     <div className="ml-6 mt-2 space-y-1">
                       {item.submenu
-                        .filter((subItem) => {
-                          if (subItem.permissions) {
-                            return hasAnyPermission(subItem.permissions);
-                          }
-                          return subItem.roles.includes(user.role);
-                        })
                         .map((subItem) => {
+                          // Roles and Mail Config special cases were already applied when building allowedNavItems
+                          // Only enforce permissions here if present
+                          if (
+                            subItem.permissions &&
+                            !hasAnyPermission(subItem.permissions)
+                          ) {
+                            return null;
+                          }
+
                           const isSubActive =
                             location.pathname === subItem.href;
 
@@ -627,7 +630,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                               <span>{subItem.name}</span>
                             </Link>
                           );
-                        })}
+                        })
+                        .filter(Boolean)}
                     </div>
                   )}
                 </div>

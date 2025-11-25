@@ -170,7 +170,7 @@ router.get(
         assigned_to: {
           id: row.assigned_to_id,
           name:
-            (row.assignee_firstname || row.assignee_lastname)
+            row.assignee_firstname || row.assignee_lastname
               ? `${row.assignee_firstname || ""} ${row.assignee_lastname || ""}`.trim()
               : "Unassigned",
         },
@@ -186,38 +186,38 @@ router.get(
       WHERE t.mail_config_id IS NOT NULL
     `;
 
-  const countValues: any[] = [];
-  let countParamCount = 1;
+      const countValues: any[] = [];
+      let countParamCount = 1;
 
-  if (date_from) {
-    countQuery += ` AND t.created_at >= $${countParamCount}`;
-    countValues.push(date_from);
-    countParamCount++;
-  }
+      if (date_from) {
+        countQuery += ` AND t.created_at >= $${countParamCount}`;
+        countValues.push(date_from);
+        countParamCount++;
+      }
 
-  if (date_to) {
-    countQuery += ` AND t.created_at <= $${countParamCount}`;
-    countValues.push(date_to);
-    countParamCount++;
-  }
+      if (date_to) {
+        countQuery += ` AND t.created_at <= $${countParamCount}`;
+        countValues.push(date_to);
+        countParamCount++;
+      }
 
-  if (assigned_user_id) {
-    countQuery += ` AND t.assigned_to = $${countParamCount}`;
-    countValues.push(assigned_user_id);
-    countParamCount++;
-  }
+      if (assigned_user_id) {
+        countQuery += ` AND t.assigned_to = $${countParamCount}`;
+        countValues.push(assigned_user_id);
+        countParamCount++;
+      }
 
-  if (priority_id) {
-    countQuery += ` AND t.priority_id = $${countParamCount}`;
-    countValues.push(priority_id);
-    countParamCount++;
-  }
+      if (priority_id) {
+        countQuery += ` AND t.priority_id = $${countParamCount}`;
+        countValues.push(priority_id);
+        countParamCount++;
+      }
 
-  if (project_id) {
-    countQuery += ` AND t.project_id = $${countParamCount}`;
-    countValues.push(project_id);
-    countParamCount++;
-  }
+      if (project_id) {
+        countQuery += ` AND t.project_id = $${countParamCount}`;
+        countValues.push(project_id);
+        countParamCount++;
+      }
 
       const countResult = await pool.query(countQuery, countValues);
       const total = countResult.rows[0]?.total || 0;

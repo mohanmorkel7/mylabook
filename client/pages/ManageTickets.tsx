@@ -799,7 +799,11 @@ export default function ManageTickets() {
         </div>
       </div>
 
-      {/* Status counts */}
+      {/* Status counts and Charts */}
+      {activeTab === "all" && (
+        <TicketCharts dateFrom={filters.dateFrom} dateTo={filters.dateTo} />
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">

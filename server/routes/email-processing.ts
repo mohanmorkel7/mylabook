@@ -80,14 +80,35 @@ router.get(
     try {
       const {
         status,
-        date_from,
-        date_to,
+        date_from: raw_date_from,
+        date_to: raw_date_to,
         assigned_user_id,
         priority_id,
         project_id,
         limit = 50,
         offset = 0,
       } = req.query;
+
+      // Normalize date-only params (YYYY-MM-DD) into full IST day UTC timestamps
+      function expandIstDate(dateStr: string, endOfDay = false) {
+        // dateStr expected YYYY-MM-DD
+        const parts = String(dateStr).split("-");
+        if (parts.length !== 3) return dateStr;
+        const [y, m, d] = parts.map((p) => parseInt(p, 10));
+        if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+        // Build IST local datetime
+        const hour = endOfDay ? 23 : 0;
+        const minute = endOfDay ? 59 : 0;
+        const second = endOfDay ? 59 : 0;
+        // IST is UTC+5:30 -> construct Date as UTC for that IST timestamp then convert to ISO
+        // Create a Date representing YYYY-MM-DDThh:mm:ss in IST by subtracting offset
+        const istOffsetMs = 5.5 * 60 * 60 * 1000;
+        const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+        return new Date(utcTs).toISOString();
+      }
+
+      const date_from = raw_date_from ? expandIstDate(String(raw_date_from), false) : undefined;
+      const date_to = raw_date_to ? expandIstDate(String(raw_date_to), true) : undefined;
 
       // List tickets created by mail configs (use main tickets table)
       let query = `

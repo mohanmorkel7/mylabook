@@ -210,7 +210,9 @@ router.get(
         created_at: row.created_at,
         updated_at: row.updated_at,
         sla_time: row.sla_time,
-        status: row.status_name ? { id: row.status_id, name: row.status_name } : null,
+        status: row.status_name
+          ? { id: row.status_id, name: row.status_name }
+          : null,
         mitra_response: row.mitra_response
           ? typeof row.mitra_response === "string"
             ? JSON.parse(row.mitra_response)

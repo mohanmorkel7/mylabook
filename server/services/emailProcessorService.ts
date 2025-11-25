@@ -311,7 +311,7 @@ ${parsed.html}`;
               email.id,
               createdTicket.id,
               null,
-              { email_body: (email.body || null) },
+              { email_body: email.body || null },
               subject,
               fromEmail,
             );
@@ -449,7 +449,7 @@ ${parsed.html}`;
                 email.id,
                 ticketResult.ticketId,
                 null,
-                { email_body: (email.body || null) },
+                { email_body: email.body || null },
                 emailSubject,
                 emailFrom,
               );

@@ -277,7 +277,14 @@ export function initialize() {
               // Advance only if we actually processed emails (created tickets). This prevents skipping
               // messages that were fetched but not matched or processed.
               if (processedMaxDate) {
-                await MailConfigRepository.updateLastProcessedAt(config.id, processedMaxDate);
+                // Only update if it's forward of the existing timestamp
+                if (!rawSince || processedMaxDate > rawSince) {
+                  await MailConfigRepository.updateLastProcessedAt(config.id, processedMaxDate);
+                } else {
+                  console.log(
+                    `Computed processedMaxDate (${processedMaxDate.toISOString()}) is not newer than existing last_processed_at for config ${config.id}; skipping update`,
+                  );
+                }
               } else if (!anyFetchSucceeded) {
                 console.log(
                   `Skipping update of last_processed_at for config ${config.id} because no mailbox fetch succeeded`,

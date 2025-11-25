@@ -295,6 +295,7 @@ router.get(
           limit: Number(limit),
           offset: Number(offset),
         },
+        server_time: new Date().toISOString(),
       });
     } catch (error) {
       console.error("Error fetching created tickets:", error);

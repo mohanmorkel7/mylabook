@@ -224,6 +224,19 @@ router.put("/:id", async (req: Request, res: Response) => {
         }
       }
 
+      // If updating to become a department admin, ensure uniqueness
+      if (userData.department_admin && userData.admin_for_department) {
+        const conflictRes = await pool.query(
+          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 AND id != $2 LIMIT 1",
+          [userData.admin_for_department, id],
+        );
+        if (conflictRes.rows.length > 0) {
+          return res.status(409).json({
+            error: `Department '${userData.admin_for_department}' already has an admin`,
+          });
+        }
+      }
+
       user = await UserRepository.update(id, userData);
       if (!user) {
         return res.status(404).json({ error: "User not found" });

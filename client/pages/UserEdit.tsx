@@ -340,6 +340,13 @@ export default function UserEdit() {
                 >
                   {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                 </span>
+
+                {user.department_admin && user.admin_for_department ? (
+                  <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                    {`${user.admin_for_department.charAt(0).toUpperCase() + user.admin_for_department.slice(1)} Admin`}
+                  </span>
+                ) : null}
+
                 <span
                   className={`px-2 py-1 rounded text-xs font-medium ${
                     user.status === "active"

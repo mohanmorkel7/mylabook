@@ -144,6 +144,20 @@ router.post("/", async (req: Request, res: Response) => {
       if (existingUser) {
         return res.status(409).json({ error: "Email already exists" });
       }
+
+      // If creating a department admin, ensure no other admin exists for that department
+      if (userData.department_admin && userData.admin_for_department) {
+        const conflictRes = await pool.query(
+          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 LIMIT 1",
+          [userData.admin_for_department],
+        );
+        if (conflictRes.rows.length > 0) {
+          return res.status(409).json({
+            error: `Department '${userData.admin_for_department}' already has an admin`,
+          });
+        }
+      }
+
       user = await UserRepository.create(userData);
     } else {
       // Check if email already exists in mock data

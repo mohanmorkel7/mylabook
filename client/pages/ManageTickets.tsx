@@ -361,6 +361,11 @@ export default function ManageTickets() {
           priority_id: t.priority_id,
           mitra_ticket_id: t.mitra_ticket_id || null,
           created_at: t.created_at,
+          updated_at: t.updated_at,
+          sla_time: t.sla_time,
+          status: t.status || null,
+          // include original ticket as source for full parity
+          __source_ticket: t,
         }));
         setCreatedTickets(mapped);
         setCreatedTicketsCount((prev) => Math.max(prev || 0, mapped.length));

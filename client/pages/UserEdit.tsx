@@ -613,6 +613,48 @@ export default function UserEdit() {
                     ` Current mapping: ${user.department.charAt(0).toUpperCase() + user.department.slice(1)} → ${user.role}`}
                 </AlertDescription>
               </Alert>
+
+              {/* Department Admin controls */}
+              <div className="p-4 border rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium">Department Admin</h4>
+                    <p className="text-sm text-gray-600">Grant this user admin privileges for a specific department (only one admin allowed per department).</p>
+                  </div>
+                  <Switch
+                    checked={Boolean(user.department_admin)}
+                    onCheckedChange={(val) => updateField("department_admin", Boolean(val))}
+                  />
+                </div>
+
+                {user.department_admin && (
+                  <div>
+                    <Label htmlFor="admin_for_department">Admin For Department</Label>
+                    <Select
+                      value={user.admin_for_department}
+                      onValueChange={(v) => updateField("admin_for_department", v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="administration">Administration</SelectItem>
+                        <SelectItem value="sales">Sales</SelectItem>
+                        <SelectItem value="hr">HR</SelectItem>
+                        <SelectItem value="finance">Finance</SelectItem>
+                        <SelectItem value="finops">FinOps</SelectItem>
+                        <SelectItem value="database">Database</SelectItem>
+                        <SelectItem value="frontend">Frontend</SelectItem>
+                        <SelectItem value="backend">Backend</SelectItem>
+                        <SelectItem value="infra">Infra</SelectItem>
+                        <SelectItem value="switch_team">Switch Team</SelectItem>
+                        <SelectItem value="business_analyst">Business Analyst</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

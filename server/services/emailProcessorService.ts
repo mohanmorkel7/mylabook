@@ -369,13 +369,15 @@ ${sanitizedHtml || parsed?.text || ""}`;
             MailConfigRepo.MailConfig ||
             MailConfigRepo.default ||
             MailConfigRepo;
-          if (repo && typeof repo.insertCreatedTicket === "function") {
+          const emailBodyForRecord = sanitizedHtml || parsed?.text || email.body || null;
+
+        if (repo && typeof repo.insertCreatedTicket === "function") {
             await repo.insertCreatedTicket(
               config.id,
               email.id,
               createdTicket.id,
               null,
-              { email_body: sanitizedHtml || parsed?.text || email.body || null },
+              { email_body: emailBodyForRecord },
               subject,
               fromEmail,
             );
@@ -391,7 +393,7 @@ ${sanitizedHtml || parsed?.text || ""}`;
           );
         }
 
-        return { ticketId: createdTicket.id, success: true };
+        return { ticketId: createdTicket.id, success: true, emailBody: emailBodyForRecord };
       } catch (dbError: any) {
         const errorMsg = (dbError?.message || String(dbError)).toLowerCase();
 

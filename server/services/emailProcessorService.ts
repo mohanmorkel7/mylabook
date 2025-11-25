@@ -291,7 +291,7 @@ Received: ${email.receivedDateTime || "Unknown"}
 
 ---
 
-${parsed.html}`;
+${sanitizedHtml || parsed?.text || ""}`;
 
       console.log("config : ", config);
 

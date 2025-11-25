@@ -1898,7 +1898,7 @@ export async function getTodayEmails(
       const inRange = sharedEmails.filter((it: any) => {
         if (!it || !it.receivedDateTime) return false;
         const d = new Date(it.receivedDateTime);
-        return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
+        return d >= filterStartDate && d < utcEndOfDay;
       }).length;
       console.log(
         `getTodayEmails: diagnostic - ${inRange} of fetched shared mailbox messages are within the ${startISO}..${endISO} window`,
@@ -1913,8 +1913,8 @@ export async function getTodayEmails(
     if (sharedEmails.length > 0) {
       const parsedEmails = await parseGraphEmails(
         sharedEmails,
-        new Date(utcStartOfDay),
-        new Date(utcEndOfDay),
+        filterStartDate,
+        utcEndOfDay,
         token,
       );
       console.log(
@@ -2012,7 +2012,7 @@ export async function getTodayEmails(
           const inRange = folderEmails.filter((it: any) => {
             if (!it || !it.receivedDateTime) return false;
             const d = new Date(it.receivedDateTime);
-            return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
+            return d >= filterStartDate && d < utcEndOfDay;
           }).length;
           console.log(
             `getTodayEmails: diagnostic - ${inRange} of fetched shared folder messages are within the ${startISO}..${endISO} window`,
@@ -2027,8 +2027,8 @@ export async function getTodayEmails(
         if (folderEmails.length > 0) {
           const parsedEmails = await parseGraphEmails(
             folderEmails,
-            new Date(utcStartOfDay),
-            new Date(utcEndOfDay),
+            filterStartDate,
+            utcEndOfDay,
             token,
           );
           console.log(
@@ -2077,7 +2077,7 @@ export async function getTodayEmails(
       const inRange = userEmails.filter((it: any) => {
         if (!it || !it.receivedDateTime) return false;
         const d = new Date(it.receivedDateTime);
-        return d >= new Date(utcStartOfDay) && d < new Date(utcEndOfDay);
+        return d >= filterStartDate && d < utcEndOfDay;
       }).length;
       console.log(
         `getTodayEmails: diagnostic - ${inRange} of fetched user inbox messages are within the ${startISO}..${endISO} window`,
@@ -2092,8 +2092,8 @@ export async function getTodayEmails(
     if (userEmails.length > 0) {
       const parsedEmails = await parseGraphEmails(
         userEmails,
-        new Date(utcStartOfDay),
-        new Date(utcEndOfDay),
+        filterStartDate,
+        utcEndOfDay,
         token,
       );
       console.log(

@@ -783,7 +783,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {user.name}
                 </p>
-                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                <p className="text-xs text-gray-500 capitalize">{roleLabel}</p>
               </div>
             </div>
           </Link>

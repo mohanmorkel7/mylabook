@@ -253,8 +253,38 @@ export class UserRepository {
       userData.notes || null,
     ];
 
-    const result = await pool.query(query, values);
-    return result.rows[0];
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (err: any) {
+      if (err && (err.code === "42703" || /column .* does not exist/i.test(err.message || ""))) {
+        // Fallback to older insert without department_admin/admin_for_department
+        const fallback = `
+      INSERT INTO users (first_name, last_name, email, phone, password_hash, role,
+                        department, manager_id, start_date, two_factor_enabled, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id, first_name, last_name, email, phone, role, department,
+                manager_id, status, start_date, last_login, two_factor_enabled,
+                notes, created_at, updated_at
+    `;
+        const fallbackValues = [
+          userData.first_name,
+          userData.last_name,
+          userData.email,
+          userData.phone || null,
+          passwordHash,
+          userData.role,
+          userData.department || null,
+          userData.manager_id || null,
+          userData.start_date || null,
+          userData.two_factor_enabled || false,
+          userData.notes || null,
+        ];
+        const r2 = await pool.query(fallback, fallbackValues);
+        return r2.rows[0];
+      }
+      throw err;
+    }
   }
 
   static async update(

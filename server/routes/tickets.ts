@@ -353,7 +353,10 @@ router.get("/summary", async (req: Request, res: Response) => {
     const assignedRes = await pool.query(assignedQuery, values);
     const assigned = assignedRes.rows.map((r: any) => ({
       user_id: r.user_id,
-      name: r.first_name || r.last_name ? `${r.first_name || ""} ${r.last_name || ""}`.trim() : r.fallback_name || "Unassigned",
+      name:
+        r.first_name || r.last_name
+          ? `${r.first_name || ""} ${r.last_name || ""}`.trim()
+          : r.fallback_name || "Unassigned",
       count: Number(r.count),
     }));
 
@@ -1418,7 +1421,10 @@ router.get("/summary", async (req: Request, res: Response) => {
     const assignedRes = await pool.query(assignedQuery, values);
     const assigned = assignedRes.rows.map((r: any) => ({
       user_id: r.user_id,
-      name: r.first_name || r.last_name ? `${r.first_name || ""} ${r.last_name || ""}`.trim() : r.fallback_name || "Unassigned",
+      name:
+        r.first_name || r.last_name
+          ? `${r.first_name || ""} ${r.last_name || ""}`.trim()
+          : r.fallback_name || "Unassigned",
       count: Number(r.count),
     }));
 

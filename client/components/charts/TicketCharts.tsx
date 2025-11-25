@@ -62,14 +62,18 @@ export default function TicketCharts({
       <div className="space-y-2">
         {items.map((it, idx) => (
           <div key={idx} className="flex items-center gap-3">
-            <div className="w-36 text-sm text-gray-700 truncate">{it[labelKey]}</div>
+            <div className="w-36 text-sm text-gray-700 truncate">
+              {it[labelKey]}
+            </div>
             <div className="flex-1 bg-gray-100 rounded h-4 relative">
               <div
                 className="absolute left-0 top-0 h-4 bg-indigo-500 rounded"
                 style={{ width: `${(it[valueKey] / max) * 100}%` }}
               />
             </div>
-            <div className="w-12 text-right text-sm font-medium text-gray-800">{it[valueKey]}</div>
+            <div className="w-12 text-right text-sm font-medium text-gray-800">
+              {it[valueKey]}
+            </div>
           </div>
         ))}
       </div>

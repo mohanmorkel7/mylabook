@@ -128,7 +128,7 @@ export class UserRepository {
   ): Promise<(User & { password_hash: string }) | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
-             manager_id, status, start_date, last_login, two_factor_enabled,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, password_hash, azure_object_id, sso_provider, job_title
       FROM users
       WHERE id = $1

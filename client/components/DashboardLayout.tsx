@@ -606,11 +606,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         .map((subItem) => {
                           // Roles and Mail Config special cases were already applied when building allowedNavItems
                           // Only enforce permissions here if present
-                          if (subItem.permissions && !hasAnyPermission(subItem.permissions)) {
+                          if (
+                            subItem.permissions &&
+                            !hasAnyPermission(subItem.permissions)
+                          ) {
                             return null;
                           }
 
-                          const isSubActive = location.pathname === subItem.href;
+                          const isSubActive =
+                            location.pathname === subItem.href;
 
                           return (
                             <Link
@@ -618,7 +622,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                               to={subItem.href}
                               className={cn(
                                 "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                                isSubActive ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-100",
+                                isSubActive
+                                  ? "bg-primary text-white"
+                                  : "text-gray-600 hover:bg-gray-100",
                               )}
                             >
                               <span>{subItem.name}</span>

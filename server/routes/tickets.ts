@@ -322,6 +322,63 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/tickets/summary
+// Returns counts grouped by assigned user and by status for a date range
+router.get("/summary", async (req: Request, res: Response) => {
+  try {
+    const { date_from, date_to } = req.query;
+    const values: any[] = [];
+    let where = "WHERE 1=1";
+    let idx = 1;
+    if (date_from) {
+      where += ` AND t.created_at >= $${idx++}`;
+      values.push(date_from);
+    }
+    if (date_to) {
+      where += ` AND t.created_at <= $${idx++}`;
+      values.push(date_to);
+    }
+
+    // Assigned to counts
+    const assignedQuery = `
+      SELECT u.id as user_id, u.first_name, u.last_name, u.name as fallback_name, COUNT(*) as count
+      FROM tickets t
+      LEFT JOIN users u ON t.assigned_to = u.id
+      ${where}
+      GROUP BY u.id, u.first_name, u.last_name, u.name
+      ORDER BY count DESC
+      LIMIT 50
+    `;
+
+    const assignedRes = await pool.query(assignedQuery, values);
+    const assigned = assignedRes.rows.map((r: any) => ({
+      user_id: r.user_id,
+      name: r.first_name || r.last_name ? `${r.first_name || ""} ${r.last_name || ""}`.trim() : r.fallback_name || "Unassigned",
+      count: Number(r.count),
+    }));
+
+    // Status counts
+    const statusQuery = `
+      SELECT ts.name as status_name, COUNT(*) as count
+      FROM tickets t
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      ${where}
+      GROUP BY ts.name
+      ORDER BY count DESC
+    `;
+    const statusRes = await pool.query(statusQuery, values);
+    const statuses = statusRes.rows.map((r: any) => ({
+      status: r.status_name || "Unknown",
+      count: Number(r.count),
+    }));
+
+    res.json({ assigned, statuses });
+  } catch (err) {
+    console.error("Error fetching ticket summary:", err);
+    res.status(500).json({ error: "Failed to fetch summary" });
+  }
+});
+
 // Get ticket by ID
 router.get("/:id", async (req: Request, res: Response) => {
   try {

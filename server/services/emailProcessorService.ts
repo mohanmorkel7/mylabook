@@ -1342,7 +1342,14 @@ export async function getTodayEmails(
   );
   const utcEndOfDay = new Date(istEndOfDay.getTime() - istOffsetMs);
 
-  const startISO = utcStartOfDay.toISOString();
+  // Ensure we don't accidentally exclude earlier messages from today when 'since' is
+  // more recent than the start of the IST day. Use the earlier of (since, utcStartOfDay)
+  // so we include all messages from the start of today up to utcEndOfDay.
+  const filterStartDate = since
+    ? new Date(Math.min(since.getTime(), utcStartOfDay.getTime()))
+    : utcStartOfDay;
+
+  const startISO = filterStartDate.toISOString();
   const endISO = utcEndOfDay.toISOString();
 
   const allEmails: Email[] = [];

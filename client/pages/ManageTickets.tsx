@@ -747,7 +747,9 @@ export default function ManageTickets() {
       // If we have the full ticket object in `tickets`, prefer that as the source so SLA & metadata match
       return createdTickets.map((ct: any) => {
         const ticketId = ct.ticket_id ?? ct.ticket_ref_id ?? ct.id;
-        const authoritative = tickets.find((t) => Number(t.id) === Number(ticketId));
+        const authoritative = tickets.find(
+          (t) => Number(t.id) === Number(ticketId),
+        );
         return {
           ...ct,
           __source_ticket: authoritative ?? ct.__source_ticket ?? undefined,

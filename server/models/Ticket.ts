@@ -323,10 +323,11 @@ export class TicketRepository {
           const slaDate = new Date(slaUTC_ms);
 
           // Format as YYYY-MM-DD HH:mm:ss (PostgreSQL will interpret this as IST)
-          computedSlaValue = `${slaDate.getUTCFullYear()}-${pad(slaDate.getUTCMonth() + 1)}-${pad(slaDate.getUTCDate())} ${pad(slaDate.getUTCHours())}:${pad(slaDate.getUTCMinutes())}:${pad(slaDate.getUTCSeconds())}`;
+          // Store SLA as ISO UTC string so the client and subsequent processing interpret it correctly
+          computedSlaValue = slaDate.toISOString();
 
           console.log(
-            `[SLA] Computed SLA: ${computedSlaValue} (${hours} hours from now)`,
+            `[SLA] Computed SLA (ISO UTC): ${computedSlaValue} (${hours} hours from now)`,
           );
         }
       }

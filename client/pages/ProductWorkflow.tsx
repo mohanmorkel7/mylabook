@@ -238,6 +238,7 @@ function CreateProjectFromLeadDialog({
 
     const submitData = {
       ...projectData,
+      project_type: "product_development",
       project_manager_id: projectData.project_manager_id
         ? parseInt(projectData.project_manager_id)
         : undefined,

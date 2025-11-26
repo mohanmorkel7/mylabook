@@ -452,6 +452,19 @@ export class ApiClient {
 
       // Try to parse as JSON
       try {
+        // If empty body, return empty object instead of throwing
+        if (!responseText || responseText.trim() === "") {
+          // Reset failure count and offline mode on successful request
+          if (this.isOfflineMode) {
+            if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+              console.log("🟢 Connection restored - exiting offline mode");
+            this.isOfflineMode = false;
+            this.offlineDetectedAt = 0;
+          }
+          this.failureCount = 0;
+          return {} as T;
+        }
+
         const result = JSON.parse(responseText);
         // Reset failure count and offline mode on successful request
         if (this.isOfflineMode) {

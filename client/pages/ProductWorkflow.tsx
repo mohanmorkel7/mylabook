@@ -883,8 +883,47 @@ export default function ProductWorkflow() {
       try {
         const proj = await apiClient.getWorkflowProject(pid);
         setSelectedProject(proj);
-        // Open create dialog in edit mode
+
+        // Try to fetch a linked product record to obtain template and step probabilities
+        try {
+          const product = await apiClient.request(`/products/${proj.id}`);
+          if (product) {
+            // copy template if available
+            if (product.template_id) {
+              proj.template_id = product.template_id;
+            }
+
+            // If product has steps with probabilities, merge into proj.steps by step_order or name
+            if (Array.isArray(product.steps) && product.steps.length > 0 && Array.isArray(proj.steps)) {
+              const psByOrder: any = {};
+              product.steps.forEach((s: any) => {
+                if (s.step_order !== undefined && s.step_order !== null) psByOrder[s.step_order] = s;
+              });
+
+              proj.steps = proj.steps.map((s: any, i: number) => {
+                const byOrder = psByOrder[s.step_order];
+                const byName = product.steps.find((ps: any) => (ps.name || ps.step_name) === (s.step_name || s.name));
+                const source = byOrder || byName;
+                if (source) {
+                  return {
+                    ...s,
+                    probability_percent:
+                      source.probability_percent ?? source.probability ?? s.probability_percent ?? 0,
+                    due_date: s.due_date || source.eta || source.due_date || s.due_date,
+                  };
+                }
+                return s;
+              });
+            }
+          }
+        } catch (prodErr) {
+          // ignore - product fallback may not exist
+          console.debug("No linked product or failed to fetch product for project", pid, prodErr);
+        }
+
+        // Open create dialog in edit mode with enriched project
         setSelectedLead(null);
+        setSelectedProject(proj);
         setIsCreateDialogOpen(true);
       } catch (err) {
         console.error("Failed to load project from query param:", err);

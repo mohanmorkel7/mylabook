@@ -133,7 +133,10 @@ function CreateProjectFromLeadDialog({
         status: s.status || "pending",
         probability_percent: s.probability_percent ?? s.probability ?? 0,
         estimated_hours: s.estimated_hours,
-        due_date: s.due_date || s.dueDate || s.eta ? formatToDateInput(s.due_date || s.dueDate || s.eta) : "",
+        due_date:
+          s.due_date || s.dueDate || s.eta
+            ? formatToDateInput(s.due_date || s.dueDate || s.eta)
+            : "",
       }));
     }
     return [];
@@ -216,7 +219,10 @@ function CreateProjectFromLeadDialog({
           status: s.status || "pending",
           probability_percent: s.probability_percent ?? s.probability ?? 0,
           estimated_hours: s.estimated_hours,
-          due_date: s.due_date || s.dueDate || s.eta ? formatToDateInput(s.due_date || s.dueDate || s.eta) : "",
+          due_date:
+            s.due_date || s.dueDate || s.eta
+              ? formatToDateInput(s.due_date || s.dueDate || s.eta)
+              : "",
         })),
       );
     }
@@ -225,7 +231,9 @@ function CreateProjectFromLeadDialog({
   // If templates are loaded and a project has template_id, set selectedTemplate
   useEffect(() => {
     if (project && project.template_id && templates.length > 0) {
-      const t = templates.find((tt: any) => String(tt.id) === String(project.template_id));
+      const t = templates.find(
+        (tt: any) => String(tt.id) === String(project.template_id),
+      );
       if (t) setSelectedTemplate(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -841,8 +849,8 @@ function CreateProjectFromLeadDialog({
                   ? "Updating..."
                   : "Creating..."
                 : project && project.id
-                ? "Update Project"
-                : "Create Project"}
+                  ? "Update Project"
+                  : "Create Project"}
             </Button>
           </div>
         </form>

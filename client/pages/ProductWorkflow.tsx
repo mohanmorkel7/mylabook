@@ -75,6 +75,7 @@ interface ProjectStep {
   assigned_to?: number;
   estimated_hours?: number;
   due_date?: string;
+  probability_percent?: number;
 }
 
 interface CreateProjectFromLeadDialogProps {
@@ -102,7 +103,6 @@ function CreateProjectFromLeadDialog({
     project_manager_id: "",
     target_completion_date: "",
     estimated_hours: "",
-    budget: lead?.estimated_budget || "",
     template_id: "",
   });
 
@@ -144,6 +144,7 @@ function CreateProjectFromLeadDialog({
           estimated_hours: step.default_eta_days
             ? step.default_eta_days * 8
             : undefined,
+          probability_percent: step.probability_percent || 0,
         }),
       );
       setSteps(convertedSteps);
@@ -157,6 +158,7 @@ function CreateProjectFromLeadDialog({
           step_order: 1,
           status: "pending",
           estimated_hours: 40,
+          probability_percent: 0,
         },
         {
           step_name: "Follow-up with development team",
@@ -165,6 +167,7 @@ function CreateProjectFromLeadDialog({
           step_order: 2,
           status: "pending",
           estimated_hours: 20,
+          probability_percent: 0,
         },
       ]);
     }
@@ -197,7 +200,10 @@ function CreateProjectFromLeadDialog({
   ];
 
   const createProjectMutation = useMutation({
-    mutationFn: (data: any) => apiClient.createProjectFromLead(lead.id, data),
+    mutationFn: (data: any) =>
+      lead && lead.id
+        ? apiClient.createProjectFromLead(lead.id, data)
+        : apiClient.createWorkflowProject(data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
       queryClient.invalidateQueries({ queryKey: ["completed-leads"] });
@@ -217,7 +223,6 @@ function CreateProjectFromLeadDialog({
       estimated_hours: projectData.estimated_hours
         ? parseInt(projectData.estimated_hours)
         : undefined,
-      budget: projectData.budget ? parseFloat(projectData.budget) : undefined,
       template_id: projectData.template_id
         ? parseInt(projectData.template_id)
         : undefined,
@@ -234,6 +239,7 @@ function CreateProjectFromLeadDialog({
       step_description: "",
       step_order: steps.length + 1,
       status: "pending",
+      probability_percent: 0,
     };
     setSteps([...steps, newStep]);
   };
@@ -277,44 +283,69 @@ function CreateProjectFromLeadDialog({
     setSteps(newSteps);
   };
 
-  if (!lead) return null;
+  // Allow creating project even when not started from a lead (lead may be null)
+
+  const totalProbability = steps.reduce(
+    (sum, s) => sum + (s.probability_percent || 0),
+    0,
+  );
+  const probabilityInvalid = totalProbability > 0 && totalProbability !== 100;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Product Project from Lead</DialogTitle>
+          <DialogTitle>
+            {lead
+              ? "Create Product Project from Lead"
+              : "Create Product Project"}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Lead Information Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lead Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <strong>Client:</strong> {lead.client_name}
+          {lead ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Lead Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <strong>Client:</strong> {lead.client_name}
+                  </div>
+                  <div>
+                    <strong>Project:</strong> {lead.project_title}
+                  </div>
+                  <div>
+                    <strong>Completed:</strong>{" "}
+                    {lead.completion_date &&
+                      format(new Date(lead.completion_date), "MMM d, yyyy")}
+                  </div>
+                  <div>
+                    <strong>Lead Steps:</strong> {lead.completed_steps}/
+                    {lead.total_steps}
+                  </div>
                 </div>
-                <div>
-                  <strong>Project:</strong> {lead.project_title}
+                <div className="mt-2">
+                  <strong>Description:</strong>
+                  <p className="text-gray-600">{lead.project_description}</p>
                 </div>
-                <div>
-                  <strong>Completed:</strong>{" "}
-                  {format(new Date(lead.completion_date), "MMM d, yyyy")}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Lead Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-gray-600">
+                  No lead selected. You can proceed to create a project without
+                  a lead or select a completed lead from the list.
                 </div>
-                <div>
-                  <strong>Lead Steps:</strong> {lead.completed_steps}/
-                  {lead.total_steps}
-                </div>
-              </div>
-              <div className="mt-2">
-                <strong>Description:</strong>
-                <p className="text-gray-600">{lead.project_description}</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Project Details */}
           <Card>
@@ -491,22 +522,6 @@ function CreateProjectFromLeadDialog({
                     placeholder="Total project hours"
                   />
                 </div>
-
-                <div>
-                  <Label htmlFor="budget">Budget (₹)</Label>
-                  <Input
-                    id="budget"
-                    type="number"
-                    value={projectData.budget}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        budget: e.target.value,
-                      }))
-                    }
-                    placeholder="Project budget"
-                  />
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -516,15 +531,28 @@ function CreateProjectFromLeadDialog({
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="text-lg">Project Steps</CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addStep}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Step
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-600">
+                    Total Probability:{" "}
+                    <span className="font-medium text-gray-900">
+                      {totalProbability}%
+                    </span>
+                    {probabilityInvalid && (
+                      <span className="ml-3 text-sm text-red-600">
+                        Total must equal 100%
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addStep}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Step
+                  </Button>
+                </div>
               </div>
               <CardDescription>
                 Define the specific steps for this product development project
@@ -535,7 +563,12 @@ function CreateProjectFromLeadDialog({
                 <Card key={index} className="border-l-4 border-l-blue-500">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
-                      <Badge variant="outline">Step {step.step_order}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Step {step.step_order}</Badge>
+                        <div className="text-sm text-gray-600">
+                          {step.probability_percent ?? 0}%
+                        </div>
+                      </div>
                       <div className="flex gap-1">
                         <Button
                           type="button"
@@ -596,7 +629,7 @@ function CreateProjectFromLeadDialog({
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
                           <Label>Estimated Hours</Label>
                           <Input
@@ -623,6 +656,12 @@ function CreateProjectFromLeadDialog({
                               updateStep(index, "due_date", e.target.value)
                             }
                           />
+                        </div>
+                        <div>
+                          <Label>Probability (%)</Label>
+                          <div className="mt-1 text-sm text-gray-700">
+                            {step.probability_percent ?? 0}%
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -651,7 +690,8 @@ function CreateProjectFromLeadDialog({
               disabled={
                 !projectData.name.trim() ||
                 steps.length === 0 ||
-                createProjectMutation.isPending
+                createProjectMutation.isPending ||
+                probabilityInvalid
               }
             >
               <Rocket className="w-4 h-4 mr-2" />
@@ -669,6 +709,7 @@ function CreateProjectFromLeadDialog({
 export default function ProductWorkflow() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
@@ -725,8 +766,8 @@ export default function ProductWorkflow() {
   };
 
   const handleViewProject = (project: any) => {
-    setSelectedProject(project);
-    setIsProjectDetailOpen(true);
+    // Redirect to Product Overview page
+    navigate(`/products/${project.id}`);
   };
 
   const getStatusIcon = (status: string) => {
@@ -768,6 +809,17 @@ export default function ProductWorkflow() {
           <p className="text-gray-600 mt-1">
             Manage lead-to-product handoffs and project development
           </p>
+        </div>
+        <div>
+          <Button
+            onClick={() => {
+              setSelectedLead(null);
+              setIsCreateDialogOpen(true);
+            }}
+            className="btn btn-primary"
+          >
+            Create Project
+          </Button>
         </div>
       </div>
 
@@ -869,55 +921,63 @@ export default function ProductWorkflow() {
         <TabsContent value="completed-leads" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Leads Ready for Product Development</CardTitle>
+              <CardTitle>Product list</CardTitle>
               <CardDescription>
-                Completed leads that can be converted into product development
-                projects
+                List of products and their key details
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {leadsLoading ? (
-                <div className="text-center py-8">
-                  Loading completed leads...
-                </div>
-              ) : completedLeads.length > 0 ? (
+              {projectsLoading ? (
+                <div className="text-center py-8">Loading products...</div>
+              ) : projects.length > 0 ? (
                 <div className="space-y-4">
-                  {completedLeads.map((lead: any) => (
+                  {projects.map((project: any) => (
                     <Card
-                      key={lead.id}
-                      className="border-l-4 border-l-green-500"
+                      key={project.id}
+                      className="hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => handleViewProject(project)}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <h3 className="font-semibold text-lg">
-                                {lead.client_name}
+                                {project.name}
                               </h3>
                               <Badge
                                 variant="outline"
-                                className="text-green-600"
+                                className={getStatusColor(project.status)}
                               >
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Lead Completed
+                                {project.status}
                               </Badge>
                             </div>
 
                             <h4 className="font-medium text-gray-900 mb-2">
-                              {lead.project_title}
+                              {project.description}
                             </h4>
                             <p className="text-gray-600 mb-3">
-                              {lead.project_description}
+                              {project.source_type === "lead"
+                                ? `From Lead #${project.source_id}`
+                                : ""}
                             </p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
-                                <span className="font-medium">Completed:</span>
+                                <span className="font-medium">Progress:</span>
                                 <br />
-                                {format(
-                                  new Date(lead.completion_date),
-                                  "MMM d, yyyy",
-                                )}
+                                <div className="flex items-center gap-2">
+                                  <div className="w-20 bg-gray-200 rounded-full h-2">
+                                    <div
+                                      className="bg-blue-600 h-2 rounded-full"
+                                      style={{
+                                        width: `${project.progress_percentage || 0}%`,
+                                      }}
+                                    />
+                                  </div>
+                                  <span>
+                                    {project.progress_percentage || 0}%
+                                  </span>
+                                </div>
                               </div>
                               <div>
                                 <span className="font-medium">Lead Steps:</span>
@@ -925,94 +985,85 @@ export default function ProductWorkflow() {
                                 <div className="flex items-center gap-1">
                                   <CheckCircle className="w-3 h-3 text-green-600" />
                                   <span>
-                                    {lead.completed_steps}/{lead.total_steps}
+                                    {project.completed_steps || 0}/
+                                    {project.total_steps || 0}
                                   </span>
                                 </div>
-                              </div>
-                              <div>
-                                <span className="font-medium">
-                                  Est. Budget:
-                                </span>
-                                <br />₹{lead.estimated_budget?.toLocaleString()}
                               </div>
                               <div>
                                 <span className="font-medium">Status:</span>
                                 <br />
                                 <Select
-                                  value={
-                                    lead.product_status || "ready_for_product"
-                                  }
+                                  value={project.status}
                                   onValueChange={(value) => {
-                                    // Update lead status
                                     console.log(
-                                      "Updating lead status:",
-                                      lead.id,
+                                      "Updating project status:",
+                                      project.id,
                                       value,
                                     );
-                                    // TODO: Implement API call to update lead status
                                   }}
                                 >
                                   <SelectTrigger className="w-full h-8">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="ready_for_product">
-                                      Ready for Product
+                                    <SelectItem value="created">
+                                      Created
                                     </SelectItem>
-                                    <SelectItem value="in_review">
-                                      In Review
+                                    <SelectItem value="in_progress">
+                                      In Progress
                                     </SelectItem>
-                                    <SelectItem value="approved">
-                                      Approved
+                                    <SelectItem value="review">
+                                      Review
+                                    </SelectItem>
+                                    <SelectItem value="completed">
+                                      Completed
                                     </SelectItem>
                                     <SelectItem value="on_hold">
                                       On Hold
                                     </SelectItem>
-                                    <SelectItem value="rejected">
-                                      Rejected
+                                    <SelectItem value="cancelled">
+                                      Cancelled
                                     </SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
                             </div>
-
-                            {/* Project Steps Count - Clickable */}
-                            <div className="mt-3">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedLeadForSteps(lead);
-                                  setIsStepsPreviewOpen(true);
-                                }}
-                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                              >
-                                <Target className="w-4 h-4 mr-2" />
-                                View{" "}
-                                {Math.ceil(
-                                  (lead.estimated_budget || 100000) / 50000,
-                                )}{" "}
-                                Estimated Project Steps
-                              </Button>
-                            </div>
                           </div>
 
-                          <div className="flex flex-col gap-2 ml-4">
-                            <Button
-                              onClick={() => handleCreateProject(lead)}
-                              className="min-w-[140px]"
+                          <div className="flex items-start gap-2 ml-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/products/${project.id}/edit`);
+                              }}
+                              title="Edit"
+                              className="p-2 rounded hover:bg-gray-100"
                             >
-                              <ArrowRight className="w-4 h-4 mr-2" />
-                              Create Project
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewLead(lead)}
+                              <Edit className="w-4 h-4 text-gray-600" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!confirm("Delete this product?")) return;
+                                try {
+                                  await apiClient.request(
+                                    `/products/${project.id}`,
+                                    { method: "DELETE" },
+                                  );
+                                  queryClient.invalidateQueries([
+                                    "workflow-projects",
+                                  ]);
+                                } catch (err) {
+                                  console.error(err);
+                                  alert("Failed to delete product");
+                                }
+                              }}
+                              title="Delete"
+                              className="p-2 rounded hover:bg-gray-100"
                             >
-                              <Eye className="w-4 h-4 mr-2" />
-                              View Lead
-                            </Button>
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </button>
                           </div>
                         </div>
                       </CardContent>
@@ -1023,11 +1074,10 @@ export default function ProductWorkflow() {
                 <div className="text-center py-12">
                   <Package className="w-16 h-16 mx-auto text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No Completed Leads
+                    No Products
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    There are no completed leads ready for product development
-                    at the moment.
+                    There are no products to show at the moment.
                   </p>
                 </div>
               )}

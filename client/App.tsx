@@ -116,6 +116,9 @@ import SalesDashboard from "@/pages/SalesDashboard";
 import ProductManagement from "@/pages/ProductManagement";
 import ProductWorkflow from "@/pages/ProductWorkflow";
 import AlertsNotifications from "@/pages/AlertsNotifications";
+import ProductsPage from "@/pages/Products";
+import CreateProduct from "@/pages/CreateProduct";
+import ProductOverview from "@/pages/ProductOverview";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import LeadDashboard from "@/pages/LeadDashboard";
 import CreateLead from "@/pages/CreateLead";
@@ -1040,6 +1043,39 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
               <ProductManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/products"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
+            <DashboardLayout>
+              <ProductsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/create-product"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <CreateProduct />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/products/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <ProductOverview />
             </DashboardLayout>
           </ProtectedRoute>
         }

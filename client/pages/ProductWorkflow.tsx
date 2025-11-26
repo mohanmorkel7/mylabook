@@ -291,33 +291,43 @@ function CreateProjectFromLeadDialog({
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Lead Information Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lead Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <strong>Client:</strong> {lead.client_name}
+          {lead ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Lead Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <strong>Client:</strong> {lead.client_name}
+                  </div>
+                  <div>
+                    <strong>Project:</strong> {lead.project_title}
+                  </div>
+                  <div>
+                    <strong>Completed:</strong>{" "}
+                    {lead.completion_date && format(new Date(lead.completion_date), "MMM d, yyyy")}
+                  </div>
+                  <div>
+                    <strong>Lead Steps:</strong> {lead.completed_steps}/{lead.total_steps}
+                  </div>
                 </div>
-                <div>
-                  <strong>Project:</strong> {lead.project_title}
+                <div className="mt-2">
+                  <strong>Description:</strong>
+                  <p className="text-gray-600">{lead.project_description}</p>
                 </div>
-                <div>
-                  <strong>Completed:</strong>{" "}
-                  {format(new Date(lead.completion_date), "MMM d, yyyy")}
-                </div>
-                <div>
-                  <strong>Lead Steps:</strong> {lead.completed_steps}/
-                  {lead.total_steps}
-                </div>
-              </div>
-              <div className="mt-2">
-                <strong>Description:</strong>
-                <p className="text-gray-600">{lead.project_description}</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Lead Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-gray-600">No lead selected. You can proceed to create a project without a lead or select a completed lead from the list.</div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Project Details */}
           <Card>

@@ -200,11 +200,8 @@ function CreateProjectFromLeadDialog({
     "DevOps Team",
     "Full Stack Team",
   ];
-  const projectManagers = [
-    { id: 2, name: "Alice Johnson" },
-    { id: 3, name: "Bob Smith" },
-    { id: 4, name: "Carol Davis" },
-  ];
+  // projectManagers are provided by users query (see above)
+  // const projectManagers will be derived from users when dialog opens
 
   const createProjectMutation = useMutation({
     mutationFn: (data: any) =>

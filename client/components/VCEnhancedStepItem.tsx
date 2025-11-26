@@ -613,24 +613,24 @@ export function VCEnhancedStepItem({
   ) => {
     try {
       let saved: any = null;
-    if ((stepApiBase as any) === "workflow") {
-      // Workflow doesn't support editing comments via this endpoint; update locally
-      saved = { message: editMessageText.trim(), is_rich_text: true } as any;
-    } else {
-      saved = await apiClient.request(`/${stepApiBase}/chats/${messageId}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          message: editMessageText.trim(),
-          is_rich_text: true,
-        }),
-      });
-    }
+      if ((stepApiBase as any) === "workflow") {
+        // Workflow doesn't support editing comments via this endpoint; update locally
+        saved = { message: editMessageText.trim(), is_rich_text: true } as any;
+      } else {
+        saved = await apiClient.request(`/${stepApiBase}/chats/${messageId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            message: editMessageText.trim(),
+            is_rich_text: true,
+          }),
+        });
+      }
 
-    setChatMessages((prev) =>
-      prev.map((msg) => (msg.id === messageId ? { ...msg, ...saved } : msg)),
-    );
-    setEditingMessageId(null);
-    setEditMessageText("");
+      setChatMessages((prev) =>
+        prev.map((msg) => (msg.id === messageId ? { ...msg, ...saved } : msg)),
+      );
+      setEditingMessageId(null);
+      setEditMessageText("");
     } catch (error) {
       console.error("Failed to edit message:", error);
       // Fallback: update locally
@@ -666,7 +666,9 @@ export function VCEnhancedStepItem({
     try {
       if ((stepApiBase as any) === "workflow") {
         // Workflow doesn't expose a delete endpoint for comments; just remove locally
-        console.warn("Workflow comment delete requested; removing locally only");
+        console.warn(
+          "Workflow comment delete requested; removing locally only",
+        );
       } else {
         await apiClient.request(`/${stepApiBase}/chats/${messageToDelete}`, {
           method: "DELETE",
@@ -1230,7 +1232,8 @@ export function VCEnhancedStepItem({
                                             parseInt(user?.id || "0") && (
                                             <>
                                               {/* Hide edit/delete for workflow comments as server lacks those endpoints */}
-                                              {(stepApiBase as any) !== "workflow" && (
+                                              {(stepApiBase as any) !==
+                                                "workflow" && (
                                                 <>
                                                   <Button
                                                     size="sm"

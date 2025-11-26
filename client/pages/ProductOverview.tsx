@@ -356,7 +356,9 @@ const ProductOverview: React.FC = () => {
                   vcId={Number(id)}
                   steps={steps}
                   expandedSteps={expandedSteps}
-                  onToggleExpansion={(stepId: number) => toggleStepExpansion(stepId)}
+                  onToggleExpansion={(stepId: number) =>
+                    toggleStepExpansion(stepId)
+                  }
                   onDeleteStep={handleDeleteStep}
                   onReorderSteps={handleReorderSteps}
                   updateStepStatus={updateStepStatus}

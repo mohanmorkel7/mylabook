@@ -54,10 +54,9 @@ router.get("/:id", async (req, res) => {
     // If not found, check if a workflow project exists with this id and try to create/find linked product
     if (!product) {
       try {
-        const wpRes = await (await import("../database/connection")).pool.query(
-          "SELECT * FROM workflow_projects WHERE id = $1",
-          [id],
-        );
+        const wpRes = await (
+          await import("../database/connection")
+        ).pool.query("SELECT * FROM workflow_projects WHERE id = $1", [id]);
         if (wpRes.rows.length > 0) {
           const wp = wpRes.rows[0];
           // If workflow_projects has a product_id, try to fetch that product
@@ -79,18 +78,26 @@ router.get("/:id", async (req, res) => {
             const created = await ProductRepository.createProduct(prodData);
             // Persist link
             try {
-              await (await import("../database/connection")).pool.query(
+              await (
+                await import("../database/connection")
+              ).pool.query(
                 "UPDATE workflow_projects SET product_id = $1 WHERE id = $2",
                 [created.id, id],
               );
             } catch (uErr) {
-              console.warn("Failed to persist product_id on workflow_projects:", uErr);
+              console.warn(
+                "Failed to persist product_id on workflow_projects:",
+                uErr,
+              );
             }
             product = created as any;
           }
         }
       } catch (wpErr) {
-        console.warn("Error checking workflow_projects for fallback product:", wpErr);
+        console.warn(
+          "Error checking workflow_projects for fallback product:",
+          wpErr,
+        );
       }
     }
 

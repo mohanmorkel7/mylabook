@@ -301,11 +301,9 @@ router.post("/projects", async (req: Request, res: Response) => {
       !projectData.project_type ||
       !projectData.created_by
     ) {
-      return res
-        .status(400)
-        .json({
-          error: "Missing required fields: name, project_type, created_by",
-        });
+      return res.status(400).json({
+        error: "Missing required fields: name, project_type, created_by",
+      });
     }
 
     if (await isDatabaseAvailable()) {
@@ -330,7 +328,9 @@ router.post("/projects", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error creating project:", error);
     // Return detailed message for debugging (consider sanitizing in production)
-    res.status(500).json({ error: (error as Error).message || "Failed to create project" });
+    res
+      .status(500)
+      .json({ error: (error as Error).message || "Failed to create project" });
   }
 });
 

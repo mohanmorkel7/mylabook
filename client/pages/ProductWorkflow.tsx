@@ -651,7 +651,7 @@ function CreateProjectFromLeadDialog({
                             type="number"
                             min={0}
                             max={100}
-                            value={step.probability_percent || ""}
+                            value={step.probability_percent ?? ""}
                             onChange={(e) =>
                               updateStep(
                                 index,

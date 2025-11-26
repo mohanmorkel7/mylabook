@@ -538,7 +538,7 @@ function CreateProjectFromLeadDialog({
               <div className="flex justify-between items-center">
                 <CardTitle className="text-lg">Project Steps</CardTitle>
                 <div className="flex items-center gap-3">
-                  <div className="text-sm text-gray-600">Total Probability: <span className="font-medium text-gray-900">{steps.reduce((sum, s) => sum + (s.probability_percent || 0), 0)}%</span></div>
+                  <div className="text-sm text-gray-600">Total Probability: <span className="font-medium text-gray-900">{totalProbability}%</span>{probabilityInvalid && (<span className="ml-3 text-sm text-red-600">Total must equal 100%</span>)}</div>
                   <Button
                     type="button"
                     variant="outline"

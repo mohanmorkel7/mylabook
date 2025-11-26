@@ -726,8 +726,8 @@ export default function ProductWorkflow() {
   };
 
   const handleViewProject = (project: any) => {
-    setSelectedProject(project);
-    setIsProjectDetailOpen(true);
+    // Redirect to Product Overview page
+    navigate(`/products/${project.id}`);
   };
 
   const getStatusIcon = (status: string) => {

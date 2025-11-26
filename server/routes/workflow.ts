@@ -321,7 +321,11 @@ router.post("/projects", async (req: Request, res: Response) => {
             const stepData: CreateWorkflowStepData = {
               project_id: newProject.id,
               step_name: s.step_name || s.name || s.stepName,
-              step_description: s.step_description || s.description || s.stepDescription || null,
+              step_description:
+                s.step_description ||
+                s.description ||
+                s.stepDescription ||
+                null,
               step_order: s.step_order ?? s.stepOrder ?? null,
               assigned_to: s.assigned_to ?? s.assignedTo ?? null,
               estimated_hours: s.estimated_hours ?? s.estimatedHours ?? null,
@@ -337,7 +341,9 @@ router.post("/projects", async (req: Request, res: Response) => {
       }
 
       // Reload project with steps
-      const projectWithSteps = await WorkflowRepository.getProjectById(newProject.id);
+      const projectWithSteps = await WorkflowRepository.getProjectById(
+        newProject.id,
+      );
       res.status(201).json(projectWithSteps);
     } else {
       // Return mock created project

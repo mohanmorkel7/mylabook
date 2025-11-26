@@ -147,9 +147,17 @@ export function VCEnhancedStepItem({
       try {
         setChatLoading(true);
         setChatError(null);
-        const rows = await apiClient.request(
-          `/${stepApiBase}/steps/${step.id}/chats`,
-        );
+        let rows: any;
+        if ((stepApiBase as any) === "workflow") {
+          // Workflow stores comments under project comments; filter by stepId
+          rows = await apiClient.request(
+            `/workflow/projects/${step.project_id}/comments?stepId=${step.id}`,
+          );
+        } else {
+          rows = await apiClient.request(
+            `/${stepApiBase}/steps/${step.id}/chats`,
+          );
+        }
         setChatMessages(Array.isArray(rows) ? rows : []);
       } catch (e: any) {
         setChatError(e);
@@ -336,13 +344,31 @@ export function VCEnhancedStepItem({
         attachments: stagedAttachments,
       };
 
-      const saved = await apiClient.request(
-        `/${stepApiBase}/steps/${step.id}/chats`,
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
-      );
+      let saved: any;
+      if ((stepApiBase as any) === "workflow") {
+        // Workflow: post to project comments endpoint
+        const body = {
+          comment_text: newMessage.trim(),
+          created_by: parseInt(user?.id || "1"),
+          step_id: step.id,
+          comment_type: "comment",
+        };
+        saved = await apiClient.request(
+          `/workflow/projects/${step.project_id}/comments`,
+          {
+            method: "POST",
+            body: JSON.stringify(body),
+          },
+        );
+      } else {
+        saved = await apiClient.request(
+          `/${stepApiBase}/steps/${step.id}/chats`,
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          },
+        );
+      }
 
       setChatMessages((prev) => [...prev, saved]);
       setNewMessage("");
@@ -586,16 +612,19 @@ export function VCEnhancedStepItem({
     originalIsRichText: boolean,
   ) => {
     try {
-      const saved = await apiClient.request(
-        `/${stepApiBase}/chats/${messageId}`,
-        {
+      let saved: any = null;
+      if ((stepApiBase as any) === "workflow") {
+        // Workflow doesn't support editing comments via this endpoint; update locally
+        saved = { message: editMessageText.trim(), is_rich_text: true } as any;
+      } else {
+        saved = await apiClient.request(`/${stepApiBase}/chats/${messageId}`, {
           method: "PUT",
           body: JSON.stringify({
             message: editMessageText.trim(),
             is_rich_text: true,
           }),
-        },
-      );
+        });
+      }
 
       setChatMessages((prev) =>
         prev.map((msg) => (msg.id === messageId ? { ...msg, ...saved } : msg)),
@@ -635,9 +664,16 @@ export function VCEnhancedStepItem({
     if (!messageToDelete) return;
 
     try {
-      await apiClient.request(`/${stepApiBase}/chats/${messageToDelete}`, {
-        method: "DELETE",
-      });
+      if ((stepApiBase as any) === "workflow") {
+        // Workflow doesn't expose a delete endpoint for comments; just remove locally
+        console.warn(
+          "Workflow comment delete requested; removing locally only",
+        );
+      } else {
+        await apiClient.request(`/${stepApiBase}/chats/${messageToDelete}`, {
+          method: "DELETE",
+        });
+      }
     } catch (error) {
       console.error("Failed to delete on server, removing locally:", error);
     } finally {
@@ -1195,32 +1231,38 @@ export function VCEnhancedStepItem({
                                           {message.user_id ===
                                             parseInt(user?.id || "0") && (
                                             <>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                  handleEditMessage(
-                                                    message.id,
-                                                    message.message,
-                                                    message.is_rich_text,
-                                                  )
-                                                }
-                                                className="text-gray-600 hover:text-gray-700"
-                                              >
-                                                <Edit className="w-3 h-3" />
-                                              </Button>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                  handleDeleteMessage(
-                                                    message.id,
-                                                  )
-                                                }
-                                                className="text-red-600 hover:text-red-700"
-                                              >
-                                                <Trash2 className="w-3 h-3" />
-                                              </Button>
+                                              {/* Hide edit/delete for workflow comments as server lacks those endpoints */}
+                                              {(stepApiBase as any) !==
+                                                "workflow" && (
+                                                <>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                      handleEditMessage(
+                                                        message.id,
+                                                        message.message,
+                                                        message.is_rich_text,
+                                                      )
+                                                    }
+                                                    className="text-gray-600 hover:text-gray-700"
+                                                  >
+                                                    <Edit className="w-3 h-3" />
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                      handleDeleteMessage(
+                                                        message.id,
+                                                      )
+                                                    }
+                                                    className="text-red-600 hover:text-red-700"
+                                                  >
+                                                    <Trash2 className="w-3 h-3" />
+                                                  </Button>
+                                                </>
+                                              )}
                                             </>
                                           )}
                                         </>

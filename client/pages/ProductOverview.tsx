@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { apiClient } from "@/lib/api";
 import { VCDraggableStepsList } from "@/components/VCDraggableStepsList";
@@ -24,27 +25,22 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 
-const formatRemaining = (eta?: string | null, createdAt?: string) => {
-  if (!eta) return "No ETA";
-  try {
-    const d = new Date(eta);
-    const now = new Date();
-    const diff = d.getTime() - now.getTime();
-    if (diff <= 0) return "Overdue";
-    const days = Math.floor(diff / (24 * 3600 * 1000));
-    const hours = Math.floor((diff % (24 * 3600 * 1000)) / 3600000);
-    return `${days} Days ${hours} Hours Remaining`;
-  } catch (e) {
-    return "Invalid ETA";
-  }
-};
-
 const ProductOverview: React.FC = () => {
   const { id } = useParams();
   const [product, setProduct] = useState<any>(null);
   const [steps, setSteps] = useState<any[]>([]);
   const [stepsLoading, setStepsLoading] = useState(false);
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
+
+  const toggleStepExpansion = (stepId: number) => {
+    setExpandedSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(stepId)) next.delete(stepId);
+      else next.add(stepId);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -65,12 +61,17 @@ const ProductOverview: React.FC = () => {
         };
         const normalizedSteps = (res.steps || []).map((s: any) => ({
           id: s.id,
+          // Components expect 'name' and 'description' fields
+          name: s.step_name || s.name,
+          description: s.step_description || s.description || null,
           step_name: s.step_name || s.name,
-          step_description: s.step_description || s.description,
+          step_description: s.step_description || s.description || null,
           probability_percent: s.probability || s.probability_percent || 0,
           eta: s.eta || s.due_date,
           status: s.status,
           estimated_hours: s.estimated_hours,
+          project_id: s.project_id || res.id,
+          isTemplate: !!s.is_template || !!s.isTemplate || false,
         }));
         setProduct(normalized);
         setSteps(normalizedSteps);
@@ -136,12 +137,16 @@ const ProductOverview: React.FC = () => {
       setSteps(
         (res || []).map((s: any) => ({
           id: s.id,
+          name: s.step_name || s.name,
+          description: s.step_description || s.description || null,
           step_name: s.step_name || s.name,
-          step_description: s.step_description || s.description,
+          step_description: s.step_description || s.description || null,
           probability_percent: s.probability || s.probability_percent || 0,
           eta: s.eta || s.due_date,
           status: s.status,
           estimated_hours: s.estimated_hours,
+          project_id: s.project_id || Number(id),
+          isTemplate: !!s.is_template || !!s.isTemplate || false,
         })),
       );
     } catch (e) {
@@ -350,12 +355,14 @@ const ProductOverview: React.FC = () => {
                 <VCDraggableStepsList
                   vcId={Number(id)}
                   steps={steps}
-                  expandedSteps={new Set()}
-                  onToggleExpansion={() => {}}
+                  expandedSteps={expandedSteps}
+                  onToggleExpansion={(stepId: number) =>
+                    toggleStepExpansion(stepId)
+                  }
                   onDeleteStep={handleDeleteStep}
                   onReorderSteps={handleReorderSteps}
                   updateStepStatus={updateStepStatus}
-                  // Not providing stepApiBase to avoid chat prefetch for now
+                  stepApiBase="workflow"
                 />
               )}
             </CardContent>

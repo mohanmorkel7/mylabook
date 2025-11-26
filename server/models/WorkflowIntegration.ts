@@ -609,8 +609,8 @@ export class WorkflowRepository {
         for (const step of (projectData as any).steps) {
           await client.query(
             `INSERT INTO workflow_steps
-             (project_id, step_name, step_description, step_order, status, estimated_hours, due_date, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (project_id, step_name, step_description, step_order, status, estimated_hours, due_date, created_by, probability_percent)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [
               projectId,
               step.step_name,
@@ -620,6 +620,7 @@ export class WorkflowRepository {
               step.estimated_hours,
               step.due_date,
               createdBy,
+              (step.probability_percent ?? step.probability ?? null),
             ],
           );
         }

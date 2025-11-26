@@ -653,20 +653,7 @@ function CreateProjectFromLeadDialog({
                         </div>
                         <div>
                           <Label>Probability (%)</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={step.probability_percent ?? ""}
-                            onChange={(e) =>
-                              updateStep(
-                                index,
-                                "probability_percent",
-                                e.target.value ? parseInt(e.target.value) : 0,
-                              )
-                            }
-                            placeholder="0"
-                          />
+                          <div className="mt-1 text-sm text-gray-700">{step.probability_percent ?? 0}%</div>
                         </div>
                       </div>
                     </div>

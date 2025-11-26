@@ -682,7 +682,8 @@ function CreateProjectFromLeadDialog({
               disabled={
                 !projectData.name.trim() ||
                 steps.length === 0 ||
-                createProjectMutation.isPending
+                createProjectMutation.isPending ||
+                probabilityInvalid
               }
             >
               <Rocket className="w-4 h-4 mr-2" />

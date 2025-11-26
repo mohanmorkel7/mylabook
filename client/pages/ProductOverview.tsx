@@ -89,11 +89,17 @@ const ProductOverview: React.FC = () => {
         return Math.min(100, Math.round(totalCompletedProbability));
       }
 
-      const completedCount = steps.filter((s: any) => s.status === "completed").length;
-      const inProgressCount = steps.filter((s: any) => s.status === "in_progress").length;
+      const completedCount = steps.filter(
+        (s: any) => s.status === "completed",
+      ).length;
+      const inProgressCount = steps.filter(
+        (s: any) => s.status === "in_progress",
+      ).length;
       const totalSteps = steps.length;
       return totalSteps > 0
-        ? Math.round(((completedCount + inProgressCount * 0.5) / totalSteps) * 100)
+        ? Math.round(
+            ((completedCount + inProgressCount * 0.5) / totalSteps) * 100,
+          )
         : 0;
     }
     return product?.progress || 0;
@@ -102,7 +108,9 @@ const ProductOverview: React.FC = () => {
   const refetchSteps = async () => {
     setStepsLoading(true);
     try {
-      const res = await apiClient.request<any>(`/workflow/projects/${id}/steps`);
+      const res = await apiClient.request<any>(
+        `/workflow/projects/${id}/steps`,
+      );
       setSteps(
         (res || []).map((s: any) => ({
           id: s.id,
@@ -129,7 +137,9 @@ const ProductOverview: React.FC = () => {
   const handleDeleteStep = async (stepId: number) => {
     if (!window.confirm("Delete this step?")) return;
     try {
-      await apiClient.request(`/workflow/steps/${stepId}`, { method: "DELETE" });
+      await apiClient.request(`/workflow/steps/${stepId}`, {
+        method: "DELETE",
+      });
       await refetchSteps();
     } catch (e) {
       console.error(e);
@@ -151,7 +161,10 @@ const ProductOverview: React.FC = () => {
 
   const handleReorderSteps = async (reordered: any[]) => {
     try {
-      const stepOrders = reordered.map((s: any, idx: number) => ({ id: s.id, order: idx + 1 }));
+      const stepOrders = reordered.map((s: any, idx: number) => ({
+        id: s.id,
+        order: idx + 1,
+      }));
       await apiClient.request(`/workflow/projects/${id}/steps/reorder`, {
         method: "POST",
         body: JSON.stringify({ stepOrders }),
@@ -179,13 +192,19 @@ const ProductOverview: React.FC = () => {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="sm" onClick={() => navigate("/products")}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/products")}
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products
           </Button>
           <div>
             <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {product.name}
+              </h1>
               <Badge className="text-xs">{product.id}</Badge>
               <Badge className="text-xs">{product.status}</Badge>
             </div>
@@ -193,7 +212,10 @@ const ProductOverview: React.FC = () => {
           </div>
         </div>
         <div className="flex space-x-3">
-          <Button variant="outline" onClick={() => navigate(`/products/${id}/edit`)}>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/products/${id}/edit`)}
+          >
             <Edit className="w-4 h-4 mr-2" />
             Edit Project
           </Button>
@@ -205,12 +227,15 @@ const ProductOverview: React.FC = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete this Project?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. All related steps and comments will be removed.
+                  This action cannot be undone. All related steps and comments
+                  will be removed.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={deleteProject}>Confirm Delete</AlertDialogAction>
+                <AlertDialogAction onClick={deleteProject}>
+                  Confirm Delete
+                </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -222,21 +247,31 @@ const ProductOverview: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>Product Overview</CardTitle>
-              <CardDescription>Basic information and pipeline steps</CardDescription>
+              <CardDescription>
+                Basic information and pipeline steps
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="rounded-md border bg-slate-50 p-3">
                   <div className="text-xs text-slate-500">Status</div>
-                  <div className="mt-1 font-semibold text-slate-900">{product.status}</div>
+                  <div className="mt-1 font-semibold text-slate-900">
+                    {product.status}
+                  </div>
                 </div>
                 <div className="rounded-md border bg-slate-50 p-3">
-                  <div className="text-xs text-slate-500">Target Completion</div>
-                  <div className="mt-1 font-semibold text-slate-900">{product.target_completion_date || 'TBD'}</div>
+                  <div className="text-xs text-slate-500">
+                    Target Completion
+                  </div>
+                  <div className="mt-1 font-semibold text-slate-900">
+                    {product.target_completion_date || "TBD"}
+                  </div>
                 </div>
                 <div className="rounded-md border bg-slate-50 p-3">
                   <div className="text-xs text-slate-500">Estimated Hours</div>
-                  <div className="mt-1 font-semibold text-slate-900">{product.estimated_hours || 'TBD'}</div>
+                  <div className="mt-1 font-semibold text-slate-900">
+                    {product.estimated_hours || "TBD"}
+                  </div>
                 </div>
               </div>
 
@@ -244,16 +279,23 @@ const ProductOverview: React.FC = () => {
                 <div className="flex items-center gap-4">
                   <div className="flex-1 max-w-sm">
                     <div className="w-full bg-gray-200 rounded-full h-3 relative">
-                      <div className={`h-3 rounded-full transition-all duration-500 ${completionPercentage === 100 ? 'bg-green-500' : completionPercentage >= 75 ? 'bg-blue-500' : completionPercentage >= 50 ? 'bg-yellow-500' : completionPercentage >= 25 ? 'bg-orange-500' : 'bg-red-500'}`} style={{ width: `${completionPercentage}%` }} />
+                      <div
+                        className={`h-3 rounded-full transition-all duration-500 ${completionPercentage === 100 ? "bg-green-500" : completionPercentage >= 75 ? "bg-blue-500" : completionPercentage >= 50 ? "bg-yellow-500" : completionPercentage >= 25 ? "bg-orange-500" : "bg-red-500"}`}
+                        style={{ width: `${completionPercentage}%` }}
+                      />
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-blue-600">{completionPercentage}% Complete</div>
-                    <div className="text-xs text-gray-500">{steps.filter(s => s.status==='completed').length} of {steps.length} steps</div>
+                    <div className="text-sm font-bold text-blue-600">
+                      {completionPercentage}% Complete
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {steps.filter((s) => s.status === "completed").length} of{" "}
+                      {steps.length} steps
+                    </div>
                   </div>
                 </div>
               </div>
-
             </CardContent>
           </Card>
 
@@ -275,8 +317,12 @@ const ProductOverview: React.FC = () => {
               ) : steps.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Target className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No steps yet</h3>
-                  <p className="text-gray-600 mb-4">Create steps to track your product development process.</p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No steps yet
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Create steps to track your product development process.
+                  </p>
                 </div>
               ) : (
                 <VCDraggableStepsList
@@ -302,11 +348,25 @@ const ProductOverview: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="space-y-2">
-                <div className="flex justify-between"><span className="text-gray-600">Manager</span><span className="text-gray-900">{product.project_manager_id || '-'}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">Target</span><span className="text-gray-900">{product.target_completion_date || '-'}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">Estimated Hours</span><span className="text-gray-900">{product.estimated_hours || '-'}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Manager</span>
+                  <span className="text-gray-900">
+                    {product.project_manager_id || "-"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Target</span>
+                  <span className="text-gray-900">
+                    {product.target_completion_date || "-"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Estimated Hours</span>
+                  <span className="text-gray-900">
+                    {product.estimated_hours || "-"}
+                  </span>
+                </div>
               </div>
-
             </CardContent>
           </Card>
         </div>

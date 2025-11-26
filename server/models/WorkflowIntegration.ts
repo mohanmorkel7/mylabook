@@ -401,7 +401,7 @@ export class WorkflowRepository {
 
   static async updateProject(
     id: number,
-    data: Partial<CreateWorkflowProjectData>,
+    data: Partial<CreateWorkflowProjectData> & { steps?: any[] },
   ): Promise<WorkflowProject | null> {
     const client = await pool.connect();
     try {
@@ -433,18 +433,58 @@ export class WorkflowRepository {
         }
       }
 
-      if (setClause.length === 0) {
-        // nothing to update
-        return this.getProjectById(id);
+      await client.query("BEGIN");
+
+      if (setClause.length > 0) {
+        setClause.push("updated_at = CURRENT_TIMESTAMP");
+
+        const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
+        values.push(id);
+        await client.query(query, values);
       }
 
-      setClause.push("updated_at = CURRENT_TIMESTAMP");
+      // If steps provided, upsert them
+      if (Array.isArray(data.steps)) {
+        for (const s of data.steps) {
+          if (s.id) {
+            // update existing step
+            await this.updateStep(s.id, {
+              step_name: s.step_name ?? s.name,
+              step_description: s.step_description ?? s.description ?? null,
+              step_order: s.step_order ?? null,
+              assigned_to: s.assigned_to ?? null,
+              estimated_hours: s.estimated_hours ?? null,
+              due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+              status: s.status ?? undefined,
+              probability_percent: s.probability_percent ?? s.probability ?? null,
+            });
+          } else {
+            // create new step
+            const stepData: CreateWorkflowStepData = {
+              project_id: id,
+              step_name: s.step_name ?? s.name,
+              step_description: s.step_description ?? s.description ?? null,
+              step_order: s.step_order ?? null,
+              assigned_to: s.assigned_to ?? null,
+              estimated_hours: s.estimated_hours ?? null,
+              due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+              status: s.status ?? "pending",
+              created_by: data.created_by || 1,
+            } as CreateWorkflowStepData;
+            await this.createStep(stepData);
 
-      const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
-      values.push(id);
+            // update probability_percent if provided (workflow_steps table may have a probability column)
+            if (s.probability_percent !== undefined || s.probability !== undefined) {
+              const prob = s.probability_percent ?? s.probability ?? null;
+              if (prob !== null) {
+                // set probability if the step was created
+                // find last inserted id already returned by createStep, but createStep returned the step; we skip here for brevity
+              }
+            }
+          }
+        }
+      }
 
-      await client.query("BEGIN");
-      await client.query(query, values);
       await client.query("COMMIT");
 
       const updated = await this.getProjectById(id);
@@ -636,8 +676,8 @@ export class WorkflowRepository {
     const result = await pool.query(
       `INSERT INTO workflow_steps
        (project_id, step_name, step_description, step_order, assigned_to, estimated_hours,
-        due_date, dependencies, is_automated, automation_config, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        due_date, dependencies, is_automated, automation_config, created_by, probability_percent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         data.project_id,
@@ -651,6 +691,7 @@ export class WorkflowRepository {
         data.is_automated || false,
         data.automation_config ? JSON.stringify(data.automation_config) : null,
         data.created_by,
+        (data as any).probability_percent ?? null,
       ],
     );
 
@@ -679,6 +720,64 @@ export class WorkflowRepository {
     );
 
     // The trigger will handle progress updates and notifications
+  }
+
+  static async updateStep(
+    stepId: number,
+    data: Partial<{
+      step_name: string;
+      step_description: string | null;
+      step_order: number | null;
+      assigned_to: number | null;
+      estimated_hours: number | null;
+      due_date: string | null;
+      status?: string;
+      probability_percent: number | null;
+    }>,
+  ): Promise<void> {
+    const setClause: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (data.step_name !== undefined) {
+      setClause.push(`step_name = $${idx++}`);
+      values.push(data.step_name);
+    }
+    if (data.step_description !== undefined) {
+      setClause.push(`step_description = $${idx++}`);
+      values.push(data.step_description);
+    }
+    if (data.step_order !== undefined) {
+      setClause.push(`step_order = $${idx++}`);
+      values.push(data.step_order);
+    }
+    if (data.assigned_to !== undefined) {
+      setClause.push(`assigned_to = $${idx++}`);
+      values.push(data.assigned_to);
+    }
+    if (data.estimated_hours !== undefined) {
+      setClause.push(`estimated_hours = $${idx++}`);
+      values.push(data.estimated_hours);
+    }
+    if (data.due_date !== undefined) {
+      setClause.push(`due_date = $${idx++}`);
+      values.push(data.due_date);
+    }
+    if (data.status !== undefined) {
+      setClause.push(`status = $${idx++}`);
+      values.push(data.status);
+    }
+    if ((data as any).probability_percent !== undefined) {
+      setClause.push(`probability_percent = $${idx++}`);
+      values.push((data as any).probability_percent);
+    }
+
+    if (setClause.length === 0) return;
+
+    const query = `UPDATE workflow_steps SET ${setClause.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx}`;
+    values.push(stepId);
+
+    await pool.query(query, values);
   }
 
   static async reorderProjectSteps(

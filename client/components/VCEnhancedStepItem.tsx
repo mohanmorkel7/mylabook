@@ -271,27 +271,35 @@ export function VCEnhancedStepItem({
   }, [isExpanded, sortedMessages.length]);
 
   // Function to highlight mentions and make follow-up IDs clickable
-  const processMessageContent = (messageText: string) => {
-    if (!user) return messageText;
+  const processMessageContent = (messageText: string | undefined | null) => {
+    // Ensure messageText is a string
+    let processedText = (messageText || "").toString();
 
-    let processedText = messageText;
+    // If no user info, skip mention highlighting
+    const userName = user && user.name ? String(user.name) : "";
 
-    // Look for mentions of current user (case insensitive)
-    const userNamePattern = new RegExp(`@${user.name}`, "gi");
-    processedText = processedText.replace(
-      userNamePattern,
-      `<span class="bg-red-100 text-red-700 px-1 rounded font-medium">@${user.name}</span>`,
-    );
+    if (userName) {
+      try {
+        const userNamePattern = new RegExp(`@${userName}`, "gi");
+        processedText = processedText.replace(
+          userNamePattern,
+          `<span class="bg-red-100 text-red-700 px-1 rounded font-medium">@${userName}</span>`,
+        );
+      } catch (e) {
+        console.warn("Failed to highlight username in message:", e);
+      }
+    }
 
     // Make follow-up IDs clickable (#13, #14, etc.)
-    const followUpPattern = /#(\d+)/g;
-    processedText = processedText.replace(
-      followUpPattern,
-      `<span class="follow-up-link bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium cursor-pointer hover:bg-blue-200"
-        data-follow-up-id="$1"
-        onclick="window.location.href='/follow-ups?id=$1'"
-      >#$1</span>`,
-    );
+    try {
+      const followUpPattern = /#(\d+)/g;
+      processedText = processedText.replace(
+        followUpPattern,
+        `<span class="follow-up-link bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium cursor-pointer hover:bg-blue-200" data-follow-up-id="$1">#$1</span>`,
+      );
+    } catch (e) {
+      console.warn("Failed to process follow-up links:", e);
+    }
 
     return processedText;
   };

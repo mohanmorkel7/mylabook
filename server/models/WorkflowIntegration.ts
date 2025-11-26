@@ -472,6 +472,8 @@ export class WorkflowRepository {
               due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
               status: s.status ?? "pending",
               created_by: data.created_by || 1,
+              probability_percent:
+                s.probability_percent ?? s.probability ?? null,
             } as CreateWorkflowStepData;
             await this.createStep(stepData);
 

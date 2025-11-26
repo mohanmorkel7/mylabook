@@ -624,7 +624,7 @@ export class WorkflowRepository {
               step.estimated_hours,
               step.due_date,
               createdBy,
-              (step.probability_percent ?? step.probability ?? null),
+              step.probability_percent ?? step.probability ?? null,
             ],
           );
         }

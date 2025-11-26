@@ -519,6 +519,27 @@ router.patch("/steps/:stepId/status", async (req: Request, res: Response) => {
   }
 });
 
+// Delete step
+router.delete("/steps/:stepId", async (req: Request, res: Response) => {
+  try {
+    const stepId = parseInt(req.params.stepId);
+    if (isNaN(stepId))
+      return res.status(400).json({ error: "Invalid step ID" });
+
+    if (await isDatabaseAvailable()) {
+      await WorkflowRepository.deleteStep(stepId);
+      res.status(204).json({});
+    } else {
+      const idx = WorkflowMockData.steps.findIndex((s) => s.id === stepId);
+      if (idx !== -1) WorkflowMockData.steps.splice(idx, 1);
+      res.status(204).json({});
+    }
+  } catch (error) {
+    console.error("Error deleting step:", error);
+    res.status(500).json({ error: "Failed to delete step" });
+  }
+});
+
 // Reorder project steps
 router.post(
   "/projects/:projectId/steps/reorder",

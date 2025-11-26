@@ -374,6 +374,13 @@ export function createServer() {
   }
 
   try {
+    app.use("/api/products", productsRouter);
+    console.log("Products router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Products router:", error);
+  }
+
+  try {
     app.use("/api/files", filesRouter);
     console.log("Files router loaded successfully");
   } catch (error) {

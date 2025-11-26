@@ -915,11 +915,12 @@ export default function ProductWorkflow() {
                 if (source) {
                   return {
                     ...s,
-                    probability_percent:
+                    probability_percent: parseFloat(
                       source.probability_percent ??
-                      source.probability ??
-                      s.probability_percent ??
-                      0,
+                        source.probability ??
+                        s.probability_percent ??
+                        0,
+                    ) || 0,
                     due_date:
                       s.due_date || source.eta || source.due_date || s.due_date,
                   };

@@ -1,5 +1,6 @@
 import { pool } from "../database/connection";
 import { QueryResult } from "pg";
+import { ProductRepository } from "./Product";
 
 // Type definitions for workflow entities
 export interface WorkflowProject {

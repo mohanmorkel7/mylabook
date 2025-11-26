@@ -1089,7 +1089,7 @@ export default function ProductWorkflow() {
                                 if (!confirm("Delete this product?")) return;
                                 try {
                                   await apiClient.request(
-                                    `/products/${project.id}`,
+                                    `/workflow/projects/${project.id}`,
                                     { method: "DELETE" },
                                   );
                                   queryClient.invalidateQueries([

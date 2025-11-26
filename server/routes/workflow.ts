@@ -391,6 +391,35 @@ router.delete("/projects/:id", async (req: Request, res: Response) => {
   }
 });
 
+// Update project
+router.patch("/projects/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid project ID" });
+
+    const updateData: Partial<CreateWorkflowProjectData> = req.body || {};
+
+    if (await isDatabaseAvailable()) {
+      // Use repository to apply updates
+      const updated = await WorkflowRepository.updateProject(id, updateData);
+      if (!updated) return res.status(404).json({ error: "Project not found" });
+      res.json(updated);
+    } else {
+      // Update mock
+      const idx = WorkflowMockData.projects.findIndex((p) => p.id === id);
+      if (idx === -1) return res.status(404).json({ error: "Project not found" });
+      WorkflowMockData.projects[idx] = { ...WorkflowMockData.projects[idx], ...updateData, updated_at: new Date().toISOString() } as any;
+      const mockProject = WorkflowMockData.projects[idx];
+      const projectSteps = WorkflowMockData.steps.filter((s) => s.project_id === id);
+      const projectComments = WorkflowMockData.comments.filter((c) => c.project_id === id);
+      res.json({ ...mockProject, steps: projectSteps, comments: projectComments });
+    }
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ error: "Failed to update project" });
+  }
+});
+
 // Create project from completed lead
 router.post(
   "/projects/from-lead/:leadId",

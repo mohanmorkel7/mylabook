@@ -1229,32 +1229,37 @@ export function VCEnhancedStepItem({
                                           {message.user_id ===
                                             parseInt(user?.id || "0") && (
                                             <>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                  handleEditMessage(
-                                                    message.id,
-                                                    message.message,
-                                                    message.is_rich_text,
-                                                  )
-                                                }
-                                                className="text-gray-600 hover:text-gray-700"
-                                              >
-                                                <Edit className="w-3 h-3" />
-                                              </Button>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                  handleDeleteMessage(
-                                                    message.id,
-                                                  )
-                                                }
-                                                className="text-red-600 hover:text-red-700"
-                                              >
-                                                <Trash2 className="w-3 h-3" />
-                                              </Button>
+                                              {/* Hide edit/delete for workflow comments as server lacks those endpoints */}
+                                              {(stepApiBase as any) !== "workflow" && (
+                                                <>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                      handleEditMessage(
+                                                        message.id,
+                                                        message.message,
+                                                        message.is_rich_text,
+                                                      )
+                                                    }
+                                                    className="text-gray-600 hover:text-gray-700"
+                                                  >
+                                                    <Edit className="w-3 h-3" />
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                      handleDeleteMessage(
+                                                        message.id,
+                                                      )
+                                                    }
+                                                    className="text-red-600 hover:text-red-700"
+                                                  >
+                                                    <Trash2 className="w-3 h-3" />
+                                                  </Button>
+                                                </>
+                                              )}
                                             </>
                                           )}
                                         </>

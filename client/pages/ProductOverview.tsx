@@ -272,7 +272,7 @@ const ProductOverview: React.FC = () => {
                 {product.name}
               </h1>
               <Badge className="text-xs">{product.id}</Badge>
-              <Badge className="text-xs">{product.status}</Badge>
+              <Badge className="text-xs">{formatStatusLabel(product.status)}</Badge>
             </div>
             <p className="text-gray-600 mt-1">Product Overview & Pipeline</p>
           </div>

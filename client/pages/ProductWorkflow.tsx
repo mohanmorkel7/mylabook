@@ -1023,7 +1023,9 @@ export default function ProductWorkflow() {
   }, [location.search, (routeParams as any)?.id]);
 
   // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)
-  const isEditModalPath = Boolean(location.pathname.match(/^\/products\/[0-9]+\/edit$/));
+  const isEditModalPath = Boolean(
+    location.pathname.match(/^\/products\/[0-9]+\/edit$/),
+  );
 
   if (isEditModalPath) {
     return (
@@ -1035,7 +1037,8 @@ export default function ProductWorkflow() {
           onClose={() => {
             setIsCreateDialogOpen(false);
             setSelectedProject(null);
-            if ((routeParams as any)?.id) navigate(`/products/${(routeParams as any).id}`);
+            if ((routeParams as any)?.id)
+              navigate(`/products/${(routeParams as any).id}`);
           }}
           onSuccess={handleProjectCreated}
         />

@@ -171,6 +171,38 @@ function CreateProjectFromLeadDialog({
       (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
   );
 
+  // If editing an existing project, sync internal state when project prop changes
+  useEffect(() => {
+    if (!project) return;
+    setProjectData({
+      name: project.name || "",
+      description: project.description || "",
+      assigned_team: project.assigned_team || "Product Team",
+      project_manager_id: project.project_manager_id
+        ? String(project.project_manager_id)
+        : "",
+      target_completion_date: project.target_completion_date || "",
+      estimated_hours: project.estimated_hours
+        ? String(project.estimated_hours)
+        : "",
+      template_id: project.template_id ? String(project.template_id) : "",
+    });
+
+    if (Array.isArray(project.steps) && project.steps.length > 0) {
+      setSteps(
+        project.steps.map((s: any, i: number) => ({
+          id: s.id,
+          step_name: s.step_name || s.name,
+          step_description: s.step_description || s.description || "",
+          step_order: s.step_order ?? i + 1,
+          status: s.status || "pending",
+          probability_percent: s.probability_percent || s.probability || 0,
+          estimated_hours: s.estimated_hours,
+        })),
+      );
+    }
+  }, [project]);
+
   // Update steps when template changes
   useEffect(() => {
     if (templateSteps?.steps && templateSteps.steps.length > 0) {

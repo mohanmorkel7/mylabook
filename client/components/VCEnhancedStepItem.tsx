@@ -932,7 +932,9 @@ export function VCEnhancedStepItem({
                               >
                                 {message.message_type === "system"
                                   ? "📋"
-                                  : message.user_name.charAt(0)}
+                                  : (message.user_name && message.user_name.length > 0
+                                      ? message.user_name.charAt(0)
+                                      : (message.user_id ? String(message.user_id).charAt(0) : "?"))}
                               </div>
                             )}
                             <div className="flex-1">

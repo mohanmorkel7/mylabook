@@ -120,7 +120,9 @@ function CreateProjectFromLeadDialog({
   const templates = allTemplates.filter((template: any) => {
     const name = (template.name || "").toString().toLowerCase();
     const desc = (template.description || "").toString().toLowerCase();
-    const category = (template.category || template.type || "").toString().toLowerCase();
+    const category = (template.category || template.type || "")
+      .toString()
+      .toLowerCase();
     return (
       name.includes("product") ||
       desc.includes("product") ||
@@ -144,11 +146,16 @@ function CreateProjectFromLeadDialog({
     enabled: isOpen,
   });
 
-  const projectManagers = users.map((u: any) => ({ id: u.id, name: u.name || u.email, email: u.email }));
+  const projectManagers = users.map((u: any) => ({
+    id: u.id,
+    name: u.name || u.email,
+    email: u.email,
+  }));
   const [pmQuery, setPmQuery] = useState("");
-  const filteredPMs = projectManagers.filter((pm: any) =>
-    (pm.name || "").toLowerCase().includes(pmQuery.toLowerCase()) ||
-    (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
+  const filteredPMs = projectManagers.filter(
+    (pm: any) =>
+      (pm.name || "").toLowerCase().includes(pmQuery.toLowerCase()) ||
+      (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
   );
 
   const projectManagers = users.map((u: any) => ({
@@ -513,7 +520,9 @@ function CreateProjectFromLeadDialog({
                           <SelectItem key={pm.id} value={pm.id.toString()}>
                             <div className="flex flex-col">
                               <span>{pm.name}</span>
-                              <span className="text-xs text-gray-500">{pm.email}</span>
+                              <span className="text-xs text-gray-500">
+                                {pm.email}
+                              </span>
                             </div>
                           </SelectItem>
                         ))

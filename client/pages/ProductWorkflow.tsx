@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -943,10 +943,12 @@ export default function ProductWorkflow() {
   const [selectedLeadForSteps, setSelectedLeadForSteps] = useState<any>(null);
   const [isStepsPreviewOpen, setIsStepsPreviewOpen] = useState(false);
   const location = useLocation();
+  const routeParams = useParams();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const pid = params.get("id");
+    // Prefer query param `id`, fallback to route param `id` (for /products/:id/edit)
+    const pid = params.get("id") || (routeParams as any)?.id;
     if (!pid) return;
     const loadProject = async () => {
       try {
@@ -1018,7 +1020,7 @@ export default function ProductWorkflow() {
     };
     loadProject();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, [location.search, (routeParams as any)?.id]);
 
   // Fetch project statistics
   const { data: projectStats } = useQuery({

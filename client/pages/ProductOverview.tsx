@@ -25,21 +25,6 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 
-const formatRemaining = (eta?: string | null, createdAt?: string) => {
-  if (!eta) return "No ETA";
-  try {
-    const d = new Date(eta);
-    const now = new Date();
-    const diff = d.getTime() - now.getTime();
-    if (diff <= 0) return "Overdue";
-    const days = Math.floor(diff / (24 * 3600 * 1000));
-    const hours = Math.floor((diff % (24 * 3600 * 1000)) / 3600000);
-    return `${days} Days ${hours} Hours Remaining`;
-  } catch (e) {
-    return "Invalid ETA";
-  }
-};
-
 const ProductOverview: React.FC = () => {
   const { id } = useParams();
   const [product, setProduct] = useState<any>(null);

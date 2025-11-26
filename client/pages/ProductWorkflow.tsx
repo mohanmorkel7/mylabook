@@ -103,7 +103,6 @@ function CreateProjectFromLeadDialog({
     project_manager_id: "",
     target_completion_date: "",
     estimated_hours: "",
-    budget: lead?.estimated_budget || "",
     template_id: "",
   });
 
@@ -224,7 +223,6 @@ function CreateProjectFromLeadDialog({
       estimated_hours: projectData.estimated_hours
         ? parseInt(projectData.estimated_hours)
         : undefined,
-      budget: projectData.budget ? parseFloat(projectData.budget) : undefined,
       template_id: projectData.template_id
         ? parseInt(projectData.template_id)
         : undefined,
@@ -510,22 +508,6 @@ function CreateProjectFromLeadDialog({
                       }))
                     }
                     placeholder="Total project hours"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="budget">Budget (₹)</Label>
-                  <Input
-                    id="budget"
-                    type="number"
-                    value={projectData.budget}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        budget: e.target.value,
-                      }))
-                    }
-                    placeholder="Project budget"
                   />
                 </div>
               </div>

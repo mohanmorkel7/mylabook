@@ -307,6 +307,11 @@ router.post("/projects", async (req: Request, res: Response) => {
     }
 
     if (await isDatabaseAvailable()) {
+      // Ensure source_type is set to a valid default to satisfy DB NOT NULL constraint
+      projectData.source_type = projectData.source_type || "manual";
+      projectData.source_id = projectData.source_id ?? null;
+      projectData.created_by = projectData.created_by || 1;
+
       const newProject = await WorkflowRepository.createProject(projectData);
       res.status(201).json(newProject);
     } else {

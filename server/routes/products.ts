@@ -120,10 +120,9 @@ router.put("/:id", async (req, res) => {
     let product = await ProductRepository.getById(id);
     if (!product) {
       try {
-        const wpRes = await (await import("../database/connection")).pool.query(
-          "SELECT * FROM workflow_projects WHERE id = $1",
-          [id],
-        );
+        const wpRes = await (
+          await import("../database/connection")
+        ).pool.query("SELECT * FROM workflow_projects WHERE id = $1", [id]);
         if (wpRes.rows.length > 0) {
           const wp = wpRes.rows[0];
           const prodData: any = {
@@ -140,18 +139,26 @@ router.put("/:id", async (req, res) => {
           const created = await ProductRepository.createProduct(prodData);
           // Persist link back to workflow_projects
           try {
-            await (await import("../database/connection")).pool.query(
+            await (
+              await import("../database/connection")
+            ).pool.query(
               "UPDATE workflow_projects SET product_id = $1 WHERE id = $2",
               [created.id, id],
             );
           } catch (uErr) {
-            console.warn("Failed to persist product_id on workflow_projects:", uErr);
+            console.warn(
+              "Failed to persist product_id on workflow_projects:",
+              uErr,
+            );
           }
           // Now set id to newly created product id for updating
           id = created.id;
         }
       } catch (wpErr) {
-        console.warn("Error checking workflow_projects for fallback product:", wpErr);
+        console.warn(
+          "Error checking workflow_projects for fallback product:",
+          wpErr,
+        );
       }
     }
 
@@ -163,11 +170,14 @@ router.put("/:id", async (req, res) => {
       cols.push(`${k} = $${idx++}`);
       vals.push(v);
     });
-    if (cols.length === 0) return res.status(400).json({ error: "No update fields" });
+    if (cols.length === 0)
+      return res.status(400).json({ error: "No update fields" });
 
     vals.push(id);
     const sql = `UPDATE products SET ${cols.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
-    const result = await (await import("../database/connection")).pool.query(sql, vals);
+    const result = await (
+      await import("../database/connection")
+    ).pool.query(sql, vals);
 
     if (result.rows.length === 0) {
       // Nothing updated - product may not exist

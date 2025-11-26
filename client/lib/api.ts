@@ -270,7 +270,10 @@ export class ApiClient {
                 const altUrl = `${base}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
                 if ((window as any).__APP_DEBUG)
                   console.log("Trying localhost fallback URL:", altUrl);
-                const altResponse = await fetch(altUrl, { method: config.method || "GET", headers: config.headers });
+                const altResponse = await fetch(altUrl, {
+                  method: config.method || "GET",
+                  headers: config.headers,
+                });
                 if (altResponse && altResponse.ok) {
                   if ((window as any).__APP_DEBUG)
                     console.log("Localhost fallback succeeded for:", altUrl);
@@ -285,7 +288,9 @@ export class ApiClient {
             }
             if (!response) {
               if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-                console.log("Localhost fallbacks exhausted, trying XMLHttpRequest fallback");
+                console.log(
+                  "Localhost fallbacks exhausted, trying XMLHttpRequest fallback",
+                );
             }
           }
 

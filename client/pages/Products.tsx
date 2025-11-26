@@ -20,8 +20,14 @@ const ProductsPage: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const data = await apiClient.request<any>("/products/stats");
-      setStats(data);
+      // Use workflow dashboard for stats
+      const data = await apiClient.request<any>("/workflow/dashboard");
+      // Map into expected shape
+      const total = (data.project_stats || []).reduce((s: number, p: any) => s + (p.count || 0), 0);
+      const totalDev = (data.total_developers || 0) || 0;
+      const statuses: Record<string, number> = {};
+      (data.project_stats || []).forEach((p: any) => (statuses[p.status] = p.count));
+      setStats({ total, totalDev, statuses });
     } catch (e) {
       console.error(e);
     }
@@ -29,8 +35,18 @@ const ProductsPage: React.FC = () => {
 
   const fetchProducts = async () => {
     try {
-      const data = await apiClient.request<any>("/products");
-      setProducts(data.products || []);
+      const data = await apiClient.request<any>("/workflow/projects");
+      // workflow returns array of projects
+      const list = Array.isArray(data) ? data : data.projects || data;
+      // normalize fields to match previous UI expectations
+      const normalized = (list || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        progress: p.progress_percentage ?? p.progress ?? 0,
+        status: p.status,
+      }));
+      setProducts(normalized);
     } catch (e) {
       console.error(e);
     }

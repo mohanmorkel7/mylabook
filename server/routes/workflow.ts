@@ -339,6 +339,27 @@ router.post("/projects", async (req: Request, res: Response) => {
   }
 });
 
+// Delete project
+router.delete("/projects/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid project ID" });
+
+    if (await isDatabaseAvailable()) {
+      await WorkflowRepository.deleteProject(id);
+      res.status(204).json({});
+    } else {
+      // Remove from mock data
+      const idx = WorkflowMockData.projects.findIndex((p) => p.id === id);
+      if (idx !== -1) WorkflowMockData.projects.splice(idx, 1);
+      res.status(204).json({});
+    }
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    res.status(500).json({ error: "Failed to delete project" });
+  }
+});
+
 // Create project from completed lead
 router.post(
   "/projects/from-lead/:leadId",

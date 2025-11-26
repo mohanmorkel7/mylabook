@@ -109,20 +109,18 @@ function CreateProjectFromLeadDialog({
   const [steps, setSteps] = useState<ProjectStep[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
-  // Fetch available templates (filtered for product type only)
+  // Fetch available templates
   const { data: allTemplates = [] } = useQuery({
     queryKey: ["templates"],
     queryFn: () => apiClient.getTemplates(),
     enabled: isOpen,
   });
 
-  // Filter templates to only show product-related templates
-  const templates = allTemplates.filter(
-    (template: any) =>
-      template.name?.toLowerCase().includes("product") ||
-      template.description?.toLowerCase().includes("product") ||
-      template.type === "product",
-  );
+  // Filter templates to only show those in the Product category
+  const templates = allTemplates.filter((template: any) => {
+    const category = (template.category || template.type || "").toString();
+    return category.toLowerCase() === "product";
+  });
 
   // Fetch template steps when template is selected
   const { data: templateSteps = [] } = useQuery({
@@ -131,6 +129,18 @@ function CreateProjectFromLeadDialog({
       selectedTemplate ? apiClient.getTemplate(selectedTemplate.id) : null,
     enabled: !!selectedTemplate?.id,
   });
+
+  // Fetch users for Project Manager dropdown
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => apiClient.getUsers(),
+    enabled: isOpen,
+  });
+
+  const projectManagers = users.map((u: any) => ({
+    id: u.id,
+    name: u.name || u.email,
+  }));
 
   // Update steps when template changes
   useEffect(() => {
@@ -193,11 +203,8 @@ function CreateProjectFromLeadDialog({
     "DevOps Team",
     "Full Stack Team",
   ];
-  const projectManagers = [
-    { id: 2, name: "Alice Johnson" },
-    { id: 3, name: "Bob Smith" },
-    { id: 4, name: "Carol Davis" },
-  ];
+  // projectManagers are provided by users query (see above)
+  // const projectManagers will be derived from users when dialog opens
 
   const createProjectMutation = useMutation({
     mutationFn: (data: any) =>

@@ -669,6 +669,7 @@ function CreateProjectFromLeadDialog({
 export default function ProductWorkflow() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);

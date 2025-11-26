@@ -25,8 +25,28 @@ const ProductOverview: React.FC = () => {
     if (!id) return;
     const load = async () => {
       try {
-        const res = await apiClient.request<any>(`/products/${id}`);
-        setProduct(res);
+        // Load from workflow projects API and normalize to product shape
+        const res = await apiClient.request<any>(`/workflow/projects/${id}`);
+        if (!res) return;
+        const normalized: any = {
+          id: res.id,
+          name: res.name,
+          description: res.description,
+          progress: res.progress_percentage ?? res.progress ?? 0,
+          steps: (res.steps || []).map((s: any) => ({
+            id: s.id,
+            name: s.step_name || s.name,
+            description: s.step_description || s.description,
+            probability: s.probability || s.probability_percent || 0,
+            eta: s.eta || s.due_date,
+            status: s.status,
+            estimated_hours: s.estimated_hours,
+          })),
+          project_manager_id: res.project_manager_id,
+          target_completion_date: res.target_completion_date,
+          estimated_hours: res.estimated_hours,
+        };
+        setProduct(normalized);
       } catch (e) {
         console.error(e);
       }

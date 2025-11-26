@@ -13,6 +13,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Target, Edit, ArrowLeft } from "lucide-react";
 import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogTrigger,
   AlertDialogContent,

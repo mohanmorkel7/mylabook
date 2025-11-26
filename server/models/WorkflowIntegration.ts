@@ -298,6 +298,12 @@ export class WorkflowRepository {
   static async createProject(
     data: CreateWorkflowProjectData,
   ): Promise<WorkflowProject> {
+    // Ensure sensible defaults so NOT NULL DB columns are satisfied
+    const source_type = data.source_type || "manual";
+    const project_type = data.project_type || "product_development";
+    const priority = data.priority || "medium";
+    const created_by = data.created_by || 1;
+
     const result = await pool.query(
       `INSERT INTO workflow_projects
        (name, description, source_type, source_id, project_type, priority, assigned_team,
@@ -307,17 +313,17 @@ export class WorkflowRepository {
       [
         data.name,
         data.description,
-        data.source_type,
+        source_type,
         data.source_id,
-        data.project_type,
-        data.priority || "medium",
+        project_type,
+        priority,
         data.assigned_team,
         data.project_manager_id,
         data.start_date,
         data.target_completion_date,
         data.budget,
         data.estimated_hours,
-        data.created_by,
+        created_by,
       ],
     );
 

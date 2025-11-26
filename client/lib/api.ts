@@ -254,15 +254,57 @@ export class ApiClient {
           this.failureCount++;
           this.lastFailureTime = Date.now();
           this.checkOfflineMode();
-          // Try XMLHttpRequest fallback first
-          try {
-            if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-              console.log("Trying XMLHttpRequest fallback for network error");
-            response = await this.xmlHttpRequestFallback(url, config);
-          } catch (xhrError) {
-            if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-              console.warn("XMLHttpRequest fallback failed:", xhrError);
-            return this.getEmptyFallbackResponse(endpoint);
+
+          // If running in dev on localhost, try explicit host fallback (e.g., backend on :8080)
+          if (
+            typeof window !== "undefined" &&
+            (window.location.hostname === "localhost" ||
+              window.location.hostname === "127.0.0.1")
+          ) {
+            const localhostVariants = [
+              `${window.location.protocol}//localhost:8080`,
+              `${window.location.protocol}//127.0.0.1:8080`,
+            ];
+            for (const base of localhostVariants) {
+              try {
+                const altUrl = `${base}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
+                if ((window as any).__APP_DEBUG)
+                  console.log("Trying localhost fallback URL:", altUrl);
+                const altResponse = await fetch(altUrl, {
+                  method: config.method || "GET",
+                  headers: config.headers,
+                });
+                if (altResponse && altResponse.ok) {
+                  if ((window as any).__APP_DEBUG)
+                    console.log("Localhost fallback succeeded for:", altUrl);
+                  response = altResponse;
+                  break;
+                }
+              } catch (altErr) {
+                if ((window as any).__APP_DEBUG)
+                  console.warn("Localhost fallback attempt failed:", altErr);
+                // try next variant
+              }
+            }
+            if (!response) {
+              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+                console.log(
+                  "Localhost fallbacks exhausted, trying XMLHttpRequest fallback",
+                );
+            }
+          }
+
+          // Try XMLHttpRequest fallback first (if no successful localhost fallback)
+          if (!response) {
+            try {
+              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+                console.log("Trying XMLHttpRequest fallback for network error");
+              response = await this.xmlHttpRequestFallback(url, config);
+            } catch (xhrError) {
+              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+                console.warn("XMLHttpRequest fallback failed:", xhrError);
+              return this.getEmptyFallbackResponse(endpoint);
+            }
           }
         } else if (fetchError.message === "Request timeout") {
           if (typeof window !== "undefined" && (window as any).__APP_DEBUG)

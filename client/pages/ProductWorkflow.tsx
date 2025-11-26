@@ -116,19 +116,11 @@ function CreateProjectFromLeadDialog({
     enabled: isOpen,
   });
 
-  // Filter templates to only show those related to Product (tolerant match)
+  // Filter templates to only show those with category_id === 1 (Product category)
   const templates = allTemplates.filter((template: any) => {
-    const name = (template.name || "").toString().toLowerCase();
-    const desc = (template.description || "").toString().toLowerCase();
-    const category = (template.category || template.type || "")
-      .toString()
-      .toLowerCase();
-    return (
-      name.includes("product") ||
-      desc.includes("product") ||
-      category === "product" ||
-      category.includes("product")
-    );
+    // Template might have category_id as number or string; support both
+    const cid = template.category_id ?? template.categoryId ?? (template.category && (typeof template.category === 'object' ? template.category.id : undefined));
+    return Number(cid) === 1;
   });
 
   // Fetch template steps when template is selected

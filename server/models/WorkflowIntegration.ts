@@ -580,8 +580,8 @@ export class WorkflowRepository {
             for (const templateStep of templateStepsResult.rows) {
               await client.query(
                 `INSERT INTO workflow_steps
-                 (project_id, step_name, step_description, step_order, status, estimated_hours, created_by)
-                 VALUES ($1, $2, $3, $4, 'pending', $5, $6)`,
+                 (project_id, step_name, step_description, step_order, status, estimated_hours, created_by, probability_percent)
+                 VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)`,
                 [
                   projectId,
                   templateStep.name,
@@ -591,6 +591,7 @@ export class WorkflowRepository {
                     ? templateStep.default_eta_days * 8
                     : null,
                   createdBy,
+                  templateStep.probability_percent ?? null,
                 ],
               );
             }

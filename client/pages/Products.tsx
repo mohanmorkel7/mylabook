@@ -23,10 +23,15 @@ const ProductsPage: React.FC = () => {
       // Use workflow dashboard for stats
       const data = await apiClient.request<any>("/workflow/dashboard");
       // Map into expected shape
-      const total = (data.project_stats || []).reduce((s: number, p: any) => s + (p.count || 0), 0);
-      const totalDev = (data.total_developers || 0) || 0;
+      const total = (data.project_stats || []).reduce(
+        (s: number, p: any) => s + (p.count || 0),
+        0,
+      );
+      const totalDev = data.total_developers || 0 || 0;
       const statuses: Record<string, number> = {};
-      (data.project_stats || []).forEach((p: any) => (statuses[p.status] = p.count));
+      (data.project_stats || []).forEach(
+        (p: any) => (statuses[p.status] = p.count),
+      );
       setStats({ total, totalDev, statuses });
     } catch (e) {
       console.error(e);

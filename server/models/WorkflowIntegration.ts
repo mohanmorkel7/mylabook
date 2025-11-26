@@ -374,10 +374,21 @@ export class WorkflowRepository {
     try {
       await client.query("BEGIN");
       // Delete related workflow data; cascade may handle some of these, but be explicit
-      await client.query("DELETE FROM workflow_steps WHERE project_id = $1", [id]);
-      await client.query("DELETE FROM workflow_comments WHERE project_id = $1", [id]);
-      await client.query("DELETE FROM workflow_documents WHERE project_id = $1", [id]);
-      await client.query("DELETE FROM lead_project_transitions WHERE project_id = $1", [id]);
+      await client.query("DELETE FROM workflow_steps WHERE project_id = $1", [
+        id,
+      ]);
+      await client.query(
+        "DELETE FROM workflow_comments WHERE project_id = $1",
+        [id],
+      );
+      await client.query(
+        "DELETE FROM workflow_documents WHERE project_id = $1",
+        [id],
+      );
+      await client.query(
+        "DELETE FROM lead_project_transitions WHERE project_id = $1",
+        [id],
+      );
       await client.query("DELETE FROM workflow_projects WHERE id = $1", [id]);
       await client.query("COMMIT");
     } catch (error) {

@@ -452,11 +452,14 @@ router.post(
         project_id: projectId,
       };
 
+      // Provide sensible default for created_by when not provided
+      stepData.created_by = stepData.created_by || 1;
+
       // Validate required fields
-      if (!stepData.step_name || !stepData.created_by) {
+      if (!stepData.step_name) {
         return res
           .status(400)
-          .json({ error: "Missing required fields: step_name, created_by" });
+          .json({ error: "Missing required fields: step_name" });
       }
 
       if (await isDatabaseAvailable()) {

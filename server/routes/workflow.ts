@@ -313,7 +313,32 @@ router.post("/projects", async (req: Request, res: Response) => {
       projectData.created_by = projectData.created_by || 1;
 
       const newProject = await WorkflowRepository.createProject(projectData);
-      res.status(201).json(newProject);
+
+      // If client included steps in payload, create them now
+      if (Array.isArray(projectData.steps) && projectData.steps.length > 0) {
+        try {
+          for (const s of projectData.steps) {
+            const stepData: CreateWorkflowStepData = {
+              project_id: newProject.id,
+              step_name: s.step_name || s.name || s.stepName,
+              step_description: s.step_description || s.description || s.stepDescription || null,
+              step_order: s.step_order ?? s.stepOrder ?? null,
+              assigned_to: s.assigned_to ?? s.assignedTo ?? null,
+              estimated_hours: s.estimated_hours ?? s.estimatedHours ?? null,
+              due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+              status: s.status || "pending",
+              created_by: projectData.created_by || 1,
+            };
+            await WorkflowRepository.createStep(stepData);
+          }
+        } catch (stepsErr) {
+          console.warn("Failed to create project steps:", stepsErr);
+        }
+      }
+
+      // Reload project with steps
+      const projectWithSteps = await WorkflowRepository.getProjectById(newProject.id);
+      res.status(201).json(projectWithSteps);
     } else {
       // Return mock created project
       const mockProject = {

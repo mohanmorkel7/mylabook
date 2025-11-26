@@ -1022,6 +1022,54 @@ export default function ProductWorkflow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, (routeParams as any)?.id]);
 
+  // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)
+  const isEditModalPath = Boolean(
+    location.pathname.match(/^\/products\/[0-9]+\/edit$/),
+  );
+
+  if (isEditModalPath) {
+    return (
+      <>
+        <CreateProjectFromLeadDialog
+          lead={selectedLead}
+          project={selectedProject}
+          isOpen={isCreateDialogOpen}
+          onClose={() => {
+            setIsCreateDialogOpen(false);
+            setSelectedProject(null);
+            if ((routeParams as any)?.id)
+              navigate(`/products/${(routeParams as any).id}`);
+          }}
+          onSuccess={handleProjectCreated}
+        />
+
+        <ProjectDetailDialog
+          project={selectedProject}
+          isOpen={isProjectDetailOpen}
+          onClose={() => setIsProjectDetailOpen(false)}
+        />
+
+        <LeadOverviewModal
+          isOpen={isLeadOverviewOpen}
+          onClose={() => {
+            setIsLeadOverviewOpen(false);
+            setSelectedLeadForOverview(null);
+          }}
+          lead={selectedLeadForOverview}
+        />
+
+        <StepsPreviewModal
+          isOpen={isStepsPreviewOpen}
+          onClose={() => {
+            setIsStepsPreviewOpen(false);
+            setSelectedLeadForSteps(null);
+          }}
+          lead={selectedLeadForSteps}
+        />
+      </>
+    );
+  }
+
   // Fetch project statistics
   const { data: projectStats } = useQuery({
     queryKey: ["workflow-project-stats"],

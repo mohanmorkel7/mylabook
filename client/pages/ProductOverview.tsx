@@ -31,22 +31,25 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 
-const STATUS_LABELS: Record<string,string> = {
-  upcoming: 'Upcoming',
-  open: 'Open',
-  in_progress: 'In Progress',
-  review: 'Review',
-  completed: 'Completed',
-  delayed: 'Delayed',
-  archived: 'Archived',
-  created: 'Created',
-  on_hold: 'On Hold',
-  cancelled: 'Cancelled',
+const STATUS_LABELS: Record<string, string> = {
+  upcoming: "Upcoming",
+  open: "Open",
+  in_progress: "In Progress",
+  review: "Review",
+  completed: "Completed",
+  delayed: "Delayed",
+  archived: "Archived",
+  created: "Created",
+  on_hold: "On Hold",
+  cancelled: "Cancelled",
 };
 
 function formatStatusLabel(s?: string) {
-  if (!s) return '';
-  return STATUS_LABELS[s] || s.replace(/_/g, ' ').replace(/(^|\s)\S/g, (t) => t.toUpperCase());
+  if (!s) return "";
+  return (
+    STATUS_LABELS[s] ||
+    s.replace(/_/g, " ").replace(/(^|\s)\S/g, (t) => t.toUpperCase())
+  );
 }
 
 const ProductOverview: React.FC = () => {
@@ -272,7 +275,9 @@ const ProductOverview: React.FC = () => {
                 {product.name}
               </h1>
               <Badge className="text-xs">{product.id}</Badge>
-              <Badge className="text-xs">{formatStatusLabel(product.status)}</Badge>
+              <Badge className="text-xs">
+                {formatStatusLabel(product.status)}
+              </Badge>
             </div>
             <p className="text-gray-600 mt-1">Product Overview & Pipeline</p>
           </div>

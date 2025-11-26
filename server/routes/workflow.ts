@@ -329,7 +329,8 @@ router.post("/projects", async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error("Error creating project:", error);
-    res.status(500).json({ error: "Failed to create project" });
+    // Return detailed message for debugging (consider sanitizing in production)
+    res.status(500).json({ error: (error as Error).message || "Failed to create project" });
   }
 });
 

@@ -247,9 +247,7 @@ function CreateProjectFromLeadDialog({
     if (!project) {
       // Reset form to defaults based on lead if present, otherwise blank
       setProjectData({
-        name: lead
-          ? `${lead.client_name} - ${lead.project_title}`
-          : "",
+        name: lead ? `${lead.client_name} - ${lead.project_title}` : "",
         description: lead
           ? `Product development project for ${lead.client_name}`
           : "",
@@ -268,7 +266,9 @@ function CreateProjectFromLeadDialog({
             step_description: s.description,
             step_order: s.step_order || i + 1,
             status: "pending",
-            estimated_hours: s.default_eta_days ? s.default_eta_days * 8 : undefined,
+            estimated_hours: s.default_eta_days
+              ? s.default_eta_days * 8
+              : undefined,
             probability_percent: parseFloat(s.probability_percent ?? 0) || 0,
             due_date: "",
           })),

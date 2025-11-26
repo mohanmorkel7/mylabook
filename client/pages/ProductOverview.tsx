@@ -240,7 +240,7 @@ const ProductOverview: React.FC = () => {
         <div className="flex space-x-3">
           <Button
             variant="outline"
-            onClick={() => navigate(`/products/${id}/edit`)}
+            onClick={() => navigate(`/product?id=${id}`)}
           >
             <Edit className="w-4 h-4 mr-2" />
             Edit Project

@@ -301,14 +301,17 @@ router.post("/projects", async (req: Request, res: Response) => {
       !projectData.project_type ||
       !projectData.created_by
     ) {
-      return res
-        .status(400)
-        .json({
-          error: "Missing required fields: name, project_type, created_by",
-        });
+      return res.status(400).json({
+        error: "Missing required fields: name, project_type, created_by",
+      });
     }
 
     if (await isDatabaseAvailable()) {
+      // Ensure source_type is set to a valid default to satisfy DB NOT NULL constraint
+      projectData.source_type = projectData.source_type || "manual";
+      projectData.source_id = projectData.source_id ?? null;
+      projectData.created_by = projectData.created_by || 1;
+
       const newProject = await WorkflowRepository.createProject(projectData);
       res.status(201).json(newProject);
     } else {
@@ -329,7 +332,10 @@ router.post("/projects", async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error("Error creating project:", error);
-    res.status(500).json({ error: "Failed to create project" });
+    // Return detailed message for debugging (consider sanitizing in production)
+    res
+      .status(500)
+      .json({ error: (error as Error).message || "Failed to create project" });
   }
 });
 

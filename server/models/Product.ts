@@ -63,7 +63,9 @@ export class ProductRepository {
     return res.rows[0];
   }
 
-  static async getById(id: number): Promise<Product & { steps?: ProductStep[] } | null> {
+  static async getById(
+    id: number,
+  ): Promise<(Product & { steps?: ProductStep[] }) | null> {
     const res = await pool.query("SELECT * FROM products WHERE id = $1", [id]);
     if (res.rows.length === 0) return null;
     const product = res.rows[0];
@@ -75,7 +77,9 @@ export class ProductRepository {
     return product;
   }
 
-  static async getAll(filter: any = {}): Promise<{ products: Product[]; total: number }> {
+  static async getAll(
+    filter: any = {},
+  ): Promise<{ products: Product[]; total: number }> {
     let where: string[] = [];
     const vals: any[] = [];
     let idx = 1;

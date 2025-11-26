@@ -1022,6 +1022,12 @@ export default function ProductWorkflow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, (routeParams as any)?.id]);
 
+  // Handle project created callback (hoisted so modals can reference it safely)
+  function handleProjectCreated() {
+    setSelectedLead(null);
+    setIsCreateDialogOpen(false);
+  }
+
   // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)
   const isEditModalPath = Boolean(
     location.pathname.match(/^\/products\/[0-9]+\/edit$/),
@@ -1102,11 +1108,6 @@ export default function ProductWorkflow() {
   const handleCreateProject = (lead: any) => {
     setSelectedLead(lead);
     setIsCreateDialogOpen(true);
-  };
-
-  const handleProjectCreated = () => {
-    setSelectedLead(null);
-    setIsCreateDialogOpen(false);
   };
 
   const handleViewLead = (lead: any) => {

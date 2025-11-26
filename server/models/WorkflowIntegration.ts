@@ -374,6 +374,7 @@ export class WorkflowRepository {
     projectData: Partial<CreateWorkflowProjectData>,
     createdBy: number,
   ): Promise<WorkflowProject> {
+    // (existing createProjectFromLead implementation continues below)
     const client = await pool.connect();
     try {
       await client.query("BEGIN");

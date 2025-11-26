@@ -1082,6 +1082,17 @@ function AppRoutes() {
       />
 
       <Route
+        path="/products/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <ProductWorkflow />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/product/deployment/new"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>

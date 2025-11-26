@@ -1,6 +1,29 @@
 import React, { useEffect, useState } from "react";
-import apiClient from "@/lib/api";
-import { useParams, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { apiClient } from "@/lib/api";
+import { VCDraggableStepsList } from "@/components/VCDraggableStepsList";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Target, Edit, ArrowLeft } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 const formatRemaining = (eta?: string | null, createdAt?: string) => {
   if (!eta) return "No ETA";

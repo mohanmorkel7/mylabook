@@ -399,6 +399,64 @@ export class WorkflowRepository {
     }
   }
 
+  static async updateProject(
+    id: number,
+    data: Partial<CreateWorkflowProjectData>,
+  ): Promise<WorkflowProject | null> {
+    const client = await pool.connect();
+    try {
+      const setClause: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
+
+      const allowedFields: (keyof CreateWorkflowProjectData)[] = [
+        "name",
+        "description",
+        "priority",
+        "assigned_team",
+        "project_manager_id",
+        "start_date",
+        "target_completion_date",
+        "budget",
+        "estimated_hours",
+        "status",
+        "source_type",
+        "source_id",
+        "template_id",
+      ];
+
+      for (const key of allowedFields) {
+        if ((data as any)[key] !== undefined) {
+          setClause.push(`${key} = $${idx}`);
+          values.push((data as any)[key]);
+          idx++;
+        }
+      }
+
+      if (setClause.length === 0) {
+        // nothing to update
+        return this.getProjectById(id);
+      }
+
+      setClause.push("updated_at = CURRENT_TIMESTAMP");
+
+      const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
+      values.push(id);
+
+      await client.query("BEGIN");
+      await client.query(query, values);
+      await client.query("COMMIT");
+
+      const updated = await this.getProjectById(id);
+      return updated;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   static async createProjectFromLead(
     leadId: number,
     projectData: Partial<CreateWorkflowProjectData>,

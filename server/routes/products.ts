@@ -113,8 +113,48 @@ router.get("/:id", async (req, res) => {
 // PUT /api/products/:id
 router.put("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
+    let id = Number(req.params.id);
     const data = req.body || {};
+
+    // Ensure product exists in products table; if not, try to create from workflow_projects
+    let product = await ProductRepository.getById(id);
+    if (!product) {
+      try {
+        const wpRes = await (await import("../database/connection")).pool.query(
+          "SELECT * FROM workflow_projects WHERE id = $1",
+          [id],
+        );
+        if (wpRes.rows.length > 0) {
+          const wp = wpRes.rows[0];
+          const prodData: any = {
+            name: wp.name,
+            description: wp.description || null,
+            template_id: wp.template_id ?? null,
+            project_manager_id: wp.project_manager_id ?? null,
+            target_completion_date: wp.target_completion_date ?? null,
+            estimated_hours: wp.estimated_hours ?? null,
+            status: wp.status || "upcoming",
+            progress: wp.progress_percentage ?? 0,
+            created_by: wp.created_by ?? 1,
+          };
+          const created = await ProductRepository.createProduct(prodData);
+          // Persist link back to workflow_projects
+          try {
+            await (await import("../database/connection")).pool.query(
+              "UPDATE workflow_projects SET product_id = $1 WHERE id = $2",
+              [created.id, id],
+            );
+          } catch (uErr) {
+            console.warn("Failed to persist product_id on workflow_projects:", uErr);
+          }
+          // Now set id to newly created product id for updating
+          id = created.id;
+        }
+      } catch (wpErr) {
+        console.warn("Error checking workflow_projects for fallback product:", wpErr);
+      }
+    }
+
     // Basic update using existing queries
     const cols: string[] = [];
     const vals: any[] = [];
@@ -123,13 +163,17 @@ router.put("/:id", async (req, res) => {
       cols.push(`${k} = $${idx++}`);
       vals.push(v);
     });
-    if (cols.length === 0)
-      return res.status(400).json({ error: "No update fields" });
+    if (cols.length === 0) return res.status(400).json({ error: "No update fields" });
+
     vals.push(id);
     const sql = `UPDATE products SET ${cols.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
-    const result = await (
-      await import("../database/connection")
-    ).pool.query(sql, vals);
+    const result = await (await import("../database/connection")).pool.query(sql, vals);
+
+    if (result.rows.length === 0) {
+      // Nothing updated - product may not exist
+      return res.status(404).json({ error: "Product not found" });
+    }
+
     res.json(result.rows[0]);
   } catch (e: any) {
     console.error("Failed to update product:", e);

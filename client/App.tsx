@@ -1049,6 +1049,39 @@ function AppRoutes() {
       />
 
       <Route
+        path="/products"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
+            <DashboardLayout>
+              <ProductsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/create-product"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <CreateProduct />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/products/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <ProductOverview />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/product/deployment/new"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>

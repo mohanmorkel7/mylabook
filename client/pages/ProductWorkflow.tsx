@@ -943,10 +943,12 @@ export default function ProductWorkflow() {
   const [selectedLeadForSteps, setSelectedLeadForSteps] = useState<any>(null);
   const [isStepsPreviewOpen, setIsStepsPreviewOpen] = useState(false);
   const location = useLocation();
+  const routeParams = useParams();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const pid = params.get("id");
+    // Prefer query param `id`, fallback to route param `id` (for /products/:id/edit)
+    const pid = params.get("id") || (routeParams as any)?.id;
     if (!pid) return;
     const loadProject = async () => {
       try {

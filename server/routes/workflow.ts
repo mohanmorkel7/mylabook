@@ -523,7 +523,8 @@ router.patch("/steps/:stepId/status", async (req: Request, res: Response) => {
 router.delete("/steps/:stepId", async (req: Request, res: Response) => {
   try {
     const stepId = parseInt(req.params.stepId);
-    if (isNaN(stepId)) return res.status(400).json({ error: "Invalid step ID" });
+    if (isNaN(stepId))
+      return res.status(400).json({ error: "Invalid step ID" });
 
     if (await isDatabaseAvailable()) {
       await WorkflowRepository.deleteStep(stepId);

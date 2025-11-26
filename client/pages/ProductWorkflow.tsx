@@ -75,6 +75,7 @@ interface ProjectStep {
   assigned_to?: number;
   estimated_hours?: number;
   due_date?: string;
+  probability_percent?: number;
 }
 
 interface CreateProjectFromLeadDialogProps {
@@ -144,6 +145,7 @@ function CreateProjectFromLeadDialog({
           estimated_hours: step.default_eta_days
             ? step.default_eta_days * 8
             : undefined,
+          probability_percent: step.probability_percent || 0,
         }),
       );
       setSteps(convertedSteps);
@@ -157,6 +159,7 @@ function CreateProjectFromLeadDialog({
           step_order: 1,
           status: "pending",
           estimated_hours: 40,
+          probability_percent: 0,
         },
         {
           step_name: "Follow-up with development team",
@@ -165,6 +168,7 @@ function CreateProjectFromLeadDialog({
           step_order: 2,
           status: "pending",
           estimated_hours: 20,
+          probability_percent: 0,
         },
       ]);
     }
@@ -237,6 +241,7 @@ function CreateProjectFromLeadDialog({
       step_description: "",
       step_order: steps.length + 1,
       status: "pending",
+      probability_percent: 0,
     };
     setSteps([...steps, newStep]);
   };
@@ -529,15 +534,18 @@ function CreateProjectFromLeadDialog({
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="text-lg">Project Steps</CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addStep}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Step
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-600">Total Probability: <span className="font-medium text-gray-900">{steps.reduce((sum, s) => sum + (s.probability_percent || 0), 0)}%</span></div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addStep}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Step
+                  </Button>
+                </div>
               </div>
               <CardDescription>
                 Define the specific steps for this product development project
@@ -609,7 +617,7 @@ function CreateProjectFromLeadDialog({
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
                           <Label>Estimated Hours</Label>
                           <Input
@@ -635,6 +643,23 @@ function CreateProjectFromLeadDialog({
                             onChange={(e) =>
                               updateStep(index, "due_date", e.target.value)
                             }
+                          />
+                        </div>
+                        <div>
+                          <Label>Probability (%)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={step.probability_percent || ""}
+                            onChange={(e) =>
+                              updateStep(
+                                index,
+                                "probability_percent",
+                                e.target.value ? parseInt(e.target.value) : 0,
+                              )
+                            }
+                            placeholder="0"
                           />
                         </div>
                       </div>

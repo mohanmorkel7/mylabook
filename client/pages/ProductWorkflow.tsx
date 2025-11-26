@@ -1343,40 +1343,9 @@ export default function ProductWorkflow() {
                               <div>
                                 <span className="font-medium">Status:</span>
                                 <br />
-                                <Select
-                                  value={project.status}
-                                  onValueChange={(value) => {
-                                    console.log(
-                                      "Updating project status:",
-                                      project.id,
-                                      value,
-                                    );
-                                  }}
-                                >
-                                  <SelectTrigger className="w-full h-8">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="created">
-                                      Created
-                                    </SelectItem>
-                                    <SelectItem value="in_progress">
-                                      In Progress
-                                    </SelectItem>
-                                    <SelectItem value="review">
-                                      Review
-                                    </SelectItem>
-                                    <SelectItem value="completed">
-                                      Completed
-                                    </SelectItem>
-                                    <SelectItem value="on_hold">
-                                      On Hold
-                                    </SelectItem>
-                                    <SelectItem value="cancelled">
-                                      Cancelled
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <span className="text-sm text-gray-700">
+                                  {project.status}
+                                </span>
                               </div>
                             </div>
                           </div>

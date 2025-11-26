@@ -65,7 +65,8 @@ const ProductOverview: React.FC = () => {
           description: s.step_description || s.description || null,
           step_name: s.step_name || s.name,
           step_description: s.step_description || s.description || null,
-          probability_percent: s.probability || s.probability_percent || 0,
+          probability_percent:
+            parseFloat(s.probability ?? s.probability_percent ?? 0) || 0,
           eta: s.eta || s.due_date,
           status: s.status,
           estimated_hours: s.estimated_hours,
@@ -153,7 +154,8 @@ const ProductOverview: React.FC = () => {
           description: s.step_description || s.description || null,
           step_name: s.step_name || s.name,
           step_description: s.step_description || s.description || null,
-          probability_percent: s.probability || s.probability_percent || 0,
+          probability_percent:
+            parseFloat(s.probability ?? s.probability_percent ?? 0) || 0,
           eta: s.eta || s.due_date,
           status: s.status,
           estimated_hours: s.estimated_hours,

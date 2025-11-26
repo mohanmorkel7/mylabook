@@ -332,6 +332,9 @@ router.post("/projects", async (req: Request, res: Response) => {
               due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
               status: s.status || "pending",
               created_by: projectData.created_by || 1,
+              // include probability_percent when client provides it
+              probability_percent:
+                s.probability_percent ?? s.probability ?? null,
             };
             await WorkflowRepository.createStep(stepData);
           }

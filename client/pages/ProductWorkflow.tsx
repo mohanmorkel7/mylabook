@@ -137,7 +137,10 @@ function CreateProjectFromLeadDialog({
     enabled: isOpen,
   });
 
-  const projectManagers = users.map((u: any) => ({ id: u.id, name: u.name || u.email }));
+  const projectManagers = users.map((u: any) => ({
+    id: u.id,
+    name: u.name || u.email,
+  }));
 
   // Update steps when template changes
   useEffect(() => {

@@ -116,10 +116,17 @@ function CreateProjectFromLeadDialog({
     enabled: isOpen,
   });
 
-  // Filter templates to only show those in the Product category
+  // Filter templates to only show those related to Product (tolerant match)
   const templates = allTemplates.filter((template: any) => {
-    const category = (template.category || template.type || "").toString();
-    return category.toLowerCase() === "product";
+    const name = (template.name || "").toString().toLowerCase();
+    const desc = (template.description || "").toString().toLowerCase();
+    const category = (template.category || template.type || "").toString().toLowerCase();
+    return (
+      name.includes("product") ||
+      desc.includes("product") ||
+      category === "product" ||
+      category.includes("product")
+    );
   });
 
   // Fetch template steps when template is selected
@@ -136,6 +143,13 @@ function CreateProjectFromLeadDialog({
     queryFn: () => apiClient.getUsers(),
     enabled: isOpen,
   });
+
+  const projectManagers = users.map((u: any) => ({ id: u.id, name: u.name || u.email, email: u.email }));
+  const [pmQuery, setPmQuery] = useState("");
+  const filteredPMs = projectManagers.filter((pm: any) =>
+    (pm.name || "").toLowerCase().includes(pmQuery.toLowerCase()) ||
+    (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
+  );
 
   const projectManagers = users.map((u: any) => ({
     id: u.id,

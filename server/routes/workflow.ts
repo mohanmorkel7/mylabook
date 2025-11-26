@@ -701,7 +701,8 @@ router.get(
         const mapped = (comments || []).map((c: any) => {
           let attachments = [] as any[];
           try {
-            if (c.attachments) attachments =
+            if (c.attachments)
+              attachments =
                 typeof c.attachments === "string"
                   ? JSON.parse(c.attachments)
                   : c.attachments;

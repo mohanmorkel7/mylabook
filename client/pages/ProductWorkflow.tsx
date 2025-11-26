@@ -411,6 +411,13 @@ function CreateProjectFromLeadDialog({
   );
   const probabilityInvalid = totalProbability > 0 && totalProbability !== 100;
 
+  // Format total probability for display (avoid odd concatenation or locale issues)
+  const formattedTotalProbability = (() => {
+    const v = Number(totalProbability) || 0;
+    if (Number.isInteger(v)) return String(v);
+    return v.toFixed(2);
+  })();
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -676,7 +683,7 @@ function CreateProjectFromLeadDialog({
                   <div className="text-sm text-gray-600">
                     Total Probability:{" "}
                     <span className="font-medium text-gray-900">
-                      {totalProbability}%
+                      {formattedTotalProbability}%
                     </span>
                     {probabilityInvalid && (
                       <span className="ml-3 text-sm text-red-600">

@@ -107,10 +107,23 @@ const ProductOverview: React.FC = () => {
         if (s.status === "completed") totalCompletedProbability += prob;
       });
 
+      // If steps define probability weights, use them to compute progress
       if (totalStepProbability > 0) {
-        return Math.min(100, Math.round(totalCompletedProbability));
+        // normalize in case probabilities sum to something other than 100
+        const pct = (totalCompletedProbability / totalStepProbability) * 100;
+        return Math.min(100, Math.round(pct));
       }
 
+      // If the server provides a project-level progress value, prefer showing that
+      if (
+        product &&
+        typeof product.progress === "number" &&
+        product.progress > 0
+      ) {
+        return Math.min(100, Math.round(product.progress));
+      }
+
+      // Fallback to simple step-count based estimate
       const completedCount = steps.filter(
         (s: any) => s.status === "completed",
       ).length;

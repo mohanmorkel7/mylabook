@@ -1020,7 +1020,7 @@ export default function ProductWorkflow() {
     };
     loadProject();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, [location.search, (routeParams as any)?.id]);
 
   // Fetch project statistics
   const { data: projectStats } = useQuery({

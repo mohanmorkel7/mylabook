@@ -196,6 +196,7 @@ export interface CreateWorkflowProjectData {
     status?: "pending" | "in_progress" | "completed" | "blocked";
     estimated_hours?: number;
     due_date?: string;
+    probability_percent?: number | null;
   }>;
   created_by: number;
 }
@@ -471,6 +472,8 @@ export class WorkflowRepository {
               due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
               status: s.status ?? "pending",
               created_by: data.created_by || 1,
+              probability_percent:
+                s.probability_percent ?? s.probability ?? null,
             } as CreateWorkflowStepData;
             await this.createStep(stepData);
 
@@ -580,8 +583,8 @@ export class WorkflowRepository {
             for (const templateStep of templateStepsResult.rows) {
               await client.query(
                 `INSERT INTO workflow_steps
-                 (project_id, step_name, step_description, step_order, status, estimated_hours, created_by)
-                 VALUES ($1, $2, $3, $4, 'pending', $5, $6)`,
+                 (project_id, step_name, step_description, step_order, status, estimated_hours, created_by, probability_percent)
+                 VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)`,
                 [
                   projectId,
                   templateStep.name,
@@ -591,6 +594,7 @@ export class WorkflowRepository {
                     ? templateStep.default_eta_days * 8
                     : null,
                   createdBy,
+                  templateStep.probability_percent ?? null,
                 ],
               );
             }
@@ -609,8 +613,8 @@ export class WorkflowRepository {
         for (const step of (projectData as any).steps) {
           await client.query(
             `INSERT INTO workflow_steps
-             (project_id, step_name, step_description, step_order, status, estimated_hours, due_date, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (project_id, step_name, step_description, step_order, status, estimated_hours, due_date, created_by, probability_percent)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [
               projectId,
               step.step_name,
@@ -620,6 +624,7 @@ export class WorkflowRepository {
               step.estimated_hours,
               step.due_date,
               createdBy,
+              step.probability_percent ?? step.probability ?? null,
             ],
           );
         }

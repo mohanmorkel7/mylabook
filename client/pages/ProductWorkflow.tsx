@@ -131,7 +131,8 @@ function CreateProjectFromLeadDialog({
         step_description: s.step_description || s.description || "",
         step_order: s.step_order ?? i + 1,
         status: s.status || "pending",
-        probability_percent: s.probability_percent ?? s.probability ?? 0,
+        probability_percent:
+          parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
         estimated_hours: s.estimated_hours,
         due_date:
           s.due_date || s.dueDate || s.eta
@@ -217,7 +218,8 @@ function CreateProjectFromLeadDialog({
           step_description: s.step_description || s.description || "",
           step_order: s.step_order ?? i + 1,
           status: s.status || "pending",
-          probability_percent: s.probability_percent ?? s.probability ?? 0,
+          probability_percent:
+            parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
           estimated_hours: s.estimated_hours,
           due_date:
             s.due_date || s.dueDate || s.eta
@@ -251,7 +253,7 @@ function CreateProjectFromLeadDialog({
           estimated_hours: step.default_eta_days
             ? step.default_eta_days * 8
             : undefined,
-          probability_percent: step.probability_percent || 0,
+          probability_percent: parseFloat(step.probability_percent ?? 0) || 0,
         }),
       );
       setSteps(convertedSteps);
@@ -404,7 +406,7 @@ function CreateProjectFromLeadDialog({
   // Allow creating project even when not started from a lead (lead may be null)
 
   const totalProbability = steps.reduce(
-    (sum, s) => sum + (s.probability_percent || 0),
+    (sum, s) => sum + (Number(s.probability_percent) || 0),
     0,
   );
   const probabilityInvalid = totalProbability > 0 && totalProbability !== 100;
@@ -807,7 +809,7 @@ function CreateProjectFromLeadDialog({
                               updateStep(
                                 index,
                                 "probability_percent",
-                                e.target.value ? parseInt(e.target.value) : 0,
+                                e.target.value ? parseFloat(e.target.value) : 0,
                               )
                             }
                           />
@@ -916,10 +918,12 @@ export default function ProductWorkflow() {
                   return {
                     ...s,
                     probability_percent:
-                      source.probability_percent ??
-                      source.probability ??
-                      s.probability_percent ??
-                      0,
+                      parseFloat(
+                        source.probability_percent ??
+                          source.probability ??
+                          s.probability_percent ??
+                          0,
+                      ) || 0,
                     due_date:
                       s.due_date || source.eta || source.due_date || s.due_date,
                   };

@@ -500,11 +500,28 @@ function CreateProjectFromLeadDialog({
                       <SelectValue placeholder="Select PM" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectManagers.map((pm) => (
-                        <SelectItem key={pm.id} value={pm.id.toString()}>
-                          {pm.name}
+                      <div className="p-2">
+                        <Input
+                          placeholder="Search users..."
+                          value={pmQuery}
+                          onChange={(e) => setPmQuery(e.target.value)}
+                          className="mb-2"
+                        />
+                      </div>
+                      {filteredPMs.length > 0 ? (
+                        filteredPMs.map((pm) => (
+                          <SelectItem key={pm.id} value={pm.id.toString()}>
+                            <div className="flex flex-col">
+                              <span>{pm.name}</span>
+                              <span className="text-xs text-gray-500">{pm.email}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>
+                          No users found
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

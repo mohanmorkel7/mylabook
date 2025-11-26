@@ -79,7 +79,8 @@ interface ProjectStep {
 }
 
 interface CreateProjectFromLeadDialogProps {
-  lead: any;
+  lead?: any;
+  project?: any;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -87,6 +88,7 @@ interface CreateProjectFromLeadDialogProps {
 
 function CreateProjectFromLeadDialog({
   lead,
+  project,
   isOpen,
   onClose,
   onSuccess,
@@ -94,19 +96,32 @@ function CreateProjectFromLeadDialog({
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [projectData, setProjectData] = useState({
-    name: lead ? `${lead.client_name} - ${lead.project_title}` : "",
+  const [projectData, setProjectData] = useState<any>(() => ({
+    name: lead ? `${lead.client_name} - ${lead.project_title}` : project?.name || "",
     description: lead
       ? `Product development project for ${lead.client_name}`
-      : "",
-    assigned_team: "Product Team",
-    project_manager_id: "",
-    target_completion_date: "",
-    estimated_hours: "",
-    template_id: "",
-  });
+      : project?.description || "",
+    assigned_team: project?.assigned_team || "Product Team",
+    project_manager_id: project?.project_manager_id ? String(project.project_manager_id) : "",
+    target_completion_date: project?.target_completion_date || "",
+    estimated_hours: project?.estimated_hours ? String(project.estimated_hours) : "",
+    template_id: project?.template_id ? String(project.template_id) : "",
+  }));
 
-  const [steps, setSteps] = useState<ProjectStep[]>([]);
+  const [steps, setSteps] = useState<ProjectStep[]>(() => {
+    if (project?.steps && Array.isArray(project.steps)) {
+      return project.steps.map((s: any, i: number) => ({
+        id: s.id,
+        step_name: s.step_name || s.name,
+        step_description: s.step_description || s.description || "",
+        step_order: s.step_order ?? i + 1,
+        status: s.status || "pending",
+        probability_percent: s.probability_percent || s.probability || 0,
+        estimated_hours: s.estimated_hours,
+      }));
+    }
+    return [];
+  });
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
   // Fetch available templates
@@ -221,10 +236,18 @@ function CreateProjectFromLeadDialog({
   // const projectManagers will be derived from users when dialog opens
 
   const createProjectMutation = useMutation({
-    mutationFn: (data: any) =>
-      lead && lead.id
+    mutationFn: (data: any) => {
+      if (project && project.id) {
+        // Update existing project
+        return apiClient.request(`/workflow/projects/${project.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(data),
+        });
+      }
+      return lead && lead.id
         ? apiClient.createProjectFromLead(lead.id, data)
-        : apiClient.createWorkflowProject(data),
+        : apiClient.createWorkflowProject(data);
+    },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
       queryClient.invalidateQueries({ queryKey: ["completed-leads"] });
@@ -236,7 +259,7 @@ function CreateProjectFromLeadDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const submitData = {
+    const submitData: any = {
       ...projectData,
       project_type: "product_development",
       project_manager_id: projectData.project_manager_id
@@ -251,6 +274,11 @@ function CreateProjectFromLeadDialog({
       created_by: parseInt(user?.id || "1"),
       steps: steps,
     };
+
+    // If editing, do not send created_by for updates
+    if (project && project.id) {
+      delete submitData.created_by;
+    }
 
     createProjectMutation.mutate(submitData);
   };
@@ -318,7 +346,9 @@ function CreateProjectFromLeadDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {lead
+            {project && project.id
+              ? "Edit Product Project"
+              : lead
               ? "Create Product Project from Lead"
               : "Create Product Project"}
           </DialogTitle>
@@ -771,7 +801,9 @@ export default function ProductWorkflow() {
       try {
         const proj = await apiClient.getWorkflowProject(pid);
         setSelectedProject(proj);
-        setIsProjectDetailOpen(true);
+        // Open create dialog in edit mode
+        setSelectedLead(null);
+        setIsCreateDialogOpen(true);
       } catch (err) {
         console.error("Failed to load project from query param:", err);
       }
@@ -1370,15 +1402,19 @@ export default function ProductWorkflow() {
         </TabsContent>
       </Tabs>
 
-      {/* Create Project Dialog */}
+      {/* Create / Edit Project Dialog */}
       <CreateProjectFromLeadDialog
         lead={selectedLead}
+        project={selectedProject}
         isOpen={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
+        onClose={() => {
+          setIsCreateDialogOpen(false);
+          setSelectedProject(null);
+        }}
         onSuccess={handleProjectCreated}
       />
 
-      {/* Project Detail Dialog */}
+      {/* Project Detail Dialog (read-only overview) */}
       <ProjectDetailDialog
         project={selectedProject}
         isOpen={isProjectDetailOpen}

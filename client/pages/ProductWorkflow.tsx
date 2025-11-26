@@ -556,7 +556,10 @@ function CreateProjectFromLeadDialog({
                 <Card key={index} className="border-l-4 border-l-blue-500">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
-                      <Badge variant="outline">Step {step.step_order}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Step {step.step_order}</Badge>
+                        <div className="text-sm text-gray-600">{(step.probability_percent ?? 0)}%</div>
+                      </div>
                       <div className="flex gap-1">
                         <Button
                           type="button"

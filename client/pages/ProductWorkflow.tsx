@@ -287,6 +287,9 @@ function CreateProjectFromLeadDialog({
 
   // Allow creating project even when not started from a lead (lead may be null)
 
+  const totalProbability = steps.reduce((sum, s) => sum + (s.probability_percent || 0), 0);
+  const probabilityInvalid = totalProbability > 0 && totalProbability !== 100;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

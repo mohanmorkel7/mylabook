@@ -115,16 +115,26 @@ const ProductOverview: React.FC = () => {
       }
 
       // If the server provides a project-level progress value, prefer showing that
-      if (product && typeof product.progress === "number" && product.progress > 0) {
+      if (
+        product &&
+        typeof product.progress === "number" &&
+        product.progress > 0
+      ) {
         return Math.min(100, Math.round(product.progress));
       }
 
       // Fallback to simple step-count based estimate
-      const completedCount = steps.filter((s: any) => s.status === "completed").length;
-      const inProgressCount = steps.filter((s: any) => s.status === "in_progress").length;
+      const completedCount = steps.filter(
+        (s: any) => s.status === "completed",
+      ).length;
+      const inProgressCount = steps.filter(
+        (s: any) => s.status === "in_progress",
+      ).length;
       const totalSteps = steps.length;
       return totalSteps > 0
-        ? Math.round(((completedCount + inProgressCount * 0.5) / totalSteps) * 100)
+        ? Math.round(
+            ((completedCount + inProgressCount * 0.5) / totalSteps) * 100,
+          )
         : 0;
     }
     return product?.progress || 0;

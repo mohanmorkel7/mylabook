@@ -73,7 +73,7 @@ const CreateProduct: React.FC = () => {
         status: "open",
         progress: 0,
       };
-      const created = await apiClient.request<any>("/products", {
+      const created = await apiClient.request<any>("/workflow/projects", {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -81,9 +81,17 @@ const CreateProduct: React.FC = () => {
       // Create steps
       for (let i = 0; i < steps.length; i++) {
         const s = steps[i];
-        await apiClient.request<any>(`/products/${created.id}/steps`, {
+        await apiClient.request<any>(`/workflow/projects/${created.id}/steps`, {
           method: "POST",
-          body: JSON.stringify({ ...s, step_order: i + 1 }),
+          body: JSON.stringify({
+            step_name: s.name,
+            step_description: s.description,
+            step_order: i + 1,
+            probability: s.probability ?? 0,
+            eta: s.eta,
+            status: s.status || "pending",
+            estimated_hours: s.estimated_hours ?? null,
+          }),
         });
       }
 

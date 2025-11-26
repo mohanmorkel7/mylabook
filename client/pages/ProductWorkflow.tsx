@@ -769,6 +769,11 @@ export default function ProductWorkflow() {
             Manage lead-to-product handoffs and project development
           </p>
         </div>
+        <div>
+          <Button onClick={() => { setSelectedLead(null); setIsCreateDialogOpen(true); }} className="btn btn-primary">
+            Create Project
+          </Button>
+        </div>
       </div>
 
       {/* Product Statistics Cards */}
@@ -997,23 +1002,6 @@ export default function ProductWorkflow() {
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-2 ml-4">
-                            <Button
-                              onClick={() => handleCreateProject(lead)}
-                              className="min-w-[140px]"
-                            >
-                              <ArrowRight className="w-4 h-4 mr-2" />
-                              Create Project
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewLead(lead)}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                              View Lead
-                            </Button>
-                          </div>
                         </div>
                       </CardContent>
                     </Card>

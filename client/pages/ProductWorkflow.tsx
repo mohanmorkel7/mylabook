@@ -411,6 +411,13 @@ function CreateProjectFromLeadDialog({
   );
   const probabilityInvalid = totalProbability > 0 && totalProbability !== 100;
 
+  // Format total probability for display (avoid odd concatenation or locale issues)
+  const formattedTotalProbability = (() => {
+    const v = Number(totalProbability) || 0;
+    if (Number.isInteger(v)) return String(v);
+    return v.toFixed(2);
+  })();
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

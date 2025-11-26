@@ -329,6 +329,27 @@ export class WorkflowRepository {
     );
 
     const newProject = await this.getProjectById(result.rows[0].id);
+
+    // Also create a corresponding product row so /api/products/:id can reference product records
+    try {
+      const productData: any = {
+        name: data.name,
+        description: data.description || null,
+        template_id: data.template_id ?? null,
+        project_manager_id: data.project_manager_id ?? null,
+        target_completion_date: data.target_completion_date ?? null,
+        estimated_hours: data.estimated_hours ?? null,
+        status: "upcoming",
+        progress: 0,
+        created_by: created_by,
+      };
+      const createdProduct = await ProductRepository.createProduct(productData);
+      // attach created product id to the returned workflow project for convenience
+      if (newProject) newProject['linked_product_id'] = createdProduct.id;
+    } catch (prodErr) {
+      console.warn("Failed to create linked product for workflow project:", prodErr);
+    }
+
     return newProject!;
   }
 

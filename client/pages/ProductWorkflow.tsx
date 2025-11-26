@@ -131,7 +131,8 @@ function CreateProjectFromLeadDialog({
         step_description: s.step_description || s.description || "",
         step_order: s.step_order ?? i + 1,
         status: s.status || "pending",
-        probability_percent: parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
+        probability_percent:
+          parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
         estimated_hours: s.estimated_hours,
         due_date:
           s.due_date || s.dueDate || s.eta
@@ -217,7 +218,8 @@ function CreateProjectFromLeadDialog({
           step_description: s.step_description || s.description || "",
           step_order: s.step_order ?? i + 1,
           status: s.status || "pending",
-          probability_percent: parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
+          probability_percent:
+            parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
           estimated_hours: s.estimated_hours,
           due_date:
             s.due_date || s.dueDate || s.eta
@@ -915,12 +917,13 @@ export default function ProductWorkflow() {
                 if (source) {
                   return {
                     ...s,
-                    probability_percent: parseFloat(
-                      source.probability_percent ??
-                        source.probability ??
-                        s.probability_percent ??
-                        0,
-                    ) || 0,
+                    probability_percent:
+                      parseFloat(
+                        source.probability_percent ??
+                          source.probability ??
+                          s.probability_percent ??
+                          0,
+                      ) || 0,
                     due_date:
                       s.due_date || source.eta || source.due_date || s.due_date,
                   };

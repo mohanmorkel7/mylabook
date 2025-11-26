@@ -875,134 +875,101 @@ export default function ProductWorkflow() {
         <TabsContent value="completed-leads" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Leads Ready for Product Development</CardTitle>
+              <CardTitle>Product list</CardTitle>
               <CardDescription>
-                Completed leads that can be converted into product development
-                projects
+                List of products and their key details
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {leadsLoading ? (
-                <div className="text-center py-8">
-                  Loading completed leads...
-                </div>
-              ) : completedLeads.length > 0 ? (
+              {projectsLoading ? (
+                <div className="text-center py-8">Loading products...</div>
+              ) : projects.length > 0 ? (
                 <div className="space-y-4">
-                  {completedLeads.map((lead: any) => (
+                  {projects.map((project: any) => (
                     <Card
-                      key={lead.id}
-                      className="border-l-4 border-l-green-500"
+                      key={project.id}
+                      className="hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => handleViewProject(project)}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-lg">
-                                {lead.client_name}
-                              </h3>
-                              <Badge
-                                variant="outline"
-                                className="text-green-600"
-                              >
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Lead Completed
+                              <h3 className="font-semibold text-lg">{project.name}</h3>
+                              <Badge variant="outline" className={getStatusColor(project.status)}>
+                                {project.status}
                               </Badge>
                             </div>
 
-                            <h4 className="font-medium text-gray-900 mb-2">
-                              {lead.project_title}
-                            </h4>
-                            <p className="text-gray-600 mb-3">
-                              {lead.project_description}
-                            </p>
+                            <h4 className="font-medium text-gray-900 mb-2">{project.description}</h4>
+                            <p className="text-gray-600 mb-3">{project.source_type === "lead" ? `From Lead #${project.source_id}` : ""}</p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
-                                <span className="font-medium">Completed:</span>
+                                <span className="font-medium">Progress:</span>
                                 <br />
-                                {format(
-                                  new Date(lead.completion_date),
-                                  "MMM d, yyyy",
-                                )}
+                                <div className="flex items-center gap-2">
+                                  <div className="w-20 bg-gray-200 rounded-full h-2">
+                                    <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${project.progress_percentage || 0}%` }} />
+                                  </div>
+                                  <span>{project.progress_percentage || 0}%</span>
+                                </div>
                               </div>
                               <div>
                                 <span className="font-medium">Lead Steps:</span>
                                 <br />
                                 <div className="flex items-center gap-1">
                                   <CheckCircle className="w-3 h-3 text-green-600" />
-                                  <span>
-                                    {lead.completed_steps}/{lead.total_steps}
-                                  </span>
+                                  <span>{project.completed_steps || 0}/{project.total_steps || 0}</span>
                                 </div>
-                              </div>
-                              <div>
-                                <span className="font-medium">
-                                  Est. Budget:
-                                </span>
-                                <br />₹{lead.estimated_budget?.toLocaleString()}
                               </div>
                               <div>
                                 <span className="font-medium">Status:</span>
                                 <br />
-                                <Select
-                                  value={
-                                    lead.product_status || "ready_for_product"
-                                  }
-                                  onValueChange={(value) => {
-                                    // Update lead status
-                                    console.log(
-                                      "Updating lead status:",
-                                      lead.id,
-                                      value,
-                                    );
-                                    // TODO: Implement API call to update lead status
-                                  }}
-                                >
-                                  <SelectTrigger className="w-full h-8">
-                                    <SelectValue />
-                                  </SelectTrigger>
+                                <Select value={project.status} onValueChange={(value) => { console.log("Updating project status:", project.id, value); }}>
+                                  <SelectTrigger className="w-full h-8"><SelectValue /></SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="ready_for_product">
-                                      Ready for Product
-                                    </SelectItem>
-                                    <SelectItem value="in_review">
-                                      In Review
-                                    </SelectItem>
-                                    <SelectItem value="approved">
-                                      Approved
-                                    </SelectItem>
-                                    <SelectItem value="on_hold">
-                                      On Hold
-                                    </SelectItem>
-                                    <SelectItem value="rejected">
-                                      Rejected
-                                    </SelectItem>
+                                    <SelectItem value="created">Created</SelectItem>
+                                    <SelectItem value="in_progress">In Progress</SelectItem>
+                                    <SelectItem value="review">Review</SelectItem>
+                                    <SelectItem value="completed">Completed</SelectItem>
+                                    <SelectItem value="on_hold">On Hold</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
                             </div>
-
-                            {/* Project Steps Count - Clickable */}
-                            <div className="mt-3">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedLeadForSteps(lead);
-                                  setIsStepsPreviewOpen(true);
-                                }}
-                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                              >
-                                <Target className="w-4 h-4 mr-2" />
-                                View{" "}
-                                {Math.ceil(
-                                  (lead.estimated_budget || 100000) / 50000,
-                                )}{" "}
-                                Estimated Project Steps
-                              </Button>
-                            </div>
                           </div>
 
+                          <div className="flex items-start gap-2 ml-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/products/${project.id}/edit`);
+                              }}
+                              title="Edit"
+                              className="p-2 rounded hover:bg-gray-100"
+                            >
+                              <Edit className="w-4 h-4 text-gray-600" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!confirm("Delete this product?")) return;
+                                try {
+                                  await apiClient.request(`/products/${project.id}`, { method: "DELETE" });
+                                  queryClient.invalidateQueries(["workflow-projects"]);
+                                } catch (err) {
+                                  console.error(err);
+                                  alert("Failed to delete product");
+                                }
+                              }}
+                              title="Delete"
+                              className="p-2 rounded hover:bg-gray-100"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

@@ -116,10 +116,19 @@ function CreateProjectFromLeadDialog({
     enabled: isOpen,
   });
 
-  // Filter templates to only show those in the Product category
+  // Filter templates to only show those related to Product (tolerant match)
   const templates = allTemplates.filter((template: any) => {
-    const category = (template.category || template.type || "").toString();
-    return category.toLowerCase() === "product";
+    const name = (template.name || "").toString().toLowerCase();
+    const desc = (template.description || "").toString().toLowerCase();
+    const category = (template.category || template.type || "")
+      .toString()
+      .toLowerCase();
+    return (
+      name.includes("product") ||
+      desc.includes("product") ||
+      category === "product" ||
+      category.includes("product")
+    );
   });
 
   // Fetch template steps when template is selected
@@ -140,7 +149,14 @@ function CreateProjectFromLeadDialog({
   const projectManagers = users.map((u: any) => ({
     id: u.id,
     name: u.name || u.email,
+    email: u.email,
   }));
+  const [pmQuery, setPmQuery] = useState("");
+  const filteredPMs = projectManagers.filter(
+    (pm: any) =>
+      (pm.name || "").toLowerCase().includes(pmQuery.toLowerCase()) ||
+      (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
+  );
 
   // Update steps when template changes
   useEffect(() => {
@@ -486,11 +502,30 @@ function CreateProjectFromLeadDialog({
                       <SelectValue placeholder="Select PM" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectManagers.map((pm) => (
-                        <SelectItem key={pm.id} value={pm.id.toString()}>
-                          {pm.name}
+                      <div className="p-2">
+                        <Input
+                          placeholder="Search users..."
+                          value={pmQuery}
+                          onChange={(e) => setPmQuery(e.target.value)}
+                          className="mb-2"
+                        />
+                      </div>
+                      {filteredPMs.length > 0 ? (
+                        filteredPMs.map((pm) => (
+                          <SelectItem key={pm.id} value={pm.id.toString()}>
+                            <div className="flex flex-col">
+                              <span>{pm.name}</span>
+                              <span className="text-xs text-gray-500">
+                                {pm.email}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>
+                          No users found
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

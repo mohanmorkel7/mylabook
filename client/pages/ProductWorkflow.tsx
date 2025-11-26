@@ -2,21 +2,24 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 
-const STATUS_LABELS: Record<string,string> = {
-  upcoming: 'Upcoming',
-  open: 'Open',
-  in_progress: 'In Progress',
-  review: 'Review',
-  completed: 'Completed',
-  delayed: 'Delayed',
-  archived: 'Archived',
-  created: 'Created',
-  on_hold: 'On Hold',
-  cancelled: 'Cancelled',
+const STATUS_LABELS: Record<string, string> = {
+  upcoming: "Upcoming",
+  open: "Open",
+  in_progress: "In Progress",
+  review: "Review",
+  completed: "Completed",
+  delayed: "Delayed",
+  archived: "Archived",
+  created: "Created",
+  on_hold: "On Hold",
+  cancelled: "Cancelled",
 };
 function formatStatusLabel(s?: string) {
-  if (!s) return '';
-  return STATUS_LABELS[s] || s.replace(/_/g, ' ').replace(/(^|\s)\S/g, (t) => t.toUpperCase());
+  if (!s) return "";
+  return (
+    STATUS_LABELS[s] ||
+    s.replace(/_/g, " ").replace(/(^|\s)\S/g, (t) => t.toUpperCase())
+  );
 }
 import { useAuth } from "@/lib/auth-context";
 import { useNavigate, useLocation, useParams } from "react-router-dom";

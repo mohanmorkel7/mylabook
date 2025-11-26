@@ -648,6 +648,27 @@ export class WorkflowRepository {
     }
   }
 
+  static async deleteStep(stepId: number): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM workflow_steps WHERE id = $1", [stepId]);
+      // Also delete any comments attached to this step
+      await client.query("DELETE FROM workflow_comments WHERE step_id = $1", [
+        stepId,
+      ]);
+      await client.query("DELETE FROM workflow_documents WHERE step_id = $1", [
+        stepId,
+      ]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Comment operations
   static async getProjectComments(
     projectId: number,

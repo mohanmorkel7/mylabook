@@ -257,40 +257,6 @@ const ProductOverview: React.FC = () => {
               <Badge className="text-xs">{product.status}</Badge>
             </div>
             <p className="text-gray-600 mt-1">Product Overview & Pipeline</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-700">Status:</span>
-              <Select
-                value={product?.status}
-                onValueChange={async (value: string) => {
-                  if (!product) return;
-                  const prev = product.status;
-                  setProduct((p: any) => ({ ...p, status: value }));
-                  try {
-                    await apiClient.request(`/products/${product.id}`, {
-                      method: "PUT",
-                      body: JSON.stringify({ status: value }),
-                    });
-                  } catch (err) {
-                    console.error("Failed to update product status", err);
-                    setProduct((p: any) => ({ ...p, status: prev }));
-                    alert("Failed to update status");
-                  }
-                }}
-              >
-                <SelectTrigger className="w-40 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="upcoming">Upcoming</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="review">Review</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="delayed">Delayed</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </div>
         <div className="flex space-x-3">
@@ -437,6 +403,42 @@ const ProductOverview: React.FC = () => {
                   <span className="text-gray-900">
                     {product.project_manager_id || "-"}
                   </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Status</span>
+                  <div>
+                    <Select
+                      value={product?.status}
+                      onValueChange={async (value: string) => {
+                        if (!product) return;
+                        const prev = product.status;
+                        setProduct((p: any) => ({ ...p, status: value }));
+                        try {
+                          await apiClient.request(`/products/${product.id}`, {
+                            method: "PUT",
+                            body: JSON.stringify({ status: value }),
+                          });
+                        } catch (err) {
+                          console.error("Failed to update product status", err);
+                          setProduct((p: any) => ({ ...p, status: prev }));
+                          alert("Failed to update status");
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-40 h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="upcoming">Upcoming</SelectItem>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="review">Review</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="delayed">Delayed</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Target</span>

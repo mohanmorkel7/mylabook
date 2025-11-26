@@ -345,9 +345,12 @@ export class WorkflowRepository {
       };
       const createdProduct = await ProductRepository.createProduct(productData);
       // attach created product id to the returned workflow project for convenience
-      if (newProject) newProject['linked_product_id'] = createdProduct.id;
+      if (newProject) newProject["linked_product_id"] = createdProduct.id;
     } catch (prodErr) {
-      console.warn("Failed to create linked product for workflow project:", prodErr);
+      console.warn(
+        "Failed to create linked product for workflow project:",
+        prodErr,
+      );
     }
 
     return newProject!;

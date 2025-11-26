@@ -499,6 +499,9 @@ router.get(
                     updated_at: new Date().toISOString(),
                     created_by: tpl.created_by || 1,
                     probability_percent: ts.probability_percent || 0,
+                    // Mark as template-derived so client knows these are not persisted project steps
+                    is_template: true,
+                    isTemplate: true,
                   }),
                 );
 

@@ -96,6 +96,13 @@ function CreateProjectFromLeadDialog({
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const formatToDateInput = (d: any) => {
+    if (!d) return "";
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return "";
+    return date.toISOString().slice(0, 10);
+  };
+
   const [projectData, setProjectData] = useState<any>(() => ({
     name: lead
       ? `${lead.client_name} - ${lead.project_title}`
@@ -107,7 +114,9 @@ function CreateProjectFromLeadDialog({
     project_manager_id: project?.project_manager_id
       ? String(project.project_manager_id)
       : "",
-    target_completion_date: project?.target_completion_date || "",
+    target_completion_date: project?.target_completion_date
+      ? formatToDateInput(project.target_completion_date)
+      : "",
     estimated_hours: project?.estimated_hours
       ? String(project.estimated_hours)
       : "",
@@ -122,8 +131,12 @@ function CreateProjectFromLeadDialog({
         step_description: s.step_description || s.description || "",
         step_order: s.step_order ?? i + 1,
         status: s.status || "pending",
-        probability_percent: s.probability_percent || s.probability || 0,
+        probability_percent: s.probability_percent ?? s.probability ?? 0,
         estimated_hours: s.estimated_hours,
+        due_date:
+          s.due_date || s.dueDate || s.eta
+            ? formatToDateInput(s.due_date || s.dueDate || s.eta)
+            : "",
       }));
     }
     return [];
@@ -187,7 +200,9 @@ function CreateProjectFromLeadDialog({
       project_manager_id: project.project_manager_id
         ? String(project.project_manager_id)
         : "",
-      target_completion_date: project.target_completion_date || "",
+      target_completion_date: project.target_completion_date
+        ? formatToDateInput(project.target_completion_date)
+        : "",
       estimated_hours: project.estimated_hours
         ? String(project.estimated_hours)
         : "",
@@ -202,12 +217,27 @@ function CreateProjectFromLeadDialog({
           step_description: s.step_description || s.description || "",
           step_order: s.step_order ?? i + 1,
           status: s.status || "pending",
-          probability_percent: s.probability_percent || s.probability || 0,
+          probability_percent: s.probability_percent ?? s.probability ?? 0,
           estimated_hours: s.estimated_hours,
+          due_date:
+            s.due_date || s.dueDate || s.eta
+              ? formatToDateInput(s.due_date || s.dueDate || s.eta)
+              : "",
         })),
       );
     }
   }, [project]);
+
+  // If templates are loaded and a project has template_id, set selectedTemplate
+  useEffect(() => {
+    if (project && project.template_id && templates.length > 0) {
+      const t = templates.find(
+        (tt: any) => String(tt.id) === String(project.template_id),
+      );
+      if (t) setSelectedTemplate(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates.length, project?.id]);
 
   // Update steps when template changes
   useEffect(() => {
@@ -768,9 +798,19 @@ function CreateProjectFromLeadDialog({
                         </div>
                         <div>
                           <Label>Probability (%)</Label>
-                          <div className="mt-1 text-sm text-gray-700">
-                            {step.probability_percent ?? 0}%
-                          </div>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={String(step.probability_percent ?? 0)}
+                            onChange={(e) =>
+                              updateStep(
+                                index,
+                                "probability_percent",
+                                e.target.value ? parseInt(e.target.value) : 0,
+                              )
+                            }
+                          />
                         </div>
                       </div>
                     </div>
@@ -805,8 +845,12 @@ function CreateProjectFromLeadDialog({
             >
               <Rocket className="w-4 h-4 mr-2" />
               {createProjectMutation.isPending
-                ? "Creating..."
-                : "Create Project"}
+                ? project && project.id
+                  ? "Updating..."
+                  : "Creating..."
+                : project && project.id
+                  ? "Update Project"
+                  : "Create Project"}
             </Button>
           </div>
         </form>

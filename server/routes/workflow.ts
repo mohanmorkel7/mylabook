@@ -697,7 +697,32 @@ router.get(
           projectId,
           stepId,
         );
-        res.json(comments);
+        // Map DB comment rows to chat message shape expected by the client
+        const mapped = (comments || []).map((c: any) => {
+          let attachments = [] as any[];
+          try {
+            if (c.attachments)
+              attachments =
+                typeof c.attachments === "string"
+                  ? JSON.parse(c.attachments)
+                  : c.attachments;
+          } catch (e) {
+            attachments = [];
+          }
+          return {
+            id: c.id,
+            user_id: c.created_by,
+            user_name: c.creator_name || c.user_name || c.email || "Unknown",
+            message: c.comment_text || c.message || "",
+            message_type: c.comment_type || "comment",
+            is_rich_text: !!c.is_rich_text,
+            attachments,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+            step_id: c.step_id,
+          };
+        });
+        res.json(mapped);
       } else {
         let mockComments = WorkflowMockData.comments.filter(
           (c) => c.project_id === projectId,
@@ -705,7 +730,19 @@ router.get(
         if (stepId) {
           mockComments = mockComments.filter((c) => c.step_id === stepId);
         }
-        res.json(mockComments);
+        const mappedMock = mockComments.map((c: any) => ({
+          id: c.id,
+          user_id: c.created_by || c.user_id,
+          user_name: c.creator_name || c.user_name || "Mock User",
+          message: c.comment_text || c.message || "",
+          message_type: c.comment_type || "comment",
+          is_rich_text: !!c.is_rich_text,
+          attachments: c.attachments || [],
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+          step_id: c.step_id,
+        }));
+        res.json(mappedMock);
       }
     } catch (error) {
       console.error("Error fetching comments:", error);
@@ -737,8 +774,21 @@ router.post(
       }
 
       if (await isDatabaseAvailable()) {
-        const newComment = await WorkflowRepository.createComment(commentData);
-        res.status(201).json(newComment);
+        const created = await WorkflowRepository.createComment(commentData);
+        // Map created comment to client's chat shape
+        const mappedCreated = {
+          id: created.id,
+          user_id: created.created_by,
+          user_name: created.creator_name || created.user_name || "Unknown",
+          message: created.comment_text || created.message || "",
+          message_type: created.comment_type || "comment",
+          is_rich_text: !!created.is_rich_text,
+          attachments: created.attachments || [],
+          created_at: created.created_at,
+          updated_at: created.updated_at,
+          step_id: created.step_id,
+        };
+        res.status(201).json(mappedCreated);
       } else {
         // Return mock created comment
         const mockComment = {

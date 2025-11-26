@@ -1298,7 +1298,7 @@ export default function ProductWorkflow() {
                                 variant="outline"
                                 className={getStatusColor(project.status)}
                               >
-                                {project.status}
+                                {formatStatusLabel(project.status)}
                               </Badge>
                             </div>
 

@@ -196,6 +196,7 @@ export interface CreateWorkflowProjectData {
     status?: "pending" | "in_progress" | "completed" | "blocked";
     estimated_hours?: number;
     due_date?: string;
+    probability_percent?: number | null;
   }>;
   created_by: number;
 }

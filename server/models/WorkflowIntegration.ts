@@ -492,7 +492,9 @@ export class WorkflowRepository {
   // Step operations
   static async getProjectSteps(projectId: number): Promise<WorkflowStep[]> {
     const result = await pool.query(
-      `SELECT ws.*, u1.name as assigned_user_name, u2.name as creator_name
+      `SELECT ws.*,
+        COALESCE(NULLIF(TRIM(CONCAT(u1.first_name, ' ', u1.last_name)), ''), u1.email) as assigned_user_name,
+        COALESCE(NULLIF(TRIM(CONCAT(u2.first_name, ' ', u2.last_name)), ''), u2.email) as creator_name
        FROM workflow_steps ws
        LEFT JOIN users u1 ON ws.assigned_to = u1.id
        LEFT JOIN users u2 ON ws.created_by = u2.id
@@ -526,7 +528,9 @@ export class WorkflowRepository {
     );
 
     const stepResult = await pool.query(
-      `SELECT ws.*, u1.name as assigned_user_name, u2.name as creator_name
+      `SELECT ws.*,
+        COALESCE(NULLIF(TRIM(CONCAT(u1.first_name, ' ', u1.last_name)), ''), u1.email) as assigned_user_name,
+        COALESCE(NULLIF(TRIM(CONCAT(u2.first_name, ' ', u2.last_name)), ''), u2.email) as creator_name
        FROM workflow_steps ws
        LEFT JOIN users u1 ON ws.assigned_to = u1.id
        LEFT JOIN users u2 ON ws.created_by = u2.id

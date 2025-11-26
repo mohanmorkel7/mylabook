@@ -276,7 +276,7 @@ export function VCEnhancedStepItem({
     let processedText = (messageText || "").toString();
 
     // If no user info, skip mention highlighting
-    const userName = (user && user.name) ? String(user.name) : "";
+    const userName = user && user.name ? String(user.name) : "";
 
     if (userName) {
       try {

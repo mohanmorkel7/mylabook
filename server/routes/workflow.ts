@@ -729,7 +729,19 @@ router.get(
         if (stepId) {
           mockComments = mockComments.filter((c) => c.step_id === stepId);
         }
-        res.json(mockComments);
+        const mappedMock = mockComments.map((c: any) => ({
+          id: c.id,
+          user_id: c.created_by || c.user_id,
+          user_name: c.creator_name || c.user_name || "Mock User",
+          message: c.comment_text || c.message || "",
+          message_type: c.comment_type || "comment",
+          is_rich_text: !!c.is_rich_text,
+          attachments: c.attachments || [],
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+          step_id: c.step_id,
+        }));
+        res.json(mappedMock);
       }
     } catch (error) {
       console.error("Error fetching comments:", error);

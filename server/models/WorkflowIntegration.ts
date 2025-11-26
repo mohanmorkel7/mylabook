@@ -456,7 +456,8 @@ export class WorkflowRepository {
               estimated_hours: s.estimated_hours ?? null,
               due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
               status: s.status ?? undefined,
-              probability_percent: s.probability_percent ?? s.probability ?? null,
+              probability_percent:
+                s.probability_percent ?? s.probability ?? null,
             });
           } else {
             // create new step
@@ -474,7 +475,10 @@ export class WorkflowRepository {
             await this.createStep(stepData);
 
             // update probability_percent if provided (workflow_steps table may have a probability column)
-            if (s.probability_percent !== undefined || s.probability !== undefined) {
+            if (
+              s.probability_percent !== undefined ||
+              s.probability !== undefined
+            ) {
               const prob = s.probability_percent ?? s.probability ?? null;
               if (prob !== null) {
                 // set probability if the step was created

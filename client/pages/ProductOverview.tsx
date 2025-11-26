@@ -438,31 +438,46 @@ const ProductOverview: React.FC = () => {
                         setProduct((p: any) => ({ ...p, status: value }));
                         try {
                           // Update workflow project status directly so workflow_projects is the source of truth
-                          await apiClient.request(`/workflow/projects/${product.id}`, {
-                            method: "PATCH",
-                            body: JSON.stringify({ status: value }),
-                          });
+                          await apiClient.request(
+                            `/workflow/projects/${product.id}`,
+                            {
+                              method: "PATCH",
+                              body: JSON.stringify({ status: value }),
+                            },
+                          );
 
                           // Refresh product details from workflow project to reflect any server-side normalization
-                          const refreshed = await apiClient.getWorkflowProject(product.id);
+                          const refreshed = await apiClient.getWorkflowProject(
+                            product.id,
+                          );
                           if (refreshed) {
-                            setProduct((p: any) => ({ ...p, status: refreshed.status }));
+                            setProduct((p: any) => ({
+                              ...p,
+                              status: refreshed.status,
+                            }));
                             // also update steps if available
                             if (Array.isArray(refreshed.steps)) {
                               setSteps(
                                 refreshed.steps.map((s: any) => ({
                                   id: s.id,
                                   name: s.step_name || s.name,
-                                  description: s.step_description || s.description || null,
+                                  description:
+                                    s.step_description || s.description || null,
                                   step_name: s.step_name || s.name,
-                                  step_description: s.step_description || s.description || null,
+                                  step_description:
+                                    s.step_description || s.description || null,
                                   probability_percent:
-                                    parseFloat(s.probability ?? s.probability_percent ?? 0) || 0,
+                                    parseFloat(
+                                      s.probability ??
+                                        s.probability_percent ??
+                                        0,
+                                    ) || 0,
                                   eta: s.eta || s.due_date,
                                   status: s.status,
                                   estimated_hours: s.estimated_hours,
                                   project_id: s.project_id || Number(id),
-                                  isTemplate: !!s.is_template || !!s.isTemplate || false,
+                                  isTemplate:
+                                    !!s.is_template || !!s.isTemplate || false,
                                 })),
                               );
                             }

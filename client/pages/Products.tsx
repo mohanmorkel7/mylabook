@@ -1,10 +1,21 @@
 import React, { useEffect, useState } from "react";
 import apiClient from "@/lib/api";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { Link } from "react-router-dom";
 
 const ProductsPage: React.FC = () => {
-  const [stats, setStats] = useState<any>({ total: 0, totalDev: 0, statuses: {} });
+  const [stats, setStats] = useState<any>({
+    total: 0,
+    totalDev: 0,
+    statuses: {},
+  });
   const [products, setProducts] = useState<any[]>([]);
 
   const fetchStats = async () => {
@@ -30,13 +41,18 @@ const ProductsPage: React.FC = () => {
     fetchProducts();
   }, []);
 
-  const chartData = Object.entries(stats.statuses || {}).map(([k, v]) => ({ name: k, value: v }));
+  const chartData = Object.entries(stats.statuses || {}).map(([k, v]) => ({
+    name: k,
+    value: v,
+  }));
 
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Product Management</h1>
-        <Link to="/create-product" className="btn btn-primary">Create Product</Link>
+        <Link to="/create-product" className="btn btn-primary">
+          Create Product
+        </Link>
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -50,11 +66,15 @@ const ProductsPage: React.FC = () => {
         </div>
         <div className="p-4 bg-white rounded shadow">
           <div className="text-sm text-gray-500">Open</div>
-          <div className="text-2xl font-semibold">{stats.statuses?.open || 0}</div>
+          <div className="text-2xl font-semibold">
+            {stats.statuses?.open || 0}
+          </div>
         </div>
         <div className="p-4 bg-white rounded shadow">
           <div className="text-sm text-gray-500">In Progress</div>
-          <div className="text-2xl font-semibold">{stats.statuses?.in_progress || 0}</div>
+          <div className="text-2xl font-semibold">
+            {stats.statuses?.in_progress || 0}
+          </div>
         </div>
       </div>
 
@@ -75,7 +95,11 @@ const ProductsPage: React.FC = () => {
           <h3 className="mb-2">Projects</h3>
           <div className="space-y-3 overflow-auto max-h-64">
             {products.map((p) => (
-              <Link to={`/products/${p.id}`} key={p.id} className="block p-3 border rounded hover:shadow">
+              <Link
+                to={`/products/${p.id}`}
+                key={p.id}
+                className="block p-3 border rounded hover:shadow"
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="font-semibold">{p.name}</div>

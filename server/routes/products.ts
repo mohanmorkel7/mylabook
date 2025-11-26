@@ -69,10 +69,13 @@ router.put("/:id", async (req, res) => {
       cols.push(`${k} = $${idx++}`);
       vals.push(v);
     });
-    if (cols.length === 0) return res.status(400).json({ error: "No update fields" });
+    if (cols.length === 0)
+      return res.status(400).json({ error: "No update fields" });
     vals.push(id);
     const sql = `UPDATE products SET ${cols.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
-    const result = await (await import("../database/connection")).pool.query(sql, vals);
+    const result = await (
+      await import("../database/connection")
+    ).pool.query(sql, vals);
     res.json(result.rows[0]);
   } catch (e: any) {
     console.error("Failed to update product:", e);
@@ -84,7 +87,9 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    await (await import("../database/connection")).pool.query("DELETE FROM products WHERE id = $1", [id]);
+    await (
+      await import("../database/connection")
+    ).pool.query("DELETE FROM products WHERE id = $1", [id]);
     res.status(204).json({});
   } catch (e: any) {
     console.error("Failed to delete product:", e);
@@ -121,11 +126,16 @@ router.put("/:id/steps/order", async (req, res) => {
     if (!Array.isArray(orderedStepIds)) {
       return res.status(400).json({ error: "orderedStepIds must be an array" });
     }
-    await ProductRepository.updateStepOrder(productId, orderedStepIds.map(Number));
+    await ProductRepository.updateStepOrder(
+      productId,
+      orderedStepIds.map(Number),
+    );
     res.json({ success: true });
   } catch (e: any) {
     console.error("Failed to update step order:", e);
-    res.status(500).json({ error: e?.message || "Failed to update step order" });
+    res
+      .status(500)
+      .json({ error: e?.message || "Failed to update step order" });
   }
 });
 

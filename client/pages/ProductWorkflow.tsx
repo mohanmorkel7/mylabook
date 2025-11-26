@@ -285,14 +285,21 @@ function CreateProjectFromLeadDialog({
 
   // Allow creating project even when not started from a lead (lead may be null)
 
-  const totalProbability = steps.reduce((sum, s) => sum + (s.probability_percent || 0), 0);
+  const totalProbability = steps.reduce(
+    (sum, s) => sum + (s.probability_percent || 0),
+    0,
+  );
   const probabilityInvalid = totalProbability > 0 && totalProbability !== 100;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{lead ? "Create Product Project from Lead" : "Create Product Project"}</DialogTitle>
+          <DialogTitle>
+            {lead
+              ? "Create Product Project from Lead"
+              : "Create Product Project"}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -312,10 +319,12 @@ function CreateProjectFromLeadDialog({
                   </div>
                   <div>
                     <strong>Completed:</strong>{" "}
-                    {lead.completion_date && format(new Date(lead.completion_date), "MMM d, yyyy")}
+                    {lead.completion_date &&
+                      format(new Date(lead.completion_date), "MMM d, yyyy")}
                   </div>
                   <div>
-                    <strong>Lead Steps:</strong> {lead.completed_steps}/{lead.total_steps}
+                    <strong>Lead Steps:</strong> {lead.completed_steps}/
+                    {lead.total_steps}
                   </div>
                 </div>
                 <div className="mt-2">
@@ -330,7 +339,10 @@ function CreateProjectFromLeadDialog({
                 <CardTitle className="text-lg">Lead Information</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-sm text-gray-600">No lead selected. You can proceed to create a project without a lead or select a completed lead from the list.</div>
+                <div className="text-sm text-gray-600">
+                  No lead selected. You can proceed to create a project without
+                  a lead or select a completed lead from the list.
+                </div>
               </CardContent>
             </Card>
           )}
@@ -520,7 +532,17 @@ function CreateProjectFromLeadDialog({
               <div className="flex justify-between items-center">
                 <CardTitle className="text-lg">Project Steps</CardTitle>
                 <div className="flex items-center gap-3">
-                  <div className="text-sm text-gray-600">Total Probability: <span className="font-medium text-gray-900">{totalProbability}%</span>{probabilityInvalid && (<span className="ml-3 text-sm text-red-600">Total must equal 100%</span>)}</div>
+                  <div className="text-sm text-gray-600">
+                    Total Probability:{" "}
+                    <span className="font-medium text-gray-900">
+                      {totalProbability}%
+                    </span>
+                    {probabilityInvalid && (
+                      <span className="ml-3 text-sm text-red-600">
+                        Total must equal 100%
+                      </span>
+                    )}
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
@@ -543,7 +565,9 @@ function CreateProjectFromLeadDialog({
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline">Step {step.step_order}</Badge>
-                        <div className="text-sm text-gray-600">{(step.probability_percent ?? 0)}%</div>
+                        <div className="text-sm text-gray-600">
+                          {step.probability_percent ?? 0}%
+                        </div>
                       </div>
                       <div className="flex gap-1">
                         <Button
@@ -635,7 +659,9 @@ function CreateProjectFromLeadDialog({
                         </div>
                         <div>
                           <Label>Probability (%)</Label>
-                          <div className="mt-1 text-sm text-gray-700">{step.probability_percent ?? 0}%</div>
+                          <div className="mt-1 text-sm text-gray-700">
+                            {step.probability_percent ?? 0}%
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -785,7 +811,13 @@ export default function ProductWorkflow() {
           </p>
         </div>
         <div>
-          <Button onClick={() => { setSelectedLead(null); setIsCreateDialogOpen(true); }} className="btn btn-primary">
+          <Button
+            onClick={() => {
+              setSelectedLead(null);
+              setIsCreateDialogOpen(true);
+            }}
+            className="btn btn-primary"
+          >
             Create Project
           </Button>
         </div>
@@ -909,14 +941,25 @@ export default function ProductWorkflow() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-lg">{project.name}</h3>
-                              <Badge variant="outline" className={getStatusColor(project.status)}>
+                              <h3 className="font-semibold text-lg">
+                                {project.name}
+                              </h3>
+                              <Badge
+                                variant="outline"
+                                className={getStatusColor(project.status)}
+                              >
                                 {project.status}
                               </Badge>
                             </div>
 
-                            <h4 className="font-medium text-gray-900 mb-2">{project.description}</h4>
-                            <p className="text-gray-600 mb-3">{project.source_type === "lead" ? `From Lead #${project.source_id}` : ""}</p>
+                            <h4 className="font-medium text-gray-900 mb-2">
+                              {project.description}
+                            </h4>
+                            <p className="text-gray-600 mb-3">
+                              {project.source_type === "lead"
+                                ? `From Lead #${project.source_id}`
+                                : ""}
+                            </p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
@@ -924,9 +967,16 @@ export default function ProductWorkflow() {
                                 <br />
                                 <div className="flex items-center gap-2">
                                   <div className="w-20 bg-gray-200 rounded-full h-2">
-                                    <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${project.progress_percentage || 0}%` }} />
+                                    <div
+                                      className="bg-blue-600 h-2 rounded-full"
+                                      style={{
+                                        width: `${project.progress_percentage || 0}%`,
+                                      }}
+                                    />
                                   </div>
-                                  <span>{project.progress_percentage || 0}%</span>
+                                  <span>
+                                    {project.progress_percentage || 0}%
+                                  </span>
                                 </div>
                               </div>
                               <div>
@@ -934,21 +984,47 @@ export default function ProductWorkflow() {
                                 <br />
                                 <div className="flex items-center gap-1">
                                   <CheckCircle className="w-3 h-3 text-green-600" />
-                                  <span>{project.completed_steps || 0}/{project.total_steps || 0}</span>
+                                  <span>
+                                    {project.completed_steps || 0}/
+                                    {project.total_steps || 0}
+                                  </span>
                                 </div>
                               </div>
                               <div>
                                 <span className="font-medium">Status:</span>
                                 <br />
-                                <Select value={project.status} onValueChange={(value) => { console.log("Updating project status:", project.id, value); }}>
-                                  <SelectTrigger className="w-full h-8"><SelectValue /></SelectTrigger>
+                                <Select
+                                  value={project.status}
+                                  onValueChange={(value) => {
+                                    console.log(
+                                      "Updating project status:",
+                                      project.id,
+                                      value,
+                                    );
+                                  }}
+                                >
+                                  <SelectTrigger className="w-full h-8">
+                                    <SelectValue />
+                                  </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="created">Created</SelectItem>
-                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                    <SelectItem value="review">Review</SelectItem>
-                                    <SelectItem value="completed">Completed</SelectItem>
-                                    <SelectItem value="on_hold">On Hold</SelectItem>
-                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="created">
+                                      Created
+                                    </SelectItem>
+                                    <SelectItem value="in_progress">
+                                      In Progress
+                                    </SelectItem>
+                                    <SelectItem value="review">
+                                      Review
+                                    </SelectItem>
+                                    <SelectItem value="completed">
+                                      Completed
+                                    </SelectItem>
+                                    <SelectItem value="on_hold">
+                                      On Hold
+                                    </SelectItem>
+                                    <SelectItem value="cancelled">
+                                      Cancelled
+                                    </SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -971,8 +1047,13 @@ export default function ProductWorkflow() {
                                 e.stopPropagation();
                                 if (!confirm("Delete this product?")) return;
                                 try {
-                                  await apiClient.request(`/products/${project.id}`, { method: "DELETE" });
-                                  queryClient.invalidateQueries(["workflow-projects"]);
+                                  await apiClient.request(
+                                    `/products/${project.id}`,
+                                    { method: "DELETE" },
+                                  );
+                                  queryClient.invalidateQueries([
+                                    "workflow-projects",
+                                  ]);
                                 } catch (err) {
                                   console.error(err);
                                   alert("Failed to delete product");

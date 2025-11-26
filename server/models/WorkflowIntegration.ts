@@ -346,6 +346,19 @@ export class WorkflowRepository {
       const createdProduct = await ProductRepository.createProduct(productData);
       // attach created product id to the returned workflow project for convenience
       if (newProject) newProject["linked_product_id"] = createdProduct.id;
+
+      // Persist the product_id on workflow_projects so /api/products/:id can reference product records
+      try {
+        await pool.query(
+          "UPDATE workflow_projects SET product_id = $1 WHERE id = $2",
+          [createdProduct.id, result.rows[0].id],
+        );
+      } catch (updateErr) {
+        console.warn(
+          "Failed to persist product_id on workflow_projects:",
+          updateErr,
+        );
+      }
     } catch (prodErr) {
       console.warn(
         "Failed to create linked product for workflow project:",

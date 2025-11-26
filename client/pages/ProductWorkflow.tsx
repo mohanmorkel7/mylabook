@@ -158,11 +158,6 @@ function CreateProjectFromLeadDialog({
       (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
   );
 
-  const projectManagers = users.map((u: any) => ({
-    id: u.id,
-    name: u.name || u.email,
-  }));
-
   // Update steps when template changes
   useEffect(() => {
     if (templateSteps?.steps && templateSteps.steps.length > 0) {

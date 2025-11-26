@@ -683,7 +683,7 @@ function CreateProjectFromLeadDialog({
                   <div className="text-sm text-gray-600">
                     Total Probability:{" "}
                     <span className="font-medium text-gray-900">
-                      {totalProbability}%
+                      {formattedTotalProbability}%
                     </span>
                     {probabilityInvalid && (
                       <span className="ml-3 text-sm text-red-600">

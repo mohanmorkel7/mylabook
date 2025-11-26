@@ -47,8 +47,55 @@ router.post("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const product = await ProductRepository.getById(id);
+
+    // Try to fetch product by id
+    let product = await ProductRepository.getById(id);
+
+    // If not found, check if a workflow project exists with this id and try to create/find linked product
+    if (!product) {
+      try {
+        const wpRes = await (await import("../database/connection")).pool.query(
+          "SELECT * FROM workflow_projects WHERE id = $1",
+          [id],
+        );
+        if (wpRes.rows.length > 0) {
+          const wp = wpRes.rows[0];
+          // If workflow_projects has a product_id, try to fetch that product
+          if (wp.product_id) {
+            product = await ProductRepository.getById(Number(wp.product_id));
+          } else {
+            // Create a product from workflow project data
+            const prodData: any = {
+              name: wp.name,
+              description: wp.description || null,
+              template_id: wp.template_id ?? null,
+              project_manager_id: wp.project_manager_id ?? null,
+              target_completion_date: wp.target_completion_date ?? null,
+              estimated_hours: wp.estimated_hours ?? null,
+              status: wp.status || "upcoming",
+              progress: wp.progress_percentage ?? 0,
+              created_by: wp.created_by ?? 1,
+            };
+            const created = await ProductRepository.createProduct(prodData);
+            // Persist link
+            try {
+              await (await import("../database/connection")).pool.query(
+                "UPDATE workflow_projects SET product_id = $1 WHERE id = $2",
+                [created.id, id],
+              );
+            } catch (uErr) {
+              console.warn("Failed to persist product_id on workflow_projects:", uErr);
+            }
+            product = created as any;
+          }
+        }
+      } catch (wpErr) {
+        console.warn("Error checking workflow_projects for fallback product:", wpErr);
+      }
+    }
+
     if (!product) return res.status(404).json({ error: "Product not found" });
+
     res.json(product);
   } catch (e: any) {
     console.error("Failed to fetch product:", e);

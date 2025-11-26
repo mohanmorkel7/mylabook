@@ -773,8 +773,21 @@ router.post(
       }
 
       if (await isDatabaseAvailable()) {
-        const newComment = await WorkflowRepository.createComment(commentData);
-        res.status(201).json(newComment);
+        const created = await WorkflowRepository.createComment(commentData);
+        // Map created comment to client's chat shape
+        const mappedCreated = {
+          id: created.id,
+          user_id: created.created_by,
+          user_name: created.creator_name || created.user_name || "Unknown",
+          message: created.comment_text || created.message || "",
+          message_type: created.comment_type || "comment",
+          is_rich_text: !!created.is_rich_text,
+          attachments: created.attachments || [],
+          created_at: created.created_at,
+          updated_at: created.updated_at,
+          step_id: created.step_id,
+        };
+        res.status(201).json(mappedCreated);
       } else {
         // Return mock created comment
         const mockComment = {

@@ -1343,7 +1343,9 @@ export default function ProductWorkflow() {
                               <div>
                                 <span className="font-medium">Status:</span>
                                 <br />
-                                <span className="text-sm text-gray-700">{project.status}</span>
+                                <span className="text-sm text-gray-700">
+                                  {project.status}
+                                </span>
                               </div>
                             </div>
                           </div>

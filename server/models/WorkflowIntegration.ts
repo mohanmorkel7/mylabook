@@ -349,9 +349,15 @@ export class WorkflowRepository {
 
       // Persist the product_id on workflow_projects so /api/products/:id can reference product records
       try {
-        await pool.query('UPDATE workflow_projects SET product_id = $1 WHERE id = $2', [createdProduct.id, result.rows[0].id]);
+        await pool.query(
+          "UPDATE workflow_projects SET product_id = $1 WHERE id = $2",
+          [createdProduct.id, result.rows[0].id],
+        );
       } catch (updateErr) {
-        console.warn('Failed to persist product_id on workflow_projects:', updateErr);
+        console.warn(
+          "Failed to persist product_id on workflow_projects:",
+          updateErr,
+        );
       }
     } catch (prodErr) {
       console.warn(

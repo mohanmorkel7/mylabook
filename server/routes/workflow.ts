@@ -467,33 +467,40 @@ router.get(
             const templateId = (project as any)?.template_id;
             if (templateId) {
               // Lazy-load template steps
-              const { TemplateRepository } = await import(
-                "../models/Template"
-              );
+              const { TemplateRepository } = await import("../models/Template");
               const tpl = await TemplateRepository.findById(templateId);
-              if (tpl && Array.isArray((tpl as any).steps) && (tpl as any).steps.length > 0) {
+              if (
+                tpl &&
+                Array.isArray((tpl as any).steps) &&
+                (tpl as any).steps.length > 0
+              ) {
                 // Map template steps to the workflow step shape expected by the client
-                const mapped = (tpl as any).steps.map((ts: any, idx: number) => ({
-                  id: ts.id,
-                  project_id: projectId,
-                  step_name: ts.name || ts.step_name,
-                  step_description: ts.description || ts.step_description || null,
-                  step_order: ts.step_order || idx + 1,
-                  status: "pending",
-                  assigned_to: null,
-                  estimated_hours: ts.default_eta_days ? ts.default_eta_days * 8 : null,
-                  actual_hours: null,
-                  start_date: null,
-                  due_date: null,
-                  completion_date: null,
-                  dependencies: null,
-                  is_automated: ts.is_automated || false,
-                  automation_config: ts.automation_config || null,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                  created_by: tpl.created_by || 1,
-                  probability_percent: ts.probability_percent || 0,
-                }));
+                const mapped = (tpl as any).steps.map(
+                  (ts: any, idx: number) => ({
+                    id: ts.id,
+                    project_id: projectId,
+                    step_name: ts.name || ts.step_name,
+                    step_description:
+                      ts.description || ts.step_description || null,
+                    step_order: ts.step_order || idx + 1,
+                    status: "pending",
+                    assigned_to: null,
+                    estimated_hours: ts.default_eta_days
+                      ? ts.default_eta_days * 8
+                      : null,
+                    actual_hours: null,
+                    start_date: null,
+                    due_date: null,
+                    completion_date: null,
+                    dependencies: null,
+                    is_automated: ts.is_automated || false,
+                    automation_config: ts.automation_config || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    created_by: tpl.created_by || 1,
+                    probability_percent: ts.probability_percent || 0,
+                  }),
+                );
 
                 return res.json(mapped);
               }

@@ -1110,7 +1110,6 @@ export default function ProductWorkflow() {
     setIsCreateDialogOpen(true);
   };
 
-
   const handleViewLead = (lead: any) => {
     setSelectedLeadForOverview(lead);
     setIsLeadOverviewOpen(true);

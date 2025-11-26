@@ -197,7 +197,10 @@ function CreateProjectFromLeadDialog({
   ];
 
   const createProjectMutation = useMutation({
-    mutationFn: (data: any) => apiClient.createProjectFromLead(lead.id, data),
+    mutationFn: (data: any) =>
+      lead && lead.id
+        ? apiClient.createProjectFromLead(lead.id, data)
+        : apiClient.createWorkflowProject(data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
       queryClient.invalidateQueries({ queryKey: ["completed-leads"] });
@@ -277,13 +280,13 @@ function CreateProjectFromLeadDialog({
     setSteps(newSteps);
   };
 
-  if (!lead) return null;
+  // Allow creating project even when not started from a lead (lead may be null)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Product Project from Lead</DialogTitle>
+          <DialogTitle>{lead ? "Create Product Project from Lead" : "Create Product Project"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">

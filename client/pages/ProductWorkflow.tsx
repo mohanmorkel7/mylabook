@@ -119,7 +119,13 @@ function CreateProjectFromLeadDialog({
   // Filter templates to only show those with category_id === 1 (Product category)
   const templates = allTemplates.filter((template: any) => {
     // Template might have category_id as number or string; support both
-    const cid = template.category_id ?? template.categoryId ?? (template.category && (typeof template.category === 'object' ? template.category.id : undefined));
+    const cid =
+      template.category_id ??
+      template.categoryId ??
+      (template.category &&
+        (typeof template.category === "object"
+          ? template.category.id
+          : undefined));
     return Number(cid) === 1;
   });
 

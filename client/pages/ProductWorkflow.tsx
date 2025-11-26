@@ -97,14 +97,20 @@ function CreateProjectFromLeadDialog({
   const queryClient = useQueryClient();
 
   const [projectData, setProjectData] = useState<any>(() => ({
-    name: lead ? `${lead.client_name} - ${lead.project_title}` : project?.name || "",
+    name: lead
+      ? `${lead.client_name} - ${lead.project_title}`
+      : project?.name || "",
     description: lead
       ? `Product development project for ${lead.client_name}`
       : project?.description || "",
     assigned_team: project?.assigned_team || "Product Team",
-    project_manager_id: project?.project_manager_id ? String(project.project_manager_id) : "",
+    project_manager_id: project?.project_manager_id
+      ? String(project.project_manager_id)
+      : "",
     target_completion_date: project?.target_completion_date || "",
-    estimated_hours: project?.estimated_hours ? String(project.estimated_hours) : "",
+    estimated_hours: project?.estimated_hours
+      ? String(project.estimated_hours)
+      : "",
     template_id: project?.template_id ? String(project.template_id) : "",
   }));
 
@@ -381,8 +387,8 @@ function CreateProjectFromLeadDialog({
             {project && project.id
               ? "Edit Product Project"
               : lead
-              ? "Create Product Project from Lead"
-              : "Create Product Project"}
+                ? "Create Product Project from Lead"
+                : "Create Product Project"}
           </DialogTitle>
         </DialogHeader>
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -761,6 +761,24 @@ export default function ProductWorkflow() {
   const [isLeadOverviewOpen, setIsLeadOverviewOpen] = useState(false);
   const [selectedLeadForSteps, setSelectedLeadForSteps] = useState<any>(null);
   const [isStepsPreviewOpen, setIsStepsPreviewOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const pid = params.get("id");
+    if (!pid) return;
+    const loadProject = async () => {
+      try {
+        const proj = await apiClient.getWorkflowProject(pid);
+        setSelectedProject(proj);
+        setIsProjectDetailOpen(true);
+      } catch (err) {
+        console.error("Failed to load project from query param:", err);
+      }
+    };
+    loadProject();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Fetch project statistics
   const { data: projectStats } = useQuery({
@@ -1076,7 +1094,7 @@ export default function ProductWorkflow() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/products/${project.id}/edit`);
+                                navigate(`/product?id=${project.id}`);
                               }}
                               title="Edit"
                               className="p-2 rounded hover:bg-gray-100"

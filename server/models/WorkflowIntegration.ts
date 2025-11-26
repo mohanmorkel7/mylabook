@@ -593,7 +593,8 @@ export class WorkflowRepository {
     }
 
     const result = await pool.query(
-      `SELECT wc.*, u.name as creator_name
+      `SELECT wc.*,
+        COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email) as creator_name
        FROM workflow_comments wc
        LEFT JOIN users u ON wc.created_by = u.id
        ${whereClause}

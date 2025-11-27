@@ -185,6 +185,15 @@ function CreateProjectFromLeadDialog({
     return Number(cid) === 1;
   });
 
+  // Ensure the currently selected template (possibly fetched directly) is included
+  // in the dropdown options even if it's not part of the filtered templates list.
+  const availableTemplates = (() => {
+    if (!selectedTemplate) return templates;
+    const exists = templates.find((t: any) => String(t.id) === String(selectedTemplate.id));
+    if (exists) return templates;
+    return [selectedTemplate, ...templates];
+  })();
+
   // Fetch template steps when template is selected
   const { data: templateSteps = [] } = useQuery({
     queryKey: ["template-steps", selectedTemplate?.id],

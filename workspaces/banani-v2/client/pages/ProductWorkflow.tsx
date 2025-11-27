@@ -109,6 +109,7 @@ function CreateProjectFromLeadDialog({
 
   const [steps, setSteps] = useState<ProjectStep[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [templateChangedByUser, setTemplateChangedByUser] = useState(false);
 
   // Fetch available templates (filtered for product type only)
   const { data: allTemplates = [] } = useQuery({

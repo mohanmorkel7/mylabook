@@ -510,6 +510,17 @@ export class WorkflowRepository {
 
       await client.query("COMMIT");
 
+      // After commit, verify persisted value to help debug template_id issues
+      try {
+        const checkRes = await pool.query(
+          "SELECT id, template_id, product_id FROM workflow_projects WHERE id = $1",
+          [id],
+        );
+        console.log("[WorkflowRepository.updateProject] Post-commit workflow_projects row:", checkRes.rows[0]);
+      } catch (checkErr) {
+        console.warn("[WorkflowRepository.updateProject] Failed to read post-commit workflow_projects row:", checkErr);
+      }
+
       const updated = await this.getProjectById(id);
       return updated;
     } catch (error) {

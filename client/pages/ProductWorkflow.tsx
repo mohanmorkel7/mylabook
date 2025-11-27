@@ -257,7 +257,20 @@ function CreateProjectFromLeadDialog({
       const t = templates.find(
         (tt: any) => String(tt.id) === String(project.template_id),
       );
-      if (t) setSelectedTemplate(t);
+      if (t) {
+        setSelectedTemplate(t);
+      } else {
+        // Try fetching the template directly in case it's not part of filtered templates
+        (async () => {
+          try {
+            const tpl = await apiClient.getTemplate(project.template_id);
+            if (tpl) setSelectedTemplate(tpl);
+          } catch (e) {
+            // ignore - template may not exist or user doesn't have access
+            console.debug("Could not fetch template for project:", e);
+          }
+        })();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templates.length, project?.id]);

@@ -406,6 +406,11 @@ export class WorkflowRepository {
     data: Partial<CreateWorkflowProjectData> & { steps?: any[] },
   ): Promise<WorkflowProject | null> {
     try {
+      try {
+        console.log('[WorkflowRepository.updateProject] Incoming steps:', Array.isArray(data.steps) ? data.steps.map(s => ({ id: s.id, step_order: s.step_order, step_name: s.step_name })) : 'none');
+      } catch (logErr) {
+        console.warn('[WorkflowRepository.updateProject] Failed to log incoming steps', logErr);
+      }
       const setClause: string[] = [];
       const values: any[] = [];
       let idx = 1;

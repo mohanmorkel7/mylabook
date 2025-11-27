@@ -46,7 +46,28 @@ export class ProductRepository {
     if (data.description !== undefined) add("description", data.description);
     if (data.assigned_team_id !== undefined)
       add("assigned_team_id", data.assigned_team_id);
-    if (data.template_id !== undefined) add("template_id", data.template_id);
+    if (data.template_id !== undefined) {
+      try {
+        // Ensure the referenced product_templates row exists before inserting
+        const tplRes = await pool.query(
+          "SELECT 1 FROM product_templates WHERE id = $1",
+          [data.template_id],
+        );
+        if (tplRes.rows.length > 0) {
+          add("template_id", data.template_id);
+        } else {
+          console.warn(
+            `[ProductRepository.createProduct] Provided template_id ${data.template_id} does not exist in product_templates - inserting with NULL template_id`,
+          );
+          // skip adding template_id so DB will store NULL
+        }
+      } catch (err) {
+        console.warn(
+          "[ProductRepository.createProduct] Failed to validate template_id, proceeding without it:",
+          err,
+        );
+      }
+    }
     if (data.project_manager_id !== undefined)
       add("project_manager_id", data.project_manager_id);
     if (data.target_completion_date !== undefined)

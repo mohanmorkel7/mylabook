@@ -309,8 +309,8 @@ export class WorkflowRepository {
     const result = await pool.query(
       `INSERT INTO workflow_projects
        (name, description, source_type, source_id, project_type, priority, assigned_team,
-        project_manager_id, start_date, target_completion_date, budget, estimated_hours, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id`,
       [
         data.name,
@@ -321,6 +321,7 @@ export class WorkflowRepository {
         priority,
         data.assigned_team,
         data.project_manager_id,
+        data.template_id ?? null,
         data.start_date,
         data.target_completion_date,
         data.budget,
@@ -538,6 +539,7 @@ export class WorkflowRepository {
         priority: projectData.priority || "medium",
         assigned_team: projectData.assigned_team || "Product Team",
         project_manager_id: projectData.project_manager_id,
+        template_id: (projectData as any).template_id ?? null,
         start_date:
           projectData.start_date || new Date().toISOString().split("T")[0],
         target_completion_date: projectData.target_completion_date,

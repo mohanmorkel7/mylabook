@@ -663,8 +663,8 @@ function CreateProjectFromLeadDialog({
                     <SelectItem value="none">
                       Manual Steps (Create Custom)
                     </SelectItem>
-                    {templates.length > 0 ? (
-                      templates.map((template: any) => (
+                    {availableTemplates.length > 0 ? (
+                      availableTemplates.map((template: any) => (
                         <SelectItem
                           key={template.id}
                           value={template.id.toString()}

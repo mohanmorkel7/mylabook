@@ -480,20 +480,58 @@ export class WorkflowRepository {
                   s.probability_percent ?? s.probability ?? null,
               });
             } else {
-              const stepData: CreateWorkflowStepData = {
-                project_id: id,
-                step_name: s.step_name ?? s.name,
-                step_description: s.step_description ?? s.description ?? null,
-                step_order: s.step_order ?? null,
-                assigned_to: s.assigned_to ?? null,
-                estimated_hours: s.estimated_hours ?? null,
-                due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
-                status: s.status ?? "pending",
-                created_by: data.created_by || 1,
-                probability_percent:
-                  s.probability_percent ?? s.probability ?? null,
-              } as CreateWorkflowStepData;
-              await this.createStep(stepData);
+              // For new steps (no id provided), attempt to find an existing step to update
+              try {
+                const findRes = await pool.query(
+                  `SELECT id FROM workflow_steps WHERE project_id = $1 AND (step_order = $2 OR step_name = $3) ORDER BY created_at DESC LIMIT 1`,
+                  [id, s.step_order ?? null, s.step_name ?? s.name ?? null],
+                );
+                if (findRes.rows.length > 0) {
+                  const existingStepId = findRes.rows[0].id;
+                  await this.updateStep(existingStepId, {
+                    step_name: s.step_name ?? s.name,
+                    step_description: s.step_description ?? s.description ?? null,
+                    step_order: s.step_order ?? null,
+                    assigned_to: s.assigned_to ?? null,
+                    estimated_hours: s.estimated_hours ?? null,
+                    due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                    status: s.status ?? undefined,
+                    probability_percent:
+                      s.probability_percent ?? s.probability ?? null,
+                  });
+                } else {
+                  const stepData: CreateWorkflowStepData = {
+                    project_id: id,
+                    step_name: s.step_name ?? s.name,
+                    step_description: s.step_description ?? s.description ?? null,
+                    step_order: s.step_order ?? null,
+                    assigned_to: s.assigned_to ?? null,
+                    estimated_hours: s.estimated_hours ?? null,
+                    due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                    status: s.status ?? "pending",
+                    created_by: data.created_by || 1,
+                    probability_percent:
+                      s.probability_percent ?? s.probability ?? null,
+                  } as CreateWorkflowStepData;
+                  await this.createStep(stepData);
+                }
+              } catch (err) {
+                console.warn("[WorkflowRepository.updateProject] Error finding/creating step:", err);
+                const stepData: CreateWorkflowStepData = {
+                  project_id: id,
+                  step_name: s.step_name ?? s.name,
+                  step_description: s.step_description ?? s.description ?? null,
+                  step_order: s.step_order ?? null,
+                  assigned_to: s.assigned_to ?? null,
+                  estimated_hours: s.estimated_hours ?? null,
+                  due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                  status: s.status ?? "pending",
+                  created_by: data.created_by || 1,
+                  probability_percent:
+                    s.probability_percent ?? s.probability ?? null,
+                } as CreateWorkflowStepData;
+                await this.createStep(stepData);
+              }
             }
           } catch (stepErr) {
             console.warn(

@@ -768,6 +768,45 @@ export class WorkflowRepository {
   }
 
   static async createStep(data: CreateWorkflowStepData): Promise<WorkflowStep> {
+    // Attempt to find an existing step for this project with the same order or name
+    try {
+      const existingRes = await pool.query(
+        `SELECT id FROM workflow_steps WHERE project_id = $1 AND (step_order IS NOT DISTINCT FROM $2 OR LOWER(TRIM(step_name)) = LOWER(TRIM($3))) LIMIT 1`,
+        [data.project_id, data.step_order ?? null, data.step_name ?? null],
+      );
+
+      if (existingRes.rows.length > 0) {
+        const existingId = existingRes.rows[0].id;
+        // Update the existing step with the provided data
+        await this.updateStep(existingId, {
+          step_name: data.step_name,
+          step_description: data.step_description ?? null,
+          step_order: data.step_order ?? null,
+          assigned_to: data.assigned_to ?? null,
+          estimated_hours: data.estimated_hours ?? null,
+          due_date: data.due_date ?? null,
+          status: (data as any).status ?? undefined,
+          probability_percent: (data as any).probability_percent ?? null,
+        });
+
+        const stepResult = await pool.query(
+          `SELECT ws.*,
+            COALESCE(NULLIF(TRIM(CONCAT(u1.first_name, ' ', u1.last_name)), ''), u1.email) as assigned_user_name,
+            COALESCE(NULLIF(TRIM(CONCAT(u2.first_name, ' ', u2.last_name)), ''), u2.email) as creator_name
+           FROM workflow_steps ws
+           LEFT JOIN users u1 ON ws.assigned_to = u1.id
+           LEFT JOIN users u2 ON ws.created_by = u2.id
+           WHERE ws.id = $1`,
+          [existingId],
+        );
+
+        return stepResult.rows[0] as WorkflowStep;
+      }
+    } catch (err) {
+      // If the lookup fails for any reason, fall back to insert to avoid blocking progress
+      console.warn('[WorkflowRepository.createStep] Failed to lookup existing step, will attempt insert', err);
+    }
+
     const result = await pool.query(
       `INSERT INTO workflow_steps
        (project_id, step_name, step_description, step_order, assigned_to, estimated_hours,

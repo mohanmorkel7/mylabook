@@ -273,7 +273,10 @@ function CreateProjectFromLeadDialog({
         (async () => {
           try {
             const tpl = await apiClient.getTemplate(project.template_id);
-            if (tpl) setSelectedTemplate(tpl);
+            if (tpl) {
+              setSelectedTemplate(tpl);
+              setProjectData((prev: any) => ({ ...prev, template_id: String(project.template_id) }));
+            }
           } catch (e) {
             // ignore - template may not exist or user doesn't have access
             console.debug("Could not fetch template for project:", e);

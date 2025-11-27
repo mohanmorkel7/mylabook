@@ -85,7 +85,11 @@ export class ProductRepository {
       return res.rows[0];
     } catch (err: any) {
       // If a foreign key constraint on template_id failed, retry without template_id
-      if (err && err.code === "23503" && err.constraint === "products_template_id_fkey") {
+      if (
+        err &&
+        err.code === "23503" &&
+        err.constraint === "products_template_id_fkey"
+      ) {
         console.warn(
           "[ProductRepository.createProduct] FK constraint failed for template_id - retrying without template_id",
           err.detail,

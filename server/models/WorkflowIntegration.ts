@@ -407,9 +407,21 @@ export class WorkflowRepository {
   ): Promise<WorkflowProject | null> {
     try {
       try {
-        console.log('[WorkflowRepository.updateProject] Incoming steps:', Array.isArray(data.steps) ? data.steps.map(s => ({ id: s.id, step_order: s.step_order, step_name: s.step_name })) : 'none');
+        console.log(
+          "[WorkflowRepository.updateProject] Incoming steps:",
+          Array.isArray(data.steps)
+            ? data.steps.map((s) => ({
+                id: s.id,
+                step_order: s.step_order,
+                step_name: s.step_name,
+              }))
+            : "none",
+        );
       } catch (logErr) {
-        console.warn('[WorkflowRepository.updateProject] Failed to log incoming steps', logErr);
+        console.warn(
+          "[WorkflowRepository.updateProject] Failed to log incoming steps",
+          logErr,
+        );
       }
       const setClause: string[] = [];
       const values: any[] = [];
@@ -495,7 +507,8 @@ export class WorkflowRepository {
                   const existingStepId = findRes.rows[0].id;
                   await this.updateStep(existingStepId, {
                     step_name: s.step_name ?? s.name,
-                    step_description: s.step_description ?? s.description ?? null,
+                    step_description:
+                      s.step_description ?? s.description ?? null,
                     step_order: s.step_order ?? null,
                     assigned_to: s.assigned_to ?? null,
                     estimated_hours: s.estimated_hours ?? null,
@@ -508,7 +521,8 @@ export class WorkflowRepository {
                   const stepData: CreateWorkflowStepData = {
                     project_id: id,
                     step_name: s.step_name ?? s.name,
-                    step_description: s.step_description ?? s.description ?? null,
+                    step_description:
+                      s.step_description ?? s.description ?? null,
                     step_order: s.step_order ?? null,
                     assigned_to: s.assigned_to ?? null,
                     estimated_hours: s.estimated_hours ?? null,
@@ -521,7 +535,10 @@ export class WorkflowRepository {
                   await this.createStep(stepData);
                 }
               } catch (err) {
-                console.warn("[WorkflowRepository.updateProject] Error finding/creating step:", err);
+                console.warn(
+                  "[WorkflowRepository.updateProject] Error finding/creating step:",
+                  err,
+                );
                 const stepData: CreateWorkflowStepData = {
                   project_id: id,
                   step_name: s.step_name ?? s.name,

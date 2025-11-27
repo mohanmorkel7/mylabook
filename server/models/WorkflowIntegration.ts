@@ -442,6 +442,13 @@ export class WorkflowRepository {
 
         const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
         values.push(id);
+        // Debug logging to diagnose why template_id isn't persisted
+        try {
+          console.log("[WorkflowRepository.updateProject] Executing query:", query);
+          console.log("[WorkflowRepository.updateProject] Values:", values);
+        } catch (logErr) {
+          // ignore logging errors
+        }
         await client.query(query, values);
       }
 

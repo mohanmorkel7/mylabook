@@ -1933,8 +1933,8 @@ function ProjectDetailDialog({
                 <div>
                   <Label className="text-sm font-medium">Status</Label>
                   <div className="mt-1">
-                    <Badge className={getStatusColor(project.status)}>
-                      {project.status.replace("_", " ")}
+                    <Badge className={getStatusColor(project.status || "")}>
+                      {(project.status || "").replace("_", " ")}
                     </Badge>
                   </div>
                 </div>

@@ -804,7 +804,10 @@ export class WorkflowRepository {
       }
     } catch (err) {
       // If the lookup fails for any reason, fall back to insert to avoid blocking progress
-      console.warn('[WorkflowRepository.createStep] Failed to lookup existing step, will attempt insert', err);
+      console.warn(
+        "[WorkflowRepository.createStep] Failed to lookup existing step, will attempt insert",
+        err,
+      );
     }
 
     const result = await pool.query(

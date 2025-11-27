@@ -189,7 +189,9 @@ function CreateProjectFromLeadDialog({
   // in the dropdown options even if it's not part of the filtered templates list.
   const availableTemplates = (() => {
     if (!selectedTemplate) return templates;
-    const exists = templates.find((t: any) => String(t.id) === String(selectedTemplate.id));
+    const exists = templates.find(
+      (t: any) => String(t.id) === String(selectedTemplate.id),
+    );
     if (exists) return templates;
     return [selectedTemplate, ...templates];
   })();
@@ -275,7 +277,10 @@ function CreateProjectFromLeadDialog({
             const tpl = await apiClient.getTemplate(project.template_id);
             if (tpl) {
               setSelectedTemplate(tpl);
-              setProjectData((prev: any) => ({ ...prev, template_id: String(project.template_id) }));
+              setProjectData((prev: any) => ({
+                ...prev,
+                template_id: String(project.template_id),
+              }));
             }
           } catch (e) {
             // ignore - template may not exist or user doesn't have access

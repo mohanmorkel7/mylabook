@@ -452,7 +452,12 @@ export class WorkflowRepository {
         } catch (logErr) {
           // ignore logging errors
         }
-        await client.query(query, values);
+        const updateResult = await client.query(query, values);
+        try {
+          console.log("[WorkflowRepository.updateProject] Update result:", updateResult.rows);
+        } catch (logErr) {
+          // ignore
+        }
       }
 
       // If steps provided, upsert them

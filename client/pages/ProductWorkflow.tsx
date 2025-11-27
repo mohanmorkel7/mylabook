@@ -338,7 +338,11 @@ function CreateProjectFromLeadDialog({
   // Update steps when template changes
   useEffect(() => {
     // Only auto-apply template steps when creating a new project or when user explicitly changed the template
-    if (templateSteps?.steps && templateSteps.steps.length > 0 && (templateChangedByUser || !project)) {
+    if (
+      templateSteps?.steps &&
+      templateSteps.steps.length > 0 &&
+      (templateChangedByUser || !project)
+    ) {
       const convertedSteps = templateSteps.steps.map(
         (step: any, index: number) => ({
           step_name: step.name,

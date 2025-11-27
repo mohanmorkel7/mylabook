@@ -441,7 +441,10 @@ export class WorkflowRepository {
         const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
         values.push(id);
         try {
-          console.log("[WorkflowRepository.updateProject] Executing query:", query);
+          console.log(
+            "[WorkflowRepository.updateProject] Executing query:",
+            query,
+          );
           console.log("[WorkflowRepository.updateProject] Values:", values);
         } catch (logErr) {
           // ignore logging errors
@@ -449,7 +452,10 @@ export class WorkflowRepository {
 
         const updateResult = await pool.query(query, values);
         try {
-          console.log("[WorkflowRepository.updateProject] Update result:", updateResult.rows);
+          console.log(
+            "[WorkflowRepository.updateProject] Update result:",
+            updateResult.rows,
+          );
         } catch (logErr) {
           // ignore
         }
@@ -470,7 +476,8 @@ export class WorkflowRepository {
                 estimated_hours: s.estimated_hours ?? null,
                 due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
                 status: s.status ?? undefined,
-                probability_percent: s.probability_percent ?? s.probability ?? null,
+                probability_percent:
+                  s.probability_percent ?? s.probability ?? null,
               });
             } else {
               const stepData: CreateWorkflowStepData = {
@@ -483,12 +490,16 @@ export class WorkflowRepository {
                 due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
                 status: s.status ?? "pending",
                 created_by: data.created_by || 1,
-                probability_percent: s.probability_percent ?? s.probability ?? null,
+                probability_percent:
+                  s.probability_percent ?? s.probability ?? null,
               } as CreateWorkflowStepData;
               await this.createStep(stepData);
             }
           } catch (stepErr) {
-            console.warn("[WorkflowRepository.updateProject] Failed to upsert step:", stepErr);
+            console.warn(
+              "[WorkflowRepository.updateProject] Failed to upsert step:",
+              stepErr,
+            );
             // continue processing other steps
           }
         }
@@ -500,9 +511,15 @@ export class WorkflowRepository {
           "SELECT id, template_id, product_id FROM workflow_projects WHERE id = $1",
           [id],
         );
-        console.log("[WorkflowRepository.updateProject] Post-update workflow_projects row:", checkRes.rows[0]);
+        console.log(
+          "[WorkflowRepository.updateProject] Post-update workflow_projects row:",
+          checkRes.rows[0],
+        );
       } catch (checkErr) {
-        console.warn("[WorkflowRepository.updateProject] Failed to read post-update workflow_projects row:", checkErr);
+        console.warn(
+          "[WorkflowRepository.updateProject] Failed to read post-update workflow_projects row:",
+          checkErr,
+        );
       }
 
       const updated = await this.getProjectById(id);

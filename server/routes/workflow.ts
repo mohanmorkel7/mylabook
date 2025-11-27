@@ -397,6 +397,18 @@ router.delete("/projects/:id", async (req: Request, res: Response) => {
 // Update project
 router.patch("/projects/:id", async (req: Request, res: Response) => {
   try {
+    // Log incoming request for debugging update issues
+    try {
+      console.log("[workflow PATCH] incoming request:", {
+        method: req.method,
+        url: req.originalUrl || req.url,
+        contentType: req.headers["content-type"],
+        rawBody: req.rawBody ? req.rawBody.toString("utf8") : null,
+      });
+    } catch (logErr) {
+      console.warn("Failed to log request body:", logErr);
+    }
+
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid project ID" });
 

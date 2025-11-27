@@ -324,7 +324,8 @@ function CreateProjectFromLeadDialog({
 
   // Update steps when template changes
   useEffect(() => {
-    if (templateSteps?.steps && templateSteps.steps.length > 0) {
+    // Only auto-apply template steps when creating a new project or when user explicitly changed the template
+    if (templateSteps?.steps && templateSteps.steps.length > 0 && (templateChangedByUser || !project)) {
       const convertedSteps = templateSteps.steps.map(
         (step: any, index: number) => ({
           step_name: step.name,
@@ -338,8 +339,10 @@ function CreateProjectFromLeadDialog({
         }),
       );
       setSteps(convertedSteps);
-    } else if (selectedTemplate === null) {
-      // Default steps when no template selected
+      // reset the flag after applying
+      if (templateChangedByUser) setTemplateChangedByUser(false);
+    } else if (selectedTemplate === null && !project) {
+      // Default steps when no template selected and creating a new project
       setSteps([
         {
           step_name: "Build base using platform",
@@ -367,12 +370,14 @@ function CreateProjectFromLeadDialog({
     if (templateId === "none") {
       setSelectedTemplate(null);
       setProjectData((prev) => ({ ...prev, template_id: "" }));
+      setTemplateChangedByUser(true);
     } else {
       const template = templates.find(
         (t: any) => t.id.toString() === templateId,
       );
       setSelectedTemplate(template);
       setProjectData((prev) => ({ ...prev, template_id: templateId }));
+      setTemplateChangedByUser(true);
     }
   };
 

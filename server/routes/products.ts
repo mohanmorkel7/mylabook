@@ -64,10 +64,11 @@ router.get("/:id", async (req, res) => {
             product = await ProductRepository.getById(Number(wp.product_id));
           } else {
             // Create a product from workflow project data
+            // Build product data and ensure the referenced template exists in product_templates.
             const prodData: any = {
               name: wp.name,
               description: wp.description || null,
-              template_id: wp.template_id ?? null,
+              template_id: null, // will be set below if possible
               project_manager_id: wp.project_manager_id ?? null,
               target_completion_date: wp.target_completion_date ?? null,
               estimated_hours: wp.estimated_hours ?? null,
@@ -75,6 +76,56 @@ router.get("/:id", async (req, res) => {
               progress: wp.progress_percentage ?? 0,
               created_by: wp.created_by ?? 1,
             };
+
+            // If the workflow project references a template (onboarding_templates id),
+            // try to ensure there's a corresponding row in product_templates.
+            if (wp.template_id) {
+              try {
+                const conn = await import("../database/connection");
+                const tplCheck = await conn.pool.query(
+                  "SELECT id FROM product_templates WHERE id = $1",
+                  [wp.template_id],
+                );
+
+                if (tplCheck.rows.length > 0) {
+                  prodData.template_id = wp.template_id;
+                } else {
+                  // Try to fetch the onboarding template and copy it into product_templates
+                  try {
+                    const { TemplateRepository } = await import("../models/Template");
+                    const onboardTpl = await TemplateRepository.findById(Number(wp.template_id));
+                    if (onboardTpl) {
+                      const insertRes = await conn.pool.query(
+                        `INSERT INTO product_templates (name, category, description, steps) VALUES ($1, $2, $3, $4) RETURNING id`,
+                        [
+                          onboardTpl.name || `Template ${onboardTpl.id}`,
+                          // prefer category name if present, otherwise try numeric id
+                          (onboardTpl.category && (onboardTpl.category as any).name) || onboardTpl.category_id || null,
+                          onboardTpl.description || null,
+                          JSON.stringify(onboardTpl.steps || []),
+                        ],
+                      );
+                      prodData.template_id = insertRes.rows[0].id;
+                    } else {
+                      // No onboarding template found - keep null and let createProduct handle
+                      prodData.template_id = null;
+                    }
+                  } catch (copyErr) {
+                    console.warn(
+                      "Failed to copy onboarding template into product_templates:",
+                      copyErr,
+                    );
+                    prodData.template_id = null;
+                  }
+                }
+              } catch (checkErr) {
+                console.warn(
+                  "Failed to verify or create product_templates row for template_id:",
+                  checkErr,
+                );
+                prodData.template_id = null;
+              }
+            }
             const created = await ProductRepository.createProduct(prodData);
             // Persist link
             try {
@@ -125,10 +176,11 @@ router.put("/:id", async (req, res) => {
         ).pool.query("SELECT * FROM workflow_projects WHERE id = $1", [id]);
         if (wpRes.rows.length > 0) {
           const wp = wpRes.rows[0];
+          // Build product data and ensure the referenced template exists in product_templates.
           const prodData: any = {
             name: wp.name,
             description: wp.description || null,
-            template_id: wp.template_id ?? null,
+            template_id: null, // will be set below if possible
             project_manager_id: wp.project_manager_id ?? null,
             target_completion_date: wp.target_completion_date ?? null,
             estimated_hours: wp.estimated_hours ?? null,
@@ -136,6 +188,56 @@ router.put("/:id", async (req, res) => {
             progress: wp.progress_percentage ?? 0,
             created_by: wp.created_by ?? 1,
           };
+
+          // If the workflow project references a template (onboarding_templates id),
+          // try to ensure there's a corresponding row in product_templates.
+          if (wp.template_id) {
+            try {
+              const conn = await import("../database/connection");
+              const tplCheck = await conn.pool.query(
+                "SELECT id FROM product_templates WHERE id = $1",
+                [wp.template_id],
+              );
+
+              if (tplCheck.rows.length > 0) {
+                prodData.template_id = wp.template_id;
+              } else {
+                // Try to fetch the onboarding template and copy it into product_templates
+                try {
+                  const { TemplateRepository } = await import("../models/Template");
+                  const onboardTpl = await TemplateRepository.findById(Number(wp.template_id));
+                  if (onboardTpl) {
+                    const insertRes = await conn.pool.query(
+                      `INSERT INTO product_templates (name, category, description, steps) VALUES ($1, $2, $3, $4) RETURNING id`,
+                      [
+                        onboardTpl.name || `Template ${onboardTpl.id}`,
+                        // prefer category name if present, otherwise try numeric id
+                        (onboardTpl.category && (onboardTpl.category as any).name) || onboardTpl.category_id || null,
+                        onboardTpl.description || null,
+                        JSON.stringify(onboardTpl.steps || []),
+                      ],
+                    );
+                    prodData.template_id = insertRes.rows[0].id;
+                  } else {
+                    // No onboarding template found - keep null and let createProduct handle
+                    prodData.template_id = null;
+                  }
+                } catch (copyErr) {
+                  console.warn(
+                    "Failed to copy onboarding template into product_templates:",
+                    copyErr,
+                  );
+                  prodData.template_id = null;
+                }
+              }
+            } catch (checkErr) {
+              console.warn(
+                "Failed to verify or create product_templates row for template_id:",
+                checkErr,
+              );
+              prodData.template_id = null;
+            }
+          }
           const created = await ProductRepository.createProduct(prodData);
           // Persist link back to workflow_projects
           try {

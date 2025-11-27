@@ -80,8 +80,30 @@ export class ProductRepository {
 
     const placeholders = cols.map((_, i) => `$${i + 1}`);
     const sql = `INSERT INTO products (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-    const res = await pool.query(sql, vals);
-    return res.rows[0];
+    try {
+      const res = await pool.query(sql, vals);
+      return res.rows[0];
+    } catch (err: any) {
+      // If a foreign key constraint on template_id failed, retry without template_id
+      if (err && err.code === "23503" && err.constraint === "products_template_id_fkey") {
+        console.warn(
+          "[ProductRepository.createProduct] FK constraint failed for template_id - retrying without template_id",
+          err.detail,
+        );
+        // remove template_id from cols and vals if present
+        const tplIdx = cols.findIndex((c) => c === "template_id");
+        if (tplIdx !== -1) {
+          cols.splice(tplIdx, 1);
+          vals.splice(tplIdx, 1);
+        }
+        const placeholders2 = cols.map((_, i) => `$${i + 1}`);
+        const sql2 = `INSERT INTO products (${cols.join(", ")}) VALUES (${placeholders2.join(", ")}) RETURNING *`;
+        const res2 = await pool.query(sql2, vals);
+        return res2.rows[0];
+      }
+
+      throw err;
+    }
   }
 
   static async getById(

@@ -405,7 +405,6 @@ export class WorkflowRepository {
     id: number,
     data: Partial<CreateWorkflowProjectData> & { steps?: any[] },
   ): Promise<WorkflowProject | null> {
-    const client = await pool.connect();
     try {
       const setClause: string[] = [];
       const values: any[] = [];
@@ -435,108 +434,81 @@ export class WorkflowRepository {
         }
       }
 
-      await client.query("BEGIN");
-
+      // Execute the project update outside of a long-running transaction so
+      // step upserts cannot roll it back or hold locks for extended periods.
       if (setClause.length > 0) {
         setClause.push("updated_at = CURRENT_TIMESTAMP");
-
         const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
         values.push(id);
-        // Debug logging to diagnose why template_id isn't persisted
         try {
-          console.log(
-            "[WorkflowRepository.updateProject] Executing query:",
-            query,
-          );
+          console.log("[WorkflowRepository.updateProject] Executing query:", query);
           console.log("[WorkflowRepository.updateProject] Values:", values);
         } catch (logErr) {
           // ignore logging errors
         }
-        const updateResult = await client.query(query, values);
+
+        const updateResult = await pool.query(query, values);
         try {
-          console.log(
-            "[WorkflowRepository.updateProject] Update result:",
-            updateResult.rows,
-          );
+          console.log("[WorkflowRepository.updateProject] Update result:", updateResult.rows);
         } catch (logErr) {
           // ignore
         }
       }
 
-      // If steps provided, upsert them
+      // Upsert steps individually outside a wrapping transaction so errors here
+      // won't rollback the project update. Each step operation logs errors but
+      // does not prevent the project update from persisting.
       if (Array.isArray(data.steps)) {
         for (const s of data.steps) {
-          if (s.id) {
-            // update existing step
-            await this.updateStep(s.id, {
-              step_name: s.step_name ?? s.name,
-              step_description: s.step_description ?? s.description ?? null,
-              step_order: s.step_order ?? null,
-              assigned_to: s.assigned_to ?? null,
-              estimated_hours: s.estimated_hours ?? null,
-              due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
-              status: s.status ?? undefined,
-              probability_percent:
-                s.probability_percent ?? s.probability ?? null,
-            });
-          } else {
-            // create new step
-            const stepData: CreateWorkflowStepData = {
-              project_id: id,
-              step_name: s.step_name ?? s.name,
-              step_description: s.step_description ?? s.description ?? null,
-              step_order: s.step_order ?? null,
-              assigned_to: s.assigned_to ?? null,
-              estimated_hours: s.estimated_hours ?? null,
-              due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
-              status: s.status ?? "pending",
-              created_by: data.created_by || 1,
-              probability_percent:
-                s.probability_percent ?? s.probability ?? null,
-            } as CreateWorkflowStepData;
-            await this.createStep(stepData);
-
-            // update probability_percent if provided (workflow_steps table may have a probability column)
-            if (
-              s.probability_percent !== undefined ||
-              s.probability !== undefined
-            ) {
-              const prob = s.probability_percent ?? s.probability ?? null;
-              if (prob !== null) {
-                // set probability if the step was created
-                // find last inserted id already returned by createStep, but createStep returned the step; we skip here for brevity
-              }
+          try {
+            if (s.id) {
+              await this.updateStep(s.id, {
+                step_name: s.step_name ?? s.name,
+                step_description: s.step_description ?? s.description ?? null,
+                step_order: s.step_order ?? null,
+                assigned_to: s.assigned_to ?? null,
+                estimated_hours: s.estimated_hours ?? null,
+                due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                status: s.status ?? undefined,
+                probability_percent: s.probability_percent ?? s.probability ?? null,
+              });
+            } else {
+              const stepData: CreateWorkflowStepData = {
+                project_id: id,
+                step_name: s.step_name ?? s.name,
+                step_description: s.step_description ?? s.description ?? null,
+                step_order: s.step_order ?? null,
+                assigned_to: s.assigned_to ?? null,
+                estimated_hours: s.estimated_hours ?? null,
+                due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                status: s.status ?? "pending",
+                created_by: data.created_by || 1,
+                probability_percent: s.probability_percent ?? s.probability ?? null,
+              } as CreateWorkflowStepData;
+              await this.createStep(stepData);
             }
+          } catch (stepErr) {
+            console.warn("[WorkflowRepository.updateProject] Failed to upsert step:", stepErr);
+            // continue processing other steps
           }
         }
       }
 
-      await client.query("COMMIT");
-
-      // After commit, verify persisted value to help debug template_id issues
+      // Verify persisted value to help debug template_id issues
       try {
         const checkRes = await pool.query(
           "SELECT id, template_id, product_id FROM workflow_projects WHERE id = $1",
           [id],
         );
-        console.log(
-          "[WorkflowRepository.updateProject] Post-commit workflow_projects row:",
-          checkRes.rows[0],
-        );
+        console.log("[WorkflowRepository.updateProject] Post-update workflow_projects row:", checkRes.rows[0]);
       } catch (checkErr) {
-        console.warn(
-          "[WorkflowRepository.updateProject] Failed to read post-commit workflow_projects row:",
-          checkErr,
-        );
+        console.warn("[WorkflowRepository.updateProject] Failed to read post-update workflow_projects row:", checkErr);
       }
 
       const updated = await this.getProjectById(id);
       return updated;
     } catch (error) {
-      await client.query("ROLLBACK");
       throw error;
-    } finally {
-      client.release();
     }
   }
 

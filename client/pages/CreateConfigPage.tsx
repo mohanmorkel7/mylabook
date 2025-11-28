@@ -1266,32 +1266,6 @@ export default function CreateConfigPage() {
                 </Select>
               </div>
 
-              {/* Demand */}
-              <div className="space-y-2">
-                <Label htmlFor="demand">Demand (optional)</Label>
-                <Select
-                  value={
-                    form.demand === null || form.demand === undefined
-                      ? ""
-                      : String(form.demand)
-                  }
-                  onValueChange={(value) =>
-                    setForm({
-                      ...form,
-                      demand: value === "" ? null : Number(value),
-                    })
-                  }
-                >
-                  <SelectTrigger id="demand">
-                    <SelectValue placeholder="Select demand (SLA)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">2 Hours</SelectItem>
-                    <SelectItem value="1">5 Hours</SelectItem>
-                    <SelectItem value="2">24 Hours</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </CardContent>
           </Card>
 

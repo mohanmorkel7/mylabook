@@ -207,10 +207,13 @@ export function MailConfigModal({
       description: "",
       field_type: "subject",
       field_value: "",
+      field_operator: "contains",
+      field_value_not: "",
       project_id: 28,
       priority_id: 3,
       assigned_to_id: 0,
       watcher_user_ids: [],
+      demand: undefined,
     },
   );
   const [openAssignee, setOpenAssignee] = useState(false);

@@ -50,7 +50,12 @@ interface User {
 interface EmailRule {
   id: string;
   fieldType: "From" | "To" | "Cc" | "Subject" | "Body";
-  operator?: "Starts with" | "Contains" | "Ends with" | "domain" | "Does not contain";
+  operator?:
+    | "Starts with"
+    | "Contains"
+    | "Ends with"
+    | "domain"
+    | "Does not contain";
   value: string;
   valueNot?: string | null;
   domain?: string;
@@ -1033,8 +1038,7 @@ export default function CreateConfigPage() {
                                             </div>
                                           </div>
                                         )}
-
-                                        </div>
+                                      </div>
                                     ) : (
                                       <div className="space-y-2">
                                         <Label htmlFor={`value-${rule.id}`}>
@@ -1053,9 +1057,12 @@ export default function CreateConfigPage() {
                                           }
                                         />
 
-                                        {rule.operator === "Does not contain" && (
+                                        {rule.operator ===
+                                          "Does not contain" && (
                                           <div className="mt-2">
-                                            <Label htmlFor={`value-not-${rule.id}`}>
+                                            <Label
+                                              htmlFor={`value-not-${rule.id}`}
+                                            >
                                               Does NOT contain (example)
                                             </Label>
                                             <Input
@@ -1063,9 +1070,13 @@ export default function CreateConfigPage() {
                                               placeholder="e.g., admin@example.com or sample text"
                                               value={rule.valueNot || ""}
                                               onChange={(e) =>
-                                                updateEmailRule(source.id, rule.id, {
-                                                  valueNot: e.target.value,
-                                                })
+                                                updateEmailRule(
+                                                  source.id,
+                                                  rule.id,
+                                                  {
+                                                    valueNot: e.target.value,
+                                                  },
+                                                )
                                               }
                                             />
                                           </div>
@@ -1077,9 +1088,13 @@ export default function CreateConfigPage() {
                                             <Select
                                               value={rule.bucket || ""}
                                               onValueChange={(v) =>
-                                                updateEmailRule(source.id, rule.id, {
-                                                  bucket: v || null,
-                                                })
+                                                updateEmailRule(
+                                                  source.id,
+                                                  rule.id,
+                                                  {
+                                                    bucket: v || null,
+                                                  },
+                                                )
                                               }
                                             >
                                               <SelectTrigger>
@@ -1099,14 +1114,22 @@ export default function CreateConfigPage() {
                                             <Label>Demand (SLA)</Label>
                                             <Select
                                               value={
-                                                rule.demand === undefined || rule.demand === null
+                                                rule.demand === undefined ||
+                                                rule.demand === null
                                                   ? ""
                                                   : String(rule.demand)
                                               }
                                               onValueChange={(v) =>
-                                                updateEmailRule(source.id, rule.id, {
-                                                  demand: v === "" ? null : Number(v),
-                                                })
+                                                updateEmailRule(
+                                                  source.id,
+                                                  rule.id,
+                                                  {
+                                                    demand:
+                                                      v === ""
+                                                        ? null
+                                                        : Number(v),
+                                                  },
+                                                )
                                               }
                                             >
                                               <SelectTrigger>
@@ -1114,7 +1137,10 @@ export default function CreateConfigPage() {
                                               </SelectTrigger>
                                               <SelectContent>
                                                 {DEMANDS.map((d) => (
-                                                  <SelectItem key={d.id} value={String(d.id)}>
+                                                  <SelectItem
+                                                    key={d.id}
+                                                    value={String(d.id)}
+                                                  >
                                                     {d.label}
                                                   </SelectItem>
                                                 ))}
@@ -1122,7 +1148,6 @@ export default function CreateConfigPage() {
                                             </Select>
                                           </div>
                                         </div>
-
                                       </div>
                                     )}
 

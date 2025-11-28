@@ -329,6 +329,8 @@ export function MailConfigModal({
         description: config.description,
         field_type: config.field_type,
         field_value: config.field_value,
+        field_operator: config.field_operator,
+        field_value_not: config.field_value_not,
         from_email: config.from_email,
         to_email: config.to_email,
         subject_pattern: config.subject_pattern,

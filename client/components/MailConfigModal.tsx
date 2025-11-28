@@ -470,12 +470,43 @@ export function MailConfigModal({
               <Label htmlFor="field_value">
                 {getFieldValueLabel(config.field_type)} *
               </Label>
-              <Input
-                id="field_value"
-                placeholder={getFieldValuePlaceholder(config.field_type)}
-                value={config.field_value}
-                onChange={handleFieldValueChange}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="field_value"
+                  placeholder={getFieldValuePlaceholder(config.field_type)}
+                  value={config.field_value}
+                  onChange={handleFieldValueChange}
+                />
+
+                <Select
+                  value={config.field_operator || "contains"}
+                  onValueChange={(v) =>
+                    setConfig({ ...config, field_operator: v as any })
+                  }
+                >
+                  <SelectTrigger id="field_operator" className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="contains">Contains</SelectItem>
+                    <SelectItem value="does_not_contain">Does not contain</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {config.field_operator === "does_not_contain" && (
+                <div className="mt-2">
+                  <Label htmlFor="field_value_not">Does NOT contain (example)</Label>
+                  <Input
+                    id="field_value_not"
+                    placeholder={`e.g., admin@example.com or sample text`}
+                    value={config.field_value_not || ""}
+                    onChange={(e) =>
+                      setConfig({ ...config, field_value_not: e.target.value })
+                    }
+                  />
+                </div>
+              )}
             </div>
           </div>
 

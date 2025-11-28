@@ -165,9 +165,9 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   }
 
   let result = false;
-  if (operator === "Starts with") result = target.startsWith(value);
-  else if (operator === "Ends with") result = target.endsWith(value);
-  else if (operator === "Does not contain") result = !target.includes(value);
+  if (operator === "starts with") result = target.startsWith(value);
+  else if (operator === "ends with") result = target.endsWith(value);
+  else if (operator === "does not contain") result = !target.includes(value);
   else result = target.includes(value); // default Contains
 
   if (debug)

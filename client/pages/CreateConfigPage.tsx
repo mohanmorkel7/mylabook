@@ -1265,7 +1265,6 @@ export default function CreateConfigPage() {
                   </SelectContent>
                 </Select>
               </div>
-
             </CardContent>
           </Card>
 

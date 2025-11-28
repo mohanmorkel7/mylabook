@@ -252,7 +252,7 @@ export function matchEmailAgainstConfig(
     // Use field_value_not when operator is 'does_not_contain' and value provided, otherwise fallback to field_value
     const valueToCheckRaw =
       operator === "does_not_contain"
-        ? ((config as any).field_value_not || config.field_value)
+        ? (config as any).field_value_not || config.field_value
         : config.field_value;
     const valueToCheck = (valueToCheckRaw || "").toLowerCase();
 
@@ -271,23 +271,17 @@ export function matchEmailAgainstConfig(
       case "body":
         // For body, use matchBodyContent helper instead of simple includes
         if (operator === "does_not_contain") {
-          return !matchBodyContent(valueToCheckRaw, email.body || "", (config as any).body_match_type || "word");
+          return !matchBodyContent(
+            valueToCheckRaw,
+            email.body || "",
+            (config as any).body_match_type || "word",
+          );
         }
-        return matchBodyContent(valueToCheckRaw, email.body || "", (config as any).body_match_type || "word");
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return matchBodyContent(
+          valueToCheckRaw,
+          email.body || "",
+          (config as any).body_match_type || "word",
+        );
 
       default:
         return false;

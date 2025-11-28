@@ -55,6 +55,8 @@ export interface CreateMailConfigData {
   description?: string;
   field_type: "subject" | "fromEmail" | "toEmail" | "body";
   field_value: string;
+  field_operator?: "contains" | "does_not_contain";
+  field_value_not?: string | null;
   from_email?: string;
   to_email?: string;
   subject_pattern?: string;

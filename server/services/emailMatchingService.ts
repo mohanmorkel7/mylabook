@@ -246,30 +246,41 @@ export function matchEmailAgainstConfig(
     return false;
   }
 
-  // Support new field_type/field_value format
+  // Support new field_type/field_value format with operators
   if (config.field_type && config.field_value) {
-    const fieldValue = config.field_value.toLowerCase();
+    const operator = (config as any).field_operator || "contains";
+    // Use field_value_not when operator is 'does_not_contain' and value provided, otherwise fallback to field_value
+    const valueToCheckRaw =
+      operator === "does_not_contain"
+        ? ((config as any).field_value_not || config.field_value)
+        : config.field_value;
+    const valueToCheck = (valueToCheckRaw || "").toLowerCase();
+
     let emailFieldValue = "";
 
     switch (config.field_type) {
       case "subject":
-        emailFieldValue = email.subject.toLowerCase();
+        emailFieldValue = normalizeText(stripSubjectPrefixes(email.subject));
         break;
       case "fromEmail":
-        emailFieldValue = email.from.toLowerCase();
+        emailFieldValue = normalizeText(email.from);
         break;
       case "toEmail":
-        emailFieldValue = email.to.toLowerCase();
+        emailFieldValue = normalizeText(email.to);
         break;
       case "body":
-        emailFieldValue = email.body.toLowerCase();
+        emailFieldValue = normalizeText(email.body ? email.body.replace(/<[^>]*>/g, "") : "");
         break;
       default:
         return false;
     }
 
-    const matches = emailFieldValue.includes(fieldValue);
-    return matches;
+    if (operator === "does_not_contain") {
+      return !emailFieldValue.includes(valueToCheck);
+    }
+
+    // default: contains
+    return emailFieldValue.includes(valueToCheck);
   }
 
   // Fall back to legacy field patterns

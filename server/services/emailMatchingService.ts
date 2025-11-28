@@ -270,7 +270,7 @@ export function matchEmailAgainstConfig(
         break;
       case "body":
         // For body, use matchBodyContent helper instead of simple includes
-        if (operator === "does_not_contain") {
+        if (operatorNorm === "does not contain") {
           return !matchBodyContent(
             valueToCheckRaw,
             email.body || "",
@@ -287,7 +287,7 @@ export function matchEmailAgainstConfig(
         return false;
     }
 
-    if (operator === "does_not_contain") {
+    if (operatorNorm === "does not contain") {
       return !emailFieldValue.includes(valueToCheck);
     }
 

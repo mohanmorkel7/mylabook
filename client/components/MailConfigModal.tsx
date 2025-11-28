@@ -167,7 +167,7 @@ export function MailConfigModal({
           ]);
 
           setTeams(teamsRes || []);
-          setBuckets(bucketsRes || []);
+          setBuckets((bucketsRes && bucketsRes.length > 0) ? bucketsRes : DEFAULT_BUCKETS.map((name, i) => ({ id: i+1, name })));
           setStatuses(statusesRes || []);
         } catch (innerErr) {
           console.warn("Fallback metadata fetch failed", innerErr);

@@ -205,12 +205,12 @@ export class MailConfigRepository {
   static async create(data: CreateMailConfigData): Promise<MailConfig> {
     const query = `
       INSERT INTO mail_configs (
-        user_id, name, description, field_type, field_value,
+        user_id, name, description, field_type, field_value, field_operator, field_value_not,
         from_email, to_email, subject_pattern, body_content, body_match_type,
         project_id, priority_id, assigned_to_id, watcher_user_ids, team_id, bucket_id, status_id, demand,
         sources, team
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-      RETURNING id, user_id, name, description, field_type, field_value,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+      RETURNING id, user_id, name, description, field_type, field_value, field_operator, field_value_not,
                 from_email, to_email, subject_pattern, body_content, body_match_type,
             project_id, priority_id, assigned_to_id, watcher_user_ids,
             team_id, bucket_id, status_id, demand,
@@ -223,6 +223,8 @@ export class MailConfigRepository {
       data.description || null,
       data.field_type,
       data.field_value,
+      data.field_operator || null,
+      data.field_value_not || null,
       data.from_email || null,
       data.to_email || null,
       data.subject_pattern || null,

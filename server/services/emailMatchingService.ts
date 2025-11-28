@@ -102,7 +102,8 @@ function stripSubjectPrefixes(subject: string | undefined): string {
 
 function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   const fieldType = rule.fieldType;
-  const operator = rule.operator || "Contains";
+  const operatorRaw = rule.operator || "Contains";
+  const operator = String(operatorRaw).toLowerCase().replace(/_/g, " ").trim();
   const value = (rule.value || "").toLowerCase();
   const domain = (rule.domain || "").toLowerCase();
 

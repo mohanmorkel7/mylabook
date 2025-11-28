@@ -57,7 +57,6 @@ interface EmailRule {
     | "domain"
     | "Does not contain";
   value: string;
-  valueNot?: string | null;
   domain?: string;
   bucket?: string | null;
   demand?: number | null;

@@ -184,7 +184,7 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
 
   if (debug)
     console.log(
-      `[emailMatching] text check: operator=${operator} value="${value}" => ${result} (target excerpt: "${(target||"").substring(0,120)}")`,
+      `[emailMatching] text check: operator=${operator} value="${value}" => ${result} (target excerpt: "${(target || "").substring(0, 120)}")`,
     );
   return result;
 }

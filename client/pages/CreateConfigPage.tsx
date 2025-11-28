@@ -50,9 +50,12 @@ interface User {
 interface EmailRule {
   id: string;
   fieldType: "From" | "To" | "Cc" | "Subject" | "Body";
-  operator?: "Starts with" | "Contains" | "Ends with" | "domain";
+  operator?: "Starts with" | "Contains" | "Ends with" | "domain" | "Does not contain";
   value: string;
+  valueNot?: string | null;
   domain?: string;
+  bucket?: string | null;
+  demand?: number | null;
   nextOperator: "AND" | "OR" | "END";
 }
 

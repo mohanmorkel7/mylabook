@@ -165,14 +165,26 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   }
 
   let result = false;
-  if (operator === "starts with") result = target.startsWith(value);
+
+  // Special-case: when operator is 'does not contain' and value looks like an email address,
+  // check parsed addresses in the target for exact equality first (more reliable than substring checks).
+  if (operator === "does not contain" && value.includes("@")) {
+    const addrRegex = /([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/gi;
+    const found = (target.match(addrRegex) || []).map((s) => s.toLowerCase());
+    if (found.includes(value)) {
+      result = false; // value present => does not contain should fail
+    } else {
+      // fallback: ensure the target does not contain the value as substring
+      result = !target.includes(value);
+    }
+  } else if (operator === "starts with") result = target.startsWith(value);
   else if (operator === "ends with") result = target.endsWith(value);
   else if (operator === "does not contain") result = !target.includes(value);
   else result = target.includes(value); // default Contains
 
   if (debug)
     console.log(
-      `[emailMatching] text check: operator=${operator} value="${value}" => ${result}`,
+      `[emailMatching] text check: operator=${operator} value="${value}" => ${result} (target excerpt: "${(target||"").substring(0,120)}")`,
     );
   return result;
 }

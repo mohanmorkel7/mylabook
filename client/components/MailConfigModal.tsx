@@ -153,7 +153,11 @@ export function MailConfigModal({
         const meta = await api.get("/tickets/metadata");
         if (meta && (meta.teams || meta.buckets || meta.statuses)) {
           setTeams(meta.teams || []);
-          setBuckets((meta.buckets && meta.buckets.length > 0) ? meta.buckets : DEFAULT_BUCKETS.map((name, i) => ({ id: i+1, name })));
+          setBuckets(
+            meta.buckets && meta.buckets.length > 0
+              ? meta.buckets
+              : DEFAULT_BUCKETS.map((name, i) => ({ id: i + 1, name })),
+          );
           setStatuses(meta.statuses || []);
           return;
         }
@@ -167,7 +171,11 @@ export function MailConfigModal({
           ]);
 
           setTeams(teamsRes || []);
-          setBuckets((bucketsRes && bucketsRes.length > 0) ? bucketsRes : DEFAULT_BUCKETS.map((name, i) => ({ id: i+1, name })));
+          setBuckets(
+            bucketsRes && bucketsRes.length > 0
+              ? bucketsRes
+              : DEFAULT_BUCKETS.map((name, i) => ({ id: i + 1, name })),
+          );
           setStatuses(statusesRes || []);
         } catch (innerErr) {
           console.warn("Fallback metadata fetch failed", innerErr);
@@ -491,14 +499,18 @@ export function MailConfigModal({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="contains">Contains</SelectItem>
-                    <SelectItem value="does_not_contain">Does not contain</SelectItem>
+                    <SelectItem value="does_not_contain">
+                      Does not contain
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {config.field_operator === "does_not_contain" && (
                 <div className="mt-2">
-                  <Label htmlFor="field_value_not">Does NOT contain (example)</Label>
+                  <Label htmlFor="field_value_not">
+                    Does NOT contain (example)
+                  </Label>
                   <Input
                     id="field_value_not"
                     placeholder={`e.g., admin@example.com or sample text`}

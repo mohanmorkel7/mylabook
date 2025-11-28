@@ -348,7 +348,10 @@ export default function CreateConfigPage() {
             fieldType: "From",
             operator: "domain",
             value: "",
+            valueNot: "",
             domain: "",
+            bucket: null,
+            demand: null,
             nextOperator: "END",
           };
           return { ...s, emailRules: [...s.emailRules, newRule] };

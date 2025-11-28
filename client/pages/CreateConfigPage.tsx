@@ -1055,30 +1055,6 @@ export default function CreateConfigPage() {
                                           }
                                         />
 
-                                        {rule.operator ===
-                                          "Does not contain" && (
-                                          <div className="mt-2">
-                                            <Label
-                                              htmlFor={`value-not-${rule.id}`}
-                                            >
-                                              Does NOT contain (example)
-                                            </Label>
-                                            <Input
-                                              id={`value-not-${rule.id}`}
-                                              placeholder="e.g., admin@example.com or sample text"
-                                              value={rule.valueNot || ""}
-                                              onChange={(e) =>
-                                                updateEmailRule(
-                                                  source.id,
-                                                  rule.id,
-                                                  {
-                                                    valueNot: e.target.value,
-                                                  },
-                                                )
-                                              }
-                                            />
-                                          </div>
-                                        )}
 
                                         <div className="grid grid-cols-2 gap-2 mt-3">
                                           <div className="space-y-2">

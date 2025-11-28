@@ -51,6 +51,8 @@ interface MailConfig {
   description?: string;
   field_type: "subject" | "fromEmail" | "toEmail" | "body";
   field_value: string;
+  field_operator?: "contains" | "does_not_contain";
+  field_value_not?: string | null;
   from_email?: string;
   to_email?: string;
   subject_pattern?: string;
@@ -60,6 +62,10 @@ interface MailConfig {
   priority_id: number;
   assigned_to_id: number;
   watcher_user_ids: number[];
+  team_id?: number;
+  bucket_id?: number;
+  status_id?: number;
+  demand?: number | null;
   is_active?: boolean;
 }
 

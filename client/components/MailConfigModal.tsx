@@ -135,6 +135,17 @@ export function MailConfigModal({
     { id: 2, label: "24 hours" },
   ]);
 
+  // Default bucket options if backend doesn't provide them
+  const DEFAULT_BUCKETS = [
+    "Bugs",
+    "Feature Request",
+    "Improvements",
+    "Migrations",
+    "Alerts",
+    "Roadmap",
+    "Support",
+  ];
+
   useEffect(() => {
     (async () => {
       try {

@@ -92,9 +92,26 @@ const OPERATORS = {
   From: ["domain"],
   To: ["domain"],
   Cc: ["domain"],
-  Subject: ["Starts with", "Contains", "Ends with"],
-  Body: ["Starts with", "Contains", "Ends with"],
+  Subject: ["Starts with", "Contains", "Ends with", "Does not contain"],
+  Body: ["Starts with", "Contains", "Ends with", "Does not contain"],
 };
+
+const BUCKETS = [
+  "Bugs",
+  "Feature Request",
+  "Improvements",
+  "Migrations",
+  "Alerts",
+  "Roadmap",
+  "Support",
+];
+
+const DEMANDS = [
+  { id: 0, label: "2 Hours" },
+  { id: 1, label: "5 Hours" },
+  { id: 2, label: "24 Hours" },
+];
+
 const SLACK_TYPES = ["Channel", "Workspace"];
 const STATUS_OPTIONS = ["Open", "In Progress", "Pending", "Overdue", "Closed"];
 

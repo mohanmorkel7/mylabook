@@ -153,7 +153,7 @@ export function MailConfigModal({
         const meta = await api.get("/tickets/metadata");
         if (meta && (meta.teams || meta.buckets || meta.statuses)) {
           setTeams(meta.teams || []);
-          setBuckets(meta.buckets || []);
+          setBuckets((meta.buckets && meta.buckets.length > 0) ? meta.buckets : DEFAULT_BUCKETS.map((name, i) => ({ id: i+1, name })));
           setStatuses(meta.statuses || []);
           return;
         }

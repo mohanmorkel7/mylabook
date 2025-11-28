@@ -105,8 +105,8 @@ function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   const operator = rule.operator || "Contains";
   const value = (
     operator === "Does not contain"
-      ? (rule.valueNot || rule.value || "")
-      : (rule.value || "")
+      ? rule.valueNot || rule.value || ""
+      : rule.value || ""
   ).toLowerCase();
   const domain = (rule.domain || "").toLowerCase();
 

@@ -1055,7 +1055,6 @@ export default function CreateConfigPage() {
                                           }
                                         />
 
-
                                         <div className="grid grid-cols-2 gap-2 mt-3">
                                           <div className="space-y-2">
                                             <Label>Bucket</Label>

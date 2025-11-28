@@ -274,6 +274,8 @@ export class MailConfigRepository {
       "bucket_id",
       "status_id",
       "demand",
+      "field_operator",
+      "field_value_not",
       "is_active",
       "sources",
       "team",

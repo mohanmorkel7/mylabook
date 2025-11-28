@@ -94,9 +94,9 @@ const EMAIL_SOURCES = [
 const DOMAINS = ["@razorpay.com", "@payswiff.com", "@camspay.com", "custom"];
 const FIELD_TYPES = ["From", "To", "Cc", "Subject", "Body"];
 const OPERATORS = {
-  From: ["domain"],
-  To: ["domain"],
-  Cc: ["domain"],
+  From: ["domain", "Does not contain"],
+  To: ["domain", "Does not contain"],
+  Cc: ["domain", "Does not contain"],
   Subject: ["Starts with", "Contains", "Ends with", "Does not contain"],
   Body: ["Starts with", "Contains", "Ends with", "Does not contain"],
 };

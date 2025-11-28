@@ -269,8 +269,26 @@ export function matchEmailAgainstConfig(
         emailFieldValue = normalizeText(email.to);
         break;
       case "body":
-        emailFieldValue = normalizeText(email.body ? email.body.replace(/<[^>]*>/g, "") : "");
-        break;
+        // For body, use matchBodyContent helper instead of simple includes
+        if (operator === "does_not_contain") {
+          return !matchBodyContent(valueToCheckRaw, email.body || "", (config as any).body_match_type || "word");
+        }
+        return matchBodyContent(valueToCheckRaw, email.body || "", (config as any).body_match_type || "word");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       default:
         return false;
     }

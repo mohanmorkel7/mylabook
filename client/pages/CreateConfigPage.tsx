@@ -500,6 +500,15 @@ export default function CreateConfigPage() {
                 });
                 return;
               }
+            } else if (rule.operator === "Does not contain") {
+              if (!rule.valueNot?.trim() && !rule.value?.trim()) {
+                toast({
+                  title: "Validation Error",
+                  description: `Value (example) is required for Does not contain rule on ${rule.fieldType}`,
+                  variant: "destructive",
+                });
+                return;
+              }
             } else {
               if (!rule.value?.trim()) {
                 toast({

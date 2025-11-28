@@ -221,6 +221,8 @@ router.post("/", async (req: Request, res: Response) => {
       description,
       field_type: field_type as "subject" | "fromEmail" | "toEmail" | "body",
       field_value,
+      field_operator: (req.body as any)?.field_operator,
+      field_value_not: (req.body as any)?.field_value_not || null,
       from_email,
       to_email,
       subject_pattern,

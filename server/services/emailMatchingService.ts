@@ -250,12 +250,10 @@ export function matchEmailAgainstConfig(
 
   // Support new field_type/field_value format with operators
   if (config.field_type && config.field_value) {
-    const operator = (config as any).field_operator || "contains";
-    // Use field_value_not when operator is 'does_not_contain' and value provided, otherwise fallback to field_value
-    const valueToCheckRaw =
-      operator === "does_not_contain"
-        ? (config as any).field_value_not || config.field_value
-        : config.field_value;
+    const operatorRaw = String((config as any).field_operator || "contains");
+    const operatorNorm = operatorRaw.toLowerCase().replace(/[_\s]+/g, " ").trim();
+    // Use field_value when checking; operatorNorm === 'does not contain' will invert the match
+    const valueToCheckRaw = config.field_value;
     const valueToCheck = (valueToCheckRaw || "").toLowerCase();
 
     let emailFieldValue = "";

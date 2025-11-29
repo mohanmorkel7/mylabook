@@ -360,14 +360,32 @@ ${sanitizedHtml || rawText || ""}`;
         effectivePriorityId = null;
       }
 
+      // If this createTicket was invoked for a specific source (config.sources may contain only the matched source),
+      // try to find the specific rule that matched so we can use its bucket/demand overrides.
+      let bucketOverride = config.bucket_id;
+      let demandOverride = config.demand;
+      try {
+        if (Array.isArray(config.sources) && config.sources.length === 1) {
+          const source = config.sources[0];
+          const { findMatchingRule } = await import("./emailMatchingService");
+          const matchedRule: any = findMatchingRule(email as any, source as any);
+          if (matchedRule) {
+            if (matchedRule.bucket !== undefined) bucketOverride = matchedRule.bucket;
+            if (matchedRule.demand !== undefined) demandOverride = matchedRule.demand;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to resolve matched rule overrides:", e);
+      }
+
       // Create ticket in app database using TicketRepository
       const ticketData = {
         subject,
         description,
         priority_id: effectivePriorityId,
         team_id: config.team_id,
-        bucket_id: config.bucket_id,
-        demand: config.demand,
+        bucket_id: bucketOverride,
+        demand: demandOverride,
         status_id: config.status_id,
         assigned_to: config.assigned_to_id,
         project_id: config.project_id,

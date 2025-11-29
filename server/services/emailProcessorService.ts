@@ -458,7 +458,10 @@ ${sanitizedHtml || rawText || ""}`;
                       bucketOverride = null;
                     }
                   } catch (insErr) {
-                    console.warn("Failed to create ticket_bucket:", insErr?.message || insErr);
+                    console.warn(
+                      "Failed to create ticket_bucket:",
+                      insErr?.message || insErr,
+                    );
                     bucketOverride = null;
                   }
                 } else {

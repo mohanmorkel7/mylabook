@@ -457,6 +457,17 @@ ${sanitizedHtml || rawText || ""}`;
       const createdBy = (config as any).user_id || config.assigned_to_id || 1;
 
       try {
+        console.log('[EmailProcessing] Ticket data before create:', {
+          team_id: teamOverride,
+          bucket_id: bucketOverride,
+          demand: demandOverride,
+          priority_id: effectivePriorityId,
+          status_id: config.status_id,
+          assigned_to: config.assigned_to_id,
+          project_id: config.project_id,
+          mail_config_id: config.id,
+        });
+
         const createdTicket = await (
           await import("../models/Ticket")
         ).TicketRepository.create(ticketData, createdBy);

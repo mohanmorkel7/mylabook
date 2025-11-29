@@ -361,9 +361,10 @@ ${sanitizedHtml || rawText || ""}`;
       }
 
       // If this createTicket was invoked for a specific source (config.sources may contain only the matched source),
-      // try to find the specific rule that matched so we can use its bucket/demand overrides.
+      // try to find the specific rule that matched so we can use its bucket/demand/team overrides.
       let bucketOverride = config.bucket_id;
       let demandOverride = config.demand;
+      let teamOverride = config.team_id;
       try {
         if (Array.isArray(config.sources) && config.sources.length === 1) {
           const source = config.sources[0];
@@ -377,28 +378,58 @@ ${sanitizedHtml || rawText || ""}`;
               bucketOverride = matchedRule.bucket;
             if (matchedRule.demand !== undefined)
               demandOverride = matchedRule.demand;
+            if (matchedRule.team !== undefined) teamOverride = matchedRule.team;
           }
         }
 
-        // If bucketOverride is a name (string) try to resolve to an ID
-        if (bucketOverride && typeof bucketOverride === "string") {
-          try {
-            const bRes = await pool.query(
-              "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
-              [String(bucketOverride)],
+        // Resolve teamOverride if provided as a team name (string) or if top-level config.team (string) exists
+        try {
+          if ((teamOverride === undefined || teamOverride === null) && config.team && typeof config.team === "string") {
+            teamOverride = config.team; // attempt to resolve below
+          }
+
+          if (teamOverride && typeof teamOverride === "string") {
+            const tRes = await pool.query(
+              "SELECT id FROM ticket_teams WHERE LOWER(name) = LOWER($1) LIMIT 1",
+              [String(teamOverride)],
             );
-            if (bRes.rows.length > 0) {
-              bucketOverride = bRes.rows[0].id;
+            if (tRes.rows.length > 0) {
+              teamOverride = tRes.rows[0].id;
             } else {
-              // leave as-is (DB insert will likely fail if expecting integer)
               console.warn(
-                `[EmailProcessing] Could not resolve bucket name '${bucketOverride}' to id`,
+                `[EmailProcessing] Could not resolve team name '${teamOverride}' to id`,
               );
+              teamOverride = null;
+            }
+          }
+        } catch (te) {
+          console.warn("Error resolving team name to id:", te);
+          teamOverride = null;
+        }
+
+        // Normalize bucketOverride: if numeric string, convert to number; if name string, resolve to ID
+        if (bucketOverride && typeof bucketOverride === "string") {
+          // If the string is numeric, convert
+          if (/^\d+$/.test(bucketOverride)) {
+            bucketOverride = Number(bucketOverride);
+          } else {
+            try {
+              const bRes = await pool.query(
+                "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
+                [String(bucketOverride)],
+              );
+              if (bRes.rows.length > 0) {
+                bucketOverride = bRes.rows[0].id;
+              } else {
+                console.warn(
+                  `[EmailProcessing] Could not resolve bucket name '${bucketOverride}' to id`,
+                );
+                bucketOverride = null;
+              }
+            } catch (be) {
+              console.warn("Error resolving bucket name to id:", be);
               bucketOverride = null;
             }
-          } catch (be) {
-            console.warn("Error resolving bucket name to id:", be);
-            bucketOverride = null;
           }
         }
       } catch (e) {

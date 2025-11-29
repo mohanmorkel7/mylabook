@@ -441,7 +441,7 @@ ${sanitizedHtml || rawText || ""}`;
         subject,
         description,
         priority_id: effectivePriorityId,
-        team_id: config.team_id,
+        team_id: teamOverride,
         bucket_id: bucketOverride,
         demand: demandOverride,
         status_id: config.status_id,

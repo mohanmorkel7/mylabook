@@ -227,6 +227,7 @@ export default function TicketsCreatePage() {
             ticket.assigned_to ?? ticket.assignee?.id ?? form.assigned_to,
           team_id: ticket.team_id ?? ticket.team?.id ?? form.team_id,
           bucket_id: ticket.bucket_id ?? ticket.bucket?.id ?? form.bucket_id,
+          bucket_name: ticket.bucket?.name ?? form.bucket_name,
           status_id: ticket.status_id ?? form.status_id,
           demand: ticket.demand ?? form.demand,
           reason: ticket.reason || form.reason,

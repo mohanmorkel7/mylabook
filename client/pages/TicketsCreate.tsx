@@ -302,7 +302,7 @@ export default function TicketsCreatePage() {
     // Client-side validation
     const newErrors: Record<string, string> = {};
     if (!form.team_id) newErrors.team_id = "Team is required";
-    if (!form.bucket_id) newErrors.bucket_id = "Bucket is required";
+    if (!form.bucket_id && !form.bucket_name) newErrors.bucket_id = "Bucket is required";
     if (!form.status_id) newErrors.status_id = "Status is required";
     if (!form.subject || String(form.subject).trim() === "")
       newErrors.subject = "Title is required";

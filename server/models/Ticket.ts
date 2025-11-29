@@ -733,6 +733,7 @@ export class TicketRepository {
             updated_at: row.updated_at,
           }
         : undefined,
+      bucket: row.bucket_name ? { id: row.bucket_id, name: row.bucket_name, team_id: row.bucket_team_id } : undefined,
       creator: {
         id: row.created_by,
         name: row.creator_name,
@@ -903,6 +904,7 @@ export class TicketRepository {
             updated_at: row.updated_at,
           }
         : undefined,
+      bucket: row.bucket_name ? { id: row.bucket_id, name: row.bucket_name, team_id: row.bucket_team_id } : undefined,
       creator: {
         id: row.created_by,
         name: row.creator_name,

@@ -318,6 +318,28 @@ router.put("/:id", async (req: Request, res: Response) => {
       }
     }
 
+    // Resolve team name to id if team provided in update payload
+    if (!(updateData as any).team_id && (req.body as any)?.team) {
+      try {
+        const tName = (req.body as any).team;
+        let teamRes = await pool.query(
+          "SELECT id FROM ticket_teams WHERE LOWER(name) = LOWER($1) LIMIT 1",
+          [tName],
+        );
+        if (teamRes.rows.length === 0) {
+          teamRes = await pool.query(
+            "SELECT id FROM ticket_teams WHERE LOWER(name) LIKE LOWER($1) LIMIT 1",
+            [`%${tName}%`],
+          );
+        }
+        if (teamRes.rows.length > 0) {
+          (updateData as any).team_id = teamRes.rows[0].id;
+        }
+      } catch (e) {
+        console.warn("Failed to resolve team name during update:", e?.message || e);
+      }
+    }
+
     // Remove user_id from update data if present
     delete (updateData as any).user_id;
 

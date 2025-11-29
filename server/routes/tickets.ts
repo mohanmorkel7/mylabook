@@ -517,6 +517,42 @@ router.post(
         }
       }
 
+      // Support resolving bucket_name -> bucket_id in request payloads
+      try {
+        if (
+          (!ticketData.bucket_id || ticketData.bucket_id === "" || ticketData.bucket_id === null) &&
+          (ticketData as any).bucket_name &&
+          String((ticketData as any).bucket_name).trim() !== ""
+        ) {
+          const bucketName = String((ticketData as any).bucket_name).trim();
+          let bRes;
+          if (ticketData.team_id) {
+            bRes = await pool.query(
+              "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) AND team_id = $2 LIMIT 1",
+              [bucketName, ticketData.team_id],
+            );
+          }
+          if (!bRes || bRes.rows.length === 0) {
+            bRes = await pool.query(
+              "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
+              [bucketName],
+            );
+          }
+          if (bRes && bRes.rows.length > 0) {
+            ticketData.bucket_id = bRes.rows[0].id;
+          } else if (ticketData.team_id) {
+            // Create bucket for the team
+            const ins = await pool.query(
+              "INSERT INTO ticket_buckets (team_id, name, description, created_at, updated_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+              [ticketData.team_id, bucketName, null],
+            );
+            if (ins.rows.length > 0) ticketData.bucket_id = ins.rows[0].id;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to resolve bucket_name to id:", e?.message || e);
+      }
+
       // Server-side validation for required fields
       const requiredFields = [
         { key: "team_id", label: "team" },

@@ -940,6 +940,9 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
         );
       }
 
+      // Remove transient fields not present in DB schema
+      delete (updateData as any).bucket_name;
+
       const ticket = await TicketRepository.update(id, updateData, updatedBy);
 
       // Record status change reason if provided and status changed

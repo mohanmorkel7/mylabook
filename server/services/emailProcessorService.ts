@@ -411,24 +411,60 @@ ${sanitizedHtml || rawText || ""}`;
           teamOverride = null;
         }
 
-        // Normalize bucketOverride: if numeric string, convert to number; if name string, resolve to ID
+        // Normalize bucketOverride: if numeric string, convert to number; if name string, resolve to ID.
         if (bucketOverride && typeof bucketOverride === "string") {
+          const bucketName = bucketOverride;
           // If the string is numeric, convert
-          if (/^\d+$/.test(bucketOverride)) {
-            bucketOverride = Number(bucketOverride);
+          if (/^\d+$/.test(bucketName)) {
+            bucketOverride = Number(bucketName);
           } else {
             try {
-              const bRes = await pool.query(
-                "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
-                [String(bucketOverride)],
-              );
+              // Prefer matching bucket by name + team if we have a resolved team id
+              let bRes;
+              if (teamOverride && typeof teamOverride === "number") {
+                bRes = await pool.query(
+                  "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) AND team_id = $2 LIMIT 1",
+                  [String(bucketName), teamOverride],
+                );
+              }
+
+              if (!bRes || bRes.rows.length === 0) {
+                // Fallback to name-only match
+                bRes = await pool.query(
+                  "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
+                  [String(bucketName)],
+                );
+              }
+
               if (bRes.rows.length > 0) {
                 bucketOverride = bRes.rows[0].id;
               } else {
                 console.warn(
-                  `[EmailProcessing] Could not resolve bucket name '${bucketOverride}' to id`,
+                  `[EmailProcessing] Could not resolve bucket name '${bucketName}' to id; will try to create it if team available`,
                 );
-                bucketOverride = null;
+                // If we have a team id, try to create the bucket so future matches resolve cleanly
+                if (teamOverride && typeof teamOverride === "number") {
+                  try {
+                    const insertRes = await pool.query(
+                      "INSERT INTO ticket_buckets (team_id, name, description, created_at, updated_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+                      [teamOverride, String(bucketName), null],
+                    );
+                    if (insertRes.rows.length > 0) {
+                      bucketOverride = insertRes.rows[0].id;
+                      console.log(
+                        `[EmailProcessing] Created new ticket_bucket '${bucketName}' (id=${bucketOverride}) for team_id=${teamOverride}`,
+                      );
+                    } else {
+                      bucketOverride = null;
+                    }
+                  } catch (insErr) {
+                    console.warn("Failed to create ticket_bucket:", insErr?.message || insErr);
+                    bucketOverride = null;
+                  }
+                } else {
+                  // Cannot create without a team id
+                  bucketOverride = null;
+                }
               }
             } catch (be) {
               console.warn("Error resolving bucket name to id:", be);

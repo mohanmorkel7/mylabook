@@ -374,6 +374,28 @@ ${sanitizedHtml || rawText || ""}`;
             if (matchedRule.demand !== undefined) demandOverride = matchedRule.demand;
           }
         }
+
+        // If bucketOverride is a name (string) try to resolve to an ID
+        if (bucketOverride && typeof bucketOverride === "string") {
+          try {
+            const bRes = await pool.query(
+              "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
+              [String(bucketOverride)],
+            );
+            if (bRes.rows.length > 0) {
+              bucketOverride = bRes.rows[0].id;
+            } else {
+              // leave as-is (DB insert will likely fail if expecting integer)
+              console.warn(
+                `[EmailProcessing] Could not resolve bucket name '${bucketOverride}' to id`,
+              );
+              bucketOverride = null;
+            }
+          } catch (be) {
+            console.warn("Error resolving bucket name to id:", be);
+            bucketOverride = null;
+          }
+        }
       } catch (e) {
         console.warn("Failed to resolve matched rule overrides:", e);
       }

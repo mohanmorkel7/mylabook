@@ -624,6 +624,7 @@ export class TicketRepository {
       LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
       LEFT JOIN ticket_categories tc ON t.category_id = tc.id
+      LEFT JOIN ticket_buckets tb ON t.bucket_id = tb.id
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users assignee ON t.assigned_to = assignee.id
       ${whereClause}
@@ -783,6 +784,7 @@ export class TicketRepository {
       LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
       LEFT JOIN ticket_categories tc ON t.category_id = tc.id
+      LEFT JOIN ticket_buckets tb ON t.bucket_id = tb.id
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users assignee ON t.assigned_to = assignee.id
       WHERE t.id = $1`,

@@ -665,6 +665,9 @@ router.post(
             .json({ error: "Failed to validate references" });
         }
 
+        // Remove transient fields not present in DB schema
+        delete (ticketData as any).bucket_name;
+
         // Ensure status default (Open) will be applied by DB if not provided
         const ticket = await TicketRepository.create(ticketData, createdBy);
 

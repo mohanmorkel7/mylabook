@@ -48,6 +48,7 @@ export default function TicketsCreatePage() {
     assigned_to: undefined,
     team_id: undefined,
     bucket_id: undefined,
+    bucket_name: undefined,
     status_id: undefined,
     demand: 0,
     reason: "",

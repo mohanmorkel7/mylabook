@@ -354,9 +354,20 @@ export default function TicketsCreatePage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">
-        {ticketIdParam ? "Edit Support Ticket" : "Create Support Ticket"}
-      </h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">
+          {ticketIdParam ? "Edit Support Ticket" : "Create Support Ticket"}
+        </h1>
+        {ticketIdParam ? (
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/tickets')}
+            className="ml-4"
+          >
+            Back to tickets
+          </Button>
+        ) : null}
+      </div>
 
       <Card>
         <CardHeader>

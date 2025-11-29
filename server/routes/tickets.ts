@@ -520,7 +520,9 @@ router.post(
       // Support resolving bucket_name -> bucket_id in request payloads
       try {
         if (
-          (!ticketData.bucket_id || ticketData.bucket_id === "" || ticketData.bucket_id === null) &&
+          (!ticketData.bucket_id ||
+            ticketData.bucket_id === "" ||
+            ticketData.bucket_id === null) &&
           (ticketData as any).bucket_name &&
           String((ticketData as any).bucket_name).trim() !== ""
         ) {
@@ -927,11 +929,15 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
               "INSERT INTO ticket_buckets (team_id, name, description, created_at, updated_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
               [(updateData as any).team_id, bName, null],
             );
-            if (ins.rows.length > 0) (updateData as any).bucket_id = ins.rows[0].id;
+            if (ins.rows.length > 0)
+              (updateData as any).bucket_id = ins.rows[0].id;
           }
         }
       } catch (e) {
-        console.warn("Failed to resolve bucket_name during update:", e?.message || e);
+        console.warn(
+          "Failed to resolve bucket_name during update:",
+          e?.message || e,
+        );
       }
 
       const ticket = await TicketRepository.update(id, updateData, updatedBy);

@@ -617,6 +617,7 @@ export class TicketRepository {
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
         ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
         tc.name as category_name, tc.color as category_color,
+        tb.name as bucket_name, tb.team_id as bucket_team_id,
         creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
         assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
       FROM tickets t
@@ -768,6 +769,7 @@ export class TicketRepository {
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
         ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
         tc.name as category_name, tc.color as category_color,
+        tb.name as bucket_name, tb.team_id as bucket_team_id,
         creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
         assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
       FROM tickets t

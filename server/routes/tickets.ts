@@ -903,6 +903,37 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
         // ignore and continue
       }
 
+      // Allow update payload to include bucket_name; resolve to bucket_id if necessary
+      try {
+        if ((updateData as any).bucket_name && !(updateData as any).bucket_id) {
+          const bName = String((updateData as any).bucket_name).trim();
+          let bRes;
+          if ((updateData as any).team_id) {
+            bRes = await pool.query(
+              "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) AND team_id = $2 LIMIT 1",
+              [bName, (updateData as any).team_id],
+            );
+          }
+          if (!bRes || bRes.rows.length === 0) {
+            bRes = await pool.query(
+              "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
+              [bName],
+            );
+          }
+          if (bRes && bRes.rows.length > 0) {
+            (updateData as any).bucket_id = bRes.rows[0].id;
+          } else if ((updateData as any).team_id) {
+            const ins = await pool.query(
+              "INSERT INTO ticket_buckets (team_id, name, description, created_at, updated_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+              [(updateData as any).team_id, bName, null],
+            );
+            if (ins.rows.length > 0) (updateData as any).bucket_id = ins.rows[0].id;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to resolve bucket_name during update:", e?.message || e);
+      }
+
       const ticket = await TicketRepository.update(id, updateData, updatedBy);
 
       // Record status change reason if provided and status changed

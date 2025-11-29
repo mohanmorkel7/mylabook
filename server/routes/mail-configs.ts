@@ -218,7 +218,10 @@ router.post("/", async (req: Request, res: Response) => {
     // Resolve team by name if provided (supports team string in request)
     let resolvedTeamId = team_id !== undefined ? team_id : null;
     const teamNameFromBody = (req.body as any)?.team;
-    if ((resolvedTeamId === null || resolvedTeamId === undefined) && teamNameFromBody) {
+    if (
+      (resolvedTeamId === null || resolvedTeamId === undefined) &&
+      teamNameFromBody
+    ) {
       try {
         // Try exact match first
         let teamRes = await pool.query(
@@ -336,7 +339,10 @@ router.put("/:id", async (req: Request, res: Response) => {
           (updateData as any).team_id = teamRes.rows[0].id;
         }
       } catch (e) {
-        console.warn("Failed to resolve team name during update:", e?.message || e);
+        console.warn(
+          "Failed to resolve team name during update:",
+          e?.message || e,
+        );
       }
     }
 

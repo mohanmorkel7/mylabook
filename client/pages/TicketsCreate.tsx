@@ -407,11 +407,12 @@ export default function TicketsCreatePage() {
                   Bucket<span className="text-red-500 ml-1">*</span>
                 </Label>
                 <Select
-                  value={form.bucket_id ? String(form.bucket_id) : ""}
+                  value={form.bucket_name ? String(form.bucket_name) : ""}
                   onValueChange={(v) => {
                     setForm({
                       ...form,
-                      bucket_id: v ? parseInt(v) : undefined,
+                      bucket_name: v || undefined,
+                      bucket_id: undefined,
                     });
                     setErrors((prev) => ({ ...prev, bucket_id: undefined }));
                   }}
@@ -421,23 +422,19 @@ export default function TicketsCreatePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Select</SelectItem>
-                    {(() => {
-                      const teamId = form.team_id;
-                      const buckets = (meta.buckets || []).filter((b: any) =>
-                        teamId ? String(b.team_id) === String(teamId) : true,
-                      );
-                      if (buckets.length === 0)
-                        return (
-                          <SelectItem value="no-buckets" disabled>
-                            No buckets available
-                          </SelectItem>
-                        );
-                      return buckets.map((b: any) => (
-                        <SelectItem key={b.id} value={String(b.id)}>
-                          {b.name}
-                        </SelectItem>
-                      ));
-                    })()}
+                    {[
+                      "Bugs",
+                      "Feature Request",
+                      "Improvements",
+                      "Migrations",
+                      "Alerts",
+                      "Roadmap",
+                      "Support",
+                    ].map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {errors.bucket_id && (

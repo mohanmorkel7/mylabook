@@ -374,7 +374,7 @@ export default function TicketsCreatePage() {
                   value={form.team_id ? String(form.team_id) : ""}
                   onValueChange={(v) => {
                     const teamId = v ? parseInt(v) : undefined;
-                    setForm({ ...form, team_id: teamId, bucket_id: undefined });
+                    setForm({ ...form, team_id: teamId });
                     setErrors((prev) => ({ ...prev, team_id: undefined }));
                   }}
                 >

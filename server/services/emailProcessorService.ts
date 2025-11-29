@@ -368,10 +368,15 @@ ${sanitizedHtml || rawText || ""}`;
         if (Array.isArray(config.sources) && config.sources.length === 1) {
           const source = config.sources[0];
           const { findMatchingRule } = await import("./emailMatchingService");
-          const matchedRule: any = findMatchingRule(email as any, source as any);
+          const matchedRule: any = findMatchingRule(
+            email as any,
+            source as any,
+          );
           if (matchedRule) {
-            if (matchedRule.bucket !== undefined) bucketOverride = matchedRule.bucket;
-            if (matchedRule.demand !== undefined) demandOverride = matchedRule.demand;
+            if (matchedRule.bucket !== undefined)
+              bucketOverride = matchedRule.bucket;
+            if (matchedRule.demand !== undefined)
+              demandOverride = matchedRule.demand;
           }
         }
 

@@ -10,7 +10,12 @@ export interface Email {
 export interface EmailRule {
   id: string;
   fieldType: "From" | "To" | "Cc" | "Subject" | "Body";
-  operator?: "Starts with" | "Contains" | "Ends with" | "domain" | "Does not contain";
+  operator?:
+    | "Starts with"
+    | "Contains"
+    | "Ends with"
+    | "domain"
+    | "Does not contain";
   value: string;
   domain?: string;
   nextOperator: "AND" | "OR" | "END";
@@ -56,7 +61,10 @@ export function patternToRegex(pattern: string): RegExp {
 /**
  * Check if text matches a pattern
  */
-export function matchPattern(pattern: string | undefined, text: string): boolean {
+export function matchPattern(
+  pattern: string | undefined,
+  text: string,
+): boolean {
   if (!pattern || pattern.trim() === "") return true;
   try {
     const regex = patternToRegex(pattern);
@@ -111,7 +119,9 @@ export function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
       target = normalizeText(stripSubjectPrefixes(email.subject));
       break;
     case "Body":
-      target = normalizeText(email.body ? email.body.replace(/<[^>]*>/g, "") : "");
+      target = normalizeText(
+        email.body ? email.body.replace(/<[^>]*>/g, "") : "",
+      );
       break;
     case "From":
       target = normalizeText(email.from);
@@ -137,13 +147,20 @@ export function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
     const match = target.match(/([a-z0-9._%+-]+)@([a-z0-9.-]+\.[a-z]{2,})/i);
     if (!match) {
       if (debug)
-        console.log(`[emailMatching] domain rule: no email address found in target for rule ${rule.id}`);
+        console.log(
+          `[emailMatching] domain rule: no email address found in target for rule ${rule.id}`,
+        );
       return false;
     }
     const actualDomain = match[2].toLowerCase();
-    const configuredDomain = domain.startsWith("@") ? domain.substring(1) : domain;
+    const configuredDomain = domain.startsWith("@")
+      ? domain.substring(1)
+      : domain;
     const matches = actualDomain === configuredDomain;
-    if (debug) console.log(`[emailMatching] domain check: actual=${actualDomain} configured=${configuredDomain} => ${matches}`);
+    if (debug)
+      console.log(
+        `[emailMatching] domain check: actual=${actualDomain} configured=${configuredDomain} => ${matches}`,
+      );
     return matches;
   }
 
@@ -164,14 +181,20 @@ export function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   else if (operator === "does not contain") result = !target.includes(value);
   else result = target.includes(value);
 
-  if (debug) console.log(`[emailMatching] text check: operator=${operator} value="${value}" => ${result} (target excerpt: "${(target||"").substring(0,120)}")`);
+  if (debug)
+    console.log(
+      `[emailMatching] text check: operator=${operator} value="${value}" => ${result} (target excerpt: "${(target || "").substring(0, 120)}")`,
+    );
   return result;
 }
 
 /**
  * Evaluate a chain of rules (respecting AND/OR/END operators)
  */
-export function evaluateRuleChain(rules: EmailRule[] | undefined, email: Email): boolean {
+export function evaluateRuleChain(
+  rules: EmailRule[] | undefined,
+  email: Email,
+): boolean {
   if (!rules || rules.length === 0) return true;
   let result = evaluateSingleRule(rules[0], email);
   for (let i = 1; i < rules.length; i++) {
@@ -185,14 +208,24 @@ export function evaluateRuleChain(rules: EmailRule[] | undefined, email: Email):
   return result;
 }
 
-export function matchEmailAgainstSource(email: Email, source: SourceConfig): boolean {
+export function matchEmailAgainstSource(
+  email: Email,
+  source: SourceConfig,
+): boolean {
   if (!source) return true;
   if (!source.emailRules || source.emailRules.length === 0) return true;
   return evaluateRuleChain(source.emailRules, email);
 }
 
-export function matchEmailAgainstConfig(email: Email, config: MailConfig): boolean {
-  if (config.sources && Array.isArray(config.sources) && config.sources.length > 0) {
+export function matchEmailAgainstConfig(
+  email: Email,
+  config: MailConfig,
+): boolean {
+  if (
+    config.sources &&
+    Array.isArray(config.sources) &&
+    config.sources.length > 0
+  ) {
     for (const src of config.sources) {
       if (src.type === "Email") {
         if (src.emailRules && src.emailRules.length > 0) {
@@ -208,7 +241,10 @@ export function matchEmailAgainstConfig(email: Email, config: MailConfig): boole
 
   if (config.field_type && config.field_value) {
     const operatorRaw = String((config as any).field_operator || "contains");
-    const operatorNorm = operatorRaw.toLowerCase().replace(/[_\s]+/g, " ").trim();
+    const operatorNorm = operatorRaw
+      .toLowerCase()
+      .replace(/[_\s]+/g, " ")
+      .trim();
     const valueToCheckRaw = config.field_value;
     const valueToCheck = (valueToCheckRaw || "").toLowerCase();
 
@@ -225,9 +261,17 @@ export function matchEmailAgainstConfig(email: Email, config: MailConfig): boole
         break;
       case "body":
         if (operatorNorm === "does not contain") {
-          return !matchBodyContent(valueToCheckRaw, email.body || "", (config as any).body_match_type || "word");
+          return !matchBodyContent(
+            valueToCheckRaw,
+            email.body || "",
+            (config as any).body_match_type || "word",
+          );
         }
-        return matchBodyContent(valueToCheckRaw, email.body || "", (config as any).body_match_type || "word");
+        return matchBodyContent(
+          valueToCheckRaw,
+          email.body || "",
+          (config as any).body_match_type || "word",
+        );
       default:
         return false;
     }
@@ -246,20 +290,35 @@ export function matchEmailAgainstConfig(email: Email, config: MailConfig): boole
     if (!matchPattern((config as any).to_email, email.to)) return false;
   }
   if ((config as any).subject_pattern) {
-    if (!matchPattern((config as any).subject_pattern, email.subject)) return false;
+    if (!matchPattern((config as any).subject_pattern, email.subject))
+      return false;
   }
   if ((config as any).body_content) {
-    if (!matchBodyContent((config as any).body_content, email.body, (config as any).body_match_type)) return false;
+    if (
+      !matchBodyContent(
+        (config as any).body_content,
+        email.body,
+        (config as any).body_match_type,
+      )
+    )
+      return false;
   }
   return true;
 }
 
-export function hasEmailBeenProcessed(emailId: string, processedEmailIds: Set<string>): boolean {
+export function hasEmailBeenProcessed(
+  emailId: string,
+  processedEmailIds: Set<string>,
+): boolean {
   return processedEmailIds.has(emailId);
 }
 
-export function findMatchingRule(email: Email, source: SourceConfig): EmailRule | null {
-  if (!source || !source.emailRules || source.emailRules.length === 0) return null;
+export function findMatchingRule(
+  email: Email,
+  source: SourceConfig,
+): EmailRule | null {
+  if (!source || !source.emailRules || source.emailRules.length === 0)
+    return null;
   for (const rule of source.emailRules) {
     try {
       if (evaluateSingleRule(rule as any, email)) return rule as EmailRule;

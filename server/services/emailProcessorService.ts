@@ -384,7 +384,11 @@ ${sanitizedHtml || rawText || ""}`;
 
         // Resolve teamOverride if provided as a team name (string) or if top-level config.team (string) exists
         try {
-          if ((teamOverride === undefined || teamOverride === null) && config.team && typeof config.team === "string") {
+          if (
+            (teamOverride === undefined || teamOverride === null) &&
+            config.team &&
+            typeof config.team === "string"
+          ) {
             teamOverride = config.team; // attempt to resolve below
           }
 
@@ -457,7 +461,7 @@ ${sanitizedHtml || rawText || ""}`;
       const createdBy = (config as any).user_id || config.assigned_to_id || 1;
 
       try {
-        console.log('[EmailProcessing] Ticket data before create:', {
+        console.log("[EmailProcessing] Ticket data before create:", {
           team_id: teamOverride,
           bucket_id: bucketOverride,
           demand: demandOverride,

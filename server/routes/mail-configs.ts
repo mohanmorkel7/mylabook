@@ -215,6 +215,31 @@ router.post("/", async (req: Request, res: Response) => {
       }
     }
 
+    // Resolve team by name if provided (supports team string in request)
+    let resolvedTeamId = team_id !== undefined ? team_id : null;
+    const teamNameFromBody = (req.body as any)?.team;
+    if ((resolvedTeamId === null || resolvedTeamId === undefined) && teamNameFromBody) {
+      try {
+        // Try exact match first
+        let teamRes = await pool.query(
+          "SELECT id FROM ticket_teams WHERE LOWER(name) = LOWER($1) LIMIT 1",
+          [teamNameFromBody],
+        );
+        if (teamRes.rows.length === 0) {
+          teamRes = await pool.query(
+            "SELECT id FROM ticket_teams WHERE LOWER(name) LIKE LOWER($1) LIMIT 1",
+            [`%${teamNameFromBody}%`],
+          );
+        }
+
+        if (teamRes.rows.length > 0) {
+          resolvedTeamId = teamRes.rows[0].id;
+        }
+      } catch (e) {
+        console.warn("Failed to resolve team name to id:", e?.message || e);
+      }
+    }
+
     const data: CreateMailConfigData = {
       user_id: userId,
       name,
@@ -232,7 +257,7 @@ router.post("/", async (req: Request, res: Response) => {
       priority_id,
       assigned_to_id,
       watcher_user_ids: watcher_user_ids || [],
-      team_id: team_id || null,
+      team_id: resolvedTeamId || null,
       bucket_id: bucket_id || null,
       status_id: resolvedStatusId || null,
       demand: demand !== undefined ? demand : null,

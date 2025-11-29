@@ -323,7 +323,8 @@ export function findMatchingRule(
   const matches: EmailRule[] = [];
   for (const rule of source.emailRules) {
     try {
-      if (evaluateSingleRule(rule as any, email)) matches.push(rule as EmailRule);
+      if (evaluateSingleRule(rule as any, email))
+        matches.push(rule as EmailRule);
     } catch (e) {
       // ignore
     }
@@ -334,9 +335,9 @@ export function findMatchingRule(
   // Prefer a matched rule that provides routing overrides (bucket/demand/team)
   for (const r of matches) {
     if (
-      (r as any).bucket !== undefined && (r as any).bucket !== null ||
-      (r as any).demand !== undefined && (r as any).demand !== null ||
-      (r as any).team !== undefined && (r as any).team !== null
+      ((r as any).bucket !== undefined && (r as any).bucket !== null) ||
+      ((r as any).demand !== undefined && (r as any).demand !== null) ||
+      ((r as any).team !== undefined && (r as any).team !== null)
     ) {
       return r;
     }

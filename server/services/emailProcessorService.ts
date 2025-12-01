@@ -393,7 +393,10 @@ ${sanitizedHtml || rawText || ""}`;
               demandOverride = matchedRule.demand;
             if (matchedRule.team !== undefined && matchedRule.team !== null)
               teamOverride = matchedRule.team;
-            console.log("[EmailProcessing] matchedRule overrides:", matchedRule);
+            console.log(
+              "[EmailProcessing] matchedRule overrides:",
+              matchedRule,
+            );
           }
         }
 

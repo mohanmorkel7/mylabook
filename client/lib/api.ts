@@ -92,12 +92,42 @@ export class ApiClient {
     // Ensure original fetch is preserved
     this.preserveOriginalFetch();
     // Offline mode check
-    if (this.isOfflineMode && !this.shouldRetryConnection()) {
-      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-        console.warn(
-          `🔴 Request to ${endpoint} blocked - app is in offline mode`,
+    if (this.isOfflineMode) {
+      // If we have recently entered offline mode and it's too soon to retry, fail fast
+      if (!this.shouldRetryConnection()) {
+        if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+          console.warn(
+            `🔴 Request to ${endpoint} blocked - app is in offline mode`,
+          );
+        throw new Error("Offline mode: Backend server is unavailable");
+      }
+
+      // Attempt a quick probe before failing to allow transient recoveries.
+      // Use a short timeout so UI doesn't hang.
+      try {
+        const probeTimeout = 2000; // 2s
+        const probePromise = fetch(`${API_BASE_URL}`, { method: "GET" });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Probe timeout")), probeTimeout),
         );
-      throw new Error("Offline mode: Backend server is unavailable");
+        const probeResp = await Promise.race([probePromise, timeoutPromise]);
+        if (probeResp && probeResp.ok) {
+          // Backend reachable — reset circuit breaker and continue
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.log("🟢 Quick probe succeeded - exiting offline mode");
+          this.resetCircuitBreaker();
+        } else {
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.warn(
+              "Quick probe failed or returned non-OK response — still offline",
+            );
+          throw new Error("Offline mode: Backend server is unavailable");
+        }
+      } catch (probeErr) {
+        if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+          console.warn("Quick probe failed:", probeErr);
+        throw new Error("Offline mode: Backend server is unavailable");
+      }
     }
 
     // Circuit breaker check

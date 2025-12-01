@@ -145,18 +145,6 @@ export default function ManageTickets() {
     dateTo: "",
   });
 
-  // Set default date filter to today's IST date (00:00 - 23:59 local IST)
-  useEffect(() => {
-    // Compute IST date string YYYY-MM-DD for current instant
-    const now = new Date();
-    const istOffsetMs = 5.5 * 60 * 60 * 1000;
-    const ist = new Date(now.getTime() + istOffsetMs);
-    const yyyy = ist.getUTCFullYear();
-    const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(ist.getUTCDate()).padStart(2, "0");
-    const today = `${yyyy}-${mm}-${dd}`;
-    setFilters((f) => ({ ...f, dateFrom: today, dateTo: today }));
-  }, []);
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const { toast } = useToast();
 

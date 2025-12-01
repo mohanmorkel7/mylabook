@@ -288,6 +288,7 @@ router.get("/", async (req: Request, res: Response) => {
         ...result,
         tickets: ticketsWithFlag,
       });
+      console.log(`[GET /api/tickets] responded successfully (page=${page}, limit=${effectiveLimit})`);
     } else {
       // Mock tickets for development
       const mockTickets = [

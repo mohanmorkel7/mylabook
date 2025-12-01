@@ -405,8 +405,23 @@ ${sanitizedHtml || rawText || ""}`;
               teamOverride = tRes.rows[0].id;
               console.log("[EmailProcessing] Resolved team name to id:", teamOverride);
             } else {
-              console.warn(`[EmailProcessing] Could not resolve team name '${teamOverride}' to id`);
-              teamOverride = null;
+              console.warn(`[EmailProcessing] Could not resolve team name '${teamOverride}' to id — attempting to create it`);
+              // Attempt to create the team so future configs can resolve
+              try {
+                const ins = await pool.query(
+                  "INSERT INTO ticket_teams (name, description, created_at, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+                  [String(teamOverride), null],
+                );
+                if (ins.rows.length > 0) {
+                  teamOverride = ins.rows[0].id;
+                  console.log(`[EmailProcessing] Created new team '${String(teamOverride)}' with id=${teamOverride}`);
+                } else {
+                  teamOverride = null;
+                }
+              } catch (createTeamErr) {
+                console.warn("Failed to create ticket_team:", createTeamErr?.message || createTeamErr);
+                teamOverride = null;
+              }
             }
           }
         } catch (te) {

@@ -253,7 +253,10 @@ router.get("/", async (req: Request, res: Response) => {
       );
       const TIMEOUT_MS = 15000; // 15 seconds
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Tickets query timed out")), TIMEOUT_MS),
+        setTimeout(
+          () => reject(new Error("Tickets query timed out")),
+          TIMEOUT_MS,
+        ),
       );
 
       let result: any;
@@ -261,13 +264,18 @@ router.get("/", async (req: Request, res: Response) => {
         result = await Promise.race([getAllPromise, timeoutPromise]);
       } catch (err) {
         const dur = Date.now() - startMs;
-        console.error(`Tickets fetch failed or timed out after ${dur}ms:`, err?.message || err);
+        console.error(
+          `Tickets fetch failed or timed out after ${dur}ms:`,
+          err?.message || err,
+        );
         return res.status(504).json({ error: "Tickets request timed out" });
       }
 
       const dur = Date.now() - startMs;
       if (dur > 2000) {
-        console.warn(`Tickets query took ${dur}ms (page=${page}, limit=${effectiveLimit})`);
+        console.warn(
+          `Tickets query took ${dur}ms (page=${page}, limit=${effectiveLimit})`,
+        );
       }
 
       // Add created_from_mail_config flag for frontend

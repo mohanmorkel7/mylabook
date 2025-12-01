@@ -86,7 +86,8 @@ export default function TicketCharts({
       try {
         setLoading(true);
         const params = new URLSearchParams();
-        const useFrom = range === "all" ? undefined : (dateFrom ?? computedFrom);
+        const useFrom =
+          range === "all" ? undefined : (dateFrom ?? computedFrom);
         const useTo = range === "all" ? undefined : (dateTo ?? computedTo);
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
@@ -155,7 +156,13 @@ export default function TicketCharts({
                   style={{ minHeight: 0 }}
                 >
                   <div
-                    style={{ width: 28, height: h, background: color, borderTopLeftRadius: 6, borderTopRightRadius: 6 }}
+                    style={{
+                      width: 28,
+                      height: h,
+                      background: color,
+                      borderTopLeftRadius: 6,
+                      borderTopRightRadius: 6,
+                    }}
                     title={`${it[labelKey]}: ${val}`}
                     className="transition-all"
                   />
@@ -165,8 +172,24 @@ export default function TicketCharts({
                   style={{ maxWidth: "6rem" }}
                 >
                   <span className="inline-flex items-center gap-2">
-                    <span style={{ width: 8, height: 8, background: color, display: "inline-block", borderRadius: 4 }} />
-                    <span style={{ maxWidth: 80, display: "inline-block", verticalAlign: "middle" }}>{it[labelKey]}</span>
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        background: color,
+                        display: "inline-block",
+                        borderRadius: 4,
+                      }}
+                    />
+                    <span
+                      style={{
+                        maxWidth: 80,
+                        display: "inline-block",
+                        verticalAlign: "middle",
+                      }}
+                    >
+                      {it[labelKey]}
+                    </span>
                   </span>
                 </div>
               </div>

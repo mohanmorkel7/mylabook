@@ -1541,7 +1541,6 @@ export default function ManageTickets() {
                                     return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
                                   return `${formatRemaining(slaMs)} hours remaining`;
                                 })()}
-                                
                               </p>
                             </div>
                             <div>

@@ -545,7 +545,11 @@ ${sanitizedHtml || rawText || ""}`;
         }
 
         // If still no team but config.team (string) exists, try resolving that
-        if ((teamOverride === undefined || teamOverride === null) && config.team && typeof config.team === "string") {
+        if (
+          (teamOverride === undefined || teamOverride === null) &&
+          config.team &&
+          typeof config.team === "string"
+        ) {
           try {
             const tRes = await pool.query(
               "SELECT id FROM ticket_teams WHERE LOWER(name) = LOWER($1) LIMIT 1",
@@ -560,13 +564,19 @@ ${sanitizedHtml || rawText || ""}`;
               if (ins.rows.length > 0) teamOverride = ins.rows[0].id;
             }
           } catch (e) {
-            console.warn("Final config.team resolution failed:", e?.message || e);
+            console.warn(
+              "Final config.team resolution failed:",
+              e?.message || e,
+            );
             teamOverride = null;
           }
         }
 
         // If bucketOverride exists but teamOverride missing, try to read bucket.team_id
-        if ((teamOverride === undefined || teamOverride === null) && bucketOverride) {
+        if (
+          (teamOverride === undefined || teamOverride === null) &&
+          bucketOverride
+        ) {
           try {
             const bRes = await pool.query(
               "SELECT team_id FROM ticket_buckets WHERE id = $1 LIMIT 1",
@@ -576,11 +586,17 @@ ${sanitizedHtml || rawText || ""}`;
               teamOverride = bRes.rows[0].team_id;
             }
           } catch (e) {
-            console.warn("Failed to resolve team from bucket:", e?.message || e);
+            console.warn(
+              "Failed to resolve team from bucket:",
+              e?.message || e,
+            );
           }
         }
       } catch (e) {
-        console.warn("Error during final team/bucket resolution:", e?.message || e);
+        console.warn(
+          "Error during final team/bucket resolution:",
+          e?.message || e,
+        );
       }
 
       // Create ticket in app database using TicketRepository

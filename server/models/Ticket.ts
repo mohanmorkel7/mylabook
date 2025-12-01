@@ -670,6 +670,11 @@ export class TicketRepository {
     // Get tickets with joins
     const ticketsQuery = `
       SELECT
+`;
+    if (debug) console.log("[TicketRepository.getAll] ticketsQuery constructed, whereClause length=", whereClause ? whereClause.length : 0);
+
+    const ticketsQuery = `
+      SELECT
         t.*,
         (EXTRACT(EPOCH FROM (t.sla_time - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,

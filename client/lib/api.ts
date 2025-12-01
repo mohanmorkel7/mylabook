@@ -233,18 +233,34 @@ export class ApiClient {
               "fetch for request",
             );
 
-          // Add timeout to prevent hanging requests - longer for notifications and login
-          const timeoutMs =
-            endpoint.includes("notifications") ||
-            endpoint.includes("/auth/login")
-              ? 15000
-              : 8000; // 15s for notifications/login, 8s for others
+          // Add timeout to prevent hanging requests - longer for notifications, login, and tickets
+          let timeoutMs = endpoint.includes("notifications") || endpoint.includes("/auth/login") ? 15000 : 8000;
+          if (endpoint.includes("/tickets")) timeoutMs = 30000; // allow tickets up to 30s
+
+          // Use AbortController so the underlying fetch/connection is aborted on timeout
+          const controller = new AbortController();
+          const signal = controller.signal;
+          // attach signal to config
+          (config as any).signal = signal;
+
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+            const t = setTimeout(() => {
+              try {
+                controller.abort();
+              } catch (e) {}
+              reject(new Error("Request timeout"));
+            }, timeoutMs);
+            // store timeout id on signal to clear later if needed
+            (signal as any)._timeoutId = t;
           });
 
           const fetchPromise = originalFetch(url, config);
           response = await Promise.race([fetchPromise, timeoutPromise]);
+          // Clear timeout if fetch completed
+          try {
+            const tid = (signal as any)._timeoutId;
+            if (tid) clearTimeout(tid);
+          } catch (e) {}
         }
       } catch (fetchError) {
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)

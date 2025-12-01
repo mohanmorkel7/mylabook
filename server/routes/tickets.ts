@@ -186,6 +186,7 @@ router.get("/metadata", async (req: Request, res: Response) => {
 // Get all tickets with filtering and pagination
 router.get("/", async (req: Request, res: Response) => {
   try {
+    console.log(`[GET /api/tickets] incoming request from ${req.ip} url=${req.originalUrl}`);
     // Ensure API responses are not cached to avoid 304 Not Modified for dynamic data
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Pragma", "no-cache");

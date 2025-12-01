@@ -1559,6 +1559,24 @@ export async function getTodayEmails(
   mailbox?: string,
   debugForConfigId?: number,
 ): Promise<Email[]> {
+  // If a gmail token exists for the mailbox, prefer using Gmail API fetch path
+  try {
+    if (mailbox) {
+      const tokenFilename = mailbox.replace(/[@.]/g, "_") + ".json";
+      const tokenPath = path.resolve(process.cwd(), "server", "gmail_tokens", tokenFilename);
+      if (fs.existsSync(tokenPath)) {
+        console.log(`[EmailProcessing] Detected Gmail token for mailbox ${mailbox} at ${tokenPath}; using Gmail fetch path`);
+        try {
+          const gmailEmails = await getGmailTodayEmails(mailbox, since);
+          return gmailEmails;
+        } catch (gmailErr) {
+          console.warn("Gmail fetch failed, falling back to Graph path:", gmailErr?.message || gmailErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Error checking for gmail token:", err?.message || err);
+  }
   // For delegated shared mailbox access, we need the user's delegated token
   // This token should be stored in the database or cache from user sign-in
   // For now, we'll try to fetch using app-only credentials as fallback

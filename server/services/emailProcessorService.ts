@@ -397,12 +397,19 @@ ${sanitizedHtml || rawText || ""}`;
               demandOverride = matchedRule.demand;
             if (matchedRule.team !== undefined && matchedRule.team !== null)
               teamOverride = matchedRule.team;
-            console.log("[EmailProcessing] matchedRule overrides:", matchedRule);
+            console.log(
+              "[EmailProcessing] matchedRule overrides:",
+              matchedRule,
+            );
             console.log("[EmailProcessing] overrides applied preliminary:", {
               teamOverride: teamOverride,
               bucketOverride: bucketOverride,
               demandOverride: demandOverride,
-              orig: { _origTeamOverride, _origBucketOverride, _origDemandOverride },
+              orig: {
+                _origTeamOverride,
+                _origBucketOverride,
+                _origDemandOverride,
+              },
             });
           }
         }
@@ -476,7 +483,10 @@ ${sanitizedHtml || rawText || ""}`;
                   "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) AND team_id = $2 LIMIT 1",
                   [String(bucketName), teamOverride],
                 );
-                console.log("[EmailProcessing] bucket lookup by name+team returned rows:", bRes.rows.length);
+                console.log(
+                  "[EmailProcessing] bucket lookup by name+team returned rows:",
+                  bRes.rows.length,
+                );
               }
 
               if (!bRes || bRes.rows.length === 0) {
@@ -485,7 +495,10 @@ ${sanitizedHtml || rawText || ""}`;
                   "SELECT id FROM ticket_buckets WHERE LOWER(name) = LOWER($1) LIMIT 1",
                   [String(bucketName)],
                 );
-                console.log("[EmailProcessing] bucket lookup by name-only returned rows:", bRes.rows.length);
+                console.log(
+                  "[EmailProcessing] bucket lookup by name-only returned rows:",
+                  bRes.rows.length,
+                );
               }
 
               if (bRes.rows.length > 0) {
@@ -503,12 +516,17 @@ ${sanitizedHtml || rawText || ""}`;
                     );
                     if (insertRes.rows.length > 0) {
                       bucketOverride = insertRes.rows[0].id;
-                      console.log(`[EmailProcessing] Created new ticket_bucket '${bucketName}' (id=${bucketOverride}) for team_id=${teamOverride}`);
+                      console.log(
+                        `[EmailProcessing] Created new ticket_bucket '${bucketName}' (id=${bucketOverride}) for team_id=${teamOverride}`,
+                      );
                     } else {
                       bucketOverride = null;
                     }
                   } catch (insErr) {
-                    console.warn("Failed to create ticket_bucket:", insErr?.message || insErr);
+                    console.warn(
+                      "Failed to create ticket_bucket:",
+                      insErr?.message || insErr,
+                    );
                     bucketOverride = null;
                   }
                 } else {
@@ -539,9 +557,14 @@ ${sanitizedHtml || rawText || ""}`;
             );
             if (tRes.rows.length > 0) {
               teamOverride = tRes.rows[0].id;
-              console.log("[EmailProcessing] Resolved team name to id:", teamOverride);
+              console.log(
+                "[EmailProcessing] Resolved team name to id:",
+                teamOverride,
+              );
             } else {
-              console.warn(`[EmailProcessing] Could not resolve team name '${teamOverride}' to id — attempting to create it`);
+              console.warn(
+                `[EmailProcessing] Could not resolve team name '${teamOverride}' to id — attempting to create it`,
+              );
               try {
                 const ins = await pool.query(
                   "INSERT INTO ticket_teams (name, description, created_at, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
@@ -549,12 +572,17 @@ ${sanitizedHtml || rawText || ""}`;
                 );
                 if (ins.rows.length > 0) {
                   teamOverride = ins.rows[0].id;
-                  console.log(`[EmailProcessing] Created new team '${String(teamOverride)}' with id=${teamOverride}`);
+                  console.log(
+                    `[EmailProcessing] Created new team '${String(teamOverride)}' with id=${teamOverride}`,
+                  );
                 } else {
                   teamOverride = null;
                 }
               } catch (createTeamErr) {
-                console.warn("Failed to create ticket_team:", createTeamErr?.message || createTeamErr);
+                console.warn(
+                  "Failed to create ticket_team:",
+                  createTeamErr?.message || createTeamErr,
+                );
                 teamOverride = null;
               }
             }
@@ -565,7 +593,11 @@ ${sanitizedHtml || rawText || ""}`;
         }
 
         // If still no team but config.team (string) exists, try resolving that
-        if ((teamOverride === undefined || teamOverride === null) && config.team && typeof config.team === "string") {
+        if (
+          (teamOverride === undefined || teamOverride === null) &&
+          config.team &&
+          typeof config.team === "string"
+        ) {
           try {
             const tRes = await pool.query(
               "SELECT id FROM ticket_teams WHERE LOWER(name) = LOWER($1) LIMIT 1",
@@ -579,31 +611,52 @@ ${sanitizedHtml || rawText || ""}`;
               );
               if (ins.rows.length > 0) teamOverride = ins.rows[0].id;
             }
-            console.log("[EmailProcessing] Resolved config.team to id:", teamOverride);
+            console.log(
+              "[EmailProcessing] Resolved config.team to id:",
+              teamOverride,
+            );
           } catch (e) {
-            console.warn("Final config.team resolution failed:", e?.message || e);
+            console.warn(
+              "Final config.team resolution failed:",
+              e?.message || e,
+            );
             // keep teamOverride as-is
           }
         }
 
         // If bucketOverride exists but teamOverride missing, try to read bucket.team_id
-        if ((teamOverride === undefined || teamOverride === null) && bucketOverride) {
+        if (
+          (teamOverride === undefined || teamOverride === null) &&
+          bucketOverride
+        ) {
           try {
             const bRes = await pool.query(
               "SELECT team_id FROM ticket_buckets WHERE id = $1 LIMIT 1",
               [bucketOverride],
             );
-            console.log("[EmailProcessing] bucket id lookup for team_id returned rows:", bRes.rows.length);
+            console.log(
+              "[EmailProcessing] bucket id lookup for team_id returned rows:",
+              bRes.rows.length,
+            );
             if (bRes.rows.length > 0 && bRes.rows[0].team_id) {
               teamOverride = bRes.rows[0].team_id;
-              console.log("[EmailProcessing] Resolved team from bucket:", teamOverride);
+              console.log(
+                "[EmailProcessing] Resolved team from bucket:",
+                teamOverride,
+              );
             }
           } catch (e) {
-            console.warn("Failed to resolve team from bucket:", e?.message || e);
+            console.warn(
+              "Failed to resolve team from bucket:",
+              e?.message || e,
+            );
           }
         }
 
-        if (JSON.stringify(_preFinal) !== JSON.stringify({ teamOverride, bucketOverride, demandOverride })) {
+        if (
+          JSON.stringify(_preFinal) !==
+          JSON.stringify({ teamOverride, bucketOverride, demandOverride })
+        ) {
           console.log("[EmailProcessing] Final overrides after resolution:", {
             teamOverride,
             bucketOverride,
@@ -611,7 +664,10 @@ ${sanitizedHtml || rawText || ""}`;
           });
         }
       } catch (e) {
-        console.warn("Error during final team/bucket resolution:", e?.message || e);
+        console.warn(
+          "Error during final team/bucket resolution:",
+          e?.message || e,
+        );
       }
 
       // Create ticket in app database using TicketRepository

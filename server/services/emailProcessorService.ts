@@ -521,6 +521,68 @@ ${sanitizedHtml || rawText || ""}`;
         console.warn("Failed to resolve matched rule overrides:", e);
       }
 
+      // Final resolution: ensure teamOverride and bucketOverride are numeric IDs where possible
+      try {
+        // If teamOverride is a string (name) try to resolve/create it now
+        if (teamOverride && typeof teamOverride === "string") {
+          try {
+            const tRes = await pool.query(
+              "SELECT id FROM ticket_teams WHERE LOWER(name) = LOWER($1) LIMIT 1",
+              [String(teamOverride)],
+            );
+            if (tRes.rows.length > 0) teamOverride = tRes.rows[0].id;
+            else {
+              const ins = await pool.query(
+                "INSERT INTO ticket_teams (name, description, created_at, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+                [String(teamOverride), null],
+              );
+              if (ins.rows.length > 0) teamOverride = ins.rows[0].id;
+            }
+          } catch (e) {
+            console.warn("Final team resolution failed:", e?.message || e);
+            teamOverride = null;
+          }
+        }
+
+        // If still no team but config.team (string) exists, try resolving that
+        if ((teamOverride === undefined || teamOverride === null) && config.team && typeof config.team === "string") {
+          try {
+            const tRes = await pool.query(
+              "SELECT id FROM ticket_teams WHERE LOWER(name) = LOWER($1) LIMIT 1",
+              [String(config.team)],
+            );
+            if (tRes.rows.length > 0) teamOverride = tRes.rows[0].id;
+            else {
+              const ins = await pool.query(
+                "INSERT INTO ticket_teams (name, description, created_at, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+                [String(config.team), null],
+              );
+              if (ins.rows.length > 0) teamOverride = ins.rows[0].id;
+            }
+          } catch (e) {
+            console.warn("Final config.team resolution failed:", e?.message || e);
+            teamOverride = null;
+          }
+        }
+
+        // If bucketOverride exists but teamOverride missing, try to read bucket.team_id
+        if ((teamOverride === undefined || teamOverride === null) && bucketOverride) {
+          try {
+            const bRes = await pool.query(
+              "SELECT team_id FROM ticket_buckets WHERE id = $1 LIMIT 1",
+              [bucketOverride],
+            );
+            if (bRes.rows.length > 0 && bRes.rows[0].team_id) {
+              teamOverride = bRes.rows[0].team_id;
+            }
+          } catch (e) {
+            console.warn("Failed to resolve team from bucket:", e?.message || e);
+          }
+        }
+      } catch (e) {
+        console.warn("Error during final team/bucket resolution:", e?.message || e);
+      }
+
       // Create ticket in app database using TicketRepository
       const ticketData = {
         subject,

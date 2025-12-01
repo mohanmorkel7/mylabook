@@ -3,6 +3,9 @@ import { MailConfig, MailConfigRepository } from "../models/MailConfig";
 import DOMPurify from "isomorphic-dompurify";
 import { simpleParser } from "mailparser";
 import fetch from "node-fetch";
+import fs from "fs";
+import path from "path";
+import { getGmailTodayEmails } from "./gmailService";
 
 interface GraphEmail {
   id: string;

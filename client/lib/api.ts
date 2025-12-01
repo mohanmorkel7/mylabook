@@ -99,7 +99,8 @@ export class ApiClient {
           console.warn(
             `🔴 Request to ${endpoint} blocked - app is in offline mode`,
           );
-        throw new Error("Offline mode: Backend server is unavailable");
+        // Graceful fallback to avoid spamming console with errors while offline
+        return this.getEmptyFallbackResponse(endpoint);
       }
 
       // Attempt a quick probe before failing to allow transient recoveries.

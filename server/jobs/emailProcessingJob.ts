@@ -84,6 +84,8 @@ export function initialize() {
               let anyFetchSucceeded = false; // track whether any mailbox fetch completed successfully
               // Track the maximum receivedDateTime of emails we processed (created tickets for)
               let processedMaxDate: Date | null = null;
+              // Track the maximum receivedDateTime across all fetched emails (even if not matched)
+              let fetchedMaxDate: Date | null = null;
 
               // For each email source mailbox, fetch emails and apply the config/source-specific rules
               for (const mailbox of emailSources) {
@@ -110,6 +112,22 @@ export function initialize() {
                   console.log(
                     `Found ${emails.length} emails in ${mailbox} for config ${config.id}`,
                   );
+
+                  // Track the latest receivedDateTime across fetched emails
+                  for (const e of emails) {
+                    try {
+                      if (e.receivedDateTime) {
+                        const dt = new Date(e.receivedDateTime);
+                        if (!isNaN(dt.getTime())) {
+                          if (!fetchedMaxDate || dt > fetchedMaxDate) {
+                            fetchedMaxDate = dt;
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      // ignore malformed date
+                    }
+                  }
 
                   // Filter emails using config rules; restrict matching to the current source if available
                   let sourceForMatching = undefined;

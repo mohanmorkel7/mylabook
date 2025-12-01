@@ -338,13 +338,28 @@ export function initialize() {
                     `Computed processedMaxDate (${processedMaxDate.toISOString()}) is not newer than existing last_processed_at for config ${config.id}; skipping update`,
                   );
                 }
+              } else if (fetchedMaxDate) {
+                // No tickets were created/processed, but we did fetch emails — advance last_processed_at
+                if (!rawSince || fetchedMaxDate > rawSince) {
+                  console.log(
+                    `Advancing last_processed_at for config ${config.id} to fetchedMaxDate ${fetchedMaxDate.toISOString()} (no matches created)`,
+                  );
+                  await MailConfigRepository.updateLastProcessedAt(
+                    config.id,
+                    fetchedMaxDate,
+                  );
+                } else {
+                  console.log(
+                    `FetchedMaxDate (${fetchedMaxDate.toISOString()}) is not newer than existing last_processed_at for config ${config.id}; skipping update`,
+                  );
+                }
               } else if (!anyFetchSucceeded) {
                 console.log(
                   `Skipping update of last_processed_at for config ${config.id} because no mailbox fetch succeeded`,
                 );
               } else {
                 console.log(
-                  `Not updating last_processed_at for config ${config.id} because no emails were processed (matched/created)`,
+                  `Not updating last_processed_at for config ${config.id} because no emails were processed (matched/created) and no fetched date available`,
                 );
               }
 

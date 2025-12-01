@@ -10,6 +10,82 @@
       window.__originalFetch = window.fetch ? window.fetch.bind(window) : null;
       console.log("🔒 Original fetch preserved:", !!window.__originalFetch);
     </script>
+    <!-- Install SafeWebSocket early to suppress noisy dev/proxy websocket connection errors (e.g., wss://localhost) -->
+    <script>
+      (function () {
+        try {
+          if (typeof window === 'undefined') return;
+          var NativeWS = window.WebSocket;
+          if (!NativeWS) return;
+
+          function SafeWebSocket(url, protocols) {
+            // allow constructing without 'new'
+            if (!(this instanceof SafeWebSocket)) return new SafeWebSocket(url, protocols);
+            this._url = url;
+            this._native = null;
+            this.readyState = 3; // CLOSED
+            this.onopen = null;
+            this.onmessage = null;
+            this.onclose = null;
+            this.onerror = null;
+
+            try {
+              this._native = protocols ? new NativeWS(url, protocols) : new NativeWS(url);
+              this.readyState = this._native.readyState;
+
+              var self = this;
+              this._native.onopen = function (e) {
+                try { self.readyState = self._native.readyState; } catch(_){}
+                if (self.onopen) try { self.onopen(e); } catch(_){}
+              };
+              this._native.onmessage = function (e) {
+                if (self.onmessage) try { self.onmessage(e); } catch(_){}
+              };
+              this._native.onclose = function (e) {
+                try { self.readyState = self._native.readyState; } catch(_){}
+                if (self.onclose) try { self.onclose(e); } catch(_){}
+              };
+              this._native.onerror = function (e) {
+                // suppress obvious connection refused noise
+                try {
+                  var m = e && e.message ? String(e.message).toLowerCase() : '';
+                  if (m.includes('connection refused') || m.includes('failed to connect')) {
+                    if (window.__APP_DEBUG) console.warn('SafeWebSocket suppressed connection error for', url);
+                    if (self.onerror) try { self.onerror(e); } catch(_){}
+                    return;
+                  }
+                } catch(_) {}
+                if (self.onerror) try { self.onerror(e); } catch(_){}
+              };
+            } catch (err) {
+              // Construction failed synchronously — provide a dummy closed socket
+              this._native = null;
+              this.readyState = 3;
+              var self = this;
+              setTimeout(function () {
+                try { if (self.onerror) self.onerror(new Event('error')); } catch (_) {}
+                try { if (self.onclose) self.onclose(new CloseEvent('close')); } catch (_) {}
+              }, 0);
+            }
+          }
+
+          SafeWebSocket.prototype.send = function (data) {
+            try { if (this._native) this._native.send(data); } catch (e) { if (window.__APP_DEBUG) console.warn('SafeWebSocket send failed', e); }
+          };
+          SafeWebSocket.prototype.close = function (code, reason) {
+            try { if (this._native) this._native.close(code, reason); } catch (e) { if (window.__APP_DEBUG) console.warn('SafeWebSocket close failed', e); }
+            this.readyState = 3;
+          };
+          SafeWebSocket.prototype.addEventListener = function (name, cb) { try { if (this._native && this._native.addEventListener) return this._native.addEventListener(name, cb); } catch(_){} (this['on'+name]=cb); };
+          SafeWebSocket.prototype.removeEventListener = function (name, cb) { try { if (this._native && this._native.removeEventListener) return this._native.removeEventListener(name, cb); } catch(_){} if (this['on'+name]===cb) this['on'+name]=null; };
+
+          // Expose native for debugging, then override
+          window.__nativeWebSocket = NativeWS;
+          window.WebSocket = SafeWebSocket;
+          if (window.__APP_DEBUG) console.log('SafeWebSocket installed');
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
   </head>
 
   <body>

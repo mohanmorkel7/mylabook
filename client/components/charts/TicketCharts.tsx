@@ -106,12 +106,9 @@ export default function TicketCharts({
 
     // Initial fetch
     fetchData();
-    // Poll for updates every 30s to keep charts near-real-time
-    const iv = setInterval(fetchData, 30000);
 
     return () => {
       mounted = false;
-      clearInterval(iv);
     };
   }, [dateFrom, dateTo, range]);
 

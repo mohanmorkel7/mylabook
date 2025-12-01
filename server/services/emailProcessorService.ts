@@ -517,6 +517,7 @@ ${sanitizedHtml || rawText || ""}`;
         const createdTicket = await (
           await import("../models/Ticket")
         ).TicketRepository.create(ticketData, createdBy);
+        console.log("[EmailProcessing] createdTicket returned:", createdTicket);
 
         // Best-effort: record created_tickets entry so UI can list created-from-email tickets
         try {

@@ -637,6 +637,7 @@ ${sanitizedHtml || rawText || ""}`;
         console.log("[EmailProcessing] createdTicket returned:", createdTicket);
 
         // Best-effort: record created_tickets entry so UI can list created-from-email tickets
+        let emailBodyForRecord: string | null = null;
         try {
           const MailConfigRepo = await import("../models/MailConfig");
           const repo =
@@ -644,7 +645,7 @@ ${sanitizedHtml || rawText || ""}`;
             MailConfigRepo.MailConfig ||
             MailConfigRepo.default ||
             MailConfigRepo;
-          const emailBodyForRecord =
+          emailBodyForRecord =
             sanitizedHtml ||
             rawText ||
             (typeof email.body === "string" ? email.body : null) ||

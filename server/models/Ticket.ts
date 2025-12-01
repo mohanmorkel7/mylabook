@@ -692,8 +692,16 @@ export class TicketRepository {
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
 
+    if (debug) console.log("[TicketRepository.getAll] executing ticketsQuery with params:", queryParams.concat([limit, offset]));
     queryParams.push(limit, offset);
-    const ticketsResult = await pool.query(ticketsQuery, queryParams);
+    let ticketsResult;
+    try {
+      ticketsResult = await pool.query(ticketsQuery, queryParams);
+      if (debug) console.log("[TicketRepository.getAll] ticketsResult rows count:", ticketsResult.rows ? ticketsResult.rows.length : 0);
+    } catch (qErr) {
+      console.error("[TicketRepository.getAll] tickets query failed:", qErr);
+      throw qErr;
+    }
 
     const tickets: Ticket[] = ticketsResult.rows.map((row) => ({
       id: row.id,

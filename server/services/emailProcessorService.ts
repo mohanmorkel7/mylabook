@@ -360,35 +360,39 @@ ${sanitizedHtml || rawText || ""}`;
         effectivePriorityId = null;
       }
 
-      // If this createTicket was invoked for a specific source (config.sources may contain only the matched source),
+      // If this createTicket was invoked for a specific source (config.sources may contain rules),
       // try to find the specific rule that matched so we can use its bucket/demand/team overrides.
       let bucketOverride = config.bucket_id;
       let demandOverride = config.demand;
       let teamOverride = config.team_id;
       try {
-        if (Array.isArray(config.sources) && config.sources.length === 1) {
-          const source = config.sources[0];
+        if (Array.isArray(config.sources) && config.sources.length > 0) {
           const { findMatchingRule } = await import("./emailMatchingService");
-          const matchedRule: any = findMatchingRule(
-            email as any,
-            source as any,
-          );
+          let matchedRule: any = null;
+          // Iterate through sources and find first matching rule
+          for (const source of config.sources) {
+            try {
+              const r = findMatchingRule(email as any, source as any);
+              if (r) {
+                matchedRule = r;
+                break;
+              }
+            } catch (ruleErr) {
+              console.warn("Error while evaluating source rule:", ruleErr?.message || ruleErr);
+            }
+          }
+
           if (matchedRule) {
-            if (matchedRule.bucket !== undefined)
-              bucketOverride = matchedRule.bucket;
-            if (matchedRule.demand !== undefined)
-              demandOverride = matchedRule.demand;
+            if (matchedRule.bucket !== undefined) bucketOverride = matchedRule.bucket;
+            if (matchedRule.demand !== undefined) demandOverride = matchedRule.demand;
             if (matchedRule.team !== undefined) teamOverride = matchedRule.team;
+            console.log("[EmailProcessing] matchedRule overrides:", matchedRule);
           }
         }
 
         // Resolve teamOverride if provided as a team name (string) or if top-level config.team (string) exists
         try {
-          if (
-            (teamOverride === undefined || teamOverride === null) &&
-            config.team &&
-            typeof config.team === "string"
-          ) {
+          if ((teamOverride === undefined || teamOverride === null) && config.team && typeof config.team === "string") {
             teamOverride = config.team; // attempt to resolve below
           }
 
@@ -399,10 +403,9 @@ ${sanitizedHtml || rawText || ""}`;
             );
             if (tRes.rows.length > 0) {
               teamOverride = tRes.rows[0].id;
+              console.log("[EmailProcessing] Resolved team name to id:", teamOverride);
             } else {
-              console.warn(
-                `[EmailProcessing] Could not resolve team name '${teamOverride}' to id`,
-              );
+              console.warn(`[EmailProcessing] Could not resolve team name '${teamOverride}' to id`);
               teamOverride = null;
             }
           }

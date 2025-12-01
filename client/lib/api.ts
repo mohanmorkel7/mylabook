@@ -791,57 +791,12 @@ export class ApiClient {
     return this.request("/clients/stats");
   }
   public async get<T>(path: string): Promise<T> {
-    if (this.isOfflineMode) {
-      throw new Error("API client is in offline mode");
-    }
-
+    // Use the robust requestWithRetry which includes timeouts, fallbacks and circuit breaker
     try {
-      // Build headers with x-user-id like the main request method
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-
-      // Attach x-user-id from localStorage if available
-      try {
-        if (typeof window !== "undefined" && window.localStorage) {
-          const stored = localStorage.getItem("banani_user");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed && parsed.id) {
-              headers["x-user-id"] = String(parsed.id);
-            }
-          }
-        }
-      } catch (e) {
-        // ignore localStorage parsing errors
-      }
-
-      const response = await fetch(`${API_BASE_URL}${path}`, {
-        method: "GET",
-        headers,
-      });
-
-      // Handle 304 Not Modified by returning empty array
-      if (response.status === 304) {
-        return [] as unknown as T;
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      this.failureCount = 0; // reset on success
-      return data;
+      return await this.requestWithRetry<T>(path, {}, 2);
     } catch (err) {
-      this.failureCount++;
-      this.lastFailureTime = Date.now();
-
-      if (this.failureCount >= this.OFFLINE_THRESHOLD) {
-        this.isOfflineMode = true;
-        this.offlineDetectedAt = Date.now();
-      }
-
+      // Bubble up the error after logging
+      console.error(`GET ${path} failed:`, err);
       throw err;
     }
   }

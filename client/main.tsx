@@ -68,7 +68,8 @@ initializeResizeObserverErrorHandler();
           // Failed to construct native WebSocket (e.g., connection refused immediately)
           this._ws = null;
           this.readyState = 3; // CLOSED
-          if ((window as any).__APP_DEBUG) console.warn("SafeWebSocket init failed:", err);
+          if ((window as any).__APP_DEBUG)
+            console.warn("SafeWebSocket init failed:", err);
           // Optionally schedule synthetic onerror/onclose callbacks
           setTimeout(() => {
             const ev = new Event("error");
@@ -83,29 +84,34 @@ initializeResizeObserverErrorHandler();
         try {
           this._ws && this._ws.send(data);
         } catch (e) {
-          if ((window as any).__APP_DEBUG) console.warn("SafeWebSocket send failed", e);
+          if ((window as any).__APP_DEBUG)
+            console.warn("SafeWebSocket send failed", e);
         }
       }
       close(code?: number, reason?: string) {
         try {
           this._ws && this._ws.close(code, reason);
         } catch (e) {
-          if ((window as any).__APP_DEBUG) console.warn("SafeWebSocket close failed", e);
+          if ((window as any).__APP_DEBUG)
+            console.warn("SafeWebSocket close failed", e);
         }
         this.readyState = 3;
       }
       addEventListener(name: string, cb: any) {
         try {
-          if (this._ws && this._ws.addEventListener) return this._ws.addEventListener(name, cb);
+          if (this._ws && this._ws.addEventListener)
+            return this._ws.addEventListener(name, cb);
         } catch (e) {}
         // allow attaching to local handlers
         (this as any)["on" + name] = cb;
       }
       removeEventListener(name: string, cb: any) {
         try {
-          if (this._ws && this._ws.removeEventListener) return this._ws.removeEventListener(name, cb);
+          if (this._ws && this._ws.removeEventListener)
+            return this._ws.removeEventListener(name, cb);
         } catch (e) {}
-        if ((this as any)["on" + name] === cb) (this as any)["on" + name] = null;
+        if ((this as any)["on" + name] === cb)
+          (this as any)["on" + name] = null;
       }
     }
 
@@ -113,7 +119,9 @@ initializeResizeObserverErrorHandler();
     (window as any).__nativeWebSocket = NativeWS;
     (window as any).WebSocket = SafeWebSocket as any;
     if ((window as any).__APP_DEBUG)
-      console.log("SafeWebSocket installed to suppress noisy connection errors");
+      console.log(
+        "SafeWebSocket installed to suppress noisy connection errors",
+      );
   } catch (e) {
     // ignore
   }

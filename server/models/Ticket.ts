@@ -587,13 +587,35 @@ export class TicketRepository {
         : "";
 
     // Get total count
-    const countQuery = `
-      SELECT COUNT(*)
-      FROM tickets t
-      ${whereClause}
-    `;
-    const countResult = await pool.query(countQuery, queryParams);
-    const total = parseInt(countResult.rows[0].count);
+    let total = 0;
+    try {
+      if (!whereClause || whereClause.trim() === "") {
+        // No filters — use PostgreSQL estimated row count for performance
+        const estRes = await pool.query(
+          "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
+        );
+        const est = estRes.rows[0] && estRes.rows[0].estimate ? Number(estRes.rows[0].estimate) : 0;
+        total = Math.max(0, Math.floor(est));
+      } else {
+        const countQuery = `
+          SELECT COUNT(*)
+          FROM tickets t
+          ${whereClause}
+        `;
+        const countResult = await pool.query(countQuery, queryParams);
+        total = parseInt(countResult.rows[0].count);
+      }
+    } catch (countErr) {
+      console.warn("Failed to compute total count, falling back to estimate:", countErr?.message || countErr);
+      try {
+        const estRes2 = await pool.query(
+          "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
+        );
+        total = estRes2.rows[0] && estRes2.rows[0].estimate ? Number(estRes2.rows[0].estimate) : 0;
+      } catch (e) {
+        total = 0;
+      }
+    }
 
     // Get status counts (without filters to show total counts per status)
     // This can be expensive on large datasets. Use a short in-memory cache to avoid

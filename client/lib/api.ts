@@ -128,7 +128,7 @@ export class ApiClient {
       } catch (probeErr) {
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
           console.warn("Quick probe failed:", probeErr);
-        throw new Error("Offline mode: Backend server is unavailable");
+        return this.getEmptyFallbackResponse(endpoint);
       }
     }
 

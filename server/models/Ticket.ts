@@ -827,6 +827,7 @@ export class TicketRepository {
     }));
 
     const pages = Math.ceil(total / limit);
+    if (debug) console.log(`[TicketRepository.getAll] finished - tickets=${tickets.length} total=${total} pages=${pages} elapsed=${Date.now()-startTs}ms`);
 
     return {
       tickets,

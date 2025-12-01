@@ -594,7 +594,10 @@ export class TicketRepository {
         const estRes = await pool.query(
           "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
         );
-        const est = estRes.rows[0] && estRes.rows[0].estimate ? Number(estRes.rows[0].estimate) : 0;
+        const est =
+          estRes.rows[0] && estRes.rows[0].estimate
+            ? Number(estRes.rows[0].estimate)
+            : 0;
         total = Math.max(0, Math.floor(est));
       } else {
         const countQuery = `
@@ -606,12 +609,18 @@ export class TicketRepository {
         total = parseInt(countResult.rows[0].count);
       }
     } catch (countErr) {
-      console.warn("Failed to compute total count, falling back to estimate:", countErr?.message || countErr);
+      console.warn(
+        "Failed to compute total count, falling back to estimate:",
+        countErr?.message || countErr,
+      );
       try {
         const estRes2 = await pool.query(
           "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
         );
-        total = estRes2.rows[0] && estRes2.rows[0].estimate ? Number(estRes2.rows[0].estimate) : 0;
+        total =
+          estRes2.rows[0] && estRes2.rows[0].estimate
+            ? Number(estRes2.rows[0].estimate)
+            : 0;
       } catch (e) {
         total = 0;
       }

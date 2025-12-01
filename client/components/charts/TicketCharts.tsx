@@ -81,13 +81,12 @@ export default function TicketCharts({
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+
+    const fetchData = async () => {
       try {
         setLoading(true);
         const params = new URLSearchParams();
-        // Use local range unless explicitly set to 'all' (parent date props were defaulting to today)
-        const useFrom =
-          range === "all" ? undefined : (dateFrom ?? computedFrom);
+        const useFrom = range === "all" ? undefined : (dateFrom ?? computedFrom);
         const useTo = range === "all" ? undefined : (dateTo ?? computedTo);
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
@@ -102,9 +101,16 @@ export default function TicketCharts({
       } finally {
         if (mounted) setLoading(false);
       }
-    })();
+    };
+
+    // Initial fetch
+    fetchData();
+    // Poll for updates every 15s to keep charts near-real-time
+    const iv = setInterval(fetchData, 15000);
+
     return () => {
       mounted = false;
+      clearInterval(iv);
     };
   }, [dateFrom, dateTo, range]);
 
@@ -119,15 +125,28 @@ export default function TicketCharts({
     valueKey: string;
   }) => {
     const max = items.reduce((m, it) => Math.max(m, it[valueKey] || 0), 0) || 1;
-    // Use pixel heights to avoid percentage resolving issues inside flex containers
     const MAX_PX = 160;
     const MIN_PX = 8;
+
+    // Color palettes for better visual distinction
+    const palette = [
+      "#3B82F6",
+      "#10B981",
+      "#F59E0B",
+      "#EF4444",
+      "#8B5CF6",
+      "#06B6D4",
+      "#F472B6",
+      "#7C3AED",
+    ];
+
     return (
       <div className="flex flex-col">
         <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
           {items.map((it, idx) => {
             const val = Number(it[valueKey] || 0);
             const h = Math.max(MIN_PX, Math.round((val / max) * MAX_PX));
+            const color = palette[idx % palette.length];
             return (
               <div key={idx} className="flex-1 flex flex-col items-center">
                 <div className="text-sm text-gray-700 mb-2">{val}</div>
@@ -136,15 +155,19 @@ export default function TicketCharts({
                   style={{ minHeight: 0 }}
                 >
                   <div
-                    className="bg-indigo-500 rounded-t transition-all"
-                    style={{ width: 24, height: h }}
+                    style={{ width: 28, height: h, background: color, borderTopLeftRadius: 6, borderTopRightRadius: 6 }}
+                    title={`${it[labelKey]}: ${val}`}
+                    className="transition-all"
                   />
                 </div>
                 <div
-                  className="mt-2 text-xs text-center text-gray-600 truncate"
+                  className="mt-2 text-xs text-center text-gray-700 truncate"
                   style={{ maxWidth: "6rem" }}
                 >
-                  {it[labelKey]}
+                  <span className="inline-flex items-center gap-2">
+                    <span style={{ width: 8, height: 8, background: color, display: "inline-block", borderRadius: 4 }} />
+                    <span style={{ maxWidth: 80, display: "inline-block", verticalAlign: "middle" }}>{it[labelKey]}</span>
+                  </span>
                 </div>
               </div>
             );

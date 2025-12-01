@@ -591,6 +591,7 @@ export class TicketRepository {
         : "";
 
     // Get total count
+    if (debug) console.log("[TicketRepository.getAll] starting total count computation");
     let total = 0;
     try {
       if (!whereClause || whereClause.trim() === "") {

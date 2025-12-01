@@ -234,7 +234,11 @@ export class ApiClient {
             );
 
           // Add timeout to prevent hanging requests - longer for notifications, login, and tickets
-          let timeoutMs = endpoint.includes("notifications") || endpoint.includes("/auth/login") ? 15000 : 8000;
+          let timeoutMs =
+            endpoint.includes("notifications") ||
+            endpoint.includes("/auth/login")
+              ? 15000
+              : 8000;
           if (endpoint.includes("/tickets")) timeoutMs = 30000; // allow tickets up to 30s
 
           // Use AbortController so the underlying fetch/connection is aborted on timeout

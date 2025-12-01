@@ -521,7 +521,10 @@ export class TicketRepository {
 
     const debug = process.env.NODE_ENV !== "production";
     const startTs = Date.now();
-    if (debug) console.log(`[TicketRepository.getAll] start: page=${page} limit=${limit} filters=${JSON.stringify(filters)} viewerId=${viewerId} restrict=${restrictToViewer}`);
+    if (debug)
+      console.log(
+        `[TicketRepository.getAll] start: page=${page} limit=${limit} filters=${JSON.stringify(filters)} viewerId=${viewerId} restrict=${restrictToViewer}`,
+      );
 
     let whereConditions: string[] = [];
     let queryParams: any[] = [];
@@ -591,7 +594,8 @@ export class TicketRepository {
         : "";
 
     // Get total count
-    if (debug) console.log("[TicketRepository.getAll] starting total count computation");
+    if (debug)
+      console.log("[TicketRepository.getAll] starting total count computation");
     let total = 0;
     try {
       if (!whereClause || whereClause.trim() === "") {
@@ -634,7 +638,12 @@ export class TicketRepository {
     // Get status counts (without filters to show total counts per status)
     // This can be expensive on large datasets. Use a short in-memory cache to avoid
     // running the aggregation on every request (TTL: 15s).
-    if (debug) console.log("[TicketRepository.getAll] computing status counts (cachePresent=", !!(global as any)._ticketStatusCountsCache, ")");
+    if (debug)
+      console.log(
+        "[TicketRepository.getAll] computing status counts (cachePresent=",
+        !!(global as any)._ticketStatusCountsCache,
+        ")",
+      );
     const cacheAny: any = (global as any)._ticketStatusCountsCache || {};
     const CACHE_TTL_MS = 15 * 1000; // 15 seconds
     let status_counts: Record<string, number> = {};
@@ -668,7 +677,11 @@ export class TicketRepository {
     }
 
     // Get tickets with joins
-    if (debug) console.log("[TicketRepository.getAll] ticketsQuery constructed, whereClause length=", whereClause ? whereClause.length : 0);
+    if (debug)
+      console.log(
+        "[TicketRepository.getAll] ticketsQuery constructed, whereClause length=",
+        whereClause ? whereClause.length : 0,
+      );
 
     const ticketsQuery = `
       SELECT
@@ -692,12 +705,20 @@ export class TicketRepository {
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
 
-    if (debug) console.log("[TicketRepository.getAll] executing ticketsQuery with params:", queryParams.concat([limit, offset]));
+    if (debug)
+      console.log(
+        "[TicketRepository.getAll] executing ticketsQuery with params:",
+        queryParams.concat([limit, offset]),
+      );
     queryParams.push(limit, offset);
     let ticketsResult;
     try {
       ticketsResult = await pool.query(ticketsQuery, queryParams);
-      if (debug) console.log("[TicketRepository.getAll] ticketsResult rows count:", ticketsResult.rows ? ticketsResult.rows.length : 0);
+      if (debug)
+        console.log(
+          "[TicketRepository.getAll] ticketsResult rows count:",
+          ticketsResult.rows ? ticketsResult.rows.length : 0,
+        );
     } catch (qErr) {
       console.error("[TicketRepository.getAll] tickets query failed:", qErr);
       throw qErr;
@@ -827,7 +848,10 @@ export class TicketRepository {
     }));
 
     const pages = Math.ceil(total / limit);
-    if (debug) console.log(`[TicketRepository.getAll] finished - tickets=${tickets.length} total=${total} pages=${pages} elapsed=${Date.now()-startTs}ms`);
+    if (debug)
+      console.log(
+        `[TicketRepository.getAll] finished - tickets=${tickets.length} total=${total} pages=${pages} elapsed=${Date.now() - startTs}ms`,
+      );
 
     return {
       tickets,

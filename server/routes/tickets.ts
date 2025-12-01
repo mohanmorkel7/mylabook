@@ -229,7 +229,9 @@ router.get("/", async (req: Request, res: Response) => {
             [viewerId],
           );
           const role = roleRes.rows[0]?.role;
-          if (role && String(role).toLowerCase() !== "admin")
+          const roleLower = String(role || "").toLowerCase();
+          // Allow full visibility for Admin and FinOps Admin roles
+          if (role && !(roleLower === "admin" || roleLower === "finops admin"))
             restrictToViewer = true;
         }
       } catch (e) {

@@ -167,7 +167,18 @@ export default function ManageTickets() {
       fetchCreatedTicketsCount();
     };
     window.addEventListener("createdTicketsUpdated", handler);
-    return () => window.removeEventListener("createdTicketsUpdated", handler);
+
+    // Polling for near-real-time updates (every 15s)
+    const iv = setInterval(() => {
+      fetchTickets(currentPage);
+      fetchCreatedTicketsCount();
+      if (activeTab === "created") fetchCreatedTickets();
+    }, 15000);
+
+    return () => {
+      window.removeEventListener("createdTicketsUpdated", handler);
+      clearInterval(iv);
+    };
   }, [activeTab, currentPage]);
 
   useEffect(() => {

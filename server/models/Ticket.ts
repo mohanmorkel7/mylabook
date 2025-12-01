@@ -519,6 +519,10 @@ export class TicketRepository {
   }> {
     const offset = (page - 1) * limit;
 
+    const debug = process.env.NODE_ENV !== "production";
+    const startTs = Date.now();
+    if (debug) console.log(`[TicketRepository.getAll] start: page=${page} limit=${limit} filters=${JSON.stringify(filters)} viewerId=${viewerId} restrict=${restrictToViewer}`);
+
     let whereConditions: string[] = [];
     let queryParams: any[] = [];
     let paramIndex = 1;

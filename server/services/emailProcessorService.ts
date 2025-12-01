@@ -1563,14 +1563,24 @@ export async function getTodayEmails(
   try {
     if (mailbox) {
       const tokenFilename = mailbox.replace(/[@.]/g, "_") + ".json";
-      const tokenPath = path.resolve(process.cwd(), "server", "gmail_tokens", tokenFilename);
+      const tokenPath = path.resolve(
+        process.cwd(),
+        "server",
+        "gmail_tokens",
+        tokenFilename,
+      );
       if (fs.existsSync(tokenPath)) {
-        console.log(`[EmailProcessing] Detected Gmail token for mailbox ${mailbox} at ${tokenPath}; using Gmail fetch path`);
+        console.log(
+          `[EmailProcessing] Detected Gmail token for mailbox ${mailbox} at ${tokenPath}; using Gmail fetch path`,
+        );
         try {
           const gmailEmails = await getGmailTodayEmails(mailbox, since);
           return gmailEmails;
         } catch (gmailErr) {
-          console.warn("Gmail fetch failed, falling back to Graph path:", gmailErr?.message || gmailErr);
+          console.warn(
+            "Gmail fetch failed, falling back to Graph path:",
+            gmailErr?.message || gmailErr,
+          );
         }
       }
     }

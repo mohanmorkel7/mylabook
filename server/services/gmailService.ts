@@ -18,13 +18,17 @@ function sanitizeTokenPathForEmail(email: string) {
 
 function loadClientCredentials() {
   const credPath = path.resolve(process.cwd(), "credentials.json");
-  if (!fs.existsSync(credPath)) throw new Error("Missing credentials.json in project root");
+  if (!fs.existsSync(credPath))
+    throw new Error("Missing credentials.json in project root");
   return JSON.parse(fs.readFileSync(credPath, "utf8"));
 }
 
 function getOAuthClientFromCredentials(creds: any) {
   const clientInfo = creds.installed || creds.web;
-  if (!clientInfo) throw new Error("Invalid credentials.json format (expected installed or web)");
+  if (!clientInfo)
+    throw new Error(
+      "Invalid credentials.json format (expected installed or web)",
+    );
   const { client_id, client_secret, redirect_uris } = clientInfo;
   return new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
 }
@@ -89,11 +93,16 @@ function extractBodyFromPayload(payload: any): string {
 }
 
 function headerValue(headers: any[], name: string) {
-  const h = headers.find((x) => String(x.name || "").toLowerCase() === name.toLowerCase());
+  const h = headers.find(
+    (x) => String(x.name || "").toLowerCase() === name.toLowerCase(),
+  );
   return (h && h.value) || "";
 }
 
-export async function getGmailTodayEmails(email: string, since?: Date): Promise<GmailMessage[]> {
+export async function getGmailTodayEmails(
+  email: string,
+  since?: Date,
+): Promise<GmailMessage[]> {
   try {
     const creds = loadClientCredentials();
     const token = loadTokenForEmail(email);
@@ -114,9 +123,13 @@ export async function getGmailTodayEmails(email: string, since?: Date): Promise<
     const istMonth = istTime.getUTCMonth();
     const istDate = istTime.getUTCDate();
 
-    const istStartOfDay = new Date(Date.UTC(istYear, istMonth, istDate, 0, 0, 0));
+    const istStartOfDay = new Date(
+      Date.UTC(istYear, istMonth, istDate, 0, 0, 0),
+    );
     const utcStartOfIstDay = new Date(istStartOfDay.getTime() - istOffsetMs);
-    const istEndOfDay = new Date(Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0));
+    const istEndOfDay = new Date(
+      Date.UTC(istYear, istMonth, istDate + 1, 0, 0, 0),
+    );
     const utcEndOfDay = new Date(istEndOfDay.getTime() - istOffsetMs);
 
     const filterStartDate = since
@@ -135,7 +148,11 @@ export async function getGmailTodayEmails(email: string, since?: Date): Promise<
     const results: GmailMessage[] = [];
     for (const m of ids) {
       try {
-        const msgRes = await gmail.users.messages.get({ userId: "me", id: m.id, format: "full" });
+        const msgRes = await gmail.users.messages.get({
+          userId: "me",
+          id: m.id,
+          format: "full",
+        });
         const msg = msgRes.data as any;
         const headers = msg.payload?.headers || [];
         const from = headerValue(headers, "From");
@@ -143,16 +160,33 @@ export async function getGmailTodayEmails(email: string, since?: Date): Promise<
         const subject = headerValue(headers, "Subject") || msg.snippet || "";
         const date = headerValue(headers, "Date") || msg.internalDate;
         const body = extractBodyFromPayload(msg.payload) || msg.snippet || "";
-        const received = date ? new Date(date).toISOString() : new Date(Number(msg.internalDate) || Date.now()).toISOString();
-        results.push({ id: String(msg.id), subject, from, to, snippet: msg.snippet || "", body, receivedDateTime: received });
+        const received = date
+          ? new Date(date).toISOString()
+          : new Date(Number(msg.internalDate) || Date.now()).toISOString();
+        results.push({
+          id: String(msg.id),
+          subject,
+          from,
+          to,
+          snippet: msg.snippet || "",
+          body,
+          receivedDateTime: received,
+        });
       } catch (err) {
-        console.warn("Failed to fetch gmail message", m.id, err?.message || err);
+        console.warn(
+          "Failed to fetch gmail message",
+          m.id,
+          err?.message || err,
+        );
       }
     }
 
     return results;
   } catch (error) {
-    console.error("[GmailService] Error while fetching emails:", error?.message || error);
+    console.error(
+      "[GmailService] Error while fetching emails:",
+      error?.message || error,
+    );
     return [];
   }
 }

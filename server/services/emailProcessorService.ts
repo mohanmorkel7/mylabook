@@ -1602,11 +1602,20 @@ export async function getTodayEmails(
     try {
       if (mailbox) {
         const tokenFilename = mailbox.replace(/[@.]/g, "_") + ".json";
-        const tokenPath = path.resolve(process.cwd(), "server", "gmail_tokens", tokenFilename);
+        const tokenPath = path.resolve(
+          process.cwd(),
+          "server",
+          "gmail_tokens",
+          tokenFilename,
+        );
         if (fs.existsSync(tokenPath)) {
-          console.log(`[EmailProcessing] Falling back to Gmail fetch for ${mailbox} using token at ${tokenPath}`);
+          console.log(
+            `[EmailProcessing] Falling back to Gmail fetch for ${mailbox} using token at ${tokenPath}`,
+          );
           try {
-            const gmailEmails = await (await import("./gmailService")).getGmailTodayEmails(mailbox, since);
+            const gmailEmails = await (
+              await import("./gmailService")
+            ).getGmailTodayEmails(mailbox, since);
             return gmailEmails as any;
           } catch (gErr) {
             console.warn("Gmail fallback failed:", gErr?.message || gErr);
@@ -1619,7 +1628,9 @@ export async function getTodayEmails(
       console.warn("Error during Gmail fallback attempt:", e?.message || e);
     }
 
-    console.warn("Azure AD credentials not configured, skipping getTodayEmails");
+    console.warn(
+      "Azure AD credentials not configured, skipping getTodayEmails",
+    );
     return [];
   }
 

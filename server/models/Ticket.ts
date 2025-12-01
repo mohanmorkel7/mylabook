@@ -634,6 +634,7 @@ export class TicketRepository {
     // Get status counts (without filters to show total counts per status)
     // This can be expensive on large datasets. Use a short in-memory cache to avoid
     // running the aggregation on every request (TTL: 15s).
+    if (debug) console.log("[TicketRepository.getAll] computing status counts (cachePresent=", !!(global as any)._ticketStatusCountsCache, ")");
     const cacheAny: any = (global as any)._ticketStatusCountsCache || {};
     const CACHE_TTL_MS = 15 * 1000; // 15 seconds
     let status_counts: Record<string, number> = {};

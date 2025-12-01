@@ -378,21 +378,33 @@ ${sanitizedHtml || rawText || ""}`;
                 break;
               }
             } catch (ruleErr) {
-              console.warn("Error while evaluating source rule:", ruleErr?.message || ruleErr);
+              console.warn(
+                "Error while evaluating source rule:",
+                ruleErr?.message || ruleErr,
+              );
             }
           }
 
           if (matchedRule) {
-            if (matchedRule.bucket !== undefined) bucketOverride = matchedRule.bucket;
-            if (matchedRule.demand !== undefined) demandOverride = matchedRule.demand;
+            if (matchedRule.bucket !== undefined)
+              bucketOverride = matchedRule.bucket;
+            if (matchedRule.demand !== undefined)
+              demandOverride = matchedRule.demand;
             if (matchedRule.team !== undefined) teamOverride = matchedRule.team;
-            console.log("[EmailProcessing] matchedRule overrides:", matchedRule);
+            console.log(
+              "[EmailProcessing] matchedRule overrides:",
+              matchedRule,
+            );
           }
         }
 
         // Resolve teamOverride if provided as a team name (string) or if top-level config.team (string) exists
         try {
-          if ((teamOverride === undefined || teamOverride === null) && config.team && typeof config.team === "string") {
+          if (
+            (teamOverride === undefined || teamOverride === null) &&
+            config.team &&
+            typeof config.team === "string"
+          ) {
             teamOverride = config.team; // attempt to resolve below
           }
 
@@ -403,9 +415,14 @@ ${sanitizedHtml || rawText || ""}`;
             );
             if (tRes.rows.length > 0) {
               teamOverride = tRes.rows[0].id;
-              console.log("[EmailProcessing] Resolved team name to id:", teamOverride);
+              console.log(
+                "[EmailProcessing] Resolved team name to id:",
+                teamOverride,
+              );
             } else {
-              console.warn(`[EmailProcessing] Could not resolve team name '${teamOverride}' to id — attempting to create it`);
+              console.warn(
+                `[EmailProcessing] Could not resolve team name '${teamOverride}' to id — attempting to create it`,
+              );
               // Attempt to create the team so future configs can resolve
               try {
                 const ins = await pool.query(
@@ -414,12 +431,17 @@ ${sanitizedHtml || rawText || ""}`;
                 );
                 if (ins.rows.length > 0) {
                   teamOverride = ins.rows[0].id;
-                  console.log(`[EmailProcessing] Created new team '${String(teamOverride)}' with id=${teamOverride}`);
+                  console.log(
+                    `[EmailProcessing] Created new team '${String(teamOverride)}' with id=${teamOverride}`,
+                  );
                 } else {
                   teamOverride = null;
                 }
               } catch (createTeamErr) {
-                console.warn("Failed to create ticket_team:", createTeamErr?.message || createTeamErr);
+                console.warn(
+                  "Failed to create ticket_team:",
+                  createTeamErr?.message || createTeamErr,
+                );
                 teamOverride = null;
               }
             }

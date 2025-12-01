@@ -238,13 +238,38 @@ router.get("/", async (req: Request, res: Response) => {
         // ignore and default to unrestricted listing
       }
 
-      const result = await TicketRepository.getAll(
+      // Cap limit to avoid huge responses
+      const MAX_LIMIT = 100;
+      const effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+
+      const startMs = Date.now();
+      // Protect the route from extremely slow DB calls by racing with a timeout
+      const getAllPromise = TicketRepository.getAll(
         filters,
         page,
-        limit,
+        effectiveLimit,
         viewerId,
         restrictToViewer,
       );
+      const TIMEOUT_MS = 15000; // 15 seconds
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Tickets query timed out")), TIMEOUT_MS),
+      );
+
+      let result: any;
+      try {
+        result = await Promise.race([getAllPromise, timeoutPromise]);
+      } catch (err) {
+        const dur = Date.now() - startMs;
+        console.error(`Tickets fetch failed or timed out after ${dur}ms:`, err?.message || err);
+        return res.status(504).json({ error: "Tickets request timed out" });
+      }
+
+      const dur = Date.now() - startMs;
+      if (dur > 2000) {
+        console.warn(`Tickets query took ${dur}ms (page=${page}, limit=${effectiveLimit})`);
+      }
+
       // Add created_from_mail_config flag for frontend
       const ticketsWithFlag = result.tickets.map((ticket: any) => ({
         ...ticket,

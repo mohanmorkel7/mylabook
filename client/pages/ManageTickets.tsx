@@ -168,16 +168,8 @@ export default function ManageTickets() {
     };
     window.addEventListener("createdTicketsUpdated", handler);
 
-    // Polling for near-real-time updates (every 30s)
-    const iv = setInterval(() => {
-      fetchTickets(currentPage);
-      fetchCreatedTicketsCount();
-      if (activeTab === "created") fetchCreatedTickets();
-    }, 30000);
-
     return () => {
       window.removeEventListener("createdTicketsUpdated", handler);
-      clearInterval(iv);
     };
   }, [activeTab, currentPage]);
 

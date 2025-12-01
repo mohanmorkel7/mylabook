@@ -783,9 +783,23 @@ export default function ManageTickets() {
             <Button
               variant={activeTab === "created" ? "default" : "outline"}
               onClick={() => {
+                // If no date filters are set, default created view to today's IST day
+                if (!filters.dateFrom || !filters.dateTo) {
+                  const now = new Date();
+                  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+                  const ist = new Date(now.getTime() + istOffsetMs);
+                  const yyyy = ist.getUTCFullYear();
+                  const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
+                  const dd = String(ist.getUTCDate()).padStart(2, "0");
+                  const today = `${yyyy}-${mm}-${dd}`;
+                  setFilters((f) => ({ ...f, dateFrom: today, dateTo: today }));
+                  // fetch after state update
+                  setTimeout(() => fetchCreatedTickets(true), 50);
+                } else {
+                  fetchCreatedTickets(true);
+                }
                 setActiveTab("created");
-                // Fetch created tickets ignoring current filters so tab shows items
-                fetchCreatedTickets(true);
+                setCurrentPage(1);
               }}
             >
               Created from Email ({createdTicketsCount})

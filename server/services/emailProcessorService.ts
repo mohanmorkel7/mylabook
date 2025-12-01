@@ -386,15 +386,14 @@ ${sanitizedHtml || rawText || ""}`;
           }
 
           if (matchedRule) {
-            if (matchedRule.bucket !== undefined)
+            // Only apply overrides when non-null to avoid clearing config defaults
+            if (matchedRule.bucket !== undefined && matchedRule.bucket !== null)
               bucketOverride = matchedRule.bucket;
-            if (matchedRule.demand !== undefined)
+            if (matchedRule.demand !== undefined && matchedRule.demand !== null)
               demandOverride = matchedRule.demand;
-            if (matchedRule.team !== undefined) teamOverride = matchedRule.team;
-            console.log(
-              "[EmailProcessing] matchedRule overrides:",
-              matchedRule,
-            );
+            if (matchedRule.team !== undefined && matchedRule.team !== null)
+              teamOverride = matchedRule.team;
+            console.log("[EmailProcessing] matchedRule overrides:", matchedRule);
           }
         }
 

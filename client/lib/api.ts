@@ -122,7 +122,8 @@ export class ApiClient {
             console.warn(
               "Quick probe failed or returned non-OK response — still offline",
             );
-          throw new Error("Offline mode: Backend server is unavailable");
+          // Return empty fallback response so UI can render gracefully
+          return this.getEmptyFallbackResponse(endpoint);
         }
       } catch (probeErr) {
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)

@@ -668,9 +668,6 @@ export class TicketRepository {
     }
 
     // Get tickets with joins
-    const ticketsQuery = `
-      SELECT
-`;
     if (debug) console.log("[TicketRepository.getAll] ticketsQuery constructed, whereClause length=", whereClause ? whereClause.length : 0);
 
     const ticketsQuery = `

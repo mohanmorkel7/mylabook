@@ -108,6 +108,15 @@ export default function TicketCharts({
         } catch (e2) {
           console.warn("TicketCharts: failed to fetch user-status summary", e2);
         }
+
+        // Fetch tag-status summary
+        try {
+          const resp3 = await api.get(`/tickets/summary/by-tag${query}`);
+          const p3 = resp3?.data ?? resp3;
+          if (mounted) setTagStatus(p3?.tags || []);
+        } catch (e3) {
+          console.warn("TicketCharts: failed to fetch tag-status summary", e3);
+        }
       } catch (e) {
         console.error("TicketCharts: failed to fetch summary", e);
       } finally {

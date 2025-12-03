@@ -139,6 +139,64 @@ export default function ManageTickets() {
   >([]);
   const serverFilteredRef = useRef(false);
 
+  // Expose getMailConfigProviderName on window for TicketCharts to use
+  useEffect(() => {
+    const getMailConfigProviderName = (sources: any, sampleText?: string): string | null => {
+      if (!sources) return null;
+      try {
+        const arr = Array.isArray(sources)
+          ? sources
+          : typeof sources === "string"
+            ? JSON.parse(sources)
+            : null;
+        if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
+
+        const senderEmail = extractEmailFromText(sampleText || "") || null;
+        const senderDomain = senderEmail
+          ? senderEmail.split("@").slice(1).join("@").toLowerCase()
+          : null;
+
+        // First try to find a rule whose domain matches the sender's domain
+        if (senderDomain) {
+          for (const src of arr) {
+            if (src && Array.isArray(src.emailRules)) {
+              for (const rule of src.emailRules) {
+                if (rule && rule.domain) {
+                  const ruleDomain = String(rule.domain || "").trim();
+                  const strippedRule = ruleDomain.startsWith("@")
+                    ? ruleDomain.slice(1).toLowerCase()
+                    : ruleDomain.toLowerCase();
+                  // match by exact suffix (e.g., payswiff.com matches subdomains too)
+                  if (
+                    senderDomain === strippedRule ||
+                    senderDomain.endsWith("." + strippedRule)
+                  ) {
+                    return formatProviderNameFromDomain(strippedRule);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Fallback: return first rule's provider name
+        for (const src of arr) {
+          if (src && Array.isArray(src.emailRules)) {
+            for (const rule of src.emailRules) {
+              if (rule && rule.domain) {
+                return formatProviderNameFromDomain(String(rule.domain));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        return null;
+      }
+      return null;
+    };
+    (window as any).getMailConfigProviderName = getMailConfigProviderName;
+  }, []);
+
   // realtime clock for countdowns
   useEffect(() => {
     const iv = setInterval(() => setNow(Date.now()), 1000);

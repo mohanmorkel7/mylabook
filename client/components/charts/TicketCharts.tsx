@@ -414,7 +414,7 @@ export default function TicketCharts({
         <div>
           <h3 className="text-lg font-semibold">Tickets Overview</h3>
           <div className="text-sm text-gray-600">
-            Total: {" "}
+            Total:{" "}
             <span className="font-medium text-gray-900">{totalTickets}</span>
           </div>
         </div>
@@ -441,7 +441,7 @@ export default function TicketCharts({
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold">Assigned To</h4>
             <div className="text-sm text-gray-600">
-              Total: {" "}
+              Total:{" "}
               <span className="font-medium text-gray-900">{totalAssigned}</span>
             </div>
           </div>
@@ -452,7 +452,11 @@ export default function TicketCharts({
               <div className="text-sm text-gray-500">No data</div>
             ) : (
               <div className="min-w-[220px]">
-                <VerticalBarChart items={assigned} labelKey="name" valueKey="count" />
+                <VerticalBarChart
+                  items={assigned}
+                  labelKey="name"
+                  valueKey="count"
+                />
               </div>
             )}
           </div>
@@ -463,7 +467,7 @@ export default function TicketCharts({
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold">Status</h4>
             <div className="text-sm text-gray-600">
-              Total: {" "}
+              Total:{" "}
               <span className="font-medium text-gray-900">{totalTickets}</span>
             </div>
           </div>
@@ -474,7 +478,11 @@ export default function TicketCharts({
               <div className="text-sm text-gray-500">No data</div>
             ) : (
               <div className="min-w-[220px]">
-                <VerticalBarChart items={statuses} labelKey="status" valueKey="count" />
+                <VerticalBarChart
+                  items={statuses}
+                  labelKey="status"
+                  valueKey="count"
+                />
               </div>
             )}
           </div>
@@ -485,8 +493,10 @@ export default function TicketCharts({
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold">By User (Status)</h4>
             <div className="text-sm text-gray-600">
-              Users: {" "}
-              <span className="font-medium text-gray-900">{userStatus.length}</span>
+              Users:{" "}
+              <span className="font-medium text-gray-900">
+                {userStatus.length}
+              </span>
             </div>
           </div>
           <div className="overflow-x-auto">

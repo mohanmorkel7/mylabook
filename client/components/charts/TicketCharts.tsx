@@ -98,6 +98,15 @@ export default function TicketCharts({
         if (!mounted) return;
         setAssigned(payload.assigned || []);
         setStatuses(payload.statuses || []);
+
+        // Fetch user-status summary in parallel
+        try {
+          const resp2 = await api.get(`/tickets/summary/user-status${query}`);
+          const p2 = resp2?.data ?? resp2;
+          if (mounted) setUserStatus(p2?.users || []);
+        } catch (e2) {
+          console.warn('TicketCharts: failed to fetch user-status summary', e2);
+        }
       } catch (e) {
         console.error("TicketCharts: failed to fetch summary", e);
       } finally {

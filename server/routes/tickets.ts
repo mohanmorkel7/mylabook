@@ -614,7 +614,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                     tagName = main
                       .replace(/[^a-zA-Z0-9]/g, " ")
                       .split(" ")
-                      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                      .map(
+                        (w: string) => w.charAt(0).toUpperCase() + w.slice(1),
+                      )
                       .join(" ");
                     break;
                   }
@@ -667,7 +669,10 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         tagMap[tagName].counts[status] =
           (tagMap[tagName].counts[status] || 0) + 1;
       } catch (rowErr) {
-        console.warn("by-tag: failed to process a ticket row, skipping", rowErr);
+        console.warn(
+          "by-tag: failed to process a ticket row, skipping",
+          rowErr,
+        );
         continue;
       }
     }

@@ -577,7 +577,10 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     for (const row of r.rows) {
       try {
         const statusRaw = String(row.status_name || "").trim();
-        const status = statusRaw === "" || /^unknown$/i.test(statusRaw) ? "Manual" : statusRaw;
+        const status =
+          statusRaw === "" || /^unknown$/i.test(statusRaw)
+            ? "Manual"
+            : statusRaw;
         statusesSet.add(status);
 
         // Derive tag name from mail_config sources. Prefer rules that match the sender domain when available.
@@ -773,7 +776,10 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           const desc = String(row.ticket_description || "").toLowerCase();
           if (desc.includes("payswiff") || /@payswiff\./i.test(desc)) {
             const statusRaw = String(row.status_name || "").trim();
-            const status = statusRaw === "" || /^unknown$/i.test(statusRaw) ? "Manual" : statusRaw;
+            const status =
+              statusRaw === "" || /^unknown$/i.test(statusRaw)
+                ? "Manual"
+                : statusRaw;
             if (!tagMap["Payswiff"])
               tagMap["Payswiff"] = { tag: "Payswiff", counts: {} };
             tagMap["Payswiff"].counts[status] =
@@ -802,7 +808,10 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         const fallbackMap: Record<string, any> = {};
         for (const row of fr.rows) {
           const statusRaw = String(row.status_name || "").trim();
-          const status = statusRaw === "" || /^unknown$/i.test(statusRaw) ? "Manual" : statusRaw;
+          const status =
+            statusRaw === "" || /^unknown$/i.test(statusRaw)
+              ? "Manual"
+              : statusRaw;
           const sources = row.sources;
           let tagName = "Unknown";
           if (sources) {

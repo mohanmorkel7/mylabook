@@ -582,6 +582,20 @@ export class TicketRepository {
       queryParams.push(filters.date_to);
     }
 
+    // Support 'unassigned' (tickets with no assignee)
+    if (filters.unassigned) {
+      whereConditions.push(`t.assigned_to IS NULL`);
+    }
+
+    // Support filtering by whether ticket was created from a mail config
+    if (typeof filters.created_from_mail_config !== 'undefined') {
+      if (filters.created_from_mail_config) {
+        whereConditions.push(`t.mail_config_id IS NOT NULL`);
+      } else {
+        whereConditions.push(`t.mail_config_id IS NULL`);
+      }
+    }
+
     // If requested, restrict results to tickets visible to a specific viewer (non-admin users)
     if (restrictToViewer && viewerId) {
       whereConditions.push(

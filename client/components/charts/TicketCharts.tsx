@@ -218,8 +218,17 @@ export default function TicketCharts({
   };
 
   // Donut chart component for status distribution
-  const DonutChart = ({ items, labelKey, valueKey }: { items: any[]; labelKey: string; valueKey: string; }) => {
-    const total = items.reduce((s, it) => s + Number(it[valueKey] || 0), 0) || 1;
+  const DonutChart = ({
+    items,
+    labelKey,
+    valueKey,
+  }: {
+    items: any[];
+    labelKey: string;
+    valueKey: string;
+  }) => {
+    const total =
+      items.reduce((s, it) => s + Number(it[valueKey] || 0), 0) || 1;
     const radius = 48;
     const stroke = 20;
     const normalizedRadius = radius - stroke / 2;
@@ -240,7 +249,11 @@ export default function TicketCharts({
 
     return (
       <div className="flex items-center gap-4">
-        <svg height={radius * 2} width={radius * 2} className="transform -rotate-90">
+        <svg
+          height={radius * 2}
+          width={radius * 2}
+          className="transform -rotate-90"
+        >
           {items.map((it, i) => {
             const val = Number(it[valueKey] || 0);
             const fraction = val / total;
@@ -264,15 +277,38 @@ export default function TicketCharts({
               />
             );
           })}
-          <circle r={normalizedRadius - stroke} cx={radius} cy={radius} fill="#fff" />
-          <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="text-sm font-semibold" style={{ fontSize: 14 }}>
+          <circle
+            r={normalizedRadius - stroke}
+            cx={radius}
+            cy={radius}
+            fill="#fff"
+          />
+          <text
+            x="50%"
+            y="50%"
+            dominantBaseline="middle"
+            textAnchor="middle"
+            className="text-sm font-semibold"
+            style={{ fontSize: 14 }}
+          >
             {total}
           </text>
         </svg>
         <div className="flex flex-col">
           {items.map((it, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
-              <span style={{ width: 10, height: 10, background: palette[i % palette.length], display: 'inline-block', borderRadius: 3 }} />
+            <div
+              key={i}
+              className="flex items-center gap-2 text-sm text-gray-700"
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  background: palette[i % palette.length],
+                  display: "inline-block",
+                  borderRadius: 3,
+                }}
+              />
               <span>{it[labelKey]}</span>
               <span className="text-gray-500 ml-2">{it[valueKey]}</span>
             </div>

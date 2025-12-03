@@ -87,6 +87,13 @@ export default function TicketCharts({
     const fetchData = async () => {
       try {
         setLoading(true);
+        console.log("TicketCharts: fetchData called with", {
+          range,
+          dateFrom,
+          dateTo,
+          computedFrom,
+          computedTo,
+        });
         const params = new URLSearchParams();
         const useFrom =
           range === "all" ? undefined : (dateFrom ?? computedFrom);

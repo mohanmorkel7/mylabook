@@ -194,7 +194,7 @@ router.get("/", async (req: Request, res: Response) => {
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
 
-    const filters: TicketFilters = {
+    const filters: TicketFilters & any = {
       status_id: req.query.status_id
         ? parseInt(req.query.status_id as string)
         : undefined,
@@ -214,6 +214,15 @@ router.get("/", async (req: Request, res: Response) => {
       tags: req.query.tags ? (req.query.tags as string).split(",") : undefined,
       date_from: req.query.date_from as string,
       date_to: req.query.date_to as string,
+      // support explicit 'unassigned' and created_from_mail_config flags
+      unassigned:
+        typeof req.query.unassigned !== "undefined"
+          ? String(req.query.unassigned) === "true"
+          : undefined,
+      created_from_mail_config:
+        typeof req.query.created_from_mail_config !== "undefined"
+          ? String(req.query.created_from_mail_config) === "true"
+          : undefined,
     };
 
     const page = parseInt(req.query.page as string) || 1;

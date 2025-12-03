@@ -606,12 +606,20 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
             );
             if (m2 && m2[2]) {
               senderDomain = m2[2].toLowerCase();
+              if ((senderDomain || "").includes("payswiff")) {
+                console.log(`by-tag debug: parsed Payswiff from description ticket_id=${row.ticket_id} parsed=${senderDomain}`);
+              }
             } else {
               // Try to find any email in description
               const m3 = desc.match(
                 /([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i,
               );
-              if (m3 && m3[2]) senderDomain = m3[2].toLowerCase();
+              if (m3 && m3[2]) {
+                senderDomain = m3[2].toLowerCase();
+                if ((senderDomain || "").includes("payswiff")) {
+                  console.log(`by-tag debug: parsed Payswiff from description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`);
+                }
+              }
             }
           } catch (e) {
             // ignore

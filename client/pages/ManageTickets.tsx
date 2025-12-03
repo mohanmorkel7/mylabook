@@ -278,32 +278,35 @@ export default function ManageTickets() {
       // Build server-side filters
       const serverFilters: any = {};
       if (filters.searchText) serverFilters.search = filters.searchText;
-      if (filters.priority)
-        serverFilters.priority_id = parseInt(filters.priority, 10);
+      if (filters.priority !== undefined && String(filters.priority).trim() !== "") {
+        const pid = Number.parseInt(String(filters.priority), 10);
+        if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
+      }
       if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
       if (filters.dateTo) serverFilters.date_to = filters.dateTo;
 
       // status -> map to status_id using statusesMap
-      if (filters.status) {
+      if (filters.status !== undefined && String(filters.status).trim() !== "") {
         const key = String(filters.status || "").toLowerCase();
         const normalizedKey = key
           .replace(/[^a-z0-9]+/g, "_")
           .replace(/^_+|_+$/g, "");
-        const sid = statusesMap[normalizedKey] ?? null;
-        if (sid) serverFilters.status_id = sid;
+        const sid = statusesMap[normalizedKey];
+        if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid))) serverFilters.status_id = Number(sid);
       }
 
       // assigned to
-      if (filters.assignedTo) {
+      if (filters.assignedTo !== undefined && String(filters.assignedTo).trim() !== "") {
         if (filters.assignedTo === "unassigned") {
           serverFilters.unassigned = true;
         } else {
-          serverFilters.assigned_to = parseInt(filters.assignedTo, 10);
+          const aid = Number.parseInt(String(filters.assignedTo), 10);
+          if (!Number.isNaN(aid)) serverFilters.assigned_to = aid;
         }
       }
 
       // source/tag filter
-      if (filters.source) {
+      if (filters.source !== undefined && String(filters.source).trim() !== "") {
         if (filters.source === "mail_config") {
           serverFilters.created_from_mail_config = true;
         } else if (filters.source === "manual") {

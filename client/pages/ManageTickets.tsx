@@ -854,14 +854,16 @@ export default function ManageTickets() {
       for (const t of allTickets) {
         const tagNames = normalizeTagForTicket(t);
 
-        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
+        const statusLabel =
+          (t.status && (t.status.name || t.status)) || "Unknown";
 
         for (const tg of tagNames) {
           const key = String(tg || "");
           tagCounts.set(key, (tagCounts.get(key) || 0) + 1);
 
           if (!tagStatusCounts[key]) tagStatusCounts[key] = {};
-          tagStatusCounts[key][statusLabel] = (tagStatusCounts[key][statusLabel] || 0) + 1;
+          tagStatusCounts[key][statusLabel] =
+            (tagStatusCounts[key][statusLabel] || 0) + 1;
         }
 
         // Assigned user
@@ -931,14 +933,17 @@ export default function ManageTickets() {
 
       // Build Summary sheet with per-tag status breakdown
       // Determine status columns from statusesList (fallback to common names)
-      const statusNames = (statusesList && statusesList.length > 0)
-        ? statusesList.map((s: any) => s.name)
-        : ["Open", "In Progress", "Pending", "Overdue", "Closed"];
+      const statusNames =
+        statusesList && statusesList.length > 0
+          ? statusesList.map((s: any) => s.name)
+          : ["Open", "In Progress", "Pending", "Overdue", "Closed"];
 
       const summaryHeader = ["Tag", "Total", ...statusNames];
       const summaryRows = [summaryHeader];
 
-      const uniqueTags = Array.from(new Set<string>([...Array.from(tagCounts.keys())]));
+      const uniqueTags = Array.from(
+        new Set<string>([...Array.from(tagCounts.keys())]),
+      );
       for (const tagName of uniqueTags) {
         const totalsByStatus = tagStatusCounts[tagName] || {};
         const total = tagCounts.get(tagName) || 0;
@@ -952,10 +957,14 @@ export default function ManageTickets() {
       // Append a blank row and then user and global status summaries
       summaryRows.push([]);
       summaryRows.push(["User", "Count"]);
-      Array.from(userCounts.entries()).forEach(([k, v]) => summaryRows.push([k, v]));
+      Array.from(userCounts.entries()).forEach(([k, v]) =>
+        summaryRows.push([k, v]),
+      );
       summaryRows.push([]);
       summaryRows.push(["Status", "Count"]);
-      Array.from(statusCounts.entries()).forEach(([k, v]) => summaryRows.push([k, v]));
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        summaryRows.push([k, v]),
+      );
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");

@@ -1732,59 +1732,29 @@ export default function ManageTickets() {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent>
-                        <div className="mb-3 text-sm text-gray-700 truncate">
-                          {t.description}
-                        </div>
+                      <CardContent className="py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {pr && <Badge className={pr.color}>{pr.name}</Badge>}
+                          <Badge>{t.status?.name || (t.status as any) || "Unknown"}</Badge>
+                          {provider && <Badge variant="outline">{provider}</Badge>}
 
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            {pr && (
-                              <Badge className={pr.color}>{pr.name}</Badge>
-                            )}
-                            <Badge>
-                              {t.status?.name || (t.status as any) || "Unknown"}
-                            </Badge>
-                            {provider && (
-                              <Badge variant="outline">{provider}</Badge>
-                            )}
-                          </div>
-
-                          <div className="text-right text-sm">
-                            <div className="text-gray-600">
-                              {getAssignedUserName(t.assigned_to_id)}
-                            </div>
-                            <div
-                              className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}
-                            >
-                              {slaText}
-                            </div>
+                          <div className="ml-auto text-right text-xs text-gray-500">
+                            <div className={`text-gray-600`}>{slaText}</div>
                           </div>
                         </div>
 
-                        <div className="mt-3 flex items-center justify-between">
+                        <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
-                            Updated{" "}
-                            {formatDistanceToNowStrict(new Date(t.updated_at))}{" "}
-                            ago
+                            Updated {formatDistanceToNowStrict(new Date(t.updated_at))} ago
                           </div>
-                          <div className="flex gap-2">
+
+                          <div className="flex gap-2 items-center">
                             <Link to={`/tickets/${t.id}/edit`}>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                              <Button size="sm" variant="ghost" onClick={(e) => e.stopPropagation()}>
                                 <Edit size={14} />
                               </Button>
                             </Link>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={(e) => {
-                                e.stopPropagation(); /* deletion logic here */
-                              }}
-                            >
+                            <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); }}>
                               <Trash size={14} />
                             </Button>
                           </div>

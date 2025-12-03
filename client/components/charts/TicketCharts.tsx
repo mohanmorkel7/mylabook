@@ -312,7 +312,9 @@ export default function TicketCharts({
                   borderRadius: 3,
                 }}
               />
-              <span style={{ minWidth: 80, display: 'inline-block' }}>{it[labelKey]}</span>
+              <span style={{ minWidth: 80, display: "inline-block" }}>
+                {it[labelKey]}
+              </span>
               <span className="text-gray-500 ml-2">{it[valueKey]}</span>
             </div>
           ))}

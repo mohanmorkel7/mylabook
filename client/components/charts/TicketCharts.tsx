@@ -168,6 +168,10 @@ export default function TicketCharts({
             const arr = Object.entries(computedTagCounts).map(
               ([tag, counts]) => ({ tag, counts }),
             );
+            console.log("TicketCharts: computed tag status (client-side):", {
+              computedTagCounts,
+              arr,
+            });
             setTagStatus(arr);
           }
         } catch (e) {

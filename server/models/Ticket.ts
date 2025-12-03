@@ -186,6 +186,9 @@ export interface TicketFilters {
   tags?: string[];
   date_from?: string;
   date_to?: string;
+  // New flags
+  unassigned?: boolean;
+  created_from_mail_config?: boolean;
 }
 
 export class TicketRepository {

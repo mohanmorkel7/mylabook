@@ -219,8 +219,8 @@ export default function TicketCharts({
     statuses: StatusCount[];
   }) => {
     const MAX_PX = 160;
-    const MIN_PX = 4;
-    const totalColWidth = 28; // total width per user column in px
+    const MIN_PX = 12; // increase minimum height so low values remain visible
+    const totalColWidth = 48; // increase column width per user for clearer bars
 
     const statusNames =
       statuses && statuses.length > 0 ? statuses.map((s) => s.status) : [];
@@ -244,8 +244,8 @@ export default function TicketCharts({
     );
 
     const barWidth = Math.max(
-      6,
-      Math.floor(totalColWidth / Math.max(1, statusNames.length)),
+      10,
+      Math.floor((totalColWidth - (statusNames.length - 1) * 4) / Math.max(1, statusNames.length)),
     );
 
     return (
@@ -255,10 +255,7 @@ export default function TicketCharts({
             const name = u.name || `User ${u.user_id}`;
             const bars = statusNames.map((st, idx) => {
               const val = Number((u.counts && u.counts[st]) || 0);
-              const h =
-                val === 0
-                  ? 0
-                  : Math.max(MIN_PX, Math.round((val / maxVal) * MAX_PX));
+              const h = Math.max(MIN_PX, Math.round((val / Math.max(1, maxVal)) * MAX_PX));
               return {
                 val,
                 h,
@@ -289,21 +286,25 @@ export default function TicketCharts({
                         display: "flex",
                         alignItems: "flex-end",
                         justifyContent: "center",
-                        gap: 4,
+                        gap: 6,
                       }}
                     >
                       {bars.map((bar, bi) => (
-                        <div
-                          key={bi}
-                          style={{
-                            width: barWidth,
-                            height: bar.h,
-                            background: bar.color,
-                            borderTopLeftRadius: 4,
-                            borderTopRightRadius: 4,
-                          }}
-                          title={`${name} - ${bar.status}: ${bar.val}`}
-                        />
+                        <div key={bi} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <div style={{ fontSize: 10, color: "#374151", marginBottom: 4 }}>{bar.val > 0 ? bar.val : ""}</div>
+                          <div
+                            style={{
+                              width: barWidth,
+                              height: bar.h,
+                              background: bar.color,
+                              borderTopLeftRadius: 4,
+                              borderTopRightRadius: 4,
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+                              border: "1px solid rgba(0,0,0,0.04)",
+                            }}
+                            title={`${name} - ${bar.status}: ${bar.val}`}
+                          />
+                        </div>
                       ))}
                     </div>
                   </div>

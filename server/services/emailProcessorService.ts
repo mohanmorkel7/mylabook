@@ -673,6 +673,36 @@ ${sanitizedHtml || rawText || ""}`;
         );
       }
 
+      // Derive tags from matched rule / config (e.g., domain rules like @razorpay.com -> Razorpay)
+      const tagsSet = new Set<string>();
+      try {
+        if (typeof matchedRule === "object" && matchedRule) {
+          // domain -> Razorpay
+          if (matchedRule.domain && typeof matchedRule.domain === "string") {
+            const d = String(matchedRule.domain).trim();
+            const clean = d.replace(/^@/, "").split(".")[0];
+            if (clean) tagsSet.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+          }
+          // bucket name as tag
+          if (matchedRule.bucket && typeof matchedRule.bucket === "string") {
+            tagsSet.add(String(matchedRule.bucket).trim());
+          }
+          // team name as tag
+          if (matchedRule.team && typeof matchedRule.team === "string") {
+            tagsSet.add(String(matchedRule.team).trim());
+          }
+        }
+
+        // Also include top-level config.team if present
+        if ((config as any).team && typeof (config as any).team === "string") {
+          tagsSet.add(String((config as any).team).trim());
+        }
+      } catch (tagErr) {
+        console.warn("Error deriving tags from matched rule:", tagErr?.message || tagErr);
+      }
+
+      const tagsArray = Array.from(tagsSet);
+
       // Create ticket in app database using TicketRepository
       const ticketData = {
         subject,
@@ -688,6 +718,8 @@ ${sanitizedHtml || rawText || ""}`;
         mail_config_id: config.id,
         // Pass watcher IDs so TicketRepository.create can persist them into ticket_watchers
         watchers: config.watcher_user_ids || config.watcher_ids || [],
+        // Tags inferred from rules/config
+        tags: tagsArray.length > 0 ? tagsArray : undefined,
       } as any;
 
       // createdBy: prefer config.user_id else assigned_to

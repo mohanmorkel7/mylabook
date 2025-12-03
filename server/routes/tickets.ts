@@ -607,7 +607,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
             if (m2 && m2[2]) {
               senderDomain = m2[2].toLowerCase();
               if ((senderDomain || "").includes("payswiff")) {
-                console.log(`by-tag debug: parsed Payswiff from description ticket_id=${row.ticket_id} parsed=${senderDomain}`);
+                console.log(
+                  `by-tag debug: parsed Payswiff from description ticket_id=${row.ticket_id} parsed=${senderDomain}`,
+                );
               }
             } else {
               // Try to find any email in description
@@ -617,7 +619,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
               if (m3 && m3[2]) {
                 senderDomain = m3[2].toLowerCase();
                 if ((senderDomain || "").includes("payswiff")) {
-                  console.log(`by-tag debug: parsed Payswiff from description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`);
+                  console.log(
+                    `by-tag debug: parsed Payswiff from description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`,
+                  );
                 }
               }
             }
@@ -632,7 +636,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         if (mappedFromSender) {
           tagName = mappedFromSender;
           if (mappedFromSender === "Payswiff") {
-            console.log(`by-tag debug: mapped Payswiff from senderDomain=${senderDomain} ticket_id=${row.ticket_id} status=${status}`);
+            console.log(
+              `by-tag debug: mapped Payswiff from senderDomain=${senderDomain} ticket_id=${row.ticket_id} status=${status}`,
+            );
           }
         }
 

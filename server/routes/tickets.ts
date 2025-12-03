@@ -601,12 +601,16 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           try {
             const desc = String(row.ticket_description);
             // Common pattern: Email from: someone@domain.com Received: <timestamp>
-            const m2 = desc.match(/Email from:\s*([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i);
+            const m2 = desc.match(
+              /Email from:\s*([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i,
+            );
             if (m2 && m2[2]) {
               senderDomain = m2[2].toLowerCase();
             } else {
               // Try to find any email in description
-              const m3 = desc.match(/([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i);
+              const m3 = desc.match(
+                /([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i,
+              );
               if (m3 && m3[2]) senderDomain = m3[2].toLowerCase();
             }
           } catch (e) {

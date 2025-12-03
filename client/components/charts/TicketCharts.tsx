@@ -299,13 +299,16 @@ export default function TicketCharts({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-[220px]">
           {items.map((it, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-gray-700">
+            <div
+              key={i}
+              className="flex items-center gap-2 text-xs text-gray-700"
+            >
               <span
                 style={{
                   width: 8,
                   height: 8,
                   background: palette[i % palette.length],
-                  display: 'inline-block',
+                  display: "inline-block",
                   borderRadius: 3,
                 }}
               />

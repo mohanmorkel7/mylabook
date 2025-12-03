@@ -513,6 +513,107 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/tickets/summary/by-tag
+// Returns counts grouped by mail-config-derived tags (e.g., Razorpay) and status for a date range
+router.get("/summary/by-tag", async (req: Request, res: Response) => {
+  try {
+    const raw_date_from = req.query.date_from as string | undefined;
+    const raw_date_to = req.query.date_to as string | undefined;
+
+    function expandIstDate(dateStr: string, endOfDay = false) {
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return dateStr;
+      const [y, m, d] = parts.map((p) => parseInt(p, 10));
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+      const hour = endOfDay ? 23 : 0;
+      const minute = endOfDay ? 59 : 0;
+      const second = endOfDay ? 59 : 0;
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+      return new Date(utcTs).toISOString();
+    }
+
+    const date_from = raw_date_from
+      ? expandIstDate(raw_date_from, false)
+      : undefined;
+    const date_to = raw_date_to ? expandIstDate(raw_date_to, true) : undefined;
+
+    const values: any[] = [];
+    let where = "WHERE 1=1";
+    let idx = 1;
+    if (date_from) {
+      where += ` AND t.created_at >= $${idx++}`;
+      values.push(date_from);
+    }
+    if (date_to) {
+      where += ` AND t.created_at <= $${idx++}`;
+      values.push(date_to);
+    }
+
+    const q = `
+      SELECT ts.name as status_name, mc.sources as sources
+      FROM tickets t
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+      ${where}
+    `;
+
+    const r = await pool.query(q, values);
+
+    const tagMap: Record<string, any> = {};
+    const statusesSet = new Set<string>();
+
+    for (const row of r.rows) {
+      const status = row.status_name || "Unknown";
+      statusesSet.add(status);
+
+      let tagName = "Unknown";
+      if (row.sources) {
+        let sources = row.sources;
+        if (typeof sources === "string") {
+          try {
+            sources = JSON.parse(sources);
+          } catch (e) {
+            sources = null;
+          }
+        }
+
+        if (Array.isArray(sources)) {
+          outer: for (const src of sources) {
+            if (src && Array.isArray(src.emailRules)) {
+              for (const rule of src.emailRules) {
+                if (rule && rule.domain) {
+                  const domain = String(rule.domain || "").trim();
+                  if (!domain) continue;
+                  const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+                  const main = stripped.split(".")[0] || stripped;
+                  tagName = main
+                    .replace(/[^a-zA-Z0-9]/g, " ")
+                    .split(" ")
+                    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(" ");
+                  break outer;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (!tagMap[tagName]) tagMap[tagName] = { tag: tagName, counts: {} };
+      tagMap[tagName].counts[status] = (tagMap[tagName].counts[status] || 0) + 1;
+    }
+
+    const tags = Object.values(tagMap);
+    const statuses = Array.from(statusesSet);
+
+    res.json({ tags, statuses });
+  } catch (err) {
+    console.error("Error fetching tag summary:", err);
+    res.status(500).json({ error: "Failed to fetch tag summary" });
+  }
+});
+
 // Get ticket by ID
 router.get("/:id", async (req: Request, res: Response) => {
   try {

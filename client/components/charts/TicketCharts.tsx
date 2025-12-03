@@ -553,7 +553,7 @@ export default function TicketCharts({
               <div className="text-sm text-gray-500">No data</div>
             ) : (
               <div className="min-w-[220px]">
-                <VerticalBarChart
+                <DonutChart
                   items={statuses}
                   labelKey="status"
                   valueKey="count"

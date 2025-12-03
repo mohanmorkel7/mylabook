@@ -1548,7 +1548,72 @@ export default function ManageTickets() {
         </Card>
       </div>
 
-      {/* Rest of the ManageTickets UI (ticket list, filters, pagination) remains unchanged */}
+      {/* Ticket list */}
+      <div className="space-y-4">
+        {activeTab === "all" ? (
+          (() => {
+            const start = (currentPage - 1) * pageSize;
+            const pageItems = paginatedTickets.slice(start, start + pageSize);
+            if (!pageItems || pageItems.length === 0) {
+              return (
+                <div className="text-sm text-gray-500">No tickets to display</div>
+              );
+            }
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pageItems.map((t) => (
+                  <Card key={t.id} className="shadow-sm">
+                    <CardContent>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-sm text-gray-500">{t.track_id}</div>
+                          <div className="text-lg font-medium text-gray-900">{t.subject}</div>
+                          <div className="text-sm text-gray-600 mt-1">{String(t.description || "").slice(0, 200)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500">{t.assignee?.name || getAssignedUserName(t.assigned_to_id)}</div>
+                          <div className="mt-2">
+                            <Badge>{(t.status && (t.status.name || t.status)) || "Unknown"}</Badge>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-xs text-gray-500">Created: {formatToIST(t.created_at)}</div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()
+        ) : (
+          <div>
+            {effectiveCreatedTickets && effectiveCreatedTickets.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {effectiveCreatedTickets.map((ct) => (
+                  <Card key={ct.id} className="shadow-sm">
+                    <CardContent>
+                      <div className="text-sm text-gray-500">{ct.email_subject}</div>
+                      <div className="text-sm text-gray-700">From: {ct.email_from}</div>
+                      <div className="mt-2 text-xs text-gray-500">Created: {formatToIST(ct.created_at)}</div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">No created tickets</div>
+            )}
+          </div>
+        )}
+
+        {/* Pagination controls */}
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-sm text-gray-600">Showing {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, paginatedTickets.length)} of {paginatedTickets.length}</div>
+          <div className="flex items-center gap-2">
+            <Button disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Prev</Button>
+            <div className="text-sm">Page {currentPage} / {Math.max(1, Math.ceil(paginatedTickets.length / pageSize))}</div>
+            <Button disabled={currentPage >= Math.max(1, Math.ceil(paginatedTickets.length / pageSize))} onClick={() => setCurrentPage((p) => Math.min(Math.max(1, Math.ceil(paginatedTickets.length / pageSize)), p + 1))}>Next</Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

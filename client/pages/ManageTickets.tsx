@@ -723,13 +723,22 @@ export default function ManageTickets() {
     return `${formatRemaining(earliestRemaining)} hours remaining`;
   };
 
-  // fetch ticket metadata to discover overdue status id
+  // fetch ticket metadata to discover overdue status id and build statuses map
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const meta = await api.getTicketMetadata();
         const statuses = meta?.data?.statuses ?? meta?.statuses ?? [];
+        if (mounted) {
+          setStatusesList(statuses);
+          const map: Record<string, number> = {};
+          for (const s of statuses) {
+            const key = String(s.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+            map[key] = Number(s.id);
+          }
+          setStatusesMap(map);
+        }
         const overdue = statuses.find((s: any) =>
           String(s.name).toLowerCase().includes("overdue"),
         );

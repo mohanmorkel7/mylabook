@@ -237,15 +237,13 @@ export default function TicketCharts({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold">Assigned To</h4>
               <div className="text-sm text-gray-600">
                 Total:{" "}
-                <span className="font-medium text-gray-900">
-                  {totalAssigned}
-                </span>
+                <span className="font-medium text-gray-900">{totalAssigned}</span>
               </div>
             </div>
             {loading ? (
@@ -253,11 +251,7 @@ export default function TicketCharts({
             ) : assigned.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart
-                items={assigned}
-                labelKey="name"
-                valueKey="count"
-              />
+              <VerticalBarChart items={assigned} labelKey="name" valueKey="count" />
             )}
           </div>
 
@@ -266,9 +260,7 @@ export default function TicketCharts({
               <h4 className="text-sm font-semibold">Status</h4>
               <div className="text-sm text-gray-600">
                 Total:{" "}
-                <span className="font-medium text-gray-900">
-                  {totalTickets}
-                </span>
+                <span className="font-medium text-gray-900">{totalTickets}</span>
               </div>
             </div>
             {loading ? (
@@ -276,11 +268,23 @@ export default function TicketCharts({
             ) : statuses.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart
-                items={statuses}
-                labelKey="status"
-                valueKey="count"
-              />
+              <VerticalBarChart items={statuses} labelKey="status" valueKey="count" />
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold">By User (Status)</h4>
+              <div className="text-sm text-gray-600">
+                Users: <span className="font-medium text-gray-900">{userStatus.length}</span>
+              </div>
+            </div>
+            {loading ? (
+              <div className="text-sm text-gray-500">Loading…</div>
+            ) : userStatus.length === 0 ? (
+              <div className="text-sm text-gray-500">No data</div>
+            ) : (
+              <StackedVerticalChart users={userStatus} statuses={statuses} />
             )}
           </div>
         </div>

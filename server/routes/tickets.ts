@@ -609,7 +609,10 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                 .replace(/&amp;/g, "&")
                 .replace(/&#39;/g, "'")
                 .replace(/&quot;/g, '"');
-            const cleaned = decodeEntities(stripHtml(descRaw)).replace(/\s+/g, " ");
+            const cleaned = decodeEntities(stripHtml(descRaw)).replace(
+              /\s+/g,
+              " ",
+            );
 
             // Common pattern: Email from: someone@domain.com Received: <timestamp>
             const m2 = cleaned.match(
@@ -618,7 +621,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
             if (m2 && m2[2]) {
               senderDomain = m2[2].toLowerCase();
               if (senderDomain.includes("payswiff"))
-                console.log(`by-tag debug: parsed Payswiff from cleaned description ticket_id=${row.ticket_id} parsed=${senderDomain}`);
+                console.log(
+                  `by-tag debug: parsed Payswiff from cleaned description ticket_id=${row.ticket_id} parsed=${senderDomain}`,
+                );
             } else {
               // Try to find any email in cleaned description
               const m3 = cleaned.match(
@@ -627,7 +632,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
               if (m3 && m3[2]) {
                 senderDomain = m3[2].toLowerCase();
                 if (senderDomain.includes("payswiff"))
-                  console.log(`by-tag debug: parsed Payswiff from cleaned description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`);
+                  console.log(
+                    `by-tag debug: parsed Payswiff from cleaned description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`,
+                  );
               }
             }
           } catch (e) {
@@ -765,8 +772,10 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           const desc = String(row.ticket_description || "").toLowerCase();
           if (desc.includes("payswiff") || /@payswiff\./i.test(desc)) {
             const status = row.status_name || "Unknown";
-            if (!tagMap["Payswiff"]) tagMap["Payswiff"] = { tag: "Payswiff", counts: {} };
-            tagMap["Payswiff"].counts[status] = (tagMap["Payswiff"].counts[status] || 0) + 1;
+            if (!tagMap["Payswiff"])
+              tagMap["Payswiff"] = { tag: "Payswiff", counts: {} };
+            tagMap["Payswiff"].counts[status] =
+              (tagMap["Payswiff"].counts[status] || 0) + 1;
           }
         } catch (e) {
           // ignore

@@ -380,6 +380,8 @@ export default function ManageTickets() {
         };
       });
       setTickets(normalized);
+      // Use server results directly for displayed list to avoid double-filtering client-side
+      setFilteredTickets(normalized);
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
       const localCreatedCount = normalized.filter(
         (t: any) => t.created_from_mail_config,

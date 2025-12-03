@@ -1758,11 +1758,11 @@ export default function ManageTickets() {
                           </div>
                           <div className="flex gap-2">
                             <Link to={`/tickets/${t.id}/edit`}>
-                              <Button size="sm" variant="ghost">
+                              <Button size="sm" variant="ghost" onClick={(e) => e.stopPropagation()}>
                                 <Edit size={14} />
                               </Button>
                             </Link>
-                            <Button size="sm" variant="destructive">
+                            <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); /* deletion logic here */ }}>
                               <Trash size={14} />
                             </Button>
                           </div>

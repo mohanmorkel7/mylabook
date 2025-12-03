@@ -1686,15 +1686,24 @@ export default function ManageTickets() {
                     <Card key={t.id} className="hover:shadow transition-shadow">
                       <CardHeader>
                         <div className="flex justify-between items-start">
-                          <CardTitle className="text-sm font-semibold">
-                            <Link
-                              to={`/tickets/${t.id}`}
-                              className="hover:underline"
-                            >
-                              {t.subject || t.track_id}
-                            </Link>
-                          </CardTitle>
-                          <div className="text-right text-xs">
+                          <div className="flex items-start gap-3">
+                            <CardTitle className="text-sm font-semibold">
+                              <Link
+                                to={`/tickets/${t.id}`}
+                                className="hover:underline"
+                              >
+                                {t.subject || t.track_id}
+                              </Link>
+                            </CardTitle>
+                          </div>
+
+                          <div className="text-right text-xs flex flex-col items-end gap-1">
+                            {t.created_from_mail_config ? (
+                              <Badge className="bg-green-100 text-green-800">From Mail Config</Badge>
+                            ) : provider ? (
+                              <Badge variant="outline">{provider}</Badge>
+                            ) : null}
+
                             <div className="font-medium text-gray-600">
                               {t.track_id}
                             </div>

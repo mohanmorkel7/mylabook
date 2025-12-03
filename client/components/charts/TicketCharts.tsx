@@ -229,8 +229,8 @@ export default function TicketCharts({
   }) => {
     const total =
       items.reduce((s, it) => s + Number(it[valueKey] || 0), 0) || 1;
-    const radius = 48;
-    const stroke = 20;
+    const radius = 72; // larger donut
+    const stroke = 24;
     const normalizedRadius = radius - stroke / 2;
     const circumference = 2 * Math.PI * normalizedRadius;
 

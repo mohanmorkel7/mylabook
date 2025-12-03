@@ -382,6 +382,7 @@ export default function ManageTickets() {
           __fetched_at_ms: fetchClientMs,
         };
       });
+
       setTickets(normalized);
       // Use server results directly for displayed list to avoid double-filtering client-side
       serverFilteredRef.current = true;
@@ -739,6 +740,7 @@ export default function ManageTickets() {
     if (user.first_name && user.last_name) {
       return `${user.first_name} ${user.last_name}`;
     }
+
     return "Unassigned";
   };
 
@@ -917,7 +919,19 @@ export default function ManageTickets() {
       // Build workbook
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Summary - Tag-wise, User-wise, Status-wise
+      // Build per-user status counts
+      const userStatusCounts: Record<string, Record<string, number>> = {};
+      for (const t of allTickets) {
+        const assignedLabel =
+          t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        const statusLabel =
+          (t.status && (t.status.name || t.status)) || "Unknown";
+        if (!userStatusCounts[assignedLabel])
+          userStatusCounts[assignedLabel] = {};
+        userStatusCounts[assignedLabel][statusLabel] =
+          (userStatusCounts[assignedLabel][statusLabel] || 0) + 1;
+      }
+
       const tagRows = [["Tag", "Count"]];
       Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
 
@@ -954,12 +968,23 @@ export default function ManageTickets() {
         summaryRows.push(row);
       }
 
-      // Append a blank row and then user and global status summaries
+      // Append a blank row and then user per-status summary
       summaryRows.push([]);
-      summaryRows.push(["User", "Count"]);
-      Array.from(userCounts.entries()).forEach(([k, v]) =>
-        summaryRows.push([k, v]),
+      summaryRows.push(["User", "Total", ...statusNames]);
+      const uniqueUsers = Array.from(
+        new Set<string>([...Array.from(userCounts.keys())]),
       );
+      for (const userName of uniqueUsers) {
+        const totalsByStatus = userStatusCounts[userName] || {};
+        const total = userCounts.get(userName) || 0;
+        const row = [userName, total];
+        for (const sName of statusNames) {
+          row.push(totalsByStatus[sName] || 0);
+        }
+        summaryRows.push(row);
+      }
+
+      // Append overall status totals
       summaryRows.push([]);
       summaryRows.push(["Status", "Count"]);
       Array.from(statusCounts.entries()).forEach(([k, v]) =>
@@ -1458,28 +1483,13 @@ export default function ManageTickets() {
               </Select>
             </div>
 
-            <Link to="/tickets/create">
-              <Button>Create Ticket</Button>
-            </Link>
-
             <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
               Export Excel
             </Button>
 
-            {/* {currentUser?.role === "admin" && activeTab === "all" && (
-              <div className="ml-4 text-right">
-                <div className="text-xs text-gray-500">Next SLA</div>
-                <div
-                  className={`text-sm font-medium ${nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0 ? "text-red-600" : "text-gray-700"}`}
-                >
-                  {nextSlaInfo.ticket
-                    ? nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0
-                      ? `Overdue ${formatRemaining(Math.abs(nextSlaInfo.ms))} ��� ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
-                      : `${formatRemaining(nextSlaInfo.ms)} hours remaining — ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
-                    : "No SLA"}
-                </div>
-              </div>
-            )} */}
+            <Link to="/tickets/create">
+              <Button>Create Ticket</Button>
+            </Link>
           </div>
         </div>
       </div>
@@ -1501,8 +1511,8 @@ export default function ManageTickets() {
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
-            <p className="text-2xl md:text-3xl font-bold text-orange-500">
-              {statusCounts["In Progress"] ?? 0}
+            <p className="text-2xl md:text-3xl font-bold text-orange-600">
+              {statusCounts["In Progress"] ?? statusCounts["InProgress"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress
@@ -1520,15 +1530,6 @@ export default function ManageTickets() {
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-2xl md:text-3xl font-bold text-green-600">
-              {(statusCounts["Resolved"] ?? 0) + (statusCounts["Closed"] ?? 0)}
-            </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-red-600">
               {statusCounts["Overdue"] ?? 0}
@@ -1536,92 +1537,88 @@ export default function ManageTickets() {
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
           </CardContent>
         </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-gray-900">
+              {statusCounts["Closed"] ?? 0}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters Card */}
+      {/* Filters panel */}
       {showFilters && (
         <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                Filters
-              </CardTitle>
-              {isAnyFilterActive && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="text-blue-600 hover:text-blue-700"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Clear All
-                </Button>
-              )}
-            </div>
-          </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Search
-                </label>
-                <div className="relative">
-                  <Input
-                    placeholder="Search by subject or description..."
-                    value={filters.searchText}
-                    onChange={(e) =>
-                      setFilters({ ...filters, searchText: e.target.value })
-                    }
-                    className="pl-10"
-                  />
-                  <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <div className="md:col-span-2">
+                <label className="sr-only">Search</label>
+                <Input
+                  placeholder="Search subject or description"
+                  value={filters.searchText}
+                  onChange={(e) =>
+                    setFilters({ ...filters, searchText: e.target.value })
+                  }
+                />
               </div>
 
-              {/* Priority */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Priority
-                </label>
+                <label className="sr-only">Priority</label>
                 <Select
-                  value={filters.priority}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, priority: value })
-                  }
+                  value={String(filters.priority)}
+                  onValueChange={(v) => setFilters({ ...filters, priority: v })}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Priorities" />
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Priorities</SelectItem>
-                    {Object.entries(PRIORITY_OPTIONS).map(([key, val]) => (
-                      <SelectItem key={key} value={key}>
-                        {val.name}
+                    <SelectItem value="">All</SelectItem>
+                    {Object.entries(PRIORITY_OPTIONS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>
+                        {v.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Status */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
+                <label className="sr-only">Status</label>
                 <Select
-                  value={filters.status}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, status: value })
-                  }
+                  value={String(filters.status)}
+                  onValueChange={(v) => setFilters({ ...filters, status: v })}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Statuses" />
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Statuses</SelectItem>
-                    {STATUS_OPTIONS.map((opt) => (
+                    <SelectItem value="">All</SelectItem>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="sr-only">Assigned</label>
+                <Select
+                  value={String(filters.assignedTo)}
+                  onValueChange={(v) =>
+                    setFilters({ ...filters, assignedTo: v })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {assignedOptions.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
                       </SelectItem>
@@ -1630,588 +1627,234 @@ export default function ManageTickets() {
                 </Select>
               </div>
 
-              {/* Assigned To */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned To
-                </label>
+                <label className="sr-only">Source/Tag</label>
                 <Select
-                  value={filters.assignedTo}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, assignedTo: value })
-                  }
+                  value={String(filters.source)}
+                  onValueChange={(v) => setFilters({ ...filters, source: v })}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Users" />
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Users</SelectItem>
-                    {assignedOptions.map((opt) => (
-                      <SelectItem
-                        key={`assigned-${opt.value}`}
-                        value={opt.value}
-                      >
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Source */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Source
-                </label>
-                <Select
-                  value={filters.source}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, source: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Sources" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All Sources</SelectItem>
-                    <SelectItem value="mail_config">
-                      From Mail Config
-                    </SelectItem>
+                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="mail_config">From Email</SelectItem>
                     <SelectItem value="manual">Manual</SelectItem>
-                    {sourceTags.map((tg) => (
-                      <SelectItem key={`tag-${tg}`} value={tg}>
-                        {tg}
+                    {sourceTags.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Date From */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  From Date
-                </label>
-                <Input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) =>
-                    setFilters({ ...filters, dateFrom: e.target.value })
-                  }
-                />
-              </div>
-
-              {/* Date To */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  To Date
-                </label>
-                <Input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) =>
-                    setFilters({ ...filters, dateTo: e.target.value })
-                  }
-                />
+              <div className="md:col-span-6 flex items-center gap-2">
+                <Button variant="ghost" onClick={clearFilters}>
+                  <X size={14} /> Clear
+                </Button>
+                <div className="ml-auto">
+                  <Button onClick={() => setShowFilters(false)}>Done</Button>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Tickets List - Conditional Tab Display */}
-      {activeTab === "all" ? (
-        <>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-            </div>
-          ) : filteredTickets.length === 0 ? (
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-center py-12">
-                  <p className="text-gray-600 text-lg">
-                    {tickets.length === 0
-                      ? "No tickets yet"
-                      : "No tickets match your filters"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {paginatedTickets.map((ticket) => {
-                const priority = getPriorityBadge(ticket.priority_id);
-                const slaMs = computeSlaMsForTicket(ticket);
-                return (
-                  <Card
-                    key={ticket.id}
-                    className="hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => navigate(`/tickets/${ticket.id}`)}
-                  >
-                    <CardContent className="pt-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900 truncate">
-                              {ticket.track_id ||
-                                `TKT-${String(ticket.id).padStart(4, "0")}`}
-                              : {ticket.subject}
-                            </h3>
-                            {ticket.created_from_mail_config && (
-                              <>
-                                <Badge className="bg-green-100 text-green-800">
-                                  From Mail Config
-                                </Badge>
-                                {(() => {
-                                  const provider = getMailConfigProviderName(
-                                    (ticket as any).mail_config_sources,
-                                    ticket.description,
-                                  );
-                                  return provider ? (
-                                    <Badge className="bg-blue-100 text-blue-800">
-                                      {provider}
-                                    </Badge>
-                                  ) : null;
-                                })()}
-                              </>
-                            )}
+      {/* Ticket list */}
+      <div>
+        {activeTab === "all" && (
+          <div>
+            {isLoading ? (
+              <div className="text-center py-8">Loading tickets...</div>
+            ) : paginatedTickets.length === 0 ? (
+              <div className="text-center py-8">No tickets found</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {paginatedTickets.map((t) => {
+                  const pr = getPriorityBadge(t.priority_id || 0);
+                  const slaMs = computeSlaMsForTicket(t);
+                  const slaText =
+                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                  const provider = getMailConfigProviderName(
+                    t.mail_config_sources || t.mail_config_sources,
+                    t.description,
+                  );
 
-                            <div className="ml-auto flex items-center gap-2">
+                  return (
+                    <Card key={t.id} className="hover:shadow transition-shadow">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-start gap-3">
+                            <CardTitle className="text-sm font-semibold">
                               <Link
-                                to={`/tickets/${ticket.id}`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="View"
-                                onClick={(e) => e.stopPropagation()}
+                                to={`/tickets/${t.id}`}
+                                className="hover:underline"
                               >
-                                <Search size={16} />
+                                {t.subject || t.track_id}
                               </Link>
-                              <Link
-                                to={`/tickets/${ticket.id}/edit`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="Edit"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Edit size={16} />
-                              </Link>
-                              <button
-                                className="p-1 rounded hover:bg-gray-100 text-red-600"
-                                title="Delete"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (!confirm("Delete this ticket?")) return;
-                                  try {
-                                    await api.deleteTicket(ticket.id);
-                                    setTickets((prev) =>
-                                      prev.filter((p) => p.id !== ticket.id),
-                                    );
-                                    toast({
-                                      title: "Deleted",
-                                      description: "Ticket deleted",
-                                    });
-                                  } catch (delErr) {
-                                    console.error("Delete failed", delErr);
-                                    toast({
-                                      title: "Error",
-                                      description: "Failed to delete ticket",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                              >
-                                <Trash size={16} />
-                              </button>
-                            </div>
+                            </CardTitle>
                           </div>
 
-                          <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: ((): string => {
-                                  try {
-                                    const raw = ticket.description || "";
-                                    const parser = new DOMParser();
-                                    const doc = parser.parseFromString(
-                                      raw,
-                                      "text/html",
-                                    );
-                                    const plainText =
-                                      doc.body.textContent || "";
-                                    return plainText;
-                                  } catch (e) {
-                                    return ticket.description || "";
-                                  }
-                                })(),
-                              }}
-                            />
-                          </div>
+                          <div className="text-right text-xs flex flex-col items-end gap-1">
+                            {t.created_from_mail_config ? (
+                              <Badge className="bg-green-100 text-green-800">
+                                From Mail Config
+                              </Badge>
+                            ) : provider ? (
+                              <Badge variant="outline">{provider}</Badge>
+                            ) : null}
 
-                          <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
-                            <div>
-                              <p className="text-gray-600">Status</p>
-                              <Badge variant="outline" className="mt-1">
-                                {typeof ticket.status === "object"
-                                  ? ticket.status?.name
-                                  : ticket.status}
-                              </Badge>
+                            <div className="font-medium text-gray-600">
+                              {t.track_id}
                             </div>
-                            <div>
-                              <p className="text-gray-600">Priority</p>
-                              {priority && (
-                                <Badge className={`mt-1 ${priority.color}`}>
-                                  {priority.name}
-                                </Badge>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Assigned To</p>
-                              <p className="font-medium mt-1">
-                                {ticket.assignee?.name ||
-                                  getAssignedUserName(ticket.assigned_to_id)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Created</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(ticket.created_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Updated</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(ticket.updated_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">SLA</p>
-                              <p
-                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
-                              >
-                                {(() => {
-                                  const statusName =
-                                    (ticket.status &&
-                                      (ticket.status.name || ticket.status)) ||
-                                    "";
-                                  const isInProgress =
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("in progress") ||
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("inprogress");
-                                  if (isInProgress) return "No SLA";
-                                  if (slaMs === null) return "No SLA";
-                                  if (slaMs <= 0)
-                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
-                                  return `${formatRemaining(slaMs)} hours remaining`;
-                                })()}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Track ID</p>
-                              <Badge variant="secondary" className="mt-1">
-                                {ticket.track_id ||
-                                  `TKT-${String(ticket.id).padStart(4, "0")}`}
-                              </Badge>
+                            <div className="text-gray-500 text-[11px]">
+                              {formatToIST(t.created_at)}
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="mb-3 text-sm text-gray-700 truncate">
+                          {t.description}
+                        </div>
 
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-2">
-                  <Button
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-gray-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    disabled={currentPage >= totalPages}
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(totalPages, p + 1))
-                    }
-                  >
-                    Next
-                  </Button>
-                </div>
-                <div className="text-sm text-gray-600">
-                  {filteredTickets.length} items
-                </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            {pr && (
+                              <Badge className={pr.color}>{pr.name}</Badge>
+                            )}
+                            <Badge>
+                              {t.status?.name || (t.status as any) || "Unknown"}
+                            </Badge>
+                            {provider && (
+                              <Badge variant="outline">{provider}</Badge>
+                            )}
+                          </div>
+
+                          <div className="text-right text-sm">
+                            <div className="text-gray-600">
+                              {getAssignedUserName(t.assigned_to_id)}
+                            </div>
+                            <div
+                              className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}
+                            >
+                              {slaText}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            Updated{" "}
+                            {formatDistanceToNowStrict(new Date(t.updated_at))}{" "}
+                            ago
+                          </div>
+                          <div className="flex gap-2">
+                            <Link to={`/tickets/${t.id}/edit`}>
+                              <Button size="sm" variant="ghost">
+                                <Edit size={14} />
+                              </Button>
+                            </Link>
+                            <Button size="sm" variant="destructive">
+                              <Trash size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
+            )}
+
+            {/* Pagination */}
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <div className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                disabled={currentPage >= totalPages}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+              >
+                Next
+              </Button>
             </div>
-          )}
-        </>
-      ) : (
-        <>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-            </div>
-          ) : effectiveCreatedTickets.length === 0 ? (
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-center py-12">
-                  <p className="text-gray-600 text-lg">
-                    No tickets created from email automation yet
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {effectiveCreatedTickets.map((ticket) => {
-                // Prefer original source ticket if available so card matches All Tickets layout
-                const source =
-                  ticket.__source_ticket ??
-                  ({
-                    id: ticket.ticket_id ?? ticket.id,
-                    track_id: ticket.track_id,
-                    subject: ticket.email_subject || ticket.subject || "",
-                    // Prefer mitra_response email_body if available
-                    description:
-                      (ticket.mitra_response &&
-                        ticket.mitra_response.email_body) ||
-                      ticket.description ||
-                      ticket.email_subject ||
-                      "",
-                    created_from_mail_config: true,
-                    created_at: ticket.created_at,
-                    updated_at: ticket.updated_at || ticket.created_at,
-                    sla_time: (ticket as any).sla_time ?? null,
-                    status: (ticket as any).status || null,
-                    priority_id: ticket.priority_id,
-                    assignee: ticket.assigned_to || null,
-                    assigned_to_id:
-                      (ticket.assigned_to &&
-                        (ticket.assigned_to.id ?? ticket.assigned_to_id)) ||
-                      ticket.assigned_to_id ||
-                      null,
-                  } as any);
+          </div>
+        )}
 
-                const priority = getPriorityBadge(source.priority_id);
-                const slaMs = computeSlaMsForTicket(source);
+        {activeTab === "created" && (
+          <div>
+            {isLoading ? (
+              <div className="text-center py-8">Loading created tickets...</div>
+            ) : effectiveCreatedTickets.length === 0 ? (
+              <div className="text-center py-8">
+                No created-from-email tickets
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {effectiveCreatedTickets.map((ct: any) => {
+                  const src = ct.__source_ticket || ct;
+                  const slaMs = computeSlaMsForTicket(src);
+                  const slaText =
+                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
 
-                return (
-                  <Card
-                    key={ticket.id}
-                    className="hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => {
-                      const targetId = source.id || ticket.id;
-                      if (targetId) navigate(`/tickets/${targetId}`);
-                    }}
-                  >
-                    <CardContent className="pt-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900 truncate">
-                              {source.track_id ||
-                                `TKT-${String(source.id).padStart(4, "0")}`}
-                              : {source.subject}
-                            </h3>
-                            {source.created_from_mail_config && (
-                              <>
-                                <Badge className="bg-green-100 text-green-800">
-                                  From Mail Config
-                                </Badge>
-                                {(() => {
-                                  const provider = getMailConfigProviderName(
-                                    (ticket as any).mail_config_sources ||
-                                      (source as any).mail_config_sources,
-                                    source.description || ticket.description,
-                                  );
-                                  return provider ? (
-                                    <Badge className="bg-blue-100 text-blue-800">
-                                      {provider}
-                                    </Badge>
-                                  ) : null;
-                                })()}
-                              </>
-                            )}
-
-                            <div className="ml-auto flex items-center gap-2">
-                              <Link
-                                to={`/tickets/${source.id}`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="View"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Search size={16} />
-                              </Link>
-                              <Link
-                                to={`/tickets/${source.id}/edit`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="Edit"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Edit size={16} />
-                              </Link>
-                              <button
-                                className="p-1 rounded hover:bg-gray-100 text-red-600"
-                                title="Delete"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (!confirm("Delete this ticket?")) return;
-                                  try {
-                                    await api.deleteTicket(source.id);
-                                    setTickets((prev) =>
-                                      prev.filter((p) => p.id !== source.id),
-                                    );
-                                    toast({
-                                      title: "Deleted",
-                                      description: "Ticket deleted",
-                                    });
-                                  } catch (delErr) {
-                                    console.error("Delete failed", delErr);
-                                    toast({
-                                      title: "Error",
-                                      description: "Failed to delete ticket",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                              >
-                                <Trash size={16} />
-                              </button>
+                  return (
+                    <Card
+                      key={ct.id}
+                      className="hover:shadow transition-shadow"
+                    >
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <CardTitle className="text-sm font-semibold">
+                            {ct.email_subject}
+                          </CardTitle>
+                          <div className="text-right text-xs">
+                            <div className="font-medium text-gray-600">
+                              {ct.mitra_ticket_id || "-"}
                             </div>
-                          </div>
-
-                          <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: (() => {
-                                  try {
-                                    const raw =
-                                      source.description ||
-                                      ticket.email_subject ||
-                                      "";
-                                    const parser = new DOMParser();
-                                    const doc = parser.parseFromString(
-                                      raw,
-                                      "text/html",
-                                    );
-                                    const plainText =
-                                      doc.body.textContent || "";
-                                    return plainText;
-                                  } catch (e) {
-                                    return (
-                                      source.description ||
-                                      ticket.email_subject ||
-                                      ""
-                                    );
-                                  }
-                                })(),
-                              }}
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
-                            <div>
-                              <p className="text-gray-600">Status</p>
-                              <Badge variant="outline" className="mt-1">
-                                {typeof source.status === "object"
-                                  ? source.status?.name
-                                  : source.status}
-                              </Badge>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Priority</p>
-                              {priority && (
-                                <Badge className={`mt-1 ${priority.color}`}>
-                                  {priority.name}
-                                </Badge>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Assigned To</p>
-                              <p className="font-medium mt-1">
-                                {source.assignee?.name ||
-                                  getAssignedUserName(source.assigned_to_id)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Created</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(source.created_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Updated</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(source.updated_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">SLA</p>
-                              <p
-                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
-                              >
-                                {/* {(() => {
-                                  const statusName =
-                                    (source.status &&
-                                      (source.status.name || source.status)) ||
-                                    "";
-                                  const isInProgress =
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("in progress") ||
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("inprogress");
-                                  if (isInProgress) return "No SLA";
-                                  if (slaMs === null) return "No SLA";
-                                  if (slaMs <= 0)
-                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
-                                  return `${formatRemaining(slaMs)} hours remaining`;
-                                })()} */}
-
-                                {(() => {
-                                  const statusName =
-                                    (ticket.status &&
-                                      (ticket.status.name || ticket.status)) ||
-                                    "";
-                                  const isInProgress =
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("in progress") ||
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("inprogress");
-                                  if (isInProgress) return "No SLA";
-                                  if (slaMs === null) return "No SLA";
-                                  if (slaMs <= 0)
-                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
-                                  return `${formatRemaining(slaMs)} hours remaining`;
-                                })()}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Track ID</p>
-                              <Badge variant="secondary" className="mt-1">
-                                {source.track_id ||
-                                  `TKT-${String(source.id).padStart(4, "0")}`}
-                              </Badge>
+                            <div className="text-gray-500 text-[11px]">
+                              {formatToIST(ct.created_at)}
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-700">
+                            From: {ct.email_from}
+                          </div>
+                          <div className="text-right text-sm">
+                            <div className="text-gray-600">
+                              {ct.assigned_to?.name || "Unassigned"}
+                            </div>
+                            <div
+                              className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}
+                            >
+                              {slaText}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

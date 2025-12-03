@@ -574,7 +574,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
       let senderDomain: string | null = null;
       if (row.email_from) {
         try {
-          const m = String(row.email_from).toLowerCase().match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
+          const m = String(row.email_from)
+            .toLowerCase()
+            .match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
           if (m && m[1]) senderDomain = m[1].toLowerCase();
         } catch (e) {
           senderDomain = null;
@@ -600,8 +602,13 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                 if (!rule || !rule.domain) continue;
                 const domain = String(rule.domain || "").trim();
                 if (!domain) continue;
-                const stripped = domain.startsWith("@") ? domain.slice(1).toLowerCase() : domain.toLowerCase();
-                if (senderDomain === stripped || senderDomain.endsWith("." + stripped)) {
+                const stripped = domain.startsWith("@")
+                  ? domain.slice(1).toLowerCase()
+                  : domain.toLowerCase();
+                if (
+                  senderDomain === stripped ||
+                  senderDomain.endsWith("." + stripped)
+                ) {
                   const main = stripped.split(".")[0] || stripped;
                   tagName = main
                     .replace(/[^a-zA-Z0-9]/g, " ")
@@ -623,7 +630,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                 if (!rule || !rule.domain) continue;
                 const domain = String(rule.domain || "").trim();
                 if (!domain) continue;
-                const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+                const stripped = domain.startsWith("@")
+                  ? domain.slice(1)
+                  : domain;
                 const main = stripped.split(".")[0] || stripped;
                 tagName = main
                   .replace(/[^a-zA-Z0-9]/g, " ")

@@ -846,11 +846,19 @@ export class TicketRepository {
         : undefined,
       // Expose watcher_user_ids column if available
       watchers:
-      row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
+        row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
       // Expose mail_config_sources if available (parse JSON string if necessary)
       mail_config_sources:
         row.mail_config_sources !== undefined
-          ? (typeof row.mail_config_sources === 'string' ? (() => { try { return JSON.parse(row.mail_config_sources); } catch(e){ return null; } })() : row.mail_config_sources)
+          ? typeof row.mail_config_sources === "string"
+            ? (() => {
+                try {
+                  return JSON.parse(row.mail_config_sources);
+                } catch (e) {
+                  return null;
+                }
+              })()
+            : row.mail_config_sources
           : undefined,
     }));
 

@@ -521,6 +521,31 @@ export default function TicketCharts({
             )}
           </div>
         </div>
+
+        {/* Tag (Status) Card */}
+        <div className="bg-white shadow rounded p-4 flex-1 min-w-0 mt-4 md:mt-0">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold">By Tag (Status)</h4>
+            <div className="text-sm text-gray-600">
+              Tags: {" "}
+              <span className="font-medium text-gray-900">{tagStatus.length}</span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="text-sm text-gray-500">Loading…</div>
+            ) : tagStatus.length === 0 ? (
+              <div className="text-sm text-gray-500">No data</div>
+            ) : (
+              <div className="min-w-[320px]">
+                <GroupedBarChart
+                  users={tagStatus.map((t: any) => ({ user_id: t.tag, name: t.tag, counts: t.counts }))}
+                  statuses={statuses}
+                />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

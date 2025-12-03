@@ -1682,6 +1682,16 @@ export default function ManageTickets() {
                     t.description,
                   );
 
+                  const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+                  const stripHtml = (s: any) => {
+                    try {
+                      if (!s) return "";
+                      return String(s).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                    } catch (e) {
+                      return String(s || "");
+                    }
+                  };
+
                   return (
                     <Card
                       key={t.id}

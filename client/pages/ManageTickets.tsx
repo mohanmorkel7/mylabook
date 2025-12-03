@@ -769,7 +769,9 @@ export default function ManageTickets() {
         const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
 
         // Normalize similar to fetchTickets
-        const serverMs = data?.server_time ? new Date(String(data.server_time)).getTime() : null;
+        const serverMs = data?.server_time
+          ? new Date(String(data.server_time)).getTime()
+          : null;
         const fetchClientMs = Date.now();
         const normalized = (ticketsArr || []).map((t: any) => {
           let statusInfo = t.status;
@@ -783,7 +785,8 @@ export default function ManageTickets() {
             };
           }
           const pr = ((): number | null => {
-            const val = t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+            const val =
+              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
             const num = Number(val);
             return Number.isFinite(num) ? num : null;
           })();
@@ -792,8 +795,13 @@ export default function ManageTickets() {
             ...t,
             priority_id: pr,
             assigned_to_id:
-              t.assigned_to_id ?? (t.assigned_to !== undefined && t.assigned_to !== null ? Number(t.assigned_to) : null) ?? null,
-            track_id: t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+              t.assigned_to_id ??
+              (t.assigned_to !== undefined && t.assigned_to !== null
+                ? Number(t.assigned_to)
+                : null) ??
+              null,
+            track_id:
+              t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
             description: t.description || "",
             status: statusInfo,
             created_from_mail_config: t.created_from_mail_config ?? false,
@@ -823,14 +831,24 @@ export default function ManageTickets() {
           }
         } catch (e) {}
 
-        if ((!tagNames || tagNames.length === 0) && t.created_from_mail_config) {
+        if (
+          (!tagNames || tagNames.length === 0) &&
+          t.created_from_mail_config
+        ) {
           try {
-            const prov = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description) || null;
+            const prov =
+              getMailConfigProviderName(
+                t.mail_config_sources || t.mail_config_sources,
+                t.description,
+              ) || null;
             if (prov) tagNames = [prov];
           } catch (e) {}
         }
 
-        if ((!tagNames || tagNames.length === 0) && !t.created_from_mail_config) {
+        if (
+          (!tagNames || tagNames.length === 0) &&
+          !t.created_from_mail_config
+        ) {
           tagNames = ["Manual"];
         }
 
@@ -842,21 +860,33 @@ export default function ManageTickets() {
         }
 
         // Assigned user
-        const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        const assignedLabel =
+          t.assignee?.name || getAssignedUserName(t.assigned_to_id);
         userCounts.set(assignedLabel, (userCounts.get(assignedLabel) || 0) + 1);
 
         // Status
-        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
+        const statusLabel =
+          (t.status && (t.status.name || t.status)) || "Unknown";
         statusCounts.set(statusLabel, (statusCounts.get(statusLabel) || 0) + 1);
 
         // Created-from-email rows
         if (t.created_from_mail_config) {
           const provider = ((): string => {
             try {
-              const p = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description);
-              return p || (Array.isArray(t.tags) && t.tags.length ? String(t.tags[0]) : "");
+              const p = getMailConfigProviderName(
+                t.mail_config_sources || t.mail_config_sources,
+                t.description,
+              );
+              return (
+                p ||
+                (Array.isArray(t.tags) && t.tags.length
+                  ? String(t.tags[0])
+                  : "")
+              );
             } catch (e) {
-              return Array.isArray(t.tags) && t.tags.length ? String(t.tags[0]) : "";
+              return Array.isArray(t.tags) && t.tags.length
+                ? String(t.tags[0])
+                : "";
             }
           })();
 
@@ -865,7 +895,13 @@ export default function ManageTickets() {
             t.subject || t.track_id || "",
             assignedLabel,
             statusLabel,
-            (t.priority && t.priority.name) || (PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS] && PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS].name) || "",
+            (t.priority && t.priority.name) ||
+              (PRIORITY_OPTIONS[
+                t.priority_id as keyof typeof PRIORITY_OPTIONS
+              ] &&
+                PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS]
+                  .name) ||
+              "",
             formatToIST(t.created_at),
             formatToIST(t.updated_at),
             provider,
@@ -881,10 +917,14 @@ export default function ManageTickets() {
       Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
 
       const userRows = [["User", "Count"]];
-      Array.from(userCounts.entries()).forEach(([k, v]) => userRows.push([k, v]));
+      Array.from(userCounts.entries()).forEach(([k, v]) =>
+        userRows.push([k, v]),
+      );
 
       const statusRows = [["Status", "Count"]];
-      Array.from(statusCounts.entries()).forEach(([k, v]) => statusRows.push([k, v]));
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        statusRows.push([k, v]),
+      );
 
       const wsSummary = XLSX.utils.aoa_to_sheet([
         ...tagRows,
@@ -897,30 +937,65 @@ export default function ManageTickets() {
 
       // Sheet 2: From Email
       const wsEmailHeaders = [
-        ["ticket_id", "subject", "assigned_to", "status", "Priority", "created_at", "Updated_at", "tag"],
+        [
+          "ticket_id",
+          "subject",
+          "assigned_to",
+          "status",
+          "Priority",
+          "created_at",
+          "Updated_at",
+          "tag",
+        ],
       ];
-      const wsEmail = XLSX.utils.aoa_to_sheet([...
-        wsEmailHeaders,
+      const wsEmail = XLSX.utils.aoa_to_sheet([
+        ...wsEmailHeaders,
         ...createdEmailRows,
       ]);
       XLSX.utils.book_append_sheet(wb, wsEmail, "From Email");
 
       // Sheets for each tag (including Manual)
-      const uniqueTags = Array.from(new Set<string>([...Array.from(tagCounts.keys())]));
+      const uniqueTags = Array.from(
+        new Set<string>([...Array.from(tagCounts.keys())]),
+      );
       for (const tagName of uniqueTags) {
-        const rows = [["ticket_id", "subject", "assigned_to", "status", "Priority", "created_at", "Updated_at", "tags"]];
+        const rows = [
+          [
+            "ticket_id",
+            "subject",
+            "assigned_to",
+            "status",
+            "Priority",
+            "created_at",
+            "Updated_at",
+            "tags",
+          ],
+        ];
         for (const t of allTickets) {
           let match = false;
           try {
-            if (Array.isArray(t.tags) && t.tags.map((x: any) => String(x).toLowerCase()).includes(String(tagName).toLowerCase())) match = true;
+            if (
+              Array.isArray(t.tags) &&
+              t.tags
+                .map((x: any) => String(x).toLowerCase())
+                .includes(String(tagName).toLowerCase())
+            )
+              match = true;
           } catch (e) {}
           if (!match && tagName === "Manual") {
             if (!t.created_from_mail_config) match = true;
           }
           if (!match && t.created_from_mail_config) {
             try {
-              const prov = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description);
-              if (prov && String(prov).toLowerCase() === String(tagName).toLowerCase()) match = true;
+              const prov = getMailConfigProviderName(
+                t.mail_config_sources || t.mail_config_sources,
+                t.description,
+              );
+              if (
+                prov &&
+                String(prov).toLowerCase() === String(tagName).toLowerCase()
+              )
+                match = true;
             } catch (e) {}
           }
           if (match) {
@@ -929,10 +1004,24 @@ export default function ManageTickets() {
               t.subject || t.track_id || "",
               t.assignee?.name || getAssignedUserName(t.assigned_to_id),
               (t.status && (t.status.name || t.status)) || "",
-              (t.priority && t.priority.name) || (PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS] && PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS].name) || "",
+              (t.priority && t.priority.name) ||
+                (PRIORITY_OPTIONS[
+                  t.priority_id as keyof typeof PRIORITY_OPTIONS
+                ] &&
+                  PRIORITY_OPTIONS[
+                    t.priority_id as keyof typeof PRIORITY_OPTIONS
+                  ].name) ||
+                "",
               formatToIST(t.created_at),
               formatToIST(t.updated_at),
-              Array.isArray(t.tags) ? t.tags.join(", ") : (t.created_from_mail_config ? (getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description) || "") : "Manual"),
+              Array.isArray(t.tags)
+                ? t.tags.join(", ")
+                : t.created_from_mail_config
+                  ? getMailConfigProviderName(
+                      t.mail_config_sources || t.mail_config_sources,
+                      t.description,
+                    ) || ""
+                  : "Manual",
             ]);
           }
         }
@@ -945,12 +1034,19 @@ export default function ManageTickets() {
       // Write and download
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       const blob = new Blob([wbout], { type: "application/octet-stream" });
-      saveAs(blob, `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      saveAs(
+        blob,
+        `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
 
       toast({ title: "Export ready", description: "Excel export downloaded" });
     } catch (err) {
       console.error("Export failed:", err);
-      toast({ title: "Export failed", description: "Could not generate Excel file", variant: "destructive" });
+      toast({
+        title: "Export failed",
+        description: "Could not generate Excel file",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

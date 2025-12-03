@@ -136,7 +136,8 @@ router.get(
       t.status_id,
       ts.name as status_name,
       t.sla_time,
-      t.updated_at as updated_at
+      t.updated_at as updated_at,
+      mc.sources as mail_config_sources
       FROM tickets t
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
       LEFT JOIN created_tickets ct ON ct.ticket_id = t.id AND ct.mail_config_id = mc.id

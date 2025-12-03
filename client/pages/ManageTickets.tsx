@@ -107,10 +107,10 @@ const PRIORITY_OPTIONS = {
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
+  { value: "pending", label: "Pending" },
   { value: "in_progress", label: "In Progress" },
-  { value: "resolved", label: "Resolved" },
+  { value: "overdue", label: "Overdue" },
   { value: "closed", label: "Closed" },
-  { value: "on_hold", label: "On Hold" },
 ];
 
 export default function ManageTickets() {
@@ -129,6 +129,7 @@ export default function ManageTickets() {
   const serverTimeOffsetRef = useRef<number>(0); // clientNow - serverNow (ms) to adjust remaining time calculations
   const autoMarkedRef = useRef(new Set<number>());
   const { user: currentUser } = useAuth();
+  const [sourceTags, setSourceTags] = useState<string[]>([]);
 
   // realtime clock for countdowns
   useEffect(() => {
@@ -234,6 +235,7 @@ export default function ManageTickets() {
   useEffect(() => {
     fetchTickets(currentPage);
     fetchUsers();
+    fetchTags();
     // Always refresh created tickets count so the tab displays an accurate value
     fetchCreatedTicketsCount();
     if (activeTab === "created") {
@@ -348,6 +350,17 @@ export default function ManageTickets() {
       setUsers(normalized as User[]);
     } catch (error) {
       console.error("Error fetching users:", error);
+    }
+  };
+
+  const fetchTags = async () => {
+    try {
+      const resp = await api.get('/tickets/summary/by-tag');
+      const data = resp?.data ?? resp;
+      const tags = Array.isArray(data?.tags) ? data.tags.map((t: any) => String(t.tag || t.name || '').trim()).filter(Boolean) : [];
+      setSourceTags(tags);
+    } catch (e) {
+      console.error('Error fetching tag sources:', e);
     }
   };
 
@@ -498,26 +511,52 @@ export default function ManageTickets() {
 
     // Status filter
     if (filters.status) {
+      const normalize = (s: any) =>
+        String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
       filtered = filtered.filter((t) => {
-        const statusName = (t.status as any)?.name || t.status;
-        return (
-          String(statusName).toLowerCase() === filters.status.toLowerCase()
-        );
+        const statusName = (t.status as any)?.name || t.status || "";
+        const token = normalize(statusName);
+        return token === normalize(filters.status);
       });
     }
 
     // Assigned to filter
     if (filters.assignedTo) {
-      filtered = filtered.filter(
-        (t) => t.assigned_to_id === parseInt(filters.assignedTo),
-      );
+      if (filters.assignedTo === 'unassigned') {
+        filtered = filtered.filter((t) => t.assigned_to_id === null || t.assigned_to_id === undefined);
+      } else {
+        filtered = filtered.filter(
+          (t) => t.assigned_to_id === parseInt(filters.assignedTo),
+        );
+      }
     }
 
-    // Source filter (mail config vs manual)
-    if (filters.source === "mail_config") {
-      filtered = filtered.filter((t) => t.created_from_mail_config);
-    } else if (filters.source === "manual") {
-      filtered = filtered.filter((t) => !t.created_from_mail_config);
+    // Source filter (mail config vs manual or specific tag)
+    if (filters.source) {
+      if (filters.source === "mail_config") {
+        filtered = filtered.filter((t) => t.created_from_mail_config);
+      } else if (filters.source === "manual") {
+        filtered = filtered.filter((t) => !t.created_from_mail_config);
+      } else {
+        // specific tag selected
+        const sel = String(filters.source).toLowerCase();
+        filtered = filtered.filter((t) => {
+          // check ticket tags array first
+          try {
+            if (Array.isArray(t.tags)) {
+              if (t.tags.some((tg: any) => String(tg).toLowerCase() === sel)) return true;
+            }
+          } catch (e) {}
+
+          // try deriving provider name from mail_config_sources or description
+          try {
+            const prov = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description) || null;
+            if (prov && String(prov).toLowerCase() === sel) return true;
+          } catch (e) {}
+
+          return false;
+        });
+      }
     }
 
     // Date range filter (interpret date-only inputs as full IST day ranges)
@@ -1101,8 +1140,17 @@ export default function ManageTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All Users</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {Array.from(new Set(tickets.map((t) => (t.assigned_to_id === null || t.assigned_to_id === undefined) ? 'unassigned' : String(t.assigned_to_id)))).filter(x => x && x !== 'unassigned').map((idStr) => {
+                      const id = Number(idStr);
+                      return (
+                        <SelectItem key={id} value={idStr}>
+                          {getAssignedUserName(id)}
+                        </SelectItem>
+                      );
+                    })}
                     {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id.toString()}>
+                      <SelectItem key={`u-${user.id}`} value={user.id.toString()}>
                         {getAssignedUserName(user.id)}
                       </SelectItem>
                     ))}
@@ -1126,10 +1174,13 @@ export default function ManageTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All Sources</SelectItem>
-                    <SelectItem value="mail_config">
-                      From Mail Config
-                    </SelectItem>
+                    <SelectItem value="mail_config">From Mail Config</SelectItem>
                     <SelectItem value="manual">Manual</SelectItem>
+                    {sourceTags.map((tg) => (
+                      <SelectItem key={`tag-${tg}`} value={tg}>
+                        {tg}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

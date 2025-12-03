@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import api from "@/lib/api";
 
 interface AssignedCount {
@@ -109,13 +110,52 @@ export default function TicketCharts({
           console.warn("TicketCharts: failed to fetch user-status summary", e2);
         }
 
-        // Fetch tag-status summary
+        // Fetch tag-status summary (fallback to client-side classification if server data is unreliable)
         try {
           const resp3 = await api.get(`/tickets/summary/by-tag${query}`);
           const p3 = resp3?.data ?? resp3;
           if (mounted) setTagStatus(p3?.tags || []);
         } catch (e3) {
           console.warn("TicketCharts: failed to fetch tag-status summary", e3);
+        }
+
+        // Additionally compute tag counts client-side using ticket descriptions to ensure Razorpay/Payswiff/Manual classification
+        try {
+          const computedTagCounts: Record<string, number> = {};
+          let page = 1;
+          let pages = 1;
+          do {
+            const respAll = await api.getTickets({ date_from: useFrom, date_to: useTo }, page, 100);
+            const d = respAll?.data ?? respAll;
+            const ticketsArr = d?.tickets ?? (Array.isArray(d) ? d : []);
+            pages = d?.pages ?? 1;
+            for (const t of ticketsArr) {
+              let tag = "Manual";
+              try {
+                const desc = String(t.description || "").toLowerCase();
+                if (desc.includes("razorpay")) tag = "Razorpay";
+                else if (desc.includes("payswiff")) tag = "Payswiff";
+                else if (Array.isArray(t.tags) && t.tags.length) tag = String(t.tags[0]);
+                else if (t.created_from_mail_config) {
+                  // prefer mail config provider name if available
+                  try {
+                    // call client helper if available on window or fallback to 'Email'
+                    const prov = (window as any).getMailConfigProviderName ? (window as any).getMailConfigProviderName(t.mail_config_sources, t.description) : null;
+                    if (prov) tag = prov;
+                  } catch (e) {}
+                }
+              } catch (e) {}
+              computedTagCounts[tag] = (computedTagCounts[tag] || 0) + 1;
+            }
+            page += 1;
+          } while (page <= pages);
+
+          if (mounted) {
+            const arr = Object.entries(computedTagCounts).map(([tag, count]) => ({ tag, count }));
+            setTagStatus(arr);
+          }
+        } catch (e) {
+          console.warn("TicketCharts: failed to compute client-side tag summary", e);
         }
       } catch (e) {
         console.error("TicketCharts: failed to fetch summary", e);

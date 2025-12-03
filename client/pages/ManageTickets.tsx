@@ -1483,13 +1483,13 @@ export default function ManageTickets() {
               </Select>
             </div>
 
-            <Link to="/tickets/create">
-              <Button>Create Ticket</Button>
-            </Link>
-
             <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
               Export Excel
             </Button>
+
+            <Link to="/tickets/create">
+              <Button>Create Ticket</Button>
+            </Link>
           </div>
         </div>
       </div>

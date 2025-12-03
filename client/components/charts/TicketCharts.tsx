@@ -315,7 +315,15 @@ export default function TicketCharts({
                             alignItems: "center",
                           }}
                         >
-                          <div style={{ fontSize: 10, color: "#374151", marginBottom: 4 }}>{bar.val}</div>
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "#374151",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {bar.val}
+                          </div>
                           <div
                             style={{
                               width: barWidth,

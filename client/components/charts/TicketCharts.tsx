@@ -410,94 +410,94 @@ export default function TicketCharts({
 
   return (
     <div className="mb-6">
-      <div className="p-4 bg-white shadow rounded">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">Tickets Overview</h3>
-            <div className="text-sm text-gray-600">
-              Total:{" "}
-              <span className="font-medium text-gray-900">{totalTickets}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-gray-600">Range</label>
-            <select
-              value={range}
-              onChange={(e) => setRange(e.target.value as any)}
-              className="border rounded px-2 py-1 text-sm"
-            >
-              <option value="all">All</option>
-              <option value="today">Today</option>
-              <option value="7days">Last 7 days</option>
-              <option value="month">This month</option>
-            </select>
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold">Tickets Overview</h3>
+          <div className="text-sm text-gray-600">
+            Total: {" "}
+            <span className="font-medium text-gray-900">{totalTickets}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold">Assigned To</h4>
-              <div className="text-sm text-gray-600">
-                Total:{" "}
-                <span className="font-medium text-gray-900">
-                  {totalAssigned}
-                </span>
-              </div>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-600">Range</label>
+          <select
+            value={range}
+            onChange={(e) => setRange(e.target.value as any)}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value="all">All</option>
+            <option value="today">Today</option>
+            <option value="7days">Last 7 days</option>
+            <option value="month">This month</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Three cards in a single row */}
+      <div className="flex gap-4 items-stretch flex-col md:flex-row">
+        {/* Assigned To Card */}
+        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold">Assigned To</h4>
+            <div className="text-sm text-gray-600">
+              Total: {" "}
+              <span className="font-medium text-gray-900">{totalAssigned}</span>
             </div>
+          </div>
+          <div className="overflow-x-auto">
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : assigned.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart
-                items={assigned}
-                labelKey="name"
-                valueKey="count"
-              />
+              <div className="min-w-[220px]">
+                <VerticalBarChart items={assigned} labelKey="name" valueKey="count" />
+              </div>
             )}
           </div>
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold">Status</h4>
-              <div className="text-sm text-gray-600">
-                Total:{" "}
-                <span className="font-medium text-gray-900">
-                  {totalTickets}
-                </span>
-              </div>
+        {/* Status Card */}
+        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold">Status</h4>
+            <div className="text-sm text-gray-600">
+              Total: {" "}
+              <span className="font-medium text-gray-900">{totalTickets}</span>
             </div>
+          </div>
+          <div className="overflow-x-auto">
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : statuses.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart
-                items={statuses}
-                labelKey="status"
-                valueKey="count"
-              />
+              <div className="min-w-[220px]">
+                <VerticalBarChart items={statuses} labelKey="status" valueKey="count" />
+              </div>
             )}
           </div>
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold">By User (Status)</h4>
-              <div className="text-sm text-gray-600">
-                Users:{" "}
-                <span className="font-medium text-gray-900">
-                  {userStatus.length}
-                </span>
-              </div>
+        {/* By User (Status) Card */}
+        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold">By User (Status)</h4>
+            <div className="text-sm text-gray-600">
+              Users: {" "}
+              <span className="font-medium text-gray-900">{userStatus.length}</span>
             </div>
+          </div>
+          <div className="overflow-x-auto">
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : userStatus.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <GroupedBarChart users={userStatus} statuses={statuses} />
+              <div className="min-w-[320px]">
+                <GroupedBarChart users={userStatus} statuses={statuses} />
+              </div>
             )}
           </div>
         </div>

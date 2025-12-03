@@ -753,12 +753,13 @@ export default function ManageTickets() {
   };
 
   const assignedOptions = (() => {
-    if (assignedOptionsState && assignedOptionsState.length > 0) return assignedOptionsState;
+    if (assignedOptionsState && assignedOptionsState.length > 0)
+      return assignedOptionsState;
 
     // Fallback: derive from tickets and users
     const map = new Map<string, string>();
     for (const t of tickets) {
-      const id = (t as any).assigned_to_id ?? (t.assigned_to ?? null);
+      const id = (t as any).assigned_to_id ?? t.assigned_to ?? null;
       if (id === null || id === undefined) {
         if (!map.has("unassigned")) map.set("unassigned", "Unassigned");
       } else {
@@ -767,11 +768,18 @@ export default function ManageTickets() {
           let label = `User #${key}`;
           const user = users.find((u) => Number(u.id) === Number(id));
           if (user) {
-            if (user.firstname || user.lastname) label = `${user.firstname || ""} ${user.lastname || ""}`.trim();
+            if (user.firstname || user.lastname)
+              label = `${user.firstname || ""} ${user.lastname || ""}`.trim();
             else if (user.name) label = user.name;
-            else if (user.first_name && user.last_name) label = `${user.first_name} ${user.last_name}`;
-          } else if ((t as any).assignee && ((t as any).assignee.name || (t as any).assignee.first_name)) {
-            label = ((t as any).assignee.name) || `${((t as any).assignee.first_name||'')} ${((t as any).assignee.last_name||'')}`.trim();
+            else if (user.first_name && user.last_name)
+              label = `${user.first_name} ${user.last_name}`;
+          } else if (
+            (t as any).assignee &&
+            ((t as any).assignee.name || (t as any).assignee.first_name)
+          ) {
+            label =
+              (t as any).assignee.name ||
+              `${(t as any).assignee.first_name || ""} ${(t as any).assignee.last_name || ""}`.trim();
           }
           map.set(key, label);
         }
@@ -781,12 +789,16 @@ export default function ManageTickets() {
     for (const u of users) {
       const k = String(u.id);
       if (!map.has(k)) {
-        if (u.firstname || u.lastname) map.set(k, `${u.firstname || ''} ${u.lastname || ''}`.trim());
+        if (u.firstname || u.lastname)
+          map.set(k, `${u.firstname || ""} ${u.lastname || ""}`.trim());
         else if (u.name) map.set(k, u.name);
         else map.set(k, `User #${k}`);
       }
     }
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    return Array.from(map.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
   })();
 
   const getPriorityBadge = (priority: number) => {

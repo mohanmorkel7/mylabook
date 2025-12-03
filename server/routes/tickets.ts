@@ -685,24 +685,34 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         const fr = await pool.query(fq, values);
         const fallbackMap: Record<string, any> = {};
         for (const row of fr.rows) {
-          const status = row.status_name || 'Unknown';
+          const status = row.status_name || "Unknown";
           const sources = row.sources;
-          let tagName = 'Unknown';
+          let tagName = "Unknown";
           if (sources) {
             let s = sources;
-            if (typeof s === 'string') {
-              try { s = JSON.parse(s); } catch(e){ s = null; }
+            if (typeof s === "string") {
+              try {
+                s = JSON.parse(s);
+              } catch (e) {
+                s = null;
+              }
             }
             if (Array.isArray(s)) {
               outer: for (const src of s) {
                 if (src && Array.isArray(src.emailRules)) {
                   for (const rule of src.emailRules) {
                     if (rule && rule.domain) {
-                      const domain = String(rule.domain || '').trim();
+                      const domain = String(rule.domain || "").trim();
                       if (!domain) continue;
-                      const stripped = domain.startsWith('@') ? domain.slice(1) : domain;
-                      const main = stripped.split('.')[0] || stripped;
-                      tagName = main.replace(/[^a-zA-Z0-9]/g, ' ').split(' ').map((w:any)=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+                      const stripped = domain.startsWith("@")
+                        ? domain.slice(1)
+                        : domain;
+                      const main = stripped.split(".")[0] || stripped;
+                      tagName = main
+                        .replace(/[^a-zA-Z0-9]/g, " ")
+                        .split(" ")
+                        .map((w: any) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(" ");
                       break outer;
                     }
                   }
@@ -710,15 +720,17 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
               }
             }
           }
-          if (!fallbackMap[tagName]) fallbackMap[tagName] = { tag: tagName, counts: {} };
-          fallbackMap[tagName].counts[status] = (fallbackMap[tagName].counts[status] || 0) + Number(row.count || 0);
+          if (!fallbackMap[tagName])
+            fallbackMap[tagName] = { tag: tagName, counts: {} };
+          fallbackMap[tagName].counts[status] =
+            (fallbackMap[tagName].counts[status] || 0) + Number(row.count || 0);
         }
         const ftags = Object.values(fallbackMap);
         if (ftags.length > 0) {
           tags = ftags;
         }
       } catch (fe) {
-        console.warn('by-tag fallback failed', fe);
+        console.warn("by-tag fallback failed", fe);
       }
     }
 

@@ -267,23 +267,23 @@ export default function TicketCharts({
         <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
           {users.map((u, ui) => {
             const name = u.name || `User ${u.user_id}`;
-            // Boost small values using sqrt scaling so single-count statuses remain visible
-            const scaledVals = statusNames.map((st) =>
-              Math.sqrt(Number((u.counts && u.counts[st]) || 0)),
-            );
-            const maxScaledForUser = Math.max(
+            // Per-user scaling: ensure every non-zero status gets a minimum visible height
+            const userMax = Math.max(
               1,
-              ...scaledVals,
-              Math.sqrt(maxVal),
+              ...statusNames.map((st) => Number((u.counts && u.counts[st]) || 0)),
             );
+            const nonZeroMinHeight = Math.round(MAX_PX * 0.22); // ~22% of chart height
+            const zeroHeight = Math.max(4, Math.round(nonZeroMinHeight * 0.18));
+
             const bars = statusNames.map((st, idx) => {
               const val = Number((u.counts && u.counts[st]) || 0);
-              const scaled = Math.sqrt(val);
-              // height based on scaled value, normalized by global maxScaledForUser
-              const h = Math.max(
-                MIN_PX,
-                Math.round((scaled / maxScaledForUser) * MAX_PX),
-              );
+              let h = 0;
+              if (val === 0) {
+                h = zeroHeight;
+              } else {
+                const proportion = val / userMax;
+                h = Math.max(nonZeroMinHeight, Math.round(proportion * MAX_PX));
+              }
               return {
                 val,
                 h,

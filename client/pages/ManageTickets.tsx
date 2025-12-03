@@ -1699,7 +1699,9 @@ export default function ManageTickets() {
 
                           <div className="text-right text-xs flex flex-col items-end gap-1">
                             {t.created_from_mail_config ? (
-                              <Badge className="bg-green-100 text-green-800">From Mail Config</Badge>
+                              <Badge className="bg-green-100 text-green-800">
+                                From Mail Config
+                              </Badge>
                             ) : provider ? (
                               <Badge variant="outline">{provider}</Badge>
                             ) : null}

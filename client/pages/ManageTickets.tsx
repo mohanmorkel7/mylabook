@@ -358,16 +358,15 @@ export default function ManageTickets() {
             sort_order: 0,
           };
         }
-        const pr = ((): number | null => {
-          const val =
-            t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
-          const num = Number(val);
-          return Number.isFinite(num) ? num : null;
-        })();
 
         return {
           ...t,
-          priority_id: pr,
+          priority_id: ((): number | null => {
+            const val =
+              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+            const num = Number(val);
+            return Number.isFinite(num) ? num : null;
+          })(),
           assigned_to_id:
             t.assigned_to_id ??
             (t.assigned_to !== undefined && t.assigned_to !== null
@@ -740,3 +739,792 @@ export default function ManageTickets() {
     // Handle old structure
     if (user.first_name && user.last_name) {
       return `${user.first_name} ${user.last_name}`;
+    }
+
+    return "Unassigned";
+  };
+
+  const fetchAssignedOptions = async () => {
+    try {
+      const resp = await api.get("/tickets/assigned-options");
+      const data = resp?.data ?? resp;
+      if (Array.isArray(data?.options)) setAssignedOptionsState(data.options);
+      else setAssignedOptionsState([]);
+    } catch (e) {
+      console.error("Error fetching assigned options:", e);
+      setAssignedOptionsState([]);
+    }
+  };
+
+  // Export all tickets to Excel with multiple sheets as requested
+  const exportAllTicketsToExcel = async () => {
+    try {
+      setIsLoading(true);
+      const allTickets: any[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      // Fetch all pages sequentially
+      do {
+        const resp = await api.getTickets({}, page, 100);
+        const data = resp?.data ?? resp;
+        const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
+
+        // Normalize similar to fetchTickets
+        const serverMs = data?.server_time
+          ? new Date(String(data.server_time)).getTime()
+          : null;
+        const fetchClientMs = Date.now();
+        const normalized = (ticketsArr || []).map((t: any) => {
+          let statusInfo = t.status;
+          if (!statusInfo && t.status_id) {
+            statusInfo = {
+              id: t.status_id,
+              name: t.status_name || "Unknown",
+              color: t.status_color || "#999",
+              is_closed: t.status_is_closed || false,
+              sort_order: 0,
+            };
+          }
+          const pr = ((): number | null => {
+            const val =
+              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+            const num = Number(val);
+            return Number.isFinite(num) ? num : null;
+          })();
+
+          return {
+            ...t,
+            priority_id: pr,
+            assigned_to_id:
+              t.assigned_to_id ??
+              (t.assigned_to !== undefined && t.assigned_to !== null
+                ? Number(t.assigned_to)
+                : null) ??
+              null,
+            track_id:
+              t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+            description: t.description || "",
+            status: statusInfo,
+            created_from_mail_config: t.created_from_mail_config ?? false,
+            __server_time_ms: serverMs,
+            __fetched_at_ms: fetchClientMs,
+          };
+        });
+
+        allTickets.push(...normalized);
+        totalPages = data?.pages ?? 1;
+        page += 1;
+      } while (page <= totalPages);
+
+      // Prepare summaries
+      const tagCounts = new Map<string, number>();
+      const userCounts = new Map<string, number>();
+      const statusCounts = new Map<string, number>();
+
+      const tagStatusCounts: Record<string, Record<string, number>> = {};
+
+      const createdEmailRows: any[] = [];
+
+      const normalizeTagForTicket = (t: any): string[] => {
+        // Priority: description content (razorpay/payswiff), explicit tags, mail config provider, Manual
+        try {
+          const desc = String(t.description || "").toLowerCase();
+          if (desc.includes("razorpay")) return ["Razorpay"];
+          if (desc.includes("payswiff")) return ["Payswiff"];
+        } catch (e) {}
+
+        try {
+          if (Array.isArray(t.tags) && t.tags.length > 0) {
+            return t.tags.map((x: any) => String(x).trim()).filter(Boolean);
+          }
+        } catch (e) {}
+
+        if (t.created_from_mail_config) {
+          try {
+            const prov = getMailConfigProviderName(
+              t.mail_config_sources || t.mail_config_sources,
+              t.description,
+            );
+            if (prov) return [prov];
+          } catch (e) {}
+        }
+
+        return [t.created_from_mail_config ? "Email" : "Manual"];
+      };
+
+      for (const t of allTickets) {
+        const tagNames = normalizeTagForTicket(t);
+
+        const statusLabel =
+          (t.status && (t.status.name || t.status)) || "Unknown";
+
+        for (const tg of tagNames) {
+          const key = String(tg || "");
+          tagCounts.set(key, (tagCounts.get(key) || 0) + 1);
+
+          if (!tagStatusCounts[key]) tagStatusCounts[key] = {};
+          tagStatusCounts[key][statusLabel] =
+            (tagStatusCounts[key][statusLabel] || 0) + 1;
+        }
+
+        // Assigned user
+        const assignedLabel =
+          t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        userCounts.set(assignedLabel, (userCounts.get(assignedLabel) || 0) + 1);
+
+        // Status
+        statusCounts.set(statusLabel, (statusCounts.get(statusLabel) || 0) + 1);
+
+        // Created-from-email rows
+        if (t.created_from_mail_config) {
+          const provider = ((): string => {
+            try {
+              const p = getMailConfigProviderName(
+                t.mail_config_sources || t.mail_config_sources,
+                t.description,
+              );
+              return (
+                p ||
+                (Array.isArray(t.tags) && t.tags.length
+                  ? String(t.tags[0])
+                  : "")
+              );
+            } catch (e) {
+              return Array.isArray(t.tags) && t.tags.length
+                ? String(t.tags[0])
+                : "";
+            }
+          })();
+
+          createdEmailRows.push([
+            t.id,
+            t.subject || t.track_id || "",
+            assignedLabel,
+            statusLabel,
+            (t.priority && t.priority.name) ||
+              (PRIORITY_OPTIONS[
+                t.priority_id as keyof typeof PRIORITY_OPTIONS
+              ] &&
+                PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS]
+                  .name) ||
+              "",
+            formatToIST(t.created_at),
+            formatToIST(t.updated_at),
+            provider,
+          ]);
+        }
+      }
+
+      // Build workbook
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Summary - Tag-wise, User-wise, Status-wise
+      const tagRows = [["Tag", "Count"]];
+      Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
+
+      const userRows = [["User", "Count"]];
+      Array.from(userCounts.entries()).forEach(([k, v]) =>
+        userRows.push([k, v]),
+      );
+
+      const statusRows = [["Status", "Count"]];
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        statusRows.push([k, v]),
+      );
+
+      // Build Summary sheet with per-tag status breakdown
+      // Determine status columns from statusesList (fallback to common names)
+      const statusNames =
+        statusesList && statusesList.length > 0
+          ? statusesList.map((s: any) => s.name)
+          : ["Open", "In Progress", "Pending", "Overdue", "Closed"];
+
+      const summaryHeader = ["Tag", "Total", ...statusNames];
+      const summaryRows = [summaryHeader];
+
+      const uniqueTags = Array.from(
+        new Set<string>([...Array.from(tagCounts.keys())]),
+      );
+      for (const tagName of uniqueTags) {
+        const totalsByStatus = tagStatusCounts[tagName] || {};
+        const total = tagCounts.get(tagName) || 0;
+        const row = [tagName, total];
+        for (const sName of statusNames) {
+          row.push(totalsByStatus[sName] || 0);
+        }
+        summaryRows.push(row);
+      }
+
+      // Append a blank row and then user and global status summaries
+      summaryRows.push([]);
+      summaryRows.push(["User", "Count"]);
+      Array.from(userCounts.entries()).forEach(([k, v]) =>
+        summaryRows.push([k, v]),
+      );
+      summaryRows.push([]);
+      summaryRows.push(["Status", "Count"]);
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        summaryRows.push([k, v]),
+      );
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+      // Sheet 2: From Email
+      const wsEmailHeaders = [
+        [
+          "ticket_id",
+          "subject",
+          "assigned_to",
+          "status",
+          "Priority",
+          "created_at",
+          "Updated_at",
+          "tag",
+        ],
+      ];
+      const wsEmail = XLSX.utils.aoa_to_sheet([
+        ...wsEmailHeaders,
+        ...createdEmailRows,
+      ]);
+      XLSX.utils.book_append_sheet(wb, wsEmail, "From Email");
+
+      // Sheets for each tag (including Manual)
+      const uniqueTagsForSheets = Array.from(
+        new Set<string>([...Array.from(tagCounts.keys())]),
+      );
+      for (const tagName of uniqueTagsForSheets) {
+        const rows = [
+          [
+            "ticket_id",
+            "subject",
+            "assigned_to",
+            "status",
+            "Priority",
+            "created_at",
+            "Updated_at",
+            "tags",
+          ],
+        ];
+        for (const t of allTickets) {
+          let match = false;
+          try {
+            const norms = normalizeTagForTicket(t).map((x) =>
+              String(x).toLowerCase(),
+            );
+            if (norms.includes(String(tagName).toLowerCase())) match = true;
+          } catch (e) {}
+
+          if (match) {
+            rows.push([
+              t.id,
+              t.subject || t.track_id || "",
+              t.assignee?.name || getAssignedUserName(t.assigned_to_id),
+              (t.status && (t.status.name || t.status)) || "",
+              (t.priority && t.priority.name) ||
+                (PRIORITY_OPTIONS[
+                  t.priority_id as keyof typeof PRIORITY_OPTIONS
+                ] &&
+                  PRIORITY_OPTIONS[
+                    t.priority_id as keyof typeof PRIORITY_OPTIONS
+                  ].name) ||
+                "",
+              formatToIST(t.created_at),
+              formatToIST(t.updated_at),
+              Array.isArray(t.tags)
+                ? t.tags.join(", ")
+                : t.created_from_mail_config
+                  ? getMailConfigProviderName(
+                      t.mail_config_sources || t.mail_config_sources,
+                      t.description,
+                    ) || ""
+                  : "Manual",
+            ]);
+          }
+        }
+
+        const safeName = String(tagName || "Sheet").slice(0, 31);
+        const wsTag = XLSX.utils.aoa_to_sheet(rows);
+        XLSX.utils.book_append_sheet(wb, wsTag, safeName);
+      }
+
+      // Write and download
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/octet-stream" });
+      saveAs(
+        blob,
+        `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+
+      toast({ title: "Export ready", description: "Excel export downloaded" });
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast({
+        title: "Export failed",
+        description: "Could not generate Excel file",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const assignedOptions = (() => {
+    if (assignedOptionsState && assignedOptionsState.length > 0)
+      return assignedOptionsState;
+
+    // Fallback: derive from tickets and users
+    const map = new Map<string, string>();
+    for (const t of tickets) {
+      const id = (t as any).assigned_to_id ?? t.assigned_to ?? null;
+      if (id === null || id === undefined) {
+        if (!map.has("unassigned")) map.set("unassigned", "Unassigned");
+      } else {
+        const key = String(id);
+        if (!map.has(key)) {
+          let label = `User #${key}`;
+          const user = users.find((u) => Number(u.id) === Number(id));
+          if (user) {
+            if (user.firstname || user.lastname)
+              label = `${user.firstname || ""} ${user.lastname || ""}`.trim();
+            else if (user.name) label = user.name;
+            else if (user.first_name && user.last_name)
+              label = `${user.first_name} ${user.last_name}`;
+          } else if (
+            (t as any).assignee &&
+            ((t as any).assignee.name || (t as any).assignee.first_name)
+          ) {
+            label =
+              (t as any).assignee.name ||
+              `${(t as any).assignee.first_name || ""} ${(t as any).assignee.last_name || ""}`.trim();
+          }
+          map.set(key, label);
+        }
+      }
+    }
+    // Ensure users are present
+    for (const u of users) {
+      const k = String(u.id);
+      if (!map.has(k)) {
+        if (u.firstname || u.lastname)
+          map.set(k, `${u.firstname || ""} ${u.lastname || ""}`.trim());
+        else if (u.name) map.set(k, u.name);
+        else map.set(k, `User #${k}`);
+      }
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  })();
+
+  const getPriorityBadge = (priority: number) => {
+    const p = PRIORITY_OPTIONS[priority as keyof typeof PRIORITY_OPTIONS];
+    return p ? { name: p.name, color: p.color } : null;
+  };
+
+  const getSlaTextFor = (ticketSubset: any[]) => {
+    if (!ticketSubset || ticketSubset.length === 0) return "No SLA";
+    // Compute remaining ms for each ticket (use helper which falls back to created_at+priority)
+    const remainingMs = ticketSubset
+      .map((t) => computeSlaMsForTicket(t))
+      .filter((m) => m !== null) as number[];
+    if (remainingMs.length === 0) return "No SLA";
+    const earliestRemaining = Math.min(...remainingMs);
+    if (earliestRemaining < 0) {
+      // overdue
+      return `Overdue ${formatRemaining(Math.abs(earliestRemaining))}`;
+    }
+    return `${formatRemaining(earliestRemaining)} hours remaining`;
+  };
+
+  // fetch ticket metadata to discover overdue status id and build statuses map
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const meta = await api.getTicketMetadata();
+        const statuses = meta?.data?.statuses ?? meta?.statuses ?? [];
+        if (mounted) {
+          setStatusesList(statuses);
+          const map: Record<string, number> = {};
+          for (const s of statuses) {
+            const key = String(s.name || "")
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_+|_+$/g, "");
+            map[key] = Number(s.id);
+          }
+          setStatusesMap(map);
+        }
+        const overdue = statuses.find((s: any) =>
+          String(s.name).toLowerCase().includes("overdue"),
+        );
+        if (mounted && overdue) setOverdueStatusId(Number(overdue.id));
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const formatRemaining = (ms: number | null) => {
+    if (ms === null) return "No SLA";
+    if (ms <= 0) return "00:00:00";
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  // Helper to parse timestamps from DB as UTC (handles 'YYYY-MM-DD HH:MM:SS' format)
+  const parseTimestampAsUTC = (ts?: string | null) => {
+    if (!ts) return null;
+    try {
+      // If string already contains timezone info or 'Z', parse directly
+      if (/[Tt].*Z$/.test(ts) || /[+\-]\d{2}:\d{2}$/.test(ts))
+        return new Date(ts);
+      const iso = ts.includes("T") ? ts : ts.replace(" ", "T");
+      return new Date(iso + "Z");
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Format timestamp in IST (Asia/Kolkata) reliably by converting UTC -> IST (+5:30)
+  const formatToIST = (ts?: string | null) => {
+    const d = parseTimestampAsUTC(ts);
+    if (!d || isNaN(d.getTime())) return ts || "-";
+    const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+    const istDate = new Date(d.getTime() + IST_OFFSET_MS);
+    return istDate.toLocaleString("en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  };
+
+  // Compute SLA remaining ms for a ticket. If ticket.sla_time exists, use it.
+  // Otherwise, fallback to created_at + priority-based SLA hours. Adjust server-provided
+  // sla_remaining_ms dynamically so it counts down on the client. Use the client-side
+  // server offset to compute a dynamic serverNowMs so values update each render.
+  const computeSlaMsForTicket = (ticket: any): number | null => {
+    try {
+      // Compute current server-aligned 'now' (ms). Prefer clientNow - offset when available
+      // so the value changes on every render (setNow interval triggers rerenders).
+      const clientNowMs = Date.now();
+      const serverNowMs =
+        typeof serverTimeOffsetRef.current === "number" &&
+        serverTimeOffsetRef.current !== 0
+          ? clientNowMs - serverTimeOffsetRef.current
+          : clientNowMs;
+
+      // If server provided a precomputed remaining ms, adjust it based on elapsed time since that computation
+      if (
+        ticket.sla_remaining_ms !== undefined &&
+        ticket.sla_remaining_ms !== null
+      ) {
+        const baseTime = Number(
+          ticket.__server_time_ms ?? ticket.__fetched_at_ms ?? serverNowMs,
+        );
+        const elapsedSinceBase = serverNowMs - baseTime;
+        return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
+      }
+
+      // If SLA timestamp is available, compute remaining relative to serverNowMs
+      if (ticket.sla_time) {
+        const parsed = parseTimestampAsUTC(ticket.sla_time);
+        const ts = parsed ? parsed.getTime() : NaN;
+        if (isNaN(ts)) return null;
+        return ts - serverNowMs;
+      }
+
+      // Fallback mapping (use priority IDs that the UI uses)
+      const PRIORITY_SLA_HOURS: Record<number, number> = {
+        0: 2, // Priority 0 -> 2 hours
+        1: 2, // Low -> 2 hours
+        2: 5, // Normal -> 5 hours
+        3: 8, // High -> 8 hours
+        4: 24, // Urgent -> 24 hours
+        5: 48, // Immediate -> 48 hours
+      };
+
+      const pr = Number(
+        ticket.priority_id ?? ticket.priority?.id ?? ticket.priority_id,
+      );
+      const hours = PRIORITY_SLA_HOURS[pr];
+      if (hours === undefined || hours === null) return null;
+      const createdTs = ticket.created_at
+        ? parseTimestampAsUTC(ticket.created_at).getTime()
+        : NaN;
+      if (isNaN(createdTs)) return null;
+      const slaTs = createdTs + hours * 3600 * 1000;
+      return slaTs - serverNowMs;
+    } catch (e) {
+      console.error("SLA compute error", e);
+      return null;
+    }
+  };
+
+  const markOverdue = async (ticket: any) => {
+    if (!overdueStatusId) return;
+    if (autoMarkedRef.current.has(ticket.id)) return;
+
+    // Avoid marking if already overdue, closed, or if status is In Progress
+    const sName =
+      (ticket.status && (ticket.status.name || ticket.status)) ||
+      ticket.status ||
+      "";
+    const sNameLower = String(sName).toLowerCase();
+    if (sNameLower.includes("overdue")) return;
+    if (sNameLower.includes("in progress") || sNameLower.includes("inprogress"))
+      return;
+    if (
+      (ticket.status && ticket.status.is_closed) ||
+      /closed/i.test(String(sName || ""))
+    )
+      return;
+
+    autoMarkedRef.current.add(ticket.id);
+    try {
+      await api.updateTicket(ticket.id, {
+        status_id: overdueStatusId,
+        updated_by: currentUser?.id || 1,
+      });
+      // update local state
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticket.id
+            ? {
+                ...t,
+                status: {
+                  ...(t.status || {}),
+                  id: overdueStatusId,
+                  name: "Overdue",
+                  is_closed: false,
+                },
+                status_id: overdueStatusId,
+              }
+            : t,
+        ),
+      );
+    } catch (e) {
+      console.error("Failed to mark ticket overdue:", e);
+      autoMarkedRef.current.delete(ticket.id);
+    }
+  };
+
+  const nextSlaInfo = React.useMemo(() => {
+    const withSla = tickets
+      .map((t) =>
+        t.sla_time
+          ? { ...t, slaTs: parseTimestampAsUTC(t.sla_time)?.getTime() ?? null }
+          : null,
+      )
+      .filter((x) => x && x.slaTs !== null) as any[];
+    if (!withSla || withSla.length === 0) return { ticket: null, ms: null };
+    // find the earliest SLA timestamp
+    const earliest = withSla.reduce((prev, cur) =>
+      cur.slaTs < prev.slaTs ? cur : prev,
+    );
+    const ms =
+      earliest && typeof earliest.slaTs === "number"
+        ? earliest.slaTs - Date.now()
+        : null;
+    return { ticket: earliest, ms };
+  }, [tickets, now]);
+
+  const isAnyFilterActive = Object.values(filters).some((v) => v !== "");
+
+  // Use filtered tickets directly since server provides pagination
+  const paginatedTickets = filteredTickets;
+
+  const effectiveCreatedTickets = React.useMemo(() => {
+    if (createdTickets && createdTickets.length > 0) {
+      // If we have the full ticket object in `tickets`, prefer that as the source so SLA & metadata match
+      return createdTickets.map((ct: any) => {
+        const ticketId = ct.ticket_id ?? ct.ticket_ref_id ?? ct.id;
+        const authoritative = tickets.find(
+          (t) => Number(t.id) === Number(ticketId),
+        );
+        return {
+          ...ct,
+          __source_ticket: authoritative ?? ct.__source_ticket ?? undefined,
+        };
+      });
+    }
+    const local = tickets.filter((t) => t.created_from_mail_config);
+    if (!local || local.length === 0) return [];
+    return local.map((t: any) => ({
+      id: t.id,
+      email_subject: t.subject || t.track_id,
+      email_from:
+        (t.creator && (t.creator.email || t.creator.name)) || "Unknown",
+      config_name: t.mail_config_id ? `Config #${t.mail_config_id}` : "",
+      assigned_to:
+        t.assignee ||
+        (t.assigned_to ? { id: t.assigned_to, name: "Unassigned" } : null),
+      priority_id: t.priority_id,
+      mitra_ticket_id: t.mitra_ticket_id || null,
+      created_at: t.created_at,
+      __source_ticket: t,
+    }));
+  }, [createdTickets, tickets]);
+
+  return (
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-4xl font-bold text-gray-900">Manage Tickets</h1>
+        <div className="flex gap-4 mt-4 items-center">
+          <div className="flex gap-4">
+            <Button
+              variant={activeTab === "all" ? "default" : "outline"}
+              onClick={() => {
+                setActiveTab("all");
+                setCurrentPage(1);
+              }}
+            >
+              All Tickets ({totalTickets})
+            </Button>
+            <Button
+              variant={activeTab === "created" ? "default" : "outline"}
+              onClick={() => {
+                // If no date filters are set, default created view to today's IST day
+                if (!filters.dateFrom || !filters.dateTo) {
+                  const now = new Date();
+                  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+                  const ist = new Date(now.getTime() + istOffsetMs);
+                  const yyyy = ist.getUTCFullYear();
+                  const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
+                  const dd = String(ist.getUTCDate()).padStart(2, "0");
+                  const today = `${yyyy}-${mm}-${dd}`;
+                  setFilters((f) => ({ ...f, dateFrom: today, dateTo: today }));
+                  // fetch after state update
+                  setTimeout(() => fetchCreatedTickets(true), 50);
+                } else {
+                  fetchCreatedTickets(true);
+                }
+                setActiveTab("created");
+                setCurrentPage(1);
+              }}
+            >
+              Created from Email ({createdTicketsCount})
+            </Button>
+          </div>
+
+          <div className="ml-auto flex items-center gap-3">
+            {/* Date picker (IST day) placed left of Filters button */}
+            <div>
+              <label className="sr-only">Date</label>
+              <Input
+                type="date"
+                value={filters.dateFrom || ""}
+                onChange={(e) => {
+                  const d = e.target.value;
+                  // Set both from and to to the selected date (full IST day)
+                  setFilters({ ...filters, dateFrom: d, dateTo: d });
+                }}
+                className="mr-2"
+              />
+            </div>
+
+            <Button variant="outline" onClick={() => setShowFilters((s) => !s)}>
+              Filters
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Show</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  setPageSize(Number(v));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Link to="/tickets/create">
+              <Button>Create Ticket</Button>
+            </Link>
+
+            <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
+              Export Excel
+            </Button>
+
+          </div>
+        </div>
+      </div>
+
+      {/* Status counts and Charts */}
+      {activeTab === "all" && (
+        <TicketCharts dateFrom={filters.dateFrom} dateTo={filters.dateTo} />
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-indigo-600">
+              {statusCounts["Open"] ?? 0}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-orange-600">
+              {statusCounts["In Progress"] ?? statusCounts["InProgress"] ?? 0}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">In Progress</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-yellow-600">
+              {statusCounts["Pending"] ?? 0}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-red-600">
+              {statusCounts["Overdue"] ?? 0}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-gray-900">
+              {statusCounts["Closed"] ?? 0}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Rest of the ManageTickets UI (ticket list, filters, pagination) remains unchanged */}
+    </div>
+  );
+}

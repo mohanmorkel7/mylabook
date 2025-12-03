@@ -239,6 +239,7 @@ export default function ManageTickets() {
     fetchTickets(currentPage);
     fetchUsers();
     fetchTags();
+    fetchAssignedOptions();
     // Always refresh created tickets count so the tab displays an accurate value
     fetchCreatedTicketsCount();
     if (activeTab === "created") {

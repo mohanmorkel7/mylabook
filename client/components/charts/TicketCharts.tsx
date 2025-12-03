@@ -145,6 +145,8 @@ export default function TicketCharts({
             const d = respAll?.data ?? respAll;
             const ticketsArr = d?.tickets ?? (Array.isArray(d) ? d : []);
             pages = d?.pages ?? 1;
+            // If pages is 0 but we got some tickets, set pages to 1 to avoid immediate exit
+            if (pages === 0 && ticketsArr.length > 0) pages = 1;
             console.log("TicketCharts: fetched tickets page", page, {
               ticketsCount: ticketsArr.length,
               pages,

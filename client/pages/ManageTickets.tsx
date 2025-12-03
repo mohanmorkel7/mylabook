@@ -581,6 +581,11 @@ export default function ManageTickets() {
   };
 
   const applyFilters = () => {
+    // If the last fetch already applied server-side filters, skip client-side re-filtering
+    if (serverFilteredRef.current) {
+      serverFilteredRef.current = false;
+      return;
+    }
     let filtered = [...tickets];
 
     // Search text filter

@@ -374,7 +374,7 @@ export default function TicketCharts({
             ) : userStatus.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <StackedVerticalChart users={userStatus} statuses={statuses} />
+              <GroupedBarChart users={userStatus} statuses={statuses} />
             )}
           </div>
         </div>

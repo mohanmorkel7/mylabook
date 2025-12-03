@@ -758,6 +758,23 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     let tags = Object.values(tagMap);
     const statuses = Array.from(statusesSet);
 
+    // If Payswiff not present in derived tags, scan ticket descriptions as a last-resort fallback
+    if (!tags.some((t: any) => String(t.tag).toLowerCase() === "payswiff")) {
+      for (const row of r.rows) {
+        try {
+          const desc = String(row.ticket_description || "").toLowerCase();
+          if (desc.includes("payswiff") || /@payswiff\./i.test(desc)) {
+            const status = row.status_name || "Unknown";
+            if (!tagMap["Payswiff"]) tagMap["Payswiff"] = { tag: "Payswiff", counts: {} };
+            tagMap["Payswiff"].counts[status] = (tagMap["Payswiff"].counts[status] || 0) + 1;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      tags = Object.values(tagMap);
+    }
+
     // Fallback: if no tags derived from tickets, try aggregating directly from mail_configs
     if ((!tags || tags.length === 0) && (await (async () => true)())) {
       const fq = `

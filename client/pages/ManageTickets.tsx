@@ -1203,6 +1203,7 @@ export default function ManageTickets() {
                                 {(() => {
                                   const provider = getMailConfigProviderName(
                                     (ticket as any).mail_config_sources,
+                                    ticket.description,
                                   );
                                   return provider ? (
                                     <Badge className="bg-blue-100 text-blue-800">

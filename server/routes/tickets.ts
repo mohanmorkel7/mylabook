@@ -496,17 +496,20 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
     const usersMap: Record<string, any> = {};
     for (const row of r.rows) {
       const uid = row.user_id || 0;
-      const name = row.first_name || row.last_name ? `${row.first_name || ''} ${row.last_name || ''}`.trim() : 'Unassigned';
+      const name =
+        row.first_name || row.last_name
+          ? `${row.first_name || ""} ${row.last_name || ""}`.trim()
+          : "Unassigned";
       if (!usersMap[uid]) usersMap[uid] = { user_id: uid, name, counts: {} };
-      const statusName = row.status_name || 'Unknown';
+      const statusName = row.status_name || "Unknown";
       usersMap[uid].counts[statusName] = Number(row.count);
     }
 
     const users = Object.values(usersMap);
     res.json({ users });
   } catch (err) {
-    console.error('Error fetching user-status summary:', err);
-    res.status(500).json({ error: 'Failed to fetch user-status summary' });
+    console.error("Error fetching user-status summary:", err);
+    res.status(500).json({ error: "Failed to fetch user-status summary" });
   }
 });
 

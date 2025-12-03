@@ -105,7 +105,7 @@ export default function TicketCharts({
           const p2 = resp2?.data ?? resp2;
           if (mounted) setUserStatus(p2?.users || []);
         } catch (e2) {
-          console.warn('TicketCharts: failed to fetch user-status summary', e2);
+          console.warn("TicketCharts: failed to fetch user-status summary", e2);
         }
       } catch (e) {
         console.error("TicketCharts: failed to fetch summary", e);
@@ -211,11 +211,18 @@ export default function TicketCharts({
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
 
   // Stacked vertical bar chart for users where each user's bar is stacked by status counts
-  const StackedVerticalChart = ({ users, statuses }: { users: any[]; statuses: StatusCount[] }) => {
+  const StackedVerticalChart = ({
+    users,
+    statuses,
+  }: {
+    users: any[];
+    statuses: StatusCount[];
+  }) => {
     const MAX_PX = 160;
     const MIN_PX = 8;
     // Build list of status names to maintain order
-    const statusNames = statuses && statuses.length > 0 ? statuses.map((s) => s.status) : [];
+    const statusNames =
+      statuses && statuses.length > 0 ? statuses.map((s) => s.status) : [];
 
     // color palette - reuse palette from VerticalBarChart
     const palette = [
@@ -232,7 +239,11 @@ export default function TicketCharts({
     const maxTotal = Math.max(
       1,
       ...users.map((u) =>
-        statusNames.reduce((s: number, st: string) => s + Number((u.counts && u.counts[st]) || 0), 0),
+        statusNames.reduce(
+          (s: number, st: string) =>
+            s + Number((u.counts && u.counts[st]) || 0),
+          0,
+        ),
       ),
     );
 
@@ -240,34 +251,83 @@ export default function TicketCharts({
       <div className="flex flex-col">
         <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
           {users.map((u, ui) => {
-            const total = statusNames.reduce((s: number, st: string) => s + Number((u.counts && u.counts[st]) || 0), 0);
+            const total = statusNames.reduce(
+              (s: number, st: string) =>
+                s + Number((u.counts && u.counts[st]) || 0),
+              0,
+            );
             const segments = statusNames.map((st, idx) => {
               const val = Number((u.counts && u.counts[st]) || 0);
-              const h = total === 0 ? 0 : Math.max(MIN_PX, Math.round((val / maxTotal) * MAX_PX));
-              return { val, h, color: palette[idx % palette.length], status: st };
+              const h =
+                total === 0
+                  ? 0
+                  : Math.max(MIN_PX, Math.round((val / maxTotal) * MAX_PX));
+              return {
+                val,
+                h,
+                color: palette[idx % palette.length],
+                status: st,
+              };
             });
 
             return (
               <div key={ui} className="flex-1 flex flex-col items-center">
                 <div className="text-sm text-gray-700 mb-2">{total}</div>
-                <div className="w-full flex items-end justify-center" style={{ minHeight: 0 }}>
-                  <div style={{ width: 28 }} title={`${u.name}: ${total}`} className="overflow-hidden" aria-hidden>
+                <div
+                  className="w-full flex items-end justify-center"
+                  style={{ minHeight: 0 }}
+                >
+                  <div
+                    style={{ width: 28 }}
+                    title={`${u.name}: ${total}`}
+                    className="overflow-hidden"
+                    aria-hidden
+                  >
                     {/* stack segments from bottom to top */}
-                    <div style={{ display: 'flex', flexDirection: 'column-reverse', height: MAX_PX }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column-reverse",
+                        height: MAX_PX,
+                      }}
+                    >
                       {segments.map((seg, si) => (
                         <div
                           key={si}
-                          style={{ height: seg.h, background: seg.color, width: '100%' }}
+                          style={{
+                            height: seg.h,
+                            background: seg.color,
+                            width: "100%",
+                          }}
                           title={`${u.name} - ${seg.status}: ${seg.val}`}
                         />
                       ))}
                     </div>
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-center text-gray-700 truncate" style={{ maxWidth: '6rem' }}>
+                <div
+                  className="mt-2 text-xs text-center text-gray-700 truncate"
+                  style={{ maxWidth: "6rem" }}
+                >
                   <span className="inline-flex items-center gap-2">
-                    <span style={{ width: 8, height: 8, background: '#666', display: 'inline-block', borderRadius: 4 }} />
-                    <span style={{ maxWidth: 80, display: 'inline-block', verticalAlign: 'middle' }}>{u.name}</span>
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        background: "#666",
+                        display: "inline-block",
+                        borderRadius: 4,
+                      }}
+                    />
+                    <span
+                      style={{
+                        maxWidth: 80,
+                        display: "inline-block",
+                        verticalAlign: "middle",
+                      }}
+                    >
+                      {u.name}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -278,7 +338,15 @@ export default function TicketCharts({
         <div className="flex flex-wrap gap-2 mt-2">
           {statusNames.map((st, i) => (
             <div key={st} className="text-xs inline-flex items-center gap-2">
-              <span style={{ width: 10, height: 10, background: palette[i % palette.length], display: 'inline-block', borderRadius: 3 }} />
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  background: palette[i % palette.length],
+                  display: "inline-block",
+                  borderRadius: 3,
+                }}
+              />
               <span className="text-gray-700">{st}</span>
             </div>
           ))}
@@ -320,7 +388,9 @@ export default function TicketCharts({
               <h4 className="text-sm font-semibold">Assigned To</h4>
               <div className="text-sm text-gray-600">
                 Total:{" "}
-                <span className="font-medium text-gray-900">{totalAssigned}</span>
+                <span className="font-medium text-gray-900">
+                  {totalAssigned}
+                </span>
               </div>
             </div>
             {loading ? (
@@ -328,7 +398,11 @@ export default function TicketCharts({
             ) : assigned.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart items={assigned} labelKey="name" valueKey="count" />
+              <VerticalBarChart
+                items={assigned}
+                labelKey="name"
+                valueKey="count"
+              />
             )}
           </div>
 
@@ -337,7 +411,9 @@ export default function TicketCharts({
               <h4 className="text-sm font-semibold">Status</h4>
               <div className="text-sm text-gray-600">
                 Total:{" "}
-                <span className="font-medium text-gray-900">{totalTickets}</span>
+                <span className="font-medium text-gray-900">
+                  {totalTickets}
+                </span>
               </div>
             </div>
             {loading ? (
@@ -345,7 +421,11 @@ export default function TicketCharts({
             ) : statuses.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <VerticalBarChart items={statuses} labelKey="status" valueKey="count" />
+              <VerticalBarChart
+                items={statuses}
+                labelKey="status"
+                valueKey="count"
+              />
             )}
           </div>
 
@@ -353,7 +433,10 @@ export default function TicketCharts({
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold">By User (Status)</h4>
               <div className="text-sm text-gray-600">
-                Users: <span className="font-medium text-gray-900">{userStatus.length}</span>
+                Users:{" "}
+                <span className="font-medium text-gray-900">
+                  {userStatus.length}
+                </span>
               </div>
             </div>
             {loading ? (

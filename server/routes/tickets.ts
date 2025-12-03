@@ -568,10 +568,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     function mapDomainToTag(domain: string | null) {
       if (!domain) return null;
       const d = domain.toLowerCase();
-      if (d === "razorpay.com" || d.endsWith(".razorpay.com"))
-        return "Razorpay";
-      if (d === "payswiff.com" || d.endsWith(".payswiff.com"))
-        return "Payswiff";
+      // Broad matching to cover subdomains and variations
+      if (d.includes("razorpay")) return "Razorpay";
+      if (d.includes("payswiff") || d.includes("pay-swiff")) return "Payswiff";
       return null;
     }
 

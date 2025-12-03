@@ -217,6 +217,71 @@ export default function TicketCharts({
     );
   };
 
+  // Donut chart component for status distribution
+  const DonutChart = ({ items, labelKey, valueKey }: { items: any[]; labelKey: string; valueKey: string; }) => {
+    const total = items.reduce((s, it) => s + Number(it[valueKey] || 0), 0) || 1;
+    const radius = 48;
+    const stroke = 20;
+    const normalizedRadius = radius - stroke / 2;
+    const circumference = 2 * Math.PI * normalizedRadius;
+
+    const palette = [
+      "#3B82F6",
+      "#10B981",
+      "#F59E0B",
+      "#EF4444",
+      "#8B5CF6",
+      "#06B6D4",
+      "#F472B6",
+      "#7C3AED",
+    ];
+
+    let cumulative = 0;
+
+    return (
+      <div className="flex items-center gap-4">
+        <svg height={radius * 2} width={radius * 2} className="transform -rotate-90">
+          {items.map((it, i) => {
+            const val = Number(it[valueKey] || 0);
+            const fraction = val / total;
+            const dash = fraction * circumference;
+            const dashArray = `${dash} ${circumference - dash}`;
+            const offset = circumference * (1 - cumulative);
+            const color = palette[i % palette.length];
+            cumulative += fraction;
+            return (
+              <circle
+                key={i}
+                r={normalizedRadius}
+                cx={radius}
+                cy={radius}
+                fill="transparent"
+                stroke={color}
+                strokeWidth={stroke}
+                strokeDasharray={dashArray}
+                strokeDashoffset={offset}
+                strokeLinecap="butt"
+              />
+            );
+          })}
+          <circle r={normalizedRadius - stroke} cx={radius} cy={radius} fill="#fff" />
+          <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" className="text-sm font-semibold" style={{ fontSize: 14 }}>
+            {total}
+          </text>
+        </svg>
+        <div className="flex flex-col">
+          {items.map((it, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
+              <span style={{ width: 10, height: 10, background: palette[i % palette.length], display: 'inline-block', borderRadius: 3 }} />
+              <span>{it[labelKey]}</span>
+              <span className="text-gray-500 ml-2">{it[valueKey]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
 

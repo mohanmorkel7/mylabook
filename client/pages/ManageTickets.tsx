@@ -820,6 +820,8 @@ export default function ManageTickets() {
       const userCounts = new Map<string, number>();
       const statusCounts = new Map<string, number>();
 
+      const tagStatusCounts: Record<string, Record<string, number>> = {};
+
       const createdEmailRows: any[] = [];
 
       const normalizeTagForTicket = (t: any): string[] => {
@@ -852,9 +854,14 @@ export default function ManageTickets() {
       for (const t of allTickets) {
         const tagNames = normalizeTagForTicket(t);
 
+        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
+
         for (const tg of tagNames) {
           const key = String(tg || "");
           tagCounts.set(key, (tagCounts.get(key) || 0) + 1);
+
+          if (!tagStatusCounts[key]) tagStatusCounts[key] = {};
+          tagStatusCounts[key][statusLabel] = (tagStatusCounts[key][statusLabel] || 0) + 1;
         }
 
         // Assigned user
@@ -863,8 +870,6 @@ export default function ManageTickets() {
         userCounts.set(assignedLabel, (userCounts.get(assignedLabel) || 0) + 1);
 
         // Status
-        const statusLabel =
-          (t.status && (t.status.name || t.status)) || "Unknown";
         statusCounts.set(statusLabel, (statusCounts.get(statusLabel) || 0) + 1);
 
         // Created-from-email rows

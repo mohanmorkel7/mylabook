@@ -737,7 +737,8 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     res.json({ tags, statuses });
   } catch (err) {
     console.error("Error fetching tag summary:", err);
-    res.status(500).json({ error: "Failed to fetch tag summary" });
+    // Return empty result instead of 500 so UI can render gracefully
+    res.json({ tags: [], statuses: [] });
   }
 });
 

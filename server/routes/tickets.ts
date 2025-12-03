@@ -743,8 +743,13 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                       const domain = String(rule.domain || "").trim();
                       if (!domain) continue;
                       const stripped = domain.startsWith("@")
-                        ? domain.slice(1)
-                        : domain;
+                        ? domain.slice(1).toLowerCase()
+                        : domain.toLowerCase();
+                      const mapped = mapDomainToTag(stripped);
+                      if (mapped) {
+                        tagName = mapped;
+                        break outer;
+                      }
                       const main = stripped.split(".")[0] || stripped;
                       tagName = main
                         .replace(/[^a-zA-Z0-9]/g, " ")

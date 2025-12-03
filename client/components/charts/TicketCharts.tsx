@@ -222,8 +222,13 @@ export default function TicketCharts({
     const MIN_PX = 12; // increase minimum height so low values remain visible
     const totalColWidth = 48; // increase column width per user for clearer bars
 
-    const statusNames =
-      statuses && statuses.length > 0 ? statuses.map((s) => s.status) : [];
+    // compute union of status names from both statuses list and users' counts
+    const derivedFromUsers = Array.from(
+      new Set(users.flatMap((u) => (u.counts ? Object.keys(u.counts) : []))),
+    );
+    const statusNames = Array.from(
+      new Set([...(statuses || []).map((s) => s.status), ...derivedFromUsers]),
+    );
     const palette = [
       "#3B82F6",
       "#10B981",
@@ -234,6 +239,12 @@ export default function TicketCharts({
       "#F472B6",
       "#7C3AED",
     ];
+
+    // stable color map for statuses
+    const colorMap: Record<string, string> = {};
+    statusNames.forEach((st, i) => {
+      colorMap[st] = palette[i % palette.length];
+    });
 
     // global max value across all users/statuses for consistent scaling
     const maxVal = Math.max(

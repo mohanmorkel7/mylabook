@@ -180,8 +180,10 @@ export default function TicketCharts({
               ([tag, counts]) => ({ tag, counts }),
             );
             console.log("TicketCharts: computed tag status (client-side):", {
+              totalTicketsProcessed,
               computedTagCounts,
               arr,
+              arrayLength: arr.length,
             });
             setTagStatus(arr);
           }

@@ -248,8 +248,8 @@ export default function TicketCharts({
     let cumulative = 0;
 
     return (
-      <div className="flex items-center gap-3">
-        <div style={{ minWidth: radius * 2, minHeight: radius * 2 }}>
+      <div className="flex flex-col items-center gap-3">
+        <div style={{ width: radius * 2, height: radius * 2 }}>
           <svg
             height={radius * 2}
             width={radius * 2}
@@ -296,23 +296,20 @@ export default function TicketCharts({
             </text>
           </svg>
         </div>
-        <div className="flex flex-col text-xs">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-[220px]">
           {items.map((it, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 text-xs text-gray-700"
-              style={{ marginBottom: 6 }}
-            >
+            <div key={i} className="flex items-center gap-2 text-xs text-gray-700">
               <span
                 style={{
                   width: 8,
                   height: 8,
                   background: palette[i % palette.length],
-                  display: "inline-block",
+                  display: 'inline-block',
                   borderRadius: 3,
                 }}
               />
-              <span style={{ minWidth: 80, display: "inline-block" }}>
+              <span className="truncate" style={{ minWidth: 60 }}>
                 {it[labelKey]}
               </span>
               <span className="text-gray-500 ml-2">{it[valueKey]}</span>

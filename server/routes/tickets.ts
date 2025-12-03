@@ -563,6 +563,15 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     const tagMap: Record<string, any> = {};
     const statusesSet = new Set<string>();
 
+    // Helper to map known domains to friendly tag names
+    function mapDomainToTag(domain: string | null) {
+      if (!domain) return null;
+      const d = domain.toLowerCase();
+      if (d === "razorpay.com" || d.endsWith(".razorpay.com")) return "Razorpay";
+      if (d === "payswiff.com" || d.endsWith(".payswiff.com")) return "Payswiff";
+      return null;
+    }
+
     for (const row of r.rows) {
       try {
         const status = row.status_name || "Unknown";
@@ -584,7 +593,11 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           }
         }
 
-        if (row.sources) {
+        // If sender domain maps to a known tag, use it immediately
+        const mappedFromSender = mapDomainToTag(senderDomain);
+        if (mappedFromSender) tagName = mappedFromSender;
+
+        if (row.sources && tagName === "Unknown") {
           let sources = row.sources;
           if (typeof sources === "string") {
             try {
@@ -606,6 +619,14 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                   const stripped = domain.startsWith("@")
                     ? domain.slice(1).toLowerCase()
                     : domain.toLowerCase();
+
+                  // domain mapping check
+                  const mapped = mapDomainToTag(stripped);
+                  if (mapped) {
+                    tagName = mapped;
+                    break;
+                  }
+
                   if (
                     senderDomain === stripped ||
                     senderDomain.endsWith("." + stripped)
@@ -636,6 +657,13 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                   const stripped = domain.startsWith("@")
                     ? domain.slice(1)
                     : domain;
+
+                  const mapped = mapDomainToTag(stripped);
+                  if (mapped) {
+                    tagName = mapped;
+                    break outer2;
+                  }
+
                   const main = stripped.split(".")[0] || stripped;
                   tagName = main
                     .replace(/[^a-zA-Z0-9]/g, " ")

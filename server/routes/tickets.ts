@@ -567,8 +567,10 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     function mapDomainToTag(domain: string | null) {
       if (!domain) return null;
       const d = domain.toLowerCase();
-      if (d === "razorpay.com" || d.endsWith(".razorpay.com")) return "Razorpay";
-      if (d === "payswiff.com" || d.endsWith(".payswiff.com")) return "Payswiff";
+      if (d === "razorpay.com" || d.endsWith(".razorpay.com"))
+        return "Razorpay";
+      if (d === "payswiff.com" || d.endsWith(".payswiff.com"))
+        return "Payswiff";
       return null;
     }
 

@@ -141,7 +141,11 @@ export default function ManageTickets() {
   function getMailConfigProviderName(sources: any): string | null {
     if (!sources) return null;
     try {
-      const arr = Array.isArray(sources) ? sources : typeof sources === 'string' ? JSON.parse(sources) : null;
+      const arr = Array.isArray(sources)
+        ? sources
+        : typeof sources === "string"
+          ? JSON.parse(sources)
+          : null;
       if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
       for (const src of arr) {
         if (src && Array.isArray(src.emailRules)) {
@@ -150,9 +154,12 @@ export default function ManageTickets() {
               const domain = String(rule.domain || "").trim();
               if (!domain) continue;
               // strip leading @ and subdomains, take first token before dot
-              const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+              const stripped = domain.startsWith("@")
+                ? domain.slice(1)
+                : domain;
               const main = stripped.split(".")[0] || stripped;
-              const name = main.replace(/[^a-zA-Z0-9]/g, " ")
+              const name = main
+                .replace(/[^a-zA-Z0-9]/g, " ")
                 .split(" ")
                 .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
                 .join(" ");
@@ -1163,7 +1170,9 @@ export default function ManageTickets() {
                                   From Mail Config
                                 </Badge>
                                 {(() => {
-                                  const provider = getMailConfigProviderName((ticket as any).mail_config_sources);
+                                  const provider = getMailConfigProviderName(
+                                    (ticket as any).mail_config_sources,
+                                  );
                                   return provider ? (
                                     <Badge className="bg-blue-100 text-blue-800">
                                       {provider}
@@ -1420,7 +1429,11 @@ export default function ManageTickets() {
                                   From Mail Config
                                 </Badge>
                                 {(() => {
-                                  const provider = getMailConfigProviderName((ticket as any).mail_config_sources || (source as any).mail_config_sources || (ticket as any).mail_config_sources);
+                                  const provider = getMailConfigProviderName(
+                                    (ticket as any).mail_config_sources ||
+                                      (source as any).mail_config_sources ||
+                                      (ticket as any).mail_config_sources,
+                                  );
                                   return provider ? (
                                     <Badge className="bg-blue-100 text-blue-800">
                                       {provider}

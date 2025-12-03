@@ -88,6 +88,18 @@ class FinOpsAlertService {
     }
   }
 
+  private async getPulseAlertsEnabled(): Promise<boolean> {
+    try {
+      const res = await pool.query(
+        `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+      );
+      return res.rows[0]?.pulse_alerts_enabled ?? true;
+    } catch (error) {
+      console.warn("Failed to check pulse alerts setting:", error);
+      return true; // Default to enabled if check fails
+    }
+  }
+
   private async getUserIdsFromNames(names: string[]): Promise<string[]> {
     if (!names.length) return [];
     const normalized = names
@@ -188,18 +200,18 @@ class FinOpsAlertService {
     const lockKey = 1234567890; // arbitrary constant
     let haveDbLock = false;
     try {
-      const lockRes = await pool.query(
-        `SELECT pg_try_advisory_lock($1) as ok`,
-        [lockKey],
-      );
-      haveDbLock = !!(lockRes.rows && lockRes.rows[0] && lockRes.rows[0].ok);
-      if (!haveDbLock) {
-        console.log(
-          "Another process holds the SLA advisory lock — skipping this run",
-        );
-        this.isCheckingSLA = false;
-        return;
-      }
+      // const lockRes = await pool.query(
+      //   `SELECT pg_try_advisory_lock($1) as ok`,
+      //   [lockKey],
+      // );
+      // haveDbLock = !!(lockRes.rows && lockRes.rows[0] && lockRes.rows[0].ok);
+      // if (!haveDbLock) {
+      //   console.log(
+      //     "Another process holds the SLA advisory lock — skipping this run",
+      //   );
+      //   this.isCheckingSLA = false;
+      //   return;
+      // }
 
       const { isDatabaseAvailable } = await import("../database/connection");
       if (!(await isDatabaseAvailable())) return;
@@ -279,9 +291,9 @@ class FinOpsAlertService {
   private async checkSubtaskSLA(task: any, subtask: any): Promise<void> {
     const now = new Date();
 
-    console.log(
-      `Checking SLA for subtask ${subtask.id} (${subtask.name}): status=${subtask.status}`,
-    );
+    // console.log(
+    //   `Checking SLA for subtask ${subtask.id} (${subtask.name}): status=${subtask.status}`,
+    // );
 
     // Only check pending tasks for overdue status
     if (subtask.status !== "pending") {
@@ -471,30 +483,34 @@ class FinOpsAlertService {
             immediate_user_ids: immediateUserIds,
           });
 
-          // // Make the external Pulse alert call (unconditional - this is the primary notification)
-          // console.log("PULSE ALERT CALL STARTS - allUserIds:", allUserIds);
-          // try {
-          //   const response = await fetch(
-          //     "https://pulsealerts.mylapay.com/direct-call",
-          //     {
-          //       method: "POST",
-          //       headers: { "Content-Type": "application/json" },
-          //       body: JSON.stringify({
-          //         receiver: "CRM_Switch",
-          //         title,
-          //         user_ids: allUserIds,
-          //       }),
-          //     },
-          //   );
-          //   console.log("PULSE ALERT CALL response status:", response.status);
-          //   const responseBody = await response.text();
-          //   console.log("PULSE ALERT CALL response body:", responseBody);
-          // } catch (fetchErr) {
-          //   console.error(
-          //     "PULSE ALERT CALL ERROR:",
-          //     (fetchErr as Error).message,
-          //   );
-          // }
+          // Make the external Pulse alert call (if enabled)
+          if (await this.getPulseAlertsEnabled()) {
+            console.log("PULSE ALERT CALL STARTS - allUserIds:", allUserIds);
+            try {
+              const response = await fetch(
+                "https://pulsealerts.mylapay.com/direct-call",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    receiver: "CRM_Switch",
+                    title: title,
+                    user_ids: allUserIds,
+                  }),
+                },
+              );
+              console.log("PULSE ALERT CALL response status:", response.status);
+              const responseBody = await response.text();
+              console.log("PULSE ALERT CALL response body:", responseBody);
+            } catch (fetchErr) {
+              console.error(
+                "PULSE ALERT CALL ERROR:",
+                (fetchErr as Error).message,
+              );
+            }
+          } else {
+            console.log("Pulse alerts disabled, skipping Pulse alert call");
+          }
 
           // Send notifications and log (these can use pool, but may skip if recent alert exists)
           if (!shouldSkipLogging) {
@@ -1128,13 +1144,13 @@ class FinOpsAlertService {
     }));
 
     // Debug: log subtask statuses from finops_tracker
-    for (const task of tasksWithSubtasks) {
-      for (const subtask of task.subtasks) {
-        console.log(
-          `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
-        );
-      }
-    }
+    // for (const task of tasksWithSubtasks) {
+    //   for (const subtask of task.subtasks) {
+    //     console.log(
+    //       `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
+    //     );
+    //   }
+    // }
 
     return tasksWithSubtasks;
   }
@@ -1331,6 +1347,27 @@ class FinOpsAlertService {
         "System",
         statusChangeMessage,
       );
+
+      // When a subtask is marked completed, schedule a pending-approval alert for reporting managers after 30 minutes
+      if (status === "completed") {
+        try {
+          const approvalTitle = `Please review and approve the subtask "${subtaskName}" under the task "${taskName}" for the client "${clientName}" at your earliest convenience.`;
+          await pool.query(
+            `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+             VALUES ($1, $2, $3, -1, $4, NOW() + INTERVAL '30 minutes')
+             ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
+            [taskId, subtaskId, "pending_approval_reporting", approvalTitle],
+          );
+          console.log(
+            `Scheduled pending-approval alert for task ${taskId} subtask ${subtaskId}`,
+          );
+        } catch (e) {
+          console.warn(
+            "Failed to schedule pending-approval alert:",
+            (e as Error).message,
+          );
+        }
+      }
 
       // Trigger external alert only for overdue transitions
       if (status === "overdue") {

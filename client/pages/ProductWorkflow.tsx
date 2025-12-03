@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+
+const STATUS_LABELS: Record<string, string> = {
+  upcoming: "Upcoming",
+  open: "Open",
+  in_progress: "In Progress",
+  review: "Review",
+  completed: "Completed",
+  delayed: "Delayed",
+  archived: "Archived",
+  created: "Created",
+  on_hold: "On Hold",
+  cancelled: "Cancelled",
+};
+function formatStatusLabel(s?: string) {
+  if (!s) return "";
+  return (
+    STATUS_LABELS[s] ||
+    s.replace(/_/g, " ").replace(/(^|\s)\S/g, (t) => t.toUpperCase())
+  );
+}
 import { useAuth } from "@/lib/auth-context";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,10 +95,12 @@ interface ProjectStep {
   assigned_to?: number;
   estimated_hours?: number;
   due_date?: string;
+  probability_percent?: number;
 }
 
 interface CreateProjectFromLeadDialogProps {
-  lead: any;
+  lead?: any;
+  project?: any;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -86,6 +108,7 @@ interface CreateProjectFromLeadDialogProps {
 
 function CreateProjectFromLeadDialog({
   lead,
+  project,
   isOpen,
   onClose,
   onSuccess,
@@ -93,36 +116,85 @@ function CreateProjectFromLeadDialog({
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [projectData, setProjectData] = useState({
-    name: lead ? `${lead.client_name} - ${lead.project_title}` : "",
+  const formatToDateInput = (d: any) => {
+    if (!d) return "";
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return "";
+    return date.toISOString().slice(0, 10);
+  };
+
+  const [projectData, setProjectData] = useState<any>(() => ({
+    name: lead
+      ? `${lead.client_name} - ${lead.project_title}`
+      : project?.name || "",
     description: lead
       ? `Product development project for ${lead.client_name}`
+      : project?.description || "",
+    assigned_team: project?.assigned_team || "Product Team",
+    project_manager_id: project?.project_manager_id
+      ? String(project.project_manager_id)
       : "",
-    assigned_team: "Product Team",
-    project_manager_id: "",
-    target_completion_date: "",
-    estimated_hours: "",
-    budget: lead?.estimated_budget || "",
-    template_id: "",
+    target_completion_date: project?.target_completion_date
+      ? formatToDateInput(project.target_completion_date)
+      : "",
+    estimated_hours: project?.estimated_hours
+      ? String(project.estimated_hours)
+      : "",
+    template_id: project?.template_id ? String(project.template_id) : "",
+  }));
+
+  const [steps, setSteps] = useState<ProjectStep[]>(() => {
+    if (project?.steps && Array.isArray(project.steps)) {
+      return project.steps.map((s: any, i: number) => ({
+        id: s.id,
+        step_name: s.step_name || s.name,
+        step_description: s.step_description || s.description || "",
+        step_order: s.step_order ?? i + 1,
+        status: s.status || "pending",
+        probability_percent:
+          parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
+        estimated_hours: s.estimated_hours,
+        due_date:
+          s.due_date || s.dueDate || s.eta
+            ? formatToDateInput(s.due_date || s.dueDate || s.eta)
+            : "",
+      }));
+    }
+    return [];
   });
-
-  const [steps, setSteps] = useState<ProjectStep[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [templateChangedByUser, setTemplateChangedByUser] = useState(false);
 
-  // Fetch available templates (filtered for product type only)
+  // Fetch available templates
   const { data: allTemplates = [] } = useQuery({
     queryKey: ["templates"],
     queryFn: () => apiClient.getTemplates(),
     enabled: isOpen,
   });
 
-  // Filter templates to only show product-related templates
-  const templates = allTemplates.filter(
-    (template: any) =>
-      template.name?.toLowerCase().includes("product") ||
-      template.description?.toLowerCase().includes("product") ||
-      template.type === "product",
-  );
+  // Filter templates to only show those with category_id === 1 (Product category)
+  const templates = allTemplates.filter((template: any) => {
+    // Template might have category_id as number or string; support both
+    const cid =
+      template.category_id ??
+      template.categoryId ??
+      (template.category &&
+        (typeof template.category === "object"
+          ? template.category.id
+          : undefined));
+    return Number(cid) === 1;
+  });
+
+  // Ensure the currently selected template (possibly fetched directly) is included
+  // in the dropdown options even if it's not part of the filtered templates list.
+  const availableTemplates = (() => {
+    if (!selectedTemplate) return templates;
+    const exists = templates.find(
+      (t: any) => String(t.id) === String(selectedTemplate.id),
+    );
+    if (exists) return templates;
+    return [selectedTemplate, ...templates];
+  })();
 
   // Fetch template steps when template is selected
   const { data: templateSteps = [] } = useQuery({
@@ -132,9 +204,162 @@ function CreateProjectFromLeadDialog({
     enabled: !!selectedTemplate?.id,
   });
 
+  // Fetch users for Project Manager dropdown
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => apiClient.getUsers(),
+    enabled: isOpen,
+  });
+
+  const projectManagers = users.map((u: any) => ({
+    id: u.id,
+    name: u.name || u.email,
+    email: u.email,
+  }));
+  const [pmQuery, setPmQuery] = useState("");
+  const filteredPMs = projectManagers.filter(
+    (pm: any) =>
+      (pm.name || "").toLowerCase().includes(pmQuery.toLowerCase()) ||
+      (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
+  );
+
+  // If editing an existing project, sync internal state when project prop changes
+  useEffect(() => {
+    if (!project) return;
+    setProjectData({
+      name: project.name || "",
+      description: project.description || "",
+      assigned_team: project.assigned_team || "Product Team",
+      project_manager_id: project.project_manager_id
+        ? String(project.project_manager_id)
+        : "",
+      target_completion_date: project.target_completion_date
+        ? formatToDateInput(project.target_completion_date)
+        : "",
+      estimated_hours: project.estimated_hours
+        ? String(project.estimated_hours)
+        : "",
+      template_id: project.template_id ? String(project.template_id) : "",
+    });
+
+    if (Array.isArray(project.steps) && project.steps.length > 0) {
+      setSteps(
+        project.steps.map((s: any, i: number) => ({
+          id: s.id,
+          step_name: s.step_name || s.name,
+          step_description: s.step_description || s.description || "",
+          step_order: s.step_order ?? i + 1,
+          status: s.status || "pending",
+          probability_percent:
+            parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
+          estimated_hours: s.estimated_hours,
+          due_date:
+            s.due_date || s.dueDate || s.eta
+              ? formatToDateInput(s.due_date || s.dueDate || s.eta)
+              : "",
+        })),
+      );
+    }
+  }, [project]);
+
+  // If templates are loaded and a project has template_id, set selectedTemplate
+  useEffect(() => {
+    if (project && project.template_id && templates.length > 0) {
+      const t = templates.find(
+        (tt: any) => String(tt.id) === String(project.template_id),
+      );
+      if (t) {
+        setSelectedTemplate(t);
+      } else {
+        // Try fetching the template directly in case it's not part of filtered templates
+        (async () => {
+          try {
+            const tpl = await apiClient.getTemplate(project.template_id);
+            if (tpl) {
+              setSelectedTemplate(tpl);
+              setProjectData((prev: any) => ({
+                ...prev,
+                template_id: String(project.template_id),
+              }));
+            }
+          } catch (e) {
+            // ignore - template may not exist or user doesn't have access
+            console.debug("Could not fetch template for project:", e);
+          }
+        })();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates.length, project?.id]);
+
+  // Reset dialog internal state when opening as a fresh create (no project provided)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!project) {
+      // Reset form to defaults based on lead if present, otherwise blank
+      setProjectData({
+        name: lead ? `${lead.client_name} - ${lead.project_title}` : "",
+        description: lead
+          ? `Product development project for ${lead.client_name}`
+          : "",
+        assigned_team: "Product Team",
+        project_manager_id: "",
+        target_completion_date: "",
+        estimated_hours: "",
+        template_id: "",
+      });
+
+      if (selectedTemplate) {
+        // if a template is preselected, apply its steps
+        setSteps(
+          (selectedTemplate.steps || []).map((s: any, i: number) => ({
+            step_name: s.name,
+            step_description: s.description,
+            step_order: s.step_order || i + 1,
+            status: "pending",
+            estimated_hours: s.default_eta_days
+              ? s.default_eta_days * 8
+              : undefined,
+            probability_percent: parseFloat(s.probability_percent ?? 0) || 0,
+            due_date: "",
+          })),
+        );
+      } else {
+        setSteps([
+          {
+            step_name: "Build base using platform",
+            step_description:
+              "Create the foundational architecture using our existing platform components and review lead requirements",
+            step_order: 1,
+            status: "pending",
+            estimated_hours: 40,
+            probability_percent: 0,
+          },
+          {
+            step_name: "Follow-up with development team",
+            step_description:
+              "Coordinate with development team and assign specific tasks with tracking and milestone planning",
+            step_order: 2,
+            status: "pending",
+            estimated_hours: 20,
+            probability_percent: 0,
+          },
+        ]);
+      }
+
+      setSelectedTemplate(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   // Update steps when template changes
   useEffect(() => {
-    if (templateSteps?.steps && templateSteps.steps.length > 0) {
+    // Only auto-apply template steps when creating a new project or when user explicitly changed the template
+    if (
+      templateSteps?.steps &&
+      templateSteps.steps.length > 0 &&
+      (templateChangedByUser || !project)
+    ) {
       const convertedSteps = templateSteps.steps.map(
         (step: any, index: number) => ({
           step_name: step.name,
@@ -144,11 +369,14 @@ function CreateProjectFromLeadDialog({
           estimated_hours: step.default_eta_days
             ? step.default_eta_days * 8
             : undefined,
+          probability_percent: parseFloat(step.probability_percent ?? 0) || 0,
         }),
       );
       setSteps(convertedSteps);
-    } else if (selectedTemplate === null) {
-      // Default steps when no template selected
+      // reset the flag after applying
+      if (templateChangedByUser) setTemplateChangedByUser(false);
+    } else if (selectedTemplate === null && !project) {
+      // Default steps when no template selected and creating a new project
       setSteps([
         {
           step_name: "Build base using platform",
@@ -157,6 +385,7 @@ function CreateProjectFromLeadDialog({
           step_order: 1,
           status: "pending",
           estimated_hours: 40,
+          probability_percent: 0,
         },
         {
           step_name: "Follow-up with development team",
@@ -165,6 +394,7 @@ function CreateProjectFromLeadDialog({
           step_order: 2,
           status: "pending",
           estimated_hours: 20,
+          probability_percent: 0,
         },
       ]);
     }
@@ -174,12 +404,14 @@ function CreateProjectFromLeadDialog({
     if (templateId === "none") {
       setSelectedTemplate(null);
       setProjectData((prev) => ({ ...prev, template_id: "" }));
+      setTemplateChangedByUser(true);
     } else {
       const template = templates.find(
         (t: any) => t.id.toString() === templateId,
       );
       setSelectedTemplate(template);
       setProjectData((prev) => ({ ...prev, template_id: templateId }));
+      setTemplateChangedByUser(true);
     }
   };
 
@@ -190,14 +422,22 @@ function CreateProjectFromLeadDialog({
     "DevOps Team",
     "Full Stack Team",
   ];
-  const projectManagers = [
-    { id: 2, name: "Alice Johnson" },
-    { id: 3, name: "Bob Smith" },
-    { id: 4, name: "Carol Davis" },
-  ];
+  // projectManagers are provided by users query (see above)
+  // const projectManagers will be derived from users when dialog opens
 
   const createProjectMutation = useMutation({
-    mutationFn: (data: any) => apiClient.createProjectFromLead(lead.id, data),
+    mutationFn: (data: any) => {
+      if (project && project.id) {
+        // Update existing project
+        return apiClient.request(`/workflow/projects/${project.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(data),
+        });
+      }
+      return lead && lead.id
+        ? apiClient.createProjectFromLead(lead.id, data)
+        : apiClient.createWorkflowProject(data);
+    },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
       queryClient.invalidateQueries({ queryKey: ["completed-leads"] });
@@ -209,21 +449,26 @@ function CreateProjectFromLeadDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const submitData = {
+    const submitData: any = {
       ...projectData,
+      project_type: "product_development",
       project_manager_id: projectData.project_manager_id
         ? parseInt(projectData.project_manager_id)
         : undefined,
       estimated_hours: projectData.estimated_hours
         ? parseInt(projectData.estimated_hours)
         : undefined,
-      budget: projectData.budget ? parseFloat(projectData.budget) : undefined,
       template_id: projectData.template_id
         ? parseInt(projectData.template_id)
         : undefined,
       created_by: parseInt(user?.id || "1"),
       steps: steps,
     };
+
+    // If editing, do not send created_by for updates
+    if (project && project.id) {
+      delete submitData.created_by;
+    }
 
     createProjectMutation.mutate(submitData);
   };
@@ -234,6 +479,7 @@ function CreateProjectFromLeadDialog({
       step_description: "",
       step_order: steps.length + 1,
       status: "pending",
+      probability_percent: 0,
     };
     setSteps([...steps, newStep]);
   };
@@ -277,44 +523,78 @@ function CreateProjectFromLeadDialog({
     setSteps(newSteps);
   };
 
-  if (!lead) return null;
+  // Allow creating project even when not started from a lead (lead may be null)
+
+  const totalProbability = steps.reduce(
+    (sum, s) => sum + (Number(s.probability_percent) || 0),
+    0,
+  );
+  const probabilityInvalid = totalProbability > 0 && totalProbability !== 100;
+
+  // Format total probability for display (avoid odd concatenation or locale issues)
+  const formattedTotalProbability = (() => {
+    const v = Number(totalProbability) || 0;
+    if (Number.isInteger(v)) return String(v);
+    return v.toFixed(2);
+  })();
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Product Project from Lead</DialogTitle>
+          <DialogTitle>
+            {project && project.id
+              ? "Edit Product Project"
+              : lead
+                ? "Create Product Project from Lead"
+                : "Create Product Project"}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Lead Information Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Lead Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <strong>Client:</strong> {lead.client_name}
+          {lead ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Lead Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <strong>Client:</strong> {lead.client_name}
+                  </div>
+                  <div>
+                    <strong>Project:</strong> {lead.project_title}
+                  </div>
+                  <div>
+                    <strong>Completed:</strong>{" "}
+                    {lead.completion_date &&
+                      format(new Date(lead.completion_date), "MMM d, yyyy")}
+                  </div>
+                  <div>
+                    <strong>Lead Steps:</strong> {lead.completed_steps}/
+                    {lead.total_steps}
+                  </div>
                 </div>
-                <div>
-                  <strong>Project:</strong> {lead.project_title}
+                <div className="mt-2">
+                  <strong>Description:</strong>
+                  <p className="text-gray-600">{lead.project_description}</p>
                 </div>
-                <div>
-                  <strong>Completed:</strong>{" "}
-                  {format(new Date(lead.completion_date), "MMM d, yyyy")}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Lead Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-gray-600">
+                  No lead selected. You can proceed to create a project without
+                  a lead or select a completed lead from the list.
                 </div>
-                <div>
-                  <strong>Lead Steps:</strong> {lead.completed_steps}/
-                  {lead.total_steps}
-                </div>
-              </div>
-              <div className="mt-2">
-                <strong>Description:</strong>
-                <p className="text-gray-600">{lead.project_description}</p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Project Details */}
           <Card>
@@ -391,8 +671,8 @@ function CreateProjectFromLeadDialog({
                     <SelectItem value="none">
                       Manual Steps (Create Custom)
                     </SelectItem>
-                    {templates.length > 0 ? (
-                      templates.map((template: any) => (
+                    {availableTemplates.length > 0 ? (
+                      availableTemplates.map((template: any) => (
                         <SelectItem
                           key={template.id}
                           value={template.id.toString()}
@@ -448,11 +728,30 @@ function CreateProjectFromLeadDialog({
                       <SelectValue placeholder="Select PM" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectManagers.map((pm) => (
-                        <SelectItem key={pm.id} value={pm.id.toString()}>
-                          {pm.name}
+                      <div className="p-2">
+                        <Input
+                          placeholder="Search users..."
+                          value={pmQuery}
+                          onChange={(e) => setPmQuery(e.target.value)}
+                          className="mb-2"
+                        />
+                      </div>
+                      {filteredPMs.length > 0 ? (
+                        filteredPMs.map((pm) => (
+                          <SelectItem key={pm.id} value={pm.id.toString()}>
+                            <div className="flex flex-col">
+                              <span>{pm.name}</span>
+                              <span className="text-xs text-gray-500">
+                                {pm.email}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>
+                          No users found
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -491,22 +790,6 @@ function CreateProjectFromLeadDialog({
                     placeholder="Total project hours"
                   />
                 </div>
-
-                <div>
-                  <Label htmlFor="budget">Budget (₹)</Label>
-                  <Input
-                    id="budget"
-                    type="number"
-                    value={projectData.budget}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        budget: e.target.value,
-                      }))
-                    }
-                    placeholder="Project budget"
-                  />
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -516,15 +799,28 @@ function CreateProjectFromLeadDialog({
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle className="text-lg">Project Steps</CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addStep}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Step
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-600">
+                    Total Probability:{" "}
+                    <span className="font-medium text-gray-900">
+                      {formattedTotalProbability}%
+                    </span>
+                    {probabilityInvalid && (
+                      <span className="ml-3 text-sm text-red-600">
+                        Total must equal 100%
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addStep}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Step
+                  </Button>
+                </div>
               </div>
               <CardDescription>
                 Define the specific steps for this product development project
@@ -535,7 +831,12 @@ function CreateProjectFromLeadDialog({
                 <Card key={index} className="border-l-4 border-l-blue-500">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
-                      <Badge variant="outline">Step {step.step_order}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">Step {step.step_order}</Badge>
+                        <div className="text-sm text-gray-600">
+                          {step.probability_percent ?? 0}%
+                        </div>
+                      </div>
                       <div className="flex gap-1">
                         <Button
                           type="button"
@@ -596,7 +897,7 @@ function CreateProjectFromLeadDialog({
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
                           <Label>Estimated Hours</Label>
                           <Input
@@ -621,6 +922,22 @@ function CreateProjectFromLeadDialog({
                             value={step.due_date || ""}
                             onChange={(e) =>
                               updateStep(index, "due_date", e.target.value)
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label>Probability (%)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={String(step.probability_percent ?? 0)}
+                            onChange={(e) =>
+                              updateStep(
+                                index,
+                                "probability_percent",
+                                e.target.value ? parseFloat(e.target.value) : 0,
+                              )
                             }
                           />
                         </div>
@@ -651,13 +968,18 @@ function CreateProjectFromLeadDialog({
               disabled={
                 !projectData.name.trim() ||
                 steps.length === 0 ||
-                createProjectMutation.isPending
+                createProjectMutation.isPending ||
+                probabilityInvalid
               }
             >
               <Rocket className="w-4 h-4 mr-2" />
               {createProjectMutation.isPending
-                ? "Creating..."
-                : "Create Project"}
+                ? project && project.id
+                  ? "Updating..."
+                  : "Creating..."
+                : project && project.id
+                  ? "Update Project"
+                  : "Create Project"}
             </Button>
           </div>
         </form>
@@ -669,6 +991,7 @@ function CreateProjectFromLeadDialog({
 export default function ProductWorkflow() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
@@ -679,6 +1002,139 @@ export default function ProductWorkflow() {
   const [isLeadOverviewOpen, setIsLeadOverviewOpen] = useState(false);
   const [selectedLeadForSteps, setSelectedLeadForSteps] = useState<any>(null);
   const [isStepsPreviewOpen, setIsStepsPreviewOpen] = useState(false);
+  const location = useLocation();
+  const routeParams = useParams();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    // Prefer query param `id`, fallback to route param `id` (for /products/:id/edit)
+    const pid = params.get("id") || (routeParams as any)?.id;
+    if (!pid) return;
+    const loadProject = async () => {
+      try {
+        const proj = await apiClient.getWorkflowProject(pid);
+        setSelectedProject(proj);
+
+        // Try to fetch a linked product record to obtain template and step probabilities
+        try {
+          const product = await apiClient.request(`/products/${proj.id}`);
+          if (product) {
+            // copy template if available
+            if (product.template_id) {
+              proj.template_id = product.template_id;
+            }
+
+            // If product has steps with probabilities, merge into proj.steps by step_order or name
+            if (
+              Array.isArray(product.steps) &&
+              product.steps.length > 0 &&
+              Array.isArray(proj.steps)
+            ) {
+              const psByOrder: any = {};
+              product.steps.forEach((s: any) => {
+                if (s.step_order !== undefined && s.step_order !== null)
+                  psByOrder[s.step_order] = s;
+              });
+
+              proj.steps = proj.steps.map((s: any, i: number) => {
+                const byOrder = psByOrder[s.step_order];
+                const byName = product.steps.find(
+                  (ps: any) =>
+                    (ps.name || ps.step_name) === (s.step_name || s.name),
+                );
+                const source = byOrder || byName;
+                if (source) {
+                  return {
+                    ...s,
+                    probability_percent:
+                      parseFloat(
+                        source.probability_percent ??
+                          source.probability ??
+                          s.probability_percent ??
+                          0,
+                      ) || 0,
+                    due_date:
+                      s.due_date || source.eta || source.due_date || s.due_date,
+                  };
+                }
+                return s;
+              });
+            }
+          }
+        } catch (prodErr) {
+          // ignore - product fallback may not exist
+          console.debug(
+            "No linked product or failed to fetch product for project",
+            pid,
+            prodErr,
+          );
+        }
+
+        // Open create dialog in edit mode with enriched project
+        setSelectedLead(null);
+        setSelectedProject(proj);
+        setIsCreateDialogOpen(true);
+      } catch (err) {
+        console.error("Failed to load project from query param:", err);
+      }
+    };
+    loadProject();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, (routeParams as any)?.id]);
+
+  // Handle project created callback (hoisted so modals can reference it safely)
+  function handleProjectCreated() {
+    setSelectedLead(null);
+    setIsCreateDialogOpen(false);
+  }
+
+  // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)
+  const isEditModalPath = Boolean(
+    location.pathname.match(/^\/products\/[0-9]+\/edit$/),
+  );
+
+  if (isEditModalPath) {
+    return (
+      <>
+        <CreateProjectFromLeadDialog
+          lead={selectedLead}
+          project={selectedProject}
+          isOpen={isCreateDialogOpen}
+          onClose={() => {
+            setIsCreateDialogOpen(false);
+            setSelectedProject(null);
+            if ((routeParams as any)?.id)
+              navigate(`/products/${(routeParams as any).id}`);
+          }}
+          onSuccess={handleProjectCreated}
+        />
+
+        <ProjectDetailDialog
+          project={selectedProject}
+          isOpen={isProjectDetailOpen}
+          onClose={() => setIsProjectDetailOpen(false)}
+        />
+
+        <LeadOverviewModal
+          isOpen={isLeadOverviewOpen}
+          onClose={() => {
+            setIsLeadOverviewOpen(false);
+            setSelectedLeadForOverview(null);
+          }}
+          lead={selectedLeadForOverview}
+        />
+
+        <StepsPreviewModal
+          isOpen={isStepsPreviewOpen}
+          onClose={() => {
+            setIsStepsPreviewOpen(false);
+            setSelectedLeadForSteps(null);
+          }}
+          lead={selectedLeadForSteps}
+        />
+      </>
+    );
+  }
 
   // Fetch project statistics
   const { data: projectStats } = useQuery({
@@ -714,19 +1170,14 @@ export default function ProductWorkflow() {
     setIsCreateDialogOpen(true);
   };
 
-  const handleProjectCreated = () => {
-    setSelectedLead(null);
-    setIsCreateDialogOpen(false);
-  };
-
   const handleViewLead = (lead: any) => {
     setSelectedLeadForOverview(lead);
     setIsLeadOverviewOpen(true);
   };
 
   const handleViewProject = (project: any) => {
-    setSelectedProject(project);
-    setIsProjectDetailOpen(true);
+    // Redirect to Product Overview page
+    navigate(`/products/${project.id}`);
   };
 
   const getStatusIcon = (status: string) => {
@@ -768,6 +1219,17 @@ export default function ProductWorkflow() {
           <p className="text-gray-600 mt-1">
             Manage lead-to-product handoffs and project development
           </p>
+        </div>
+        <div>
+          <Button
+            onClick={() => {
+              setSelectedLead(null);
+              setIsCreateDialogOpen(true);
+            }}
+            className="btn btn-primary"
+          >
+            Create Project
+          </Button>
         </div>
       </div>
 
@@ -869,55 +1331,63 @@ export default function ProductWorkflow() {
         <TabsContent value="completed-leads" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Leads Ready for Product Development</CardTitle>
+              <CardTitle>Product list</CardTitle>
               <CardDescription>
-                Completed leads that can be converted into product development
-                projects
+                List of products and their key details
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {leadsLoading ? (
-                <div className="text-center py-8">
-                  Loading completed leads...
-                </div>
-              ) : completedLeads.length > 0 ? (
+              {projectsLoading ? (
+                <div className="text-center py-8">Loading products...</div>
+              ) : projects.length > 0 ? (
                 <div className="space-y-4">
-                  {completedLeads.map((lead: any) => (
+                  {projects.map((project: any) => (
                     <Card
-                      key={lead.id}
-                      className="border-l-4 border-l-green-500"
+                      key={project.id}
+                      className="hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => handleViewProject(project)}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <h3 className="font-semibold text-lg">
-                                {lead.client_name}
+                                {project.name}
                               </h3>
                               <Badge
                                 variant="outline"
-                                className="text-green-600"
+                                className={getStatusColor(project.status)}
                               >
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Lead Completed
+                                {formatStatusLabel(project.status)}
                               </Badge>
                             </div>
 
                             <h4 className="font-medium text-gray-900 mb-2">
-                              {lead.project_title}
+                              {project.description}
                             </h4>
                             <p className="text-gray-600 mb-3">
-                              {lead.project_description}
+                              {project.source_type === "lead"
+                                ? `From Lead #${project.source_id}`
+                                : ""}
                             </p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
-                                <span className="font-medium">Completed:</span>
+                                <span className="font-medium">Progress:</span>
                                 <br />
-                                {format(
-                                  new Date(lead.completion_date),
-                                  "MMM d, yyyy",
-                                )}
+                                <div className="flex items-center gap-2">
+                                  <div className="w-20 bg-gray-200 rounded-full h-2">
+                                    <div
+                                      className="bg-blue-600 h-2 rounded-full"
+                                      style={{
+                                        width: `${project.progress_percentage || 0}%`,
+                                      }}
+                                    />
+                                  </div>
+                                  <span>
+                                    {project.progress_percentage || 0}%
+                                  </span>
+                                </div>
                               </div>
                               <div>
                                 <span className="font-medium">Lead Steps:</span>
@@ -925,94 +1395,54 @@ export default function ProductWorkflow() {
                                 <div className="flex items-center gap-1">
                                   <CheckCircle className="w-3 h-3 text-green-600" />
                                   <span>
-                                    {lead.completed_steps}/{lead.total_steps}
+                                    {project.completed_steps || 0}/
+                                    {project.total_steps || 0}
                                   </span>
                                 </div>
                               </div>
                               <div>
-                                <span className="font-medium">
-                                  Est. Budget:
-                                </span>
-                                <br />₹{lead.estimated_budget?.toLocaleString()}
-                              </div>
-                              <div>
                                 <span className="font-medium">Status:</span>
                                 <br />
-                                <Select
-                                  value={
-                                    lead.product_status || "ready_for_product"
-                                  }
-                                  onValueChange={(value) => {
-                                    // Update lead status
-                                    console.log(
-                                      "Updating lead status:",
-                                      lead.id,
-                                      value,
-                                    );
-                                    // TODO: Implement API call to update lead status
-                                  }}
-                                >
-                                  <SelectTrigger className="w-full h-8">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="ready_for_product">
-                                      Ready for Product
-                                    </SelectItem>
-                                    <SelectItem value="in_review">
-                                      In Review
-                                    </SelectItem>
-                                    <SelectItem value="approved">
-                                      Approved
-                                    </SelectItem>
-                                    <SelectItem value="on_hold">
-                                      On Hold
-                                    </SelectItem>
-                                    <SelectItem value="rejected">
-                                      Rejected
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <span className="text-sm text-gray-700">
+                                  {project.status}
+                                </span>
                               </div>
-                            </div>
-
-                            {/* Project Steps Count - Clickable */}
-                            <div className="mt-3">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedLeadForSteps(lead);
-                                  setIsStepsPreviewOpen(true);
-                                }}
-                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                              >
-                                <Target className="w-4 h-4 mr-2" />
-                                View{" "}
-                                {Math.ceil(
-                                  (lead.estimated_budget || 100000) / 50000,
-                                )}{" "}
-                                Estimated Project Steps
-                              </Button>
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-2 ml-4">
-                            <Button
-                              onClick={() => handleCreateProject(lead)}
-                              className="min-w-[140px]"
+                          <div className="flex items-start gap-2 ml-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/product?id=${project.id}`);
+                              }}
+                              title="Edit"
+                              className="p-2 rounded hover:bg-gray-100"
                             >
-                              <ArrowRight className="w-4 h-4 mr-2" />
-                              Create Project
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewLead(lead)}
+                              <Edit className="w-4 h-4 text-gray-600" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!confirm("Delete this product?")) return;
+                                try {
+                                  await apiClient.request(
+                                    `/workflow/projects/${project.id}`,
+                                    { method: "DELETE" },
+                                  );
+                                  queryClient.invalidateQueries([
+                                    "workflow-projects",
+                                  ]);
+                                } catch (err) {
+                                  console.error(err);
+                                  alert("Failed to delete product");
+                                }
+                              }}
+                              title="Delete"
+                              className="p-2 rounded hover:bg-gray-100"
                             >
-                              <Eye className="w-4 h-4 mr-2" />
-                              View Lead
-                            </Button>
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </button>
                           </div>
                         </div>
                       </CardContent>
@@ -1023,11 +1453,10 @@ export default function ProductWorkflow() {
                 <div className="text-center py-12">
                   <Package className="w-16 h-16 mx-auto text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No Completed Leads
+                    No Products
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    There are no completed leads ready for product development
-                    at the moment.
+                    There are no products to show at the moment.
                   </p>
                 </div>
               )}
@@ -1261,15 +1690,19 @@ export default function ProductWorkflow() {
         </TabsContent>
       </Tabs>
 
-      {/* Create Project Dialog */}
+      {/* Create / Edit Project Dialog */}
       <CreateProjectFromLeadDialog
         lead={selectedLead}
+        project={selectedProject}
         isOpen={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
+        onClose={() => {
+          setIsCreateDialogOpen(false);
+          setSelectedProject(null);
+        }}
         onSuccess={handleProjectCreated}
       />
 
-      {/* Project Detail Dialog */}
+      {/* Project Detail Dialog (read-only overview) */}
       <ProjectDetailDialog
         project={selectedProject}
         isOpen={isProjectDetailOpen}
@@ -1540,8 +1973,8 @@ function ProjectDetailDialog({
                 <div>
                   <Label className="text-sm font-medium">Status</Label>
                   <div className="mt-1">
-                    <Badge className={getStatusColor(project.status)}>
-                      {project.status.replace("_", " ")}
+                    <Badge className={getStatusColor(project.status || "")}>
+                      {(project.status || "").replace("_", " ")}
                     </Badge>
                   </div>
                 </div>

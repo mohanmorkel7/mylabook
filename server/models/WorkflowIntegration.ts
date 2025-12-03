@@ -1,5 +1,6 @@
 import { pool } from "../database/connection";
 import { QueryResult } from "pg";
+import { ProductRepository } from "./Product";
 
 // Type definitions for workflow entities
 export interface WorkflowProject {
@@ -195,6 +196,7 @@ export interface CreateWorkflowProjectData {
     status?: "pending" | "in_progress" | "completed" | "blocked";
     estimated_hours?: number;
     due_date?: string;
+    probability_percent?: number | null;
   }>;
   created_by: number;
 }
@@ -298,31 +300,293 @@ export class WorkflowRepository {
   static async createProject(
     data: CreateWorkflowProjectData,
   ): Promise<WorkflowProject> {
+    // Ensure sensible defaults so NOT NULL DB columns are satisfied
+    const source_type = data.source_type || "manual";
+    const project_type = data.project_type || "product_development";
+    const priority = data.priority || "medium";
+    const created_by = data.created_by || 1;
+
     const result = await pool.query(
       `INSERT INTO workflow_projects
        (name, description, source_type, source_id, project_type, priority, assigned_team,
-        project_manager_id, start_date, target_completion_date, budget, estimated_hours, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id`,
       [
         data.name,
         data.description,
-        data.source_type,
+        source_type,
         data.source_id,
-        data.project_type,
-        data.priority || "medium",
+        project_type,
+        priority,
         data.assigned_team,
         data.project_manager_id,
+        data.template_id ?? null,
         data.start_date,
         data.target_completion_date,
         data.budget,
         data.estimated_hours,
-        data.created_by,
+        created_by,
       ],
     );
 
     const newProject = await this.getProjectById(result.rows[0].id);
+
+    // Also create a corresponding product row so /api/products/:id can reference product records
+    try {
+      const productData: any = {
+        name: data.name,
+        description: data.description || null,
+        template_id: data.template_id ?? null,
+        project_manager_id: data.project_manager_id ?? null,
+        target_completion_date: data.target_completion_date ?? null,
+        estimated_hours: data.estimated_hours ?? null,
+        status: "upcoming",
+        progress: 0,
+        created_by: created_by,
+      };
+      const createdProduct = await ProductRepository.createProduct(productData);
+      // attach created product id to the returned workflow project for convenience
+      if (newProject) newProject["linked_product_id"] = createdProduct.id;
+
+      // Persist the product_id on workflow_projects so /api/products/:id can reference product records
+      try {
+        await pool.query(
+          "UPDATE workflow_projects SET product_id = $1 WHERE id = $2",
+          [createdProduct.id, result.rows[0].id],
+        );
+      } catch (updateErr) {
+        console.warn(
+          "Failed to persist product_id on workflow_projects:",
+          updateErr,
+        );
+      }
+    } catch (prodErr) {
+      console.warn(
+        "Failed to create linked product for workflow project:",
+        prodErr,
+      );
+    }
+
     return newProject!;
+  }
+
+  static async deleteProject(id: number): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Delete related workflow data; cascade may handle some of these, but be explicit
+      await client.query("DELETE FROM workflow_steps WHERE project_id = $1", [
+        id,
+      ]);
+      await client.query(
+        "DELETE FROM workflow_comments WHERE project_id = $1",
+        [id],
+      );
+      await client.query(
+        "DELETE FROM workflow_documents WHERE project_id = $1",
+        [id],
+      );
+      await client.query(
+        "DELETE FROM lead_project_transitions WHERE project_id = $1",
+        [id],
+      );
+      await client.query("DELETE FROM workflow_projects WHERE id = $1", [id]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  static async updateProject(
+    id: number,
+    data: Partial<CreateWorkflowProjectData> & { steps?: any[] },
+  ): Promise<WorkflowProject | null> {
+    try {
+      try {
+        console.log(
+          "[WorkflowRepository.updateProject] Incoming steps:",
+          Array.isArray(data.steps)
+            ? data.steps.map((s) => ({
+                id: s.id,
+                step_order: s.step_order,
+                step_name: s.step_name,
+              }))
+            : "none",
+        );
+      } catch (logErr) {
+        console.warn(
+          "[WorkflowRepository.updateProject] Failed to log incoming steps",
+          logErr,
+        );
+      }
+      const setClause: string[] = [];
+      const values: any[] = [];
+      let idx = 1;
+
+      const allowedFields: (keyof CreateWorkflowProjectData)[] = [
+        "name",
+        "description",
+        "priority",
+        "assigned_team",
+        "project_manager_id",
+        "start_date",
+        "target_completion_date",
+        "budget",
+        "estimated_hours",
+        "status",
+        "source_type",
+        "source_id",
+        "template_id",
+      ];
+
+      for (const key of allowedFields) {
+        if ((data as any)[key] !== undefined) {
+          setClause.push(`${key} = $${idx}`);
+          values.push((data as any)[key]);
+          idx++;
+        }
+      }
+
+      // Execute the project update outside of a long-running transaction so
+      // step upserts cannot roll it back or hold locks for extended periods.
+      if (setClause.length > 0) {
+        setClause.push("updated_at = CURRENT_TIMESTAMP");
+        const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
+        values.push(id);
+        try {
+          console.log(
+            "[WorkflowRepository.updateProject] Executing query:",
+            query,
+          );
+          console.log("[WorkflowRepository.updateProject] Values:", values);
+        } catch (logErr) {
+          // ignore logging errors
+        }
+
+        const updateResult = await pool.query(query, values);
+        try {
+          console.log(
+            "[WorkflowRepository.updateProject] Update result:",
+            updateResult.rows,
+          );
+        } catch (logErr) {
+          // ignore
+        }
+      }
+
+      // Upsert steps individually outside a wrapping transaction so errors here
+      // won't rollback the project update. Each step operation logs errors but
+      // does not prevent the project update from persisting.
+      if (Array.isArray(data.steps)) {
+        for (const s of data.steps) {
+          try {
+            if (s.id) {
+              await this.updateStep(s.id, {
+                step_name: s.step_name ?? s.name,
+                step_description: s.step_description ?? s.description ?? null,
+                step_order: s.step_order ?? null,
+                assigned_to: s.assigned_to ?? null,
+                estimated_hours: s.estimated_hours ?? null,
+                due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                status: s.status ?? undefined,
+                probability_percent:
+                  s.probability_percent ?? s.probability ?? null,
+              });
+            } else {
+              // For new steps (no id provided), attempt to find an existing step to update
+              try {
+                const findRes = await pool.query(
+                  `SELECT id FROM workflow_steps WHERE project_id = $1 AND (step_order = $2 OR step_name = $3) ORDER BY created_at DESC LIMIT 1`,
+                  [id, s.step_order ?? null, s.step_name ?? s.name ?? null],
+                );
+                if (findRes.rows.length > 0) {
+                  const existingStepId = findRes.rows[0].id;
+                  await this.updateStep(existingStepId, {
+                    step_name: s.step_name ?? s.name,
+                    step_description:
+                      s.step_description ?? s.description ?? null,
+                    step_order: s.step_order ?? null,
+                    assigned_to: s.assigned_to ?? null,
+                    estimated_hours: s.estimated_hours ?? null,
+                    due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                    status: s.status ?? undefined,
+                    probability_percent:
+                      s.probability_percent ?? s.probability ?? null,
+                  });
+                } else {
+                  const stepData: CreateWorkflowStepData = {
+                    project_id: id,
+                    step_name: s.step_name ?? s.name,
+                    step_description:
+                      s.step_description ?? s.description ?? null,
+                    step_order: s.step_order ?? null,
+                    assigned_to: s.assigned_to ?? null,
+                    estimated_hours: s.estimated_hours ?? null,
+                    due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                    status: s.status ?? "pending",
+                    created_by: data.created_by || 1,
+                    probability_percent:
+                      s.probability_percent ?? s.probability ?? null,
+                  } as CreateWorkflowStepData;
+                  await this.createStep(stepData);
+                }
+              } catch (err) {
+                console.warn(
+                  "[WorkflowRepository.updateProject] Error finding/creating step:",
+                  err,
+                );
+                const stepData: CreateWorkflowStepData = {
+                  project_id: id,
+                  step_name: s.step_name ?? s.name,
+                  step_description: s.step_description ?? s.description ?? null,
+                  step_order: s.step_order ?? null,
+                  assigned_to: s.assigned_to ?? null,
+                  estimated_hours: s.estimated_hours ?? null,
+                  due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+                  status: s.status ?? "pending",
+                  created_by: data.created_by || 1,
+                  probability_percent:
+                    s.probability_percent ?? s.probability ?? null,
+                } as CreateWorkflowStepData;
+                await this.createStep(stepData);
+              }
+            }
+          } catch (stepErr) {
+            console.warn(
+              "[WorkflowRepository.updateProject] Failed to upsert step:",
+              stepErr,
+            );
+            // continue processing other steps
+          }
+        }
+      }
+
+      // Verify persisted value to help debug template_id issues
+      try {
+        const checkRes = await pool.query(
+          "SELECT id, template_id, product_id FROM workflow_projects WHERE id = $1",
+          [id],
+        );
+        console.log(
+          "[WorkflowRepository.updateProject] Post-update workflow_projects row:",
+          checkRes.rows[0],
+        );
+      } catch (checkErr) {
+        console.warn(
+          "[WorkflowRepository.updateProject] Failed to read post-update workflow_projects row:",
+          checkErr,
+        );
+      }
+
+      const updated = await this.getProjectById(id);
+      return updated;
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async createProjectFromLead(
@@ -330,6 +594,7 @@ export class WorkflowRepository {
     projectData: Partial<CreateWorkflowProjectData>,
     createdBy: number,
   ): Promise<WorkflowProject> {
+    // (existing createProjectFromLead implementation continues below)
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -358,6 +623,7 @@ export class WorkflowRepository {
         priority: projectData.priority || "medium",
         assigned_team: projectData.assigned_team || "Product Team",
         project_manager_id: projectData.project_manager_id,
+        template_id: (projectData as any).template_id ?? null,
         start_date:
           projectData.start_date || new Date().toISOString().split("T")[0],
         target_completion_date: projectData.target_completion_date,
@@ -403,8 +669,8 @@ export class WorkflowRepository {
             for (const templateStep of templateStepsResult.rows) {
               await client.query(
                 `INSERT INTO workflow_steps
-                 (project_id, step_name, step_description, step_order, status, estimated_hours, created_by)
-                 VALUES ($1, $2, $3, $4, 'pending', $5, $6)`,
+                 (project_id, step_name, step_description, step_order, status, estimated_hours, created_by, probability_percent)
+                 VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)`,
                 [
                   projectId,
                   templateStep.name,
@@ -414,6 +680,7 @@ export class WorkflowRepository {
                     ? templateStep.default_eta_days * 8
                     : null,
                   createdBy,
+                  templateStep.probability_percent ?? null,
                 ],
               );
             }
@@ -432,8 +699,8 @@ export class WorkflowRepository {
         for (const step of (projectData as any).steps) {
           await client.query(
             `INSERT INTO workflow_steps
-             (project_id, step_name, step_description, step_order, status, estimated_hours, due_date, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (project_id, step_name, step_description, step_order, status, estimated_hours, due_date, created_by, probability_percent)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
             [
               projectId,
               step.step_name,
@@ -443,6 +710,7 @@ export class WorkflowRepository {
               step.estimated_hours,
               step.due_date,
               createdBy,
+              step.probability_percent ?? step.probability ?? null,
             ],
           );
         }
@@ -486,7 +754,9 @@ export class WorkflowRepository {
   // Step operations
   static async getProjectSteps(projectId: number): Promise<WorkflowStep[]> {
     const result = await pool.query(
-      `SELECT ws.*, u1.name as assigned_user_name, u2.name as creator_name
+      `SELECT ws.*,
+        COALESCE(NULLIF(TRIM(CONCAT(u1.first_name, ' ', u1.last_name)), ''), u1.email) as assigned_user_name,
+        COALESCE(NULLIF(TRIM(CONCAT(u2.first_name, ' ', u2.last_name)), ''), u2.email) as creator_name
        FROM workflow_steps ws
        LEFT JOIN users u1 ON ws.assigned_to = u1.id
        LEFT JOIN users u2 ON ws.created_by = u2.id
@@ -498,11 +768,53 @@ export class WorkflowRepository {
   }
 
   static async createStep(data: CreateWorkflowStepData): Promise<WorkflowStep> {
+    // Attempt to find an existing step for this project with the same order or name
+    try {
+      const existingRes = await pool.query(
+        `SELECT id FROM workflow_steps WHERE project_id = $1 AND (step_order IS NOT DISTINCT FROM $2 OR LOWER(TRIM(step_name)) = LOWER(TRIM($3))) LIMIT 1`,
+        [data.project_id, data.step_order ?? null, data.step_name ?? null],
+      );
+
+      if (existingRes.rows.length > 0) {
+        const existingId = existingRes.rows[0].id;
+        // Update the existing step with the provided data
+        await this.updateStep(existingId, {
+          step_name: data.step_name,
+          step_description: data.step_description ?? null,
+          step_order: data.step_order ?? null,
+          assigned_to: data.assigned_to ?? null,
+          estimated_hours: data.estimated_hours ?? null,
+          due_date: data.due_date ?? null,
+          status: (data as any).status ?? undefined,
+          probability_percent: (data as any).probability_percent ?? null,
+        });
+
+        const stepResult = await pool.query(
+          `SELECT ws.*,
+            COALESCE(NULLIF(TRIM(CONCAT(u1.first_name, ' ', u1.last_name)), ''), u1.email) as assigned_user_name,
+            COALESCE(NULLIF(TRIM(CONCAT(u2.first_name, ' ', u2.last_name)), ''), u2.email) as creator_name
+           FROM workflow_steps ws
+           LEFT JOIN users u1 ON ws.assigned_to = u1.id
+           LEFT JOIN users u2 ON ws.created_by = u2.id
+           WHERE ws.id = $1`,
+          [existingId],
+        );
+
+        return stepResult.rows[0] as WorkflowStep;
+      }
+    } catch (err) {
+      // If the lookup fails for any reason, fall back to insert to avoid blocking progress
+      console.warn(
+        "[WorkflowRepository.createStep] Failed to lookup existing step, will attempt insert",
+        err,
+      );
+    }
+
     const result = await pool.query(
       `INSERT INTO workflow_steps
        (project_id, step_name, step_description, step_order, assigned_to, estimated_hours,
-        due_date, dependencies, is_automated, automation_config, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        due_date, dependencies, is_automated, automation_config, created_by, probability_percent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         data.project_id,
@@ -516,11 +828,14 @@ export class WorkflowRepository {
         data.is_automated || false,
         data.automation_config ? JSON.stringify(data.automation_config) : null,
         data.created_by,
+        (data as any).probability_percent ?? null,
       ],
     );
 
     const stepResult = await pool.query(
-      `SELECT ws.*, u1.name as assigned_user_name, u2.name as creator_name
+      `SELECT ws.*,
+        COALESCE(NULLIF(TRIM(CONCAT(u1.first_name, ' ', u1.last_name)), ''), u1.email) as assigned_user_name,
+        COALESCE(NULLIF(TRIM(CONCAT(u2.first_name, ' ', u2.last_name)), ''), u2.email) as creator_name
        FROM workflow_steps ws
        LEFT JOIN users u1 ON ws.assigned_to = u1.id
        LEFT JOIN users u2 ON ws.created_by = u2.id
@@ -542,6 +857,64 @@ export class WorkflowRepository {
     );
 
     // The trigger will handle progress updates and notifications
+  }
+
+  static async updateStep(
+    stepId: number,
+    data: Partial<{
+      step_name: string;
+      step_description: string | null;
+      step_order: number | null;
+      assigned_to: number | null;
+      estimated_hours: number | null;
+      due_date: string | null;
+      status?: string;
+      probability_percent: number | null;
+    }>,
+  ): Promise<void> {
+    const setClause: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (data.step_name !== undefined) {
+      setClause.push(`step_name = $${idx++}`);
+      values.push(data.step_name);
+    }
+    if (data.step_description !== undefined) {
+      setClause.push(`step_description = $${idx++}`);
+      values.push(data.step_description);
+    }
+    if (data.step_order !== undefined) {
+      setClause.push(`step_order = $${idx++}`);
+      values.push(data.step_order);
+    }
+    if (data.assigned_to !== undefined) {
+      setClause.push(`assigned_to = $${idx++}`);
+      values.push(data.assigned_to);
+    }
+    if (data.estimated_hours !== undefined) {
+      setClause.push(`estimated_hours = $${idx++}`);
+      values.push(data.estimated_hours);
+    }
+    if (data.due_date !== undefined) {
+      setClause.push(`due_date = $${idx++}`);
+      values.push(data.due_date);
+    }
+    if (data.status !== undefined) {
+      setClause.push(`status = $${idx++}`);
+      values.push(data.status);
+    }
+    if ((data as any).probability_percent !== undefined) {
+      setClause.push(`probability_percent = $${idx++}`);
+      values.push((data as any).probability_percent);
+    }
+
+    if (setClause.length === 0) return;
+
+    const query = `UPDATE workflow_steps SET ${setClause.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx}`;
+    values.push(stepId);
+
+    await pool.query(query, values);
   }
 
   static async reorderProjectSteps(
@@ -569,6 +942,27 @@ export class WorkflowRepository {
     }
   }
 
+  static async deleteStep(stepId: number): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM workflow_steps WHERE id = $1", [stepId]);
+      // Also delete any comments attached to this step
+      await client.query("DELETE FROM workflow_comments WHERE step_id = $1", [
+        stepId,
+      ]);
+      await client.query("DELETE FROM workflow_documents WHERE step_id = $1", [
+        stepId,
+      ]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Comment operations
   static async getProjectComments(
     projectId: number,
@@ -583,7 +977,8 @@ export class WorkflowRepository {
     }
 
     const result = await pool.query(
-      `SELECT wc.*, u.name as creator_name
+      `SELECT wc.*,
+        COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email) as creator_name
        FROM workflow_comments wc
        LEFT JOIN users u ON wc.created_by = u.id
        ${whereClause}
@@ -614,7 +1009,8 @@ export class WorkflowRepository {
     );
 
     const commentResult = await pool.query(
-      `SELECT wc.*, u.name as creator_name
+      `SELECT wc.*,
+        COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), u.email) as creator_name
        FROM workflow_comments wc
        LEFT JOIN users u ON wc.created_by = u.id
        WHERE wc.id = $1`,

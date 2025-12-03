@@ -27,14 +27,14 @@ ADD COLUMN IF NOT EXISTS client_name VARCHAR(255);
 CREATE INDEX IF NOT EXISTS idx_finops_tasks_client_id ON finops_tasks(client_id);
 
 -- Update existing tasks with sample client data
-UPDATE finops_tasks
-SET client_id = 1, client_name = 'Acme Corporation'
-WHERE client_id IS NULL AND task_name LIKE '%CLEARING%';
+-- UPDATE finops_tasks
+-- SET client_id = 1, client_name = 'Acme Corporation'
+-- WHERE client_id IS NULL AND task_name LIKE '%CLEARING%';
 
-UPDATE finops_tasks
-SET client_id = 2, client_name = 'TechCorp Solutions'
-WHERE client_id IS NULL AND task_name LIKE '%RECONCILIATION%';
+-- UPDATE finops_tasks
+-- SET client_id = 2, client_name = 'TechCorp Solutions'
+-- WHERE client_id IS NULL AND task_name LIKE '%RECONCILIATION%';
 
-UPDATE finops_tasks
-SET client_id = 3, client_name = 'Global Finance Ltd'
-WHERE client_id IS NULL;
+-- UPDATE finops_tasks
+-- SET client_id = 3, client_name = 'Global Finance Ltd'
+-- WHERE client_id IS NULL;

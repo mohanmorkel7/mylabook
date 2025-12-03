@@ -30,6 +30,38 @@ async function ensureExternalAlertsSchema(): Promise<void> {
   );
 }
 
+// Endpoint to fetch external alert next_call_at for a given task/subtask
+router.get("/external-alerts", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+    const taskId = req.query.task_id
+      ? parseInt(req.query.task_id as string)
+      : null;
+    const subtaskId = req.query.subtask_id
+      ? parseInt(req.query.subtask_id as string)
+      : null;
+    const group = (req.query.group as string) || "pending_approval_reporting";
+
+    if (!taskId || !subtaskId) {
+      return res
+        .status(400)
+        .json({ error: "task_id and subtask_id are required" });
+    }
+
+    const q = `SELECT id, next_call_at, created_at, alert_group FROM finops_external_alerts WHERE task_id = $1 AND subtask_id = $2 AND alert_group = $3 ORDER BY next_call_at ASC LIMIT 1`;
+    const rr = await pool.query(q, [taskId, subtaskId, group]);
+    if (rr.rows.length === 0) {
+      return res.json({ next_call_at: null });
+    }
+
+    const row = rr.rows[0];
+    return res.json({ next_call_at: row.next_call_at });
+  } catch (error) {
+    console.error("Error fetching external alerts:", error);
+    res.status(500).json({ error: "Failed to fetch external alerts" });
+  }
+});
+
 // Production database availability check - fail fast if no database
 async function requireDatabase() {
   try {
@@ -165,7 +197,15 @@ async function sendReplicaDownAlertOnce(
         new Set([...assigned_to_parsed, ...reporting_managers_parsed]),
       );
       const immediateUserIds = await getUserIdsFromNames(immediateNames);
-      // if (immediateUserIds.length) {
+
+      // Check if Pulse alerts are enabled
+      const settingsResult = await pool.query(
+        `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+      );
+      const pulseAlertsEnabled =
+        settingsResult.rows[0]?.pulse_alerts_enabled ?? true;
+
+      // if (pulseAlertsEnabled && immediateUserIds.length) {
       //   fetch("https://pulsealerts.mylapay.com/direct-call", {
       //     method: "POST",
       //     headers: { "Content-Type": "application/json" },
@@ -179,6 +219,10 @@ async function sendReplicaDownAlertOnce(
       //       "[finops-production] Immediate direct-call error:",
       //       (err as Error).message,
       //     ),
+      //   );
+      // } else if (!pulseAlertsEnabled) {
+      //   console.log(
+      //     "[finops-production] Pulse alerts disabled, skipping direct-call",
       //   );
       // }
     } catch (err) {
@@ -558,6 +602,15 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
 
     const subtaskId = parseInt(req.params.id);
     const { status, delay_reason, user_name, date } = req.body;
+    let sanitizedUserName =
+      typeof user_name === "string" ? user_name.trim() : "";
+    if (
+      !sanitizedUserName ||
+      /undefined|null/i.test(sanitizedUserName) ||
+      sanitizedUserName.replace(/\s+/g, "") === ""
+    ) {
+      sanitizedUserName = null;
+    }
 
     if (isNaN(subtaskId)) {
       return res.status(400).json({ error: "Invalid subtask ID" });
@@ -614,6 +667,7 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
         status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
         started_at TIMESTAMP NULL,
         completed_at TIMESTAMP NULL,
+        completed_by TEXT,
         scheduled_time TIME NULL,
         subtask_scheduled_date DATE NULL,
         description TEXT,
@@ -629,10 +683,18 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
         assigned_to TEXT,
         reporting_managers TEXT,
         escalation_managers TEXT,
+        approved_at TIMESTAMP,
+        approved_by TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(run_date, period, task_id, subtask_id)
       );
+
+      -- Ensure additional columns exist for older installs
+      ALTER TABLE finops_tracker
+        ADD COLUMN IF NOT EXISTS completed_by TEXT,
+        ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS approved_by TEXT;
     `);
 
       // Try to find existing tracker row for the specified date
@@ -700,6 +762,9 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
 
       if (status === "completed") {
         updateFields.push("completed_at = CURRENT_TIMESTAMP");
+        // record who completed if provided
+        updateFields.push(`completed_by = $${pIdx++}`);
+        params.push(sanitizedUserName);
       }
       if (status === "in_progress") {
         updateFields.push(
@@ -788,7 +853,39 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
     const subtaskId = parseInt(req.params.id);
-    const { approver_name, note, tracker_id } = req.body || {};
+    let { approver_name, note, tracker_id } = req.body || {};
+
+    // Allow approver to be provided via header x-user-name or x-user-id
+    if (!approver_name || /undefined|null/i.test(String(approver_name))) {
+      const headerName = (req.headers["x-user-name"] as string) || "";
+      const headerUserId = (req.headers["x-user-id"] as string) || "";
+      if (headerName && typeof headerName === "string" && headerName.trim() !== "") {
+        approver_name = headerName.trim();
+      } else if (headerUserId && String(headerUserId).trim() !== "") {
+        try {
+          const uid = String(headerUserId).trim();
+          let userRes;
+          if (/^\d+$/.test(uid)) {
+            userRes = await pool.query(
+              `SELECT first_name, last_name, email FROM users WHERE id = $1 LIMIT 1`,
+              [Number(uid)],
+            );
+          } else {
+            userRes = await pool.query(
+              `SELECT first_name, last_name, email FROM users WHERE azure_object_id = $1 OR LOWER(email) = LOWER($1) LIMIT 1`,
+              [uid],
+            );
+          }
+          if (userRes && userRes.rows.length > 0) {
+            const u = userRes.rows[0];
+            approver_name = `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() || u.email || approver_name;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
     if (!approver_name)
       return res.status(400).json({ error: "approver_name is required" });
 
@@ -924,6 +1021,19 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
           note || null,
         ],
       );
+
+      // Update finops_tracker to set approved_by/approved_at for today's tracker row
+      try {
+        await client.query(
+          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+          [approver_name, row.task_id, subtaskId],
+        );
+      } catch (e) {
+        console.warn(
+          "Failed to update finops_tracker approval fields:",
+          (e as Error).message,
+        );
+      }
 
       await client.query("COMMIT");
 

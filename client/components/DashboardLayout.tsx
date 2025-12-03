@@ -58,7 +58,7 @@ const navigationItems: NavigationItem[] = [
     name: "Overview",
     href: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["admin", "sales", "product", "finops","business_analyst"]
+    roles: ["admin", "sales", "product", "finops", "business_analyst"],
   },
   // b) Templates (was Admin Panel)
   {
@@ -96,8 +96,7 @@ const navigationItems: NavigationItem[] = [
     name: "Clients",
     href: "/clients",
     icon: Building,
-    roles: ["admin", "sales", "product","business_analyst"],
-    
+    roles: ["admin", "sales", "product", "business_analyst"],
   },
   // g) Sales (was Business Offerings)
   {
@@ -141,7 +140,7 @@ const navigationItems: NavigationItem[] = [
     name: "Support Tickets",
     href: "/tickets",
     icon: Ticket,
-    roles: ["admin", "sales", "product","switch_team"],
+    roles: ["admin", "sales", "product", "switch_team", "finops"],
   },
   // l) Alerts & notifications
   {
@@ -155,7 +154,7 @@ const navigationItems: NavigationItem[] = [
     name: "Mails",
     href: "/mails",
     icon: Mail,
-    roles: ["admin","finance", "finops"]
+    roles: ["admin", "finance", "finops"],
   },
   // n) Settings
   {
@@ -166,6 +165,11 @@ const navigationItems: NavigationItem[] = [
       {
         name: "Manage Users",
         href: "/admin/users",
+        roles: ["admin"],
+      },
+      {
+        name: "Mail Config",
+        href: "/mail-configs",
         roles: ["admin"],
       },
     ],
@@ -354,14 +358,59 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return <Navigate to="/login" replace />;
   }
 
-  const allowedNavItems = navigationItems.filter((item) => {
-    // Check permissions first, fall back to roles for backward compatibility
-    if (item.permissions) {
-      return hasAnyPermission(item.permissions);
-    }
-    const effectiveRole = user.role === "unknown" ? "development" : user.role;
-    return item.roles.includes(effectiveRole as UserRole);
-  });
+  // Determine role label (show "<Department> Admin" for department admins)
+  const roleLabel =
+    (user as any).department_admin && (user as any).admin_for_department
+      ? `${((user as any).admin_for_department || "").charAt(0).toUpperCase() + ((user as any).admin_for_department || "").slice(1)} Admin`
+      : user.role
+        ? `${user.role.charAt(0).toUpperCase() + user.role.slice(1)}`
+        : "";
+
+  // Determine allowed navigation items, with special handling for Settings -> Mail Config
+  const allowedNavItems = navigationItems
+    .map((item) => {
+      // If item has submenu, filter submenu entries by access and also include Mail Config
+      if (item.submenu && item.submenu.length > 0) {
+        const filteredSubmenu = item.submenu.filter((sub) => {
+          // Special-case: allow Mail Config if user is department admin for finops
+          if (sub.name === "Mail Config") {
+            const adminDept = (user as any).admin_for_department;
+            const isDeptAdmin = !!(user as any).department_admin || !!adminDept;
+            const adminDeptMatchesFinops =
+              typeof adminDept === "string" &&
+              adminDept.toLowerCase() === "finops";
+            if (adminDeptMatchesFinops || user.role === "admin") {
+              return true;
+            }
+          }
+
+          if (sub.permissions) return hasAnyPermission(sub.permissions);
+          const effectiveRole =
+            user.role === "unknown" ? "development" : user.role;
+          return sub.roles.includes(effectiveRole as UserRole);
+        });
+        if (filteredSubmenu.length === 0) return null;
+        return { ...item, submenu: filteredSubmenu } as NavigationItem;
+      }
+
+      // Non-submenu items: check permissions then roles
+      if (item.permissions && !hasAnyPermission(item.permissions)) return null;
+      const effectiveRole = user.role === "unknown" ? "development" : user.role;
+
+      // Allow top-level Mail Config link visibility if user is finops department admin (rare case)
+      if (item.name === "Mail Config") {
+        const adminDept = (user as any).admin_for_department;
+        const adminDeptMatchesFinops =
+          typeof adminDept === "string" && adminDept.toLowerCase() === "finops";
+        if (adminDeptMatchesFinops || user.role === "admin") {
+          return item;
+        }
+      }
+
+      if (!item.roles.includes(effectiveRole as UserRole)) return null;
+      return item;
+    })
+    .filter(Boolean) as NavigationItem[];
 
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
@@ -558,13 +607,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   {isExpanded && (
                     <div className="ml-6 mt-2 space-y-1">
                       {item.submenu
-                        .filter((subItem) => {
-                          if (subItem.permissions) {
-                            return hasAnyPermission(subItem.permissions);
-                          }
-                          return subItem.roles.includes(user.role);
-                        })
                         .map((subItem) => {
+                          // Roles and Mail Config special cases were already applied when building allowedNavItems
+                          // Only enforce permissions here if present
+                          if (
+                            subItem.permissions &&
+                            !hasAnyPermission(subItem.permissions)
+                          ) {
+                            return null;
+                          }
+
                           const isSubActive =
                             location.pathname === subItem.href;
 
@@ -582,7 +634,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                               <span>{subItem.name}</span>
                             </Link>
                           );
-                        })}
+                        })
+                        .filter(Boolean)}
                     </div>
                   )}
                 </div>
@@ -741,7 +794,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {user.name}
                 </p>
-                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                <p className="text-xs text-gray-500 capitalize">{roleLabel}</p>
               </div>
             </div>
           </Link>

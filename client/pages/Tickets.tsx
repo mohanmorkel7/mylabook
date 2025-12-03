@@ -1,640 +1,286 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Plus,
-  Search,
-  Filter,
-  Eye,
-  MessageSquare,
-  Paperclip,
-  Calendar,
-  User,
-} from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
-import CreateTicketForm from "@/components/CreateTicketForm";
-import TicketDetails from "@/components/TicketDetails";
+import apiClient from "@/lib/api";
 
-interface Ticket {
-  id: number;
-  track_id: string;
-  subject: string;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-  priority?: { id: number; name: string; color: string; level: number };
-  status?: { id: number; name: string; color: string; is_closed: boolean };
-  category?: { id: number; name: string; color: string };
-  creator?: { id: number; name: string; email: string };
-  assignee?: { id: number; name: string; email: string };
-}
-
-interface TicketFilters {
-  search?: string;
-  status_id?: number;
-  priority_id?: number;
-  category_id?: number;
-  assigned_to?: number;
-}
-
-export default function Tickets() {
-  const { user } = useAuth();
-  const [filters, setFilters] = useState<TicketFilters>({});
+export default function TicketsPage() {
+  const [filters, setFilters] = useState<any>({});
   const [page, setPage] = useState(1);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [tabValue, setTabValue] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState<string>(filters.search || "");
-
-  // Fetch tickets
-  const {
-    data: ticketsData,
-    isLoading: ticketsLoading,
-    refetch: refetchTickets,
-  } = useQuery({
-    queryKey: ["tickets", filters, page],
-    queryFn: () => apiClient.getTickets(filters, page, 20),
+  const [limit, setLimit] = useState(10);
+  const [ticketsResp, setTicketsResp] = useState<any>({
+    tickets: [],
+    total: 0,
+    pages: 0,
   });
+  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"assignedToMe" | "assignedByMe" | "all">(
+    "assignedToMe",
+  );
+  const [search, setSearch] = useState("");
 
-  // Fetch metadata
-  const { data: metadata } = useQuery({
-    queryKey: ["ticket-metadata"],
-    queryFn: () => apiClient.getTicketMetadata(),
-  });
+  const fetchTickets = async () => {
+  setLoading(true);
 
-  // Fetch users for admin filters
-  const { data: users } = useQuery({
-    queryKey: ["users"],
-    queryFn: () => apiClient.getUsers(),
-  });
+  console.log("working...");
 
-  const handleFilterChange = (key: keyof TicketFilters, value: any) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value === "all" ? undefined : value,
-    }));
-    setPage(1);
-  };
+  try {
+    const localFilters: any = { ...filters };
 
-  const handleTicketCreated = () => {
-    // Close dialog and blur any focused element to avoid focus-based re-open (e.g., Enter key triggering the trigger button)
-    setIsCreateDialogOpen(false);
+    // ✅ Get current user from localStorage
+    let currentUser: any = null;
     try {
-      if (typeof window !== "undefined" && document.activeElement instanceof HTMLElement) {
-        // Use setTimeout to ensure closing happens before blur
-        setTimeout(() => document.activeElement && (document.activeElement as HTMLElement).blur(), 0);
-      }
+      const raw = localStorage.getItem("banani_user");
+      if (raw) currentUser = JSON.parse(raw);
     } catch (e) {
-      // ignore
+      console.warn("Failed to parse user data:", e);
     }
 
-    refetchTickets();
-  };
+    // ✅ Check admin role
+    const isAdmin = currentUser?.role?.toLowerCase?.() === "admin";
 
-  const handleViewTicket = (ticket: Ticket) => {
-    setSelectedTicket(ticket);
-    setIsDetailsDialogOpen(true);
-  };
+    
 
-  const getPriorityColor = (priority?: { color: string; level: number }) => {
-    if (!priority) return "bg-gray-100 text-gray-800";
-    return `bg-gray-100 text-gray-800`;
-  };
-
-  const getStatusColor = (status?: { color: string; is_closed: boolean }) => {
-    if (!status) return "bg-gray-100 text-gray-800";
-    return status.is_closed
-      ? "bg-gray-100 text-gray-600"
-      : "bg-blue-100 text-blue-800";
-  };
-
-  // Compute displayed tickets based on active tab
-  const displayedTickets = useMemo(() => {
-    const all = ticketsData?.tickets || [];
-    if (tabValue === "all") return all;
-    if (tabValue === "my-tickets") {
-      if (!user) return [];
-      return all.filter((t: any) => String(t.creator?.id) === String(user.id));
-    }
-    if (tabValue === "assigned") {
-      if (!user) return [];
-      return all.filter((t: any) => String(t.assignee?.id) === String(user.id));
-    }
-    if (tabValue === "open") {
-      return all.filter((t: any) => !t.status?.is_closed);
-    }
-    if (tabValue === "closed") {
-      return all.filter((t: any) => t.status?.is_closed);
-    }
-    return all;
-  }, [ticketsData, tabValue, user]);
-
-  // Helper to render the tickets list (used in each tab panel)
-  const renderTicketsList = () => {
-    if (ticketsLoading) {
-      return <div className="text-center py-8">Loading tickets...</div>;
-    }
-
-    return (
-      <div className="space-y-4">
-        {displayedTickets.map((ticket: any) => (
-          <Card
-            key={ticket.id}
-            className="hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => handleViewTicket(ticket)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {ticket.track_id}
-                    </Badge>
-                    {ticket.priority && (
-                      <Badge className={getPriorityColor(ticket.priority)}>
-                        {ticket.priority.name}
-                      </Badge>
-                    )}
-                    {ticket.status && (
-                      <Badge className={getStatusColor(ticket.status)}>
-                        {ticket.status.name}
-                      </Badge>
-                    )}
-                    {ticket.category && (
-                      <Badge
-                        variant="secondary"
-                        style={{
-                          backgroundColor: `${ticket.category.color}20`,
-                          color: ticket.category.color,
-                        }}
-                      >
-                        {ticket.category.name}
-                      </Badge>
-                    )}
-                  </div>
-
-                  <h3 className="font-semibold text-lg mb-1">{ticket.subject}</h3>
-
-                  {ticket.description && (
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                      {ticket.description}
-                    </p>
-                  )}
-
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <User className="w-4 h-4" />
-                      <span>Created by {ticket.creator?.name}</span>
-                    </div>
-                    {ticket.assignee && (
-                      <div className="flex items-center gap-1">
-                        <User className="w-4 h-4" />
-                        <span>Assigned to {ticket.assignee?.name}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>
-                        {formatDistanceToNow(new Date(ticket.created_at), {
-                          addSuffix: true,
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 ml-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewTicket(ticket);
-                    }}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-
-        {displayedTickets.length === 0 && (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <p className="text-gray-500">No tickets found</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Pagination */}
-        {ticketsData && ticketsData.pages > 1 && (
-          <div className="flex justify-center gap-2 mt-6">
-            <Button variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>
-              Previous
-            </Button>
-            <span className="flex items-center px-4">Page {page} of {ticketsData.pages}</span>
-            <Button
-              variant="outline"
-              disabled={page === ticketsData.pages}
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Handle search Enter key for tracking by ticket ID
-  const handleSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== "Enter") return;
-    const raw = searchTerm.trim();
-    if (!raw) return;
-
-    // Normalize track id (allow starting with #)
-    const normalized = raw.replace(/^#/, "");
-
-    // If it looks like a track id (e.g., TKT-1234), try to open ticket by track id
-    if (/^TKT-\d+/i.test(normalized)) {
-      try {
-        const ticket = await apiClient.getTicketByTrackId(normalized.toUpperCase());
-        if (ticket) {
-          setSelectedTicket(ticket);
-          setIsDetailsDialogOpen(true);
-          return;
-        }
-      } catch (err) {
-        // Not found: fallback to regular search filter
+    // ✅ Apply filters based on role & tab
+    if (!isAdmin) {
+      if (tab === "assignedToMe" && currentUser?.id) {
+        localFilters.assigned_to = currentUser.id;
+      } else if (tab === "assignedByMe" && currentUser?.id) {
+        localFilters.created_by = currentUser.id;
+      }
+      // 🔹 Non-admin "all" tab could show everything they created or assigned
+      else if (tab === "all" && currentUser?.id) {
+        localFilters.created_or_assigned_to = currentUser.id;
+      }
+    } else {
+      // ✅ Admin — no filters (see ALL tickets)
+      if (tab === "all") {
+        Object.keys(localFilters).forEach((key) => delete localFilters[key]);
       }
     }
 
-    // Fallback to normal search filter
-    handleFilterChange("search", raw);
+    // ✅ Apply search
+    if (search) localFilters.search = search;
+
+    console.log("[TicketsPage] Filters applied:", localFilters);
+
+    // ✅ Fetch tickets from backend
+    const resp = await apiClient.getTickets(localFilters, page, limit);
+    console.log("[TicketsPage] API response:", resp);
+    setTicketsResp(resp);
+  } catch (err) {
+    console.error("Failed to load tickets:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// 1️⃣ Run once on mount: set admin tab (if needed) and then fetch tickets
+useEffect(() => {
+
+  
+
+  const init = async () => {
+    try {
+      const raw = localStorage.getItem("banani_user");
+      let defaultTab: "assignedToMe" | "assignedByMe" | "all" = "assignedToMe";
+
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && String(parsed.role).toLowerCase() === "admin") {
+          defaultTab = "all";
+        }
+      }
+
+      setTab(defaultTab); // this triggers re-render
+      // wait until tab state updates before fetching
+      await new Promise((r) => setTimeout(r, 0)); 
+      fetchTickets(); // ✅ guaranteed to run once on mount
+    } catch (e) {
+      console.warn("Error reading user from localStorage:", e);
+      fetchTickets(); // still call if user not found
+    }
   };
 
-  // Keep search state in sync with filters
-  useEffect(() => {
-    setSearchTerm(filters.search || "");
-  }, [filters.search]);
+  init();
+}, []);
 
-  // When tab changes, adjust filters for server-side where possible
-  useEffect(() => {
-    if (!user) return;
-    if (tabValue === "my-tickets") {
-      setFilters((prev) => ({ ...prev, created_by: parseInt(user.id) }));
-      setPage(1);
-      return;
-    }
-    if (tabValue === "assigned") {
-      setFilters((prev) => ({ ...prev, assigned_to: parseInt(user.id) }));
-      setPage(1);
-      return;
-    }
+// 2️⃣ Re-fetch when filters, page, limit, tab, or search change
+useEffect(() => {
 
-    // For other tabs, remove created_by/assigned_to to show all and filter client-side
-    setFilters((prev) => {
-      const copy = { ...prev } as any;
-      delete copy.created_by;
-      delete copy.assigned_to;
-      return copy;
-    });
-    setPage(1);
-  }, [tabValue, user]);
+  console.log("🔥 First useEffect running");
+  
+  if (!loading) {
+    console.log("[TicketsPage] auto refetch due to state change");
+    fetchTickets();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [filters, page, limit, tab, search]);
 
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Support Tickets</h1>
-          <p className="text-gray-600 mt-1">Manage and track support tickets</p>
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold">Tickets</h1>
+        <div className="flex items-center gap-2">
+          <Link to="/tickets/create">
+            <Button>Create Ticket</Button>
+          </Link>
         </div>
-
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Ticket
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Ticket</DialogTitle>
-            </DialogHeader>
-            <div className="max-h-[calc(85vh-80px)] overflow-y-auto">
-              <CreateTicketForm
-                onSuccess={handleTicketCreated}
-                metadata={metadata}
-                currentUser={user}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search tickets..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    handleFilterChange("search", e.target.value);
-                  }}
-                  onKeyDown={handleSearchKeyDown}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <Select
-              value={filters.status_id?.toString() || "all"}
-              onValueChange={(value) =>
-                handleFilterChange(
-                  "status_id",
-                  value === "all" ? undefined : parseInt(value),
-                )
-              }
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {metadata?.statuses?.map((status) => (
-                  <SelectItem key={status.id} value={status.id.toString()}>
-                    {status.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.priority_id?.toString() || "all"}
-              onValueChange={(value) =>
-                handleFilterChange(
-                  "priority_id",
-                  value === "all" ? undefined : parseInt(value),
-                )
-              }
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priority</SelectItem>
-                {metadata?.priorities?.map((priority) => (
-                  <SelectItem key={priority.id} value={priority.id.toString()}>
-                    {priority.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.category_id?.toString() || "all"}
-              onValueChange={(value) =>
-                handleFilterChange(
-                  "category_id",
-                  value === "all" ? undefined : parseInt(value),
-                )
-              }
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {metadata?.categories?.map((category) => (
-                  <SelectItem key={category.id} value={category.id.toString()}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {user?.role === "admin" && (
-              <Select
-                value={filters.assigned_to?.toString() || "all"}
-                onValueChange={(value) =>
-                  handleFilterChange(
-                    "assigned_to",
-                    value === "all" ? undefined : parseInt(value),
-                  )
+      <div className="mb-4">
+        <div className="flex gap-2">
+          <Button
+            variant={tab === "assignedToMe" ? "default" : "ghost"}
+            onClick={() => {
+              setTab("assignedToMe");
+              setPage(1);
+            }}
+          >
+            Assigned to me
+          </Button>
+          <Button
+            variant={tab === "assignedByMe" ? "default" : "ghost"}
+            onClick={() => {
+              setTab("assignedByMe");
+              setPage(1);
+            }}
+          >
+            Assigned by me
+          </Button>
+          {/* Show All tab for admin users */}
+          {(() => {
+            try {
+              const raw = localStorage.getItem("banani_user");
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && String(parsed.role).toLowerCase() === "admin") {
+                  return (
+                    <Button
+                      variant={tab === "all" ? "default" : "ghost"}
+                      onClick={() => {
+                        setTab("all");
+                        setPage(1);
+                      }}
+                    >
+                      All
+                    </Button>
+                  );
                 }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Assigned User" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any Assignee</SelectItem>
-                  {users?.map((u: any) => (
-                    <SelectItem key={u.id} value={u.id.toString()}>
-                      {u.first_name} {u.last_name} ({u.role})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              }
+            } catch (e) {
+              return null;
+            }
+            return null;
+          })()}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4">
+        <Input
+          placeholder="Search tickets"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Button
+          onClick={() => {
+            setPage(1);
+            fetchTickets();
+          }}
+        >
+          Search
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Label>Per page</Label>
+          <select
+            value={limit}
+            onChange={(e) => {
+              setLimit(parseInt(e.target.value));
+              setPage(1);
+            }}
+            className="border rounded px-2 py-1"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="bg-white rounded shadow overflow-x-auto">
+        <table className="w-full table-auto">
+          <thead>
+            <tr>
+              <th className="p-2 text-left">Track</th>
+              <th className="p-2 text-left">Title</th>
+              <th className="p-2 text-left">Priority</th>
+              <th className="p-2 text-left">Status</th>
+              <th className="p-2 text-left">Assigned To</th>
+              <th className="p-2 text-left">Created At</th>
+              <th className="p-2 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ticketsResp.tickets && ticketsResp.tickets.length > 0 ? (
+              ticketsResp.tickets.map((t: any) => (
+                <tr key={t.id} className="border-t">
+                  <td className="p-2">{t.track_id}</td>
+                  <td className="p-2">
+                    <Link to={`/tickets/${t.id}`} className="text-blue-600">
+                      {t.subject}
+                    </Link>
+                  </td>
+                  <td className="p-2">{t.priority?.name}</td>
+                  <td className="p-2">{t.status?.name}</td>
+                  <td className="p-2">{t.assignee?.name || "-"}</td>
+                  <td className="p-2">
+                    {t.created_at
+                      ? new Date(t.created_at).toLocaleString()
+                      : "-"}
+                  </td>
+                  <td className="p-2">
+                    <Link
+                      to={`/tickets/${t.id}`}
+                      className="mr-2 text-sm text-blue-600"
+                    >
+                      View
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="p-4 text-center" colSpan={7}>
+                  {loading ? "Loading tickets..." : "No tickets to display"}
+                </td>
+              </tr>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </tbody>
+        </table>
+      </div>
 
-      {/* Tickets Tabs */}
-      <Tabs value={tabValue} onValueChange={setTabValue} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">All Tickets</TabsTrigger>
-          <TabsTrigger value="my-tickets">My Tickets</TabsTrigger>
-          <TabsTrigger value="assigned">Assigned to Me</TabsTrigger>
-          <TabsTrigger value="open">Open</TabsTrigger>
-          <TabsTrigger value="closed">Closed</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all">
-          {ticketsLoading ? (
-            <div className="text-center py-8">Loading tickets...</div>
-          ) : (
-            <div className="space-y-4">
-              {displayedTickets.map((ticket: any) => (
-                <Card
-                  key={ticket.id}
-                  className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleViewTicket(ticket)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge
-                            variant="outline"
-                            className="font-mono text-xs"
-                          >
-                            {ticket.track_id}
-                          </Badge>
-                          {ticket.priority && (
-                            <Badge
-                              className={getPriorityColor(ticket.priority)}
-                            >
-                              {ticket.priority.name}
-                            </Badge>
-                          )}
-                          {ticket.status && (
-                            <Badge className={getStatusColor(ticket.status)}>
-                              {ticket.status.name}
-                            </Badge>
-                          )}
-                          {ticket.category && (
-                            <Badge
-                              variant="secondary"
-                              style={{
-                                backgroundColor: `${ticket.category.color}20`,
-                                color: ticket.category.color,
-                              }}
-                            >
-                              {ticket.category.name}
-                            </Badge>
-                          )}
-                        </div>
-
-                        <h3 className="font-semibold text-lg mb-1">
-                          {ticket.subject}
-                        </h3>
-
-                        {ticket.description && (
-                          <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                            {ticket.description}
-                          </p>
-                        )}
-
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <User className="w-4 h-4" />
-                            <span>Created by {ticket.creator?.name}</span>
-                          </div>
-                          {ticket.assignee && (
-                            <div className="flex items-center gap-1">
-                              <User className="w-4 h-4" />
-                              <span>Assigned to {ticket.assignee?.name}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            <span>
-                              {formatDistanceToNow(
-                                new Date(ticket.created_at),
-                                { addSuffix: true },
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewTicket(ticket);
-                          }}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-
-              {displayedTickets.length === 0 && (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <p className="text-gray-500">No tickets found</p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Pagination */}
-              {ticketsData && ticketsData.pages > 1 && (
-                <div className="flex justify-center gap-2 mt-6">
-                  <Button
-                    variant="outline"
-                    disabled={page === 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    Previous
-                  </Button>
-                  <span className="flex items-center px-4">
-                    Page {page} of {ticketsData.pages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    disabled={page === ticketsData.pages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Other tab contents would be similar with different filters */}
-        <TabsContent value="my-tickets">{renderTicketsList()}</TabsContent>
-
-        <TabsContent value="assigned">{renderTicketsList()}</TabsContent>
-
-        <TabsContent value="open">{renderTicketsList()}</TabsContent>
-
-        <TabsContent value="closed">{renderTicketsList()}</TabsContent>
-      </Tabs>
-
-      {/* Ticket Details Dialog */}
-      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Ticket Details</DialogTitle>
-          </DialogHeader>
-          {selectedTicket && (
-            <TicketDetails
-              ticket={selectedTicket}
-              onUpdate={refetchTickets}
-              metadata={metadata}
-              currentUser={user}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <div className="flex items-center justify-between mt-4">
+        <div>
+          Page {page} of {ticketsResp.pages || 1} — Total:{" "}
+          {ticketsResp.total || 0}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Prev
+          </Button>
+          <Button
+            disabled={page >= (ticketsResp.pages || 1)}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

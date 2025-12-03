@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useNavigate } from "react-router-dom";
-import { RichTextEditor } from "./RichTextEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -148,9 +147,17 @@ export function VCEnhancedStepItem({
       try {
         setChatLoading(true);
         setChatError(null);
-        const rows = await apiClient.request(
-          `/${stepApiBase}/steps/${step.id}/chats`,
-        );
+        let rows: any;
+        if ((stepApiBase as any) === "workflow") {
+          // Workflow stores comments under project comments; filter by stepId
+          rows = await apiClient.request(
+            `/workflow/projects/${step.project_id}/comments?stepId=${step.id}`,
+          );
+        } else {
+          rows = await apiClient.request(
+            `/${stepApiBase}/steps/${step.id}/chats`,
+          );
+        }
         setChatMessages(Array.isArray(rows) ? rows : []);
       } catch (e: any) {
         setChatError(e);
@@ -264,27 +271,35 @@ export function VCEnhancedStepItem({
   }, [isExpanded, sortedMessages.length]);
 
   // Function to highlight mentions and make follow-up IDs clickable
-  const processMessageContent = (messageText: string) => {
-    if (!user) return messageText;
+  const processMessageContent = (messageText: string | undefined | null) => {
+    // Ensure messageText is a string
+    let processedText = (messageText || "").toString();
 
-    let processedText = messageText;
+    // If no user info, skip mention highlighting
+    const userName = user && user.name ? String(user.name) : "";
 
-    // Look for mentions of current user (case insensitive)
-    const userNamePattern = new RegExp(`@${user.name}`, "gi");
-    processedText = processedText.replace(
-      userNamePattern,
-      `<span class="bg-red-100 text-red-700 px-1 rounded font-medium">@${user.name}</span>`,
-    );
+    if (userName) {
+      try {
+        const userNamePattern = new RegExp(`@${userName}`, "gi");
+        processedText = processedText.replace(
+          userNamePattern,
+          `<span class="bg-red-100 text-red-700 px-1 rounded font-medium">@${userName}</span>`,
+        );
+      } catch (e) {
+        console.warn("Failed to highlight username in message:", e);
+      }
+    }
 
     // Make follow-up IDs clickable (#13, #14, etc.)
-    const followUpPattern = /#(\d+)/g;
-    processedText = processedText.replace(
-      followUpPattern,
-      `<span class="follow-up-link bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium cursor-pointer hover:bg-blue-200"
-        data-follow-up-id="$1"
-        onclick="window.location.href='/follow-ups?id=$1'"
-      >#$1</span>`,
-    );
+    try {
+      const followUpPattern = /#(\d+)/g;
+      processedText = processedText.replace(
+        followUpPattern,
+        `<span class="follow-up-link bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium cursor-pointer hover:bg-blue-200" data-follow-up-id="$1">#$1</span>`,
+      );
+    } catch (e) {
+      console.warn("Failed to process follow-up links:", e);
+    }
 
     return processedText;
   };
@@ -337,13 +352,31 @@ export function VCEnhancedStepItem({
         attachments: stagedAttachments,
       };
 
-      const saved = await apiClient.request(
-        `/${stepApiBase}/steps/${step.id}/chats`,
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
-      );
+      let saved: any;
+      if ((stepApiBase as any) === "workflow") {
+        // Workflow: post to project comments endpoint
+        const body = {
+          comment_text: newMessage.trim(),
+          created_by: parseInt(user?.id || "1"),
+          step_id: step.id,
+          comment_type: "comment",
+        };
+        saved = await apiClient.request(
+          `/workflow/projects/${step.project_id}/comments`,
+          {
+            method: "POST",
+            body: JSON.stringify(body),
+          },
+        );
+      } else {
+        saved = await apiClient.request(
+          `/${stepApiBase}/steps/${step.id}/chats`,
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          },
+        );
+      }
 
       setChatMessages((prev) => [...prev, saved]);
       setNewMessage("");
@@ -587,16 +620,19 @@ export function VCEnhancedStepItem({
     originalIsRichText: boolean,
   ) => {
     try {
-      const saved = await apiClient.request(
-        `/${stepApiBase}/chats/${messageId}`,
-        {
+      let saved: any = null;
+      if ((stepApiBase as any) === "workflow") {
+        // Workflow doesn't support editing comments via this endpoint; update locally
+        saved = { message: editMessageText.trim(), is_rich_text: true } as any;
+      } else {
+        saved = await apiClient.request(`/${stepApiBase}/chats/${messageId}`, {
           method: "PUT",
           body: JSON.stringify({
             message: editMessageText.trim(),
             is_rich_text: true,
           }),
-        },
-      );
+        });
+      }
 
       setChatMessages((prev) =>
         prev.map((msg) => (msg.id === messageId ? { ...msg, ...saved } : msg)),
@@ -636,9 +672,16 @@ export function VCEnhancedStepItem({
     if (!messageToDelete) return;
 
     try {
-      await apiClient.request(`/${stepApiBase}/chats/${messageToDelete}`, {
-        method: "DELETE",
-      });
+      if ((stepApiBase as any) === "workflow") {
+        // Workflow doesn't expose a delete endpoint for comments; just remove locally
+        console.warn(
+          "Workflow comment delete requested; removing locally only",
+        );
+      } else {
+        await apiClient.request(`/${stepApiBase}/chats/${messageToDelete}`, {
+          method: "DELETE",
+        });
+      }
     } catch (error) {
       console.error("Failed to delete on server, removing locally:", error);
     } finally {
@@ -897,7 +940,12 @@ export function VCEnhancedStepItem({
                               >
                                 {message.message_type === "system"
                                   ? "📋"
-                                  : message.user_name.charAt(0)}
+                                  : message.user_name &&
+                                      message.user_name.length > 0
+                                    ? message.user_name.charAt(0)
+                                    : message.user_id
+                                      ? String(message.user_id).charAt(0)
+                                      : "?"}
                               </div>
                             )}
                             <div className="flex-1">
@@ -1016,8 +1064,7 @@ export function VCEnhancedStepItem({
                                                               message: sysMsg,
                                                               message_type:
                                                                 "system" as const,
-                                                              is_rich_text:
-                                                                false,
+                                                              is_rich_text: false,
                                                               created_at:
                                                                 new Date().toISOString(),
                                                             } as any;
@@ -1047,8 +1094,7 @@ export function VCEnhancedStepItem({
                                                                         sysMsg,
                                                                       message_type:
                                                                         "system",
-                                                                      is_rich_text:
-                                                                        false,
+                                                                      is_rich_text: false,
                                                                       attachments:
                                                                         [],
                                                                     },
@@ -1146,8 +1192,7 @@ export function VCEnhancedStepItem({
                                                                       sysMsg,
                                                                     message_type:
                                                                       "system",
-                                                                    is_rich_text:
-                                                                      false,
+                                                                    is_rich_text: false,
                                                                     attachments:
                                                                       [],
                                                                   },
@@ -1199,32 +1244,38 @@ export function VCEnhancedStepItem({
                                           {message.user_id ===
                                             parseInt(user?.id || "0") && (
                                             <>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                  handleEditMessage(
-                                                    message.id,
-                                                    message.message,
-                                                    message.is_rich_text,
-                                                  )
-                                                }
-                                                className="text-gray-600 hover:text-gray-700"
-                                              >
-                                                <Edit className="w-3 h-3" />
-                                              </Button>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                  handleDeleteMessage(
-                                                    message.id,
-                                                  )
-                                                }
-                                                className="text-red-600 hover:text-red-700"
-                                              >
-                                                <Trash2 className="w-3 h-3" />
-                                              </Button>
+                                              {/* Hide edit/delete for workflow comments as server lacks those endpoints */}
+                                              {(stepApiBase as any) !==
+                                                "workflow" && (
+                                                <>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                      handleEditMessage(
+                                                        message.id,
+                                                        message.message,
+                                                        message.is_rich_text,
+                                                      )
+                                                    }
+                                                    className="text-gray-600 hover:text-gray-700"
+                                                  >
+                                                    <Edit className="w-3 h-3" />
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                      handleDeleteMessage(
+                                                        message.id,
+                                                      )
+                                                    }
+                                                    className="text-red-600 hover:text-red-700"
+                                                  >
+                                                    <Trash2 className="w-3 h-3" />
+                                                  </Button>
+                                                </>
+                                              )}
                                             </>
                                           )}
                                         </>
@@ -1234,10 +1285,12 @@ export function VCEnhancedStepItem({
                                   <div className="text-sm text-gray-700">
                                     {editingMessageId === message.id ? (
                                       <div className="space-y-2">
-                                        <RichTextEditor
+                                        <Textarea
                                           value={editMessageText}
-                                          onChange={setEditMessageText}
-                                          placeholder="Edit your message with rich formatting..."
+                                          onChange={(e) =>
+                                            setEditMessageText(e.target.value)
+                                          }
+                                          placeholder="Edit your message..."
                                           className="min-h-[80px] border-gray-200"
                                         />
                                         <div className="flex space-x-2">
@@ -1420,10 +1473,10 @@ export function VCEnhancedStepItem({
                   {/* Message Input Section */}
                   <div className="border-t pt-4">
                     <div className="space-y-3">
-                      <RichTextEditor
+                      <Textarea
                         value={newMessage}
-                        onChange={setNewMessage}
-                        placeholder="Type your message with rich formatting..."
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type your message..."
                         className="min-h-[100px] border-gray-300"
                       />
 

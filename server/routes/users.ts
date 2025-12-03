@@ -2,7 +2,10 @@ import { Router, Request, Response } from "express";
 import { UserRepository, CreateUserData, UpdateUserData } from "../models/User";
 import { MockDataService } from "../services/mockData";
 import bcrypt from "bcryptjs";
-import { isDatabaseAvailable as checkDatabaseAvailable } from "../database/connection";
+import {
+  isDatabaseAvailable as checkDatabaseAvailable,
+  pool,
+} from "../database/connection";
 
 const router = Router();
 
@@ -131,7 +134,7 @@ router.post("/", async (req: Request, res: Response) => {
       "infra",
       "switch_team",
       "unknown",
-      "business_analyst"
+      "business_analyst",
     ];
     if (!validRoles.includes(userData.role)) {
       return res.status(400).json({ error: "Invalid role" });
@@ -144,6 +147,20 @@ router.post("/", async (req: Request, res: Response) => {
       if (existingUser) {
         return res.status(409).json({ error: "Email already exists" });
       }
+
+      // If creating a department admin, ensure no other admin exists for that department
+      if (userData.department_admin && userData.admin_for_department) {
+        const conflictRes = await pool.query(
+          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 LIMIT 1",
+          [userData.admin_for_department],
+        );
+        if (conflictRes.rows.length > 0) {
+          return res.status(409).json({
+            error: `Department '${userData.admin_for_department}' already has an admin`,
+          });
+        }
+      }
+
       user = await UserRepository.create(userData);
     } else {
       // Check if email already exists in mock data
@@ -186,7 +203,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       "infra",
       "switch_team",
       "unknown",
-      "business_analyst"
+      "business_analyst",
     ];
     if (userData.role && !validRoles.includes(userData.role)) {
       return res.status(400).json({ error: "Invalid role" });
@@ -207,6 +224,19 @@ router.put("/:id", async (req: Request, res: Response) => {
         const existingUser = await UserRepository.findByEmail(userData.email);
         if (existingUser && existingUser.id !== id) {
           return res.status(409).json({ error: "Email already exists" });
+        }
+      }
+
+      // If updating to become a department admin, ensure uniqueness
+      if (userData.department_admin && userData.admin_for_department) {
+        const conflictRes = await pool.query(
+          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 AND id != $2 LIMIT 1",
+          [userData.admin_for_department, id],
+        );
+        if (conflictRes.rows.length > 0) {
+          return res.status(409).json({
+            error: `Department '${userData.admin_for_department}' already has an admin`,
+          });
         }
       }
 
@@ -620,6 +650,66 @@ router.post("/bulk-status-update", async (req: Request, res: Response) => {
       error: "Failed to update user statuses",
       message: error.message,
     });
+  }
+});
+
+// Get mitra users list (for mail config dropdowns)
+router.get("/list/mitra", async (req: Request, res: Response) => {
+  try {
+    const { pool } = await import("../database/connection");
+
+    if (await isDatabaseAvailable()) {
+      // Fetch from mitra_users table with proper filtering and formatting
+      const query = `
+        SELECT
+          id,
+          firstname,
+          lastname,
+          CONCAT(firstname, ' ', lastname) as name,
+          type,
+          login
+        FROM mitra_users
+        WHERE status = 1
+          AND (type = 'User' OR type = 'Group')
+        ORDER BY firstname ASC, lastname ASC
+      `;
+      const result = await pool.query(query);
+      const mitraUsers = result.rows.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        firstname: row.firstname,
+        lastname: row.lastname,
+        type: row.type,
+      }));
+      res.json(mitraUsers || []);
+    } else {
+      // Fallback to regular users table
+      const users = await UserRepository.findAll();
+      const mitraUsers = users.map((u) => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+        firstname: u.first_name,
+        lastname: u.last_name,
+        type: "User",
+      }));
+      res.json(mitraUsers);
+    }
+  } catch (error) {
+    console.error("Error fetching mitra users list:", error);
+    // Fallback to regular users
+    try {
+      const users = await UserRepository.findAll();
+      const mitraUsers = users.map((u) => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+        firstname: u.first_name,
+        lastname: u.last_name,
+        type: "User",
+      }));
+      res.json(mitraUsers);
+    } catch (fallbackError) {
+      res.status(500).json({ error: "Failed to fetch users list" });
+    }
   }
 });
 

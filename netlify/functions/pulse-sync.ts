@@ -107,69 +107,133 @@ export const handler: Handler = async () => {
           .filter(Boolean);
       };
 
-      // Determine whether this is the initial immediate call (Assigned + Reporting only)
-      const createdAt = alertRow.created_at
-        ? new Date(alertRow.created_at)
-        : null;
-      const nextCallAt = alertRow.next_call_at
-        ? new Date(alertRow.next_call_at)
-        : null;
-      // If next_call_at is within 5 minutes of created_at, treat as the initial call
-      const isInitial = !!(
-        createdAt &&
-        nextCallAt &&
-        nextCallAt.getTime() - createdAt.getTime() < 5 * 60 * 1000
-      );
+      try {
+        // If this subtask has already been approved, remove the pending alert and skip
+        const approvalCheck = await pool.query(
+          `SELECT 1 FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 LIMIT 1`,
+          [alertRow.task_id, alertRow.subtask_id],
+        );
+        if (approvalCheck.rows.length > 0) {
+          // cleanup reservation
+          await pool.query(`DELETE FROM finops_external_alerts WHERE id = $1`, [
+            alertRow.id,
+          ]);
+          continue;
+        }
 
-      // Always include Assigned + Reporting; include Escalation only after 15 minutes
-      const baseNames = Array.from(
-        new Set([
-          ...parseManagers(meta.reporting_managers),
-          ...(meta.assigned_to ? [String(meta.assigned_to)] : []),
-        ]),
-      );
-      const names = isInitial
-        ? baseNames
-        : Array.from(
-            new Set([...baseNames, ...parseManagers(meta.escalation_managers)]),
+        // Determine alert recipients based on alert_group
+        let names: string[] = [];
+        const group = String(alertRow.alert_group || "").toLowerCase();
+
+        if (group.startsWith("pending_approval")) {
+          // Only notify reporting managers for pending approval alerts
+          names = Array.from(new Set(parseManagers(meta.reporting_managers)));
+        } else {
+          // Determine whether this is the initial immediate call (Assigned + Reporting only)
+          const createdAt = alertRow.created_at
+            ? new Date(alertRow.created_at)
+            : null;
+          const nextCallAt = alertRow.next_call_at
+            ? new Date(alertRow.next_call_at)
+            : null;
+          const isInitial = !!(
+            createdAt &&
+            nextCallAt &&
+            nextCallAt.getTime() - createdAt.getTime() < 5 * 60 * 1000
           );
 
-      const lowered = names.map((n) => n.toLowerCase());
-      const users = await pool.query(
-        `SELECT azure_object_id FROM users WHERE LOWER(CONCAT(first_name,' ',last_name)) = ANY($1)`,
-        [lowered],
-      );
-      const user_ids = users.rows
-        .map((r) => r.azure_object_id)
-        .filter((id) => !!id);
+          // Always include Assigned + Reporting; include Escalation only after 15 minutes
+          const baseNames = Array.from(
+            new Set([
+              ...parseManagers(meta.reporting_managers),
+              ...(meta.assigned_to ? [String(meta.assigned_to)] : []),
+            ]),
+          );
+          names = isInitial
+            ? baseNames
+            : Array.from(
+                new Set([
+                  ...baseNames,
+                  ...parseManagers(meta.escalation_managers),
+                ]),
+              );
+        }
 
-      // try {
-      //   const resp = await fetch(
-      //     "https://pulsealerts.mylapay.com/direct-call",
-      //     {
-      //       method: "POST",
-      //       headers: { "Content-Type": "application/json" },
-      //       body: JSON.stringify({
-      //         receiver: "CRM_Switch",
-      //         title: alertRow.title,
-      //         user_ids,
-      //       }),
-      //     },
-      //   );
-      //   if (!resp.ok) {
-      //     console.warn("[pulse-sync] Pulse call failed:", resp.status);
-      //     continue;
-      //   }
+        if (!names.length) {
+          // nothing to notify
+          await pool.query(`DELETE FROM finops_external_alerts WHERE id = $1`, [
+            alertRow.id,
+          ]);
+          continue;
+        }
 
-      //   // Update next_call_at to avoid immediate resend
-      //   await pool.query(
-      //     `UPDATE finops_external_alerts SET next_call_at = NOW() + INTERVAL '15 minutes' WHERE id = $1`,
-      //     [alertRow.id],
-      //   );
-      //   sent++;
-      // } catch (err) {
-      //   console.warn("[pulse-sync] Pulse call error:", (err as Error).message);
-      // }
+        const lowered = names.map((n) => n.toLowerCase());
+        const users = await pool.query(
+          `SELECT azure_object_id FROM users WHERE LOWER(CONCAT(first_name,' ',last_name)) = ANY($1)`,
+          [lowered],
+        );
+        const user_ids = users.rows
+          .map((r) => r.azure_object_id)
+          .filter((id) => !!id);
+
+        if (!user_ids.length) {
+          // no resolved users, remove reservation to avoid retry loop
+          await pool.query(`DELETE FROM finops_external_alerts WHERE id = $1`, [
+            alertRow.id,
+          ]);
+          continue;
+        }
+
+        // Check pulse setting (skip if disabled)
+        const pulseSetting = await pool.query(
+          `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+        );
+        const pulseEnabled = pulseSetting.rows[0]?.pulse_alerts_enabled ?? true;
+        if (!pulseEnabled) {
+          console.log(
+            "[pulse-sync] Pulse alerts disabled, skipping external call",
+          );
+          continue;
+        }
+
+        try {
+          const resp = await fetch(
+            "https://pulsealerts.mylapay.com/direct-call",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                receiver: "CRM_Switch",
+                title: alertRow.title,
+                user_ids,
+              }),
+            },
+          );
+
+          if (!resp.ok) {
+            console.warn("[pulse-sync] Pulse call failed:", resp.status);
+            continue;
+          }
+
+          // After sending, schedule a retry 15 minutes later (to re-check approval) for pending approval alerts
+          await pool.query(
+            `UPDATE finops_external_alerts SET next_call_at = NOW() + INTERVAL '15 minutes' WHERE id = $1`,
+            [alertRow.id],
+          );
+
+          sent++;
+        } catch (err) {
+          console.warn(
+            "[pulse-sync] Pulse call error:",
+            (err as Error).message,
+          );
+        }
+      } catch (e) {
+        console.warn(
+          "[pulse-sync] pending alert processing error:",
+          e?.message || e,
+        );
+      }
     }
 
     const finishedAt = new Date().toISOString();

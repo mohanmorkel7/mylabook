@@ -201,6 +201,26 @@ export async function initializeDatabase() {
             console.log("VC schema initialized");
           }
         }
+
+        // Also attempt to apply ticket teams/buckets migration if present (schema already existed)
+        try {
+          const ticketTeamsPath = path.join(
+            __dirname,
+            "add-ticket-teams-buckets.sql",
+          );
+          if (fs.existsSync(ticketTeamsPath)) {
+            const ticketSql = fs.readFileSync(ticketTeamsPath, "utf8");
+            await client.query(ticketSql);
+            console.log(
+              "Ticket teams/buckets migration applied successfully (existing schema path)",
+            );
+          }
+        } catch (ticketErr) {
+          console.log(
+            "Ticket teams migration skipped or error:",
+            ticketErr.message,
+          );
+        }
       } catch (e) {
         console.log("VC schema init skipped or failed:", e.message);
       }
@@ -257,6 +277,60 @@ export async function initializeDatabase() {
       console.log(
         "Fund Raise steps schema ensure skipped or error:",
         frStepsError.message,
+      );
+    }
+
+    // Ensure ticket teams and buckets migration has run (adds team_id, bucket_id, demand, sla_time, reason)
+    try {
+      const ticketTeamsPath = path.join(
+        __dirname,
+        "add-ticket-teams-buckets.sql",
+      );
+      if (fs.existsSync(ticketTeamsPath)) {
+        const ticketSql = fs.readFileSync(ticketTeamsPath, "utf8");
+        await client.query(ticketSql);
+        console.log("Ticket teams/buckets migration applied successfully");
+      }
+    } catch (ticketTeamsError) {
+      console.log(
+        "Ticket teams/buckets migration already applied or error:",
+        ticketTeamsError.message,
+      );
+    }
+
+    // Ensure mail_configs routing columns exist (team_id, bucket_id, status_id, demand)
+    try {
+      const mailConfigRoutingPath = path.join(
+        __dirname,
+        "add-mail-configs-routing.sql",
+      );
+      if (fs.existsSync(mailConfigRoutingPath)) {
+        const mailConfigSql = fs.readFileSync(mailConfigRoutingPath, "utf8");
+        await client.query(mailConfigSql);
+        console.log("Mail configs routing migration applied successfully");
+      }
+    } catch (mailConfigError) {
+      console.log(
+        "Mail configs routing migration already applied or error:",
+        mailConfigError.message,
+      );
+    }
+
+    // Ensure mail_config_id column exists in tickets table
+    try {
+      const mailConfigIdPath = path.join(
+        __dirname,
+        "add-mail-config-id-to-tickets.sql",
+      );
+      if (fs.existsSync(mailConfigIdPath)) {
+        const mailConfigIdSql = fs.readFileSync(mailConfigIdPath, "utf8");
+        await client.query(mailConfigIdSql);
+        console.log("Mail config ID column migration applied successfully");
+      }
+    } catch (mailConfigIdError) {
+      console.log(
+        "Mail config ID column migration already applied or error:",
+        mailConfigIdError.message,
       );
     }
 
@@ -707,6 +781,24 @@ export async function initializeDatabase() {
       console.log(
         "finops_tracker ensure skipped or failed:",
         (trackerErr as any).message,
+      );
+    }
+
+    // Mail configs table for email-to-ticket automation
+    try {
+      const mailConfigsPath = path.join(
+        __dirname,
+        "create-mail-configs-table.sql",
+      );
+      if (fs.existsSync(mailConfigsPath)) {
+        const sql = fs.readFileSync(mailConfigsPath, "utf8");
+        await client.query(sql);
+        console.log("Mail configs table migration applied successfully");
+      }
+    } catch (mailConfigsErr) {
+      console.log(
+        "Mail configs table migration already applied or error:",
+        (mailConfigsErr as any).message,
       );
     }
 

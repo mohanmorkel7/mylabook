@@ -136,6 +136,36 @@ export default function ManageTickets() {
     return () => clearInterval(iv);
   }, []);
   const [activeTab, setActiveTab] = useState<"all" | "created">("all");
+
+  // Derive provider name from mail_config sources (e.g. domain "@razorpay.com" -> "Razorpay")
+  function getMailConfigProviderName(sources: any): string | null {
+    if (!sources) return null;
+    try {
+      const arr = Array.isArray(sources) ? sources : typeof sources === 'string' ? JSON.parse(sources) : null;
+      if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
+      for (const src of arr) {
+        if (src && Array.isArray(src.emailRules)) {
+          for (const rule of src.emailRules) {
+            if (rule && rule.domain) {
+              const domain = String(rule.domain || "").trim();
+              if (!domain) continue;
+              // strip leading @ and subdomains, take first token before dot
+              const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+              const main = stripped.split(".")[0] || stripped;
+              const name = main.replace(/[^a-zA-Z0-9]/g, " ")
+                .split(" ")
+                .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(" ");
+              if (name) return name;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
   const [filters, setFilters] = useState<FilterOptions>({
     searchText: "",
     priority: "",

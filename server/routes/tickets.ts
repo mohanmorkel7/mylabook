@@ -882,6 +882,45 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/tickets/assigned-options
+router.get("/assigned-options", async (req: Request, res: Response) => {
+  try {
+    const q = `
+      SELECT DISTINCT t.assigned_to as assigned_to, u.first_name, u.last_name, u.name, u.email
+      FROM tickets t
+      LEFT JOIN users u ON t.assigned_to = u.id
+      ORDER BY u.first_name NULLS LAST, t.assigned_to NULLS LAST
+    `;
+    const r = await pool.query(q, []);
+    const seen = new Set<string>();
+    const options: any[] = [];
+    for (const row of r.rows) {
+      const aid = row.assigned_to;
+      if (aid === null || aid === undefined) {
+        if (!seen.has("unassigned")) {
+          seen.add("unassigned");
+          options.push({ value: "unassigned", label: "Unassigned" });
+        }
+      } else {
+        const key = String(aid);
+        if (!seen.has(key)) {
+          seen.add(key);
+          let label = `User #${key}`;
+          if (row.name) label = row.name;
+          else if (row.first_name || row.last_name)
+            label = `${row.first_name || ""} ${row.last_name || ""}`.trim();
+          else if (row.email) label = row.email;
+          options.push({ value: key, label });
+        }
+      }
+    }
+    res.json({ options });
+  } catch (e) {
+    console.error("Error fetching assigned options:", e);
+    res.status(500).json({ options: [] });
+  }
+});
+
 // Get ticket by ID
 router.get("/:id", async (req: Request, res: Response) => {
   try {

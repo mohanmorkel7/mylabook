@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Filter, X, Edit, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import {
   Select,
   SelectContent,
@@ -752,6 +754,208 @@ export default function ManageTickets() {
     }
   };
 
+  // Export all tickets to Excel with multiple sheets as requested
+  const exportAllTicketsToExcel = async () => {
+    try {
+      setIsLoading(true);
+      const allTickets: any[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      // Fetch all pages sequentially
+      do {
+        const resp = await api.getTickets({}, page, 100);
+        const data = resp?.data ?? resp;
+        const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
+
+        // Normalize similar to fetchTickets
+        const serverMs = data?.server_time ? new Date(String(data.server_time)).getTime() : null;
+        const fetchClientMs = Date.now();
+        const normalized = (ticketsArr || []).map((t: any) => {
+          let statusInfo = t.status;
+          if (!statusInfo && t.status_id) {
+            statusInfo = {
+              id: t.status_id,
+              name: t.status_name || "Unknown",
+              color: t.status_color || "#999",
+              is_closed: t.status_is_closed || false,
+              sort_order: 0,
+            };
+          }
+          const pr = ((): number | null => {
+            const val = t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+            const num = Number(val);
+            return Number.isFinite(num) ? num : null;
+          })();
+
+          return {
+            ...t,
+            priority_id: pr,
+            assigned_to_id:
+              t.assigned_to_id ?? (t.assigned_to !== undefined && t.assigned_to !== null ? Number(t.assigned_to) : null) ?? null,
+            track_id: t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+            description: t.description || "",
+            status: statusInfo,
+            created_from_mail_config: t.created_from_mail_config ?? false,
+            __server_time_ms: serverMs,
+            __fetched_at_ms: fetchClientMs,
+          };
+        });
+
+        allTickets.push(...normalized);
+        totalPages = data?.pages ?? 1;
+        page += 1;
+      } while (page <= totalPages);
+
+      // Prepare summaries
+      const tagCounts = new Map<string, number>();
+      const userCounts = new Map<string, number>();
+      const statusCounts = new Map<string, number>();
+
+      const createdEmailRows: any[] = [];
+
+      for (const t of allTickets) {
+        // Tags/providers
+        let tagNames: string[] = [];
+        try {
+          if (Array.isArray(t.tags) && t.tags.length > 0) {
+            tagNames = t.tags.map((x: any) => String(x).trim()).filter(Boolean);
+          }
+        } catch (e) {}
+
+        if ((!tagNames || tagNames.length === 0) && t.created_from_mail_config) {
+          try {
+            const prov = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description) || null;
+            if (prov) tagNames = [prov];
+          } catch (e) {}
+        }
+
+        if ((!tagNames || tagNames.length === 0) && !t.created_from_mail_config) {
+          tagNames = ["Manual"];
+        }
+
+        if (!tagNames || tagNames.length === 0) tagNames = ["Unknown"];
+
+        for (const tg of tagNames) {
+          const key = String(tg || "");
+          tagCounts.set(key, (tagCounts.get(key) || 0) + 1);
+        }
+
+        // Assigned user
+        const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        userCounts.set(assignedLabel, (userCounts.get(assignedLabel) || 0) + 1);
+
+        // Status
+        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
+        statusCounts.set(statusLabel, (statusCounts.get(statusLabel) || 0) + 1);
+
+        // Created-from-email rows
+        if (t.created_from_mail_config) {
+          const provider = ((): string => {
+            try {
+              const p = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description);
+              return p || (Array.isArray(t.tags) && t.tags.length ? String(t.tags[0]) : "");
+            } catch (e) {
+              return Array.isArray(t.tags) && t.tags.length ? String(t.tags[0]) : "";
+            }
+          })();
+
+          createdEmailRows.push([
+            t.id,
+            t.subject || t.track_id || "",
+            assignedLabel,
+            statusLabel,
+            (t.priority && t.priority.name) || (PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS] && PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS].name) || "",
+            formatToIST(t.created_at),
+            formatToIST(t.updated_at),
+            provider,
+          ]);
+        }
+      }
+
+      // Build workbook
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Summary - Tag-wise, User-wise, Status-wise
+      const tagRows = [["Tag", "Count"]];
+      Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
+
+      const userRows = [["User", "Count"]];
+      Array.from(userCounts.entries()).forEach(([k, v]) => userRows.push([k, v]));
+
+      const statusRows = [["Status", "Count"]];
+      Array.from(statusCounts.entries()).forEach(([k, v]) => statusRows.push([k, v]));
+
+      const wsSummary = XLSX.utils.aoa_to_sheet([
+        ...tagRows,
+        [],
+        ...userRows,
+        [],
+        ...statusRows,
+      ]);
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+      // Sheet 2: From Email
+      const wsEmailHeaders = [
+        ["ticket_id", "subject", "assigned_to", "status", "Priority", "created_at", "Updated_at", "tag"],
+      ];
+      const wsEmail = XLSX.utils.aoa_to_sheet([...
+        wsEmailHeaders,
+        ...createdEmailRows,
+      ]);
+      XLSX.utils.book_append_sheet(wb, wsEmail, "From Email");
+
+      // Sheets for each tag (including Manual)
+      const uniqueTags = Array.from(new Set<string>([...Array.from(tagCounts.keys())]));
+      for (const tagName of uniqueTags) {
+        const rows = [["ticket_id", "subject", "assigned_to", "status", "Priority", "created_at", "Updated_at", "tags"]];
+        for (const t of allTickets) {
+          let match = false;
+          try {
+            if (Array.isArray(t.tags) && t.tags.map((x: any) => String(x).toLowerCase()).includes(String(tagName).toLowerCase())) match = true;
+          } catch (e) {}
+          if (!match && tagName === "Manual") {
+            if (!t.created_from_mail_config) match = true;
+          }
+          if (!match && t.created_from_mail_config) {
+            try {
+              const prov = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description);
+              if (prov && String(prov).toLowerCase() === String(tagName).toLowerCase()) match = true;
+            } catch (e) {}
+          }
+          if (match) {
+            rows.push([
+              t.id,
+              t.subject || t.track_id || "",
+              t.assignee?.name || getAssignedUserName(t.assigned_to_id),
+              (t.status && (t.status.name || t.status)) || "",
+              (t.priority && t.priority.name) || (PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS] && PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS].name) || "",
+              formatToIST(t.created_at),
+              formatToIST(t.updated_at),
+              Array.isArray(t.tags) ? t.tags.join(", ") : (t.created_from_mail_config ? (getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description) || "") : "Manual"),
+            ]);
+          }
+        }
+
+        const safeName = String(tagName || "Sheet").slice(0, 31);
+        const wsTag = XLSX.utils.aoa_to_sheet(rows);
+        XLSX.utils.book_append_sheet(wb, wsTag, safeName);
+      }
+
+      // Write and download
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/octet-stream" });
+      saveAs(blob, `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+      toast({ title: "Export ready", description: "Excel export downloaded" });
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast({ title: "Export failed", description: "Could not generate Excel file", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const assignedOptions = (() => {
     if (assignedOptionsState && assignedOptionsState.length > 0)
       return assignedOptionsState;
@@ -1145,6 +1349,10 @@ export default function ManageTickets() {
             <Link to="/tickets/create">
               <Button>Create Ticket</Button>
             </Link>
+
+            <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
+              Export Excel
+            </Button>
 
             {/* {currentUser?.role === "admin" && activeTab === "all" && (
               <div className="ml-4 text-right">

@@ -69,6 +69,7 @@ interface Ticket {
   closed_at?: string;
   created_from_mail_config?: boolean;
   mail_config_id?: number;
+  mail_config_sources?: any;
   created_at: string;
   updated_at: string;
   __server_time_ms?: number;

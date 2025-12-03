@@ -248,68 +248,71 @@ export default function TicketCharts({
     let cumulative = 0;
 
     return (
-      <div className="flex items-center gap-4">
-        <svg
-          height={radius * 2}
-          width={radius * 2}
-          className="transform -rotate-90"
-        >
-          {items.map((it, i) => {
-            const val = Number(it[valueKey] || 0);
-            const fraction = val / total;
-            const dash = fraction * circumference;
-            const dashArray = `${dash} ${circumference - dash}`;
-            const offset = circumference * (1 - cumulative);
-            const color = palette[i % palette.length];
-            cumulative += fraction;
-            return (
-              <circle
-                key={i}
-                r={normalizedRadius}
-                cx={radius}
-                cy={radius}
-                fill="transparent"
-                stroke={color}
-                strokeWidth={stroke}
-                strokeDasharray={dashArray}
-                strokeDashoffset={offset}
-                strokeLinecap="butt"
-              />
-            );
-          })}
-          <circle
-            r={normalizedRadius - stroke}
-            cx={radius}
-            cy={radius}
-            fill="#fff"
-          />
-          <text
-            x="50%"
-            y="50%"
-            dominantBaseline="middle"
-            textAnchor="middle"
-            className="text-sm font-semibold"
-            style={{ fontSize: 14 }}
+      <div className="flex items-center gap-3">
+        <div style={{ minWidth: radius * 2, minHeight: radius * 2 }}>
+          <svg
+            height={radius * 2}
+            width={radius * 2}
+            className="transform -rotate-90"
           >
-            {total}
-          </text>
-        </svg>
-        <div className="flex flex-col">
+            {items.map((it, i) => {
+              const val = Number(it[valueKey] || 0);
+              const fraction = val / total;
+              const dash = fraction * circumference;
+              const dashArray = `${dash} ${circumference - dash}`;
+              const offset = circumference * (1 - cumulative);
+              const color = palette[i % palette.length];
+              cumulative += fraction;
+              return (
+                <circle
+                  key={i}
+                  r={normalizedRadius}
+                  cx={radius}
+                  cy={radius}
+                  fill="transparent"
+                  stroke={color}
+                  strokeWidth={stroke}
+                  strokeDasharray={dashArray}
+                  strokeDashoffset={offset}
+                  strokeLinecap="butt"
+                />
+              );
+            })}
+            <circle
+              r={normalizedRadius - stroke}
+              cx={radius}
+              cy={radius}
+              fill="#fff"
+            />
+            <text
+              x="50%"
+              y="50%"
+              dominantBaseline="middle"
+              textAnchor="middle"
+              className="text-sm font-semibold"
+              style={{ fontSize: 16 }}
+            >
+              {total}
+            </text>
+          </svg>
+        </div>
+        <div className="flex flex-col text-xs">
           {items.map((it, i) => (
             <div
               key={i}
-              className="flex items-center gap-2 text-sm text-gray-700"
+              className="flex items-center gap-2 text-xs text-gray-700"
+              style={{ marginBottom: 6 }}
             >
               <span
                 style={{
-                  width: 10,
-                  height: 10,
+                  width: 8,
+                  height: 8,
                   background: palette[i % palette.length],
                   display: "inline-block",
                   borderRadius: 3,
                 }}
               />
-              <span>{it[labelKey]}</span>
+              <span style={{ minWidth: 80, display: 'inline-block' }}>{it[labelKey]}</span>
               <span className="text-gray-500 ml-2">{it[valueKey]}</span>
             </div>
           ))}

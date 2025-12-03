@@ -336,7 +336,9 @@ export default function ManageTickets() {
       const response = await api.getTickets(serverFilters, page, pageSize);
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
+      console.debug("[ManageTickets] fetchTickets response data:", data);
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
+      console.debug("[ManageTickets] fetchTickets ticketsArray length:", (ticketsArray || []).length);
       // Capture server time when provided to correct client/server clock skew
       let serverMs: number | null = null;
       if (data?.server_time) {
@@ -387,6 +389,7 @@ export default function ManageTickets() {
       // Use server results directly for displayed list to avoid double-filtering client-side
       serverFilteredRef.current = true;
       setFilteredTickets(normalized);
+      console.debug("[ManageTickets] Applied normalized tickets, count:", normalized.length);
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
       const localCreatedCount = normalized.filter(
         (t: any) => t.created_from_mail_config,

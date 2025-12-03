@@ -124,7 +124,12 @@ export default function TicketCharts({
           const computedTagCounts: Record<string, Record<string, number>> = {};
           let page = 1;
           let pages = 1;
+          let totalTicketsProcessed = 0;
           do {
+            console.log("TicketCharts: fetching tickets page", page, {
+              useFrom,
+              useTo,
+            });
             const respAll = await api.getTickets(
               { date_from: useFrom, date_to: useTo },
               page,
@@ -133,6 +138,12 @@ export default function TicketCharts({
             const d = respAll?.data ?? respAll;
             const ticketsArr = d?.tickets ?? (Array.isArray(d) ? d : []);
             pages = d?.pages ?? 1;
+            console.log("TicketCharts: fetched tickets page", page, {
+              ticketsCount: ticketsArr.length,
+              pages,
+              response: d,
+            });
+            totalTicketsProcessed += ticketsArr.length;
             for (const t of ticketsArr) {
               let tag = "Manual";
               try {

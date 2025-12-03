@@ -359,7 +359,8 @@ export default function ManageTickets() {
         return {
           ...t,
           priority_id: ((): number | null => {
-            const val = t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+            const val =
+              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
             const num = Number(val);
             return Number.isFinite(num) ? num : null;
           })(),

@@ -130,6 +130,9 @@ export default function ManageTickets() {
   const autoMarkedRef = useRef(new Set<number>());
   const { user: currentUser } = useAuth();
   const [sourceTags, setSourceTags] = useState<string[]>([]);
+  const [statusesList, setStatusesList] = useState<any[]>([]);
+  const [statusesMap, setStatusesMap] = useState<Record<string, number>>({});
+  const [assignedOptionsState, setAssignedOptionsState] = useState<{value:string,label:string}[]>([]);
 
   // realtime clock for countdowns
   useEffect(() => {

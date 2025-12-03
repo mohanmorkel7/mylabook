@@ -918,10 +918,13 @@ router.get("/assigned-options", async (req: Request, res: Response) => {
       }
       return res.json({ options });
     } catch (primaryErr) {
-      console.warn('assigned-options primary query failed, falling back to two-step lookup', primaryErr?.message || primaryErr);
+      console.warn(
+        "assigned-options primary query failed, falling back to two-step lookup",
+        primaryErr?.message || primaryErr,
+      );
       // Fallback: get distinct assigned_to ids, then fetch users for those ids
       try {
-        const r2 = await pool.query('SELECT DISTINCT assigned_to FROM tickets');
+        const r2 = await pool.query("SELECT DISTINCT assigned_to FROM tickets");
         const ids: number[] = [];
         let hasUnassigned = false;
         for (const row of r2.rows) {
@@ -933,7 +936,8 @@ router.get("/assigned-options", async (req: Request, res: Response) => {
           }
         }
         const options: any[] = [];
-        if (hasUnassigned) options.push({ value: 'unassigned', label: 'Unassigned' });
+        if (hasUnassigned)
+          options.push({ value: "unassigned", label: "Unassigned" });
         if (ids.length > 0) {
           const ures = await pool.query(
             `SELECT id, first_name, last_name, name, email FROM users WHERE id = ANY($1)`,
@@ -944,7 +948,8 @@ router.get("/assigned-options", async (req: Request, res: Response) => {
             const key = String(u.id);
             let label = `User #${key}`;
             if (u.name) label = u.name;
-            else if (u.first_name || u.last_name) label = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+            else if (u.first_name || u.last_name)
+              label = `${u.first_name || ""} ${u.last_name || ""}`.trim();
             else if (u.email) label = u.email;
             byId[key] = label;
           }
@@ -956,7 +961,7 @@ router.get("/assigned-options", async (req: Request, res: Response) => {
         }
         return res.json({ options });
       } catch (fallbackErr) {
-        console.error('assigned-options fallback failed', fallbackErr);
+        console.error("assigned-options fallback failed", fallbackErr);
         return res.json({ options: [] });
       }
     }

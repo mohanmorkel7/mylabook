@@ -158,18 +158,23 @@ export default function ManageTickets() {
       .join(" ");
   }
 
-  function getMailConfigProviderName(sources: any, sampleText?: string): string | null {
+  function getMailConfigProviderName(
+    sources: any,
+    sampleText?: string,
+  ): string | null {
     if (!sources) return null;
     try {
       const arr = Array.isArray(sources)
         ? sources
         : typeof sources === "string"
-        ? JSON.parse(sources)
-        : null;
+          ? JSON.parse(sources)
+          : null;
       if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
 
       const senderEmail = extractEmailFromText(sampleText || "") || null;
-      const senderDomain = senderEmail ? senderEmail.split("@").slice(1).join("@").toLowerCase() : null;
+      const senderDomain = senderEmail
+        ? senderEmail.split("@").slice(1).join("@").toLowerCase()
+        : null;
 
       // First try to find a rule whose domain matches the sender's domain
       if (senderDomain) {
@@ -178,9 +183,14 @@ export default function ManageTickets() {
             for (const rule of src.emailRules) {
               if (rule && rule.domain) {
                 const ruleDomain = String(rule.domain || "").trim();
-                const strippedRule = ruleDomain.startsWith("@") ? ruleDomain.slice(1).toLowerCase() : ruleDomain.toLowerCase();
+                const strippedRule = ruleDomain.startsWith("@")
+                  ? ruleDomain.slice(1).toLowerCase()
+                  : ruleDomain.toLowerCase();
                 // match by exact suffix (e.g., payswiff.com matches subdomains too)
-                if (senderDomain === strippedRule || senderDomain.endsWith("." + strippedRule)) {
+                if (
+                  senderDomain === strippedRule ||
+                  senderDomain.endsWith("." + strippedRule)
+                ) {
                   return formatProviderNameFromDomain(strippedRule);
                 }
               }
@@ -1462,7 +1472,8 @@ export default function ManageTickets() {
                                 </Badge>
                                 {(() => {
                                   const provider = getMailConfigProviderName(
-                                    (ticket as any).mail_config_sources || (source as any).mail_config_sources,
+                                    (ticket as any).mail_config_sources ||
+                                      (source as any).mail_config_sources,
                                     source.description || ticket.description,
                                   );
                                   return provider ? (

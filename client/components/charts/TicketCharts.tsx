@@ -587,13 +587,13 @@ export default function TicketCharts({
               <span className="font-medium text-gray-900">{totalTickets}</span>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : statuses.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <div className="min-w-[220px]">
+              <div>
                 <DonutChart
                   items={statuses}
                   labelKey="status"

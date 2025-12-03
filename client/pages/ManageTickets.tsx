@@ -1698,10 +1698,10 @@ export default function ManageTickets() {
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
                       onClick={() => navigate(`/tickets/${t.id}`)}
                     >
-                      <CardHeader>
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-start gap-3">
-                            <CardTitle className="text-sm font-semibold">
+                      <CardHeader className="py-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 pr-4">
+                            <CardTitle className="text-sm font-semibold mb-1 truncate">
                               <Link
                                 to={`/tickets/${t.id}`}
                                 className="hover:underline"
@@ -1710,21 +1710,23 @@ export default function ManageTickets() {
                                 {t.subject || t.track_id}
                               </Link>
                             </CardTitle>
+                            <div className="text-xs text-gray-600 leading-tight">
+                              {stripHtml(t.description).slice(0, 180)}
+                            </div>
                           </div>
 
-                          <div className="text-right text-xs flex flex-col items-end gap-1">
+                          <div className="flex flex-col items-end text-right text-xs text-gray-500">
                             {t.created_from_mail_config ? (
-                              <Badge className="bg-green-100 text-green-800">
-                                From Mail Config
-                              </Badge>
+                              <Badge className="bg-green-100 text-green-800">From Mail Config</Badge>
                             ) : provider ? (
                               <Badge variant="outline">{provider}</Badge>
                             ) : null}
 
-                            <div className="font-medium text-gray-600">
-                              {t.track_id}
+                            <div className="mt-2 font-medium text-gray-700 text-[13px]">
+                              {assignedLabel}
                             </div>
-                            <div className="text-gray-500 text-[11px]">
+
+                            <div className="mt-1 text-gray-500 text-[11px]">
                               {formatToIST(t.created_at)}
                             </div>
                           </div>

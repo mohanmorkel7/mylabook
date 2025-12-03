@@ -231,7 +231,10 @@ export default function TicketCharts({
     // fixed bar width and gap
     const gap = 8;
     const fixedBarWidth = 14; // px per small bar
-    const totalColWidth = Math.max(56, statusNames.length * (fixedBarWidth + gap) + 8);
+    const totalColWidth = Math.max(
+      56,
+      statusNames.length * (fixedBarWidth + gap) + 8,
+    );
 
     const palette = [
       "#3B82F6",
@@ -315,7 +318,10 @@ export default function TicketCharts({
                         alignItems: "flex-end",
                         justifyContent: "center",
                         gap: 6,
-                        minWidth: Math.max(120, statusNames.length * (barWidth + gap)),
+                        minWidth: Math.max(
+                          120,
+                          statusNames.length * (barWidth + gap),
+                        ),
                       }}
                     >
                       {bars.map((bar, bi) => (

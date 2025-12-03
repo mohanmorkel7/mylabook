@@ -621,7 +621,12 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
 
         // If sender domain maps to a known tag, use it immediately
         const mappedFromSender = mapDomainToTag(senderDomain);
-        if (mappedFromSender) tagName = mappedFromSender;
+        if (mappedFromSender) {
+          tagName = mappedFromSender;
+          if (mappedFromSender === "Payswiff") {
+            console.log(`by-tag debug: mapped Payswiff from senderDomain=${senderDomain} ticket_id=${row.ticket_id} status=${status}`);
+          }
+        }
 
         if (row.sources && tagName === "Unknown") {
           let sources = row.sources;

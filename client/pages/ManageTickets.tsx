@@ -919,19 +919,23 @@ export default function ManageTickets() {
       // Build workbook
       const wb = XLSX.utils.book_new();
 
-      // Sheet 1: Summary - Tag-wise, User-wise, Status-wise
+      // Build per-user status counts
+      const userStatusCounts: Record<string, Record<string, number>> = {};
+      for (const t of allTickets) {
+        const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
+        if (!userStatusCounts[assignedLabel]) userStatusCounts[assignedLabel] = {};
+        userStatusCounts[assignedLabel][statusLabel] = (userStatusCounts[assignedLabel][statusLabel] || 0) + 1;
+      }
+
       const tagRows = [["Tag", "Count"]];
       Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
 
       const userRows = [["User", "Count"]];
-      Array.from(userCounts.entries()).forEach(([k, v]) =>
-        userRows.push([k, v]),
-      );
+      Array.from(userCounts.entries()).forEach(([k, v]) => userRows.push([k, v]));
 
       const statusRows = [["Status", "Count"]];
-      Array.from(statusCounts.entries()).forEach(([k, v]) =>
-        statusRows.push([k, v]),
-      );
+      Array.from(statusCounts.entries()).forEach(([k, v]) => statusRows.push([k, v]));
 
       // Build Summary sheet with per-tag status breakdown
       // Determine status columns from statusesList (fallback to common names)
@@ -943,9 +947,7 @@ export default function ManageTickets() {
       const summaryHeader = ["Tag", "Total", ...statusNames];
       const summaryRows = [summaryHeader];
 
-      const uniqueTags = Array.from(
-        new Set<string>([...Array.from(tagCounts.keys())]),
-      );
+      const uniqueTags = Array.from(new Set<string>([...Array.from(tagCounts.keys())]));
       for (const tagName of uniqueTags) {
         const totalsByStatus = tagStatusCounts[tagName] || {};
         const total = tagCounts.get(tagName) || 0;
@@ -956,17 +958,24 @@ export default function ManageTickets() {
         summaryRows.push(row);
       }
 
-      // Append a blank row and then user and global status summaries
+      // Append a blank row and then user per-status summary
       summaryRows.push([]);
-      summaryRows.push(["User", "Count"]);
-      Array.from(userCounts.entries()).forEach(([k, v]) =>
-        summaryRows.push([k, v]),
-      );
+      summaryRows.push(["User", "Total", ...statusNames]);
+      const uniqueUsers = Array.from(new Set<string>([...Array.from(userCounts.keys())]));
+      for (const userName of uniqueUsers) {
+        const totalsByStatus = userStatusCounts[userName] || {};
+        const total = userCounts.get(userName) || 0;
+        const row = [userName, total];
+        for (const sName of statusNames) {
+          row.push(totalsByStatus[sName] || 0);
+        }
+        summaryRows.push(row);
+      }
+
+      // Append overall status totals
       summaryRows.push([]);
       summaryRows.push(["Status", "Count"]);
-      Array.from(statusCounts.entries()).forEach(([k, v]) =>
-        summaryRows.push([k, v]),
-      );
+      Array.from(statusCounts.entries()).forEach(([k, v]) => summaryRows.push([k, v]));
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");

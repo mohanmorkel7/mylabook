@@ -358,6 +358,9 @@ export default function ManageTickets() {
 
         return {
           ...t,
+          priority_id: Number(
+            t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id)) ?? NaN,
+          ),
           assigned_to_id:
             t.assigned_to_id ??
             (t.assigned_to !== undefined && t.assigned_to !== null

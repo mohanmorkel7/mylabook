@@ -692,7 +692,8 @@ export class TicketRepository {
         tc.name as category_name, tc.color as category_color,
         tb.name as bucket_name, tb.team_id as bucket_team_id,
         creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
-        assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
+        assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email,
+        mc.sources as mail_config_sources
       FROM tickets t
       LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
@@ -700,6 +701,7 @@ export class TicketRepository {
       LEFT JOIN ticket_buckets tb ON t.bucket_id = tb.id
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users assignee ON t.assigned_to = assignee.id
+      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
       ${whereClause}
       ORDER BY t.created_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
@@ -844,7 +846,12 @@ export class TicketRepository {
         : undefined,
       // Expose watcher_user_ids column if available
       watchers:
-        row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
+      row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
+      // Expose mail_config_sources if available (parse JSON string if necessary)
+      mail_config_sources:
+        row.mail_config_sources !== undefined
+          ? (typeof row.mail_config_sources === 'string' ? (() => { try { return JSON.parse(row.mail_config_sources); } catch(e){ return null; } })() : row.mail_config_sources)
+          : undefined,
     }));
 
     const pages = Math.ceil(total / limit);

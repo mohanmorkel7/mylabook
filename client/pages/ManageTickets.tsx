@@ -132,7 +132,9 @@ export default function ManageTickets() {
   const [sourceTags, setSourceTags] = useState<string[]>([]);
   const [statusesList, setStatusesList] = useState<any[]>([]);
   const [statusesMap, setStatusesMap] = useState<Record<string, number>>({});
-  const [assignedOptionsState, setAssignedOptionsState] = useState<{value:string,label:string}[]>([]);
+  const [assignedOptionsState, setAssignedOptionsState] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   // realtime clock for countdowns
   useEffect(() => {
@@ -269,14 +271,17 @@ export default function ManageTickets() {
       // Build server-side filters
       const serverFilters: any = {};
       if (filters.searchText) serverFilters.search = filters.searchText;
-      if (filters.priority) serverFilters.priority_id = parseInt(filters.priority, 10);
+      if (filters.priority)
+        serverFilters.priority_id = parseInt(filters.priority, 10);
       if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
       if (filters.dateTo) serverFilters.date_to = filters.dateTo;
 
       // status -> map to status_id using statusesMap
       if (filters.status) {
         const key = String(filters.status || "").toLowerCase();
-        const normalizedKey = key.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        const normalizedKey = key
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
         const sid = statusesMap[normalizedKey] ?? null;
         if (sid) serverFilters.status_id = sid;
       }
@@ -399,7 +404,9 @@ export default function ManageTickets() {
       const resp = await api.get("/tickets/summary/by-tag");
       const data = resp?.data ?? resp;
       const raw = Array.isArray(data?.tags)
-        ? data.tags.map((t: any) => String(t.tag || t.name || "").trim()).filter(Boolean)
+        ? data.tags
+            .map((t: any) => String(t.tag || t.name || "").trim())
+            .filter(Boolean)
         : [];
       const seen = new Set<string>();
       const unique: string[] = [];
@@ -555,7 +562,10 @@ export default function ManageTickets() {
     }
 
     // Priority filter
-    if (filters.priority !== undefined && String(filters.priority).trim() !== "") {
+    if (
+      filters.priority !== undefined &&
+      String(filters.priority).trim() !== ""
+    ) {
       filtered = filtered.filter(
         (t) => t.priority_id === parseInt(filters.priority, 10),
       );
@@ -576,7 +586,10 @@ export default function ManageTickets() {
     }
 
     // Assigned to filter
-    if (filters.assignedTo !== undefined && String(filters.assignedTo).trim() !== "") {
+    if (
+      filters.assignedTo !== undefined &&
+      String(filters.assignedTo).trim() !== ""
+    ) {
       if (filters.assignedTo === "unassigned") {
         filtered = filtered.filter(
           (t) => t.assigned_to_id === null || t.assigned_to_id === undefined,
@@ -691,12 +704,12 @@ export default function ManageTickets() {
 
   const fetchAssignedOptions = async () => {
     try {
-      const resp = await api.get('/tickets/assigned-options');
+      const resp = await api.get("/tickets/assigned-options");
       const data = resp?.data ?? resp;
       if (Array.isArray(data?.options)) setAssignedOptionsState(data.options);
       else setAssignedOptionsState([]);
     } catch (e) {
-      console.error('Error fetching assigned options:', e);
+      console.error("Error fetching assigned options:", e);
       setAssignedOptionsState([]);
     }
   };
@@ -734,7 +747,10 @@ export default function ManageTickets() {
           setStatusesList(statuses);
           const map: Record<string, number> = {};
           for (const s of statuses) {
-            const key = String(s.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+            const key = String(s.name || "")
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_+|_+$/g, "");
             map[key] = Number(s.id);
           }
           setStatusesMap(map);
@@ -1226,7 +1242,10 @@ export default function ManageTickets() {
                   <SelectContent>
                     <SelectItem value="">All Users</SelectItem>
                     {assignedOptions.map((opt) => (
-                      <SelectItem key={`assigned-${opt.value}`} value={opt.value}>
+                      <SelectItem
+                        key={`assigned-${opt.value}`}
+                        value={opt.value}
+                      >
                         {opt.label}
                       </SelectItem>
                     ))}

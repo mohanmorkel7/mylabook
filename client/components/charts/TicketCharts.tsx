@@ -143,7 +143,11 @@ export default function TicketCharts({
               100,
             );
             const d = respAll?.data ?? respAll;
-            const ticketsArr = d?.tickets ?? (Array.isArray(d) ? d : []);
+            let ticketsArr = d?.tickets ?? (Array.isArray(d) ? d : []);
+            // Ensure ticketsArr is always an array
+            if (!Array.isArray(ticketsArr)) {
+              ticketsArr = [];
+            }
             pages = d?.pages ?? 1;
             // If pages is 0 but we got some tickets, set pages to 1 to avoid immediate exit
             if (pages === 0 && ticketsArr.length > 0) pages = 1;

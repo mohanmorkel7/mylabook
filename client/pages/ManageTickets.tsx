@@ -1608,7 +1608,9 @@ export default function ManageTickets() {
                 <label className="sr-only">Assigned</label>
                 <Select
                   value={String(filters.assignedTo)}
-                  onValueChange={(v) => setFilters({ ...filters, assignedTo: v })}
+                  onValueChange={(v) =>
+                    setFilters({ ...filters, assignedTo: v })
+                  }
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -1673,7 +1675,8 @@ export default function ManageTickets() {
                 {paginatedTickets.map((t) => {
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);
-                  const slaText = slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                  const slaText =
+                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -1684,43 +1687,68 @@ export default function ManageTickets() {
                       <CardHeader>
                         <div className="flex justify-between items-start">
                           <CardTitle className="text-sm font-semibold">
-                            <Link to={`/tickets/${t.id}`} className="hover:underline">
+                            <Link
+                              to={`/tickets/${t.id}`}
+                              className="hover:underline"
+                            >
                               {t.subject || t.track_id}
                             </Link>
                           </CardTitle>
                           <div className="text-right text-xs">
-                            <div className="font-medium text-gray-600">{t.track_id}</div>
-                            <div className="text-gray-500 text-[11px]">{formatToIST(t.created_at)}</div>
+                            <div className="font-medium text-gray-600">
+                              {t.track_id}
+                            </div>
+                            <div className="text-gray-500 text-[11px]">
+                              {formatToIST(t.created_at)}
+                            </div>
                           </div>
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="mb-3 text-sm text-gray-700 truncate">{t.description}</div>
+                        <div className="mb-3 text-sm text-gray-700 truncate">
+                          {t.description}
+                        </div>
 
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             {pr && (
                               <Badge className={pr.color}>{pr.name}</Badge>
                             )}
-                            <Badge>{t.status?.name || (t.status as any) || "Unknown"}</Badge>
-                            {provider && <Badge variant="outline">{provider}</Badge>}
+                            <Badge>
+                              {t.status?.name || (t.status as any) || "Unknown"}
+                            </Badge>
+                            {provider && (
+                              <Badge variant="outline">{provider}</Badge>
+                            )}
                           </div>
 
                           <div className="text-right text-sm">
-                            <div className="text-gray-600">{getAssignedUserName(t.assigned_to_id)}</div>
-                            <div className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}>
+                            <div className="text-gray-600">
+                              {getAssignedUserName(t.assigned_to_id)}
+                            </div>
+                            <div
+                              className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}
+                            >
                               {slaText}
                             </div>
                           </div>
                         </div>
 
                         <div className="mt-3 flex items-center justify-between">
-                          <div className="text-xs text-gray-500">Updated {formatDistanceToNowStrict(new Date(t.updated_at))} ago</div>
+                          <div className="text-xs text-gray-500">
+                            Updated{" "}
+                            {formatDistanceToNowStrict(new Date(t.updated_at))}{" "}
+                            ago
+                          </div>
                           <div className="flex gap-2">
                             <Link to={`/tickets/${t.id}/edit`}>
-                              <Button size="sm" variant="ghost"><Edit size={14} /></Button>
+                              <Button size="sm" variant="ghost">
+                                <Edit size={14} />
+                              </Button>
                             </Link>
-                            <Button size="sm" variant="destructive"><Trash size={14} /></Button>
+                            <Button size="sm" variant="destructive">
+                              <Trash size={14} />
+                            </Button>
                           </div>
                         </div>
                       </CardContent>
@@ -1745,7 +1773,9 @@ export default function ManageTickets() {
               <Button
                 variant="outline"
                 disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
               >
                 Next
               </Button>
@@ -1758,33 +1788,49 @@ export default function ManageTickets() {
             {isLoading ? (
               <div className="text-center py-8">Loading created tickets...</div>
             ) : effectiveCreatedTickets.length === 0 ? (
-              <div className="text-center py-8">No created-from-email tickets</div>
+              <div className="text-center py-8">
+                No created-from-email tickets
+              </div>
             ) : (
               <div className="space-y-4">
                 {effectiveCreatedTickets.map((ct: any) => {
                   const src = ct.__source_ticket || ct;
                   const slaMs = computeSlaMsForTicket(src);
-                  const slaText = slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                  const slaText =
+                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
 
                   return (
-                    <Card key={ct.id} className="hover:shadow transition-shadow">
+                    <Card
+                      key={ct.id}
+                      className="hover:shadow transition-shadow"
+                    >
                       <CardHeader>
                         <div className="flex justify-between items-start">
                           <CardTitle className="text-sm font-semibold">
                             {ct.email_subject}
                           </CardTitle>
                           <div className="text-right text-xs">
-                            <div className="font-medium text-gray-600">{ct.mitra_ticket_id || "-"}</div>
-                            <div className="text-gray-500 text-[11px]">{formatToIST(ct.created_at)}</div>
+                            <div className="font-medium text-gray-600">
+                              {ct.mitra_ticket_id || "-"}
+                            </div>
+                            <div className="text-gray-500 text-[11px]">
+                              {formatToIST(ct.created_at)}
+                            </div>
                           </div>
                         </div>
                       </CardHeader>
                       <CardContent>
                         <div className="flex items-center justify-between">
-                          <div className="text-sm text-gray-700">From: {ct.email_from}</div>
+                          <div className="text-sm text-gray-700">
+                            From: {ct.email_from}
+                          </div>
                           <div className="text-right text-sm">
-                            <div className="text-gray-600">{ct.assigned_to?.name || "Unassigned"}</div>
-                            <div className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}>
+                            <div className="text-gray-600">
+                              {ct.assigned_to?.name || "Unassigned"}
+                            </div>
+                            <div
+                              className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}
+                            >
                               {slaText}
                             </div>
                           </div>

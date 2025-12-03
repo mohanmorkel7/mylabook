@@ -588,7 +588,7 @@ export class TicketRepository {
     }
 
     // Support filtering by whether ticket was created from a mail config
-    if (typeof filters.created_from_mail_config !== 'undefined') {
+    if (typeof filters.created_from_mail_config !== "undefined") {
       if (filters.created_from_mail_config) {
         whereConditions.push(`t.mail_config_id IS NOT NULL`);
       } else {

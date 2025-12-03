@@ -257,13 +257,10 @@ export default function TicketCharts({
       ),
     );
 
-    const barWidth = Math.max(
-      10,
-      Math.floor(
-        (totalColWidth - (statusNames.length - 1) * 4) /
-          Math.max(1, statusNames.length),
-      ),
-    );
+    // fixed bar width to avoid thin lines
+    const fixedBarWidth = 14;
+    const gap = 8;
+    const barWidth = fixedBarWidth;
 
     return (
       <div className="flex flex-col">

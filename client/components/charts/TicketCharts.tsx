@@ -270,7 +270,9 @@ export default function TicketCharts({
             // Per-user scaling: ensure every non-zero status gets a minimum visible height
             const userMax = Math.max(
               1,
-              ...statusNames.map((st) => Number((u.counts && u.counts[st]) || 0)),
+              ...statusNames.map((st) =>
+                Number((u.counts && u.counts[st]) || 0),
+              ),
             );
             const nonZeroMinHeight = Math.round(MAX_PX * 0.22); // ~22% of chart height
             const zeroHeight = Math.max(4, Math.round(nonZeroMinHeight * 0.18));

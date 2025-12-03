@@ -339,7 +339,11 @@ export default function ManageTickets() {
       console.debug("[ManageTickets] fetchTickets response data:", data);
       // Support multiple response shapes: tickets, data.tickets, rows, items, or direct array
       const ticketsArray =
-        data?.tickets ?? data?.data?.tickets ?? data?.rows ?? data?.items ?? (Array.isArray(data) ? data : []);
+        data?.tickets ??
+        data?.data?.tickets ??
+        data?.rows ??
+        data?.items ??
+        (Array.isArray(data) ? data : []);
       console.debug(
         "[ManageTickets] fetchTickets ticketsArray length:",
         (ticketsArray || []).length,

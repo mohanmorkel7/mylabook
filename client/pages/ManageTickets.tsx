@@ -980,10 +980,10 @@ export default function ManageTickets() {
       XLSX.utils.book_append_sheet(wb, wsEmail, "From Email");
 
       // Sheets for each tag (including Manual)
-      const uniqueTags = Array.from(
+      const uniqueTagsForSheets = Array.from(
         new Set<string>([...Array.from(tagCounts.keys())]),
       );
-      for (const tagName of uniqueTags) {
+      for (const tagName of uniqueTagsForSheets) {
         const rows = [
           [
             "ticket_id",

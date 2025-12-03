@@ -265,7 +265,44 @@ export default function ManageTickets() {
   const fetchTickets = async (page: number = 1) => {
     try {
       setIsLoading(true);
-      const response = await api.get(`/tickets?page=${page}&limit=20`);
+
+      // Build server-side filters
+      const serverFilters: any = {};
+      if (filters.searchText) serverFilters.search = filters.searchText;
+      if (filters.priority) serverFilters.priority_id = parseInt(filters.priority, 10);
+      if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
+      if (filters.dateTo) serverFilters.date_to = filters.dateTo;
+
+      // status -> map to status_id using statusesMap
+      if (filters.status) {
+        const key = String(filters.status || "").toLowerCase();
+        const normalizedKey = key.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        const sid = statusesMap[normalizedKey] ?? null;
+        if (sid) serverFilters.status_id = sid;
+      }
+
+      // assigned to
+      if (filters.assignedTo) {
+        if (filters.assignedTo === "unassigned") {
+          serverFilters.unassigned = true;
+        } else {
+          serverFilters.assigned_to = parseInt(filters.assignedTo, 10);
+        }
+      }
+
+      // source/tag filter
+      if (filters.source) {
+        if (filters.source === "mail_config") {
+          serverFilters.created_from_mail_config = true;
+        } else if (filters.source === "manual") {
+          serverFilters.created_from_mail_config = false;
+        } else {
+          // treat as tag
+          serverFilters.tags = [filters.source];
+        }
+      }
+
+      const response = await api.getTickets(serverFilters, page, 20);
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);

@@ -258,9 +258,6 @@ export default function TicketCharts({
       ),
     );
 
-    // fixed bar width to avoid thin lines
-    const fixedBarWidth = 14;
-    const gap = 8;
     const barWidth = fixedBarWidth;
 
     return (

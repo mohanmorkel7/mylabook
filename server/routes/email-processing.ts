@@ -243,6 +243,11 @@ router.get(
             ? JSON.parse(row.mitra_response)
             : row.mitra_response
           : null,
+        // Include parsed mail_config sources so client can determine provider/badges
+        mail_config_sources:
+          row.mail_config_sources && typeof row.mail_config_sources === "string"
+            ? (() => { try { return JSON.parse(row.mail_config_sources); } catch(e){ return null; } })()
+            : row.mail_config_sources || null,
       }));
 
       // Get total count for pagination

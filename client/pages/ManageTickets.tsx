@@ -1685,7 +1685,8 @@ export default function ManageTickets() {
                   return (
                     <Card
                       key={t.id}
-                      className="hover:shadow transition-shadow col-span-1"
+                      className="hover:shadow transition-shadow col-span-1 cursor-pointer"
+                      onClick={() => navigate(`/tickets/${t.id}`)}
                     >
                       <CardHeader>
                         <div className="flex justify-between items-start">

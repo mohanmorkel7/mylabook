@@ -596,33 +596,38 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           }
         }
 
-        // fallback: parse ticket_description for 'Email from:' patterns
+        // fallback: parse ticket_description for 'Email from:' patterns (strip HTML & decode entities)
         if (!senderDomain && row.ticket_description) {
           try {
-            const desc = String(row.ticket_description);
+            const descRaw = String(row.ticket_description || "");
+            const stripHtml = (s: string) => s.replace(/<[^>]+>/g, " ");
+            const decodeEntities = (s: string) =>
+              s
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&nbsp;/g, " ")
+                .replace(/&amp;/g, "&")
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/g, '"');
+            const cleaned = decodeEntities(stripHtml(descRaw)).replace(/\s+/g, " ");
+
             // Common pattern: Email from: someone@domain.com Received: <timestamp>
-            const m2 = desc.match(
+            const m2 = cleaned.match(
               /Email from:\s*([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i,
             );
             if (m2 && m2[2]) {
               senderDomain = m2[2].toLowerCase();
-              if ((senderDomain || "").includes("payswiff")) {
-                console.log(
-                  `by-tag debug: parsed Payswiff from description ticket_id=${row.ticket_id} parsed=${senderDomain}`,
-                );
-              }
+              if (senderDomain.includes("payswiff"))
+                console.log(`by-tag debug: parsed Payswiff from cleaned description ticket_id=${row.ticket_id} parsed=${senderDomain}`);
             } else {
-              // Try to find any email in description
-              const m3 = desc.match(
+              // Try to find any email in cleaned description
+              const m3 = cleaned.match(
                 /([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i,
               );
               if (m3 && m3[2]) {
                 senderDomain = m3[2].toLowerCase();
-                if ((senderDomain || "").includes("payswiff")) {
-                  console.log(
-                    `by-tag debug: parsed Payswiff from description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`,
-                  );
-                }
+                if (senderDomain.includes("payswiff"))
+                  console.log(`by-tag debug: parsed Payswiff from cleaned description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`);
               }
             }
           } catch (e) {

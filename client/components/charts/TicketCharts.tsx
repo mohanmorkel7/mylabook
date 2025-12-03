@@ -154,15 +154,19 @@ export default function TicketCharts({
                 }
               } catch (e) {}
 
-              const statusName = (t.status && (t.status.name || t.status)) || "Unknown";
+              const statusName =
+                (t.status && (t.status.name || t.status)) || "Unknown";
               if (!computedTagCounts[tag]) computedTagCounts[tag] = {};
-              computedTagCounts[tag][statusName] = (computedTagCounts[tag][statusName] || 0) + 1;
+              computedTagCounts[tag][statusName] =
+                (computedTagCounts[tag][statusName] || 0) + 1;
             }
             page += 1;
           } while (page <= pages);
 
           if (mounted) {
-            const arr = Object.entries(computedTagCounts).map(([tag, counts]) => ({ tag, counts }));
+            const arr = Object.entries(computedTagCounts).map(
+              ([tag, counts]) => ({ tag, counts }),
+            );
             setTagStatus(arr);
           }
         } catch (e) {

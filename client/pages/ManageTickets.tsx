@@ -1682,11 +1682,15 @@ export default function ManageTickets() {
                     t.description,
                   );
 
-                  const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+                  const assignedLabel =
+                    t.assignee?.name || getAssignedUserName(t.assigned_to_id);
                   const stripHtml = (s: any) => {
                     try {
                       if (!s) return "";
-                      return String(s).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                      return String(s)
+                        .replace(/<[^>]+>/g, " ")
+                        .replace(/\s+/g, " ")
+                        .trim();
                     } catch (e) {
                       return String(s || "");
                     }
@@ -1717,7 +1721,9 @@ export default function ManageTickets() {
 
                           <div className="flex flex-col items-end text-right text-xs text-gray-500">
                             {t.created_from_mail_config ? (
-                              <Badge className="bg-green-100 text-green-800">From Mail Config</Badge>
+                              <Badge className="bg-green-100 text-green-800">
+                                From Mail Config
+                              </Badge>
                             ) : provider ? (
                               <Badge variant="outline">{provider}</Badge>
                             ) : null}
@@ -1735,8 +1741,12 @@ export default function ManageTickets() {
                       <CardContent className="py-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           {pr && <Badge className={pr.color}>{pr.name}</Badge>}
-                          <Badge>{t.status?.name || (t.status as any) || "Unknown"}</Badge>
-                          {provider && <Badge variant="outline">{provider}</Badge>}
+                          <Badge>
+                            {t.status?.name || (t.status as any) || "Unknown"}
+                          </Badge>
+                          {provider && (
+                            <Badge variant="outline">{provider}</Badge>
+                          )}
 
                           <div className="ml-auto text-right text-xs text-gray-500">
                             <div className={`text-gray-600`}>{slaText}</div>
@@ -1745,16 +1755,28 @@ export default function ManageTickets() {
 
                         <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
-                            Updated {formatDistanceToNowStrict(new Date(t.updated_at))} ago
+                            Updated{" "}
+                            {formatDistanceToNowStrict(new Date(t.updated_at))}{" "}
+                            ago
                           </div>
 
                           <div className="flex gap-2 items-center">
                             <Link to={`/tickets/${t.id}/edit`}>
-                              <Button size="sm" variant="ghost" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <Edit size={14} />
                               </Button>
                             </Link>
-                            <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); }}>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                            >
                               <Trash size={14} />
                             </Button>
                           </div>

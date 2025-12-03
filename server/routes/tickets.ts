@@ -567,7 +567,20 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
       const status = row.status_name || "Unknown";
       statusesSet.add(status);
 
+      // Derive tag name from mail_config sources. Prefer rules that match the sender domain when available.
       let tagName = "Unknown";
+
+      // compute sender domain if present on ticket
+      let senderDomain: string | null = null;
+      if (row.email_from) {
+        try {
+          const m = String(row.email_from).toLowerCase().match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
+          if (m && m[1]) senderDomain = m[1].toLowerCase();
+        } catch (e) {
+          senderDomain = null;
+        }
+      }
+
       if (row.sources) {
         let sources = row.sources;
         if (typeof sources === "string") {
@@ -578,24 +591,46 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           }
         }
 
-        if (Array.isArray(sources)) {
-          outer: for (const src of sources) {
-            if (src && Array.isArray(src.emailRules)) {
+        if (Array.isArray(sources) && sources.length > 0) {
+          // first try to find a matching rule by sender domain
+          if (senderDomain) {
+            for (const src of sources) {
+              if (!src || !Array.isArray(src.emailRules)) continue;
               for (const rule of src.emailRules) {
-                if (rule && rule.domain) {
-                  const domain = String(rule.domain || "").trim();
-                  if (!domain) continue;
-                  const stripped = domain.startsWith("@")
-                    ? domain.slice(1)
-                    : domain;
+                if (!rule || !rule.domain) continue;
+                const domain = String(rule.domain || "").trim();
+                if (!domain) continue;
+                const stripped = domain.startsWith("@") ? domain.slice(1).toLowerCase() : domain.toLowerCase();
+                if (senderDomain === stripped || senderDomain.endsWith("." + stripped)) {
                   const main = stripped.split(".")[0] || stripped;
                   tagName = main
                     .replace(/[^a-zA-Z0-9]/g, " ")
                     .split(" ")
                     .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
                     .join(" ");
-                  break outer;
+                  break;
                 }
+              }
+              if (tagName !== "Unknown") break;
+            }
+          }
+
+          // fallback: use first rule's domain if no match found
+          if (tagName === "Unknown") {
+            outer2: for (const src of sources) {
+              if (!src || !Array.isArray(src.emailRules)) continue;
+              for (const rule of src.emailRules) {
+                if (!rule || !rule.domain) continue;
+                const domain = String(rule.domain || "").trim();
+                if (!domain) continue;
+                const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+                const main = stripped.split(".")[0] || stripped;
+                tagName = main
+                  .replace(/[^a-zA-Z0-9]/g, " ")
+                  .split(" ")
+                  .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                  .join(" ");
+                break outer2;
               }
             }
           }

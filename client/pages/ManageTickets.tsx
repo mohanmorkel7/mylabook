@@ -929,13 +929,35 @@ export default function ManageTickets() {
         statusRows.push([k, v]),
       );
 
-      const wsSummary = XLSX.utils.aoa_to_sheet([
-        ...tagRows,
-        [],
-        ...userRows,
-        [],
-        ...statusRows,
-      ]);
+      // Build Summary sheet with per-tag status breakdown
+      // Determine status columns from statusesList (fallback to common names)
+      const statusNames = (statusesList && statusesList.length > 0)
+        ? statusesList.map((s: any) => s.name)
+        : ["Open", "In Progress", "Pending", "Overdue", "Closed"];
+
+      const summaryHeader = ["Tag", "Total", ...statusNames];
+      const summaryRows = [summaryHeader];
+
+      const uniqueTags = Array.from(new Set<string>([...Array.from(tagCounts.keys())]));
+      for (const tagName of uniqueTags) {
+        const totalsByStatus = tagStatusCounts[tagName] || {};
+        const total = tagCounts.get(tagName) || 0;
+        const row = [tagName, total];
+        for (const sName of statusNames) {
+          row.push(totalsByStatus[sName] || 0);
+        }
+        summaryRows.push(row);
+      }
+
+      // Append a blank row and then user and global status summaries
+      summaryRows.push([]);
+      summaryRows.push(["User", "Count"]);
+      Array.from(userCounts.entries()).forEach(([k, v]) => summaryRows.push([k, v]));
+      summaryRows.push([]);
+      summaryRows.push(["Status", "Count"]);
+      Array.from(statusCounts.entries()).forEach(([k, v]) => summaryRows.push([k, v]));
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
       // Sheet 2: From Email

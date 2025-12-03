@@ -443,6 +443,73 @@ router.get("/summary", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/tickets/summary/user-status
+// Returns counts grouped by assigned user and by status for a date range
+router.get("/summary/user-status", async (req: Request, res: Response) => {
+  try {
+    const raw_date_from = req.query.date_from as string | undefined;
+    const raw_date_to = req.query.date_to as string | undefined;
+
+    function expandIstDate(dateStr: string, endOfDay = false) {
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return dateStr;
+      const [y, m, d] = parts.map((p) => parseInt(p, 10));
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+      const hour = endOfDay ? 23 : 0;
+      const minute = endOfDay ? 59 : 0;
+      const second = endOfDay ? 59 : 0;
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+      return new Date(utcTs).toISOString();
+    }
+
+    const date_from = raw_date_from
+      ? expandIstDate(raw_date_from, false)
+      : undefined;
+    const date_to = raw_date_to ? expandIstDate(raw_date_to, true) : undefined;
+
+    const values: any[] = [];
+    let where = "WHERE 1=1";
+    let idx = 1;
+    if (date_from) {
+      where += ` AND t.created_at >= $${idx++}`;
+      values.push(date_from);
+    }
+    if (date_to) {
+      where += ` AND t.created_at <= $${idx++}`;
+      values.push(date_to);
+    }
+
+    // Query counts grouped by user and status
+    const q = `
+      SELECT u.id as user_id, u.first_name, u.last_name, ts.name as status_name, COUNT(*) as count
+      FROM tickets t
+      LEFT JOIN users u ON t.assigned_to = u.id
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      ${where}
+      GROUP BY u.id, u.first_name, u.last_name, ts.name
+      ORDER BY u.id NULLS LAST, ts.name
+    `;
+
+    const r = await pool.query(q, values);
+    // Transform into map per user
+    const usersMap: Record<string, any> = {};
+    for (const row of r.rows) {
+      const uid = row.user_id || 0;
+      const name = row.first_name || row.last_name ? `${row.first_name || ''} ${row.last_name || ''}`.trim() : 'Unassigned';
+      if (!usersMap[uid]) usersMap[uid] = { user_id: uid, name, counts: {} };
+      const statusName = row.status_name || 'Unknown';
+      usersMap[uid].counts[statusName] = Number(row.count);
+    }
+
+    const users = Object.values(usersMap);
+    res.json({ users });
+  } catch (err) {
+    console.error('Error fetching user-status summary:', err);
+    res.status(500).json({ error: 'Failed to fetch user-status summary' });
+  }
+});
+
 // Get ticket by ID
 router.get("/:id", async (req: Request, res: Response) => {
   try {

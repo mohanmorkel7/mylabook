@@ -220,7 +220,10 @@ export default function TicketCharts({
   }) => {
     const MAX_PX = 160;
     const MIN_PX = 10; // visible but not too tall
-    const totalColWidth = 56; // wider column so multiple bars fit clearly
+    // Use fixed bar width and gap so bars don't collapse into lines
+    const gap = 8;
+    const fixedBarWidth = 14; // px per small bar
+    const totalColWidth = Math.max(56, statusNames.length * (fixedBarWidth + gap) + 8);
 
     // compute union of status names from both statuses list and users' counts
     const derivedFromUsers = Array.from(

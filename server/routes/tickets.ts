@@ -667,8 +667,60 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         (tagMap[tagName].counts[status] || 0) + 1;
     }
 
-    const tags = Object.values(tagMap);
+    let tags = Object.values(tagMap);
     const statuses = Array.from(statusesSet);
+
+    // Fallback: if no tags derived from tickets, try aggregating directly from mail_configs
+    if ((!tags || tags.length === 0) && (await (async () => true)())) {
+      const fq = `
+        SELECT mc.id as mc_id, mc.sources as sources, ts.name as status_name, COUNT(*) as count
+        FROM tickets t
+        LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+        LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+        ${where}
+        AND t.mail_config_id IS NOT NULL
+        GROUP BY mc.id, mc.sources, ts.name
+      `;
+      try {
+        const fr = await pool.query(fq, values);
+        const fallbackMap: Record<string, any> = {};
+        for (const row of fr.rows) {
+          const status = row.status_name || 'Unknown';
+          const sources = row.sources;
+          let tagName = 'Unknown';
+          if (sources) {
+            let s = sources;
+            if (typeof s === 'string') {
+              try { s = JSON.parse(s); } catch(e){ s = null; }
+            }
+            if (Array.isArray(s)) {
+              outer: for (const src of s) {
+                if (src && Array.isArray(src.emailRules)) {
+                  for (const rule of src.emailRules) {
+                    if (rule && rule.domain) {
+                      const domain = String(rule.domain || '').trim();
+                      if (!domain) continue;
+                      const stripped = domain.startsWith('@') ? domain.slice(1) : domain;
+                      const main = stripped.split('.')[0] || stripped;
+                      tagName = main.replace(/[^a-zA-Z0-9]/g, ' ').split(' ').map((w:any)=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+                      break outer;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if (!fallbackMap[tagName]) fallbackMap[tagName] = { tag: tagName, counts: {} };
+          fallbackMap[tagName].counts[status] = (fallbackMap[tagName].counts[status] || 0) + Number(row.count || 0);
+        }
+        const ftags = Object.values(fallbackMap);
+        if (ftags.length > 0) {
+          tags = ftags;
+        }
+      } catch (fe) {
+        console.warn('by-tag fallback failed', fe);
+      }
+    }
 
     res.json({ tags, statuses });
   } catch (err) {

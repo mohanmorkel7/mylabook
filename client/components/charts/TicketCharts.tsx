@@ -245,7 +245,10 @@ export default function TicketCharts({
 
     const barWidth = Math.max(
       10,
-      Math.floor((totalColWidth - (statusNames.length - 1) * 4) / Math.max(1, statusNames.length)),
+      Math.floor(
+        (totalColWidth - (statusNames.length - 1) * 4) /
+          Math.max(1, statusNames.length),
+      ),
     );
 
     return (
@@ -255,7 +258,10 @@ export default function TicketCharts({
             const name = u.name || `User ${u.user_id}`;
             const bars = statusNames.map((st, idx) => {
               const val = Number((u.counts && u.counts[st]) || 0);
-              const h = Math.max(MIN_PX, Math.round((val / Math.max(1, maxVal)) * MAX_PX));
+              const h = Math.max(
+                MIN_PX,
+                Math.round((val / Math.max(1, maxVal)) * MAX_PX),
+              );
               return {
                 val,
                 h,
@@ -290,8 +296,23 @@ export default function TicketCharts({
                       }}
                     >
                       {bars.map((bar, bi) => (
-                        <div key={bi} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                          <div style={{ fontSize: 10, color: "#374151", marginBottom: 4 }}>{bar.val > 0 ? bar.val : ""}</div>
+                        <div
+                          key={bi}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "#374151",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {bar.val > 0 ? bar.val : ""}
+                          </div>
                           <div
                             style={{
                               width: barWidth,

@@ -564,107 +564,112 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     const statusesSet = new Set<string>();
 
     for (const row of r.rows) {
-      const status = row.status_name || "Unknown";
-      statusesSet.add(status);
+      try {
+        const status = row.status_name || "Unknown";
+        statusesSet.add(status);
 
-      // Derive tag name from mail_config sources. Prefer rules that match the sender domain when available.
-      let tagName = "Unknown";
+        // Derive tag name from mail_config sources. Prefer rules that match the sender domain when available.
+        let tagName = "Unknown";
 
-      // compute sender domain if present on ticket
-      let senderDomain: string | null = null;
-      if (row.email_from) {
-        try {
-          const m = String(row.email_from)
-            .toLowerCase()
-            .match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
-          if (m && m[1]) senderDomain = m[1].toLowerCase();
-        } catch (e) {
-          senderDomain = null;
-        }
-      }
-
-      if (row.sources) {
-        let sources = row.sources;
-        if (typeof sources === "string") {
+        // compute sender domain if present on ticket
+        let senderDomain: string | null = null;
+        if (row.email_from) {
           try {
-            sources = JSON.parse(sources);
+            const m = String(row.email_from)
+              .toLowerCase()
+              .match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
+            if (m && m[1]) senderDomain = m[1].toLowerCase();
           } catch (e) {
-            sources = null;
+            senderDomain = null;
           }
         }
 
-        if (Array.isArray(sources) && sources.length > 0) {
-          // first try to find a matching rule by sender domain
-          if (senderDomain) {
-            for (const src of sources) {
-              if (!src || !Array.isArray(src.emailRules)) continue;
-              for (const rule of src.emailRules) {
-                if (!rule || !rule.domain) continue;
-                const domain = String(rule.domain || "").trim();
-                if (!domain) continue;
-                const stripped = domain.startsWith("@")
-                  ? domain.slice(1).toLowerCase()
-                  : domain.toLowerCase();
-                if (
-                  senderDomain === stripped ||
-                  senderDomain.endsWith("." + stripped)
-                ) {
+        if (row.sources) {
+          let sources = row.sources;
+          if (typeof sources === "string") {
+            try {
+              sources = JSON.parse(sources);
+            } catch (e) {
+              sources = null;
+            }
+          }
+
+          if (Array.isArray(sources) && sources.length > 0) {
+            // first try to find a matching rule by sender domain
+            if (senderDomain) {
+              for (const src of sources) {
+                if (!src || !Array.isArray(src.emailRules)) continue;
+                for (const rule of src.emailRules) {
+                  if (!rule || !rule.domain) continue;
+                  const domain = String(rule.domain || "").trim();
+                  if (!domain) continue;
+                  const stripped = domain.startsWith("@")
+                    ? domain.slice(1).toLowerCase()
+                    : domain.toLowerCase();
+                  if (
+                    senderDomain === stripped ||
+                    senderDomain.endsWith("." + stripped)
+                  ) {
+                    const main = stripped.split(".")[0] || stripped;
+                    tagName = main
+                      .replace(/[^a-zA-Z0-9]/g, " ")
+                      .split(" ")
+                      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                      .join(" ");
+                    break;
+                  }
+                }
+                if (tagName !== "Unknown") break;
+              }
+            }
+
+            // fallback: use first rule's domain if no match found
+            if (tagName === "Unknown") {
+              outer2: for (const src of sources) {
+                if (!src || !Array.isArray(src.emailRules)) continue;
+                for (const rule of src.emailRules) {
+                  if (!rule || !rule.domain) continue;
+                  const domain = String(rule.domain || "").trim();
+                  if (!domain) continue;
+                  const stripped = domain.startsWith("@")
+                    ? domain.slice(1)
+                    : domain;
                   const main = stripped.split(".")[0] || stripped;
                   tagName = main
                     .replace(/[^a-zA-Z0-9]/g, " ")
                     .split(" ")
                     .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
                     .join(" ");
-                  break;
+                  break outer2;
                 }
               }
-              if (tagName !== "Unknown") break;
-            }
-          }
-
-          // fallback: use first rule's domain if no match found
-          if (tagName === "Unknown") {
-            outer2: for (const src of sources) {
-              if (!src || !Array.isArray(src.emailRules)) continue;
-              for (const rule of src.emailRules) {
-                if (!rule || !rule.domain) continue;
-                const domain = String(rule.domain || "").trim();
-                if (!domain) continue;
-                const stripped = domain.startsWith("@")
-                  ? domain.slice(1)
-                  : domain;
-                const main = stripped.split(".")[0] || stripped;
-                tagName = main
-                  .replace(/[^a-zA-Z0-9]/g, " ")
-                  .split(" ")
-                  .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-                  .join(" ");
-                break outer2;
-              }
             }
           }
         }
-      }
 
-      // If we still don't have a derived tag, try ticket_tags fallback
-      if ((tagName === "Unknown" || !tagName) && row.ticket_tags) {
-        let ttags = row.ticket_tags;
-        if (typeof ttags === "string") {
-          try {
-            ttags = JSON.parse(ttags);
-          } catch (e) {
-            ttags = null;
+        // If we still don't have a derived tag, try ticket_tags fallback
+        if ((tagName === "Unknown" || !tagName) && row.ticket_tags) {
+          let ttags = row.ticket_tags;
+          if (typeof ttags === "string") {
+            try {
+              ttags = JSON.parse(ttags);
+            } catch (e) {
+              ttags = null;
+            }
+          }
+          if (Array.isArray(ttags) && ttags.length > 0) {
+            const first = String(ttags[0] || "").trim();
+            if (first) tagName = first;
           }
         }
-        if (Array.isArray(ttags) && ttags.length > 0) {
-          const first = String(ttags[0] || "").trim();
-          if (first) tagName = first;
-        }
-      }
 
-      if (!tagMap[tagName]) tagMap[tagName] = { tag: tagName, counts: {} };
-      tagMap[tagName].counts[status] =
-        (tagMap[tagName].counts[status] || 0) + 1;
+        if (!tagMap[tagName]) tagMap[tagName] = { tag: tagName, counts: {} };
+        tagMap[tagName].counts[status] =
+          (tagMap[tagName].counts[status] || 0) + 1;
+      } catch (rowErr) {
+        console.warn("by-tag: failed to process a ticket row, skipping", rowErr);
+        continue;
+      }
     }
 
     let tags = Object.values(tagMap);

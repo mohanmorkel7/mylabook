@@ -492,7 +492,7 @@ export default function ManageTickets() {
     }
   };
 
-  const fetchCreatedTickets = async (ignoreFilters: boolean = false) => {
+  const fetchCreatedTickets = async (ignoreFilters: boolean = false, overrides?: Record<string, string>) => {
     try {
       setIsLoading(true);
       const params = new URLSearchParams();
@@ -502,6 +502,15 @@ export default function ManageTickets() {
         if (filters.priority) params.append("priority_id", filters.priority);
         if (filters.assignedTo)
           params.append("assigned_user_id", filters.assignedTo);
+      }
+
+      // Apply explicit overrides (used when opening Created tab without mutating filters)
+      if (overrides) {
+        Object.entries(overrides).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && String(v).trim() !== "") {
+            params.set(k, String(v));
+          }
+        });
       }
 
       const query = params.toString() ? `?${params}` : "";

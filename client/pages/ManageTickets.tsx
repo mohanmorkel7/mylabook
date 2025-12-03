@@ -972,30 +972,10 @@ export default function ManageTickets() {
         for (const t of allTickets) {
           let match = false;
           try {
-            if (
-              Array.isArray(t.tags) &&
-              t.tags
-                .map((x: any) => String(x).toLowerCase())
-                .includes(String(tagName).toLowerCase())
-            )
-              match = true;
+            const norms = normalizeTagForTicket(t).map((x) => String(x).toLowerCase());
+            if (norms.includes(String(tagName).toLowerCase())) match = true;
           } catch (e) {}
-          if (!match && tagName === "Manual") {
-            if (!t.created_from_mail_config) match = true;
-          }
-          if (!match && t.created_from_mail_config) {
-            try {
-              const prov = getMailConfigProviderName(
-                t.mail_config_sources || t.mail_config_sources,
-                t.description,
-              );
-              if (
-                prov &&
-                String(prov).toLowerCase() === String(tagName).toLowerCase()
-              )
-                match = true;
-            } catch (e) {}
-          }
+
           if (match) {
             rows.push([
               t.id,

@@ -1671,7 +1671,7 @@ export default function ManageTickets() {
             ) : paginatedTickets.length === 0 ? (
               <div className="text-center py-8">No tickets found</div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {paginatedTickets.map((t) => {
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);

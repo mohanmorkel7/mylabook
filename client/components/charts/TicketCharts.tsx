@@ -120,7 +120,7 @@ export default function TicketCharts({
 
         // Additionally compute tag counts client-side using ticket descriptions to ensure Razorpay/Payswiff/Manual classification
         try {
-          const computedTagCounts: Record<string, number> = {};
+          const computedTagCounts: Record<string, Record<string, number>> = {};
           let page = 1;
           let pages = 1;
           do {
@@ -143,7 +143,6 @@ export default function TicketCharts({
                 else if (t.created_from_mail_config) {
                   // prefer mail config provider name if available
                   try {
-                    // call client helper if available on window or fallback to 'Email'
                     const prov = (window as any).getMailConfigProviderName
                       ? (window as any).getMailConfigProviderName(
                           t.mail_config_sources,
@@ -154,15 +153,16 @@ export default function TicketCharts({
                   } catch (e) {}
                 }
               } catch (e) {}
-              computedTagCounts[tag] = (computedTagCounts[tag] || 0) + 1;
+
+              const statusName = (t.status && (t.status.name || t.status)) || "Unknown";
+              if (!computedTagCounts[tag]) computedTagCounts[tag] = {};
+              computedTagCounts[tag][statusName] = (computedTagCounts[tag][statusName] || 0) + 1;
             }
             page += 1;
           } while (page <= pages);
 
           if (mounted) {
-            const arr = Object.entries(computedTagCounts).map(
-              ([tag, count]) => ({ tag, count }),
-            );
+            const arr = Object.entries(computedTagCounts).map(([tag, counts]) => ({ tag, counts }));
             setTagStatus(arr);
           }
         } catch (e) {

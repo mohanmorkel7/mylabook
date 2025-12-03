@@ -1158,9 +1158,19 @@ export default function ManageTickets() {
                               : {ticket.subject}
                             </h3>
                             {ticket.created_from_mail_config && (
-                              <Badge className="bg-green-100 text-green-800">
-                                From Mail Config
-                              </Badge>
+                              <>
+                                <Badge className="bg-green-100 text-green-800">
+                                  From Mail Config
+                                </Badge>
+                                {(() => {
+                                  const provider = getMailConfigProviderName((ticket as any).mail_config_sources);
+                                  return provider ? (
+                                    <Badge className="bg-blue-100 text-blue-800">
+                                      {provider}
+                                    </Badge>
+                                  ) : null;
+                                })()}
+                              </>
                             )}
 
                             <div className="ml-auto flex items-center gap-2">

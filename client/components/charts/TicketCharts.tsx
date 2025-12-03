@@ -219,8 +219,8 @@ export default function TicketCharts({
     statuses: StatusCount[];
   }) => {
     const MAX_PX = 160;
-    const MIN_PX = 12; // increase minimum height so low values remain visible
-    const totalColWidth = 48; // increase column width per user for clearer bars
+    const MIN_PX = 10; // visible but not too tall
+    const totalColWidth = 56; // wider column so multiple bars fit clearly
 
     // compute union of status names from both statuses list and users' counts
     const derivedFromUsers = Array.from(
@@ -276,7 +276,7 @@ export default function TicketCharts({
               return {
                 val,
                 h,
-                color: palette[idx % palette.length],
+                color: colorMap[st] || palette[idx % palette.length],
                 status: st,
               };
             });
@@ -315,15 +315,7 @@ export default function TicketCharts({
                             alignItems: "center",
                           }}
                         >
-                          <div
-                            style={{
-                              fontSize: 10,
-                              color: "#374151",
-                              marginBottom: 4,
-                            }}
-                          >
-                            {bar.val > 0 ? bar.val : ""}
-                          </div>
+                          <div style={{ fontSize: 10, color: "#374151", marginBottom: 4 }}>{bar.val}</div>
                           <div
                             style={{
                               width: barWidth,
@@ -377,7 +369,7 @@ export default function TicketCharts({
                 style={{
                   width: 10,
                   height: 10,
-                  background: palette[i % palette.length],
+                  background: colorMap[st] || palette[i % palette.length],
                   display: "inline-block",
                   borderRadius: 3,
                 }}

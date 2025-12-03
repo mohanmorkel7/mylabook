@@ -646,6 +646,22 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         }
       }
 
+      // If we still don't have a derived tag, try ticket_tags fallback
+      if ((tagName === "Unknown" || !tagName) && row.ticket_tags) {
+        let ttags = row.ticket_tags;
+        if (typeof ttags === "string") {
+          try {
+            ttags = JSON.parse(ttags);
+          } catch (e) {
+            ttags = null;
+          }
+        }
+        if (Array.isArray(ttags) && ttags.length > 0) {
+          const first = String(ttags[0] || "").trim();
+          if (first) tagName = first;
+        }
+      }
+
       if (!tagMap[tagName]) tagMap[tagName] = { tag: tagName, counts: {} };
       tagMap[tagName].counts[status] =
         (tagMap[tagName].counts[status] || 0) + 1;

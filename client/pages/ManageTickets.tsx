@@ -337,10 +337,16 @@ export default function ManageTickets() {
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       console.debug("[ManageTickets] fetchTickets response data:", data);
-      const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
+      // Support multiple response shapes: tickets, data.tickets, rows, items, or direct array
+      const ticketsArray =
+        data?.tickets ?? data?.data?.tickets ?? data?.rows ?? data?.items ?? (Array.isArray(data) ? data : []);
       console.debug(
         "[ManageTickets] fetchTickets ticketsArray length:",
         (ticketsArray || []).length,
+        "page:",
+        page,
+        "pageSize:",
+        pageSize,
       );
       // Capture server time when provided to correct client/server clock skew
       let serverMs: number | null = null;

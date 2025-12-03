@@ -822,37 +822,35 @@ export default function ManageTickets() {
 
       const createdEmailRows: any[] = [];
 
-      for (const t of allTickets) {
-        // Tags/providers
-        let tagNames: string[] = [];
+      const normalizeTagForTicket = (t: any): string[] => {
+        // Priority: description content (razorpay/payswiff), explicit tags, mail config provider, Manual
+        try {
+          const desc = String(t.description || "").toLowerCase();
+          if (desc.includes("razorpay")) return ["Razorpay"];
+          if (desc.includes("payswiff")) return ["Payswiff"];
+        } catch (e) {}
+
         try {
           if (Array.isArray(t.tags) && t.tags.length > 0) {
-            tagNames = t.tags.map((x: any) => String(x).trim()).filter(Boolean);
+            return t.tags.map((x: any) => String(x).trim()).filter(Boolean);
           }
         } catch (e) {}
 
-        if (
-          (!tagNames || tagNames.length === 0) &&
-          t.created_from_mail_config
-        ) {
+        if (t.created_from_mail_config) {
           try {
-            const prov =
-              getMailConfigProviderName(
-                t.mail_config_sources || t.mail_config_sources,
-                t.description,
-              ) || null;
-            if (prov) tagNames = [prov];
+            const prov = getMailConfigProviderName(
+              t.mail_config_sources || t.mail_config_sources,
+              t.description,
+            );
+            if (prov) return [prov];
           } catch (e) {}
         }
 
-        if (
-          (!tagNames || tagNames.length === 0) &&
-          !t.created_from_mail_config
-        ) {
-          tagNames = ["Manual"];
-        }
+        return [t.created_from_mail_config ? "Email" : "Manual"];
+      };
 
-        if (!tagNames || tagNames.length === 0) tagNames = ["Unknown"];
+      for (const t of allTickets) {
+        const tagNames = normalizeTagForTicket(t);
 
         for (const tg of tagNames) {
           const key = String(tg || "");

@@ -210,21 +210,13 @@ export default function TicketCharts({
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
 
-  // Stacked vertical bar chart for users where each user's bar is stacked by status counts
-  const StackedVerticalChart = ({
-    users,
-    statuses,
-  }: {
-    users: any[];
-    statuses: StatusCount[];
-  }) => {
+  // Grouped side-by-side vertical bars per user (each user's column contains bars for each status)
+  const GroupedBarChart = ({ users, statuses }: { users: any[]; statuses: StatusCount[] }) => {
     const MAX_PX = 160;
-    const MIN_PX = 8;
-    // Build list of status names to maintain order
-    const statusNames =
-      statuses && statuses.length > 0 ? statuses.map((s) => s.status) : [];
+    const MIN_PX = 4;
+    const totalColWidth = 28; // total width per user column in px
 
-    // color palette - reuse palette from VerticalBarChart
+    const statusNames = statuses && statuses.length > 0 ? statuses.map((s) => s.status) : [];
     const palette = [
       "#3B82F6",
       "#10B981",
@@ -236,117 +228,55 @@ export default function TicketCharts({
       "#7C3AED",
     ];
 
-    const maxTotal = Math.max(
+    // global max value across all users/statuses for consistent scaling
+    const maxVal = Math.max(
       1,
-      ...users.map((u) =>
-        statusNames.reduce(
-          (s: number, st: string) =>
-            s + Number((u.counts && u.counts[st]) || 0),
-          0,
-        ),
-      ),
+      ...users.flatMap((u) => statusNames.map((st) => Number((u.counts && u.counts[st]) || 0))),
     );
+
+    const barWidth = Math.max(6, Math.floor(totalColWidth / Math.max(1, statusNames.length)));
 
     return (
       <div className="flex flex-col">
         <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
           {users.map((u, ui) => {
-            const total = statusNames.reduce(
-              (s: number, st: string) =>
-                s + Number((u.counts && u.counts[st]) || 0),
-              0,
-            );
-            const segments = statusNames.map((st, idx) => {
+            const name = u.name || `User ${u.user_id}`;
+            const bars = statusNames.map((st, idx) => {
               const val = Number((u.counts && u.counts[st]) || 0);
-              const h =
-                total === 0
-                  ? 0
-                  : Math.max(MIN_PX, Math.round((val / maxTotal) * MAX_PX));
-              return {
-                val,
-                h,
-                color: palette[idx % palette.length],
-                status: st,
-              };
+              const h = val === 0 ? 0 : Math.max(MIN_PX, Math.round((val / maxVal) * MAX_PX));
+              return { val, h, color: palette[idx % palette.length], status: st };
             });
 
             return (
               <div key={ui} className="flex-1 flex flex-col items-center">
-                <div className="text-sm text-gray-700 mb-2">{total}</div>
-                <div
-                  className="w-full flex items-end justify-center"
-                  style={{ minHeight: 0 }}
-                >
-                  <div
-                    style={{ width: 28 }}
-                    title={`${u.name}: ${total}`}
-                    className="overflow-hidden"
-                    aria-hidden
-                  >
-                    {/* stack segments from bottom to top */}
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column-reverse",
-                        height: MAX_PX,
-                      }}
-                    >
-                      {segments.map((seg, si) => (
+                <div className="text-sm text-gray-700 mb-2">{statusNames.reduce((s, st) => s + Number((u.counts && u.counts[st]) || 0), 0)}</div>
+                <div className="w-full flex items-end justify-center" style={{ minHeight: 0 }}>
+                  <div style={{ width: totalColWidth }} title={`${name}`} className="overflow-hidden">
+                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 4 }}>
+                      {bars.map((bar, bi) => (
                         <div
-                          key={si}
-                          style={{
-                            height: seg.h,
-                            background: seg.color,
-                            width: "100%",
-                          }}
-                          title={`${u.name} - ${seg.status}: ${seg.val}`}
+                          key={bi}
+                          style={{ width: barWidth, height: bar.h, background: bar.color, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}
+                          title={`${name} - ${bar.status}: ${bar.val}`}
                         />
                       ))}
                     </div>
                   </div>
                 </div>
-                <div
-                  className="mt-2 text-xs text-center text-gray-700 truncate"
-                  style={{ maxWidth: "6rem" }}
-                >
+                <div className="mt-2 text-xs text-center text-gray-700 truncate" style={{ maxWidth: '6rem' }}>
                   <span className="inline-flex items-center gap-2">
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: "#666",
-                        display: "inline-block",
-                        borderRadius: 4,
-                      }}
-                    />
-                    <span
-                      style={{
-                        maxWidth: 80,
-                        display: "inline-block",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {u.name}
-                    </span>
+                    <span style={{ width: 8, height: 8, background: '#666', display: 'inline-block', borderRadius: 4 }} />
+                    <span style={{ maxWidth: 80, display: 'inline-block', verticalAlign: 'middle' }}>{name}</span>
                   </span>
                 </div>
               </div>
             );
           })}
         </div>
-        {/* Legend */}
         <div className="flex flex-wrap gap-2 mt-2">
           {statusNames.map((st, i) => (
             <div key={st} className="text-xs inline-flex items-center gap-2">
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  background: palette[i % palette.length],
-                  display: "inline-block",
-                  borderRadius: 3,
-                }}
-              />
+              <span style={{ width: 10, height: 10, background: palette[i % palette.length], display: 'inline-block', borderRadius: 3 }} />
               <span className="text-gray-700">{st}</span>
             </div>
           ))}

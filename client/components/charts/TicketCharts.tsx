@@ -210,6 +210,83 @@ export default function TicketCharts({
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
 
+  // Stacked vertical bar chart for users where each user's bar is stacked by status counts
+  const StackedVerticalChart = ({ users, statuses }: { users: any[]; statuses: StatusCount[] }) => {
+    const MAX_PX = 160;
+    const MIN_PX = 8;
+    // Build list of status names to maintain order
+    const statusNames = statuses && statuses.length > 0 ? statuses.map((s) => s.status) : [];
+
+    // color palette - reuse palette from VerticalBarChart
+    const palette = [
+      "#3B82F6",
+      "#10B981",
+      "#F59E0B",
+      "#EF4444",
+      "#8B5CF6",
+      "#06B6D4",
+      "#F472B6",
+      "#7C3AED",
+    ];
+
+    const maxTotal = Math.max(
+      1,
+      ...users.map((u) =>
+        statusNames.reduce((s: number, st: string) => s + Number((u.counts && u.counts[st]) || 0), 0),
+      ),
+    );
+
+    return (
+      <div className="flex flex-col">
+        <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
+          {users.map((u, ui) => {
+            const total = statusNames.reduce((s: number, st: string) => s + Number((u.counts && u.counts[st]) || 0), 0);
+            const segments = statusNames.map((st, idx) => {
+              const val = Number((u.counts && u.counts[st]) || 0);
+              const h = total === 0 ? 0 : Math.max(MIN_PX, Math.round((val / maxTotal) * MAX_PX));
+              return { val, h, color: palette[idx % palette.length], status: st };
+            });
+
+            return (
+              <div key={ui} className="flex-1 flex flex-col items-center">
+                <div className="text-sm text-gray-700 mb-2">{total}</div>
+                <div className="w-full flex items-end justify-center" style={{ minHeight: 0 }}>
+                  <div style={{ width: 28 }} title={`${u.name}: ${total}`} className="overflow-hidden" aria-hidden>
+                    {/* stack segments from bottom to top */}
+                    <div style={{ display: 'flex', flexDirection: 'column-reverse', height: MAX_PX }}>
+                      {segments.map((seg, si) => (
+                        <div
+                          key={si}
+                          style={{ height: seg.h, background: seg.color, width: '100%' }}
+                          title={`${u.name} - ${seg.status}: ${seg.val}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-center text-gray-700 truncate" style={{ maxWidth: '6rem' }}>
+                  <span className="inline-flex items-center gap-2">
+                    <span style={{ width: 8, height: 8, background: '#666', display: 'inline-block', borderRadius: 4 }} />
+                    <span style={{ maxWidth: 80, display: 'inline-block', verticalAlign: 'middle' }}>{u.name}</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Legend */}
+        <div className="flex flex-wrap gap-2 mt-2">
+          {statusNames.map((st, i) => (
+            <div key={st} className="text-xs inline-flex items-center gap-2">
+              <span style={{ width: 10, height: 10, background: palette[i % palette.length], display: 'inline-block', borderRadius: 3 }} />
+              <span className="text-gray-700">{st}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="mb-6">
       <div className="p-4 bg-white shadow rounded">

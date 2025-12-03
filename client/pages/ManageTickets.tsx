@@ -689,39 +689,19 @@ export default function ManageTickets() {
     return "Unassigned";
   };
 
-  const assignedOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of tickets) {
-      const id = t.assigned_to_id;
-      if (id === null || id === undefined) {
-        if (!map.has('unassigned')) map.set('unassigned', 'Unassigned');
-      } else {
-        const key = String(id);
-        if (!map.has(key)) {
-          let label = `User #${key}`;
-          const user = users.find((u) => Number(u.id) === Number(id));
-          if (user) {
-            // derive name similar to getAssignedUserName
-            if (user.firstname || user.lastname) label = `${user.firstname || ''} ${user.lastname || ''}`.trim();
-            else if (user.name) label = user.name;
-            else if (user.first_name && user.last_name) label = `${user.first_name} ${user.last_name}`;
-          } else if ((t as any).assignee && ((t as any).assignee.name || (t as any).assignee.first_name)) {
-            label = ((t as any).assignee.name) || `${((t as any).assignee.first_name||'')} ${((t as any).assignee.last_name||'')}`.trim();
-          }
-          map.set(key, label);
-        }
-      }
+  const fetchAssignedOptions = async () => {
+    try {
+      const resp = await api.get('/tickets/assigned-options');
+      const data = resp?.data ?? resp;
+      if (Array.isArray(data?.options)) setAssignedOptionsState(data.options);
+      else setAssignedOptionsState([]);
+    } catch (e) {
+      console.error('Error fetching assigned options:', e);
+      setAssignedOptionsState([]);
     }
-    for (const u of users) {
-      const k = String(u.id);
-      if (!map.has(k)) {
-        if (u.firstname || u.lastname) map.set(k, `${u.firstname || ''} ${u.lastname || ''}`.trim());
-        else if (u.name) map.set(k, u.name);
-        else map.set(k, `User #${k}`);
-      }
-    }
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
-  }, [tickets, users]);
+  };
+
+  const assignedOptions = assignedOptionsState;
 
   const getPriorityBadge = (priority: number) => {
     const p = PRIORITY_OPTIONS[priority as keyof typeof PRIORITY_OPTIONS];

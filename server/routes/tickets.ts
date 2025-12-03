@@ -263,12 +263,9 @@ router.get("/", async (req: Request, res: Response) => {
         viewerId,
         restrictToViewer,
       );
-      const TIMEOUT_MS = 15000; // 15 seconds
+      const TIMEOUT_MS = 60000; // 60 seconds - increase to allow complex queries to finish
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Tickets query timed out")),
-          TIMEOUT_MS,
-        ),
+        setTimeout(() => reject(new Error(`Tickets query timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS),
       );
 
       let result: any;
@@ -276,10 +273,8 @@ router.get("/", async (req: Request, res: Response) => {
         result = await Promise.race([getAllPromise, timeoutPromise]);
       } catch (err) {
         const dur = Date.now() - startMs;
-        console.error(
-          `Tickets fetch failed or timed out after ${dur}ms:`,
-          err?.message || err,
-        );
+        console.error(`Tickets fetch failed or timed out after ${dur}ms:`, err?.message || err);
+        // If the underlying DB query is still running it will complete eventually, but respond with 504 to the client.
         return res.status(504).json({ error: "Tickets request timed out" });
       }
 

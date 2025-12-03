@@ -972,7 +972,9 @@ export default function ManageTickets() {
         for (const t of allTickets) {
           let match = false;
           try {
-            const norms = normalizeTagForTicket(t).map((x) => String(x).toLowerCase());
+            const norms = normalizeTagForTicket(t).map((x) =>
+              String(x).toLowerCase(),
+            );
             if (norms.includes(String(tagName).toLowerCase())) match = true;
           } catch (e) {}
 

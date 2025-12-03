@@ -584,7 +584,7 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         statusesSet.add(status);
 
         // Derive tag name from mail_config sources. Prefer rules that match the sender domain when available.
-        let tagName = "Unknown";
+        let tagName = "Manual";
 
         // compute sender domain if present on ticket (from creator.email or embedded in ticket_description)
         let senderDomain: string | null = null;
@@ -658,7 +658,7 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           }
         }
 
-        if (row.sources && tagName === "Unknown") {
+        if (row.sources && tagName === "Manual") {
           let sources = row.sources;
           if (typeof sources === "string") {
             try {
@@ -703,12 +703,12 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                     break;
                   }
                 }
-                if (tagName !== "Unknown") break;
+                if (tagName !== "Manual") break;
               }
             }
 
             // fallback: use first rule's domain if no match found
-            if (tagName === "Unknown") {
+            if (tagName === "Manual") {
               outer2: for (const src of sources) {
                 if (!src || !Array.isArray(src.emailRules)) continue;
                 for (const rule of src.emailRules) {
@@ -739,7 +739,7 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         }
 
         // If we still don't have a derived tag, try ticket_tags fallback
-        if ((tagName === "Unknown" || !tagName) && row.ticket_tags) {
+        if ((tagName === "Manual" || !tagName) && row.ticket_tags) {
           let ttags = row.ticket_tags;
           if (typeof ttags === "string") {
             try {
@@ -813,7 +813,7 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
               ? "Manual"
               : statusRaw;
           const sources = row.sources;
-          let tagName = "Unknown";
+          let tagName = "Manual";
           if (sources) {
             let s = sources;
             if (typeof s === "string") {

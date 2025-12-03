@@ -141,7 +141,10 @@ export default function ManageTickets() {
 
   // Expose getMailConfigProviderName on window for TicketCharts to use
   useEffect(() => {
-    const getMailConfigProviderName = (sources: any, sampleText?: string): string | null => {
+    const getMailConfigProviderName = (
+      sources: any,
+      sampleText?: string,
+    ): string | null => {
       if (!sources) return null;
       try {
         const arr = Array.isArray(sources)

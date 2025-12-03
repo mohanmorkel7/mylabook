@@ -21,6 +21,7 @@ export default function TicketCharts({
 }) {
   const [assigned, setAssigned] = useState<AssignedCount[]>([]);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);
+  const [userStatus, setUserStatus] = useState<any[]>([]); // [{ user_id, name, counts: { statusName: count } }]
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<"all" | "today" | "7days" | "month">(
     "all",

@@ -194,6 +194,22 @@ router.get("/", async (req: Request, res: Response) => {
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
 
+    const raw_date_from = req.query.date_from as string | undefined;
+    const raw_date_to = req.query.date_to as string | undefined;
+
+    function expandIstDate(dateStr: string, endOfDay = false) {
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return dateStr;
+      const [y, m, d] = parts.map((p) => parseInt(p, 10));
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+      const hour = endOfDay ? 23 : 0;
+      const minute = endOfDay ? 59 : 0;
+      const second = endOfDay ? 59 : 0;
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+      return new Date(utcTs).toISOString();
+    }
+
     const filters: TicketFilters & any = {
       status_id: req.query.status_id
         ? parseInt(req.query.status_id as string)
@@ -212,8 +228,8 @@ router.get("/", async (req: Request, res: Response) => {
         : undefined,
       search: req.query.search as string,
       tags: req.query.tags ? (req.query.tags as string).split(",") : undefined,
-      date_from: req.query.date_from as string,
-      date_to: req.query.date_to as string,
+      date_from: raw_date_from ? expandIstDate(raw_date_from, false) : undefined,
+      date_to: raw_date_to ? expandIstDate(raw_date_to, true) : undefined,
       // support explicit 'unassigned' and created_from_mail_config flags
       unassigned:
         typeof req.query.unassigned !== "undefined"

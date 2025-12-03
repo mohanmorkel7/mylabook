@@ -317,6 +317,7 @@ export default function TicketCharts({
                         alignItems: "flex-end",
                         justifyContent: "center",
                         gap: 6,
+                        minWidth: Math.max(120, statusNames.length * (barWidth + gap)),
                       }}
                     >
                       {bars.map((bar, bi) => (

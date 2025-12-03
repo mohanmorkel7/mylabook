@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -357,12 +357,19 @@ export default function ManageTickets() {
     try {
       const resp = await api.get("/tickets/summary/by-tag");
       const data = resp?.data ?? resp;
-      const tags = Array.isArray(data?.tags)
-        ? data.tags
-            .map((t: any) => String(t.tag || t.name || "").trim())
-            .filter(Boolean)
+      const raw = Array.isArray(data?.tags)
+        ? data.tags.map((t: any) => String(t.tag || t.name || "").trim()).filter(Boolean)
         : [];
-      setSourceTags(tags);
+      const seen = new Set<string>();
+      const unique: string[] = [];
+      for (const t of raw) {
+        const key = t.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(t);
+        }
+      }
+      setSourceTags(unique);
     } catch (e) {
       console.error("Error fetching tag sources:", e);
     }
@@ -507,14 +514,14 @@ export default function ManageTickets() {
     }
 
     // Priority filter
-    if (filters.priority) {
+    if (filters.priority !== undefined && String(filters.priority).trim() !== "") {
       filtered = filtered.filter(
-        (t) => t.priority_id === parseInt(filters.priority),
+        (t) => t.priority_id === parseInt(filters.priority, 10),
       );
     }
 
     // Status filter
-    if (filters.status) {
+    if (filters.status !== undefined && String(filters.status).trim() !== "") {
       const normalize = (s: any) =>
         String(s || "")
           .toLowerCase()
@@ -528,14 +535,14 @@ export default function ManageTickets() {
     }
 
     // Assigned to filter
-    if (filters.assignedTo) {
+    if (filters.assignedTo !== undefined && String(filters.assignedTo).trim() !== "") {
       if (filters.assignedTo === "unassigned") {
         filtered = filtered.filter(
           (t) => t.assigned_to_id === null || t.assigned_to_id === undefined,
         );
       } else {
         filtered = filtered.filter(
-          (t) => t.assigned_to_id === parseInt(filters.assignedTo),
+          (t) => t.assigned_to_id === parseInt(filters.assignedTo, 10),
         );
       }
     }
@@ -640,6 +647,40 @@ export default function ManageTickets() {
     }
     return "Unassigned";
   };
+
+  const assignedOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of tickets) {
+      const id = t.assigned_to_id;
+      if (id === null || id === undefined) {
+        if (!map.has('unassigned')) map.set('unassigned', 'Unassigned');
+      } else {
+        const key = String(id);
+        if (!map.has(key)) {
+          let label = `User #${key}`;
+          const user = users.find((u) => Number(u.id) === Number(id));
+          if (user) {
+            // derive name similar to getAssignedUserName
+            if (user.firstname || user.lastname) label = `${user.firstname || ''} ${user.lastname || ''}`.trim();
+            else if (user.name) label = user.name;
+            else if (user.first_name && user.last_name) label = `${user.first_name} ${user.last_name}`;
+          } else if ((t as any).assignee && ((t as any).assignee.name || (t as any).assignee.first_name)) {
+            label = ((t as any).assignee.name) || `${((t as any).assignee.first_name||'')} ${((t as any).assignee.last_name||'')}`.trim();
+          }
+          map.set(key, label);
+        }
+      }
+    }
+    for (const u of users) {
+      const k = String(u.id);
+      if (!map.has(k)) {
+        if (u.firstname || u.lastname) map.set(k, `${u.firstname || ''} ${u.lastname || ''}`.trim());
+        else if (u.name) map.set(k, u.name);
+        else map.set(k, `User #${k}`);
+      }
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [tickets, users]);
 
   const getPriorityBadge = (priority: number) => {
     const p = PRIORITY_OPTIONS[priority as keyof typeof PRIORITY_OPTIONS];
@@ -1154,32 +1195,9 @@ export default function ManageTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All Users</SelectItem>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {Array.from(
-                      new Set(
-                        tickets.map((t) =>
-                          t.assigned_to_id === null ||
-                          t.assigned_to_id === undefined
-                            ? "unassigned"
-                            : String(t.assigned_to_id),
-                        ),
-                      ),
-                    )
-                      .filter((x) => x && x !== "unassigned")
-                      .map((idStr) => {
-                        const id = Number(idStr);
-                        return (
-                          <SelectItem key={id} value={idStr}>
-                            {getAssignedUserName(id)}
-                          </SelectItem>
-                        );
-                      })}
-                    {users.map((user) => (
-                      <SelectItem
-                        key={`u-${user.id}`}
-                        value={user.id.toString()}
-                      >
-                        {getAssignedUserName(user.id)}
+                    {assignedOptions.map((opt) => (
+                      <SelectItem key={`assigned-${opt.value}`} value={opt.value}>
+                        {opt.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

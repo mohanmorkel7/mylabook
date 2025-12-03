@@ -137,33 +137,64 @@ export default function ManageTickets() {
   }, []);
   const [activeTab, setActiveTab] = useState<"all" | "created">("all");
 
-  // Derive provider name from mail_config sources (e.g. domain "@razorpay.com" -> "Razorpay")
-  function getMailConfigProviderName(sources: any): string | null {
+  // Derive provider name from mail_config sources. Prefer a rule that matches the email sender when possible.
+  function extractEmailFromText(text: string | undefined): string | null {
+    if (!text) return null;
+    try {
+      const m = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      return m ? m[0].toLowerCase() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function formatProviderNameFromDomain(domain: string): string {
+    const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+    const main = stripped.split(".")[0] || stripped;
+    return main
+      .replace(/[^a-zA-Z0-9]/g, " ")
+      .split(" ")
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+
+  function getMailConfigProviderName(sources: any, sampleText?: string): string | null {
     if (!sources) return null;
     try {
       const arr = Array.isArray(sources)
         ? sources
         : typeof sources === "string"
-          ? JSON.parse(sources)
-          : null;
+        ? JSON.parse(sources)
+        : null;
       if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
+
+      const senderEmail = extractEmailFromText(sampleText || "") || null;
+      const senderDomain = senderEmail ? senderEmail.split("@").slice(1).join("@").toLowerCase() : null;
+
+      // First try to find a rule whose domain matches the sender's domain
+      if (senderDomain) {
+        for (const src of arr) {
+          if (src && Array.isArray(src.emailRules)) {
+            for (const rule of src.emailRules) {
+              if (rule && rule.domain) {
+                const ruleDomain = String(rule.domain || "").trim();
+                const strippedRule = ruleDomain.startsWith("@") ? ruleDomain.slice(1).toLowerCase() : ruleDomain.toLowerCase();
+                // match by exact suffix (e.g., payswiff.com matches subdomains too)
+                if (senderDomain === strippedRule || senderDomain.endsWith("." + strippedRule)) {
+                  return formatProviderNameFromDomain(strippedRule);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback: return first rule's provider name
       for (const src of arr) {
         if (src && Array.isArray(src.emailRules)) {
           for (const rule of src.emailRules) {
             if (rule && rule.domain) {
-              const domain = String(rule.domain || "").trim();
-              if (!domain) continue;
-              // strip leading @ and subdomains, take first token before dot
-              const stripped = domain.startsWith("@")
-                ? domain.slice(1)
-                : domain;
-              const main = stripped.split(".")[0] || stripped;
-              const name = main
-                .replace(/[^a-zA-Z0-9]/g, " ")
-                .split(" ")
-                .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-                .join(" ");
-              if (name) return name;
+              return formatProviderNameFromDomain(String(rule.domain));
             }
           }
         }

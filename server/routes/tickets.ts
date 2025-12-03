@@ -885,39 +885,84 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
 // GET /api/tickets/assigned-options
 router.get("/assigned-options", async (req: Request, res: Response) => {
   try {
+    // Primary attempt: join tickets -> users to get labels in one query
     const q = `
       SELECT DISTINCT t.assigned_to as assigned_to, u.first_name, u.last_name, u.name, u.email
       FROM tickets t
       LEFT JOIN users u ON t.assigned_to = u.id
       ORDER BY u.first_name NULLS LAST, t.assigned_to NULLS LAST
     `;
-    const r = await pool.query(q, []);
-    const seen = new Set<string>();
-    const options: any[] = [];
-    for (const row of r.rows) {
-      const aid = row.assigned_to;
-      if (aid === null || aid === undefined) {
-        if (!seen.has("unassigned")) {
-          seen.add("unassigned");
-          options.push({ value: "unassigned", label: "Unassigned" });
-        }
-      } else {
-        const key = String(aid);
-        if (!seen.has(key)) {
-          seen.add(key);
-          let label = `User #${key}`;
-          if (row.name) label = row.name;
-          else if (row.first_name || row.last_name)
-            label = `${row.first_name || ""} ${row.last_name || ""}`.trim();
-          else if (row.email) label = row.email;
-          options.push({ value: key, label });
+    try {
+      const r = await pool.query(q, []);
+      const seen = new Set<string>();
+      const options: any[] = [];
+      for (const row of r.rows) {
+        const aid = row.assigned_to;
+        if (aid === null || aid === undefined) {
+          if (!seen.has("unassigned")) {
+            seen.add("unassigned");
+            options.push({ value: "unassigned", label: "Unassigned" });
+          }
+        } else {
+          const key = String(aid);
+          if (!seen.has(key)) {
+            seen.add(key);
+            let label = `User #${key}`;
+            if (row.name) label = row.name;
+            else if (row.first_name || row.last_name)
+              label = `${row.first_name || ""} ${row.last_name || ""}`.trim();
+            else if (row.email) label = row.email;
+            options.push({ value: key, label });
+          }
         }
       }
+      return res.json({ options });
+    } catch (primaryErr) {
+      console.warn('assigned-options primary query failed, falling back to two-step lookup', primaryErr?.message || primaryErr);
+      // Fallback: get distinct assigned_to ids, then fetch users for those ids
+      try {
+        const r2 = await pool.query('SELECT DISTINCT assigned_to FROM tickets');
+        const ids: number[] = [];
+        let hasUnassigned = false;
+        for (const row of r2.rows) {
+          const aid = row.assigned_to;
+          if (aid === null || aid === undefined) {
+            hasUnassigned = true;
+          } else if (!isNaN(Number(aid))) {
+            ids.push(Number(aid));
+          }
+        }
+        const options: any[] = [];
+        if (hasUnassigned) options.push({ value: 'unassigned', label: 'Unassigned' });
+        if (ids.length > 0) {
+          const ures = await pool.query(
+            `SELECT id, first_name, last_name, name, email FROM users WHERE id = ANY($1)`,
+            [ids],
+          );
+          const byId: Record<string, any> = {};
+          for (const u of ures.rows) {
+            const key = String(u.id);
+            let label = `User #${key}`;
+            if (u.name) label = u.name;
+            else if (u.first_name || u.last_name) label = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+            else if (u.email) label = u.email;
+            byId[key] = label;
+          }
+          // Preserve the ids order
+          for (const id of ids) {
+            const key = String(id);
+            options.push({ value: key, label: byId[key] || `User #${key}` });
+          }
+        }
+        return res.json({ options });
+      } catch (fallbackErr) {
+        console.error('assigned-options fallback failed', fallbackErr);
+        return res.json({ options: [] });
+      }
     }
-    res.json({ options });
   } catch (e) {
     console.error("Error fetching assigned options:", e);
-    res.status(500).json({ options: [] });
+    return res.json({ options: [] });
   }
 });
 

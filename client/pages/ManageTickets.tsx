@@ -1695,6 +1695,7 @@ export default function ManageTickets() {
                               <Link
                                 to={`/tickets/${t.id}`}
                                 className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 {t.subject || t.track_id}
                               </Link>

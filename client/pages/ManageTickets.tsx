@@ -260,9 +260,16 @@ export default function ManageTickets() {
     };
   }, [activeTab, currentPage]);
 
+  // When filters change, fetch fresh results from server (reset to page 1)
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchTickets(1);
+  }, [filters]);
+
+  // Re-apply local filtering when tickets array changes (clientside adjustments)
   useEffect(() => {
     applyFilters();
-  }, [filters, tickets]);
+  }, [tickets]);
 
   const fetchTickets = async (page: number = 1) => {
     try {

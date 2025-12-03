@@ -1818,51 +1818,110 @@ export default function ManageTickets() {
             {isLoading ? (
               <div className="text-center py-8">Loading created tickets...</div>
             ) : effectiveCreatedTickets.length === 0 ? (
-              <div className="text-center py-8">
-                No created-from-email tickets
-              </div>
+              <div className="text-center py-8">No created-from-email tickets</div>
             ) : (
               <div className="space-y-4">
                 {effectiveCreatedTickets.map((ct: any) => {
                   const src = ct.__source_ticket || ct;
-                  const slaMs = computeSlaMsForTicket(src);
-                  const slaText =
-                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+
+                  // Normalize source ticket fields to reuse the same card layout
+                  const t = {
+                    id: ct.id || src.id,
+                    subject: ct.email_subject || src.subject || src.track_id,
+                    track_id: ct.mitra_ticket_id || src.track_id || `#${ct.id}`,
+                    description: src.description || ct.email_body || "",
+                    priority_id: ct.priority_id || src.priority_id || null,
+                    status: ct.status || src.status || null,
+                    priority: ct.priority || src.priority || null,
+                    mail_config_sources: src.mail_config_sources || src.mail_config_sources || null,
+                    created_from_mail_config: !!src.mail_config_id || !!ct.config_name || false,
+                    created_at: ct.created_at || src.created_at,
+                    updated_at: ct.updated_at || src.updated_at,
+                    assignee: ct.assigned_to || src.assignee || null,
+                    assigned_to_id:
+                      (ct.assigned_to && ct.assigned_to.id) ||
+                      src.assigned_to ||
+                      null,
+                    assignee: ct.assigned_to || src.assignee || (src.assigned_to ? { id: src.assigned_to, name: getAssignedUserName(src.assigned_to) } : null),
+                    __source_ticket: src,
+                  } as any;
+
+                  const pr = getPriorityBadge(t.priority_id || 0);
+                  const slaMs = computeSlaMsForTicket(t);
+                  const slaText = slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                  const provider = getMailConfigProviderName(
+                    t.mail_config_sources || t.mail_config_sources,
+                    t.description,
+                  );
+
+                  const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+                  const stripHtml = (s: any) => {
+                    try {
+                      if (!s) return "";
+                      return String(s).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                    } catch (e) {
+                      return String(s || "");
+                    }
+                  };
 
                   return (
                     <Card
                       key={ct.id}
-                      className="hover:shadow transition-shadow"
+                      className="hover:shadow transition-shadow col-span-1 cursor-pointer"
+                      onClick={() => navigate(`/tickets/${t.id}`)}
                     >
-                      <CardHeader>
-                        <div className="flex justify-between items-start">
-                          <CardTitle className="text-sm font-semibold">
-                            {ct.email_subject}
-                          </CardTitle>
-                          <div className="text-right text-xs">
-                            <div className="font-medium text-gray-600">
-                              {ct.mitra_ticket_id || "-"}
+                      <CardHeader className="py-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 pr-4">
+                            <CardTitle className="text-sm font-semibold mb-1 truncate">
+                              <Link to={`/tickets/${t.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+                                {t.subject || t.track_id}
+                              </Link>
+                            </CardTitle>
+                            <div className="text-xs text-gray-600 leading-tight">
+                              {stripHtml(t.description).slice(0, 180)}
                             </div>
-                            <div className="text-gray-500 text-[11px]">
-                              {formatToIST(ct.created_at)}
+                          </div>
+
+                          <div className="flex flex-col items-end text-right text-xs text-gray-500">
+                            {t.created_from_mail_config ? (
+                              <Badge className="bg-green-100 text-green-800">From Mail Config</Badge>
+                            ) : provider ? (
+                              <Badge variant="outline">{provider}</Badge>
+                            ) : null}
+
+                            <div className="mt-2 font-medium text-gray-700 text-[13px]">
+                              {assignedLabel}
                             </div>
+
+                            <div className="mt-1 text-gray-500 text-[11px]">{formatToIST(t.created_at)}</div>
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-gray-700">
-                            From: {ct.email_from}
+
+                      <CardContent className="py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {pr && <Badge className={pr.color}>{pr.name}</Badge>}
+                          <Badge>{t.status?.name || (t.status as any) || "Unknown"}</Badge>
+                          {provider && <Badge variant="outline">{provider}</Badge>}
+
+                          <div className="ml-auto text-right text-xs text-gray-500">
+                            <div className={`text-gray-600`}>{slaText}</div>
                           </div>
-                          <div className="text-right text-sm">
-                            <div className="text-gray-600">
-                              {ct.assigned_to?.name || "Unassigned"}
-                            </div>
-                            <div
-                              className={`text-xs ${slaMs !== null && slaMs < 0 ? "text-red-600" : "text-gray-500"}`}
-                            >
-                              {slaText}
-                            </div>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between">
+                          <div className="text-xs text-gray-500">Updated {formatDistanceToNowStrict(new Date(t.updated_at))} ago</div>
+
+                          <div className="flex gap-2 items-center">
+                            <Link to={`/tickets/${t.id}/edit`}>
+                              <Button size="sm" variant="ghost" onClick={(e) => e.stopPropagation()}>
+                                <Edit size={14} />
+                              </Button>
+                            </Link>
+                            <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); }}>
+                              <Trash size={14} />
+                            </Button>
                           </div>
                         </div>
                       </CardContent>

@@ -1683,7 +1683,7 @@ export default function ManageTickets() {
                   );
 
                   return (
-                    <Card key={t.id} className="hover:shadow transition-shadow">
+                    <Card key={t.id} className="hover:shadow transition-shadow col-span-1">
                       <CardHeader>
                         <div className="flex justify-between items-start">
                           <div className="flex items-start gap-3">

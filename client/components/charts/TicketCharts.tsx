@@ -227,6 +227,12 @@ export default function TicketCharts({
     const statusNames = Array.from(
       new Set([...(statuses || []).map((s) => s.status), ...derivedFromUsers]),
     );
+
+    // fixed bar width and gap
+    const gap = 8;
+    const fixedBarWidth = 14; // px per small bar
+    const totalColWidth = Math.max(56, statusNames.length * (fixedBarWidth + gap) + 8);
+
     const palette = [
       "#3B82F6",
       "#10B981",

@@ -135,6 +135,7 @@ export default function ManageTickets() {
   const [assignedOptionsState, setAssignedOptionsState] = useState<
     { value: string; label: string }[]
   >([]);
+  const serverFilteredRef = useRef(false);
 
   // realtime clock for countdowns
   useEffect(() => {

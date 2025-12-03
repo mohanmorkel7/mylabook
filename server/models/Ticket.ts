@@ -615,25 +615,14 @@ export class TicketRepository {
       console.log("[TicketRepository.getAll] starting total count computation");
     let total = 0;
     try {
-      if (!whereClause || whereClause.trim() === "") {
-        // No filters — use PostgreSQL estimated row count for performance
-        const estRes = await pool.query(
-          "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
-        );
-        const est =
-          estRes.rows[0] && estRes.rows[0].estimate
-            ? Number(estRes.rows[0].estimate)
-            : 0;
-        total = Math.max(0, Math.floor(est));
-      } else {
-        const countQuery = `
-          SELECT COUNT(*)
-          FROM tickets t
-          ${whereClause}
-        `;
-        const countResult = await pool.query(countQuery, queryParams);
-        total = parseInt(countResult.rows[0].count);
-      }
+      // Always compute exact count using COUNT(*) to ensure UI displays accurate totals
+      const countQuery = `
+        SELECT COUNT(*)
+        FROM tickets t
+        ${whereClause}
+      `;
+      const countResult = await pool.query(countQuery, queryParams);
+      total = parseInt(countResult.rows[0].count);
     } catch (countErr) {
       console.warn(
         "Failed to compute total count, falling back to estimate:",

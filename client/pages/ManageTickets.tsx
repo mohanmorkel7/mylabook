@@ -922,20 +922,28 @@ export default function ManageTickets() {
       // Build per-user status counts
       const userStatusCounts: Record<string, Record<string, number>> = {};
       for (const t of allTickets) {
-        const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
-        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
-        if (!userStatusCounts[assignedLabel]) userStatusCounts[assignedLabel] = {};
-        userStatusCounts[assignedLabel][statusLabel] = (userStatusCounts[assignedLabel][statusLabel] || 0) + 1;
+        const assignedLabel =
+          t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        const statusLabel =
+          (t.status && (t.status.name || t.status)) || "Unknown";
+        if (!userStatusCounts[assignedLabel])
+          userStatusCounts[assignedLabel] = {};
+        userStatusCounts[assignedLabel][statusLabel] =
+          (userStatusCounts[assignedLabel][statusLabel] || 0) + 1;
       }
 
       const tagRows = [["Tag", "Count"]];
       Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
 
       const userRows = [["User", "Count"]];
-      Array.from(userCounts.entries()).forEach(([k, v]) => userRows.push([k, v]));
+      Array.from(userCounts.entries()).forEach(([k, v]) =>
+        userRows.push([k, v]),
+      );
 
       const statusRows = [["Status", "Count"]];
-      Array.from(statusCounts.entries()).forEach(([k, v]) => statusRows.push([k, v]));
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        statusRows.push([k, v]),
+      );
 
       // Build Summary sheet with per-tag status breakdown
       // Determine status columns from statusesList (fallback to common names)
@@ -947,7 +955,9 @@ export default function ManageTickets() {
       const summaryHeader = ["Tag", "Total", ...statusNames];
       const summaryRows = [summaryHeader];
 
-      const uniqueTags = Array.from(new Set<string>([...Array.from(tagCounts.keys())]));
+      const uniqueTags = Array.from(
+        new Set<string>([...Array.from(tagCounts.keys())]),
+      );
       for (const tagName of uniqueTags) {
         const totalsByStatus = tagStatusCounts[tagName] || {};
         const total = tagCounts.get(tagName) || 0;
@@ -961,7 +971,9 @@ export default function ManageTickets() {
       // Append a blank row and then user per-status summary
       summaryRows.push([]);
       summaryRows.push(["User", "Total", ...statusNames]);
-      const uniqueUsers = Array.from(new Set<string>([...Array.from(userCounts.keys())]));
+      const uniqueUsers = Array.from(
+        new Set<string>([...Array.from(userCounts.keys())]),
+      );
       for (const userName of uniqueUsers) {
         const totalsByStatus = userStatusCounts[userName] || {};
         const total = userCounts.get(userName) || 0;
@@ -975,7 +987,9 @@ export default function ManageTickets() {
       // Append overall status totals
       summaryRows.push([]);
       summaryRows.push(["Status", "Count"]);
-      Array.from(statusCounts.entries()).forEach(([k, v]) => summaryRows.push([k, v]));
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        summaryRows.push([k, v]),
+      );
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
@@ -1476,7 +1490,6 @@ export default function ManageTickets() {
             <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
               Export Excel
             </Button>
-
           </div>
         </div>
       </div>
@@ -1501,7 +1514,9 @@ export default function ManageTickets() {
             <p className="text-2xl md:text-3xl font-bold text-orange-600">
               {statusCounts["In Progress"] ?? statusCounts["InProgress"] ?? 0}
             </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">In Progress</p>
+            <p className="mt-2 text-sm font-medium text-gray-600">
+              In Progress
+            </p>
           </CardContent>
         </Card>
 

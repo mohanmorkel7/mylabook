@@ -585,7 +585,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
                 if (rule && rule.domain) {
                   const domain = String(rule.domain || "").trim();
                   if (!domain) continue;
-                  const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+                  const stripped = domain.startsWith("@")
+                    ? domain.slice(1)
+                    : domain;
                   const main = stripped.split(".")[0] || stripped;
                   tagName = main
                     .replace(/[^a-zA-Z0-9]/g, " ")
@@ -601,7 +603,8 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
       }
 
       if (!tagMap[tagName]) tagMap[tagName] = { tag: tagName, counts: {} };
-      tagMap[tagName].counts[status] = (tagMap[tagName].counts[status] || 0) + 1;
+      tagMap[tagName].counts[status] =
+        (tagMap[tagName].counts[status] || 0) + 1;
     }
 
     const tags = Object.values(tagMap);

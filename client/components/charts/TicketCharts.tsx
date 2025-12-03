@@ -527,8 +527,10 @@ export default function TicketCharts({
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold">By Tag (Status)</h4>
             <div className="text-sm text-gray-600">
-              Tags: {" "}
-              <span className="font-medium text-gray-900">{tagStatus.length}</span>
+              Tags:{" "}
+              <span className="font-medium text-gray-900">
+                {tagStatus.length}
+              </span>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -539,7 +541,11 @@ export default function TicketCharts({
             ) : (
               <div className="min-w-[320px]">
                 <GroupedBarChart
-                  users={tagStatus.map((t: any) => ({ user_id: t.tag, name: t.tag, counts: t.counts }))}
+                  users={tagStatus.map((t: any) => ({
+                    user_id: t.tag,
+                    name: t.tag,
+                    counts: t.counts,
+                  }))}
                   statuses={statuses}
                 />
               </div>

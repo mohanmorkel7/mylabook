@@ -681,7 +681,8 @@ ${sanitizedHtml || rawText || ""}`;
           if (matchedRule.domain && typeof matchedRule.domain === "string") {
             const d = String(matchedRule.domain).trim();
             const clean = d.replace(/^@/, "").split(".")[0];
-            if (clean) tagsSet.add(clean.charAt(0).toUpperCase() + clean.slice(1));
+            if (clean)
+              tagsSet.add(clean.charAt(0).toUpperCase() + clean.slice(1));
           }
           // bucket name as tag
           if (matchedRule.bucket && typeof matchedRule.bucket === "string") {
@@ -698,7 +699,10 @@ ${sanitizedHtml || rawText || ""}`;
           tagsSet.add(String((config as any).team).trim());
         }
       } catch (tagErr) {
-        console.warn("Error deriving tags from matched rule:", tagErr?.message || tagErr);
+        console.warn(
+          "Error deriving tags from matched rule:",
+          tagErr?.message || tagErr,
+        );
       }
 
       const tagsArray = Array.from(tagsSet);

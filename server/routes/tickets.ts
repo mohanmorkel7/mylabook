@@ -228,7 +228,9 @@ router.get("/", async (req: Request, res: Response) => {
         : undefined,
       search: req.query.search as string,
       tags: req.query.tags ? (req.query.tags as string).split(",") : undefined,
-      date_from: raw_date_from ? expandIstDate(raw_date_from, false) : undefined,
+      date_from: raw_date_from
+        ? expandIstDate(raw_date_from, false)
+        : undefined,
       date_to: raw_date_to ? expandIstDate(raw_date_to, true) : undefined,
       // support explicit 'unassigned' and created_from_mail_config flags
       unassigned:

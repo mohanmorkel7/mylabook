@@ -120,7 +120,11 @@ export default function TicketCharts({
         try {
           const resp3 = await api.get(`/tickets/summary/by-tag${query}`);
           const p3 = resp3?.data ?? resp3;
-          console.log("TicketCharts: tag-status API response:", { resp3, p3, tags: p3?.tags });
+          console.log("TicketCharts: tag-status API response:", {
+            resp3,
+            p3,
+            tags: p3?.tags,
+          });
           if (mounted) setTagStatus(p3?.tags || []);
         } catch (e3) {
           console.warn("TicketCharts: failed to fetch tag-status summary", e3);

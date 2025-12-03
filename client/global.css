@@ -214,7 +214,14 @@
     @apply border-border;
   }
 
+  /* Ensure full-height layout so internal scroll containers work correctly and avoid duplicate browser scrollbars */
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-hidden;
   }
 }

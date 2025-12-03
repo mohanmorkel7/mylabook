@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { azureSilentAuth } from "@/lib/azure-silent-auth";
 import { azureSyncService } from "@/lib/azure-sync-service";
 import {
@@ -9,6 +10,10 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { textAlign } from "html2canvas/dist/types/css/property-descriptors/text-align";
+import api from "@/lib/api";
+import { Settings } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { MailConfigsPanel } from "@/components/MailConfigsPanel";
 
 type GraphEmail = {
   id: string;
@@ -143,14 +148,46 @@ function sanitizeHtml(html: string): string {
   }
 }
 
+interface User {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
+interface User {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
 export default function Mails() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [emails, setEmails] = useState<GraphEmail[]>([]);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
+  const [configPanelOpen, setConfigPanelOpen] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
 
   const targetUser = useMemo(() => encodeURIComponent(TARGET_MAIL), []);
+
+  useEffect(() => {
+    // Fetch mitra users for mail config
+    const fetchUsers = async () => {
+      try {
+        const resp = await api.get("/users");
+        const list = (resp && (resp.users || resp.data || resp)) || [];
+        setUsers(list as User[]);
+      } catch (error) {
+        console.warn("Failed to fetch users:", error);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -187,6 +224,64 @@ export default function Mails() {
     };
   }, [targetUser]);
 
+  // Periodically trigger server-side processing using the currently fetched emails
+  useEffect(() => {
+    let interval: any = null;
+    // Don't start if not authenticated or no emails
+    if (!needsAuth && emails && emails.length > 0) {
+      // Trigger immediately once, then every 30 seconds
+      const trigger = async () => {
+        try {
+          console.log(
+            "Triggering periodic email processing with",
+            emails.length,
+            "emails",
+            emails,
+          );
+          const resp = await api.post("/mail-configs/process-emails", {
+            emails,
+            userId: user?.id ? parseInt(user.id, 10) : undefined,
+          });
+          console.log("Periodic processing response:", resp);
+
+          const results = resp?.results || resp?.data?.results || [];
+          if (results.length > 0) {
+            console.log(`Found ${results.length} processing results:`);
+            let anyCreated = false;
+            for (const r of results) {
+              const emailObj = emails.find((e) => e.id === r.emailId);
+              console.log({
+                emailId: r.emailId,
+                subject: emailObj?.subject,
+                from:
+                  emailObj?.from?.emailAddress?.address ||
+                  emailObj?.sender?.emailAddress?.address,
+                configId: r.configId,
+                success: r.success,
+                error: r.error,
+              });
+              if (r.success) anyCreated = true;
+            }
+            if (anyCreated) {
+              try {
+                window.dispatchEvent(new CustomEvent("createdTicketsUpdated"));
+              } catch (e) {}
+            }
+          }
+        } catch (err) {
+          console.error("Periodic processing error:", err);
+        }
+      };
+
+      trigger();
+      interval = setInterval(trigger, 30000); // 30 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [needsAuth, emails, user?.id]);
+
   async function fetchEmailsWithToken(token: string, mounted = true) {
     setLoading(true);
     setError(null);
@@ -195,7 +290,7 @@ export default function Mails() {
       //   `https://graph.microsoft.com/v1.0/users/${targetUser}/messages` +
       //   `?$top=25&$orderby=receivedDateTime%20desc&$select=subject,from,body,receivedDateTime`;
 
-      const url=`https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/mailFolders/inbox/messages`;
+      const url = `https://graph.microsoft.com/v1.0/users/reconops@mylapay.com/mailFolders/inbox/messages`;
 
       // const url=`https://graph.microsoft.com/v1.0/users/support.wavegate@payswiff.com/messages`;
 
@@ -204,8 +299,6 @@ export default function Mails() {
       //dcfb7108-ce83-442b-ba56-0e56a1c1583c
 
       // const url=`https://graph.microsoft.com/v1.0//users/reconops@mylapay.com/mailFolders`
-
-      
 
       const res = await fetch(url, {
         headers: {
@@ -367,12 +460,35 @@ export default function Mails() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Mails Inbox</h1>
-        {/* <p className="text-gray-600 mt-1">
-          Showing latest emails for {decodeURIComponent(targetUser)} containing
-          "Invoice" in the subject.
-        </p> */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Mails Inbox</h1>
+          {/* <p className="text-gray-600 mt-1">
+            Showing latest emails for {decodeURIComponent(targetUser)} containing
+            "Invoice" in the subject.
+          </p> */}
+        </div>
+        {/* {!needsAuth && (
+          <Button
+            onClick={() => setConfigPanelOpen(true)}
+            variant="outline"
+            size="lg"
+            className="flex items-center gap-2"
+          >
+            <Settings className="h-5 w-5" />
+            Config
+          </Button>
+        )} */}
+
+        <Button
+            onClick={() => setConfigPanelOpen(true)}
+            variant="outline"
+            size="lg"
+            className="flex items-center gap-2"
+          >
+            <Settings className="h-5 w-5" />
+            Config
+          </Button>
       </div>
 
       <Card>
@@ -476,7 +592,10 @@ export default function Mails() {
                               <div className="flex items-start justify-between w-full">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-start gap-3">
-                                    <div className="flex-1" style={{textAlign:"left"}}>
+                                    <div
+                                      className="flex-1"
+                                      style={{ textAlign: "left" }}
+                                    >
                                       <div className="text-sm font-medium text-gray-900 truncate">
                                         {m.subject || "(No subject)"}
                                       </div>
@@ -548,6 +667,13 @@ export default function Mails() {
           )}
         </CardContent>
       </Card>
+
+      <MailConfigsPanel
+        isOpen={configPanelOpen}
+        onClose={() => setConfigPanelOpen(false)}
+        users={users}
+        emails={emails}
+      />
     </div>
   );
 }

@@ -20,6 +20,9 @@ export interface User {
     | "switch_team"
     | "unknown";
   department?: string;
+  // New: whether user is a department admin (head) and which department they administer
+  department_admin?: boolean;
+  admin_for_department?: string | null;
   manager_id?: number;
   status: "active" | "inactive" | "pending";
   start_date?: string;
@@ -85,13 +88,33 @@ export class UserRepository {
   static async findAll(): Promise<User[]> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
+             notes, created_at, updated_at, azure_object_id, sso_provider, job_title
+      FROM users
+      ORDER BY created_at DESC
+    `;
+    try {
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (err: any) {
+      // If DB schema hasn't been migrated yet (missing columns), fallback to older select
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
+        const fallbackQuery = `
+      SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, azure_object_id, sso_provider, job_title
       FROM users
       ORDER BY created_at DESC
     `;
-    const result = await pool.query(query);
-    return result.rows;
+        const fallbackRes = await pool.query(fallbackQuery);
+        return fallbackRes.rows;
+      }
+      throw err;
+    }
   }
 
   static async findByAzureObjectId(
@@ -99,25 +122,63 @@ export class UserRepository {
   ): Promise<User | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
+             notes, created_at, updated_at, azure_object_id, sso_provider, job_title
+      FROM users
+      WHERE azure_object_id = $1
+    `;
+    try {
+      const result = await pool.query(query, [azureObjectId]);
+      return result.rows[0] || null;
+    } catch (err: any) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
+        const fallback = `
+      SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, azure_object_id, sso_provider, job_title
       FROM users
       WHERE azure_object_id = $1
     `;
-    const result = await pool.query(query, [azureObjectId]);
-    return result.rows[0] || null;
+        const r2 = await pool.query(fallback, [azureObjectId]);
+        return r2.rows[0] || null;
+      }
+      throw err;
+    }
   }
 
   static async findById(id: number): Promise<User | null> {
     const query = `
+      SELECT id, first_name, last_name, email, phone, role, department,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
+             notes, created_at, updated_at, azure_object_id, sso_provider, job_title
+      FROM users
+      WHERE id = $1
+    `;
+    try {
+      const result = await pool.query(query, [id]);
+      return result.rows[0] || null;
+    } catch (err: any) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
+        const fallback = `
       SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, azure_object_id, sso_provider, job_title
       FROM users
       WHERE id = $1
     `;
-    const result = await pool.query(query, [id]);
-    return result.rows[0] || null;
+        const r2 = await pool.query(fallback, [id]);
+        return r2.rows[0] || null;
+      }
+      throw err;
+    }
   }
 
   static async findByIdWithPassword(
@@ -125,36 +186,74 @@ export class UserRepository {
   ): Promise<(User & { password_hash: string }) | null> {
     const query = `
       SELECT id, first_name, last_name, email, phone, role, department,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
+             notes, created_at, updated_at, password_hash, azure_object_id, sso_provider, job_title
+      FROM users
+      WHERE id = $1
+    `;
+    try {
+      const result = await pool.query(query, [id]);
+      return result.rows[0] || null;
+    } catch (err: any) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
+        const fallback = `
+      SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, password_hash, azure_object_id, sso_provider, job_title
       FROM users
       WHERE id = $1
     `;
-    const result = await pool.query(query, [id]);
-    return result.rows[0] || null;
+        const r2 = await pool.query(fallback, [id]);
+        return r2.rows[0] || null;
+      }
+      throw err;
+    }
   }
 
   static async findByEmail(email: string): Promise<User | null> {
     const query = `
+      SELECT id, first_name, last_name, email, phone, role, department,
+             department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
+             notes, created_at, updated_at, password_hash, azure_object_id, sso_provider, job_title
+      FROM users
+      WHERE email = $1
+    `;
+    try {
+      const result = await pool.query(query, [email]);
+      return result.rows[0] || null;
+    } catch (err: any) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
+        const fallback = `
       SELECT id, first_name, last_name, email, phone, role, department,
              manager_id, status, start_date, last_login, two_factor_enabled,
              notes, created_at, updated_at, password_hash, azure_object_id, sso_provider, job_title
       FROM users
       WHERE email = $1
     `;
-    const result = await pool.query(query, [email]);
-    return result.rows[0] || null;
+        const r2 = await pool.query(fallback, [email]);
+        return r2.rows[0] || null;
+      }
+      throw err;
+    }
   }
 
   static async create(userData: CreateUserData): Promise<User> {
     const passwordHash = await bcrypt.hash(userData.password, 10);
 
     const query = `
-      INSERT INTO users (first_name, last_name, email, phone, password_hash, role, 
-                        department, manager_id, start_date, two_factor_enabled, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING id, first_name, last_name, email, phone, role, department, 
-                manager_id, status, start_date, last_login, two_factor_enabled, 
+      INSERT INTO users (first_name, last_name, email, phone, password_hash, role,
+                        department, department_admin, admin_for_department, manager_id, start_date, two_factor_enabled, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, first_name, last_name, email, phone, role, department, department_admin, admin_for_department,
+                manager_id, status, start_date, last_login, two_factor_enabled,
                 notes, created_at, updated_at
     `;
 
@@ -166,14 +265,50 @@ export class UserRepository {
       passwordHash,
       userData.role,
       userData.department || null,
+      userData.department_admin || false,
+      userData.admin_for_department || null,
       userData.manager_id || null,
       userData.start_date || null,
       userData.two_factor_enabled || false,
       userData.notes || null,
     ];
 
-    const result = await pool.query(query, values);
-    return result.rows[0];
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (err: any) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
+        // Fallback to older insert without department_admin/admin_for_department
+        const fallback = `
+      INSERT INTO users (first_name, last_name, email, phone, password_hash, role,
+                        department, manager_id, start_date, two_factor_enabled, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id, first_name, last_name, email, phone, role, department,
+                manager_id, status, start_date, last_login, two_factor_enabled,
+                notes, created_at, updated_at
+    `;
+        const fallbackValues = [
+          userData.first_name,
+          userData.last_name,
+          userData.email,
+          userData.phone || null,
+          passwordHash,
+          userData.role,
+          userData.department || null,
+          userData.manager_id || null,
+          userData.start_date || null,
+          userData.two_factor_enabled || false,
+          userData.notes || null,
+        ];
+        const r2 = await pool.query(fallback, fallbackValues);
+        return r2.rows[0];
+      }
+      throw err;
+    }
   }
 
   static async update(
@@ -213,12 +348,48 @@ export class UserRepository {
       SET ${setClause.join(", ")}
       WHERE id = $${paramIndex}
       RETURNING id, first_name, last_name, email, phone, role, department,
-                manager_id, status, start_date, last_login, two_factor_enabled,
+                department_admin, admin_for_department, manager_id, status, start_date, last_login, two_factor_enabled,
                 notes, created_at, updated_at, azure_object_id, sso_provider, job_title
     `;
 
-    const result = await pool.query(query, values);
-    return result.rows[0] || null;
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0] || null;
+    } catch (err: any) {
+      if (
+        err &&
+        (err.code === "42703" ||
+          /column .* does not exist/i.test(err.message || ""))
+      ) {
+        // Retry by removing department_admin/admin_for_department from setClause and values
+        const filteredPairs = Object.entries(userData).filter(
+          ([k]) => k !== "department_admin" && k !== "admin_for_department",
+        );
+        const fallbackSet: string[] = [];
+        const fallbackVals: any[] = [];
+        let idx = 1;
+        for (const [k, v] of filteredPairs) {
+          fallbackSet.push(`${k} = $${idx++}`);
+          fallbackVals.push(v === "" && ["start_date"].includes(k) ? null : v);
+        }
+        if (fallbackSet.length === 0) {
+          return this.findById(id);
+        }
+        fallbackSet.push(`updated_at = CURRENT_TIMESTAMP`);
+        fallbackVals.push(id);
+        const fallbackQuery = `
+      UPDATE users
+      SET ${fallbackSet.join(", ")}
+      WHERE id = $${idx}
+      RETURNING id, first_name, last_name, email, phone, role, department,
+                manager_id, status, start_date, last_login, two_factor_enabled,
+                notes, created_at, updated_at, azure_object_id, sso_provider, job_title
+    `;
+        const r2 = await pool.query(fallbackQuery, fallbackVals);
+        return r2.rows[0] || null;
+      }
+      throw err;
+    }
   }
 
   static async delete(id: number): Promise<boolean> {

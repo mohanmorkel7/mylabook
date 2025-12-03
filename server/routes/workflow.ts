@@ -301,16 +301,53 @@ router.post("/projects", async (req: Request, res: Response) => {
       !projectData.project_type ||
       !projectData.created_by
     ) {
-      return res
-        .status(400)
-        .json({
-          error: "Missing required fields: name, project_type, created_by",
-        });
+      return res.status(400).json({
+        error: "Missing required fields: name, project_type, created_by",
+      });
     }
 
     if (await isDatabaseAvailable()) {
+      // Ensure source_type is set to a valid default to satisfy DB NOT NULL constraint
+      projectData.source_type = projectData.source_type || "manual";
+      projectData.source_id = projectData.source_id ?? null;
+      projectData.created_by = projectData.created_by || 1;
+
       const newProject = await WorkflowRepository.createProject(projectData);
-      res.status(201).json(newProject);
+
+      // If client included steps in payload, create them now
+      if (Array.isArray(projectData.steps) && projectData.steps.length > 0) {
+        try {
+          for (const s of projectData.steps) {
+            const stepData: CreateWorkflowStepData = {
+              project_id: newProject.id,
+              step_name: s.step_name || s.name || s.stepName,
+              step_description:
+                s.step_description ||
+                s.description ||
+                s.stepDescription ||
+                null,
+              step_order: s.step_order ?? s.stepOrder ?? null,
+              assigned_to: s.assigned_to ?? s.assignedTo ?? null,
+              estimated_hours: s.estimated_hours ?? s.estimatedHours ?? null,
+              due_date: s.due_date ?? s.dueDate ?? s.eta ?? null,
+              status: s.status || "pending",
+              created_by: projectData.created_by || 1,
+              // include probability_percent when client provides it
+              probability_percent:
+                s.probability_percent ?? s.probability ?? null,
+            };
+            await WorkflowRepository.createStep(stepData);
+          }
+        } catch (stepsErr) {
+          console.warn("Failed to create project steps:", stepsErr);
+        }
+      }
+
+      // Reload project with steps
+      const projectWithSteps = await WorkflowRepository.getProjectById(
+        newProject.id,
+      );
+      res.status(201).json(projectWithSteps);
     } else {
       // Return mock created project
       const mockProject = {
@@ -329,7 +366,85 @@ router.post("/projects", async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error("Error creating project:", error);
-    res.status(500).json({ error: "Failed to create project" });
+    // Return detailed message for debugging (consider sanitizing in production)
+    res
+      .status(500)
+      .json({ error: (error as Error).message || "Failed to create project" });
+  }
+});
+
+// Delete project
+router.delete("/projects/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid project ID" });
+
+    if (await isDatabaseAvailable()) {
+      await WorkflowRepository.deleteProject(id);
+      res.status(204).json({});
+    } else {
+      // Remove from mock data
+      const idx = WorkflowMockData.projects.findIndex((p) => p.id === id);
+      if (idx !== -1) WorkflowMockData.projects.splice(idx, 1);
+      res.status(204).json({});
+    }
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    res.status(500).json({ error: "Failed to delete project" });
+  }
+});
+
+// Update project
+router.patch("/projects/:id", async (req: Request, res: Response) => {
+  try {
+    // Log incoming request for debugging update issues
+    try {
+      console.log("[workflow PATCH] incoming request:", {
+        method: req.method,
+        url: req.originalUrl || req.url,
+        contentType: req.headers["content-type"],
+        rawBody: req.rawBody ? req.rawBody.toString("utf8") : null,
+      });
+    } catch (logErr) {
+      console.warn("Failed to log request body:", logErr);
+    }
+
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid project ID" });
+
+    const updateData: Partial<CreateWorkflowProjectData> = req.body || {};
+
+    if (await isDatabaseAvailable()) {
+      // Use repository to apply updates
+      const updated = await WorkflowRepository.updateProject(id, updateData);
+      if (!updated) return res.status(404).json({ error: "Project not found" });
+      res.json(updated);
+    } else {
+      // Update mock
+      const idx = WorkflowMockData.projects.findIndex((p) => p.id === id);
+      if (idx === -1)
+        return res.status(404).json({ error: "Project not found" });
+      WorkflowMockData.projects[idx] = {
+        ...WorkflowMockData.projects[idx],
+        ...updateData,
+        updated_at: new Date().toISOString(),
+      } as any;
+      const mockProject = WorkflowMockData.projects[idx];
+      const projectSteps = WorkflowMockData.steps.filter(
+        (s) => s.project_id === id,
+      );
+      const projectComments = WorkflowMockData.comments.filter(
+        (c) => c.project_id === id,
+      );
+      res.json({
+        ...mockProject,
+        steps: projectSteps,
+        comments: projectComments,
+      });
+    }
+  } catch (error) {
+    console.error("Error updating project:", error);
+    res.status(500).json({ error: "Failed to update project" });
   }
 });
 
@@ -395,8 +510,67 @@ router.get(
       }
 
       if (await isDatabaseAvailable()) {
-        const steps = await WorkflowRepository.getProjectSteps(projectId);
-        res.json(steps);
+        let steps = await WorkflowRepository.getProjectSteps(projectId);
+
+        // If no explicit project steps exist yet, fall back to the project's template steps
+        // so the UI can show the expected pipeline even before steps are persisted.
+        if ((steps || []).length === 0) {
+          try {
+            const project = await WorkflowRepository.getProjectById(
+              projectId,
+              false,
+              false,
+            );
+            const templateId = (project as any)?.template_id;
+            if (templateId) {
+              // Lazy-load template steps
+              const { TemplateRepository } = await import("../models/Template");
+              const tpl = await TemplateRepository.findById(templateId);
+              if (
+                tpl &&
+                Array.isArray((tpl as any).steps) &&
+                (tpl as any).steps.length > 0
+              ) {
+                // Map template steps to the workflow step shape expected by the client
+                const mapped = (tpl as any).steps.map(
+                  (ts: any, idx: number) => ({
+                    id: ts.id,
+                    project_id: projectId,
+                    step_name: ts.name || ts.step_name,
+                    step_description:
+                      ts.description || ts.step_description || null,
+                    step_order: ts.step_order || idx + 1,
+                    status: "pending",
+                    assigned_to: null,
+                    estimated_hours: ts.default_eta_days
+                      ? ts.default_eta_days * 8
+                      : null,
+                    actual_hours: null,
+                    start_date: null,
+                    due_date: null,
+                    completion_date: null,
+                    dependencies: null,
+                    is_automated: ts.is_automated || false,
+                    automation_config: ts.automation_config || null,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    created_by: tpl.created_by || 1,
+                    probability_percent: ts.probability_percent || 0,
+                    // Mark as template-derived so client knows these are not persisted project steps
+                    is_template: true,
+                    isTemplate: true,
+                  }),
+                );
+
+                return res.json(mapped);
+              }
+            }
+          } catch (tplErr) {
+            console.warn("Failed to load template steps fallback:", tplErr);
+          }
+        }
+
+        return res.json(steps);
       } else {
         const mockSteps = WorkflowMockData.steps.filter(
           (s) => s.project_id === projectId,
@@ -425,11 +599,14 @@ router.post(
         project_id: projectId,
       };
 
+      // Provide sensible default for created_by when not provided
+      stepData.created_by = stepData.created_by || 1;
+
       // Validate required fields
-      if (!stepData.step_name || !stepData.created_by) {
+      if (!stepData.step_name) {
         return res
           .status(400)
-          .json({ error: "Missing required fields: step_name, created_by" });
+          .json({ error: "Missing required fields: step_name" });
       }
 
       if (await isDatabaseAvailable()) {
@@ -489,6 +666,27 @@ router.patch("/steps/:stepId/status", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error updating step status:", error);
     res.status(500).json({ error: "Failed to update step status" });
+  }
+});
+
+// Delete step
+router.delete("/steps/:stepId", async (req: Request, res: Response) => {
+  try {
+    const stepId = parseInt(req.params.stepId);
+    if (isNaN(stepId))
+      return res.status(400).json({ error: "Invalid step ID" });
+
+    if (await isDatabaseAvailable()) {
+      await WorkflowRepository.deleteStep(stepId);
+      res.status(204).json({});
+    } else {
+      const idx = WorkflowMockData.steps.findIndex((s) => s.id === stepId);
+      if (idx !== -1) WorkflowMockData.steps.splice(idx, 1);
+      res.status(204).json({});
+    }
+  } catch (error) {
+    console.error("Error deleting step:", error);
+    res.status(500).json({ error: "Failed to delete step" });
   }
 });
 
@@ -556,7 +754,32 @@ router.get(
           projectId,
           stepId,
         );
-        res.json(comments);
+        // Map DB comment rows to chat message shape expected by the client
+        const mapped = (comments || []).map((c: any) => {
+          let attachments = [] as any[];
+          try {
+            if (c.attachments)
+              attachments =
+                typeof c.attachments === "string"
+                  ? JSON.parse(c.attachments)
+                  : c.attachments;
+          } catch (e) {
+            attachments = [];
+          }
+          return {
+            id: c.id,
+            user_id: c.created_by,
+            user_name: c.creator_name || c.user_name || c.email || "Unknown",
+            message: c.comment_text || c.message || "",
+            message_type: c.comment_type || "comment",
+            is_rich_text: !!c.is_rich_text,
+            attachments,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+            step_id: c.step_id,
+          };
+        });
+        res.json(mapped);
       } else {
         let mockComments = WorkflowMockData.comments.filter(
           (c) => c.project_id === projectId,
@@ -564,7 +787,19 @@ router.get(
         if (stepId) {
           mockComments = mockComments.filter((c) => c.step_id === stepId);
         }
-        res.json(mockComments);
+        const mappedMock = mockComments.map((c: any) => ({
+          id: c.id,
+          user_id: c.created_by || c.user_id,
+          user_name: c.creator_name || c.user_name || "Mock User",
+          message: c.comment_text || c.message || "",
+          message_type: c.comment_type || "comment",
+          is_rich_text: !!c.is_rich_text,
+          attachments: c.attachments || [],
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+          step_id: c.step_id,
+        }));
+        res.json(mappedMock);
       }
     } catch (error) {
       console.error("Error fetching comments:", error);
@@ -596,8 +831,21 @@ router.post(
       }
 
       if (await isDatabaseAvailable()) {
-        const newComment = await WorkflowRepository.createComment(commentData);
-        res.status(201).json(newComment);
+        const created = await WorkflowRepository.createComment(commentData);
+        // Map created comment to client's chat shape
+        const mappedCreated = {
+          id: created.id,
+          user_id: created.created_by,
+          user_name: created.creator_name || created.user_name || "Unknown",
+          message: created.comment_text || created.message || "",
+          message_type: created.comment_type || "comment",
+          is_rich_text: !!created.is_rich_text,
+          attachments: created.attachments || [],
+          created_at: created.created_at,
+          updated_at: created.updated_at,
+          step_id: created.step_id,
+        };
+        res.status(201).json(mappedCreated);
       } else {
         // Return mock created comment
         const mockComment = {

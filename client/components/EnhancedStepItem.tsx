@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useNavigate } from "react-router-dom";
-import { RichTextEditor } from "./RichTextEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -714,7 +713,12 @@ export function EnhancedStepItem({
                           >
                             {message.message_type === "system"
                               ? "📋"
-                              : message.user_name.charAt(0)}
+                              : message.user_name &&
+                                  message.user_name.length > 0
+                                ? message.user_name.charAt(0)
+                                : message.user_id
+                                  ? String(message.user_id).charAt(0)
+                                  : "?"}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center justify-between mb-1">
@@ -774,23 +778,14 @@ export function EnhancedStepItem({
                             <div className="text-sm text-gray-700">
                               {editingMessageId === message.id ? (
                                 <div className="space-y-2">
-                                  {message.is_rich_text ? (
-                                    <RichTextEditor
-                                      value={editMessageText}
-                                      onChange={setEditMessageText}
-                                      placeholder="Edit your message with rich formatting..."
-                                      className="min-h-[80px] border-gray-200"
-                                    />
-                                  ) : (
-                                    <Textarea
-                                      value={editMessageText}
-                                      onChange={(e) =>
-                                        setEditMessageText(e.target.value)
-                                      }
-                                      className="min-h-[60px]"
-                                      placeholder="Edit your message..."
-                                    />
-                                  )}
+                                  <Textarea
+                                    value={editMessageText}
+                                    onChange={(e) =>
+                                      setEditMessageText(e.target.value)
+                                    }
+                                    className="min-h-[80px] border-gray-200"
+                                    placeholder="Edit your message..."
+                                  />
                                   <div className="flex space-x-2">
                                     <Button
                                       size="sm"
@@ -1043,10 +1038,10 @@ export function EnhancedStepItem({
                       )}
 
                       <div className="mb-3">
-                        <RichTextEditor
+                        <Textarea
                           value={newMessage}
-                          onChange={setNewMessage}
-                          placeholder="Type your message with rich formatting..."
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Type your message..."
                           className="min-h-[80px] border-gray-200"
                         />
                       </div>

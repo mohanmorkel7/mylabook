@@ -108,6 +108,13 @@ export function VCDraggableStepsList({
         const entries = await Promise.all(
           items.map(async (s) => {
             try {
+              if (stepApiBase === "workflow") {
+                const rows = await apiClient.request(
+                  `/workflow/projects/${s.project_id}/comments?stepId=${s.id}`,
+                );
+                return [s.id, Array.isArray(rows) ? rows.length : 0] as const;
+              }
+
               const rows = await apiClient.request(
                 `/${stepApiBase}/steps/${s.id}/chats`,
               );

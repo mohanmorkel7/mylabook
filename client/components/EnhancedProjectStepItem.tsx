@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { RichTextEditor } from "./RichTextEditor";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -583,9 +583,9 @@ export function EnhancedProjectStepItem({
                     )}
 
                     <div className="mb-3">
-                      <RichTextEditor
+                      <Textarea
                         value={newComment}
-                        onChange={setNewComment}
+                        onChange={(e) => setNewComment(e.target.value)}
                         placeholder="Add a detailed comment for this step..."
                         className="min-h-[100px] border-gray-200"
                       />

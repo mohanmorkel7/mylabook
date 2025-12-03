@@ -116,6 +116,9 @@ import SalesDashboard from "@/pages/SalesDashboard";
 import ProductManagement from "@/pages/ProductManagement";
 import ProductWorkflow from "@/pages/ProductWorkflow";
 import AlertsNotifications from "@/pages/AlertsNotifications";
+import ProductsPage from "@/pages/Products";
+import CreateProduct from "@/pages/CreateProduct";
+import ProductOverview from "@/pages/ProductOverview";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import LeadDashboard from "@/pages/LeadDashboard";
 import CreateLead from "@/pages/CreateLead";
@@ -143,8 +146,12 @@ import ProposalNew from "@/pages/ProposalNew";
 import ProposalList from "@/pages/ProposalList";
 import FollowUpTracker from "@/pages/FollowUpTracker";
 import PipelineSettings from "@/pages/PipelineSettings";
-import Tickets from "@/pages/Tickets";
+import ManageTickets from "@/pages/ManageTickets";
+import TicketsCreate from "@/pages/TicketsCreate";
+import TicketDetail from "@/pages/TicketDetail";
 import Mails from "@/pages/Mails";
+import MailConfigs from "@/pages/MailConfigs";
+import CreateConfigPage from "@/pages/CreateConfigPage";
 import AdminTemplates from "@/pages/AdminTemplates";
 import FinOpsDashboard from "@/pages/FinOpsDashboard";
 import FinOpsAutomation from "@/pages/FinOpsAutomation";
@@ -298,7 +305,40 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <Tickets />
+              <ManageTickets />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/tickets/create"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TicketsCreate />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/tickets/:id"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TicketDetail />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/tickets/:id/edit"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <TicketsCreate />
             </DashboardLayout>
           </ProtectedRoute>
         }
@@ -310,6 +350,39 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
             <DashboardLayout>
               <Mails />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/mail-configs"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
+            <DashboardLayout>
+              <MailConfigs />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/mail-configs/create"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
+            <DashboardLayout>
+              <CreateConfigPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/mail-configs/edit/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "development", "finops"]}>
+            <DashboardLayout>
+              <CreateConfigPage />
             </DashboardLayout>
           </ProtectedRoute>
         }
@@ -439,7 +512,7 @@ function AppRoutes() {
       <Route
         path="/upload-tasks"
         element={
-          <ProtectedRoute allowedRoles={["admin","finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finops"]}>
             <DashboardLayout>
               <TaskExcelUpload></TaskExcelUpload>
             </DashboardLayout>
@@ -648,7 +721,9 @@ function AppRoutes() {
       <Route
         path="/clients"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales", "product","business_analyst"]}>
+          <ProtectedRoute
+            allowedRoles={["admin", "sales", "product", "business_analyst"]}
+          >
             <DashboardLayout>
               <ClientDashboard />
             </DashboardLayout>
@@ -658,7 +733,7 @@ function AppRoutes() {
       <Route
         path="/clients/create"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales","business_analyst"]}>
+          <ProtectedRoute allowedRoles={["admin", "sales", "business_analyst"]}>
             <DashboardLayout>
               <CreateClient />
             </DashboardLayout>
@@ -668,7 +743,9 @@ function AppRoutes() {
       <Route
         path="/clients/:id"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales", "product","business_analyst"]}>
+          <ProtectedRoute
+            allowedRoles={["admin", "sales", "product", "business_analyst"]}
+          >
             <DashboardLayout>
               <ClientDetails />
             </DashboardLayout>
@@ -678,7 +755,7 @@ function AppRoutes() {
       <Route
         path="/clients/:id/edit"
         element={
-          <ProtectedRoute allowedRoles={["admin", "sales","business_analyst"]}>
+          <ProtectedRoute allowedRoles={["admin", "sales", "business_analyst"]}>
             <DashboardLayout>
               <ClientEdit />
             </DashboardLayout>
@@ -966,6 +1043,52 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
               <ProductManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/products"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
+            <DashboardLayout>
+              <ProductsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/create-product"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <CreateProduct />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/products/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <ProductOverview />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/products/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              {/* Keep overview visible and mount workflow so it can open the edit dialog modal */}
+              <ProductOverview />
+              <ProductWorkflow />
             </DashboardLayout>
           </ProtectedRoute>
         }

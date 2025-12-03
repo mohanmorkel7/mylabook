@@ -8,6 +8,8 @@ export class ApiClient {
   private isOfflineMode = false;
   private offlineDetectedAt = 0;
   private readonly OFFLINE_THRESHOLD = 2; // Number of consecutive failures to trigger offline mode
+  private probeIntervalId: number | null = null;
+  private readonly PROBE_INTERVAL_MS = 10000; // Probe server every 10s when offline
 
   // Method to reset circuit breaker (for development/demo mode)
   public resetCircuitBreaker() {
@@ -15,6 +17,10 @@ export class ApiClient {
     this.lastFailureTime = 0;
     this.isOfflineMode = false;
     this.offlineDetectedAt = 0;
+    if (this.probeIntervalId) {
+      clearInterval(this.probeIntervalId);
+      this.probeIntervalId = null;
+    }
     if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
       console.log("Circuit breaker reset");
   }
@@ -32,7 +38,28 @@ export class ApiClient {
         console.warn(
           "���� The app will show cached/mock data until the server is restored",
         );
+      // Start probing the server so the client can auto-recover when backend is back
+      this.startProbe();
     }
+  }
+
+  private startProbe() {
+    if (this.probeIntervalId) return;
+    if (typeof window === "undefined") return;
+    this.probeIntervalId = window.setInterval(async () => {
+      try {
+        const url = `${API_BASE_URL}`;
+        const res = await fetch(url, { method: "GET" });
+        if (res && res.ok) {
+          // Server is back
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.log("🟢 Backend reachable again via probe");
+          this.resetCircuitBreaker();
+        }
+      } catch (e) {
+        // ignore probe errors
+      }
+    }, this.PROBE_INTERVAL_MS) as unknown as number;
   }
 
   // Check if we should try to exit offline mode
@@ -65,12 +92,44 @@ export class ApiClient {
     // Ensure original fetch is preserved
     this.preserveOriginalFetch();
     // Offline mode check
-    if (this.isOfflineMode && !this.shouldRetryConnection()) {
-      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-        console.warn(
-          `🔴 Request to ${endpoint} blocked - app is in offline mode`,
+    if (this.isOfflineMode) {
+      // If we have recently entered offline mode and it's too soon to retry, fail fast
+      if (!this.shouldRetryConnection()) {
+        if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+          console.warn(
+            `🔴 Request to ${endpoint} blocked - app is in offline mode`,
+          );
+        // Graceful fallback to avoid spamming console with errors while offline
+        return this.getEmptyFallbackResponse(endpoint);
+      }
+
+      // Attempt a quick probe before failing to allow transient recoveries.
+      // Use a short timeout so UI doesn't hang.
+      try {
+        const probeTimeout = 2000; // 2s
+        const probePromise = fetch(`${API_BASE_URL}`, { method: "GET" });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Probe timeout")), probeTimeout),
         );
-      throw new Error("Offline mode: Backend server is unavailable");
+        const probeResp = await Promise.race([probePromise, timeoutPromise]);
+        if (probeResp && probeResp.ok) {
+          // Backend reachable — reset circuit breaker and continue
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.log("🟢 Quick probe succeeded - exiting offline mode");
+          this.resetCircuitBreaker();
+        } else {
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.warn(
+              "Quick probe failed or returned non-OK response — still offline",
+            );
+          // Return empty fallback response so UI can render gracefully
+          return this.getEmptyFallbackResponse(endpoint);
+        }
+      } catch (probeErr) {
+        if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+          console.warn("Quick probe failed:", probeErr);
+        return this.getEmptyFallbackResponse(endpoint);
+      }
     }
 
     // Circuit breaker check
@@ -87,11 +146,40 @@ export class ApiClient {
 
     const url = `${API_BASE_URL}${endpoint}`;
 
+    // Build headers: allow FormData to set its own Content-Type
+    const headers: Record<string, string> = {};
+    // Merge provided headers first
+    if (options.headers) {
+      try {
+        Object.assign(headers, options.headers as Record<string, string>);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // If body is not FormData and Content-Type not already set, default to JSON
+    const bodyIsFormData = options.body instanceof FormData;
+    if (!bodyIsFormData && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    // Attach x-user-id from localStorage if available (backend middleware accepts this)
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const stored = localStorage.getItem("banani_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.id) {
+            headers["x-user-id"] = String(parsed.id);
+          }
+        }
+      }
+    } catch (e) {
+      // ignore localStorage parsing errors
+    }
+
     const config: RequestInit = {
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers,
       ...options,
     };
 
@@ -145,18 +233,38 @@ export class ApiClient {
               "fetch for request",
             );
 
-          // Add timeout to prevent hanging requests - longer for notifications and login
-          const timeoutMs =
+          // Add timeout to prevent hanging requests - longer for notifications, login, and tickets
+          let timeoutMs =
             endpoint.includes("notifications") ||
             endpoint.includes("/auth/login")
               ? 15000
-              : 8000; // 15s for notifications/login, 8s for others
+              : 8000;
+          if (endpoint.includes("/tickets")) timeoutMs = 30000; // allow tickets up to 30s
+
+          // Use AbortController so the underlying fetch/connection is aborted on timeout
+          const controller = new AbortController();
+          const signal = controller.signal;
+          // attach signal to config
+          (config as any).signal = signal;
+
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+            const t = setTimeout(() => {
+              try {
+                controller.abort();
+              } catch (e) {}
+              reject(new Error("Request timeout"));
+            }, timeoutMs);
+            // store timeout id on signal to clear later if needed
+            (signal as any)._timeoutId = t;
           });
 
           const fetchPromise = originalFetch(url, config);
           response = await Promise.race([fetchPromise, timeoutPromise]);
+          // Clear timeout if fetch completed
+          try {
+            const tid = (signal as any)._timeoutId;
+            if (tid) clearTimeout(tid);
+          } catch (e) {}
         }
       } catch (fetchError) {
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
@@ -198,15 +306,57 @@ export class ApiClient {
           this.failureCount++;
           this.lastFailureTime = Date.now();
           this.checkOfflineMode();
-          // Try XMLHttpRequest fallback first
-          try {
-            if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-              console.log("Trying XMLHttpRequest fallback for network error");
-            response = await this.xmlHttpRequestFallback(url, config);
-          } catch (xhrError) {
-            if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-              console.warn("XMLHttpRequest fallback failed:", xhrError);
-            return this.getEmptyFallbackResponse(endpoint);
+
+          // If running in dev on localhost, try explicit host fallback (e.g., backend on :8080)
+          if (
+            typeof window !== "undefined" &&
+            (window.location.hostname === "localhost" ||
+              window.location.hostname === "127.0.0.1")
+          ) {
+            const localhostVariants = [
+              `${window.location.protocol}//localhost:8080`,
+              `${window.location.protocol}//127.0.0.1:8080`,
+            ];
+            for (const base of localhostVariants) {
+              try {
+                const altUrl = `${base}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
+                if ((window as any).__APP_DEBUG)
+                  console.log("Trying localhost fallback URL:", altUrl);
+                const altResponse = await fetch(altUrl, {
+                  method: config.method || "GET",
+                  headers: config.headers,
+                });
+                if (altResponse && altResponse.ok) {
+                  if ((window as any).__APP_DEBUG)
+                    console.log("Localhost fallback succeeded for:", altUrl);
+                  response = altResponse;
+                  break;
+                }
+              } catch (altErr) {
+                if ((window as any).__APP_DEBUG)
+                  console.warn("Localhost fallback attempt failed:", altErr);
+                // try next variant
+              }
+            }
+            if (!response) {
+              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+                console.log(
+                  "Localhost fallbacks exhausted, trying XMLHttpRequest fallback",
+                );
+            }
+          }
+
+          // Try XMLHttpRequest fallback first (if no successful localhost fallback)
+          if (!response) {
+            try {
+              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+                console.log("Trying XMLHttpRequest fallback for network error");
+              response = await this.xmlHttpRequestFallback(url, config);
+            } catch (xhrError) {
+              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+                console.warn("XMLHttpRequest fallback failed:", xhrError);
+              return this.getEmptyFallbackResponse(endpoint);
+            }
           }
         } else if (fetchError.message === "Request timeout") {
           if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
@@ -354,6 +504,19 @@ export class ApiClient {
 
       // Try to parse as JSON
       try {
+        // If empty body, return empty object instead of throwing
+        if (!responseText || responseText.trim() === "") {
+          // Reset failure count and offline mode on successful request
+          if (this.isOfflineMode) {
+            if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+              console.log("🟢 Connection restored - exiting offline mode");
+            this.isOfflineMode = false;
+            this.offlineDetectedAt = 0;
+          }
+          this.failureCount = 0;
+          return {} as T;
+        }
+
         const result = JSON.parse(responseText);
         // Reset failure count and offline mode on successful request
         if (this.isOfflineMode) {
@@ -679,7 +842,16 @@ export class ApiClient {
   async getClientStats() {
     return this.request("/clients/stats");
   }
-
+  public async get<T>(path: string): Promise<T> {
+    // Use the robust requestWithRetry which includes timeouts, fallbacks and circuit breaker
+    try {
+      return await this.requestWithRetry<T>(path, {}, 2);
+    } catch (err) {
+      // Bubble up the error after logging
+      console.error(`GET ${path} failed:`, err);
+      throw err;
+    }
+  }
   // Connections
   async getConnections(filters?: { q?: string; type?: string }) {
     const params = new URLSearchParams();
@@ -1171,11 +1343,51 @@ export class ApiClient {
     userName?: string,
     date?: string,
   ) {
+    // Determine safe user name: prefer explicit param, otherwise try localStorage 'banani_user'
+    let safeUserName: string | null | undefined = userName;
+    try {
+      if (!safeUserName && typeof window !== "undefined") {
+        const raw =
+          localStorage.getItem("banani_user") || localStorage.getItem("user");
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed) {
+              if (parsed.name && typeof parsed.name === "string")
+                safeUserName = parsed.name.trim();
+              else if (
+                (parsed.first_name || parsed.last_name) &&
+                (parsed.first_name || parsed.last_name).trim()
+              )
+                safeUserName =
+                  `${(parsed.first_name || "").trim()} ${(parsed.last_name || "").trim()}`.trim();
+            }
+          } catch (e) {
+            // raw might already be a string name
+            if (typeof raw === "string" && raw.trim())
+              safeUserName = raw.trim();
+          }
+        }
+      }
+
+      if (typeof safeUserName === "string") {
+        const cleaned = safeUserName.trim();
+        if (
+          !cleaned ||
+          /^(undefined|null)$/i.test(cleaned.replace(/\s+/g, " "))
+        )
+          safeUserName = null;
+        else safeUserName = cleaned;
+      }
+    } catch (e) {
+      safeUserName = userName || null;
+    }
+
     return this.request(`/finops/tasks/${taskId}/subtasks/${subTaskId}`, {
       method: "PATCH",
       body: JSON.stringify({
         status,
-        user_name: userName,
+        user_name: safeUserName,
         date,
       }),
     });
@@ -1780,6 +1992,9 @@ export class ApiClient {
     if (page) params.append("page", String(page));
     if (limit) params.append("limit", String(limit));
 
+    // Add a cache-buster to avoid stale 304 responses from intermediate caches
+    params.append("_ts", String(Date.now()));
+
     if (params.toString()) {
       endpoint += `?${params.toString()}`;
     }
@@ -1788,11 +2003,17 @@ export class ApiClient {
       tickets: any[];
       total: number;
       pages: number;
-    }>(endpoint);
+    }>(endpoint, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
   }
 
   async getTicketById(id: number) {
-    return this.request<any>(`/tickets/${id}`);
+    return this.request<any>(`/tickets/${id}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    });
   }
 
   async getTicketByTrackId(trackId: string) {
@@ -1820,10 +2041,26 @@ export class ApiClient {
       });
     }
 
+    // Attach x-user-id explicitly in headers for FormData requests (some environments strip headers otherwise)
+    const headersForForm: Record<string, string> = {};
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const stored = localStorage.getItem("banani_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.id) {
+            headersForForm["x-user-id"] = String(parsed.id);
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     return this.request<any>("/tickets", {
       method: "POST",
       body: formData,
-      headers: {}, // Let browser set Content-Type for FormData
+      headers: headersForForm, // let request() merge and keep Content-Type unset so browser handles boundary
     });
   }
 
@@ -2143,7 +2380,46 @@ export class ApiClient {
   }
 }
 
+// Add HTTP helper methods to ApiClient
+ApiClient.prototype.get = function (endpoint: string, options?: RequestInit) {
+  return this.request(endpoint, { ...options, method: "GET" });
+};
+
+ApiClient.prototype.post = function (
+  endpoint: string,
+  body?: any,
+  options?: RequestInit,
+) {
+  return this.request(endpoint, {
+    ...options,
+    method: "POST",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+};
+
+ApiClient.prototype.put = function (
+  endpoint: string,
+  body?: any,
+  options?: RequestInit,
+) {
+  return this.request(endpoint, {
+    ...options,
+    method: "PUT",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+};
+
+ApiClient.prototype.delete = function (
+  endpoint: string,
+  options?: RequestInit,
+) {
+  return this.request(endpoint, { ...options, method: "DELETE" });
+};
+
 export const apiClient = new ApiClient();
 
 // Reset circuit breaker for development/demo mode
 apiClient.resetCircuitBreaker();
+
+// Default export for convenience
+export default apiClient;

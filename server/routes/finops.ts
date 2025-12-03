@@ -13,17 +13,23 @@ async function ensureFinOpsSettings() {
       initial_overdue_call_delay_minutes INTEGER DEFAULT 0,
       repeat_overdue_call_interval_minutes INTEGER DEFAULT 15,
       only_repeat_when_single_overdue BOOLEAN DEFAULT false,
+      pulse_alerts_enabled BOOLEAN DEFAULT true,
       updated_at TIMESTAMP DEFAULT NOW()
     )
+  `);
+  // Add column if it doesn't exist (for existing installations)
+  await pool.query(`
+    ALTER TABLE finops_settings
+    ADD COLUMN IF NOT EXISTS pulse_alerts_enabled BOOLEAN DEFAULT true
   `);
   const row = await pool.query(
     `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
   );
   if (row.rows.length === 0) {
     await pool.query(
-      `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue)
-       VALUES ($1, $2, $3)`,
-      [0, 15, false],
+      `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue, pulse_alerts_enabled)
+       VALUES ($1, $2, $3, $4)`,
+      [0, 15, false, true],
     );
   }
 }
@@ -35,6 +41,48 @@ async function getFinOpsSettings() {
   );
   return res.rows[0];
 }
+
+// GET pulse alerts setting
+router.get("/settings/pulse-alerts", async (req, res) => {
+  try {
+    const settings = await getFinOpsSettings();
+    res.json({ enabled: settings.pulse_alerts_enabled ?? true });
+  } catch (error) {
+    console.error("Error fetching pulse alerts setting:", error);
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+});
+
+// UPDATE pulse alerts setting (admin only)
+router.put("/settings/pulse-alerts", async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled must be a boolean" });
+    }
+
+    const result = await pool.query(
+      `UPDATE finops_settings SET pulse_alerts_enabled = $1, updated_at = NOW()
+       WHERE id = (SELECT id FROM finops_settings ORDER BY id LIMIT 1)
+       RETURNING pulse_alerts_enabled`,
+      [enabled],
+    );
+
+    if (result.rows.length === 0) {
+      return res
+        .status(500)
+        .json({ error: "Failed to update pulse alerts setting" });
+    }
+
+    res.json({
+      success: true,
+      enabled: result.rows[0].pulse_alerts_enabled,
+    });
+  } catch (error) {
+    console.error("Error updating pulse alerts setting:", error);
+    res.status(500).json({ error: "Failed to update settings" });
+  }
+});
 
 // Database availability check
 async function isDatabaseAvailable() {
@@ -669,10 +717,230 @@ router.post("/tasks", async (req: Request, res: Response) => {
   }
 });
 
-// Update FinOps task
+// // Update FinOps task
+// router.put("/tasks/:id", async (req: Request, res: Response) => {
+//   try {
+//     const taskId = parseInt(req.params.id);
+//     const {
+//       task_name,
+//       description,
+//       assigned_to,
+//       client_id,
+//       client_name,
+//       reporting_managers,
+//       escalation_managers,
+//       effective_from,
+//       duration,
+//       is_active,
+//       subtasks,
+//     } = req.body;
+
+//     if (await isDatabaseAvailable()) {
+//       const client = await pool.connect();
+
+//       try {
+//         await client.query("BEGIN");
+
+//         // Update main task
+//         const taskQuery = `
+//           UPDATE finops_tasks SET
+//             task_name = $1,
+//             description = $2,
+//             assigned_to = $3,
+//             reporting_managers = $4,
+//             escalation_managers = $5,
+//             effective_from = $6,
+//             duration = $7,
+//             is_active = $8,
+//             client_id=$9,
+//             client_name=$10,
+//             updated_at = CURRENT_TIMESTAMP
+//           WHERE id = $11
+//         `;
+
+//         await client.query(taskQuery, [
+//           task_name,
+//           description,
+//           typeof assigned_to === "string"
+//             ? assigned_to
+//             : JSON.stringify(assigned_to || []),
+//           JSON.stringify(reporting_managers),
+//           JSON.stringify(escalation_managers),
+//           effective_from,
+//           duration,
+//           is_active,
+//           client_id,
+//           client_name,
+//           taskId,
+//         ]);
+
+//         // Upsert subtasks while preserving existing status/timestamps
+//         const existingRes = await client.query(
+//           `SELECT id FROM finops_subtasks WHERE task_id = $1`,
+//           [taskId],
+//         );
+//         const existingIds = new Set<number>(
+//           existingRes.rows.map((r: any) => Number(r.id)),
+//         );
+
+//         const incoming = Array.isArray(subtasks) ? subtasks : [];
+//         const incomingIds = new Set<number>();
+
+//         for (const subtask of incoming) {
+//           const rawId = (subtask as any).id;
+//           const numericId =
+//             rawId !== undefined && rawId !== null && !isNaN(Number(rawId))
+//               ? Number(rawId)
+//               : NaN;
+
+//           if (!isNaN(numericId) && existingIds.has(numericId)) {
+//             incomingIds.add(numericId);
+//             // Update editable fields; allow explicit status updates and sync to today's tracker
+//             const incomingStatus = (subtask as any).status ?? null;
+//             await client.query(
+//               `UPDATE finops_subtasks
+//                SET name = $1,
+//                    description = $2,
+//                    start_time = $3,
+//                    sla_hours = COALESCE($4, sla_hours),
+//                    sla_minutes = COALESCE($5, sla_minutes),
+//                    order_position = $6,
+//                    status = COALESCE($8, status),
+//                    updated_at = CURRENT_TIMESTAMP
+//                WHERE task_id = $7 AND id = $9`,
+//               [
+//                 subtask.name,
+//                 subtask.description || null,
+//                 subtask.start_time || null,
+//                 (subtask as any).sla_hours ?? null,
+//                 (subtask as any).sla_minutes ?? null,
+//                 subtask.order_position ?? 0,
+//                 taskId,
+//                 incomingStatus,
+//                 numericId,
+//               ],
+//             );
+
+//             // Also update today's finops_tracker row for this subtask to reflect new scheduled time/status
+//             try {
+//               await client.query(
+//                 `UPDATE finops_tracker
+// SET task_name = COALESCE($1, task_name),
+//     subtask_name = COALESCE($2, subtask_name),
+//     description = COALESCE($3, description),
+//     scheduled_time = COALESCE($4, scheduled_time),
+//     sla_hours = COALESCE($5, sla_hours),
+//     sla_minutes = COALESCE($6, sla_minutes),
+//     order_position = COALESCE($7, order_position),
+//     status = CASE
+//                WHEN run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+//                THEN COALESCE($8, status)
+//                ELSE status
+//              END,
+//                      updated_at = NOW()
+// WHERE run_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+//   AND task_id = $9
+//   AND subtask_id = $10;
+// `,
+//                 [
+//                   task_name || null, // $1
+//                   subtask.name || null, // $2
+//                   subtask.description || null, // $3
+//                   subtask.start_time || null, // $4
+//                   subtask.sla_hours ?? null, // $5
+//                   subtask.sla_minutes ?? null, // $6
+//                   subtask.order_position ?? 0, // $7
+//                   subtask.status || null, // $8
+//                   taskId, // $9
+//                   numericId, // $10
+//                 ],
+//               );
+//             } catch (err) {
+//               console.warn(
+//                 "Failed to sync finops_tracker for updated subtask",
+//                 err,
+//               );
+//             }
+//           } else {
+//             // Insert new subtask; allow optional status from payload, default to 'pending'
+//             await client.query(
+//               `INSERT INTO finops_subtasks (
+//                  task_id, name, description, start_time, sla_hours, sla_minutes, order_position, status
+//                ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'pending'))`,
+//               [
+//                 taskId,
+//                 subtask.name,
+//                 subtask.description || null,
+//                 subtask.start_time || null,
+//                 (subtask as any).sla_hours ?? null,
+//                 (subtask as any).sla_minutes ?? null,
+//                 subtask.order_position ?? 0,
+//                 (subtask as any).status || null,
+//               ],
+//             );
+//           }
+//         }
+
+//         // Delete subtasks removed by user (present in DB but not in incoming list)
+//         if (existingIds.size > 0) {
+//           const idsToKeep = Array.from(incomingIds);
+//           if (idsToKeep.length > 0) {
+//             await client.query(
+//               `DELETE FROM finops_subtasks WHERE task_id = $1 AND id NOT IN (${idsToKeep
+//                 .map((_, i) => `$${i + 2}`)
+//                 .join(", ")})`,
+//               [taskId, ...idsToKeep],
+//             );
+//           } else {
+//             // All removed
+//             await client.query(
+//               `DELETE FROM finops_subtasks WHERE task_id = $1`,
+//               [taskId],
+//             );
+//           }
+//         }
+
+//         await client.query("COMMIT");
+
+//         console.log(
+//           `FinOps task ${taskId} updated with preserved subtask statuses`,
+//         );
+
+//         // Log activity
+//         await logActivity(taskId, null, "updated", "User", "Task updated");
+
+//         res.json({ message: "FinOps task updated successfully" });
+//       } catch (error) {
+//         await client.query("ROLLBACK");
+//         throw error;
+//       } finally {
+//         client.release();
+//       }
+//     } else {
+//       // Mock response
+//       const taskIndex = mockFinOpsTasks.findIndex((t) => t.id === taskId);
+//       if (taskIndex !== -1) {
+//         mockFinOpsTasks[taskIndex] = {
+//           ...mockFinOpsTasks[taskIndex],
+//           ...req.body,
+//           updated_at: new Date().toISOString(),
+//         };
+//         res.json({ message: "FinOps task updated successfully (mock)" });
+//       } else {
+//         res.status(404).json({ error: "Task not found" });
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error updating FinOps task:", error);
+//     res.status(500).json({ error: "Failed to update FinOps task" });
+//   }
+// });
+
 router.put("/tasks/:id", async (req: Request, res: Response) => {
+  const client = await pool.connect();
+
   try {
-    const taskId = parseInt(req.params.id);
+    const taskId = parseInt(req.params.id, 10);
     const {
       task_name,
       description,
@@ -687,206 +955,283 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
       subtasks,
     } = req.body;
 
-    if (await isDatabaseAvailable()) {
-      const client = await pool.connect();
+    console.log(`[Task ${taskId}] Update request received.`);
 
-      try {
-        await client.query("BEGIN");
+    if (!(await isDatabaseAvailable())) {
+      console.warn(`[Task ${taskId}] Database unavailable.`);
+      res.status(503).json({ error: "Database unavailable (mock mode)" });
+      return;
+    }
 
-        // Update main task
-        const taskQuery = `
-          UPDATE finops_tasks SET
-            task_name = $1,
-            description = $2,
-            assigned_to = $3,
-            reporting_managers = $4,
-            escalation_managers = $5,
-            effective_from = $6,
-            duration = $7,
-            is_active = $8,
-            client_id=$9,
-            client_name=$10,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $11
-        `;
+    await client.query("BEGIN");
+    console.log(`[Task ${taskId}] Transaction started.`);
 
-        await client.query(taskQuery, [
-          task_name,
-          description,
-          typeof assigned_to === "string"
-            ? assigned_to
-            : JSON.stringify(assigned_to || []),
-          JSON.stringify(reporting_managers),
-          JSON.stringify(escalation_managers),
-          effective_from,
-          duration,
-          is_active,
-          client_id,
-          client_name,
-          taskId,
-        ]);
+    // -----------------------------
+    // Update main task
+    // -----------------------------
+    console.log(`[Task ${taskId}] Updating main task...`);
+    const updateTaskQuery = `
+      UPDATE finops_tasks
+      SET
+        task_name = $1,
+        description = $2,
+        assigned_to = $3,
+        reporting_managers = $4,
+        escalation_managers = $5,
+        effective_from = $6,
+        duration = $7,
+        is_active = $8,
+        client_id = $9,
+        client_name = $10,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $11
+    `;
+    await client.query(updateTaskQuery, [
+      task_name,
+      description,
+      typeof assigned_to === "string"
+        ? assigned_to
+        : JSON.stringify(assigned_to || []),
+      JSON.stringify(reporting_managers || []),
+      JSON.stringify(escalation_managers || []),
+      effective_from,
+      duration,
+      is_active,
+      client_id,
+      client_name,
+      taskId,
+    ]);
+    console.log(`[Task ${taskId}] Main task updated successfully.`);
 
-        // Upsert subtasks while preserving existing status/timestamps
-        const existingRes = await client.query(
-          `SELECT id FROM finops_subtasks WHERE task_id = $1`,
-          [taskId],
-        );
-        const existingIds = new Set<number>(
-          existingRes.rows.map((r: any) => Number(r.id)),
-        );
+    // -----------------------------
+    // Handle subtasks
+    // -----------------------------
+    console.log(`[Task ${taskId}] Fetching existing subtasks...`);
+    const existingSubtasksRes = await client.query(
+      `SELECT id FROM finops_subtasks WHERE task_id = $1`,
+      [taskId],
+    );
+    const existingIds = new Set<number>(
+      existingSubtasksRes.rows.map((r: any) => Number(r.id)),
+    );
+    console.log(
+      `[Task ${taskId}] Existing subtasks IDs:`,
+      Array.from(existingIds),
+    );
 
-        const incoming = Array.isArray(subtasks) ? subtasks : [];
-        const incomingIds = new Set<number>();
+    const incomingSubtasks = Array.isArray(subtasks) ? subtasks : [];
+    const processedIds: number[] = [];
 
-        for (const subtask of incoming) {
-          const rawId = (subtask as any).id;
-          const numericId =
-            rawId !== undefined && rawId !== null && !isNaN(Number(rawId))
-              ? Number(rawId)
-              : NaN;
+    for (const subtask of incomingSubtasks) {
+      const subtaskId = subtask.id ? Number(subtask.id) : null;
+      const status = subtask.status ?? "pending";
 
-          if (!isNaN(numericId) && existingIds.has(numericId)) {
-            incomingIds.add(numericId);
-            // Update editable fields; allow explicit status updates and sync to today's tracker
-            const incomingStatus = (subtask as any).status ?? null;
-            await client.query(
-              `UPDATE finops_subtasks
-               SET name = $1,
-                   description = $2,
-                   start_time = $3,
-                   sla_hours = COALESCE($4, sla_hours),
-                   sla_minutes = COALESCE($5, sla_minutes),
-                   order_position = $6,
-                   status = COALESCE($8, status),
-                   updated_at = CURRENT_TIMESTAMP
-               WHERE task_id = $7 AND id = $9`,
-              [
-                subtask.name,
-                subtask.description || null,
-                subtask.start_time || null,
-                (subtask as any).sla_hours ?? null,
-                (subtask as any).sla_minutes ?? null,
-                subtask.order_position ?? 0,
-                taskId,
-                incomingStatus,
-                numericId,
-              ],
-            );
-
-            // Also update today's finops_tracker row for this subtask to reflect new scheduled time/status
-            try {
-              await client.query(
-                `UPDATE finops_tracker
-SET task_name = COALESCE($1, task_name),
-    subtask_name = COALESCE($2, subtask_name),
-    description = COALESCE($3, description),
-    scheduled_time = COALESCE($4, scheduled_time),
-    sla_hours = COALESCE($5, sla_hours),
-    sla_minutes = COALESCE($6, sla_minutes),
-    order_position = COALESCE($7, order_position),
-    status = CASE 
-               WHEN run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date 
-               THEN COALESCE($8, status) 
-               ELSE status 
-             END,
-                     updated_at = NOW()
-WHERE run_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
-  AND task_id = $9
-  AND subtask_id = $10;
-`,
-  [
-  task_name || null,            // $1
-  subtask.name || null,         // $2
-  subtask.description || null,  // $3
-  subtask.start_time || null,   // $4
-  subtask.sla_hours ?? null,    // $5
-  subtask.sla_minutes ?? null,  // $6
-  subtask.order_position ?? 0,  // $7
-  subtask.status || null,       // $8
-  taskId,                       // $9
-  numericId                     // $10
-]
-,
-              );
-
-            } catch (err) {
-              console.warn(
-                "Failed to sync finops_tracker for updated subtask",
-                err,
-              );
-            }
-          } else {
-            // Insert new subtask; allow optional status from payload, default to 'pending'
-            await client.query(
-              `INSERT INTO finops_subtasks (
-                 task_id, name, description, start_time, sla_hours, sla_minutes, order_position, status
-               ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'pending'))`,
-              [
-                taskId,
-                subtask.name,
-                subtask.description || null,
-                subtask.start_time || null,
-                (subtask as any).sla_hours ?? null,
-                (subtask as any).sla_minutes ?? null,
-                subtask.order_position ?? 0,
-                (subtask as any).status || null,
-              ],
-            );
-          }
-        }
-
-        // Delete subtasks removed by user (present in DB but not in incoming list)
-        if (existingIds.size > 0) {
-          const idsToKeep = Array.from(incomingIds);
-          if (idsToKeep.length > 0) {
-            await client.query(
-              `DELETE FROM finops_subtasks WHERE task_id = $1 AND id NOT IN (${idsToKeep
-                .map((_, i) => `$${i + 2}`)
-                .join(", ")})`,
-              [taskId, ...idsToKeep],
-            );
-          } else {
-            // All removed
-            await client.query(
-              `DELETE FROM finops_subtasks WHERE task_id = $1`,
-              [taskId],
-            );
-          }
-        }
-
-        await client.query("COMMIT");
-
+      // -----------------------------
+      // Update existing subtask
+      // -----------------------------
+      if (subtaskId && existingIds.has(subtaskId)) {
+        processedIds.push(subtaskId);
         console.log(
-          `FinOps task ${taskId} updated with preserved subtask statuses`,
+          `[Task ${taskId}] Updating existing subtask ID ${subtaskId}...`,
+        );
+        await client.query(
+          `
+          UPDATE finops_subtasks
+          SET
+            name = $1,
+            description = $2,
+            start_time = $3,
+            sla_hours = COALESCE($4, sla_hours),
+            sla_minutes = COALESCE($5, sla_minutes),
+            order_position = $6,
+            status = COALESCE($7, status),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $8 AND task_id = $9
+          `,
+          [
+            subtask.name,
+            subtask.description || null,
+            subtask.start_time || null,
+            subtask.sla_hours ?? null,
+            subtask.sla_minutes ?? null,
+            subtask.order_position ?? 0,
+            status,
+            subtaskId,
+            taskId,
+          ],
+        );
+        console.log(
+          `[Task ${taskId}] Subtask ${subtaskId} updated successfully.`,
         );
 
-        // Log activity
-        await logActivity(taskId, null, "updated", "User", "Task updated");
-
-        res.json({ message: "FinOps task updated successfully" });
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
+        // Update today's tracker
+        console.log(
+          `[Task ${taskId}] Updating tracker for subtask ID ${subtaskId}...`,
+        );
+        await client.query(
+          `
+          UPDATE finops_tracker
+          SET
+            task_name = COALESCE($1, task_name),
+            subtask_name = COALESCE($2, subtask_name),
+            description = COALESCE($3, description),
+            scheduled_time = COALESCE($4, scheduled_time),
+            sla_hours = COALESCE($5, sla_hours),
+            sla_minutes = COALESCE($6, sla_minutes),
+            order_position = COALESCE($7, order_position),
+            status = CASE
+              WHEN run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+              THEN COALESCE($8, status)
+              ELSE status
+            END,
+            updated_at = NOW()
+          WHERE task_id = $9 AND subtask_id = $10
+            AND run_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+          `,
+          [
+            task_name,
+            subtask.name,
+            subtask.description || null,
+            subtask.start_time || null,
+            subtask.sla_hours ?? null,
+            subtask.sla_minutes ?? null,
+            subtask.order_position ?? 0,
+            status,
+            taskId,
+            subtaskId,
+          ],
+        );
+        console.log(
+          `[Task ${taskId}] Tracker updated for subtask ID ${subtaskId}.`,
+        );
       }
-    } else {
-      // Mock response
-      const taskIndex = mockFinOpsTasks.findIndex((t) => t.id === taskId);
-      if (taskIndex !== -1) {
-        mockFinOpsTasks[taskIndex] = {
-          ...mockFinOpsTasks[taskIndex],
-          ...req.body,
-          updated_at: new Date().toISOString(),
-        };
-        res.json({ message: "FinOps task updated successfully (mock)" });
-      } else {
-        res.status(404).json({ error: "Task not found" });
+
+      // -----------------------------
+      // Insert new subtask
+      // -----------------------------
+      else {
+        console.log(
+          `[Task ${taskId}] Inserting new subtask: ${JSON.stringify(subtask)}...`,
+        );
+        const insertRes = await client.query(
+          `
+          INSERT INTO finops_subtasks (
+            task_id,
+            name,
+            description,
+            start_time,
+            sla_hours,
+            sla_minutes,
+            order_position,
+            status
+          )
+          VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,'pending'))
+          RETURNING id
+          `,
+          [
+            taskId,
+            subtask.name,
+            subtask.description || null,
+            subtask.start_time || null,
+            subtask.sla_hours ?? null,
+            subtask.sla_minutes ?? null,
+            subtask.order_position ?? 0,
+            status,
+          ],
+        );
+        const newId = insertRes.rows[0].id;
+        processedIds.push(newId);
+        console.log(`[Task ${taskId}] New subtask inserted with ID ${newId}.`);
+
+        // Insert tracker for new subtask
+        console.log(
+          `[Task ${taskId}] Inserting tracker for new subtask ID ${newId}...`,
+        );
+        await client.query(
+          `
+          INSERT INTO finops_tracker (
+            task_id,
+            subtask_id,
+            task_name,
+            subtask_name,
+            description,
+            scheduled_time,
+            sla_hours,
+            sla_minutes,
+            order_position,
+            status,
+            run_date,
+            created_at,
+            period
+          )
+          VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+            (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date,
+            NOW(),
+            $11
+          )
+          `,
+          [
+            taskId,
+            newId,
+            task_name,
+            subtask.name,
+            subtask.description || null,
+            subtask.start_time || null,
+            subtask.sla_hours ?? null,
+            subtask.sla_minutes ?? null,
+            subtask.order_position ?? 0,
+            status,
+            "daily",
+          ],
+        );
+        console.log(
+          `[Task ${taskId}] Tracker inserted for new subtask ID ${newId}.`,
+        );
       }
     }
+
+    // -----------------------------
+    // Delete removed subtasks and trackers
+    // -----------------------------
+    const idsToKeep = processedIds.length > 0 ? processedIds : [-1]; // prevent empty IN clause
+    const deletedSubtasksRes = await client.query(
+      `DELETE FROM finops_subtasks WHERE task_id = $1 AND id NOT IN (${idsToKeep
+        .map((_, i) => `$${i + 2}`)
+        .join(",")}) RETURNING id`,
+      [taskId, ...idsToKeep],
+    );
+    console.log(
+      `[Task ${taskId}] Deleted subtasks IDs:`,
+      deletedSubtasksRes.rows.map((r) => r.id),
+    );
+
+    const deletedTrackersRes = await client.query(
+      `DELETE FROM finops_tracker
+       WHERE task_id = $1
+       AND subtask_id NOT IN (${idsToKeep.map((_, i) => `$${i + 2}`).join(",")})
+       AND run_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+       RETURNING subtask_id`,
+      [taskId, ...idsToKeep],
+    );
+    console.log(
+      `[Task ${taskId}] Deleted tracker entries for subtask IDs:`,
+      deletedTrackersRes.rows.map((r) => r.subtask_id),
+    );
+
+    await client.query("COMMIT");
+    console.log(`[Task ${taskId}] Transaction committed successfully.`);
+    res.json({ message: "FinOps task updated successfully" });
   } catch (error) {
-    console.error("Error updating FinOps task:", error);
+    await client.query("ROLLBACK");
+    console.error(
+      `[Task ${req.params.id}] Transaction rolled back due to error:`,
+      error,
+    );
     res.status(500).json({ error: "Failed to update FinOps task" });
+  } finally {
+    client.release();
+    console.log(`[Task ${req.params.id}] DB client released.`);
   }
 });
 
@@ -1015,20 +1360,363 @@ async function getUserIdsFromNames(names: string[]): Promise<string[]> {
 }
 
 // Enhanced subtask status update with delay tracking and notifications
+// router.patch(
+//   "/tasks/:taskId/subtasks/:subtaskId",
+//   async (req: Request, res: Response) => {
+//     try {
+//       const taskId = parseInt(req.params.taskId);
+//       const subtaskId = req.params.subtaskId;
+//       const { status, user_name, delay_reason, delay_notes, date } = req.body;
+//       const userName = user_name || "Unknown User";
+
+//       // Determine the date to update: use provided date or default to today
+//       const updateDate = date || new Date().toISOString().split("T")[0];
+
+//       if (await isDatabaseAvailable()) {
+//         // Ensure finops_tracker has columns mirrored from finops_subtasks
+//         await pool.query(`
+//           CREATE TABLE IF NOT EXISTS finops_tracker (
+//             id SERIAL PRIMARY KEY,
+//             run_date DATE NOT NULL,
+//             period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
+//             task_id INTEGER NOT NULL,
+//             task_name TEXT,
+//             subtask_id INTEGER NOT NULL DEFAULT 0,
+//             subtask_name TEXT,
+//             status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
+//             started_at TIMESTAMP NULL,
+//             completed_at TIMESTAMP NULL,
+//             scheduled_time TIME NULL,
+//             subtask_scheduled_date DATE NULL,
+//             description TEXT,
+//             sla_hours INTEGER,
+//             sla_minutes INTEGER,
+//             order_position INTEGER,
+//             delay_reason TEXT,
+//             delay_notes TEXT,
+//             notification_sent_15min BOOLEAN DEFAULT false,
+//             notification_sent_start BOOLEAN DEFAULT false,
+//             notification_sent_escalation BOOLEAN DEFAULT false,
+//             auto_notify BOOLEAN DEFAULT true,
+//             assigned_to TEXT,
+//             reporting_managers TEXT,
+//             escalation_managers TEXT,
+//             created_at TIMESTAMP DEFAULT NOW(),
+//             updated_at TIMESTAMP DEFAULT NOW(),
+//             UNIQUE(run_date, period, task_id, subtask_id)
+//           );
+//         `);
+
+//         // Make sure missing columns exist (for older DBs)
+//         await pool.query(`
+//           ALTER TABLE finops_tracker
+//             ADD COLUMN IF NOT EXISTS description TEXT,
+//             ADD COLUMN IF NOT EXISTS sla_hours INTEGER,
+//             ADD COLUMN IF NOT EXISTS sla_minutes INTEGER,
+//             ADD COLUMN IF NOT EXISTS order_position INTEGER,
+//             ADD COLUMN IF NOT EXISTS delay_reason TEXT,
+//             ADD COLUMN IF NOT EXISTS delay_notes TEXT,
+//             ADD COLUMN IF NOT EXISTS notification_sent_15min BOOLEAN DEFAULT false,
+//             ADD COLUMN IF NOT EXISTS notification_sent_start BOOLEAN DEFAULT false,
+//             ADD COLUMN IF NOT EXISTS notification_sent_escalation BOOLEAN DEFAULT false,
+//             ADD COLUMN IF NOT EXISTS auto_notify BOOLEAN DEFAULT true,
+//             ADD COLUMN IF NOT EXISTS assigned_to TEXT,
+//             ADD COLUMN IF NOT EXISTS reporting_managers TEXT,
+//             ADD COLUMN IF NOT EXISTS escalation_managers TEXT;
+//         `);
+
+//         // Try to fetch tracker row for the specified date
+//         const trackerRes = await pool.query(
+//           `
+//           SELECT ft.*, t.duration, t.task_name, t.reporting_managers, t.escalation_managers, t.assigned_to
+//           FROM finops_tracker ft
+//           JOIN finops_tasks t ON ft.task_id = t.id
+//           WHERE ft.run_date = $1::date
+//             AND ft.task_id = $2
+//             AND ft.subtask_id = $3
+//           LIMIT 1
+//         `,
+//           [updateDate, taskId, Number(subtaskId)],
+//         );
+
+//         let trackerRow: any = trackerRes.rows[0];
+
+//         if (!trackerRow) {
+//           // No tracker row for today - create one from finops_subtasks metadata
+//           const stRes = await pool.query(
+//             `
+//             SELECT st.*, t.duration, t.task_name, t.reporting_managers, t.escalation_managers, t.assigned_to
+//             FROM finops_subtasks st
+//             JOIN finops_tasks t ON st.task_id = t.id
+//             WHERE st.task_id = $1 AND st.id = $2
+//             LIMIT 1
+//           `,
+//             [taskId, Number(subtaskId)],
+//           );
+
+//           if (stRes.rows.length === 0) {
+//             return res.status(404).json({ error: "Subtask not found" });
+//           }
+
+//           const st = stRes.rows[0];
+
+//           const insertRes = await pool.query(
+//             `
+//             INSERT INTO finops_tracker (
+//               run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position, assigned_to, reporting_managers, escalation_managers
+//             ) VALUES (
+//               $1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10, $1::date, $11, $12, $13, $14, $15, $16, $17
+//             )
+//             ON CONFLICT (run_date, period, task_id, subtask_id) DO UPDATE SET status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, description = EXCLUDED.description, sla_hours = EXCLUDED.sla_hours, sla_minutes = EXCLUDED.sla_minutes, order_position = EXCLUDED.order_position, assigned_to = EXCLUDED.assigned_to, reporting_managers = EXCLUDED.reporting_managers, escalation_managers = EXCLUDED.escalation_managers, updated_at = NOW()
+//             RETURNING *
+//           `,
+//             [
+//               updateDate,
+//               String(st.duration || "daily"),
+//               st.task_id,
+//               st.task_name || "",
+//               st.id,
+//               st.name || "",
+//               status || st.status || "pending",
+//               status === "in_progress" ? new Date() : null,
+//               status === "completed" ? new Date() : null,
+//               st.start_time || null,
+//               st.description || null,
+//               st.sla_hours || null,
+//               st.sla_minutes || null,
+//               st.order_position || null,
+//               st.assigned_to || null,
+//               st.reporting_managers || null,
+//               st.escalation_managers || null,
+//             ],
+//           );
+
+//           trackerRow = insertRes.rows[0];
+//         }
+
+//         // Now update the finops_tracker row with status change
+//         let updateFields: string[] = [
+//           "status = $1",
+//           "updated_at = CURRENT_TIMESTAMP",
+//           "subtask_scheduled_date = $2::date",
+//         ];
+//         const params: any[] = [status, updateDate, taskId, Number(subtaskId)];
+//         let pIdx = 5;
+
+//         if (status === "completed") {
+//           updateFields.push("completed_at = CURRENT_TIMESTAMP");
+//         }
+//         if (status === "in_progress") {
+//           // Only set started_at if not already set
+//           updateFields.push(
+//             "started_at = COALESCE(started_at, CURRENT_TIMESTAMP)",
+//           );
+//         }
+//         if (status === "delayed" && delay_reason) {
+//           updateFields.push(`delay_reason = $${pIdx++}`);
+//           updateFields.push(`delay_notes = $${pIdx++}`);
+//           params.push(delay_reason, delay_notes || "");
+//         }
+
+//         const updateQuery = `
+//           UPDATE finops_tracker
+//           SET ${updateFields.join(", ")}
+//           WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4
+//         `;
+
+//         await pool.query(updateQuery, params);
+
+//         // Persist status change to finops_subtasks table to keep the authoritative subtask status in sync
+//         try {
+//           const statusToSet = status;
+//           const isInProgress = statusToSet === "in_progress";
+//           const isCompleted = statusToSet === "completed";
+
+//           const subtaskUpdateParams: any[] = [
+//             statusToSet,
+//             isInProgress,
+//             isCompleted,
+//             taskId,
+//             Number(subtaskId),
+//           ];
+//           const subtaskUpdateQuery = `
+//             UPDATE finops_subtasks
+//             SET status = $1,
+//                 started_at = CASE WHEN $2 THEN COALESCE(started_at, CURRENT_TIMESTAMP) ELSE started_at END,
+//                 completed_at = CASE WHEN $3 THEN CURRENT_TIMESTAMP ELSE NULL END,
+//                 updated_at = CURRENT_TIMESTAMP
+//             WHERE task_id = $4 AND id = $5
+//           `;
+//           await pool.query(subtaskUpdateQuery, subtaskUpdateParams);
+//         } catch (err) {
+//           console.warn(
+//             "Failed to persist status to finops_subtasks:",
+//             err?.message || err,
+//           );
+//         }
+
+//         // Fetch updated tracker row for notifications/logging
+//         const updatedRes = await pool.query(
+//           `SELECT ft.*, t.task_name FROM finops_tracker ft JOIN finops_tasks t ON ft.task_id = t.id WHERE ft.run_date = $1::date AND ft.task_id = $2 AND ft.subtask_id = $3 LIMIT 1`,
+//           [updateDate, taskId, Number(subtaskId)],
+//         );
+
+//         const updated = updatedRes.rows[0];
+
+//         // Enhanced activity logging
+//         const oldStatus = trackerRow?.status || null;
+//         const subtaskName =
+//           trackerRow?.subtask_name ||
+//           updated?.subtask_name ||
+//           "Unknown Subtask";
+
+//         let logDetails = `Subtask "${subtaskName}" status changed from "${oldStatus}" to "${status}"`;
+//         if (status === "delayed" && delay_reason)
+//           logDetails += ` (Reason: ${delay_reason})`;
+
+//         await logActivity(
+//           taskId,
+//           subtaskId,
+//           "status_changed",
+//           userName,
+//           logDetails,
+//         );
+
+//         // Normalize data for notification handler: ensure fields expected by handler are present
+//         const notifyData = {
+//           ...(updated || trackerRow),
+//           id: (updated || trackerRow)?.subtask_id || Number(subtaskId),
+//           task_id: (updated || trackerRow)?.task_id || taskId,
+//           name: (updated || trackerRow)?.subtask_name || subtaskName,
+//           reporting_managers:
+//             (updated || trackerRow)?.reporting_managers || null,
+//           escalation_managers:
+//             (updated || trackerRow)?.escalation_managers || null,
+//           assigned_to: (updated || trackerRow)?.assigned_to || null,
+//         };
+
+//         // Send notifications based on status using updated tracker row
+//         await handleStatusChangeNotifications(
+//           notifyData,
+//           status,
+//           delay_reason,
+//           delay_notes,
+//         );
+
+//         // Log user activity and update task status
+//         await logUserActivity(userName, taskId);
+//         await checkAndUpdateTaskStatus(taskId, userName);
+
+//         res.json({
+//           message: "Subtask status updated successfully",
+//           previous_status: oldStatus,
+//           new_status: status,
+//           delay_reason: delay_reason || null,
+//           delay_notes: delay_notes || null,
+//           updated_at: new Date().toISOString(),
+//         });
+//       } else {
+//         // Enhanced mock response
+//         const task = mockFinOpsTasks.find((t) => t.id === taskId);
+//         if (task) {
+//           const subtask = task.subtasks.find((st) => st.id === subtaskId);
+//           if (subtask) {
+//             const oldStatus = subtask.status;
+//             subtask.status = status;
+
+//             if (status === "completed") {
+//               subtask.completed_at = new Date().toISOString();
+//             }
+//             if (status === "in_progress") {
+//               subtask.started_at = new Date().toISOString();
+//             }
+//             if (status === "delayed") {
+//               (subtask as any).delay_reason = delay_reason;
+//               (subtask as any).delay_notes = delay_notes;
+//             }
+
+//             // External alert for overdue in mock mode as well
+//             if (status === "overdue") {
+//               const taskNameMock = task.task_name || "Unknown Task";
+//               const clientNameMock = task.client_name || "Unknown Client";
+//               const title = `Please take immediate action on the overdue subtask ${subtask.name} under the task ${taskNameMock} for the client ${clientNameMock}.`;
+//               await sendReplicaDownAlertOnce(taskId, subtaskId, title, []);
+//             }
+
+//             res.json({
+//               message: "Subtask status updated successfully (mock)",
+//               previous_status: oldStatus,
+//               new_status: status,
+//               delay_reason: delay_reason || null,
+//               delay_notes: delay_notes || null,
+//             });
+//           } else {
+//             res.status(404).json({ error: "Subtask not found" });
+//           }
+//         } else {
+//           res.status(404).json({ error: "Task not found" });
+//         }
+//       }
+//     } catch (error) {
+//       console.error("Error updating subtask status:", error);
+//       res.status(500).json({ error: "Failed to update subtask status" });
+//     }
+//   },
+// );
+
 router.patch(
   "/tasks/:taskId/subtasks/:subtaskId",
   async (req: Request, res: Response) => {
     try {
       const taskId = parseInt(req.params.taskId);
-      const subtaskId = req.params.subtaskId;
+      const subtaskId = Number(req.params.subtaskId);
       const { status, user_name, delay_reason, delay_notes, date } = req.body;
-      const userName = user_name || "Unknown User";
+      let userName = typeof user_name === "string" ? user_name.trim() : "";
 
-      // Determine the date to update: use provided date or default to today
+      // If user_name not provided, try headers (x-user-name or x-user-id) before defaulting
+      if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+        const headerName = (req.headers["x-user-name"] as string) || "";
+        const headerUserId = (req.headers["x-user-id"] as string) || "";
+        if (headerName && typeof headerName === "string" && headerName.trim() !== "") {
+          userName = headerName.trim();
+        } else if (headerUserId && String(headerUserId).trim() !== "") {
+          // Try to resolve numeric user id or azure id/email
+          try {
+            const uid = String(headerUserId).trim();
+            let userRes;
+            if (/^\d+$/.test(uid)) {
+              userRes = await pool.query(
+                `SELECT first_name, last_name, email FROM users WHERE id = $1 LIMIT 1`,
+                [Number(uid)],
+              );
+            } else {
+              // Try azure_object_id or email
+              userRes = await pool.query(
+                `SELECT first_name, last_name, email FROM users WHERE azure_object_id = $1 OR LOWER(email) = LOWER($1) LIMIT 1`,
+                [uid],
+              );
+            }
+            if (userRes && userRes.rows.length > 0) {
+              const u = userRes.rows[0];
+              userName = `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() || u.email || "Unknown User";
+            }
+          } catch (e) {
+            // ignore and fallback
+          }
+        }
+
+        if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+          userName = "Unknown User";
+        }
+      }
+
+      // Use passed date or default to today (preserve time component for timestamps)
       const updateDate = date || new Date().toISOString().split("T")[0];
+      const nowTime = new Date().toTimeString().slice(0, 8);
+      const updateDateObj = new Date(`${updateDate}T${nowTime}`);
 
       if (await isDatabaseAvailable()) {
-        // Ensure finops_tracker has columns mirrored from finops_subtasks
+        // Ensure tracker table exists
         await pool.query(`
           CREATE TABLE IF NOT EXISTS finops_tracker (
             id SERIAL PRIMARY KEY,
@@ -1062,7 +1750,7 @@ router.patch(
           );
         `);
 
-        // Make sure missing columns exist (for older DBs)
+        // Ensure older columns exist
         await pool.query(`
           ALTER TABLE finops_tracker
             ADD COLUMN IF NOT EXISTS description TEXT,
@@ -1080,24 +1768,30 @@ router.patch(
             ADD COLUMN IF NOT EXISTS escalation_managers TEXT;
         `);
 
-        // Try to fetch tracker row for the specified date
-        const trackerRes = await pool.query(
+        // Ensure approval/completion columns exist
+        await pool.query(`
+          ALTER TABLE finops_tracker
+            ADD COLUMN IF NOT EXISTS completed_by TEXT,
+            ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS approved_by TEXT;
+        `);
+
+        // Fetch existing tracker row
+        let trackerRes = await pool.query(
           `
           SELECT ft.*, t.duration, t.task_name, t.reporting_managers, t.escalation_managers, t.assigned_to
           FROM finops_tracker ft
           JOIN finops_tasks t ON ft.task_id = t.id
-          WHERE ft.run_date = $1::date
-            AND ft.task_id = $2
-            AND ft.subtask_id = $3
+          WHERE ft.run_date = $1::date AND ft.task_id = $2 AND ft.subtask_id = $3
           LIMIT 1
         `,
-          [updateDate, taskId, Number(subtaskId)],
+          [updateDate, taskId, subtaskId],
         );
 
         let trackerRow: any = trackerRes.rows[0];
 
         if (!trackerRow) {
-          // No tracker row for today - create one from finops_subtasks metadata
+          // Fetch subtask metadata to create tracker row
           const stRes = await pool.query(
             `
             SELECT st.*, t.duration, t.task_name, t.reporting_managers, t.escalation_managers, t.assigned_to
@@ -1106,7 +1800,7 @@ router.patch(
             WHERE st.task_id = $1 AND st.id = $2
             LIMIT 1
           `,
-            [taskId, Number(subtaskId)],
+            [taskId, subtaskId],
           );
 
           if (stRes.rows.length === 0) {
@@ -1115,14 +1809,33 @@ router.patch(
 
           const st = stRes.rows[0];
 
+          const startedAt = status === "in_progress" ? updateDateObj : null;
+          const completedAt = status === "completed" ? updateDateObj : null;
+
           const insertRes = await pool.query(
             `
             INSERT INTO finops_tracker (
-              run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position, assigned_to, reporting_managers, escalation_managers
+              run_date, period, task_id, task_name, subtask_id, subtask_name, status,
+              started_at, completed_at, scheduled_time, subtask_scheduled_date,
+              description, sla_hours, sla_minutes, order_position, assigned_to,
+              reporting_managers, escalation_managers
             ) VALUES (
-              $1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10, $1::date, $11, $12, $13, $14, $15, $16, $17
+              $1::date, $2, $3, $4, $5, $6, $7,
+              $8, $9, $10, $1::date,
+              $11, $12, $13, $14, $15, $16, $17
             )
-            ON CONFLICT (run_date, period, task_id, subtask_id) DO UPDATE SET status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, description = EXCLUDED.description, sla_hours = EXCLUDED.sla_hours, sla_minutes = EXCLUDED.sla_minutes, order_position = EXCLUDED.order_position, assigned_to = EXCLUDED.assigned_to, reporting_managers = EXCLUDED.reporting_managers, escalation_managers = EXCLUDED.escalation_managers, updated_at = NOW()
+            ON CONFLICT (run_date, period, task_id, subtask_id) DO UPDATE
+              SET status = EXCLUDED.status,
+                  started_at = EXCLUDED.started_at,
+                  completed_at = EXCLUDED.completed_at,
+                  description = EXCLUDED.description,
+                  sla_hours = EXCLUDED.sla_hours,
+                  sla_minutes = EXCLUDED.sla_minutes,
+                  order_position = EXCLUDED.order_position,
+                  assigned_to = EXCLUDED.assigned_to,
+                  reporting_managers = EXCLUDED.reporting_managers,
+                  escalation_managers = EXCLUDED.escalation_managers,
+                  updated_at = NOW()
             RETURNING *
           `,
             [
@@ -1133,8 +1846,8 @@ router.patch(
               st.id,
               st.name || "",
               status || st.status || "pending",
-              status === "in_progress" ? new Date() : null,
-              status === "completed" ? new Date() : null,
+              startedAt,
+              completedAt,
               st.start_time || null,
               st.description || null,
               st.sla_hours || null,
@@ -1147,62 +1860,93 @@ router.patch(
           );
 
           trackerRow = insertRes.rows[0];
-        }
 
-        // Now update the finops_tracker row with status change
-        let updateFields: string[] = [
-          "status = $1",
-          "updated_at = CURRENT_TIMESTAMP",
-          "subtask_scheduled_date = $2::date",
-        ];
-        const params: any[] = [status, updateDate, taskId, Number(subtaskId)];
-        let pIdx = 5;
+          // If completed, set completed_by and ensure completed_at is set
+          if (status === "completed") {
+            try {
+              await pool.query(
+                `UPDATE finops_tracker SET completed_by = $1, completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+                [userName, updateDate, st.task_id, st.id],
+              );
+            } catch (e) {
+              console.warn(
+                "Failed to set completed_by/completed_at on new tracker row:",
+                (e as Error).message,
+              );
+            }
+          }
+        } else {
+          // Update existing row with proper backdating
+          const startedAt =
+            status === "in_progress"
+              ? trackerRow.started_at || updateDateObj
+              : trackerRow.started_at;
+          const completedAt =
+            status === "completed" ? updateDateObj : trackerRow.completed_at;
 
-        if (status === "completed") {
-          updateFields.push("completed_at = CURRENT_TIMESTAMP");
-        }
-        if (status === "in_progress") {
-          // Only set started_at if not already set
-          updateFields.push(
-            "started_at = COALESCE(started_at, CURRENT_TIMESTAMP)",
-          );
-        }
-        if (status === "delayed" && delay_reason) {
-          updateFields.push(`delay_reason = $${pIdx++}`);
-          updateFields.push(`delay_notes = $${pIdx++}`);
-          params.push(delay_reason, delay_notes || "");
-        }
-
-        const updateQuery = `
-          UPDATE finops_tracker
-          SET ${updateFields.join(", ")}
-          WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4
-        `;
-
-        await pool.query(updateQuery, params);
-
-        // Persist status change to finops_subtasks table to keep the authoritative subtask status in sync
-        try {
-          const statusToSet = status;
-          const isInProgress = statusToSet === "in_progress";
-          const isCompleted = statusToSet === "completed";
-
-          const subtaskUpdateParams: any[] = [
-            statusToSet,
-            isInProgress,
-            isCompleted,
-            taskId,
-            Number(subtaskId),
+          const updateFields = [
+            "status = $1",
+            "updated_at = CURRENT_TIMESTAMP",
+            "subtask_scheduled_date = $2::date",
+            "started_at = $3",
+            "completed_at = $4",
           ];
-          const subtaskUpdateQuery = `
+
+          const params = [
+            status,
+            updateDate,
+            startedAt,
+            completedAt,
+            taskId,
+            subtaskId,
+          ];
+
+          await pool.query(
+            `UPDATE finops_tracker
+             SET ${updateFields.join(", ")}
+             WHERE run_date = $2::date AND task_id = $5 AND subtask_id = $6`,
+            params,
+          );
+
+          // If completed, set completed_by and ensure completed_at is set
+          if (status === "completed") {
+            try {
+              await pool.query(
+                `UPDATE finops_tracker SET completed_by = $1, completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP) WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+                [userName, updateDate, taskId, subtaskId],
+              );
+            } catch (e) {
+              console.warn(
+                "Failed to set completed_by/completed_at on existing tracker row:",
+                (e as Error).message,
+              );
+            }
+          }
+        }
+
+        // Persist status to finops_subtasks table
+        try {
+          const isInProgress = status === "in_progress";
+          const isCompleted = status === "completed";
+
+          await pool.query(
+            `
             UPDATE finops_subtasks
             SET status = $1,
-                started_at = CASE WHEN $2 THEN COALESCE(started_at, CURRENT_TIMESTAMP) ELSE started_at END,
-                completed_at = CASE WHEN $3 THEN CURRENT_TIMESTAMP ELSE NULL END,
+                started_at = CASE WHEN $2 THEN COALESCE(started_at, $4) ELSE started_at END,
+                completed_at = CASE WHEN $3 THEN $4 ELSE NULL END,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE task_id = $4 AND id = $5
-          `;
-          await pool.query(subtaskUpdateQuery, subtaskUpdateParams);
+            WHERE task_id = $5 AND id = $6
+          `,
+            [
+              status,
+              isInProgress,
+              isCompleted,
+              updateDateObj,
+              taskId,
+              subtaskId,
+            ],
+          );
         } catch (err) {
           console.warn(
             "Failed to persist status to finops_subtasks:",
@@ -1210,15 +1954,19 @@ router.patch(
           );
         }
 
-        // Fetch updated tracker row for notifications/logging
+        // Fetch updated row for logging/notifications
         const updatedRes = await pool.query(
-          `SELECT ft.*, t.task_name FROM finops_tracker ft JOIN finops_tasks t ON ft.task_id = t.id WHERE ft.run_date = $1::date AND ft.task_id = $2 AND ft.subtask_id = $3 LIMIT 1`,
-          [updateDate, taskId, Number(subtaskId)],
+          `
+          SELECT ft.*, t.task_name
+          FROM finops_tracker ft
+          JOIN finops_tasks t ON ft.task_id = t.id
+          WHERE ft.run_date = $1::date AND ft.task_id = $2 AND ft.subtask_id = $3
+          LIMIT 1
+        `,
+          [updateDate, taskId, subtaskId],
         );
 
         const updated = updatedRes.rows[0];
-
-        // Enhanced activity logging
         const oldStatus = trackerRow?.status || null;
         const subtaskName =
           trackerRow?.subtask_name ||
@@ -1237,10 +1985,10 @@ router.patch(
           logDetails,
         );
 
-        // Normalize data for notification handler: ensure fields expected by handler are present
-        const notifyData = {
+        // Notification data
+        const notifyDataBase = {
           ...(updated || trackerRow),
-          id: (updated || trackerRow)?.subtask_id || Number(subtaskId),
+          id: (updated || trackerRow)?.subtask_id || subtaskId,
           task_id: (updated || trackerRow)?.task_id || taskId,
           name: (updated || trackerRow)?.subtask_name || subtaskName,
           reporting_managers:
@@ -1250,7 +1998,28 @@ router.patch(
           assigned_to: (updated || trackerRow)?.assigned_to || null,
         };
 
-        // Send notifications based on status using updated tracker row
+        // Ensure client_name is included (fetch from finops_tasks if not present)
+        let clientName = (notifyDataBase as any).client_name;
+        try {
+          if (!clientName) {
+            const taskMetaRes = await pool.query(
+              `SELECT client_name FROM finops_tasks WHERE id = $1 LIMIT 1`,
+              [(notifyDataBase as any).task_id || taskId],
+            );
+            clientName = taskMetaRes.rows[0]?.client_name || null;
+          }
+        } catch (e) {
+          console.warn(
+            "Failed to fetch client_name for notifications:",
+            (e as Error).message,
+          );
+        }
+
+        const notifyData = {
+          ...notifyDataBase,
+          client_name: clientName,
+        };
+
         await handleStatusChangeNotifications(
           notifyData,
           status,
@@ -1258,7 +2027,6 @@ router.patch(
           delay_notes,
         );
 
-        // Log user activity and update task status
         await logUserActivity(userName, taskId);
         await checkAndUpdateTaskStatus(taskId, userName);
 
@@ -1271,46 +2039,33 @@ router.patch(
           updated_at: new Date().toISOString(),
         });
       } else {
-        // Enhanced mock response
+        // Mock DB fallback
         const task = mockFinOpsTasks.find((t) => t.id === taskId);
-        if (task) {
-          const subtask = task.subtasks.find((st) => st.id === subtaskId);
-          if (subtask) {
-            const oldStatus = subtask.status;
-            subtask.status = status;
+        if (!task) return res.status(404).json({ error: "Task not found" });
 
-            if (status === "completed") {
-              subtask.completed_at = new Date().toISOString();
-            }
-            if (status === "in_progress") {
-              subtask.started_at = new Date().toISOString();
-            }
-            if (status === "delayed") {
-              (subtask as any).delay_reason = delay_reason;
-              (subtask as any).delay_notes = delay_notes;
-            }
+        const subtask = task.subtasks.find((st) => st.id === subtaskId);
+        if (!subtask)
+          return res.status(404).json({ error: "Subtask not found" });
 
-            // External alert for overdue in mock mode as well
-            if (status === "overdue") {
-              const taskNameMock = task.task_name || "Unknown Task";
-              const clientNameMock = task.client_name || "Unknown Client";
-              const title = `Please take immediate action on the overdue subtask ${subtask.name} under the task ${taskNameMock} for the client ${clientNameMock}.`;
-              await sendReplicaDownAlertOnce(taskId, subtaskId, title, []);
-            }
+        const oldStatus = subtask.status;
+        subtask.status = status;
 
-            res.json({
-              message: "Subtask status updated successfully (mock)",
-              previous_status: oldStatus,
-              new_status: status,
-              delay_reason: delay_reason || null,
-              delay_notes: delay_notes || null,
-            });
-          } else {
-            res.status(404).json({ error: "Subtask not found" });
-          }
-        } else {
-          res.status(404).json({ error: "Task not found" });
+        if (status === "completed")
+          subtask.completed_at = updateDateObj.toISOString();
+        if (status === "in_progress")
+          subtask.started_at = updateDateObj.toISOString();
+        if (status === "delayed") {
+          (subtask as any).delay_reason = delay_reason;
+          (subtask as any).delay_notes = delay_notes;
         }
+
+        res.json({
+          message: "Subtask status updated successfully (mock)",
+          previous_status: oldStatus,
+          new_status: status,
+          delay_reason: delay_reason || null,
+          delay_notes: delay_notes || null,
+        });
       }
     } catch (error) {
       console.error("Error updating subtask status:", error);
@@ -1528,6 +2283,46 @@ async function handleStatusChangeNotifications(
         "Completion notification would be sent to:",
         reportingManagers,
       );
+
+      // Schedule pending-approval alert for reporting managers after 30 minutes
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS finops_external_alerts (
+            id SERIAL PRIMARY KEY,
+            task_id INTEGER NOT NULL,
+            subtask_id INTEGER NOT NULL,
+            alert_group TEXT NOT NULL,
+            alert_bucket INTEGER NOT NULL DEFAULT -1,
+            title TEXT,
+            next_call_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
+          )
+        `);
+
+        const title = `Please review and approve the subtask \"${subtaskData.subtask_name || subtaskData.name}\" under the task \"${subtaskData.task_name}\" for the client \"${subtaskData.client_name || "Unknown Client"}\" at your earliest convenience.`;
+
+        await pool.query(
+          `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+           VALUES ($1, $2, $3, -1, $4, NOW() + INTERVAL '30 minutes')
+           ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
+          [
+            subtaskData.task_id,
+            subtaskData.id,
+            "pending_approval_reporting",
+            title,
+          ],
+        );
+
+        console.log(
+          `Scheduled pending approval alert for task ${subtaskData.task_id} subtask ${subtaskData.id}`,
+        );
+      } catch (e) {
+        console.warn(
+          "Failed to schedule pending approval alert:",
+          (e as Error).message,
+        );
+      }
     }
 
     // Send overdue notifications
@@ -1646,13 +2441,18 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
               'sla_hours', st.sla_hours,
               'sla_minutes', st.sla_minutes,
               'order_position', st.order_position,
-              'status', st.status,
-              'started_at', st.started_at,
-              'completed_at', st.completed_at
+              'status', COALESCE(ft.status, st.status),
+              'started_at', COALESCE(ft.started_at, st.started_at),
+              'completed_at', COALESCE(ft.completed_at, st.completed_at),
+              'completed_by', ft.completed_by,
+              'approved_by', ft.approved_by,
+              'delay_reason', COALESCE(ft.delay_reason, st.delay_reason),
+              'delay_notes', COALESCE(ft.delay_notes, st.delay_notes)
             ) ORDER BY st.order_position
           ) FILTER (WHERE st.id IS NOT NULL) as subtasks
         FROM finops_tasks t
         LEFT JOIN finops_subtasks st ON t.id = st.task_id
+        LEFT JOIN finops_tracker ft ON ft.run_date = $1::date AND ft.task_id = t.id AND ft.subtask_id = st.id
         WHERE t.is_active = true
         AND t.deleted_at IS NULL
         AND (
@@ -1670,16 +2470,53 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
         subtasks: row.subtasks || [],
       }));
 
+      // Build comprehensive summary including subtask-level counts
+      const summary = {
+        total_tasks: tasks.length,
+        total_subtasks: 0,
+        completed_tasks: tasks.filter((t) => t.status === "completed").length,
+        delayed_tasks: tasks.filter((t) => t.status === "delayed").length,
+        overdue_tasks: tasks.filter((t) => t.status === "overdue").length,
+        in_progress_tasks: tasks.filter((t) => t.status === "in_progress")
+          .length,
+        pending_tasks: tasks.filter((t) => t.status === "pending").length,
+        // Subtask level counters
+        completed_subtasks: 0,
+        delayed_subtasks: 0,
+        overdue_subtasks: 0,
+        pending_subtasks: 0,
+        in_progress_subtasks: 0,
+      };
+
+      tasks.forEach((t) => {
+        const subs = t.subtasks || [];
+        summary.total_subtasks += subs.length;
+        subs.forEach((st: any) => {
+          switch (st.status) {
+            case "completed":
+              summary.completed_subtasks++;
+              break;
+            case "delayed":
+              summary.delayed_subtasks++;
+              break;
+            case "overdue":
+              summary.overdue_subtasks++;
+              break;
+            case "in_progress":
+              summary.in_progress_subtasks++;
+              break;
+            case "pending":
+            default:
+              summary.pending_subtasks++;
+              break;
+          }
+        });
+      });
+
       res.json({
         date: dateStr,
         tasks: tasks,
-        summary: {
-          total_tasks: tasks.length,
-          completed_tasks: tasks.filter((t) => t.status === "completed").length,
-          overdue_tasks: tasks.filter((t) => t.status === "overdue").length,
-          in_progress_tasks: tasks.filter((t) => t.status === "in_progress")
-            .length,
-        },
+        summary,
       });
     } else {
       res.json({
@@ -2166,16 +3003,29 @@ router.post(
                 .filter((id: string | null) => !!id),
             ),
           );
+          console.log("USER INSIDE ALERT ENABLED", user_ids);
+          // Check if Pulse alerts are enabled
+          const settingsRes = await pool.query(
+            `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+          );
+          const pulseAlertsEnabled =
+            settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
 
-          // if (user_ids.length) {
-          //   fetch("https://pulsealerts.mylapay.com/direct-call", {
-          //     method: "POST",
-          //     headers: { "Content-Type": "application/json" },
-          //     body: JSON.stringify({ receiver: "CRM_Switch", title, user_ids }),
-          //   }).catch((err) => {
-          //     console.warn("Manual direct-call error:", (err as Error).message);
-          //   });
-          // }
+          if (pulseAlertsEnabled && user_ids.length) {
+            fetch("https://pulsealerts.mylapay.com/direct-call", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                receiver: "CRM_Switch",
+                title: title,
+                user_ids: user_ids,
+              }),
+            }).catch((err) => {
+              console.warn("Manual direct-call error:", (err as Error).message);
+            });
+          } else if (!pulseAlertsEnabled) {
+            console.log("Pulse alerts disabled, skipping manual direct-call");
+          }
         } catch (e) {
           console.warn(
             "Manual direct-call user resolution failed:",

@@ -1,4 +1,5 @@
 import "dotenv/config";
+// Force Vite rebuild - emailProcessorService hotfix applied
 import express from "express";
 import cors from "cors";
 
@@ -31,7 +32,12 @@ import azureSyncRouter from "./routes/azure-sync";
 import fundRaisesRouter from "./routes/fund-raises";
 import businessOfferingsRouter from "./routes/business-offerings";
 import finopsScheduler from "./services/finopsScheduler";
+import productsRouter from "./routes/products";
 import connectionsRouter from "./routes/connections";
+import mailConfigsRouter from "./routes/mail-configs";
+import emailProcessingRouter from "./routes/email-processing";
+import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
+import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
 
 // Production routes (database-only, no mock fallback)
 import templatesProductionRouter from "./routes/templates-production";
@@ -63,8 +69,63 @@ export function createServer() {
     );
   }
 
+  // Start Email Processing Job (background cron)
+  try {
+    setTimeout(() => {
+      initializeEmailProcessingJob();
+    }, 700);
+  } catch (e) {
+    console.error(
+      "Failed to initialize Email Processing Job:",
+      (e as any)?.message,
+    );
+  }
+
+  // Start Overdue Ticket Job: run every 30 seconds (guarded)
+  try {
+    const enableOverdue =
+      String(process.env.ENABLE_OVERDUE_JOB || "false").toLowerCase() ===
+      "true";
+    if (!enableOverdue) {
+      console.log("Overdue Ticket Job disabled via ENABLE_OVERDUE_JOB");
+    } else {
+      // Delay startup slightly to allow DB initialization to begin
+      setTimeout(() => {
+        // Run immediately once, then schedule periodically
+        runMarkOverdueTickets().catch((err) =>
+          console.error("Initial run of markOverdueTickets failed:", err),
+        );
+
+        // Schedule recurring run every 30 seconds
+        setInterval(() => {
+          console.log(
+            "every 30 sec call for runMarkOverdueTickets................",
+          );
+          runMarkOverdueTickets().catch((err) =>
+            console.error("Scheduled run of markOverdueTickets failed:", err),
+          );
+        }, 30 * 1000);
+      }, 1200);
+    }
+  } catch (e) {
+    console.error("Failed to start Overdue Ticket Job:", (e as any)?.message);
+  }
+
   // Middleware
-  app.use(cors());
+  // Configure CORS to include custom headers used by the client (x-user-id)
+  app.use(
+    cors({
+      origin: true,
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "Content-Length",
+        "X-Requested-With",
+        "X-User-Id",
+      ],
+      exposedHeaders: ["X-User-Id"],
+    }),
+  );
 
   // Handle large file uploads with proper error handling - skip multipart/form-data for multer
   app.use((req, res, next) => {
@@ -122,7 +183,7 @@ export function createServer() {
     res.setHeader("Access-Control-Max-Age", "86400");
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, Content-Length, X-Requested-With",
+      "Content-Type, Authorization, Content-Length, X-Requested-With, X-User-Id",
     );
 
     // Set keep-alive for large uploads
@@ -143,6 +204,18 @@ export function createServer() {
     console.log(
       `[${new Date().toISOString()}] ${req.method} ${req.url} (${contentLength} bytes)`,
     );
+    next();
+  });
+
+  // Disable caching for API routes to prevent 304 responses
+  app.use("/api", (req, res, next) => {
+    // Set cache control headers to prevent browser caching and 304 responses
+    res.set({
+      "Cache-Control":
+        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
     next();
   });
 
@@ -284,6 +357,27 @@ export function createServer() {
     console.log("Connections router loaded successfully");
   } catch (error) {
     console.error("Error loading Connections router:", error);
+  }
+
+  try {
+    app.use("/api/mail-configs", mailConfigsRouter);
+    console.log("Mail configs router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Mail configs router:", error);
+  }
+
+  try {
+    app.use("/api/email-processing", emailProcessingRouter);
+    console.log("Email processing router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Email processing router:", error);
+  }
+
+  try {
+    app.use("/api/products", productsRouter);
+    console.log("Products router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Products router:", error);
   }
 
   try {

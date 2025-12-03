@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
 import {
   Clock,
   CheckCircle,
@@ -76,6 +77,32 @@ export default function FinOpsAutomation() {
 
   // Add this line to define selectedTask
   const [selectedTask, setSelectedTask] = useState<AutomationTask | null>(null);
+
+  // Pulse alerts toggle (admin only)
+  const isAdmin = user?.role === "admin";
+
+  const { data: pulseAlertsEnabled = true } = useQuery({
+    queryKey: ["finops-pulse-alerts"],
+    queryFn: async () => {
+      const response = await apiClient.get("/finops/settings/pulse-alerts");
+      return response.enabled ?? true;
+    },
+    enabled: isAdmin,
+    staleTime: Infinity,
+  });
+
+  const updatePulseAlerts = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      return await apiClient.put("/finops/settings/pulse-alerts", { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["finops-pulse-alerts"] });
+    },
+  });
+
+  const handlePulseAlertsToggle = (enabled: boolean) => {
+    updatePulseAlerts.mutate(enabled);
+  };
 
   // Fetch workflow projects for FinOps
   const {
@@ -269,7 +296,20 @@ export default function FinOpsAutomation() {
           </p>
         </div>
 
-        <div className="flex gap-2"></div>
+        <div className="flex gap-4 items-center">
+          {isAdmin && (
+            <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
+              <span className="text-sm font-medium text-gray-700">
+                Pulse Alerts: {pulseAlertsEnabled ? "ON" : "OFF"}
+              </span>
+              <Switch
+                checked={pulseAlertsEnabled}
+                onCheckedChange={handlePulseAlertsToggle}
+                disabled={updatePulseAlerts.isPending}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Database Status Alert */}

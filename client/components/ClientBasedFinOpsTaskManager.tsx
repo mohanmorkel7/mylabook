@@ -85,60 +85,117 @@ import {
   isBefore,
   isAfter,
 } from "date-fns";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 // Helper function to extract name from "Name (email)" format or messy JSON-like strings (silent + memoized)
 const __nameParseCache = new Map<string, string>();
-const extractNameFromValue = (raw: string, depth: number = 0): string => {
-  if (!raw) return raw;
-  const cached = __nameParseCache.get(raw);
-  if (cached) return cached;
-  if (depth > 5) {
-    __nameParseCache.set(raw, raw);
-    return raw;
-  }
-  let value = String(raw).trim();
+const extractNameFromValue = (raw: any, depth: number = 0): string => {
+  if (raw === null || raw === undefined) return "";
 
-  // Strip surrounding braces {..} or quotes ".."
-  if (value.startsWith("{") && value.endsWith("}")) {
-    value = value.slice(1, -1).trim();
-  }
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    value = value.slice(1, -1);
+  // If it's already a non-empty string, proceed with existing normalization
+  if (typeof raw === "string") {
+    const cached = __nameParseCache.get(raw);
+    if (cached) return cached;
+    if (depth > 5) {
+      __nameParseCache.set(raw, raw);
+      return raw;
+    }
+    let value = raw.trim();
+
+    // Strip surrounding braces {..} or quotes ".."
+    if (value.startsWith("{") && value.endsWith("}")) {
+      value = value.slice(1, -1).trim();
+    }
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    // Unescape common escaped quotes \"...\"
+    if (value.startsWith('\\"') && value.endsWith('\\"')) {
+      value = value.slice(2, -2);
+    }
+
+    // If still looks like JSON string, try parse once
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("{") && value.endsWith("}"))
+    ) {
+      try {
+        const parsed = JSON.parse(value);
+        const res =
+          typeof parsed === "string"
+            ? extractNameFromValue(parsed, depth + 1)
+            : extractNameFromValue(parsed, depth + 1);
+        __nameParseCache.set(raw, res);
+        return res;
+      } catch {}
+    }
+
+    // Name (email) => take name only
+    const m = value.match(/^(.+)\s\([^)]+\)$/);
+    if (m) {
+      __nameParseCache.set(raw, m[1]);
+      return m[1];
+    }
+
+    __nameParseCache.set(raw, value);
+    return value;
   }
 
-  // Unescape common escaped quotes \"...\"
-  if (value.startsWith('\\"') && value.endsWith('\\"')) {
-    value = value.slice(2, -2);
+  // If raw is an array, map each element to a name and join
+  if (Array.isArray(raw)) {
+    const parts = raw
+      .map((r) => extractNameFromValue(r, depth + 1))
+      .filter(Boolean);
+    return parts.join(", ");
   }
 
-  // If still looks like JSON string, try parse once
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("{") && value.endsWith("}"))
-  ) {
+  // If raw is an object, try common properties
+  if (typeof raw === "object") {
     try {
-      const parsed = JSON.parse(value);
-      const res =
-        typeof parsed === "string"
-          ? extractNameFromValue(parsed, depth + 1)
-          : raw;
-      __nameParseCache.set(raw, res);
-      return res;
-    } catch {}
+      // Common shapes: { name: 'Naveen Kumar' } or { first_name, last_name }
+      if (raw.name && typeof raw.name === "string") return raw.name.trim();
+      if (raw.full_name && typeof raw.full_name === "string")
+        return raw.full_name.trim();
+      const first = raw.first_name || raw.firstname || raw.firstName;
+      const last = raw.last_name || raw.lastname || raw.lastName;
+      if (first || last)
+        return `${(first || "").toString().trim()} ${(last || "").toString().trim()}`.trim();
+
+      // Some payloads use user_name / username
+      if (raw.user_name || raw.username || raw.userName)
+        return (raw.user_name || raw.username || raw.userName)
+          .toString()
+          .trim();
+
+      // If email is present, prefer a display-friendly local part
+      if (raw.email && typeof raw.email === "string") {
+        const email = raw.email.trim();
+        // Use name if available in object as name + email
+        if (raw.name) return raw.name;
+        return email;
+      }
+
+      // If object contains nested tracker info with run_date and completed_by etc, try to extract name fields
+      if (raw.completed_by)
+        return extractNameFromValue(raw.completed_by, depth + 1);
+      if (raw.approved_by)
+        return extractNameFromValue(raw.approved_by, depth + 1);
+
+      // Fallback: stringify and attempt to parse
+      const str = JSON.stringify(raw);
+      return extractNameFromValue(str, depth + 1);
+    } catch (e) {
+      return "";
+    }
   }
 
-  // Name (email) => take name only
-  const m = value.match(/^(.+)\s\([^)]+\)$/);
-  if (m) {
-    __nameParseCache.set(raw, m[1]);
-    return m[1];
-  }
-
-  __nameParseCache.set(raw, value);
-  return value;
+  // Fallback to empty string for unexpected types
+  return "";
 };
 
 // Helper function to convert name to "Name (email)" format
@@ -148,6 +205,18 @@ const convertNameToValueFormat = (name: string, users: any[]): string => {
   }
   const user = users.find((u) => `${u.first_name} ${u.last_name}` === name);
   return user ? `${name} (${user.email || "no-email"})` : `${name} (no-email)`;
+};
+
+// Format ISO timestamp to "YYYY-MM-DD h:mm:ss AM/PM"
+const formatDateTime = (iso?: string | null) => {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return format(d, "yyyy-MM-dd h:mm:ss a");
+  } catch (e) {
+    return "";
+  }
 };
 
 // Time conversion utilities for AM/PM format
@@ -702,6 +771,13 @@ export default function ClientBasedFinOpsTaskManager() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const getUserDisplayName = (u: any) => {
+    if (!u) return undefined;
+    if (typeof u.name === "string" && u.name.trim()) return u.name.trim();
+    if (u.first_name && u.last_name) return `${u.first_name} ${u.last_name}`;
+    return undefined;
+  };
+
   // Check if user can edit FinOps tasks
   const canEditFinOpsTasks = (task: ClientBasedFinOpsTask): boolean => {
     if (!user) return false;
@@ -1236,7 +1312,7 @@ export default function ClientBasedFinOpsTaskManager() {
       taskId,
       subTaskId: subtaskId,
       status: newStatus,
-      userName: user?.first_name + " " + user?.last_name,
+      userName: getUserDisplayName(user),
       delayReason,
       delayNotes,
       date: dateFilter,
@@ -1266,7 +1342,7 @@ export default function ClientBasedFinOpsTaskManager() {
           taskId: overdueReasonData.taskId,
           subTaskId: overdueReasonData.subtaskId,
           status: overdueReasonData.newStatus,
-          userName: user?.first_name + " " + user?.last_name,
+          userName: getUserDisplayName(user),
           date: dateFilter,
         });
       }
@@ -1628,7 +1704,7 @@ export default function ClientBasedFinOpsTaskManager() {
               .map((name) => name.replace(/^"|"$/g, "").trim())
               .filter((name) => name.length > 0);
             if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-              console.log("🔄 Edit form - split names:", assignedArray);
+              console.log("��� Edit form - split names:", assignedArray);
           } else {
             // Single name
             assignedArray = [extracted];
@@ -1675,7 +1751,7 @@ export default function ClientBasedFinOpsTaskManager() {
   };
 
   // Filter tasks based on client, status, search, and date
-  const filteredTasks = finopsTasks.filter((task: ClientBasedFinOpsTask) => {
+  let filteredTasks = finopsTasks.filter((task: ClientBasedFinOpsTask) => {
     if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
       console.log("Processing task:", task.task_name, "for filtering");
     // Client filter from summary (takes priority)
@@ -1778,6 +1854,32 @@ export default function ClientBasedFinOpsTaskManager() {
   const normalizedUserName = normalize(user?.name || user?.email || "");
 
   const isAdmin = user?.role === "admin";
+
+  // Role-based visibility: non-admins see only tasks where they are assigned_to, reporting manager, or escalation manager
+  if (!isAdmin) {
+    filteredTasks = filteredTasks.filter((task: ClientBasedFinOpsTask) => {
+      const allInvolvedUsers = [
+        ...(Array.isArray(task.assigned_to)
+          ? task.assigned_to
+          : [task.assigned_to].filter(Boolean)),
+        ...(Array.isArray(task.reporting_managers)
+          ? task.reporting_managers
+          : []),
+        ...(Array.isArray(task.escalation_managers)
+          ? task.escalation_managers
+          : []),
+      ];
+      return allInvolvedUsers.some((person) => {
+        if (!person) return false;
+        const name = extractNameFromValue(person);
+        const normalized = normalize(name);
+        return (
+          normalized === normalizedUserName ||
+          (typeof person === "string" && person.includes(user?.email || ""))
+        );
+      });
+    });
+  }
 
   // <-- Add this here, after filteredTasks is available -->
   const canCreateTask =
@@ -1909,9 +2011,14 @@ export default function ClientBasedFinOpsTaskManager() {
       completed_tasks: 0,
       delayed_tasks: 0,
       overdue_tasks: 0,
+      // Added counts
+      pending_tasks: 0,
+      in_progress_tasks: 0,
       completed_subtasks: 0,
       delayed_subtasks: 0,
       overdue_subtasks: 0,
+      pending_subtasks: 0,
+      in_progress_subtasks: 0,
     };
 
     filteredTasks.forEach((task: ClientBasedFinOpsTask) => {
@@ -1919,11 +2026,15 @@ export default function ClientBasedFinOpsTaskManager() {
       if (task.status === "completed") summary.completed_tasks++;
       if (task.status === "delayed") summary.delayed_tasks++;
       if (task.status === "overdue") summary.overdue_tasks++;
+      if (task.status === "pending") summary.pending_tasks++;
+      if (task.status === "in_progress") summary.in_progress_tasks++;
 
       task.subtasks?.forEach((subtask) => {
         if (subtask.status === "completed") summary.completed_subtasks++;
         if (subtask.status === "delayed") summary.delayed_subtasks++;
         if (subtask.status === "overdue") summary.overdue_subtasks++;
+        if (subtask.status === "pending") summary.pending_subtasks++;
+        if (subtask.status === "in_progress") summary.in_progress_subtasks++;
       });
     });
 
@@ -1985,6 +2096,9 @@ export default function ClientBasedFinOpsTaskManager() {
           completed_subtasks: 0,
           delayed_subtasks: 0,
           overdue_subtasks: 0,
+          // New per-client counts
+          pending_subtasks: 0,
+          in_progress_subtasks: 0,
         };
       }
 
@@ -1998,6 +2112,10 @@ export default function ClientBasedFinOpsTaskManager() {
           clientSummary[clientName].delayed_subtasks++;
         if (subtask.status === "overdue")
           clientSummary[clientName].overdue_subtasks++;
+        if (subtask.status === "pending")
+          clientSummary[clientName].pending_subtasks++;
+        if (subtask.status === "in_progress")
+          clientSummary[clientName].in_progress_subtasks++;
       });
     });
 
@@ -2074,6 +2192,255 @@ export default function ClientBasedFinOpsTaskManager() {
 
           {/* 🎯 Right: Action buttons (normal size, outside the box) */}
           <div className="flex gap-2 ml-4">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  // Build workbook
+                  const wb = XLSX.utils.book_new();
+
+                  // Summary sheet - prefer authoritative server summary when available
+                  const summaryHeaders = [
+                    "Total Task",
+                    "Total Subtasks",
+                    "Completed",
+                    "Delayed",
+                    "Overdue",
+                    "Active Clients",
+                    "Pending",
+                    "In-Progress",
+                  ];
+
+                  // Fetch authoritative data from server once (tasks + summary)
+                  let serverResp: any = null;
+                  try {
+                    serverResp =
+                      await apiClient.getFinOpsDailyTasks(dateFilter);
+                  } catch (err) {
+                    console.warn(
+                      "Failed to fetch daily tasks from server for export:",
+                      err,
+                    );
+                  }
+
+                  const serverSummary: any =
+                    serverResp && serverResp.summary
+                      ? serverResp.summary
+                      : null;
+                  const tasksForExport: any[] =
+                    serverResp && Array.isArray(serverResp.tasks)
+                      ? serverResp.tasks
+                      : filteredTasks;
+
+                  const summaryRow = serverSummary
+                    ? [
+                        serverSummary.total_tasks ?? 0,
+                        serverSummary.total_subtasks ?? 0,
+                        serverSummary.completed_subtasks ?? 0,
+                        serverSummary.delayed_subtasks ?? 0,
+                        serverSummary.overdue_subtasks ?? 0,
+                        Object.keys(clientSummary).length,
+                        serverSummary.pending_subtasks ?? 0,
+                        serverSummary.in_progress_subtasks ?? 0,
+                      ]
+                    : [
+                        overallSummary.total_tasks,
+                        overallSummary.total_subtasks,
+                        overallSummary.completed_subtasks,
+                        overallSummary.delayed_subtasks,
+                        overallSummary.overdue_subtasks,
+                        Object.keys(clientSummary).length,
+                        overallSummary.pending_subtasks,
+                        overallSummary.in_progress_subtasks,
+                      ];
+
+                  const wsSummary = XLSX.utils.aoa_to_sheet([
+                    summaryHeaders,
+                    summaryRow,
+                  ]);
+                  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+                  // Build client sheets based on server data
+                  const clientNames = Array.from(
+                    new Set(
+                      tasksForExport.map(
+                        (t: any) =>
+                          t.client_name ||
+                          (t.client_id
+                            ? `Client ${t.client_id}`
+                            : "Unknown Client"),
+                      ),
+                    ),
+                  );
+
+                  clientNames.forEach((clientName: string) => {
+                    const rows: any[] = [];
+                    rows.push([
+                      "Task name",
+                      "Sub task Name",
+                      "Client name",
+                      "Period",
+                      "start time",
+                      "completed time",
+                      "status",
+                      "completed_by",
+                      "approved_by",
+                      "assigned_to",
+                      "Reporting manager",
+                      "Escalation manager",
+                      "Reason",
+                    ]);
+
+                    tasksForExport.forEach((task: any) => {
+                      const tClientName =
+                        task.client_name ||
+                        (task.client_id
+                          ? `Client ${task.client_id}`
+                          : "Unknown Client");
+                      if ((tClientName || "").toString() !== clientName) return;
+                      const period = task.duration || "daily";
+                      (task.subtasks || []).forEach((st: any) => {
+                        rows.push([
+                          task.task_name || "",
+                          st.name || "",
+                          clientName,
+                          period,
+                          st.start_time || "",
+                          formatDateTime(st.completed_at) || "",
+                          st.status || "",
+                          extractNameFromValue(
+                            st.completed_by ||
+                              st.completedBy ||
+                              st.completed_by ||
+                              "",
+                          ),
+                          extractNameFromValue(
+                            st.approved_by || st.approvedBy || "",
+                          ),
+                          Array.isArray(task.assigned_to)
+                            ? task.assigned_to.join(", ")
+                            : task.assigned_to || "",
+                          Array.isArray(task.reporting_managers)
+                            ? task.reporting_managers.join(", ")
+                            : task.reporting_managers || "",
+                          Array.isArray(task.escalation_managers)
+                            ? task.escalation_managers.join(", ")
+                            : task.escalation_managers || "",
+                          st.delay_reason || st.delay_notes || "",
+                        ]);
+                      });
+                    });
+
+                    const ws = XLSX.utils.aoa_to_sheet(rows);
+                    const safeName = (clientName || "Client")
+                      .toString()
+                      .slice(0, 31);
+                    XLSX.utils.book_append_sheet(wb, ws, safeName || "Client");
+                  });
+
+                  // Client Summary built from server data
+                  const clientSummaryRows: any[] = [];
+                  clientSummaryRows.push([
+                    "Client Name",
+                    "Total Tasks",
+                    "Total Subtasks",
+                    "Completed Subtasks",
+                    "Delayed Subtasks",
+                    "Overdue Subtasks",
+                    "Pending Subtasks",
+                    "In-Progress Subtasks",
+                  ]);
+
+                  const clientAgg: Record<string, any> = {};
+                  tasksForExport.forEach((task: any) => {
+                    const name =
+                      task.client_name ||
+                      (task.client_id
+                        ? `Client ${task.client_id}`
+                        : "Unknown Client");
+                    if (!clientAgg[name])
+                      clientAgg[name] = {
+                        total_tasks: 0,
+                        total_subtasks: 0,
+                        completed_subtasks: 0,
+                        delayed_subtasks: 0,
+                        overdue_subtasks: 0,
+                        pending_subtasks: 0,
+                        in_progress_subtasks: 0,
+                      };
+                    clientAgg[name].total_tasks += 1;
+                    clientAgg[name].total_subtasks += (
+                      task.subtasks || []
+                    ).length;
+                    (task.subtasks || []).forEach((st: any) => {
+                      if (st.status === "completed")
+                        clientAgg[name].completed_subtasks++;
+                      if (st.status === "delayed")
+                        clientAgg[name].delayed_subtasks++;
+                      if (st.status === "overdue")
+                        clientAgg[name].overdue_subtasks++;
+                      if (st.status === "pending")
+                        clientAgg[name].pending_subtasks++;
+                      if (st.status === "in_progress")
+                        clientAgg[name].in_progress_subtasks++;
+                    });
+                  });
+
+                  Object.entries(clientAgg).forEach(([cName, sum]: any) => {
+                    clientSummaryRows.push([
+                      cName,
+                      sum.total_tasks || 0,
+                      sum.total_subtasks || 0,
+                      sum.completed_subtasks || 0,
+                      sum.delayed_subtasks || 0,
+                      sum.overdue_subtasks || 0,
+                      sum.pending_subtasks || 0,
+                      sum.in_progress_subtasks || 0,
+                    ]);
+                  });
+
+                  const wsClient = XLSX.utils.aoa_to_sheet(clientSummaryRows);
+                  XLSX.utils.book_append_sheet(wb, wsClient, "Client Summary");
+
+                  // Status Summary built from server data
+                  const statusSummaryRows: any[] = [];
+                  statusSummaryRows.push(["Status", "Count"]);
+                  const statusCounts: Record<string, number> = {
+                    completed: 0,
+                    in_progress: 0,
+                    pending: 0,
+                    delayed: 0,
+                    overdue: 0,
+                  };
+                  tasksForExport.forEach((task: any) => {
+                    (task.subtasks || []).forEach((st: any) => {
+                      statusCounts[st.status] =
+                        (statusCounts[st.status] || 0) + 1;
+                    });
+                  });
+
+                  Object.entries(statusCounts).forEach(([status, cnt]) => {
+                    statusSummaryRows.push([status, cnt]);
+                  });
+
+                  const wsStatus = XLSX.utils.aoa_to_sheet(statusSummaryRows);
+                  XLSX.utils.book_append_sheet(wb, wsStatus, "Status Summary");
+
+                  const wbout = XLSX.write(wb, {
+                    bookType: "xlsx",
+                    type: "array",
+                  });
+                  const blob = new Blob([wbout], {
+                    type: "application/octet-stream",
+                  });
+                  saveAs(blob, `finops-daily-process-${dateFilter}.xlsx`);
+                } catch (err) {
+                  console.error("Failed to export Excel:", err);
+                }
+              }}
+            >
+              Export Excel
+            </Button>
             {/* Admin buttons */}
             {isAdmin && (
               <>
@@ -2124,7 +2491,7 @@ export default function ClientBasedFinOpsTaskManager() {
         )}
 
         {/* Overall Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-blue-600">
@@ -2133,6 +2500,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Total Tasks</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-gray-900">
@@ -2141,6 +2509,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Total Subtasks</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-green-600">
@@ -2149,6 +2518,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Completed</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-yellow-600">
@@ -2157,6 +2527,7 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Delayed</div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-red-600">
@@ -2165,6 +2536,25 @@ export default function ClientBasedFinOpsTaskManager() {
               <div className="text-xs text-gray-600">Overdue</div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-indigo-600">
+                {overallSummary.pending_subtasks}
+              </div>
+              <div className="text-xs text-gray-600">Pending</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {overallSummary.in_progress_subtasks}
+              </div>
+              <div className="text-xs text-gray-600">In-Progress</div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardContent className="p-4 text-center">
               <div className="text-2xl font-bold text-purple-600">
@@ -2257,6 +2647,7 @@ export default function ClientBasedFinOpsTaskManager() {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In-Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="delayed">Delayed</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
@@ -2300,7 +2691,7 @@ export default function ClientBasedFinOpsTaskManager() {
                 </Button>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
                 {Object.entries(clientSummary).map(
                   ([clientName, summary]: [string, any]) => (
                     <div
@@ -2326,7 +2717,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           </Badge>
                         )}
                       </div>
-                      <div className="grid grid-cols-5 gap-2 text-center">
+                      <div className="grid grid-cols-7 gap-2 text-center">
                         <div>
                           <div className="text-lg font-bold text-blue-600">
                             {summary.total_tasks}
@@ -2356,6 +2747,20 @@ export default function ClientBasedFinOpsTaskManager() {
                             {summary.overdue_subtasks}
                           </div>
                           <div className="text-xs text-gray-600">Overdue</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-indigo-600">
+                            {summary.pending_subtasks}
+                          </div>
+                          <div className="text-xs text-gray-600">Pending</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-blue-600">
+                            {summary.in_progress_subtasks}
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            In-Progress
+                          </div>
                         </div>
                       </div>
                       <div className="mt-2 text-xs text-gray-500 text-center">

@@ -355,12 +355,16 @@ export default function ManageTickets() {
 
   const fetchTags = async () => {
     try {
-      const resp = await api.get('/tickets/summary/by-tag');
+      const resp = await api.get("/tickets/summary/by-tag");
       const data = resp?.data ?? resp;
-      const tags = Array.isArray(data?.tags) ? data.tags.map((t: any) => String(t.tag || t.name || '').trim()).filter(Boolean) : [];
+      const tags = Array.isArray(data?.tags)
+        ? data.tags
+            .map((t: any) => String(t.tag || t.name || "").trim())
+            .filter(Boolean)
+        : [];
       setSourceTags(tags);
     } catch (e) {
-      console.error('Error fetching tag sources:', e);
+      console.error("Error fetching tag sources:", e);
     }
   };
 
@@ -512,7 +516,10 @@ export default function ManageTickets() {
     // Status filter
     if (filters.status) {
       const normalize = (s: any) =>
-        String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        String(s || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
       filtered = filtered.filter((t) => {
         const statusName = (t.status as any)?.name || t.status || "";
         const token = normalize(statusName);
@@ -522,8 +529,10 @@ export default function ManageTickets() {
 
     // Assigned to filter
     if (filters.assignedTo) {
-      if (filters.assignedTo === 'unassigned') {
-        filtered = filtered.filter((t) => t.assigned_to_id === null || t.assigned_to_id === undefined);
+      if (filters.assignedTo === "unassigned") {
+        filtered = filtered.filter(
+          (t) => t.assigned_to_id === null || t.assigned_to_id === undefined,
+        );
       } else {
         filtered = filtered.filter(
           (t) => t.assigned_to_id === parseInt(filters.assignedTo),
@@ -544,13 +553,18 @@ export default function ManageTickets() {
           // check ticket tags array first
           try {
             if (Array.isArray(t.tags)) {
-              if (t.tags.some((tg: any) => String(tg).toLowerCase() === sel)) return true;
+              if (t.tags.some((tg: any) => String(tg).toLowerCase() === sel))
+                return true;
             }
           } catch (e) {}
 
           // try deriving provider name from mail_config_sources or description
           try {
-            const prov = getMailConfigProviderName(t.mail_config_sources || t.mail_config_sources, t.description) || null;
+            const prov =
+              getMailConfigProviderName(
+                t.mail_config_sources || t.mail_config_sources,
+                t.description,
+              ) || null;
             if (prov && String(prov).toLowerCase() === sel) return true;
           } catch (e) {}
 
@@ -1141,16 +1155,30 @@ export default function ManageTickets() {
                   <SelectContent>
                     <SelectItem value="">All Users</SelectItem>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {Array.from(new Set(tickets.map((t) => (t.assigned_to_id === null || t.assigned_to_id === undefined) ? 'unassigned' : String(t.assigned_to_id)))).filter(x => x && x !== 'unassigned').map((idStr) => {
-                      const id = Number(idStr);
-                      return (
-                        <SelectItem key={id} value={idStr}>
-                          {getAssignedUserName(id)}
-                        </SelectItem>
-                      );
-                    })}
+                    {Array.from(
+                      new Set(
+                        tickets.map((t) =>
+                          t.assigned_to_id === null ||
+                          t.assigned_to_id === undefined
+                            ? "unassigned"
+                            : String(t.assigned_to_id),
+                        ),
+                      ),
+                    )
+                      .filter((x) => x && x !== "unassigned")
+                      .map((idStr) => {
+                        const id = Number(idStr);
+                        return (
+                          <SelectItem key={id} value={idStr}>
+                            {getAssignedUserName(id)}
+                          </SelectItem>
+                        );
+                      })}
                     {users.map((user) => (
-                      <SelectItem key={`u-${user.id}`} value={user.id.toString()}>
+                      <SelectItem
+                        key={`u-${user.id}`}
+                        value={user.id.toString()}
+                      >
                         {getAssignedUserName(user.id)}
                       </SelectItem>
                     ))}
@@ -1174,7 +1202,9 @@ export default function ManageTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All Sources</SelectItem>
-                    <SelectItem value="mail_config">From Mail Config</SelectItem>
+                    <SelectItem value="mail_config">
+                      From Mail Config
+                    </SelectItem>
                     <SelectItem value="manual">Manual</SelectItem>
                     {sourceTags.map((tg) => (
                       <SelectItem key={`tag-${tg}`} value={tg}>

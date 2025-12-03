@@ -582,8 +582,9 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
         // Derive tag name from mail_config sources. Prefer rules that match the sender domain when available.
         let tagName = "Unknown";
 
-        // compute sender domain if present on ticket
+        // compute sender domain if present on ticket (from creator.email or embedded in ticket_description)
         let senderDomain: string | null = null;
+        // try creator/email_from first
         if (row.email_from) {
           try {
             const m = String(row.email_from)
@@ -591,6 +592,25 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
               .match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
             if (m && m[1]) senderDomain = m[1].toLowerCase();
           } catch (e) {
+            senderDomain = null;
+          }
+        }
+
+        // fallback: parse ticket_description for 'Email from:' patterns
+        if (!senderDomain && row.ticket_description) {
+          try {
+            const desc = String(row.ticket_description);
+            // Common pattern: Email from: someone@domain.com Received: <timestamp>
+            const m2 = desc.match(/Email from:\s*([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i);
+            if (m2 && m2[2]) {
+              senderDomain = m2[2].toLowerCase();
+            } else {
+              // Try to find any email in description
+              const m3 = desc.match(/([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i);
+              if (m3 && m3[2]) senderDomain = m3[2].toLowerCase();
+            }
+          } catch (e) {
+            // ignore
             senderDomain = null;
           }
         }

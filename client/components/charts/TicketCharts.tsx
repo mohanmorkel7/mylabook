@@ -722,7 +722,7 @@ export default function TicketCharts({
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div style={{ marginTop: 50, overflowX: "auto" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : userStatus.length === 0 ? (
@@ -750,7 +750,7 @@ export default function TicketCharts({
             tagStatus,
             length: tagStatus.length,
           }) || null}
-          <div className="overflow-x-auto">
+          <div style={{ marginTop: 50, overflowX: "auto" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : tagStatus.length === 0 ? (

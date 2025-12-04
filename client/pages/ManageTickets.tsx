@@ -1734,7 +1734,6 @@ export default function ManageTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All</SelectItem>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
                     {assignedOptions.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}

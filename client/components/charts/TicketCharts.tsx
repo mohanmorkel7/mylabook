@@ -722,7 +722,7 @@ export default function TicketCharts({
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div style={{ marginTop: 50, overflowX: "auto" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : userStatus.length === 0 ? (
@@ -749,8 +749,13 @@ export default function TicketCharts({
           {/* {console.log("TicketCharts: rendering By Tag card, tagStatus:", {
             tagStatus,
             length: tagStatus.length,
+<<<<<<< HEAD
           }) || null} */}
           <div className="overflow-x-auto">
+=======
+          }) || null}
+          <div style={{ marginTop: 50, overflowX: "auto" }}>
+>>>>>>> 1909a386aa514585abfaace245f21981ed33888f
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : tagStatus.length === 0 ? (

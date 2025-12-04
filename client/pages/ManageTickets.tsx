@@ -778,37 +778,12 @@ export default function ManageTickets() {
       }
     }
 
-    // Source filter (mail config vs manual or specific tag)
-    if (filters.source) {
-      if (filters.source === "mail_config") {
-        filtered = filtered.filter((t) => t.created_from_mail_config);
-      } else if (filters.source === "manual") {
-        filtered = filtered.filter((t) => !t.created_from_mail_config);
-      } else {
-        // specific tag selected
-        const sel = String(filters.source).toLowerCase();
-        filtered = filtered.filter((t) => {
-          // check ticket tags array first
-          try {
-            if (Array.isArray(t.tags)) {
-              if (t.tags.some((tg: any) => String(tg).toLowerCase() === sel))
-                return true;
-            }
-          } catch (e) {}
-
-          // try deriving provider name from mail_config_sources or description
-          try {
-            const prov =
-              getMailConfigProviderName(
-                t.mail_config_sources || t.mail_config_sources,
-                t.description,
-              ) || null;
-            if (prov && String(prov).toLowerCase() === sel) return true;
-          } catch (e) {}
-
-          return false;
-        });
-      }
+    // Source filter (based on description classification: Razorpay, Payswiff, Manual)
+    if (filters.source && String(filters.source).trim() !== "") {
+      filtered = filtered.filter((t) => {
+        const ticketTag = getTicketTag(t);
+        return ticketTag === filters.source;
+      });
     }
 
     // Date range filter (interpret date-only inputs as full IST day ranges)

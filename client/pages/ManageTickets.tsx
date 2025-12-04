@@ -495,25 +495,11 @@ export default function ManageTickets() {
       });
 
       setTickets(normalized);
-      // Apply client-side source/tag filter based on description
-      let filtered = normalized;
-      if (
-        filters.source !== undefined &&
-        String(filters.source).trim() !== ""
-      ) {
-        filtered = normalized.filter((t: any) => {
-          const ticketTag = getTicketTag(t);
-          return ticketTag === filters.source;
-        });
-      }
-      // Use server results directly for displayed list to avoid double-filtering client-side
+      // Don't apply filtering here - let applyFilters() handle it consistently
       serverFilteredRef.current = true;
-      setFilteredTickets(filtered);
       console.debug(
-        "[ManageTickets] Applied normalized tickets, count:",
-        filtered.length,
-        "source filter:",
-        filters.source,
+        "[ManageTickets] Fetched tickets, count:",
+        normalized.length,
       );
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
       const localCreatedCount = normalized.filter(

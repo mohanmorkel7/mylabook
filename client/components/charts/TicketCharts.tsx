@@ -746,10 +746,7 @@ export default function TicketCharts({
               </span>
             </div>
           </div>
-          {console.log("TicketCharts: rendering By Tag card, tagStatus:", {
-            tagStatus,
-            length: tagStatus.length,
-          }) || null}
+       
           <div style={{ marginTop: 50, overflowX: "auto" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>

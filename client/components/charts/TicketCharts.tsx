@@ -478,7 +478,7 @@ export default function TicketCharts({
 
     return (
       <div className="flex flex-col">
-        <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
+        <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX + 24, paddingTop: 24 }}>
           {users.map((u, ui) => {
             const name = u.name || `User ${u.user_id}`;
             // Per-user scaling: ensure every non-zero status gets a minimum visible height

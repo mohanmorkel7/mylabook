@@ -494,22 +494,6 @@ export default function ManageTickets() {
         };
       });
 
-      setTickets(normalized);
-      // Let applyFilters() handle all filtering consistently
-      // Don't skip applyFilters by setting serverFilteredRef.current
-      console.debug(
-        "[ManageTickets] Fetched tickets, count:",
-        normalized.length,
-      );
-      // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
-      const localCreatedCount = normalized.filter(
-        (t: any) => t.created_from_mail_config,
-      ).length;
-      setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
-      setTotalTickets(data?.total ?? normalized.length);
-      setTotalPages(data?.pages ?? 1);
-      setStatusCounts(data?.status_counts ?? {});
-
       // Apply filters to normalized tickets and set both state variables
       setTickets(normalized);
       let filtered = [...normalized];

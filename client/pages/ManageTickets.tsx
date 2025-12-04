@@ -562,11 +562,47 @@ export default function ManageTickets() {
         });
       }
 
+      // Date filters (only for "Created from Email" tab)
+      if (activeTab === "created") {
+        const expandIstDate = (dateStr: string, endOfDay = false) => {
+          const parts = String(dateStr).split("-");
+          if (parts.length !== 3) return null;
+          const [y, m, d] = parts.map((p) => parseInt(p, 10));
+          if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+          const hour = endOfDay ? 23 : 0;
+          const minute = endOfDay ? 59 : 0;
+          const second = endOfDay ? 59 : 0;
+          const istOffsetMs = 5.5 * 60 * 60 * 1000;
+          const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+          return new Date(utcTs);
+        };
+
+        if (filters.dateFrom) {
+          const dateFromDt = expandIstDate(filters.dateFrom, false);
+          if (dateFromDt) {
+            filtered = filtered.filter(
+              (t) => new Date(t.created_at).getTime() >= dateFromDt.getTime(),
+            );
+          }
+        }
+
+        if (filters.dateTo) {
+          const dateToDt = expandIstDate(filters.dateTo, true);
+          if (dateToDt) {
+            filtered = filtered.filter(
+              (t) => new Date(t.created_at).getTime() <= dateToDt.getTime(),
+            );
+          }
+        }
+      }
+
       console.debug(
         "[ManageTickets] Applied filters in fetchTickets, filtered count:",
         filtered.length,
         "normalized count:",
         normalized.length,
+        "activeTab:",
+        activeTab,
       );
       setFilteredTickets(filtered);
 

@@ -695,8 +695,10 @@ export default function ManageTickets() {
   };
 
   const applyFilters = () => {
+    console.debug("[ManageTickets] applyFilters called, tickets.length =", tickets.length, "serverFilteredRef.current =", serverFilteredRef.current);
     // If the last fetch already applied server-side filters, skip client-side re-filtering
     if (serverFilteredRef.current) {
+      console.debug("[ManageTickets] applyFilters skipping due to serverFilteredRef");
       serverFilteredRef.current = false;
       return;
     }

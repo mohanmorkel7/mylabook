@@ -574,7 +574,9 @@ export default function ManageTickets() {
         }
       }
 
-      if (filters.source && String(filters.source).trim() !== "") {
+      // Handle source filter - skip if it's empty, "All", or whitespace
+      const sourceFilterValue = String(filters.source || "").trim();
+      if (sourceFilterValue && sourceFilterValue !== "All") {
         console.debug(
           "[ManageTickets] Applying source filter:",
           filters.source,
@@ -588,8 +590,8 @@ export default function ManageTickets() {
         console.debug("[ManageTickets] After source filter:", filtered.length);
       } else {
         console.debug(
-          "[ManageTickets] SKIPPING source filter - filters.source is empty",
-          "value:",
+          "[ManageTickets] SKIPPING source filter - showing all tickets",
+          "filters.source value:",
           JSON.stringify(filters.source),
         );
       }

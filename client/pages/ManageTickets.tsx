@@ -1945,22 +1945,33 @@ export default function ManageTickets() {
                 </Select>
               </div>
 
-              {activeTab === "created" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={filters.dateFrom || ""}
-                    onChange={(e) => {
-                      const d = e.target.value;
-                      setFilters({ ...filters, dateFrom: d, dateTo: d });
-                    }}
-                    className="w-full"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date From
+                </label>
+                <Input
+                  type="date"
+                  value={filters.dateFrom || ""}
+                  onChange={(e) => {
+                    setFilters({ ...filters, dateFrom: e.target.value });
+                  }}
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date To
+                </label>
+                <Input
+                  type="date"
+                  value={filters.dateTo || ""}
+                  onChange={(e) => {
+                    setFilters({ ...filters, dateTo: e.target.value });
+                  }}
+                  className="w-full"
+                />
+              </div>
 
               <div className="md:col-span-2 flex items-center gap-2">
                 <Button variant="ghost" onClick={clearFilters}>

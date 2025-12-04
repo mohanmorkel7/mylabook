@@ -520,25 +520,48 @@ export default function ManageTickets() {
 
   const fetchTags = async () => {
     try {
-      const resp = await api.get("/tickets/summary/by-tag");
-      const data = resp?.data ?? resp;
-      const raw = Array.isArray(data?.tags)
-        ? data.tags
-            .map((t: any) => String(t.tag || t.name || "").trim())
-            .filter(Boolean)
-        : [];
-      const seen = new Set<string>();
-      const unique: string[] = [];
-      for (const t of raw) {
-        const key = t.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          unique.push(t);
+      // Fetch all tickets and classify them based on description
+      const uniqueTags = new Set<string>();
+      uniqueTags.add("Manual"); // Always include Manual as a default option
+
+      let page = 1;
+      let pages = 1;
+      do {
+        const resp = await api.getTickets({}, page, 100);
+        const data = resp?.data ?? resp;
+        const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
+        pages = data?.pages ?? 1;
+
+        for (const ticket of ticketsArr) {
+          let tag = "Manual";
+          try {
+            const desc = String(ticket.description || "").toLowerCase();
+            if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
+              tag = "Razorpay";
+            } else if (desc.includes("payswiff") || desc.includes("@payswiff.com")) {
+              tag = "Payswiff";
+            }
+          } catch (e) {
+            // Silently ignore errors and keep tag as Manual
+          }
+          uniqueTags.add(tag);
         }
-      }
-      setSourceTags(unique);
+
+        page += 1;
+      } while (page <= pages);
+
+      // Convert set to array and sort with Manual first
+      const tagList = Array.from(uniqueTags).sort((a, b) => {
+        if (a === "Manual") return -1;
+        if (b === "Manual") return 1;
+        return a.localeCompare(b);
+      });
+
+      setSourceTags(tagList);
     } catch (e) {
       console.error("Error fetching tag sources:", e);
+      // Fallback to just Manual if there's an error
+      setSourceTags(["Manual"]);
     }
   };
 

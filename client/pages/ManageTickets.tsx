@@ -510,13 +510,69 @@ export default function ManageTickets() {
       setTotalPages(data?.pages ?? 1);
       setStatusCounts(data?.status_counts ?? {});
 
-      // Explicitly trigger applyFilters after setting tickets to ensure UI updates
-      // (This ensures filtered tickets are applied even if useEffect doesn't fire)
-      // Note: we'll use a microtask to ensure the state update is committed first
-      Promise.resolve().then(() => {
-        // This will use the tickets that were just set
-        applyFiltersAfterFetch(normalized);
-      });
+      // Apply filters to normalized tickets and set both state variables
+      setTickets(normalized);
+      let filtered = [...normalized];
+
+      // Apply all filters the same way applyFilters does
+      if (filters.searchText) {
+        const searchLower = filters.searchText.toLowerCase();
+        filtered = filtered.filter(
+          (t) =>
+            t.subject.toLowerCase().includes(searchLower) ||
+            t.description.toLowerCase().includes(searchLower),
+        );
+      }
+
+      if (
+        filters.priority !== undefined &&
+        String(filters.priority).trim() !== ""
+      ) {
+        filtered = filtered.filter(
+          (t) => t.priority_id === parseInt(filters.priority, 10),
+        );
+      }
+
+      if (filters.status !== undefined && String(filters.status).trim() !== "") {
+        const normalize = (s: any) =>
+          String(s || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        filtered = filtered.filter((t) => {
+          const statusName = (t.status as any)?.name || t.status || "";
+          const token = normalize(statusName);
+          return token === normalize(filters.status);
+        });
+      }
+
+      if (
+        filters.assignedTo !== undefined &&
+        String(filters.assignedTo).trim() !== ""
+      ) {
+        if (filters.assignedTo === "unassigned") {
+          filtered = filtered.filter(
+            (t) => t.assigned_to_id === null || t.assigned_to_id === undefined,
+          );
+        } else {
+          filtered = filtered.filter(
+            (t) => t.assigned_to_id === parseInt(filters.assignedTo, 10),
+          );
+        }
+      }
+
+      if (filters.source && String(filters.source).trim() !== "") {
+        filtered = filtered.filter((t) => {
+          const ticketTag = getTicketTag(t);
+          return ticketTag === filters.source;
+        });
+      }
+
+      console.debug(
+        "[ManageTickets] Applied filters in fetchTickets, filtered count:",
+        filtered.length,
+      );
+      setFilteredTickets(filtered);
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({

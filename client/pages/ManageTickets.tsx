@@ -556,7 +556,10 @@ export default function ManageTickets() {
             const desc = String(ticket.description || "").toLowerCase();
             if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
               tag = "Razorpay";
-            } else if (desc.includes("payswiff") || desc.includes("@payswiff.com")) {
+            } else if (
+              desc.includes("payswiff") ||
+              desc.includes("@payswiff.com")
+            ) {
               tag = "Payswiff";
             }
           } catch (e) {

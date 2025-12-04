@@ -722,7 +722,7 @@ export default function TicketCharts({
               </span>
             </div>
           </div>
-          <div style={{ marginTop: 50, overflowX: "auto" }}>
+          <div style={{ marginTop: 50, overflowX: "auto", overflowY: "visible" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : userStatus.length === 0 ? (

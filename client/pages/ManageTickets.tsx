@@ -1959,6 +1959,7 @@ export default function ManageTickets() {
       <div>
         {activeTab === "all" && (
           <div>
+            {console.log("[ManageTickets RENDER] activeTab=all, isLoading=" + isLoading + ", paginatedTickets.length=" + paginatedTickets.length + ", filteredTickets.length=" + filteredTickets.length) || null}
             {isLoading ? (
               <div className="text-center py-8">Loading tickets...</div>
             ) : paginatedTickets.length === 0 ? (

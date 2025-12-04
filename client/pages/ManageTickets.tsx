@@ -641,6 +641,11 @@ export default function ManageTickets() {
         "[ManageTickets] Calling setFilteredTickets with array of length:",
         filtered.length,
       );
+      if (filtered.length === 0 && normalized.length > 0) {
+        console.error("[ManageTickets] CRITICAL ERROR: All tickets were filtered out!");
+        console.error("[ManageTickets] normalized had", normalized.length, "tickets but filtered has 0");
+        console.error("[ManageTickets] Current filters state:", filters);
+      }
       setFilteredTickets(filtered);
       console.debug("[ManageTickets] setFilteredTickets called");
 

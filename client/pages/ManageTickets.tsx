@@ -1541,7 +1541,7 @@ export default function ManageTickets() {
           <div className="ml-auto flex items-center gap-3">
             {/* Date picker (IST day) placed left of Filters button - only shown for Created from Email tab */}
             {activeTab === "created" && (
-              <div>
+              <div className="flex items-center gap-2">
                 <label className="sr-only">Date</label>
                 <Input
                   type="date"
@@ -1551,8 +1551,20 @@ export default function ManageTickets() {
                     // Set both from and to to the selected date (full IST day)
                     setFilters({ ...filters, dateFrom: d, dateTo: d });
                   }}
-                  className="mr-2"
+                  className="w-40"
                 />
+                {filters.dateFrom && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilters({ ...filters, dateFrom: "", dateTo: "" });
+                    }}
+                    className="text-xs"
+                  >
+                    Clear
+                  </Button>
+                )}
               </div>
             )}
 

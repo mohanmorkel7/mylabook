@@ -431,7 +431,7 @@ export default function TicketCharts({
     users: any[];
     statuses: StatusCount[];
   }) => {
-    const MAX_PX = 160;
+    const MAX_PX = 140; // reduced to make room for count labels at top
     const MIN_PX = 10; // visible but not too tall
     // compute union of status names from both statuses list and users' counts
     const derivedFromUsers = Array.from(
@@ -478,7 +478,10 @@ export default function TicketCharts({
 
     return (
       <div className="flex flex-col">
-        <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
+        <div
+          className="flex items-end gap-4 px-2"
+          style={{ height: MAX_PX + 24, paddingTop: 24 }}
+        >
           {users.map((u, ui) => {
             const name = u.name || `User ${u.user_id}`;
             // Per-user scaling: ensure every non-zero status gets a minimum visible height

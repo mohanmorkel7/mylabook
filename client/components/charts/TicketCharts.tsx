@@ -382,7 +382,12 @@ export default function TicketCharts({
               y="50%"
               dominantBaseline="middle"
               textAnchor="middle"
-              style={{ fontSize: 16, fontWeight: "600", transform: "rotate(90deg)", transformOrigin: `${radius}px ${radius}px` }}
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                transform: "rotate(90deg)",
+                transformOrigin: `${radius}px ${radius}px`,
+              }}
             >
               {total}
             </text>

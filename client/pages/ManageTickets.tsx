@@ -382,20 +382,8 @@ export default function ManageTickets() {
         }
       }
 
-      // source/tag filter
-      if (
-        filters.source !== undefined &&
-        String(filters.source).trim() !== ""
-      ) {
-        if (filters.source === "mail_config") {
-          serverFilters.created_from_mail_config = true;
-        } else if (filters.source === "manual") {
-          serverFilters.created_from_mail_config = false;
-        } else {
-          // treat as tag
-          serverFilters.tags = [filters.source];
-        }
-      }
+      // Note: source/tag filter is applied client-side based on description analysis
+      // Don't apply to server filters
 
       const response = await api.getTickets(serverFilters, page, pageSize);
       // API may return parsed JSON directly or an axios-like { data } wrapper

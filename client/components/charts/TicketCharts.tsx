@@ -707,7 +707,9 @@ export default function TicketCharts({
             <h4 className="text-sm font-semibold">By User (Status)</h4>
             <div className="text-sm text-gray-600">
               Users:{" "}
-              <span className="font-medium text-gray-900">{userStatus.length}</span>
+              <span className="font-medium text-gray-900">
+                {userStatus.length}
+              </span>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -729,7 +731,9 @@ export default function TicketCharts({
             <h4 className="text-sm font-semibold">By Tag (Status)</h4>
             <div className="text-sm text-gray-600">
               Tags:{" "}
-              <span className="font-medium text-gray-900">{tagStatus.length}</span>
+              <span className="font-medium text-gray-900">
+                {tagStatus.length}
+              </span>
             </div>
           </div>
           {console.log("TicketCharts: rendering By Tag card, tagStatus:", {

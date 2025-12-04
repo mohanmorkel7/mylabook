@@ -622,7 +622,9 @@ export default function ManageTickets() {
         filters.dateTo
       );
       setTotalTickets(hasClientSideFilters ? filtered.length : data?.total ?? normalized.length);
-      setTotalPages(1); // Client-side filtering doesn't use server pagination
+      // When client-side filters are active, all filtered results are on page 1
+      // Otherwise, use the server's pagination
+      setTotalPages(hasClientSideFilters ? 1 : (data?.pages ?? 1));
       setStatusCounts(data?.status_counts ?? {});
     } catch (error) {
       console.error("Error fetching tickets:", error);

@@ -301,14 +301,25 @@ export default function ManageTickets() {
     return "Manual";
   };
 
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDateString = (): string => {
+    const now = new Date();
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const ist = new Date(now.getTime() + istOffsetMs);
+    const yyyy = ist.getUTCFullYear();
+    const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(ist.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [filters, setFilters] = useState<FilterOptions>({
     searchText: "",
     priority: "",
     status: "",
     assignedTo: "",
     source: "",
-    dateFrom: "",
-    dateTo: "",
+    dateFrom: getTodayDateString(),
+    dateTo: getTodayDateString(),
   });
 
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
@@ -394,11 +405,9 @@ export default function ManageTickets() {
         const pid = Number.parseInt(String(filters.priority), 10);
         if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
       }
-      // Only apply date filters when viewing "Created from Email" tab
-      if (activeTab === "created") {
-        if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
-        if (filters.dateTo) serverFilters.date_to = filters.dateTo;
-      }
+      // Apply date filters for all tabs
+      if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
+      if (filters.dateTo) serverFilters.date_to = filters.dateTo;
 
       // status -> map to status_id using statusesMap
       if (
@@ -1934,22 +1943,33 @@ export default function ManageTickets() {
                 </Select>
               </div>
 
-              {activeTab === "created" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={filters.dateFrom || ""}
-                    onChange={(e) => {
-                      const d = e.target.value;
-                      setFilters({ ...filters, dateFrom: d, dateTo: d });
-                    }}
-                    className="w-full"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date From
+                </label>
+                <Input
+                  type="date"
+                  value={filters.dateFrom || ""}
+                  onChange={(e) => {
+                    setFilters({ ...filters, dateFrom: e.target.value });
+                  }}
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date To
+                </label>
+                <Input
+                  type="date"
+                  value={filters.dateTo || ""}
+                  onChange={(e) => {
+                    setFilters({ ...filters, dateTo: e.target.value });
+                  }}
+                  className="w-full"
+                />
+              </div>
 
               <div className="md:col-span-2 flex items-center gap-2">
                 <Button variant="ghost" onClick={clearFilters}>

@@ -284,6 +284,23 @@ export default function ManageTickets() {
     }
     return null;
   }
+
+  // Helper function to classify a ticket into a tag based on description
+  const getTicketTag = (ticket: any): string => {
+    try {
+      const desc = String(ticket.description || "").toLowerCase();
+      if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
+        return "Razorpay";
+      }
+      if (desc.includes("payswiff") || desc.includes("@payswiff.com")) {
+        return "Payswiff";
+      }
+    } catch (e) {
+      // Silently ignore errors
+    }
+    return "Manual";
+  };
+
   const [filters, setFilters] = useState<FilterOptions>({
     searchText: "",
     priority: "",

@@ -561,62 +561,9 @@ export default function ManageTickets() {
   };
 
   const fetchTags = async () => {
-    try {
-      console.debug("[ManageTickets] fetchTags called");
-      // Fetch all tickets and classify them based on description
-      const uniqueTags = new Set<string>();
-      uniqueTags.add("Manual"); // Always include Manual as a default option
-
-      let page = 1;
-      let pages = 1;
-      let totalProcessed = 0;
-      do {
-        const resp = await api.getTickets({}, page, 100);
-        const data = resp?.data ?? resp;
-        const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
-        pages = data?.pages ?? 1;
-
-        console.debug(
-          `[ManageTickets] fetchTags page ${page}: got ${ticketsArr?.length || 0} tickets`,
-        );
-
-        if (!Array.isArray(ticketsArr)) {
-          console.warn(
-            "[ManageTickets] fetchTags: ticketsArr is not an array",
-            ticketsArr,
-          );
-          break;
-        }
-
-        for (const ticket of ticketsArr) {
-          const tag = getTicketTag(ticket);
-          uniqueTags.add(tag);
-          totalProcessed++;
-        }
-
-        page += 1;
-      } while (page <= pages);
-
-      // Convert set to array and sort with Manual first
-      const tagList = Array.from(uniqueTags).sort((a, b) => {
-        if (a === "Manual") return -1;
-        if (b === "Manual") return 1;
-        return a.localeCompare(b);
-      });
-
-      console.debug(
-        "[ManageTickets] fetchTags completed: tags =",
-        tagList,
-        "from",
-        totalProcessed,
-        "tickets",
-      );
-      setSourceTags(tagList);
-    } catch (e) {
-      console.error("[ManageTickets] Error fetching tag sources:", e);
-      // Fallback to just Manual if there's an error
-      setSourceTags(["Manual"]);
-    }
+    // Initialize with Manual - actual tags will be extracted from tickets array via useEffect
+    console.debug("[ManageTickets] fetchTags called - initializing with Manual tag");
+    setSourceTags(["Manual"]);
   };
 
   const fetchCreatedTicketsCount = async () => {

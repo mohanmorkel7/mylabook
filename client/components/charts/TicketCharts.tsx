@@ -668,13 +668,13 @@ export default function TicketCharts({
               <span className="font-medium text-gray-900">{totalAssigned}</span>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div style={{ marginTop: 50, overflowX: "auto", overflowY: "visible" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : assigned.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <div className="min-w-[220px]">
+              <div className="min-w-[220px]" style={{ marginTop: 50 }}>
                 <VerticalBarChart
                   items={assigned}
                   labelKey="name"

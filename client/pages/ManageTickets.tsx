@@ -374,10 +374,11 @@ export default function ManageTickets() {
     }
   }, [tickets]);
 
-  // Re-apply local filtering when tickets array changes (clientside adjustments)
-  useEffect(() => {
-    applyFilters();
-  }, [tickets]);
+  // NOTE: applyFilters is now called directly in fetchTickets after normalizing data
+  // No need to call it here since we handle filtering there
+  // useEffect(() => {
+  //   applyFilters();
+  // }, [tickets]);
 
   const fetchTickets = async (page: number = 1) => {
     try {

@@ -301,14 +301,25 @@ export default function ManageTickets() {
     return "Manual";
   };
 
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDateString = (): string => {
+    const now = new Date();
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const ist = new Date(now.getTime() + istOffsetMs);
+    const yyyy = ist.getUTCFullYear();
+    const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(ist.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [filters, setFilters] = useState<FilterOptions>({
     searchText: "",
     priority: "",
     status: "",
     assignedTo: "",
     source: "",
-    dateFrom: "",
-    dateTo: "",
+    dateFrom: getTodayDateString(),
+    dateTo: getTodayDateString(),
   });
 
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);

@@ -668,7 +668,9 @@ export default function TicketCharts({
               <span className="font-medium text-gray-900">{totalAssigned}</span>
             </div>
           </div>
-          <div style={{ marginTop: 50, overflowX: "auto", overflowY: "visible" }}>
+          <div
+            style={{ marginTop: 50, overflowX: "auto", overflowY: "visible" }}
+          >
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : assigned.length === 0 ? (

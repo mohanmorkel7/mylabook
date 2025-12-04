@@ -565,6 +565,8 @@ export default function ManageTickets() {
       console.debug(
         "[ManageTickets] Applied filters in fetchTickets, filtered count:",
         filtered.length,
+        "normalized count:",
+        normalized.length,
       );
       setFilteredTickets(filtered);
 
@@ -573,8 +575,18 @@ export default function ManageTickets() {
         (t: any) => t.created_from_mail_config,
       ).length;
       setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
-      setTotalTickets(data?.total ?? normalized.length);
-      setTotalPages(data?.pages ?? 1);
+      // Use filtered count if any client-side filters are active, otherwise use server total
+      const hasClientSideFilters = Boolean(
+        filters.searchText ||
+        filters.priority ||
+        filters.status ||
+        filters.assignedTo ||
+        filters.source ||
+        filters.dateFrom ||
+        filters.dateTo
+      );
+      setTotalTickets(hasClientSideFilters ? filtered.length : data?.total ?? normalized.length);
+      setTotalPages(1); // Client-side filtering doesn't use server pagination
       setStatusCounts(data?.status_counts ?? {});
     } catch (error) {
       console.error("Error fetching tickets:", error);

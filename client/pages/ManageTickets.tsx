@@ -496,6 +496,12 @@ export default function ManageTickets() {
       });
 
       // Apply filters to normalized tickets and set both state variables
+      if (normalized.length === 0) {
+        console.error("[ManageTickets] ERROR: normalized array is EMPTY after parsing!");
+        console.error("[ManageTickets] Response was:", response);
+        console.error("[ManageTickets] Data was:", data);
+        console.error("[ManageTickets] ticketsArray was:", ticketsArray);
+      }
       console.debug(
         "[ManageTickets] setTickets called with count:",
         normalized.length,

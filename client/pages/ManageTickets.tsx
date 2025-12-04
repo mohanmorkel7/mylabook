@@ -385,6 +385,22 @@ export default function ManageTickets() {
     }
   }, [tickets]);
 
+  // Auto-mark tickets as overdue when SLA time reaches 0:00:00
+  useEffect(() => {
+    if (!overdueStatusId) return;
+
+    // Check each filtered ticket for overdue SLA
+    const ticketsToMarkOverdue = filteredTickets.filter((t) => {
+      const slaMs = computeSlaMsForTicket(t);
+      return slaMs !== null && slaMs <= 0;
+    });
+
+    // Mark each overdue ticket
+    for (const ticket of ticketsToMarkOverdue) {
+      markOverdue(ticket);
+    }
+  }, [filteredTickets, now, overdueStatusId]);
+
   // NOTE: applyFilters is now called directly in fetchTickets after normalizing data
   // No need to call it here since we handle filtering there
   // useEffect(() => {

@@ -571,6 +571,12 @@ export default function ManageTickets() {
           return ticketTag === filters.source;
         });
         console.debug("[ManageTickets] After source filter:", filtered.length);
+      } else {
+        console.debug(
+          "[ManageTickets] SKIPPING source filter - filters.source is empty",
+          "value:",
+          JSON.stringify(filters.source),
+        );
       }
 
       // Date filters (only for "Created from Email" tab)

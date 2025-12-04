@@ -544,6 +544,8 @@ export default function TicketCharts({
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "center",
+                            minHeight: "100%",
+                            justifyContent: "flex-end",
                           }}
                         >
                           <div
@@ -551,6 +553,11 @@ export default function TicketCharts({
                               fontSize: 10,
                               color: "#374151",
                               marginBottom: 4,
+                              height: 14,
+                              minWidth: barWidth,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                             }}
                           >
                             {bar.val}

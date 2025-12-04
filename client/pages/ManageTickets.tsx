@@ -497,7 +497,9 @@ export default function ManageTickets() {
 
       // Apply filters to normalized tickets and set both state variables
       if (normalized.length === 0) {
-        console.error("[ManageTickets] ERROR: normalized array is EMPTY after parsing!");
+        console.error(
+          "[ManageTickets] ERROR: normalized array is EMPTY after parsing!",
+        );
         console.error("[ManageTickets] Response was:", response);
         console.error("[ManageTickets] Data was:", data);
         console.error("[ManageTickets] ticketsArray was:", ticketsArray);
@@ -642,8 +644,14 @@ export default function ManageTickets() {
         filtered.length,
       );
       if (filtered.length === 0 && normalized.length > 0) {
-        console.error("[ManageTickets] CRITICAL ERROR: All tickets were filtered out!");
-        console.error("[ManageTickets] normalized had", normalized.length, "tickets but filtered has 0");
+        console.error(
+          "[ManageTickets] CRITICAL ERROR: All tickets were filtered out!",
+        );
+        console.error(
+          "[ManageTickets] normalized had",
+          normalized.length,
+          "tickets but filtered has 0",
+        );
         console.error("[ManageTickets] Current filters state:", filters);
       }
       setFilteredTickets(filtered);
@@ -1959,7 +1967,14 @@ export default function ManageTickets() {
       <div>
         {activeTab === "all" && (
           <div>
-            {console.log("[ManageTickets RENDER] activeTab=all, isLoading=" + isLoading + ", paginatedTickets.length=" + paginatedTickets.length + ", filteredTickets.length=" + filteredTickets.length) || null}
+            {console.log(
+              "[ManageTickets RENDER] activeTab=all, isLoading=" +
+                isLoading +
+                ", paginatedTickets.length=" +
+                paginatedTickets.length +
+                ", filteredTickets.length=" +
+                filteredTickets.length,
+            ) || null}
             {isLoading ? (
               <div className="text-center py-8">Loading tickets...</div>
             ) : paginatedTickets.length === 0 ? (

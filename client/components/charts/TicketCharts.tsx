@@ -705,6 +705,10 @@ export default function TicketCharts({
         <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold">By User (Status)</h4>
+            <div className="text-sm text-gray-600">
+              Users:{" "}
+              <span className="font-medium text-gray-900">{userStatus.length}</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             {loading ? (

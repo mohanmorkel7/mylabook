@@ -346,7 +346,7 @@ export default function TicketCharts({
           <svg
             height={radius * 2}
             width={radius * 2}
-            className="transform -rotate-90"
+            style={{ transform: "rotate(-90deg)" }}
           >
             {items.map((it, i) => {
               const val = Number(it[valueKey] || 0);
@@ -382,8 +382,7 @@ export default function TicketCharts({
               y="50%"
               dominantBaseline="middle"
               textAnchor="middle"
-              className="text-sm font-semibold"
-              style={{ fontSize: 16 }}
+              style={{ fontSize: 16, fontWeight: "600", transform: "rotate(90deg)", transformOrigin: `${radius}px ${radius}px` }}
             >
               {total}
             </text>

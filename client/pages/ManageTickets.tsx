@@ -495,8 +495,8 @@ export default function ManageTickets() {
       });
 
       setTickets(normalized);
-      // Don't apply filtering here - let applyFilters() handle it consistently
-      serverFilteredRef.current = true;
+      // Let applyFilters() handle all filtering consistently
+      // Don't skip applyFilters by setting serverFilteredRef.current
       console.debug(
         "[ManageTickets] Fetched tickets, count:",
         normalized.length,

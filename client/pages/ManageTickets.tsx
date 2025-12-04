@@ -794,6 +794,12 @@ export default function ManageTickets() {
       }
     }
 
+    console.debug(
+      "[ManageTickets] applyFilters setting filteredTickets, count:",
+      filtered.length,
+      "filters:",
+      filters,
+    );
     setFilteredTickets(filtered);
   };
 

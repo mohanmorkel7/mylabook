@@ -438,7 +438,7 @@ export default function TicketCharts({
 
     // fixed bar width and gap
     const gap = 8;
-    const fixedBarWidth = 14; // px per small bar
+    const fixedBarWidth = 28; // px per small bar
     const totalColWidth = Math.max(
       56,
       statusNames.length * (fixedBarWidth + gap) + 8,

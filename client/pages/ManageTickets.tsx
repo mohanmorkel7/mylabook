@@ -562,34 +562,36 @@ export default function ManageTickets() {
 
   const fetchTags = async () => {
     try {
+      console.debug("[ManageTickets] fetchTags called");
       // Fetch all tickets and classify them based on description
       const uniqueTags = new Set<string>();
       uniqueTags.add("Manual"); // Always include Manual as a default option
 
       let page = 1;
       let pages = 1;
+      let totalProcessed = 0;
       do {
         const resp = await api.getTickets({}, page, 100);
         const data = resp?.data ?? resp;
         const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
         pages = data?.pages ?? 1;
 
+        console.debug(
+          `[ManageTickets] fetchTags page ${page}: got ${ticketsArr?.length || 0} tickets`,
+        );
+
+        if (!Array.isArray(ticketsArr)) {
+          console.warn(
+            "[ManageTickets] fetchTags: ticketsArr is not an array",
+            ticketsArr,
+          );
+          break;
+        }
+
         for (const ticket of ticketsArr) {
-          let tag = "Manual";
-          try {
-            const desc = String(ticket.description || "").toLowerCase();
-            if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
-              tag = "Razorpay";
-            } else if (
-              desc.includes("payswiff") ||
-              desc.includes("@payswiff.com")
-            ) {
-              tag = "Payswiff";
-            }
-          } catch (e) {
-            // Silently ignore errors and keep tag as Manual
-          }
+          const tag = getTicketTag(ticket);
           uniqueTags.add(tag);
+          totalProcessed++;
         }
 
         page += 1;
@@ -602,9 +604,16 @@ export default function ManageTickets() {
         return a.localeCompare(b);
       });
 
+      console.debug(
+        "[ManageTickets] fetchTags completed: tags =",
+        tagList,
+        "from",
+        totalProcessed,
+        "tickets",
+      );
       setSourceTags(tagList);
     } catch (e) {
-      console.error("Error fetching tag sources:", e);
+      console.error("[ManageTickets] Error fetching tag sources:", e);
       // Fallback to just Manual if there's an error
       setSourceTags(["Manual"]);
     }

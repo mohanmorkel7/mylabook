@@ -757,7 +757,7 @@ export default function TicketCharts({
             ) : tagStatus.length === 0 ? (
               <div className="text-sm text-gray-500">No data</div>
             ) : (
-              <div className="min-w-[320px]">
+              <div className="min-w-[320px]" style={{ marginTop: 50 }}>
                 <GroupedBarChart
                   users={tagStatus.map((t: any) => ({
                     user_id: t.tag,

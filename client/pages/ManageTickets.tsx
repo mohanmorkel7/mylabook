@@ -347,12 +347,7 @@ export default function ManageTickets() {
     fetchTickets(1);
   }, [filters]);
 
-  // Re-apply local filtering when tickets array changes (clientside adjustments)
-  useEffect(() => {
-    applyFilters();
-  }, [tickets]);
-
-  // Re-fetch tags when tickets change (to update Source/Tag dropdown options)
+  // Extract tags from tickets and update dropdown (must run before applyFilters)
   useEffect(() => {
     if (tickets && tickets.length > 0) {
       // Extract tags from current tickets instead of making a new API call
@@ -374,7 +369,12 @@ export default function ManageTickets() {
       console.debug("[ManageTickets] Updated source tags from tickets:", tagList);
       setSourceTags(tagList);
     }
-  }, [tickets]);
+  }, [tickets, getTicketTag]);
+
+  // Re-apply local filtering when tickets array changes (clientside adjustments)
+  useEffect(() => {
+    applyFilters();
+  }, [tickets, getTicketTag]);
 
   const fetchTickets = async (page: number = 1) => {
     try {

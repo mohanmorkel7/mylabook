@@ -959,15 +959,14 @@ router.get("/assigned-options", async (req: Request, res: Response) => {
           options.push({ value: "unassigned", label: "Unassigned" });
         if (ids.length > 0) {
           const ures = await pool.query(
-            `SELECT id, first_name, last_name, name, email FROM users WHERE id = ANY($1)`,
+            `SELECT id, first_name, last_name, email FROM users WHERE id = ANY($1)`,
             [ids],
           );
           const byId: Record<string, any> = {};
           for (const u of ures.rows) {
             const key = String(u.id);
             let label = `User #${key}`;
-            if (u.name) label = u.name;
-            else if (u.first_name || u.last_name)
+            if (u.first_name || u.last_name)
               label = `${u.first_name || ""} ${u.last_name || ""}`.trim();
             else if (u.email) label = u.email;
             byId[key] = label;

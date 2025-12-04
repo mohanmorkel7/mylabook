@@ -727,6 +727,10 @@ export default function TicketCharts({
         <div className="bg-white shadow rounded p-4 flex-1 min-w-0 mt-4 md:mt-0">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold">By Tag (Status)</h4>
+            <div className="text-sm text-gray-600">
+              Tags:{" "}
+              <span className="font-medium text-gray-900">{tagStatus.length}</span>
+            </div>
           </div>
           {console.log("TicketCharts: rendering By Tag card, tagStatus:", {
             tagStatus,

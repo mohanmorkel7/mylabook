@@ -1590,7 +1590,7 @@ export default function ManageTickets() {
     if (!overdueStatusId) return;
     if (autoMarkedRef.current.has(ticket.id)) return;
 
-    // Avoid marking if already overdue, closed, or if status is In Progress
+    // Avoid marking if already overdue or if status is In Progress
     const sName =
       (ticket.status && (ticket.status.name || ticket.status)) ||
       ticket.status ||
@@ -1598,11 +1598,6 @@ export default function ManageTickets() {
     const sNameLower = String(sName).toLowerCase();
     if (sNameLower.includes("overdue")) return;
     if (sNameLower.includes("in progress") || sNameLower.includes("inprogress"))
-      return;
-    if (
-      (ticket.status && ticket.status.is_closed) ||
-      /closed/i.test(String(sName || ""))
-    )
       return;
 
     autoMarkedRef.current.add(ticket.id);

@@ -534,19 +534,18 @@ export default function ManageTickets() {
         );
       }
 
-      if (
-        filters.priority !== undefined &&
-        String(filters.priority).trim() !== ""
-      ) {
-        filtered = filtered.filter(
-          (t) => t.priority_id === parseInt(filters.priority, 10),
-        );
+      // Priority filter - skip if empty or "All"
+      const priorityValue = String(filters.priority || "").trim();
+      if (priorityValue && priorityValue !== "All") {
+        const priorityId = parseInt(priorityValue, 10);
+        if (!isNaN(priorityId)) {
+          filtered = filtered.filter((t) => t.priority_id === priorityId);
+        }
       }
 
-      if (
-        filters.status !== undefined &&
-        String(filters.status).trim() !== ""
-      ) {
+      // Status filter - skip if empty or "All"
+      const statusValue = String(filters.status || "").trim();
+      if (statusValue && statusValue !== "All") {
         const normalize = (s: any) =>
           String(s || "")
             .toLowerCase()
@@ -555,22 +554,22 @@ export default function ManageTickets() {
         filtered = filtered.filter((t) => {
           const statusName = (t.status as any)?.name || t.status || "";
           const token = normalize(statusName);
-          return token === normalize(filters.status);
+          return token === normalize(statusValue);
         });
       }
 
-      if (
-        filters.assignedTo !== undefined &&
-        String(filters.assignedTo).trim() !== ""
-      ) {
-        if (filters.assignedTo === "unassigned") {
+      // Assigned To filter - skip if empty or "All"
+      const assignedValue = String(filters.assignedTo || "").trim();
+      if (assignedValue && assignedValue !== "All") {
+        if (assignedValue === "unassigned") {
           filtered = filtered.filter(
             (t) => t.assigned_to_id === null || t.assigned_to_id === undefined,
           );
         } else {
-          filtered = filtered.filter(
-            (t) => t.assigned_to_id === parseInt(filters.assignedTo, 10),
-          );
+          const assignedId = parseInt(assignedValue, 10);
+          if (!isNaN(assignedId)) {
+            filtered = filtered.filter((t) => t.assigned_to_id === assignedId);
+          }
         }
       }
 

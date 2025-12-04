@@ -556,7 +556,12 @@ export default function ManageTickets() {
       }
 
       if (filters.source && String(filters.source).trim() !== "") {
-        console.debug("[ManageTickets] Applying source filter:", filters.source, "before:", filtered.length);
+        console.debug(
+          "[ManageTickets] Applying source filter:",
+          filters.source,
+          "before:",
+          filtered.length,
+        );
         filtered = filtered.filter((t) => {
           const ticketTag = getTicketTag(t);
           return ticketTag === filters.source;
@@ -575,7 +580,8 @@ export default function ManageTickets() {
           const minute = endOfDay ? 59 : 0;
           const second = endOfDay ? 59 : 0;
           const istOffsetMs = 5.5 * 60 * 60 * 1000;
-          const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+          const utcTs =
+            Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
           return new Date(utcTs);
         };
 
@@ -608,7 +614,10 @@ export default function ManageTickets() {
         "filtered array:",
         filtered.map((t: any) => t.id),
       );
-      console.debug("[ManageTickets] Calling setFilteredTickets with array of length:", filtered.length);
+      console.debug(
+        "[ManageTickets] Calling setFilteredTickets with array of length:",
+        filtered.length,
+      );
       setFilteredTickets(filtered);
       console.debug("[ManageTickets] setFilteredTickets called");
 
@@ -620,14 +629,18 @@ export default function ManageTickets() {
       // Use filtered count if any client-side filters are active, otherwise use server total
       const hasClientSideFilters = Boolean(
         filters.searchText ||
-        filters.priority ||
-        filters.status ||
-        filters.assignedTo ||
-        filters.source ||
-        filters.dateFrom ||
-        filters.dateTo
+          filters.priority ||
+          filters.status ||
+          filters.assignedTo ||
+          filters.source ||
+          filters.dateFrom ||
+          filters.dateTo,
       );
-      setTotalTickets(hasClientSideFilters ? filtered.length : data?.total ?? normalized.length);
+      setTotalTickets(
+        hasClientSideFilters
+          ? filtered.length
+          : (data?.total ?? normalized.length),
+      );
       // When client-side filters are active, all filtered results are on page 1
       // Otherwise, use the server's pagination
       setTotalPages(hasClientSideFilters ? 1 : (data?.pages ?? 1));

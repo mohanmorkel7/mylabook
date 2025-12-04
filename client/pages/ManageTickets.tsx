@@ -369,12 +369,12 @@ export default function ManageTickets() {
       console.debug("[ManageTickets] Updated source tags from tickets:", tagList);
       setSourceTags(tagList);
     }
-  }, [tickets, getTicketTag]);
+  }, [tickets]);
 
   // Re-apply local filtering when tickets array changes (clientside adjustments)
   useEffect(() => {
     applyFilters();
-  }, [tickets, getTicketTag]);
+  }, [tickets]);
 
   const fetchTickets = async (page: number = 1) => {
     try {

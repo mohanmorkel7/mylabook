@@ -517,7 +517,10 @@ export default function ManageTickets() {
         );
       }
 
-      if (filters.status !== undefined && String(filters.status).trim() !== "") {
+      if (
+        filters.status !== undefined &&
+        String(filters.status).trim() !== ""
+      ) {
         const normalize = (s: any) =>
           String(s || "")
             .toLowerCase()
@@ -752,7 +755,10 @@ export default function ManageTickets() {
   };
 
   const applyFilters = () => {
-    console.debug("[ManageTickets] applyFilters called, tickets.length =", tickets.length);
+    console.debug(
+      "[ManageTickets] applyFilters called, tickets.length =",
+      tickets.length,
+    );
     // Always apply filters to ensure consistency
     let filtered = [...tickets];
 

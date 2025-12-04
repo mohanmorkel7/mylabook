@@ -605,8 +605,12 @@ export default function ManageTickets() {
         normalized.length,
         "activeTab:",
         activeTab,
+        "filtered array:",
+        filtered.map((t: any) => t.id),
       );
+      console.debug("[ManageTickets] Calling setFilteredTickets with array of length:", filtered.length);
       setFilteredTickets(filtered);
+      console.debug("[ManageTickets] setFilteredTickets called");
 
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
       const localCreatedCount = normalized.filter(

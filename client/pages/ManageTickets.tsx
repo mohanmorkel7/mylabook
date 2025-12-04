@@ -1590,15 +1590,16 @@ export default function ManageTickets() {
     if (!overdueStatusId) return;
     if (autoMarkedRef.current.has(ticket.id)) return;
 
-    // Avoid marking if already overdue or if status is In Progress
+    // Only convert Open or Pending tickets to Overdue
     const sName =
       (ticket.status && (ticket.status.name || ticket.status)) ||
       ticket.status ||
       "";
     const sNameLower = String(sName).toLowerCase();
-    if (sNameLower.includes("overdue")) return;
-    if (sNameLower.includes("in progress") || sNameLower.includes("inprogress"))
-      return;
+    const isOpen = sNameLower.includes("open");
+    const isPending = sNameLower.includes("pending");
+
+    if (!isOpen && !isPending) return;
 
     autoMarkedRef.current.add(ticket.id);
     try {

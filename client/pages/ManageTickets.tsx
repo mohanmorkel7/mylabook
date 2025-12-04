@@ -556,10 +556,12 @@ export default function ManageTickets() {
       }
 
       if (filters.source && String(filters.source).trim() !== "") {
+        console.debug("[ManageTickets] Applying source filter:", filters.source, "before:", filtered.length);
         filtered = filtered.filter((t) => {
           const ticketTag = getTicketTag(t);
           return ticketTag === filters.source;
         });
+        console.debug("[ManageTickets] After source filter:", filtered.length);
       }
 
       // Date filters (only for "Created from Email" tab)

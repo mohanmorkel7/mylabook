@@ -431,7 +431,7 @@ export default function TicketCharts({
     users: any[];
     statuses: StatusCount[];
   }) => {
-    const MAX_PX = 160;
+    const MAX_PX = 140; // reduced to make room for count labels at top
     const MIN_PX = 10; // visible but not too tall
     // compute union of status names from both statuses list and users' counts
     const derivedFromUsers = Array.from(

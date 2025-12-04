@@ -1797,8 +1797,6 @@ export default function ManageTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All</SelectItem>
-                    <SelectItem value="mail_config">From Email</SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
                     {sourceTags.map((t) => (
                       <SelectItem key={t} value={t}>
                         {t}

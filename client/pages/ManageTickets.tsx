@@ -496,8 +496,10 @@ export default function ManageTickets() {
       });
 
       // Apply filters to normalized tickets and set both state variables
+      console.debug("[ManageTickets] setTickets called with count:", normalized.length, "tickets:", normalized.map((t: any) => ({ id: t.id, subject: t.subject })));
       setTickets(normalized);
       let filtered = [...normalized];
+      console.debug("[ManageTickets] Starting filter application with filtered.length:", filtered.length);
       console.debug("[ManageTickets] fetchTickets filtering START:", {
         normalized_length: normalized.length,
         filters,

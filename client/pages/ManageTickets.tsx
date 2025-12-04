@@ -497,6 +497,12 @@ export default function ManageTickets() {
       // Apply filters to normalized tickets and set both state variables
       setTickets(normalized);
       let filtered = [...normalized];
+      console.debug(
+        "[ManageTickets] fetchTickets filtering: normalized.length =",
+        normalized.length,
+        "filters =",
+        filters,
+      );
 
       // Apply all filters the same way applyFilters does
       if (filters.searchText) {

@@ -1660,10 +1660,12 @@ export default function ManageTickets() {
       {/* Filters panel */}
       {showFilters && (
         <Card className="mb-6">
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              <div className="md:col-span-2">
-                <label className="sr-only">Search</label>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search
+                </label>
                 <Input
                   placeholder="Search subject or description"
                   value={filters.searchText}
@@ -1674,13 +1676,15 @@ export default function ManageTickets() {
               </div>
 
               <div>
-                <label className="sr-only">Priority</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Priority
+                </label>
                 <Select
                   value={String(filters.priority)}
                   onValueChange={(v) => setFilters({ ...filters, priority: v })}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue placeholder="All Priorities" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All</SelectItem>
@@ -1694,13 +1698,15 @@ export default function ManageTickets() {
               </div>
 
               <div>
-                <label className="sr-only">Status</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
                 <Select
                   value={String(filters.status)}
                   onValueChange={(v) => setFilters({ ...filters, status: v })}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All</SelectItem>
@@ -1714,7 +1720,9 @@ export default function ManageTickets() {
               </div>
 
               <div>
-                <label className="sr-only">Assigned</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Assigned To
+                </label>
                 <Select
                   value={String(filters.assignedTo)}
                   onValueChange={(v) =>
@@ -1722,7 +1730,7 @@ export default function ManageTickets() {
                   }
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue placeholder="All Users" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All</SelectItem>
@@ -1737,13 +1745,15 @@ export default function ManageTickets() {
               </div>
 
               <div>
-                <label className="sr-only">Source/Tag</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Source / Tag
+                </label>
                 <Select
                   value={String(filters.source)}
                   onValueChange={(v) => setFilters({ ...filters, source: v })}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue placeholder="All Sources" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All</SelectItem>
@@ -1758,9 +1768,26 @@ export default function ManageTickets() {
                 </Select>
               </div>
 
-              <div className="md:col-span-6 flex items-center gap-2">
+              {activeTab === "created" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={filters.dateFrom || ""}
+                    onChange={(e) => {
+                      const d = e.target.value;
+                      setFilters({ ...filters, dateFrom: d, dateTo: d });
+                    }}
+                    className="w-full"
+                  />
+                </div>
+              )}
+
+              <div className="md:col-span-2 flex items-center gap-2">
                 <Button variant="ghost" onClick={clearFilters}>
-                  <X size={14} /> Clear
+                  <X size={14} /> Clear All
                 </Button>
                 <div className="ml-auto">
                   <Button onClick={() => setShowFilters(false)}>Done</Button>

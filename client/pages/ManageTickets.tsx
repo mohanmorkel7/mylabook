@@ -366,7 +366,10 @@ export default function ManageTickets() {
         return a.localeCompare(b);
       });
 
-      console.debug("[ManageTickets] Updated source tags from tickets:", tagList);
+      console.debug(
+        "[ManageTickets] Updated source tags from tickets:",
+        tagList,
+      );
       setSourceTags(tagList);
     }
   }, [tickets]);
@@ -562,7 +565,9 @@ export default function ManageTickets() {
 
   const fetchTags = async () => {
     // Initialize with Manual - actual tags will be extracted from tickets array via useEffect
-    console.debug("[ManageTickets] fetchTags called - initializing with Manual tag");
+    console.debug(
+      "[ManageTickets] fetchTags called - initializing with Manual tag",
+    );
     setSourceTags(["Manual"]);
   };
 

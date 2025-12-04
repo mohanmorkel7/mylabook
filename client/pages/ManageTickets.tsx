@@ -352,6 +352,30 @@ export default function ManageTickets() {
     applyFilters();
   }, [tickets]);
 
+  // Re-fetch tags when tickets change (to update Source/Tag dropdown options)
+  useEffect(() => {
+    if (tickets && tickets.length > 0) {
+      // Extract tags from current tickets instead of making a new API call
+      const uniqueTags = new Set<string>();
+      uniqueTags.add("Manual");
+
+      for (const ticket of tickets) {
+        const tag = getTicketTag(ticket);
+        uniqueTags.add(tag);
+      }
+
+      // Convert set to array and sort with Manual first
+      const tagList = Array.from(uniqueTags).sort((a, b) => {
+        if (a === "Manual") return -1;
+        if (b === "Manual") return 1;
+        return a.localeCompare(b);
+      });
+
+      console.debug("[ManageTickets] Updated source tags from tickets:", tagList);
+      setSourceTags(tagList);
+    }
+  }, [tickets]);
+
   const fetchTickets = async (page: number = 1) => {
     try {
       setIsLoading(true);

@@ -907,7 +907,7 @@ router.get("/assigned-options", async (req: Request, res: Response) => {
   try {
     // Primary attempt: join tickets -> users to get labels in one query
     const q = `
-      SELECT DISTINCT t.assigned_to as assigned_to, u.first_name, u.last_name, u.name, u.email
+      SELECT DISTINCT t.assigned_to as assigned_to, u.first_name, u.last_name, u.email
       FROM tickets t
       LEFT JOIN users u ON t.assigned_to = u.id
       ORDER BY u.first_name NULLS LAST, t.assigned_to NULLS LAST
@@ -928,8 +928,7 @@ router.get("/assigned-options", async (req: Request, res: Response) => {
           if (!seen.has(key)) {
             seen.add(key);
             let label = `User #${key}`;
-            if (row.name) label = row.name;
-            else if (row.first_name || row.last_name)
+            if (row.first_name || row.last_name)
               label = `${row.first_name || ""} ${row.last_name || ""}`.trim();
             else if (row.email) label = row.email;
             options.push({ value: key, label });

@@ -399,7 +399,7 @@ export default function ManageTickets() {
     for (const ticket of ticketsToMarkOverdue) {
       markOverdue(ticket);
     }
-  }, [filteredTickets, now, overdueStatusId, serverNowMs]);
+  }, [filteredTickets, now, overdueStatusId]);
 
   // NOTE: applyFilters is now called directly in fetchTickets after normalizing data
   // No need to call it here since we handle filtering there

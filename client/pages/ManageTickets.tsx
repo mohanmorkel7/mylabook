@@ -1605,7 +1605,6 @@ export default function ManageTickets() {
     try {
       await api.updateTicket(ticket.id, {
         status_id: overdueStatusId,
-        updated_by: currentUser?.id || 1,
       });
       // update local state
       setTickets((prev) =>

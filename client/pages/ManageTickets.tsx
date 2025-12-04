@@ -509,6 +509,14 @@ export default function ManageTickets() {
       setTotalTickets(data?.total ?? normalized.length);
       setTotalPages(data?.pages ?? 1);
       setStatusCounts(data?.status_counts ?? {});
+
+      // Explicitly trigger applyFilters after setting tickets to ensure UI updates
+      // (This ensures filtered tickets are applied even if useEffect doesn't fire)
+      // Note: we'll use a microtask to ensure the state update is committed first
+      Promise.resolve().then(() => {
+        // This will use the tickets that were just set
+        applyFiltersAfterFetch(normalized);
+      });
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({

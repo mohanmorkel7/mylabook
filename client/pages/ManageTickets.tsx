@@ -405,11 +405,9 @@ export default function ManageTickets() {
         const pid = Number.parseInt(String(filters.priority), 10);
         if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
       }
-      // Only apply date filters when viewing "Created from Email" tab
-      if (activeTab === "created") {
-        if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
-        if (filters.dateTo) serverFilters.date_to = filters.dateTo;
-      }
+      // Apply date filters for all tabs
+      if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
+      if (filters.dateTo) serverFilters.date_to = filters.dateTo;
 
       // status -> map to status_id using statusesMap
       if (

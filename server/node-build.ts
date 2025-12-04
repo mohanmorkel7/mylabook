@@ -19,7 +19,7 @@ const distPath = path.join(__dirname, "../frontend");
 app.use(express.static(distPath));
 
 // Serve the SPA index.html for all non-API requests (handle client-side routing)
-app.get("*", (req, res) => {
+app.get("/{*splat}", (req, res) => {
   // If it's an API or health check request, return a 404
   if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
     return res.status(404).json({ error: "API endpoint not found" });

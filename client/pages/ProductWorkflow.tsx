@@ -1159,11 +1159,28 @@ export default function ProductWorkflow() {
   );
 
   // Fetch workflow projects for the product team
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const {
+    data: projects = [],
+    isLoading: projectsLoading,
+    refetch: refetchProjects,
+  } = useQuery({
     queryKey: ["workflow-projects"],
     queryFn: () =>
       apiClient.getWorkflowProjects(parseInt(user?.id || "1"), user?.role),
   });
+
+  // Ensure we refetch when the user navigates back to the product route
+  useEffect(() => {
+    try {
+      const path = location.pathname || "";
+      if (path === "/product" || path.startsWith("/product")) {
+        // attempt a fresh fetch whenever this route becomes active
+        refetchProjects();
+      }
+    } catch (e) {
+      console.debug("Refetch projects effect error:", e);
+    }
+  }, [location.pathname, refetchProjects]);
 
   const handleCreateProject = (lead: any) => {
     setSelectedLead(lead);

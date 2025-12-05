@@ -360,6 +360,7 @@ export function VCEnhancedStepItem({
           created_by: parseInt(user?.id || "1"),
           step_id: step.id,
           comment_type: "comment",
+          attachments: stagedAttachments,
         };
         saved = await apiClient.request(
           `/workflow/projects/${step.project_id}/comments`,

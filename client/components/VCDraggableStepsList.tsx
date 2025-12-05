@@ -31,7 +31,7 @@ interface VCDraggableStepsListProps {
   onDeleteStep: (stepId: number) => void;
   onReorderSteps: (steps: any[]) => void;
   updateStepStatus?: (stepId: number, payload: any) => void;
-  stepApiBase?: "vc" | "fund-raises" | "business-offerings";
+  stepApiBase?: "vc" | "fund-raises" | "business-offerings" | "workflow";
   focusStepId?: number;
   focusFollowUpId?: number;
 }

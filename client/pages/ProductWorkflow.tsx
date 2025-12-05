@@ -1190,23 +1190,27 @@ export default function ProductWorkflow() {
     projects && projects.length > 0
       ? projects.length
       : (projectStats?.project_stats || []).reduce(
-          (acc: number, s: any) => acc + (s.count || 0),
+          (acc: number, s: any) => acc + (Number(s.count) || 0),
           0,
         );
 
   const activeProjectsCount =
     projects && projects.length > 0
       ? projects.filter((p: any) => p.status === "in_progress").length
-      : (projectStats?.project_stats || []).find(
-          (s: any) => s.status === "in_progress",
-        )?.count || 0;
+      : Number(
+          (projectStats?.project_stats || []).find(
+            (s: any) => s.status === "in_progress",
+          )?.count || 0,
+        );
 
   const completedProjectsCount =
     projects && projects.length > 0
       ? projects.filter((p: any) => p.status === "completed").length
-      : (projectStats?.project_stats || []).find(
-          (s: any) => s.status === "completed",
-        )?.count || 0;
+      : Number(
+          (projectStats?.project_stats || []).find(
+            (s: any) => s.status === "completed",
+          )?.count || 0,
+        );
 
   const handleCreateProject = (lead: any) => {
     setSelectedLead(lead);

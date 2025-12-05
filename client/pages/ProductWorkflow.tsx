@@ -1304,7 +1304,7 @@ export default function ProductWorkflow() {
                   Completed Projects
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  {projects.filter((p: any) => p.status === "completed").length}
+                  {completedProjectsCount}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-green-100">

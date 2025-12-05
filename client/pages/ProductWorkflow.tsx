@@ -1164,9 +1164,11 @@ export default function ProductWorkflow() {
     isLoading: projectsLoading,
     refetch: refetchProjects,
   } = useQuery({
-    queryKey: ["workflow-projects"],
+    queryKey: ["workflow-projects", user?.id, user?.role],
     queryFn: () =>
       apiClient.getWorkflowProjects(parseInt(user?.id || "1"), user?.role),
+    enabled: !!user,
+    staleTime: 1000 * 60, // 1 min cache to avoid excessive refetches
   });
 
   // Ensure we refetch when the user navigates back to the product route

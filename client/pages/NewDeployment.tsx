@@ -75,13 +75,13 @@ export default function NewDeployment() {
   ];
 
   const handleBack = () => {
-    navigate("/products");
+    navigate("/product");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Creating deployment:", formData);
-    navigate("/products");
+    navigate("/product");
   };
 
   const handleInputChange = (field: string, value: any) => {

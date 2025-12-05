@@ -78,7 +78,7 @@ interface VCEnhancedStepItemProps {
   onUpdateStatus: (stepId: number, status: string) => void;
   onDeleteStep: (stepId: number) => void;
   isDragOverlay?: boolean;
-  stepApiBase?: "vc" | "fund-raises" | "business-offerings";
+  stepApiBase?: "vc" | "fund-raises" | "business-offerings" | "workflow";
   focusStepId?: number;
   focusFollowUpId?: number;
 }

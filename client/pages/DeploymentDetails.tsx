@@ -196,7 +196,7 @@ export default function DeploymentDetails() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" onClick={() => navigate("/product")}>
+          <Button variant="ghost" onClick={() => navigate("/products")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Deployments
           </Button>

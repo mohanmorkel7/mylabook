@@ -1304,7 +1304,7 @@ export default function ProductWorkflow() {
                     ? Math.round(
                         projects.reduce(
                           (acc: number, p: any) =>
-                            acc + (p.progress_percentage || 0),
+                            acc + (p.progress_percentage ?? p.progress ?? p.progress_percent ?? 0),
                           0,
                         ) / projects.length,
                       )

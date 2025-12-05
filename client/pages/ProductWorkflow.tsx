@@ -1299,10 +1299,13 @@ export default function ProductWorkflow() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
-                  Completed Leads
+                  Related Projects
                 </p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {completedLeads.length}
+                  {projects.filter((p: any) => p.status === "in_progress").length}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {projects.length} total projects
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-purple-100">

@@ -264,7 +264,7 @@ const ProductOverview: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/products")}
+            onClick={() => navigate("/product")}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products

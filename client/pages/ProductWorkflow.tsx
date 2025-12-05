@@ -1138,12 +1138,13 @@ export default function ProductWorkflow() {
 
   // Fetch project statistics
   const { data: projectStats } = useQuery({
-    queryKey: ["workflow-project-stats"],
+    queryKey: ["workflow-project-stats", user?.id, user?.role],
     queryFn: () =>
       apiClient.getWorkflowDashboard(
         parseInt(user?.id || "1"),
         user?.role || "admin",
       ),
+    enabled: !!user,
   });
 
   // Fetch completed leads ready for project creation (only leads with status 'completed')

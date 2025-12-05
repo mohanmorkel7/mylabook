@@ -1286,10 +1286,7 @@ export default function ProductWorkflow() {
                   Active Projects
                 </p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {
-                    projects.filter((p: any) => p.status === "in_progress")
-                      .length
-                  }
+                  {activeProjectsCount}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-100">

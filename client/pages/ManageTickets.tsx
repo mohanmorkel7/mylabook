@@ -1814,9 +1814,61 @@ export default function ManageTickets() {
               </div>
             )}
 
-            <Button variant="outline" onClick={() => setShowFilters((s) => !s)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Open filters and smooth scroll to the filter panel
+                setShowFilters((s) => {
+                  const willOpen = !s;
+                  if (willOpen) {
+                    // Delay scroll slightly to allow panel to render
+                    setTimeout(() => {
+                      if (filtersRef.current) {
+                        filtersRef.current.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      }
+                    }, 160);
+                  }
+                  return willOpen;
+                });
+              }}
+            >
               Filters
             </Button>
+
+            {/* Date picker for All tab (filters all tickets by a single IST day) */}
+            {activeTab === "all" && (
+              <div className="flex items-center gap-2">
+                <label className="sr-only">Date</label>
+                <Input
+                  type="date"
+                  value={filters.dateFrom || ""}
+                  onChange={(e) => {
+                    const d = e.target.value;
+                    // Set both from and to to the selected date (full IST day)
+                    setFilters((f) => ({ ...f, dateFrom: d, dateTo: d }));
+                    // Reset to first page when applying a date filter
+                    setCurrentPage(1);
+                  }}
+                  className="w-40"
+                />
+                {filters.dateFrom && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilters((f) => ({ ...f, dateFrom: "", dateTo: "" }));
+                      setCurrentPage(1);
+                    }}
+                    className="text-xs"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">Show</span>

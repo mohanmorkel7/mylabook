@@ -98,11 +98,15 @@ export default function TicketCharts({
         const useFrom =
           range === "all"
             ? undefined
-            : (dateFrom && String(dateFrom).trim() ? dateFrom : computedFrom);
+            : dateFrom && String(dateFrom).trim()
+              ? dateFrom
+              : computedFrom;
         const useTo =
           range === "all"
             ? undefined
-            : (dateTo && String(dateTo).trim() ? dateTo : computedTo);
+            : dateTo && String(dateTo).trim()
+              ? dateTo
+              : computedTo;
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
         const query = params.toString() ? `?${params.toString()}` : "";

@@ -327,7 +327,7 @@ export default function ManageTickets() {
 
   // Show/hide filters and pagination state
   const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [pageSize, setPageSize] = useState<number>(10);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   useEffect(() => {
     fetchTickets(currentPage);
@@ -350,7 +350,7 @@ export default function ManageTickets() {
     return () => {
       window.removeEventListener("createdTicketsUpdated", handler);
     };
-  }, [activeTab, currentPage]);
+  }, [activeTab, currentPage, pageSize]);
 
   // When filters change, fetch fresh results from server (reset to page 1)
   useEffect(() => {
@@ -1787,6 +1787,7 @@ export default function ManageTickets() {
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="20">20</SelectItem>
                   <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
                 </SelectContent>
               </Select>
             </div>

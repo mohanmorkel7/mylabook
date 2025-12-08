@@ -708,14 +708,32 @@ export default function ManageTickets() {
           filters.dateFrom ||
           filters.dateTo,
       );
+      // Derive total tickets from multiple possible response shapes
+      const serverTotal = (() => {
+        if (data == null) return undefined;
+        // Common shapes: data.total, data.pagination.total, data.meta.total, data?.pagination?.total
+        const candidates = [
+          data.total,
+          data?.pagination?.total,
+          data?.meta?.total,
+          data?.pagination?.pagination?.total,
+          data?.pagination?.total_count,
+        ];
+        for (const c of candidates) {
+          if (c !== undefined && c !== null && String(c).trim() !== "")
+            return Number(c);
+        }
+        return undefined;
+      })();
+
       setTotalTickets(
-        hasClientSideFilters
-          ? filtered.length
-          : (data?.total ?? normalized.length),
+        hasClientSideFilters ? filtered.length : (serverTotal ?? normalized.length),
       );
-      // When client-side filters are active, all filtered results are on page 1
-      // Otherwise, use the server's pagination
-      setTotalPages(hasClientSideFilters ? 1 : (data?.pages ?? 1));
+
+      // Derive total pages similarly, falling back to pages or computed pages
+      const serverPages = data?.pages ?? data?.pagination?.pages ?? data?.meta?.pages;
+      const computedPages = serverPages ?? Math.max(1, Math.ceil((serverTotal ?? normalized.length) / pageSize));
+      setTotalPages(hasClientSideFilters ? 1 : computedPages);
       setStatusCounts(data?.status_counts ?? {});
     } catch (error) {
       console.error("Error fetching tickets:", error);

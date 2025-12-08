@@ -327,6 +327,7 @@ export default function ManageTickets() {
 
   // Show/hide filters and pagination state
   const [showFilters, setShowFilters] = useState<boolean>(false);
+  const filtersRef = useRef<HTMLDivElement | null>(null);
   const [pageSize, setPageSize] = useState<number>(50);
 
   useEffect(() => {

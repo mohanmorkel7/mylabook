@@ -669,7 +669,7 @@ export default function TicketCharts({
             </div>
           </div>
           <div
-            style={{ marginTop: 50, overflowX: "auto", overflowY: "visible" }}
+            style={{ overflowX: "auto", overflowY: "visible" }}
           >
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
@@ -725,7 +725,7 @@ export default function TicketCharts({
             </div>
           </div>
           <div
-            style={{ marginTop: 50, overflowX: "auto", overflowY: "visible" }}
+            style={{ overflowX: "auto", overflowY: "visible" }}
           >
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
@@ -752,7 +752,7 @@ export default function TicketCharts({
           </div>
 
           <div
-            style={{ marginTop: 50, overflowX: "auto", overflowY: "visible" }}
+            style={{ overflowX: "auto", overflowY: "visible" }}
           >
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>

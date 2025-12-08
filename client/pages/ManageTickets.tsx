@@ -727,12 +727,17 @@ export default function ManageTickets() {
       })();
 
       setTotalTickets(
-        hasClientSideFilters ? filtered.length : (serverTotal ?? normalized.length),
+        hasClientSideFilters
+          ? filtered.length
+          : (serverTotal ?? normalized.length),
       );
 
       // Derive total pages similarly, falling back to pages or computed pages
-      const serverPages = data?.pages ?? data?.pagination?.pages ?? data?.meta?.pages;
-      const computedPages = serverPages ?? Math.max(1, Math.ceil((serverTotal ?? normalized.length) / pageSize));
+      const serverPages =
+        data?.pages ?? data?.pagination?.pages ?? data?.meta?.pages;
+      const computedPages =
+        serverPages ??
+        Math.max(1, Math.ceil((serverTotal ?? normalized.length) / pageSize));
       setTotalPages(hasClientSideFilters ? 1 : computedPages);
       setStatusCounts(data?.status_counts ?? {});
     } catch (error) {

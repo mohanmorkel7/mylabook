@@ -1814,30 +1814,6 @@ export default function ManageTickets() {
               </div>
             )}
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                // Open filters and smooth scroll to the filter panel
-                setShowFilters((s) => {
-                  const willOpen = !s;
-                  if (willOpen) {
-                    // Delay scroll slightly to allow panel to render
-                    setTimeout(() => {
-                      if (filtersRef.current) {
-                        filtersRef.current.scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        });
-                      }
-                    }, 160);
-                  }
-                  return willOpen;
-                });
-              }}
-            >
-              Filters
-            </Button>
-
             {/* Date picker for All tab (filters all tickets by a single IST day) */}
             {activeTab === "all" && (
               <div className="flex items-center gap-2">
@@ -1869,6 +1845,30 @@ export default function ManageTickets() {
                 )}
               </div>
             )}
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Open filters and smooth scroll to the filter panel
+                setShowFilters((s) => {
+                  const willOpen = !s;
+                  if (willOpen) {
+                    // Delay scroll slightly to allow panel to render
+                    setTimeout(() => {
+                      if (filtersRef.current) {
+                        filtersRef.current.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      }
+                    }, 160);
+                  }
+                  return willOpen;
+                });
+              }}
+            >
+              Filters
+            </Button>
 
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">Show</span>

@@ -709,8 +709,8 @@ export default function ManageTickets() {
           filters.dateTo,
       );
       // Derive total tickets from multiple possible response shapes
-      const serverTotal = (() => {
-        if (data == null) return undefined;
+      let serverTotal = undefined as number | undefined;
+      if (data != null) {
         const candidates = [
           data.total,
           data?.pagination?.total,
@@ -719,11 +719,34 @@ export default function ManageTickets() {
           data?.pagination?.total_count,
         ];
         for (const c of candidates) {
-          if (c !== undefined && c !== null && String(c).trim() !== "")
-            return Number(c);
+          if (c !== undefined && c !== null && String(c).trim() !== "") {
+            serverTotal = Number(c);
+            break;
+          }
         }
-        return undefined;
-      })();
+      }
+
+      // If server did not provide a total, fetch a lightweight count-only response
+      if (serverTotal === undefined) {
+        try {
+          const totalResp = await api.getTickets(serverFilters, 1, 1);
+          const totalData = totalResp?.data ?? totalResp;
+          const totalCandidates = [
+            totalData?.total,
+            totalData?.pagination?.total,
+            totalData?.meta?.total,
+            totalData?.pagination?.total_count,
+          ];
+          for (const c of totalCandidates) {
+            if (c !== undefined && c !== null && String(c).trim() !== "") {
+              serverTotal = Number(c);
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch total count fallback:", e);
+        }
+      }
 
       const finalTotal = hasClientSideFilters
         ? filtered.length

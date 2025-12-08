@@ -318,8 +318,8 @@ export default function ManageTickets() {
     status: "",
     assignedTo: "",
     source: "",
-    dateFrom: getTodayDateString(),
-    dateTo: getTodayDateString(),
+    dateFrom: "",
+    dateTo: "",
   });
 
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);

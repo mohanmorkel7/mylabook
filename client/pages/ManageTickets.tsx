@@ -750,14 +750,17 @@ export default function ManageTickets() {
 
       const finalTotal = hasClientSideFilters
         ? filtered.length
-        : serverTotal ?? normalized.length;
+        : (serverTotal ?? normalized.length);
 
       setTotalTickets(finalTotal);
 
       // Compute pages consistently from finalTotal and pageSize unless server explicitly provided pages
-      const serverPages = data?.pages ?? data?.pagination?.pages ?? data?.meta?.pages;
+      const serverPages =
+        data?.pages ?? data?.pagination?.pages ?? data?.meta?.pages;
       const pagesFromTotal = Math.max(1, Math.ceil(finalTotal / pageSize));
-      const finalPages = hasClientSideFilters ? 1 : serverPages ?? pagesFromTotal;
+      const finalPages = hasClientSideFilters
+        ? 1
+        : (serverPages ?? pagesFromTotal);
       setTotalPages(finalPages);
       setStatusCounts(data?.status_counts ?? {});
     } catch (error) {

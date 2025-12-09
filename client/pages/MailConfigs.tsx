@@ -361,8 +361,7 @@ export default function MailConfigs() {
                   <Badge
                     className={`text-xs ${PRIORITY_COLORS[config.priority_id]}`}
                   >
-                    {PRIORITY_SLA_MAP[config.priority_id] ||
-                      PRIORITY_NAMES[config.priority_id]}
+                    {getConfigSlaLabel(config)}
                   </Badge>
                   <Badge
                     variant="outline"

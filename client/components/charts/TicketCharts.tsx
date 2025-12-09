@@ -15,9 +15,11 @@ interface StatusCount {
 export default function TicketCharts({
   dateFrom,
   dateTo,
+  onSummaryFetched,
 }: {
   dateFrom?: string;
   dateTo?: string;
+  onSummaryFetched?: (summary: any) => void;
 }) {
   const [assigned, setAssigned] = useState<AssignedCount[]>([]);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);

@@ -2305,9 +2305,7 @@ export default function ManageTickets() {
 
                         <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
-                            Updated{" "}
-                            {safeFormatDistanceToNow(t.updated_at)}{" "}
-                            ago
+                            Updated {safeFormatDistanceToNow(t.updated_at)} ago
                           </div>
 
                           <div className="flex gap-2 items-center">
@@ -2493,9 +2491,7 @@ export default function ManageTickets() {
 
                         <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
-                            Updated{" "}
-                            {safeFormatDistanceToNow(t.updated_at)}{" "}
-                            ago
+                            Updated {safeFormatDistanceToNow(t.updated_at)} ago
                           </div>
 
                           <div className="flex gap-2 items-center">

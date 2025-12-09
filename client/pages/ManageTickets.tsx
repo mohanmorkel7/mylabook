@@ -17,6 +17,18 @@ import {
 } from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
 import { formatDistanceToNowStrict } from "date-fns";
+
+// Safe wrapper: formats distance to now strictly, returns 'Unknown' on invalid dates
+const safeFormatDistanceToNow = (d?: string | number | Date | null): string => {
+  try {
+    if (!d) return "Unknown";
+    const dt = d instanceof Date ? d : new Date(d as any);
+    if (isNaN(dt.getTime())) return "Unknown";
+    return formatDistanceToNowStrict(dt as Date);
+  } catch (e) {
+    return "Unknown";
+  }
+};
 import { useAuth } from "@/lib/auth-context";
 import TicketCharts from "@/components/charts/TicketCharts";
 
@@ -2293,9 +2305,7 @@ export default function ManageTickets() {
 
                         <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
-                            Updated{" "}
-                            {formatDistanceToNowStrict(new Date(t.updated_at))}{" "}
-                            ago
+                            Updated {safeFormatDistanceToNow(t.updated_at)} ago
                           </div>
 
                           <div className="flex gap-2 items-center">
@@ -2481,9 +2491,7 @@ export default function ManageTickets() {
 
                         <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
-                            Updated{" "}
-                            {formatDistanceToNowStrict(new Date(t.updated_at))}{" "}
-                            ago
+                            Updated {safeFormatDistanceToNow(t.updated_at)} ago
                           </div>
 
                           <div className="flex gap-2 items-center">

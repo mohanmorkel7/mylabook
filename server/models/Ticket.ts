@@ -625,7 +625,10 @@ export class TicketRepository {
       const COUNT_TIMEOUT_MS = 2000; // 2s
       const countPromise = pool.query(countQuery, queryParams);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("COUNT timed out")), COUNT_TIMEOUT_MS),
+        setTimeout(
+          () => reject(new Error("COUNT timed out")),
+          COUNT_TIMEOUT_MS,
+        ),
       );
 
       let countResult;
@@ -641,10 +644,16 @@ export class TicketRepository {
         const estRes2 = await pool.query(
           "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
         );
-        total = estRes2.rows[0] && estRes2.rows[0].estimate ? Number(estRes2.rows[0].estimate) : 0;
+        total =
+          estRes2.rows[0] && estRes2.rows[0].estimate
+            ? Number(estRes2.rows[0].estimate)
+            : 0;
       }
     } catch (outerErr) {
-      console.warn("Failed to determine total tickets count:", outerErr?.message || outerErr);
+      console.warn(
+        "Failed to determine total tickets count:",
+        outerErr?.message || outerErr,
+      );
       total = 0;
     }
 

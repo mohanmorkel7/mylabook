@@ -740,7 +740,7 @@ export class TicketRepository {
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
 
-     if (debug)
+    if (debug)
       console.log(
         "[TicketRepository.getAll] executing ticketsQuery with params:",
         queryParams.concat([limit, offset]),
@@ -752,22 +752,27 @@ export class TicketRepository {
     const TICKETS_QUERY_TIMEOUT_MS = 15000; // 15 seconds
     try {
       try {
-        await client.query('BEGIN');
-        await client.query(`SET LOCAL statement_timeout = ${TICKETS_QUERY_TIMEOUT_MS}`);
+        await client.query("BEGIN");
+        await client.query(
+          `SET LOCAL statement_timeout = ${TICKETS_QUERY_TIMEOUT_MS}`,
+        );
         ticketsResult = await client.query(ticketsQuery, queryParams);
         if (debug)
           console.log(
             "[TicketRepository.getAll] ticketsResult rows count:",
             ticketsResult.rows ? ticketsResult.rows.length : 0,
           );
-        await client.query('COMMIT');
+        await client.query("COMMIT");
       } catch (qErr) {
         try {
-          await client.query('ROLLBACK');
+          await client.query("ROLLBACK");
         } catch (e) {
           // ignore rollback errors
         }
-        console.error("[TicketRepository.getAll] tickets query failed:", qErr?.message || qErr);
+        console.error(
+          "[TicketRepository.getAll] tickets query failed:",
+          qErr?.message || qErr,
+        );
         throw qErr;
       }
     } finally {

@@ -707,7 +707,18 @@ export class TicketRepository {
 
     const ticketsQuery = `
       SELECT
-        t.*,
+        t.id,
+        t.track_id,
+        t.subject,
+        t.priority_id,
+        t.status_id,
+        t.category_id,
+        t.team_id,
+        t.bucket_id,
+        t.demand,
+        t.created_by,
+        t.assigned_to,
+        t.mail_config_id,
         (EXTRACT(EPOCH FROM (t.sla_time - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
         ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,

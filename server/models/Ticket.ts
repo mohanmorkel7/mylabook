@@ -1182,6 +1182,19 @@ export class TicketRepository {
                 [id],
               );
             }
+
+            // If status name indicates 'overdue', mark ever_overdue and overdue_at
+            try {
+              const nm = String(status.rows[0]?.name || "").toLowerCase();
+              if (nm.includes("overdue")) {
+                await pool.query(
+                  "UPDATE tickets SET ever_overdue = TRUE, overdue_at = COALESCE(overdue_at, NOW()) WHERE id = $1",
+                  [id],
+                );
+              }
+            } catch (e) {
+              console.warn("Failed to set ever_overdue on status change", e);
+            }
           }
         }
       }

@@ -489,7 +489,18 @@ router.get("/summary", async (req: Request, res: Response) => {
     const overdueClosed = Number(overdueClosedRes.rows[0]?.cnt || 0);
     const nonOverdueClosed = Math.max(0, totalClosed - overdueClosed);
 
-    res.json({ assigned, statuses, overdue_counts: { overdueOpen, nonOverdueOpen, overdueClosed, nonOverdueClosed, totalOpen, totalClosed } });
+    res.json({
+      assigned,
+      statuses,
+      overdue_counts: {
+        overdueOpen,
+        nonOverdueOpen,
+        overdueClosed,
+        nonOverdueClosed,
+        totalOpen,
+        totalClosed,
+      },
+    });
   } catch (err) {
     console.error("Error fetching ticket summary:", err);
     res.status(500).json({ error: "Failed to fetch summary" });

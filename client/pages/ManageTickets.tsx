@@ -122,6 +122,48 @@ export default function ManageTickets() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+
+  // Derived counts: overdue vs non-overdue for open and closed tickets
+  const {
+    overdueOpenCount,
+    nonOverdueOpenCount,
+    overdueClosedCount,
+    nonOverdueClosedCount,
+  } = ((): {
+    overdueOpenCount: number;
+    nonOverdueOpenCount: number;
+    overdueClosedCount: number;
+    nonOverdueClosedCount: number;
+  } => {
+    let overdueOpen = 0;
+    let nonOverdueOpen = 0;
+    let overdueClosed = 0;
+    let nonOverdueClosed = 0;
+
+    for (const t of tickets) {
+      const isClosed = Boolean(t.status && (t.status as any).is_closed);
+      const slaMs = (t as any).sla_remaining_ms;
+      const isOverdue =
+        (t.status &&
+          ((t.status as any).name || "").toLowerCase() === "overdue") ||
+        (slaMs !== null && typeof slaMs !== "undefined" && Number(slaMs) <= 0);
+
+      if (isClosed) {
+        if (isOverdue) overdueClosed += 1;
+        else nonOverdueClosed += 1;
+      } else {
+        if (isOverdue) overdueOpen += 1;
+        else nonOverdueOpen += 1;
+      }
+    }
+
+    return {
+      overdueOpenCount: overdueOpen,
+      nonOverdueOpenCount: nonOverdueOpen,
+      overdueClosedCount: overdueClosed,
+      nonOverdueClosedCount: nonOverdueClosed,
+    };
+  })();
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [createdTicketsCount, setCreatedTicketsCount] = useState<number>(0);
   const [users, setUsers] = useState<User[]>([]);
@@ -1911,9 +1953,15 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {statusCounts["Open"] ?? 0}
+              {overdueOpenCount + nonOverdueOpenCount}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
+            <div className="mt-2 text-xs text-gray-600 flex gap-3">
+              <span className="text-red-600">Overdue: {overdueOpenCount}</span>
+              <span className="text-green-600">
+                Active: {nonOverdueOpenCount}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
@@ -1949,9 +1997,17 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-gray-900">
-              {statusCounts["Closed"] ?? 0}
+              {overdueClosedCount + nonOverdueClosedCount}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
+            <div className="mt-2 text-xs text-gray-600 flex gap-3">
+              <span className="text-red-600">
+                Overdue: {overdueClosedCount}
+              </span>
+              <span className="text-green-600">
+                On-time: {nonOverdueClosedCount}
+              </span>
+            </div>
           </CardContent>
         </Card>
       </div>

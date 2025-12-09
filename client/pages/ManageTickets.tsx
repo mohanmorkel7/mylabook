@@ -144,7 +144,8 @@ export default function ManageTickets() {
       const isClosed = Boolean(t.status && (t.status as any).is_closed);
       const slaMs = (t as any).sla_remaining_ms;
       const isOverdue =
-        (t.status && ((t.status as any).name || "").toLowerCase() === "overdue") ||
+        (t.status &&
+          ((t.status as any).name || "").toLowerCase() === "overdue") ||
         (slaMs !== null && typeof slaMs !== "undefined" && Number(slaMs) <= 0);
 
       if (isClosed) {
@@ -1957,7 +1958,9 @@ export default function ManageTickets() {
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
               <span className="text-red-600">Overdue: {overdueOpenCount}</span>
-              <span className="text-green-600">Active: {nonOverdueOpenCount}</span>
+              <span className="text-green-600">
+                Active: {nonOverdueOpenCount}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -1998,8 +2001,12 @@ export default function ManageTickets() {
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
-              <span className="text-red-600">Overdue: {overdueClosedCount}</span>
-              <span className="text-green-600">On-time: {nonOverdueClosedCount}</span>
+              <span className="text-red-600">
+                Overdue: {overdueClosedCount}
+              </span>
+              <span className="text-green-600">
+                On-time: {nonOverdueClosedCount}
+              </span>
             </div>
           </CardContent>
         </Card>

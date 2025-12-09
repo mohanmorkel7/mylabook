@@ -122,6 +122,26 @@ export default function ManageTickets() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [serverOverdueCounts, setServerOverdueCounts] = useState<any>(null);
+
+  const handleSummaryFetched = (summary: any) => {
+    try {
+      // Map statuses array to statusCounts object
+      if (summary && Array.isArray(summary.statuses)) {
+        const map: Record<string, number> = {};
+        for (const s of summary.statuses) {
+          const name = String(s.status || s.status_name || s.name || "").trim();
+          map[name] = Number(s.count || s.count || 0);
+        }
+        setStatusCounts(map);
+      }
+      if (summary && summary.overdue_counts) {
+        setServerOverdueCounts(summary.overdue_counts);
+      }
+    } catch (e) {
+      console.warn("handleSummaryFetched failed", e);
+    }
+  };
 
   // Derived counts: overdue vs non-overdue for open and closed tickets
   const {

@@ -203,6 +203,41 @@ export default function MailConfigs() {
     );
   };
 
+  // Map demand IDs used in mail config rules to human-friendly SLA labels
+  const DEMAND_SLA_MAP: Record<number, string> = {
+    0: "2 Hours",
+    1: "5 Hours",
+    2: "24 Hours",
+  };
+
+  // Derive SLA label for a mail config. Prefer explicit demand value from sources' rules,
+  // fallback to priority-based mapping when no demand is present.
+  const getConfigSlaLabel = (config: MailConfig | null | undefined): string => {
+    if (!config) return "-";
+
+    // Look for demand on any email rule across sources (prefer the first explicit demand)
+    if (config.sources && config.sources.length > 0) {
+      for (const src of config.sources) {
+        if (src.emailRules && src.emailRules.length > 0) {
+          for (const rule of src.emailRules) {
+            // @ts-ignore - some rules may include a `demand` property
+            if (typeof (rule as any).demand === "number") {
+              const d = (rule as any).demand as number;
+              if (DEMAND_SLA_MAP[d]) return DEMAND_SLA_MAP[d];
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback to priority mapping
+    return (
+      PRIORITY_SLA_MAP[config.priority_id] ||
+      PRIORITY_NAMES[config.priority_id] ||
+      "-"
+    );
+  };
+
   const handleOpenPreview = (config: MailConfig) => {
     setSelectedConfigPreview(config);
     setPreviewOpen(true);
@@ -326,8 +361,7 @@ export default function MailConfigs() {
                   <Badge
                     className={`text-xs ${PRIORITY_COLORS[config.priority_id]}`}
                   >
-                    {PRIORITY_SLA_MAP[config.priority_id] ||
-                      PRIORITY_NAMES[config.priority_id]}
+                    {getConfigSlaLabel(config)}
                   </Badge>
                   <Badge
                     variant="outline"
@@ -494,8 +528,7 @@ export default function MailConfigs() {
                       PRIORITY_COLORS[selectedConfigPreview.priority_id]
                     }
                   >
-                    {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
-                      PRIORITY_NAMES[selectedConfigPreview.priority_id]}
+                    {getConfigSlaLabel(selectedConfigPreview)}
                   </Badge>
                 </div>
               </div>
@@ -652,8 +685,7 @@ export default function MailConfigs() {
                         PRIORITY_COLORS[selectedConfigPreview.priority_id]
                       }
                     >
-                      {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
-                        PRIORITY_NAMES[selectedConfigPreview.priority_id]}
+                      {getConfigSlaLabel(selectedConfigPreview)}
                     </Badge>
                   </div>
 

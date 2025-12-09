@@ -866,6 +866,10 @@ export class TicketRepository {
               })()
             : row.mail_config_sources
           : undefined,
+      ever_overdue: row.ever_overdue === true,
+      overdue_at: row.overdue_at
+        ? TicketRepository.convertISTToUTC(String(row.overdue_at))
+        : null,
     }));
 
     const pages = Math.ceil(total / limit);
@@ -1181,6 +1185,19 @@ export class TicketRepository {
                 "UPDATE tickets SET closed_at = CURRENT_TIMESTAMP WHERE id = $1",
                 [id],
               );
+            }
+
+            // If status name indicates 'overdue', mark ever_overdue and overdue_at
+            try {
+              const nm = String(status.rows[0]?.name || "").toLowerCase();
+              if (nm.includes("overdue")) {
+                await pool.query(
+                  "UPDATE tickets SET ever_overdue = TRUE, overdue_at = COALESCE(overdue_at, NOW()) WHERE id = $1",
+                  [id],
+                );
+              }
+            } catch (e) {
+              console.warn("Failed to set ever_overdue on status change", e);
             }
           }
         }

@@ -685,8 +685,7 @@ export default function MailConfigs() {
                         PRIORITY_COLORS[selectedConfigPreview.priority_id]
                       }
                     >
-                      {PRIORITY_SLA_MAP[selectedConfigPreview.priority_id] ||
-                        PRIORITY_NAMES[selectedConfigPreview.priority_id]}
+                      {getConfigSlaLabel(selectedConfigPreview)}
                     </Badge>
                   </div>
 

@@ -117,6 +117,13 @@ export default function TicketCharts({
         if (!mounted) return;
         setAssigned(payload.assigned || []);
         setStatuses(payload.statuses || []);
+        if (onSummaryFetched) {
+          try {
+            onSummaryFetched(payload);
+          } catch (e) {
+            console.warn("onSummaryFetched callback failed", e);
+          }
+        }
 
         // Fetch user-status summary in parallel
         try {

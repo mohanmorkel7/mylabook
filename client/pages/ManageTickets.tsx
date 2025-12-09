@@ -1952,9 +1952,13 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {statusCounts["Open"] ?? 0}
+              {overdueOpenCount + nonOverdueOpenCount}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
+            <div className="mt-2 text-xs text-gray-600 flex gap-3">
+              <span className="text-red-600">Overdue: {overdueOpenCount}</span>
+              <span className="text-green-600">Active: {nonOverdueOpenCount}</span>
+            </div>
           </CardContent>
         </Card>
 
@@ -1990,9 +1994,13 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-gray-900">
-              {statusCounts["Closed"] ?? 0}
+              {overdueClosedCount + nonOverdueClosedCount}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
+            <div className="mt-2 text-xs text-gray-600 flex gap-3">
+              <span className="text-red-600">Overdue: {overdueClosedCount}</span>
+              <span className="text-green-600">On-time: {nonOverdueClosedCount}</span>
+            </div>
           </CardContent>
         </Card>
       </div>

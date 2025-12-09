@@ -54,12 +54,6 @@ const sidebarItems: SidebarItem[] = [
     roles: ["admin", "sales", "product"],
   },
   {
-    name: "Mails",
-    href: "/mails",
-    icon: Mail,
-    roles: ["admin", "development", "finops"],
-  },
-  {
     name: "Tickets",
     href: "/tickets",
     icon: Ticket,

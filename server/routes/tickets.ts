@@ -465,16 +465,14 @@ router.get("/summary", async (req: Request, res: Response) => {
       count: Number(r.count),
     }));
 
-    // Compute overdue vs non-overdue splits for open and closed tickets
-    // Overdue definition: status name 'Overdue' OR sla_time <= now()
-    const overdueCondition = `(COALESCE(LOWER(ts.name), '') = 'overdue' OR (t.sla_time IS NOT NULL AND t.sla_time <= NOW()))`;
+    // Compute overdue vs non-overdue splits for open and closed tickets using ever_overdue flag (historical)
 
     // Open (not closed)
     const openQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL)`;
     const openRes = await pool.query(openQuery, values);
     const totalOpen = Number(openRes.rows[0]?.cnt || 0);
 
-    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND ${overdueCondition}`;
+    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND t.ever_overdue = TRUE`;
     const overdueOpenRes = await pool.query(overdueOpenQuery, values);
     const overdueOpen = Number(overdueOpenRes.rows[0]?.cnt || 0);
     const nonOverdueOpen = Math.max(0, totalOpen - overdueOpen);
@@ -484,7 +482,7 @@ router.get("/summary", async (req: Request, res: Response) => {
     const closedRes = await pool.query(closedQuery, values);
     const totalClosed = Number(closedRes.rows[0]?.cnt || 0);
 
-    const overdueClosedQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS TRUE) AND ${overdueCondition}`;
+    const overdueClosedQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS TRUE) AND t.ever_overdue = TRUE`;
     const overdueClosedRes = await pool.query(overdueClosedQuery, values);
     const overdueClosed = Number(overdueClosedRes.rows[0]?.cnt || 0);
     const nonOverdueClosed = Math.max(0, totalClosed - overdueClosed);

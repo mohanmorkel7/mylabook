@@ -1966,7 +1966,11 @@ export default function ManageTickets() {
 
       {/* Status counts and Charts */}
       {activeTab === "all" && (
-        <TicketCharts dateFrom={filters.dateFrom} dateTo={filters.dateTo} />
+        <TicketCharts
+          dateFrom={filters.dateFrom}
+          dateTo={filters.dateTo}
+          onSummaryFetched={handleSummaryFetched}
+        />
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">

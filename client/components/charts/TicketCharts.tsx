@@ -15,9 +15,11 @@ interface StatusCount {
 export default function TicketCharts({
   dateFrom,
   dateTo,
+  onSummaryFetched,
 }: {
   dateFrom?: string;
   dateTo?: string;
+  onSummaryFetched?: (summary: any) => void;
 }) {
   const [assigned, setAssigned] = useState<AssignedCount[]>([]);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);
@@ -115,6 +117,13 @@ export default function TicketCharts({
         if (!mounted) return;
         setAssigned(payload.assigned || []);
         setStatuses(payload.statuses || []);
+        if (onSummaryFetched) {
+          try {
+            onSummaryFetched(payload);
+          } catch (e) {
+            console.warn("onSummaryFetched callback failed", e);
+          }
+        }
 
         // Fetch user-status summary in parallel
         try {

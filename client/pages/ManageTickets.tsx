@@ -1977,14 +1977,12 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {overdueOpenCount + nonOverdueOpenCount}
+              {serverOverdueCounts?.totalOpen ?? (overdueOpenCount + nonOverdueOpenCount)}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
-              <span className="text-red-600">Overdue: {overdueOpenCount}</span>
-              <span className="text-green-600">
-                Active: {nonOverdueOpenCount}
-              </span>
+              <span className="text-red-600">Overdue: {serverOverdueCounts?.overdueOpen ?? overdueOpenCount}</span>
+              <span className="text-green-600">Active: {serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount}</span>
             </div>
           </CardContent>
         </Card>
@@ -2021,16 +2019,12 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-gray-900">
-              {overdueClosedCount + nonOverdueClosedCount}
+              {serverOverdueCounts?.totalClosed ?? (overdueClosedCount + nonOverdueClosedCount)}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
-              <span className="text-red-600">
-                Overdue: {overdueClosedCount}
-              </span>
-              <span className="text-green-600">
-                On-time: {nonOverdueClosedCount}
-              </span>
+              <span className="text-red-600">Overdue: {serverOverdueCounts?.overdueClosed ?? overdueClosedCount}</span>
+              <span className="text-green-600">On-time: {serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount}</span>
             </div>
           </CardContent>
         </Card>

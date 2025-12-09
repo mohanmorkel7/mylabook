@@ -707,7 +707,18 @@ export class TicketRepository {
 
     const ticketsQuery = `
       SELECT
-        t.*,
+        t.id,
+        t.track_id,
+        t.subject,
+        t.priority_id,
+        t.status_id,
+        t.category_id,
+        t.team_id,
+        t.bucket_id,
+        t.demand,
+        t.created_by,
+        t.assigned_to,
+        t.mail_config_id,
         (EXTRACT(EPOCH FROM (t.sla_time - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
         ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
@@ -735,17 +746,37 @@ export class TicketRepository {
         queryParams.concat([limit, offset]),
       );
     queryParams.push(limit, offset);
+
     let ticketsResult;
+    const client = await pool.connect();
+    const TICKETS_QUERY_TIMEOUT_MS = 15000; // 15 seconds
     try {
-      ticketsResult = await pool.query(ticketsQuery, queryParams);
-      if (debug)
-        console.log(
-          "[TicketRepository.getAll] ticketsResult rows count:",
-          ticketsResult.rows ? ticketsResult.rows.length : 0,
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `SET LOCAL statement_timeout = ${TICKETS_QUERY_TIMEOUT_MS}`,
         );
-    } catch (qErr) {
-      console.error("[TicketRepository.getAll] tickets query failed:", qErr);
-      throw qErr;
+        ticketsResult = await client.query(ticketsQuery, queryParams);
+        if (debug)
+          console.log(
+            "[TicketRepository.getAll] ticketsResult rows count:",
+            ticketsResult.rows ? ticketsResult.rows.length : 0,
+          );
+        await client.query("COMMIT");
+      } catch (qErr) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (e) {
+          // ignore rollback errors
+        }
+        console.error(
+          "[TicketRepository.getAll] tickets query failed:",
+          qErr?.message || qErr,
+        );
+        throw qErr;
+      }
+    } finally {
+      client.release();
     }
 
     const tickets: Ticket[] = ticketsResult.rows.map((row) => ({

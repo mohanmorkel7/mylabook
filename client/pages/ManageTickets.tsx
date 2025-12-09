@@ -122,6 +122,26 @@ export default function ManageTickets() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [serverOverdueCounts, setServerOverdueCounts] = useState<any>(null);
+
+  const handleSummaryFetched = (summary: any) => {
+    try {
+      // Map statuses array to statusCounts object
+      if (summary && Array.isArray(summary.statuses)) {
+        const map: Record<string, number> = {};
+        for (const s of summary.statuses) {
+          const name = String(s.status || s.status_name || s.name || "").trim();
+          map[name] = Number(s.count || s.count || 0);
+        }
+        setStatusCounts(map);
+      }
+      if (summary && summary.overdue_counts) {
+        setServerOverdueCounts(summary.overdue_counts);
+      }
+    } catch (e) {
+      console.warn("handleSummaryFetched failed", e);
+    }
+  };
 
   // Derived counts: overdue vs non-overdue for open and closed tickets
   const {
@@ -1946,20 +1966,28 @@ export default function ManageTickets() {
 
       {/* Status counts and Charts */}
       {activeTab === "all" && (
-        <TicketCharts dateFrom={filters.dateFrom} dateTo={filters.dateTo} />
+        <TicketCharts
+          dateFrom={filters.dateFrom}
+          dateTo={filters.dateTo}
+          onSummaryFetched={handleSummaryFetched}
+        />
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {overdueOpenCount + nonOverdueOpenCount}
+              {serverOverdueCounts?.totalOpen ??
+                overdueOpenCount + nonOverdueOpenCount}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
-              <span className="text-red-600">Overdue: {overdueOpenCount}</span>
+              <span className="text-red-600">
+                Overdue: {serverOverdueCounts?.overdueOpen ?? overdueOpenCount}
+              </span>
               <span className="text-green-600">
-                Active: {nonOverdueOpenCount}
+                Active:{" "}
+                {serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount}
               </span>
             </div>
           </CardContent>
@@ -1997,15 +2025,18 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-gray-900">
-              {overdueClosedCount + nonOverdueClosedCount}
+              {serverOverdueCounts?.totalClosed ??
+                overdueClosedCount + nonOverdueClosedCount}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
               <span className="text-red-600">
-                Overdue: {overdueClosedCount}
+                Overdue:{" "}
+                {serverOverdueCounts?.overdueClosed ?? overdueClosedCount}
               </span>
               <span className="text-green-600">
-                On-time: {nonOverdueClosedCount}
+                On-time:{" "}
+                {serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount}
               </span>
             </div>
           </CardContent>

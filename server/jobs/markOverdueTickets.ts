@@ -64,7 +64,7 @@ export async function runMarkOverdueTickets() {
 
       // Update ticket to overdue status
       const updateRes = await pool.query(
-        `UPDATE tickets SET status_id = $1, updated_at = NOW() WHERE id = $2 RETURNING id`,
+        `UPDATE tickets SET status_id = $1, ever_overdue = TRUE, overdue_at = COALESCE(overdue_at, NOW()), updated_at = NOW() WHERE id = $2 RETURNING id`,
         [overdueStatusId, ticketId],
       );
 

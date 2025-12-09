@@ -122,6 +122,47 @@ export default function ManageTickets() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+
+  // Derived counts: overdue vs non-overdue for open and closed tickets
+  const {
+    overdueOpenCount,
+    nonOverdueOpenCount,
+    overdueClosedCount,
+    nonOverdueClosedCount,
+  } = ((): {
+    overdueOpenCount: number;
+    nonOverdueOpenCount: number;
+    overdueClosedCount: number;
+    nonOverdueClosedCount: number;
+  } => {
+    let overdueOpen = 0;
+    let nonOverdueOpen = 0;
+    let overdueClosed = 0;
+    let nonOverdueClosed = 0;
+
+    for (const t of tickets) {
+      const isClosed = Boolean(t.status && (t.status as any).is_closed);
+      const slaMs = (t as any).sla_remaining_ms;
+      const isOverdue =
+        (t.status && ((t.status as any).name || "").toLowerCase() === "overdue") ||
+        (slaMs !== null && typeof slaMs !== "undefined" && Number(slaMs) <= 0);
+
+      if (isClosed) {
+        if (isOverdue) overdueClosed += 1;
+        else nonOverdueClosed += 1;
+      } else {
+        if (isOverdue) overdueOpen += 1;
+        else nonOverdueOpen += 1;
+      }
+    }
+
+    return {
+      overdueOpenCount: overdueOpen,
+      nonOverdueOpenCount: nonOverdueOpen,
+      overdueClosedCount: overdueClosed,
+      nonOverdueClosedCount: nonOverdueClosed,
+    };
+  })();
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [createdTicketsCount, setCreatedTicketsCount] = useState<number>(0);
   const [users, setUsers] = useState<User[]>([]);

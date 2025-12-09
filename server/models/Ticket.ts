@@ -610,35 +610,42 @@ export class TicketRepository {
         ? `WHERE ${whereConditions.join(" AND ")}`
         : "";
 
-    // Get total count
+    // Get total count - attempt exact COUNT(*) but bail out quickly and fall back to estimate if slow
     if (debug)
       console.log("[TicketRepository.getAll] starting total count computation");
     let total = 0;
     try {
-      // Always compute exact count using COUNT(*) to ensure UI displays accurate totals
       const countQuery = `
         SELECT COUNT(*)
         FROM tickets t
         ${whereClause}
       `;
-      const countResult = await pool.query(countQuery, queryParams);
-      total = parseInt(countResult.rows[0].count);
-    } catch (countErr) {
-      console.warn(
-        "Failed to compute total count, falling back to estimate:",
-        countErr?.message || countErr,
+
+      // Run COUNT(*) but timeout if takes too long (fast path preferred). This avoids long-running COUNT on very large tables.
+      const COUNT_TIMEOUT_MS = 2000; // 2s
+      const countPromise = pool.query(countQuery, queryParams);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("COUNT timed out")), COUNT_TIMEOUT_MS),
       );
+
+      let countResult;
       try {
+        countResult = await Promise.race([countPromise, timeoutPromise]);
+        total = parseInt(countResult.rows[0].count);
+      } catch (countErr) {
+        // COUNT timed out or failed; fall back to an estimate
+        console.warn(
+          "COUNT(*) slow or failed, falling back to estimate:",
+          countErr?.message || countErr,
+        );
         const estRes2 = await pool.query(
           "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
         );
-        total =
-          estRes2.rows[0] && estRes2.rows[0].estimate
-            ? Number(estRes2.rows[0].estimate)
-            : 0;
-      } catch (e) {
-        total = 0;
+        total = estRes2.rows[0] && estRes2.rows[0].estimate ? Number(estRes2.rows[0].estimate) : 0;
       }
+    } catch (outerErr) {
+      console.warn("Failed to determine total tickets count:", outerErr?.message || outerErr);
+      total = 0;
     }
 
     // Get status counts (without filters to show total counts per status)

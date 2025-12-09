@@ -867,7 +867,9 @@ export class TicketRepository {
             : row.mail_config_sources
           : undefined,
       ever_overdue: row.ever_overdue === true,
-      overdue_at: row.overdue_at ? TicketRepository.convertISTToUTC(String(row.overdue_at)) : null,
+      overdue_at: row.overdue_at
+        ? TicketRepository.convertISTToUTC(String(row.overdue_at))
+        : null,
     }));
 
     const pages = Math.ceil(total / limit);

@@ -2051,7 +2051,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-orange-600">
-              {statusCounts["In Progress"] ?? statusCounts["InProgress"] ?? 0}
+              {getStatusCount("In Progress")}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress

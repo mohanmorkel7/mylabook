@@ -359,10 +359,18 @@ export default function ManageTickets() {
     return null;
   }
 
-  // Helper function to classify a ticket into a tag based on description
+  // Helper function to classify a ticket into a tag. Prefer mail_config_sources provider, then description_preview or description
   const getTicketTag = (ticket: any): string => {
     try {
-      const desc = String(ticket.description || "").toLowerCase();
+      // Prefer explicit provider derived from mail config sources
+      const provider = getMailConfigProviderName(
+        ticket.mail_config_sources || ticket.mail_config_sources,
+        ticket.description_preview || ticket.description,
+      );
+      if (provider) return provider;
+
+      // Fallback to scanning the description preview or full description
+      const desc = String(ticket.description_preview || ticket.description || "").toLowerCase();
       if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
         return "Razorpay";
       }
@@ -2265,7 +2273,7 @@ export default function ManageTickets() {
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">
-                              {stripHtml(t.description).slice(0, 180)}
+                              {stripHtml(t.description_preview || t.description).slice(0, 200)}
                             </div>
                           </div>
 
@@ -2450,7 +2458,7 @@ export default function ManageTickets() {
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">
-                              {stripHtml(t.description).slice(0, 180)}
+                              {stripHtml(t.description_preview || t.description).slice(0, 200)}
                             </div>
                           </div>
 

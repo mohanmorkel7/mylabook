@@ -1858,7 +1858,26 @@ export default function ManageTickets() {
   const displayedOpen = serverOverdueCounts?.totalOpen ?? overdueOpenCount + nonOverdueOpenCount;
   const displayedClosed = serverOverdueCounts?.totalClosed ?? overdueClosedCount + nonOverdueClosedCount;
   const inProgressCount = getStatusCount("In Progress");
-  const overdueCount = getStatusCount("Overdue");
+  // Per-server overdue breakdowns
+  const overdueOpenFromServer = serverOverdueCounts?.overdueOpen ?? overdueOpenCount;
+  const nonOverdueOpenFromServer = serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount;
+  const overdueClosedFromServer = serverOverdueCounts?.overdueClosed ?? overdueClosedCount;
+  const nonOverdueClosedFromServer = serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount;
+
+  // Reconcile with totalTickets: ensure major buckets sum to total if server provided a total
+  let openToShow = displayedOpen;
+  let activeOpenToShow = nonOverdueOpenFromServer;
+  let overdueOpenToShow = overdueOpenFromServer;
+  if (typeof totalTickets === "number" && Number.isFinite(totalTickets)) {
+    const sumBuckets = (Number(displayedOpen || 0) + Number(inProgressCount || 0) + Number(displayedClosed || 0));
+    if (sumBuckets !== Number(totalTickets)) {
+      // Adjust Open to make totals match, prefer keeping InProgress and Closed stable
+      openToShow = Math.max(0, Number(totalTickets) - Number(inProgressCount || 0) - Number(displayedClosed || 0));
+      // Recompute activeOpen from openToShow minus overdue
+      overdueOpenToShow = overdueOpenFromServer;
+      activeOpenToShow = Math.max(0, openToShow - overdueOpenToShow);
+    }
+  }
 
   return (
     <div className="p-6">

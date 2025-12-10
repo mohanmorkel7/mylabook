@@ -370,7 +370,9 @@ export default function ManageTickets() {
       if (provider) return provider;
 
       // Fallback to scanning the description preview or full description
-      const desc = String(ticket.description_preview || ticket.description || "").toLowerCase();
+      const desc = String(
+        ticket.description_preview || ticket.description || "",
+      ).toLowerCase();
       if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
         return "Razorpay";
       }
@@ -2273,7 +2275,9 @@ export default function ManageTickets() {
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">
-                              {stripHtml(t.description_preview || t.description).slice(0, 200)}
+                              {stripHtml(
+                                t.description_preview || t.description,
+                              ).slice(0, 200)}
                             </div>
                           </div>
 
@@ -2458,7 +2462,9 @@ export default function ManageTickets() {
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">
-                              {stripHtml(t.description_preview || t.description).slice(0, 200)}
+                              {stripHtml(
+                                t.description_preview || t.description,
+                              ).slice(0, 200)}
                             </div>
                           </div>
 

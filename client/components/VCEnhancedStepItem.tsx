@@ -78,7 +78,7 @@ interface VCEnhancedStepItemProps {
   onUpdateStatus: (stepId: number, status: string) => void;
   onDeleteStep: (stepId: number) => void;
   isDragOverlay?: boolean;
-  stepApiBase?: "vc" | "fund-raises" | "business-offerings";
+  stepApiBase?: "vc" | "fund-raises" | "business-offerings" | "workflow";
   focusStepId?: number;
   focusFollowUpId?: number;
 }
@@ -360,6 +360,7 @@ export function VCEnhancedStepItem({
           created_by: parseInt(user?.id || "1"),
           step_id: step.id,
           comment_type: "comment",
+          attachments: stagedAttachments,
         };
         saved = await apiClient.request(
           `/workflow/projects/${step.project_id}/comments`,

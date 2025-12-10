@@ -31,7 +31,7 @@ interface VCDraggableStepsListProps {
   onDeleteStep: (stepId: number) => void;
   onReorderSteps: (steps: any[]) => void;
   updateStepStatus?: (stepId: number, payload: any) => void;
-  stepApiBase?: "vc" | "fund-raises" | "business-offerings";
+  stepApiBase?: "vc" | "fund-raises" | "business-offerings" | "workflow";
   focusStepId?: number;
   focusFollowUpId?: number;
 }
@@ -194,8 +194,8 @@ export function VCDraggableStepsList({
             ? "fund-raises"
             : "vc");
 
-        // For fund-raises, the backend already creates the system chat message. Avoid posting duplicate from client.
-        if (apiBase === "fund-raises") return;
+        // For fund-raises and workflow, the backend already creates the system chat message. Avoid posting duplicate from client.
+        if (apiBase === "fund-raises" || apiBase === "workflow") return;
 
         await apiClient.request(`/${apiBase}/steps/${stepId}/chats`, {
           method: "POST",

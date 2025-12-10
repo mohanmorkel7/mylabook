@@ -1138,12 +1138,13 @@ export default function ProductWorkflow() {
 
   // Fetch project statistics
   const { data: projectStats } = useQuery({
-    queryKey: ["workflow-project-stats"],
+    queryKey: ["workflow-project-stats", user?.id, user?.role],
     queryFn: () =>
       apiClient.getWorkflowDashboard(
         parseInt(user?.id || "1"),
         user?.role || "admin",
       ),
+    enabled: !!user,
   });
 
   // Fetch completed leads ready for project creation (only leads with status 'completed')
@@ -1159,11 +1160,57 @@ export default function ProductWorkflow() {
   );
 
   // Fetch workflow projects for the product team
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
-    queryKey: ["workflow-projects"],
+  const {
+    data: projects = [],
+    isLoading: projectsLoading,
+    refetch: refetchProjects,
+  } = useQuery({
+    queryKey: ["workflow-projects", user?.id, user?.role],
     queryFn: () =>
       apiClient.getWorkflowProjects(parseInt(user?.id || "1"), user?.role),
+    enabled: !!user,
+    staleTime: 1000 * 60, // 1 min cache to avoid excessive refetches
   });
+
+  // Ensure we refetch when the user navigates back to the product route
+  useEffect(() => {
+    try {
+      const path = location.pathname || "";
+      if (path === "/product" || path.startsWith("/product")) {
+        // attempt a fresh fetch whenever this route becomes active
+        refetchProjects();
+      }
+    } catch (e) {
+      console.debug("Refetch projects effect error:", e);
+    }
+  }, [location.pathname, refetchProjects]);
+
+  // Derive project counts with fallback to dashboard projectStats when projects array is empty
+  const totalProjectsCount =
+    projects && projects.length > 0
+      ? projects.length
+      : (projectStats?.project_stats || []).reduce(
+          (acc: number, s: any) => acc + (Number(s.count) || 0),
+          0,
+        );
+
+  const activeProjectsCount =
+    projects && projects.length > 0
+      ? projects.filter((p: any) => p.status === "in_progress").length
+      : Number(
+          (projectStats?.project_stats || []).find(
+            (s: any) => s.status === "in_progress",
+          )?.count || 0,
+        );
+
+  const completedProjectsCount =
+    projects && projects.length > 0
+      ? projects.filter((p: any) => p.status === "completed").length
+      : Number(
+          (projectStats?.project_stats || []).find(
+            (s: any) => s.status === "completed",
+          )?.count || 0,
+        );
 
   const handleCreateProject = (lead: any) => {
     setSelectedLead(lead);
@@ -1243,10 +1290,7 @@ export default function ProductWorkflow() {
                   Active Projects
                 </p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {
-                    projects.filter((p: any) => p.status === "in_progress")
-                      .length
-                  }
+                  {activeProjectsCount}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-100">
@@ -1264,7 +1308,7 @@ export default function ProductWorkflow() {
                   Completed Projects
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  {projects.filter((p: any) => p.status === "completed").length}
+                  {completedProjectsCount}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-green-100">
@@ -1279,10 +1323,13 @@ export default function ProductWorkflow() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
-                  Completed Leads
+                  Related Projects
                 </p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {completedLeads.length}
+                  {activeProjectsCount}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {totalProjectsCount} total projects
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-purple-100">
@@ -1304,7 +1351,11 @@ export default function ProductWorkflow() {
                     ? Math.round(
                         projects.reduce(
                           (acc: number, p: any) =>
-                            acc + (p.progress_percentage || 0),
+                            acc +
+                            (p.progress_percentage ??
+                              p.progress ??
+                              p.progress_percent ??
+                              0),
                           0,
                         ) / projects.length,
                       )

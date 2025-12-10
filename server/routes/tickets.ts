@@ -194,7 +194,23 @@ router.get("/", async (req: Request, res: Response) => {
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
 
-    const filters: TicketFilters = {
+    const raw_date_from = req.query.date_from as string | undefined;
+    const raw_date_to = req.query.date_to as string | undefined;
+
+    function expandIstDate(dateStr: string, endOfDay = false) {
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return dateStr;
+      const [y, m, d] = parts.map((p) => parseInt(p, 10));
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+      const hour = endOfDay ? 23 : 0;
+      const minute = endOfDay ? 59 : 0;
+      const second = endOfDay ? 59 : 0;
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+      return new Date(utcTs).toISOString();
+    }
+
+    const filters: TicketFilters & any = {
       status_id: req.query.status_id
         ? parseInt(req.query.status_id as string)
         : undefined,
@@ -212,8 +228,19 @@ router.get("/", async (req: Request, res: Response) => {
         : undefined,
       search: req.query.search as string,
       tags: req.query.tags ? (req.query.tags as string).split(",") : undefined,
-      date_from: req.query.date_from as string,
-      date_to: req.query.date_to as string,
+      date_from: raw_date_from
+        ? expandIstDate(raw_date_from, false)
+        : undefined,
+      date_to: raw_date_to ? expandIstDate(raw_date_to, true) : undefined,
+      // support explicit 'unassigned' and created_from_mail_config flags
+      unassigned:
+        typeof req.query.unassigned !== "undefined"
+          ? String(req.query.unassigned) === "true"
+          : undefined,
+      created_from_mail_config:
+        typeof req.query.created_from_mail_config !== "undefined"
+          ? String(req.query.created_from_mail_config) === "true"
+          : undefined,
     };
 
     const page = parseInt(req.query.page as string) || 1;
@@ -254,10 +281,11 @@ router.get("/", async (req: Request, res: Response) => {
         viewerId,
         restrictToViewer,
       );
-      const TIMEOUT_MS = 15000; // 15 seconds
+      const TIMEOUT_MS = 60000; // 60 seconds - increase to allow complex queries to finish
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(
-          () => reject(new Error("Tickets query timed out")),
+          () =>
+            reject(new Error(`Tickets query timed out after ${TIMEOUT_MS}ms`)),
           TIMEOUT_MS,
         ),
       );
@@ -271,6 +299,7 @@ router.get("/", async (req: Request, res: Response) => {
           `Tickets fetch failed or timed out after ${dur}ms:`,
           err?.message || err,
         );
+        // If the underlying DB query is still running it will complete eventually, but respond with 504 to the client.
         return res.status(504).json({ error: "Tickets request timed out" });
       }
 
@@ -444,10 +473,560 @@ router.get("/summary", async (req: Request, res: Response) => {
       count: Number(r.count),
     }));
 
-    res.json({ assigned, statuses });
+    // Compute overdue vs non-overdue splits for open and closed tickets using ever_overdue flag (historical)
+
+    // Open (not closed)
+    const openQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL)`;
+    const openRes = await pool.query(openQuery, values);
+    const totalOpen = Number(openRes.rows[0]?.cnt || 0);
+
+    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND t.ever_overdue = TRUE`;
+    const overdueOpenRes = await pool.query(overdueOpenQuery, values);
+    const overdueOpen = Number(overdueOpenRes.rows[0]?.cnt || 0);
+    const nonOverdueOpen = Math.max(0, totalOpen - overdueOpen);
+
+    // Closed
+    const closedQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS TRUE)`;
+    const closedRes = await pool.query(closedQuery, values);
+    const totalClosed = Number(closedRes.rows[0]?.cnt || 0);
+
+    const overdueClosedQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS TRUE) AND t.ever_overdue = TRUE`;
+    const overdueClosedRes = await pool.query(overdueClosedQuery, values);
+    const overdueClosed = Number(overdueClosedRes.rows[0]?.cnt || 0);
+    const nonOverdueClosed = Math.max(0, totalClosed - overdueClosed);
+
+    res.json({
+      assigned,
+      statuses,
+      overdue_counts: {
+        overdueOpen,
+        nonOverdueOpen,
+        overdueClosed,
+        nonOverdueClosed,
+        totalOpen,
+        totalClosed,
+      },
+    });
   } catch (err) {
     console.error("Error fetching ticket summary:", err);
     res.status(500).json({ error: "Failed to fetch summary" });
+  }
+});
+
+// GET /api/tickets/summary/user-status
+// Returns counts grouped by assigned user and by status for a date range
+router.get("/summary/user-status", async (req: Request, res: Response) => {
+  try {
+    const raw_date_from = req.query.date_from as string | undefined;
+    const raw_date_to = req.query.date_to as string | undefined;
+
+    function expandIstDate(dateStr: string, endOfDay = false) {
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return dateStr;
+      const [y, m, d] = parts.map((p) => parseInt(p, 10));
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+      const hour = endOfDay ? 23 : 0;
+      const minute = endOfDay ? 59 : 0;
+      const second = endOfDay ? 59 : 0;
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+      return new Date(utcTs).toISOString();
+    }
+
+    const date_from = raw_date_from
+      ? expandIstDate(raw_date_from, false)
+      : undefined;
+    const date_to = raw_date_to ? expandIstDate(raw_date_to, true) : undefined;
+
+    const values: any[] = [];
+    let where = "WHERE 1=1";
+    let idx = 1;
+    if (date_from) {
+      where += ` AND t.created_at >= $${idx++}`;
+      values.push(date_from);
+    }
+    if (date_to) {
+      where += ` AND t.created_at <= $${idx++}`;
+      values.push(date_to);
+    }
+
+    // Query counts grouped by user and status
+    const q = `
+      SELECT u.id as user_id, u.first_name, u.last_name, ts.name as status_name, COUNT(*) as count
+      FROM tickets t
+      LEFT JOIN users u ON t.assigned_to = u.id
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      ${where}
+      GROUP BY u.id, u.first_name, u.last_name, ts.name
+      ORDER BY u.id NULLS LAST, ts.name
+    `;
+
+    const r = await pool.query(q, values);
+    // Transform into map per user
+    const usersMap: Record<string, any> = {};
+    for (const row of r.rows) {
+      const uid = row.user_id || 0;
+      const name =
+        row.first_name || row.last_name
+          ? `${row.first_name || ""} ${row.last_name || ""}`.trim()
+          : "Unassigned";
+      if (!usersMap[uid]) usersMap[uid] = { user_id: uid, name, counts: {} };
+      const statusName = row.status_name || "Unknown";
+      usersMap[uid].counts[statusName] = Number(row.count);
+    }
+
+    const users = Object.values(usersMap);
+    res.json({ users });
+  } catch (err) {
+    console.error("Error fetching user-status summary:", err);
+    res.status(500).json({ error: "Failed to fetch user-status summary" });
+  }
+});
+
+// GET /api/tickets/summary/by-tag
+// Returns counts grouped by mail-config-derived tags (e.g., Razorpay) and status for a date range
+router.get("/summary/by-tag", async (req: Request, res: Response) => {
+  try {
+    const raw_date_from = req.query.date_from as string | undefined;
+    const raw_date_to = req.query.date_to as string | undefined;
+
+    function expandIstDate(dateStr: string, endOfDay = false) {
+      const parts = String(dateStr).split("-");
+      if (parts.length !== 3) return dateStr;
+      const [y, m, d] = parts.map((p) => parseInt(p, 10));
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+      const hour = endOfDay ? 23 : 0;
+      const minute = endOfDay ? 59 : 0;
+      const second = endOfDay ? 59 : 0;
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+      return new Date(utcTs).toISOString();
+    }
+
+    const date_from = raw_date_from
+      ? expandIstDate(raw_date_from, false)
+      : undefined;
+    const date_to = raw_date_to ? expandIstDate(raw_date_to, true) : undefined;
+
+    const values: any[] = [];
+    let where = "WHERE 1=1";
+    let idx = 1;
+    if (date_from) {
+      where += ` AND t.created_at >= $${idx++}`;
+      values.push(date_from);
+    }
+    if (date_to) {
+      where += ` AND t.created_at <= $${idx++}`;
+      values.push(date_to);
+    }
+
+    const q = `
+      SELECT t.id as ticket_id, ts.name as status_name, mc.sources as sources, creator.email as email_from, t.tags as ticket_tags, t.description as ticket_description
+      FROM tickets t
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+      LEFT JOIN users creator ON t.created_by = creator.id
+      ${where}
+    `;
+
+    const r = await pool.query(q, values);
+
+    const tagMap: Record<string, any> = {};
+    const statusesSet = new Set<string>();
+
+    // Helper to map known domains to friendly tag names
+    function mapDomainToTag(domain: string | null) {
+      if (!domain) return null;
+      const d = domain.toLowerCase();
+      // Broad matching to cover subdomains and variations
+      if (d.includes("razorpay")) return "Razorpay";
+      if (d.includes("payswiff") || d.includes("pay-swiff")) return "Payswiff";
+      return null;
+    }
+
+    for (const row of r.rows) {
+      try {
+        const statusRaw = String(row.status_name || "").trim();
+        const status =
+          statusRaw === "" || /^unknown$/i.test(statusRaw)
+            ? "Manual"
+            : statusRaw;
+        statusesSet.add(status);
+
+        // Derive tag name from mail_config sources. Prefer rules that match the sender domain when available.
+        let tagName = "Manual";
+
+        // compute sender domain if present on ticket (from creator.email or embedded in ticket_description)
+        let senderDomain: string | null = null;
+        // try creator/email_from first
+        if (row.email_from) {
+          try {
+            const m = String(row.email_from)
+              .toLowerCase()
+              .match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/i);
+            if (m && m[1]) senderDomain = m[1].toLowerCase();
+          } catch (e) {
+            senderDomain = null;
+          }
+        }
+
+        // fallback: parse ticket_description for 'Email from:' patterns (strip HTML & decode entities)
+        if (!senderDomain && row.ticket_description) {
+          try {
+            const descRaw = String(row.ticket_description || "");
+            const stripHtml = (s: string) => s.replace(/<[^>]+>/g, " ");
+            const decodeEntities = (s: string) =>
+              s
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&nbsp;/g, " ")
+                .replace(/&amp;/g, "&")
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/g, '"');
+            const cleaned = decodeEntities(stripHtml(descRaw)).replace(
+              /\s+/g,
+              " ",
+            );
+
+            // Common pattern: Email from: someone@domain.com Received: <timestamp>
+            const m2 = cleaned.match(
+              /Email from:\s*([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i,
+            );
+            if (m2 && m2[2]) {
+              senderDomain = m2[2].toLowerCase();
+              if (senderDomain.includes("payswiff"))
+                console.log(
+                  `by-tag debug: parsed Payswiff from cleaned description ticket_id=${row.ticket_id} parsed=${senderDomain}`,
+                );
+            } else {
+              // Try to find any email in cleaned description
+              const m3 = cleaned.match(
+                /([A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,}))/i,
+              );
+              if (m3 && m3[2]) {
+                senderDomain = m3[2].toLowerCase();
+                if (senderDomain.includes("payswiff"))
+                  console.log(
+                    `by-tag debug: parsed Payswiff from cleaned description (fallback) ticket_id=${row.ticket_id} parsed=${senderDomain}`,
+                  );
+              }
+            }
+          } catch (e) {
+            // ignore
+            senderDomain = null;
+          }
+        }
+
+        // If sender domain maps to a known tag, use it immediately
+        const mappedFromSender = mapDomainToTag(senderDomain);
+        if (mappedFromSender) {
+          tagName = mappedFromSender;
+          if (mappedFromSender === "Payswiff") {
+            console.log(
+              `by-tag debug: mapped Payswiff from senderDomain=${senderDomain} ticket_id=${row.ticket_id} status=${status}`,
+            );
+          }
+        }
+
+        if (row.sources && tagName === "Manual") {
+          let sources = row.sources;
+          if (typeof sources === "string") {
+            try {
+              sources = JSON.parse(sources);
+            } catch (e) {
+              sources = null;
+            }
+          }
+
+          if (Array.isArray(sources) && sources.length > 0) {
+            // first try to find a matching rule by sender domain
+            if (senderDomain) {
+              for (const src of sources) {
+                if (!src || !Array.isArray(src.emailRules)) continue;
+                for (const rule of src.emailRules) {
+                  if (!rule || !rule.domain) continue;
+                  const domain = String(rule.domain || "").trim();
+                  if (!domain) continue;
+                  const stripped = domain.startsWith("@")
+                    ? domain.slice(1).toLowerCase()
+                    : domain.toLowerCase();
+
+                  // domain mapping check
+                  const mapped = mapDomainToTag(stripped);
+                  if (mapped) {
+                    tagName = mapped;
+                    break;
+                  }
+
+                  if (
+                    senderDomain === stripped ||
+                    senderDomain.endsWith("." + stripped)
+                  ) {
+                    const main = stripped.split(".")[0] || stripped;
+                    tagName = main
+                      .replace(/[^a-zA-Z0-9]/g, " ")
+                      .split(" ")
+                      .map(
+                        (w: string) => w.charAt(0).toUpperCase() + w.slice(1),
+                      )
+                      .join(" ");
+                    break;
+                  }
+                }
+                if (tagName !== "Manual") break;
+              }
+            }
+
+            // fallback: use first rule's domain if no match found
+            if (tagName === "Manual") {
+              outer2: for (const src of sources) {
+                if (!src || !Array.isArray(src.emailRules)) continue;
+                for (const rule of src.emailRules) {
+                  if (!rule || !rule.domain) continue;
+                  const domain = String(rule.domain || "").trim();
+                  if (!domain) continue;
+                  const stripped = domain.startsWith("@")
+                    ? domain.slice(1)
+                    : domain;
+
+                  const mapped = mapDomainToTag(stripped);
+                  if (mapped) {
+                    tagName = mapped;
+                    break outer2;
+                  }
+
+                  const main = stripped.split(".")[0] || stripped;
+                  tagName = main
+                    .replace(/[^a-zA-Z0-9]/g, " ")
+                    .split(" ")
+                    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(" ");
+                  break outer2;
+                }
+              }
+            }
+          }
+        }
+
+        // If we still don't have a derived tag, try ticket_tags fallback
+        if ((tagName === "Manual" || !tagName) && row.ticket_tags) {
+          let ttags = row.ticket_tags;
+          if (typeof ttags === "string") {
+            try {
+              ttags = JSON.parse(ttags);
+            } catch (e) {
+              ttags = null;
+            }
+          }
+          if (Array.isArray(ttags) && ttags.length > 0) {
+            const first = String(ttags[0] || "").trim();
+            if (first) tagName = first;
+          }
+        }
+
+        if (!tagMap[tagName]) tagMap[tagName] = { tag: tagName, counts: {} };
+        tagMap[tagName].counts[status] =
+          (tagMap[tagName].counts[status] || 0) + 1;
+      } catch (rowErr) {
+        console.warn(
+          "by-tag: failed to process a ticket row, skipping",
+          rowErr,
+        );
+        continue;
+      }
+    }
+
+    let tags = Object.values(tagMap);
+    const statuses = Array.from(statusesSet);
+
+    // If Payswiff not present in derived tags, scan ticket descriptions as a last-resort fallback
+    if (!tags.some((t: any) => String(t.tag).toLowerCase() === "payswiff")) {
+      for (const row of r.rows) {
+        try {
+          const desc = String(row.ticket_description || "").toLowerCase();
+          if (desc.includes("payswiff") || /@payswiff\./i.test(desc)) {
+            const statusRaw = String(row.status_name || "").trim();
+            const status =
+              statusRaw === "" || /^unknown$/i.test(statusRaw)
+                ? "Manual"
+                : statusRaw;
+            if (!tagMap["Payswiff"])
+              tagMap["Payswiff"] = { tag: "Payswiff", counts: {} };
+            tagMap["Payswiff"].counts[status] =
+              (tagMap["Payswiff"].counts[status] || 0) + 1;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      tags = Object.values(tagMap);
+    }
+
+    // Fallback: if no tags derived from tickets, try aggregating directly from mail_configs
+    if ((!tags || tags.length === 0) && (await (async () => true)())) {
+      const fq = `
+        SELECT mc.id as mc_id, mc.sources as sources, ts.name as status_name, COUNT(*) as count
+        FROM tickets t
+        LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+        LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+        ${where}
+        AND t.mail_config_id IS NOT NULL
+        GROUP BY mc.id, mc.sources, ts.name
+      `;
+      try {
+        const fr = await pool.query(fq, values);
+        const fallbackMap: Record<string, any> = {};
+        for (const row of fr.rows) {
+          const statusRaw = String(row.status_name || "").trim();
+          const status =
+            statusRaw === "" || /^unknown$/i.test(statusRaw)
+              ? "Manual"
+              : statusRaw;
+          const sources = row.sources;
+          let tagName = "Manual";
+          if (sources) {
+            let s = sources;
+            if (typeof s === "string") {
+              try {
+                s = JSON.parse(s);
+              } catch (e) {
+                s = null;
+              }
+            }
+            if (Array.isArray(s)) {
+              outer: for (const src of s) {
+                if (src && Array.isArray(src.emailRules)) {
+                  for (const rule of src.emailRules) {
+                    if (rule && rule.domain) {
+                      const domain = String(rule.domain || "").trim();
+                      if (!domain) continue;
+                      const stripped = domain.startsWith("@")
+                        ? domain.slice(1).toLowerCase()
+                        : domain.toLowerCase();
+                      const mapped = mapDomainToTag(stripped);
+                      if (mapped) {
+                        tagName = mapped;
+                        break outer;
+                      }
+                      const main = stripped.split(".")[0] || stripped;
+                      tagName = main
+                        .replace(/[^a-zA-Z0-9]/g, " ")
+                        .split(" ")
+                        .map((w: any) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(" ");
+                      break outer;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if (!fallbackMap[tagName])
+            fallbackMap[tagName] = { tag: tagName, counts: {} };
+          fallbackMap[tagName].counts[status] =
+            (fallbackMap[tagName].counts[status] || 0) + Number(row.count || 0);
+        }
+        const ftags = Object.values(fallbackMap);
+        if (ftags.length > 0) {
+          tags = ftags;
+        }
+      } catch (fe) {
+        console.warn("by-tag fallback failed", fe);
+      }
+    }
+
+    res.json({ tags, statuses });
+  } catch (err) {
+    console.error("Error fetching tag summary:", err);
+    // Return empty result instead of 500 so UI can render gracefully
+    res.json({ tags: [], statuses: [] });
+  }
+});
+
+// GET /api/tickets/assigned-options
+router.get("/assigned-options", async (req: Request, res: Response) => {
+  try {
+    // Primary attempt: join tickets -> users to get labels in one query
+    const q = `
+      SELECT DISTINCT t.assigned_to as assigned_to, u.first_name, u.last_name, u.email
+      FROM tickets t
+      LEFT JOIN users u ON t.assigned_to = u.id
+      ORDER BY u.first_name NULLS LAST, t.assigned_to NULLS LAST
+    `;
+    try {
+      const r = await pool.query(q, []);
+      const seen = new Set<string>();
+      const options: any[] = [];
+      for (const row of r.rows) {
+        const aid = row.assigned_to;
+        if (aid === null || aid === undefined) {
+          if (!seen.has("unassigned")) {
+            seen.add("unassigned");
+            options.push({ value: "unassigned", label: "Unassigned" });
+          }
+        } else {
+          const key = String(aid);
+          if (!seen.has(key)) {
+            seen.add(key);
+            let label = `User #${key}`;
+            if (row.first_name || row.last_name)
+              label = `${row.first_name || ""} ${row.last_name || ""}`.trim();
+            else if (row.email) label = row.email;
+            options.push({ value: key, label });
+          }
+        }
+      }
+      return res.json({ options });
+    } catch (primaryErr) {
+      console.warn(
+        "assigned-options primary query failed, falling back to two-step lookup",
+        primaryErr?.message || primaryErr,
+      );
+      // Fallback: get distinct assigned_to ids, then fetch users for those ids
+      try {
+        const r2 = await pool.query("SELECT DISTINCT assigned_to FROM tickets");
+        const ids: number[] = [];
+        let hasUnassigned = false;
+        for (const row of r2.rows) {
+          const aid = row.assigned_to;
+          if (aid === null || aid === undefined) {
+            hasUnassigned = true;
+          } else if (!isNaN(Number(aid))) {
+            ids.push(Number(aid));
+          }
+        }
+        const options: any[] = [];
+        if (hasUnassigned)
+          options.push({ value: "unassigned", label: "Unassigned" });
+        if (ids.length > 0) {
+          const ures = await pool.query(
+            `SELECT id, first_name, last_name, email FROM users WHERE id = ANY($1)`,
+            [ids],
+          );
+          const byId: Record<string, any> = {};
+          for (const u of ures.rows) {
+            const key = String(u.id);
+            let label = `User #${key}`;
+            if (u.first_name || u.last_name)
+              label = `${u.first_name || ""} ${u.last_name || ""}`.trim();
+            else if (u.email) label = u.email;
+            byId[key] = label;
+          }
+          // Preserve the ids order
+          for (const id of ids) {
+            const key = String(id);
+            options.push({ value: key, label: byId[key] || `User #${key}` });
+          }
+        }
+        return res.json({ options });
+      } catch (fallbackErr) {
+        console.error("assigned-options fallback failed", fallbackErr);
+        return res.json({ options: [] });
+      }
+    }
+  } catch (e) {
+    console.error("Error fetching assigned options:", e);
+    return res.json({ options: [] });
   }
 });
 

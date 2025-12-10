@@ -2272,7 +2272,16 @@ export default function ManageTickets() {
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {t.subject || t.track_id}
+                                {t.subject ? (
+                                  <>
+                                    {t.subject}
+                                    {t.track_id ? (
+                                      <span className="ml-2 text-xs text-gray-500">{t.track_id}</span>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  t.track_id
+                                )}
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">
@@ -2498,7 +2507,16 @@ export default function ManageTickets() {
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {t.subject || t.track_id}
+                                {t.subject ? (
+                                  <>
+                                    {t.subject}
+                                    {t.track_id ? (
+                                      <span className="ml-2 text-xs text-gray-500">{t.track_id}</span>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  t.track_id
+                                )}
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">

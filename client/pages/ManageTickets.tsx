@@ -2337,18 +2337,41 @@ export default function ManageTickets() {
                               disabled={deletingId === t.id}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                if (!confirm("Are you sure you want to delete this ticket? This action cannot be undone.")) return;
+                                if (
+                                  !confirm(
+                                    "Are you sure you want to delete this ticket? This action cannot be undone.",
+                                  )
+                                )
+                                  return;
                                 try {
                                   setDeletingId(t.id);
                                   await api.deleteTicket(t.id);
                                   // remove ticket from local state to reflect deletion immediately
-                                  setTickets((prev) => prev.filter((x) => x.id !== t.id));
-                                  setFilteredTickets((prev) => prev.filter((x) => x.id !== t.id));
-                                  setTotalTickets((n) => Math.max(0, (n || 1) - 1));
-                                  toast({ title: "Ticket deleted", description: "The ticket was removed successfully." });
+                                  setTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setFilteredTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setTotalTickets((n) =>
+                                    Math.max(0, (n || 1) - 1),
+                                  );
+                                  toast({
+                                    title: "Ticket deleted",
+                                    description:
+                                      "The ticket was removed successfully.",
+                                  });
                                 } catch (err: any) {
-                                  console.error("Failed to delete ticket:", err);
-                                  toast({ title: "Delete failed", description: err?.message || "Failed to delete ticket", variant: "destructive" });
+                                  console.error(
+                                    "Failed to delete ticket:",
+                                    err,
+                                  );
+                                  toast({
+                                    title: "Delete failed",
+                                    description:
+                                      err?.message || "Failed to delete ticket",
+                                    variant: "destructive",
+                                  });
                                 } finally {
                                   setDeletingId(null);
                                 }
@@ -2541,18 +2564,41 @@ export default function ManageTickets() {
                               disabled={deletingId === t.id}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                if (!confirm("Are you sure you want to delete this ticket? This action cannot be undone.")) return;
+                                if (
+                                  !confirm(
+                                    "Are you sure you want to delete this ticket? This action cannot be undone.",
+                                  )
+                                )
+                                  return;
                                 try {
                                   setDeletingId(t.id);
                                   await api.deleteTicket(t.id);
                                   // remove ticket from local state to reflect deletion immediately
-                                  setTickets((prev) => prev.filter((x) => x.id !== t.id));
-                                  setFilteredTickets((prev) => prev.filter((x) => x.id !== t.id));
-                                  setTotalTickets((n) => Math.max(0, (n || 1) - 1));
-                                  toast({ title: "Ticket deleted", description: "The ticket was removed successfully." });
+                                  setTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setFilteredTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setTotalTickets((n) =>
+                                    Math.max(0, (n || 1) - 1),
+                                  );
+                                  toast({
+                                    title: "Ticket deleted",
+                                    description:
+                                      "The ticket was removed successfully.",
+                                  });
                                 } catch (err: any) {
-                                  console.error("Failed to delete ticket:", err);
-                                  toast({ title: "Delete failed", description: err?.message || "Failed to delete ticket", variant: "destructive" });
+                                  console.error(
+                                    "Failed to delete ticket:",
+                                    err,
+                                  );
+                                  toast({
+                                    title: "Delete failed",
+                                    description:
+                                      err?.message || "Failed to delete ticket",
+                                    variant: "destructive",
+                                  });
                                 } finally {
                                   setDeletingId(null);
                                 }

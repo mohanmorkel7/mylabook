@@ -196,12 +196,33 @@ export function evaluateRuleChain(
   email: Email,
 ): boolean {
   if (!rules || rules.length === 0) return true;
-  let result = evaluateSingleRule(rules[0], email);
+  // Evaluate first rule and short-circuit if it's a 'does not contain' that fails
+  const firstRule = rules[0];
+  let result = evaluateSingleRule(firstRule, email);
+  if (
+    String((firstRule.operator || "").toLowerCase()).trim() === "does not contain" &&
+    !result
+  ) {
+    // explicit exclusion fails -> do not match
+    return false;
+  }
+
   for (let i = 1; i < rules.length; i++) {
     const prev = rules[i - 1];
     const op = prev.nextOperator || "END";
     if (op === "END") break;
-    const currentVal = evaluateSingleRule(rules[i], email);
+    const currentRule = rules[i];
+    const currentVal = evaluateSingleRule(currentRule, email);
+
+    // If current rule is a negative 'does not contain' and it fails (i.e., the forbidden
+    // value is present), then this should exclude the whole chain regardless of OR/AND
+    if (
+      String((currentRule.operator || "").toLowerCase()).trim() === "does not contain" &&
+      !currentVal
+    ) {
+      return false;
+    }
+
     if (op === "AND") result = result && currentVal;
     else if (op === "OR") result = result || currentVal;
   }

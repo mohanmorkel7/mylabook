@@ -291,8 +291,8 @@ router.get("/", async (req: Request, res: Response) => {
           (typeof ticket.description === "string"
             ? ticket.description.replace(/<[^>]*>/g, "").slice(0, 200)
             : ticket.description
-            ? String(ticket.description).slice(0, 200)
-            : ""),
+              ? String(ticket.description).slice(0, 200)
+              : ""),
       }));
       res.json({
         ...result,

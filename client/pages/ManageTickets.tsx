@@ -2276,7 +2276,9 @@ export default function ManageTickets() {
                                   <>
                                     {t.subject}
                                     {t.track_id ? (
-                                      <span className="ml-2 text-xs text-gray-500">{t.track_id}</span>
+                                      <span className="ml-2 text-xs text-gray-500">
+                                        {t.track_id}
+                                      </span>
                                     ) : null}
                                   </>
                                 ) : (
@@ -2511,7 +2513,9 @@ export default function ManageTickets() {
                                   <>
                                     {t.subject}
                                     {t.track_id ? (
-                                      <span className="ml-2 text-xs text-gray-500">{t.track_id}</span>
+                                      <span className="ml-2 text-xs text-gray-500">
+                                        {t.track_id}
+                                      </span>
                                     ) : null}
                                   </>
                                 ) : (

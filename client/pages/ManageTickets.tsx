@@ -201,6 +201,7 @@ export default function ManageTickets() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState<number>(Date.now());
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [overdueStatusId, setOverdueStatusId] = useState<number | null>(null);
   const serverTimeOffsetRef = useRef<number>(0); // clientNow - serverNow (ms) to adjust remaining time calculations
   const autoMarkedRef = useRef(new Set<number>());
@@ -2333,8 +2334,24 @@ export default function ManageTickets() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={(e) => {
+                              disabled={deletingId === t.id}
+                              onClick={async (e) => {
                                 e.stopPropagation();
+                                if (!confirm("Are you sure you want to delete this ticket? This action cannot be undone.")) return;
+                                try {
+                                  setDeletingId(t.id);
+                                  await api.deleteTicket(t.id);
+                                  // remove ticket from local state to reflect deletion immediately
+                                  setTickets((prev) => prev.filter((x) => x.id !== t.id));
+                                  setFilteredTickets((prev) => prev.filter((x) => x.id !== t.id));
+                                  setTotalTickets((n) => Math.max(0, (n || 1) - 1));
+                                  toast({ title: "Ticket deleted", description: "The ticket was removed successfully." });
+                                } catch (err: any) {
+                                  console.error("Failed to delete ticket:", err);
+                                  toast({ title: "Delete failed", description: err?.message || "Failed to delete ticket", variant: "destructive" });
+                                } finally {
+                                  setDeletingId(null);
+                                }
                               }}
                             >
                               <Trash size={14} />
@@ -2521,8 +2538,24 @@ export default function ManageTickets() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={(e) => {
+                              disabled={deletingId === t.id}
+                              onClick={async (e) => {
                                 e.stopPropagation();
+                                if (!confirm("Are you sure you want to delete this ticket? This action cannot be undone.")) return;
+                                try {
+                                  setDeletingId(t.id);
+                                  await api.deleteTicket(t.id);
+                                  // remove ticket from local state to reflect deletion immediately
+                                  setTickets((prev) => prev.filter((x) => x.id !== t.id));
+                                  setFilteredTickets((prev) => prev.filter((x) => x.id !== t.id));
+                                  setTotalTickets((n) => Math.max(0, (n || 1) - 1));
+                                  toast({ title: "Ticket deleted", description: "The ticket was removed successfully." });
+                                } catch (err: any) {
+                                  console.error("Failed to delete ticket:", err);
+                                  toast({ title: "Delete failed", description: err?.message || "Failed to delete ticket", variant: "destructive" });
+                                } finally {
+                                  setDeletingId(null);
+                                }
                               }}
                             >
                               <Trash size={14} />

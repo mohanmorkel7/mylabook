@@ -710,6 +710,7 @@ export class TicketRepository {
         t.id,
         t.track_id,
         t.subject,
+        LEFT(t.description, 200) AS description,
         t.priority_id,
         t.status_id,
         t.category_id,

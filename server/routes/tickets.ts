@@ -285,6 +285,14 @@ router.get("/", async (req: Request, res: Response) => {
       const ticketsWithFlag = result.tickets.map((ticket: any) => ({
         ...ticket,
         created_from_mail_config: Boolean(ticket.mail_config_id),
+        // Ensure a lightweight preview is always present for list views
+        description_preview:
+          ticket.description_preview ||
+          (typeof ticket.description === "string"
+            ? ticket.description.replace(/<[^>]*>/g, "").slice(0, 200)
+            : ticket.description
+            ? String(ticket.description).slice(0, 200)
+            : ""),
       }));
       res.json({
         ...result,

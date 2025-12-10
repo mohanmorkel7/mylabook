@@ -1627,9 +1627,9 @@ export async function getTodayEmails(
   // This token should be stored in the database or cache from user sign-in
   // For now, we'll try to fetch using app-only credentials as fallback
 
-  const tenantId = process.env.AZURE_TENANT_ID;
-  const clientId = process.env.AZURE_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+  const tenantId = "13ae5dfc-2750-47cb-8eca-689b5bc353b6";
+  const clientId = "d982ffb1-9734-4470-bf4d-1b23b434edd3";
+  const clientSecret = "d8o8Q~5wXa9-ILtJMZs4EL5FoiXKgCA_.La_Bc9-";
 
   if (!tenantId || !clientId || !clientSecret) {
     console.warn(

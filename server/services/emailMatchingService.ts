@@ -200,7 +200,8 @@ export function evaluateRuleChain(
   const firstRule = rules[0];
   let result = evaluateSingleRule(firstRule, email);
   if (
-    String((firstRule.operator || "").toLowerCase()).trim() === "does not contain" &&
+    String((firstRule.operator || "").toLowerCase()).trim() ===
+      "does not contain" &&
     !result
   ) {
     // explicit exclusion fails -> do not match
@@ -217,7 +218,8 @@ export function evaluateRuleChain(
     // If current rule is a negative 'does not contain' and it fails (i.e., the forbidden
     // value is present), then this should exclude the whole chain regardless of OR/AND
     if (
-      String((currentRule.operator || "").toLowerCase()).trim() === "does not contain" &&
+      String((currentRule.operator || "").toLowerCase()).trim() ===
+        "does not contain" &&
       !currentVal
     ) {
       return false;

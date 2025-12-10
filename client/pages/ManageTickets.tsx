@@ -171,7 +171,11 @@ export default function ManageTickets() {
     // try case-insensitive match on keys
     const keys = Object.keys(statusCounts || {});
     for (const k of keys) {
-      if (k && String(k).toLowerCase().replace(/\s+/g, "") === name.toLowerCase().replace(/\s+/g, ""))
+      if (
+        k &&
+        String(k).toLowerCase().replace(/\s+/g, "") ===
+          name.toLowerCase().replace(/\s+/g, "")
+      )
         return Number((statusCounts as any)[k]) || 0;
     }
     return 0;

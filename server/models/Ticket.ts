@@ -730,7 +730,12 @@ export class TicketRepository {
       subject: row.subject,
       description: row.description,
       // Server-side lightweight preview (plain-text, first 200 chars) to speed up list views
-      description_preview: (typeof row.description === "string" ? row.description.replace(/<[^>]*>/g, "").slice(0, 200) : (row.description ? String(row.description).slice(0, 200) : "")),
+      description_preview:
+        typeof row.description === "string"
+          ? row.description.replace(/<[^>]*>/g, "").slice(0, 200)
+          : row.description
+            ? String(row.description).slice(0, 200)
+            : "",
       priority_id: row.priority_id,
       status_id: row.status_id,
       category_id: row.category_id,

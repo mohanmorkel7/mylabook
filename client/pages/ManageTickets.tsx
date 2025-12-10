@@ -1157,12 +1157,19 @@ export default function ManageTickets() {
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(ticket.id);
-                                    setTickets((prev) => prev.filter((p) => p.id !== ticket.id));
+                                    setTickets((prev) =>
+                                      prev.filter((p) => p.id !== ticket.id),
+                                    );
                                     // Also remove from createdTickets if present
                                     setCreatedTickets((prev) =>
                                       prev.filter((ct) => {
-                                        const tid = ct.ticket_id ?? ct.ticket_ref_id ?? ct.id;
-                                        return Number(tid) !== Number(ticket.id);
+                                        const tid =
+                                          ct.ticket_id ??
+                                          ct.ticket_ref_id ??
+                                          ct.id;
+                                        return (
+                                          Number(tid) !== Number(ticket.id)
+                                        );
                                       }),
                                     );
                                     toast({
@@ -1185,7 +1192,17 @@ export default function ManageTickets() {
                           </div>
 
                           <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div dangerouslySetInnerHTML={{ __html: (ticket.description_preview || (ticket.description ? String(ticket.description).replace(/<[^>]*>/g, "").slice(0,200) : "")) }} />
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html:
+                                  ticket.description_preview ||
+                                  (ticket.description
+                                    ? String(ticket.description)
+                                        .replace(/<[^>]*>/g, "")
+                                        .slice(0, 200)
+                                    : ""),
+                              }}
+                            />
                           </div>
 
                           <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
@@ -1391,12 +1408,21 @@ export default function ManageTickets() {
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(source.id);
-                                    setTickets((prev) => prev.filter((p) => p.id !== source.id));
+                                    setTickets((prev) =>
+                                      prev.filter((p) => p.id !== source.id),
+                                    );
                                     // Also remove from createdTickets list
-                                    setCreatedTickets((prev) => prev.filter((ct) => {
-                                      const tid = ct.ticket_id ?? ct.ticket_ref_id ?? ct.id;
-                                      return Number(tid) !== Number(source.id);
-                                    }));
+                                    setCreatedTickets((prev) =>
+                                      prev.filter((ct) => {
+                                        const tid =
+                                          ct.ticket_id ??
+                                          ct.ticket_ref_id ??
+                                          ct.id;
+                                        return (
+                                          Number(tid) !== Number(source.id)
+                                        );
+                                      }),
+                                    );
                                     toast({
                                       title: "Deleted",
                                       description: "Ticket deleted",
@@ -1417,7 +1443,17 @@ export default function ManageTickets() {
                           </div>
 
                           <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div dangerouslySetInnerHTML={{ __html: (source.description_preview || (source.description ? String(source.description).replace(/<[^>]*>/g, "").slice(0,200) : (ticket.email_subject || ""))) }} />
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html:
+                                  source.description_preview ||
+                                  (source.description
+                                    ? String(source.description)
+                                        .replace(/<[^>]*>/g, "")
+                                        .slice(0, 200)
+                                    : ticket.email_subject || ""),
+                              }}
+                            />
                           </div>
 
                           <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">

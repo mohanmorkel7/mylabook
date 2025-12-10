@@ -186,6 +186,9 @@ export interface TicketFilters {
   tags?: string[];
   date_from?: string;
   date_to?: string;
+  // New flags
+  unassigned?: boolean;
+  created_from_mail_config?: boolean;
 }
 
 export class TicketRepository {
@@ -579,6 +582,20 @@ export class TicketRepository {
       queryParams.push(filters.date_to);
     }
 
+    // Support 'unassigned' (tickets with no assignee)
+    if (filters.unassigned) {
+      whereConditions.push(`t.assigned_to IS NULL`);
+    }
+
+    // Support filtering by whether ticket was created from a mail config
+    if (typeof filters.created_from_mail_config !== "undefined") {
+      if (filters.created_from_mail_config) {
+        whereConditions.push(`t.mail_config_id IS NOT NULL`);
+      } else {
+        whereConditions.push(`t.mail_config_id IS NULL`);
+      }
+    }
+
     // If requested, restrict results to tickets visible to a specific viewer (non-admin users)
     if (restrictToViewer && viewerId) {
       whereConditions.push(
@@ -593,36 +610,37 @@ export class TicketRepository {
         ? `WHERE ${whereConditions.join(" AND ")}`
         : "";
 
-    // Get total count
+    // Get total count - attempt exact COUNT(*) but bail out quickly and fall back to estimate if slow
     if (debug)
       console.log("[TicketRepository.getAll] starting total count computation");
     let total = 0;
     try {
-      if (!whereClause || whereClause.trim() === "") {
-        // No filters — use PostgreSQL estimated row count for performance
-        const estRes = await pool.query(
-          "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
-        );
-        const est =
-          estRes.rows[0] && estRes.rows[0].estimate
-            ? Number(estRes.rows[0].estimate)
-            : 0;
-        total = Math.max(0, Math.floor(est));
-      } else {
-        const countQuery = `
-          SELECT COUNT(*)
-          FROM tickets t
-          ${whereClause}
-        `;
-        const countResult = await pool.query(countQuery, queryParams);
-        total = parseInt(countResult.rows[0].count);
-      }
-    } catch (countErr) {
-      console.warn(
-        "Failed to compute total count, falling back to estimate:",
-        countErr?.message || countErr,
+      const countQuery = `
+        SELECT COUNT(*)
+        FROM tickets t
+        ${whereClause}
+      `;
+
+      // Run COUNT(*) but timeout if takes too long (fast path preferred). This avoids long-running COUNT on very large tables.
+      const COUNT_TIMEOUT_MS = 2000; // 2s
+      const countPromise = pool.query(countQuery, queryParams);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("COUNT timed out")),
+          COUNT_TIMEOUT_MS,
+        ),
       );
+
+      let countResult;
       try {
+        countResult = await Promise.race([countPromise, timeoutPromise]);
+        total = parseInt(countResult.rows[0].count);
+      } catch (countErr) {
+        // COUNT timed out or failed; fall back to an estimate
+        console.warn(
+          "COUNT(*) slow or failed, falling back to estimate:",
+          countErr?.message || countErr,
+        );
         const estRes2 = await pool.query(
           "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
         );
@@ -630,9 +648,13 @@ export class TicketRepository {
           estRes2.rows[0] && estRes2.rows[0].estimate
             ? Number(estRes2.rows[0].estimate)
             : 0;
-      } catch (e) {
-        total = 0;
       }
+    } catch (outerErr) {
+      console.warn(
+        "Failed to determine total tickets count:",
+        outerErr?.message || outerErr,
+      );
+      total = 0;
     }
 
     // Get status counts (without filters to show total counts per status)
@@ -685,14 +707,26 @@ export class TicketRepository {
 
     const ticketsQuery = `
       SELECT
-        t.*,
+        t.id,
+        t.track_id,
+        t.subject,
+        t.priority_id,
+        t.status_id,
+        t.category_id,
+        t.team_id,
+        t.bucket_id,
+        t.demand,
+        t.created_by,
+        t.assigned_to,
+        t.mail_config_id,
         (EXTRACT(EPOCH FROM (t.sla_time - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
         ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
         tc.name as category_name, tc.color as category_color,
         tb.name as bucket_name, tb.team_id as bucket_team_id,
         creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
-        assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
+        assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email,
+        mc.sources as mail_config_sources
       FROM tickets t
       LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
@@ -700,6 +734,7 @@ export class TicketRepository {
       LEFT JOIN ticket_buckets tb ON t.bucket_id = tb.id
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users assignee ON t.assigned_to = assignee.id
+      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
       ${whereClause}
       ORDER BY t.created_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
@@ -711,17 +746,37 @@ export class TicketRepository {
         queryParams.concat([limit, offset]),
       );
     queryParams.push(limit, offset);
+
     let ticketsResult;
+    const client = await pool.connect();
+    const TICKETS_QUERY_TIMEOUT_MS = 15000; // 15 seconds
     try {
-      ticketsResult = await pool.query(ticketsQuery, queryParams);
-      if (debug)
-        console.log(
-          "[TicketRepository.getAll] ticketsResult rows count:",
-          ticketsResult.rows ? ticketsResult.rows.length : 0,
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `SET LOCAL statement_timeout = ${TICKETS_QUERY_TIMEOUT_MS}`,
         );
-    } catch (qErr) {
-      console.error("[TicketRepository.getAll] tickets query failed:", qErr);
-      throw qErr;
+        ticketsResult = await client.query(ticketsQuery, queryParams);
+        if (debug)
+          console.log(
+            "[TicketRepository.getAll] ticketsResult rows count:",
+            ticketsResult.rows ? ticketsResult.rows.length : 0,
+          );
+        await client.query("COMMIT");
+      } catch (qErr) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (e) {
+          // ignore rollback errors
+        }
+        console.error(
+          "[TicketRepository.getAll] tickets query failed:",
+          qErr?.message || qErr,
+        );
+        throw qErr;
+      }
+    } finally {
+      client.release();
     }
 
     const tickets: Ticket[] = ticketsResult.rows.map((row) => ({
@@ -845,6 +900,23 @@ export class TicketRepository {
       // Expose watcher_user_ids column if available
       watchers:
         row.watcher_user_ids !== undefined ? row.watcher_user_ids : undefined,
+      // Expose mail_config_sources if available (parse JSON string if necessary)
+      mail_config_sources:
+        row.mail_config_sources !== undefined
+          ? typeof row.mail_config_sources === "string"
+            ? (() => {
+                try {
+                  return JSON.parse(row.mail_config_sources);
+                } catch (e) {
+                  return null;
+                }
+              })()
+            : row.mail_config_sources
+          : undefined,
+      ever_overdue: row.ever_overdue === true,
+      overdue_at: row.overdue_at
+        ? TicketRepository.convertISTToUTC(String(row.overdue_at))
+        : null,
     }));
 
     const pages = Math.ceil(total / limit);
@@ -1160,6 +1232,19 @@ export class TicketRepository {
                 "UPDATE tickets SET closed_at = CURRENT_TIMESTAMP WHERE id = $1",
                 [id],
               );
+            }
+
+            // If status name indicates 'overdue', mark ever_overdue and overdue_at
+            try {
+              const nm = String(status.rows[0]?.name || "").toLowerCase();
+              if (nm.includes("overdue")) {
+                await pool.query(
+                  "UPDATE tickets SET ever_overdue = TRUE, overdue_at = COALESCE(overdue_at, NOW()) WHERE id = $1",
+                  [id],
+                );
+              }
+            } catch (e) {
+              console.warn("Failed to set ever_overdue on status change", e);
             }
           }
         }

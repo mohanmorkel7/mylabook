@@ -832,6 +832,17 @@ router.post(
 
       if (await isDatabaseAvailable()) {
         const created = await WorkflowRepository.createComment(commentData);
+        // Parse attachments if stored as JSON string
+        let attachments = [] as any[];
+        try {
+          if (created.attachments)
+            attachments =
+              typeof created.attachments === "string"
+                ? JSON.parse(created.attachments)
+                : created.attachments;
+        } catch (e) {
+          attachments = [];
+        }
         // Map created comment to client's chat shape
         const mappedCreated = {
           id: created.id,
@@ -840,7 +851,7 @@ router.post(
           message: created.comment_text || created.message || "",
           message_type: created.comment_type || "comment",
           is_rich_text: !!created.is_rich_text,
-          attachments: created.attachments || [],
+          attachments,
           created_at: created.created_at,
           updated_at: created.updated_at,
           step_id: created.step_id,

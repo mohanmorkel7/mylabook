@@ -136,7 +136,8 @@ router.get(
       t.status_id,
       ts.name as status_name,
       t.sla_time,
-      t.updated_at as updated_at
+      t.updated_at as updated_at,
+      mc.sources as mail_config_sources
       FROM tickets t
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
       LEFT JOIN created_tickets ct ON ct.ticket_id = t.id AND ct.mail_config_id = mc.id
@@ -242,6 +243,17 @@ router.get(
             ? JSON.parse(row.mitra_response)
             : row.mitra_response
           : null,
+        // Include parsed mail_config sources so client can determine provider/badges
+        mail_config_sources:
+          row.mail_config_sources && typeof row.mail_config_sources === "string"
+            ? (() => {
+                try {
+                  return JSON.parse(row.mail_config_sources);
+                } catch (e) {
+                  return null;
+                }
+              })()
+            : row.mail_config_sources || null,
       }));
 
       // Get total count for pagination

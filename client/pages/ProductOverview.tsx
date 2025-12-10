@@ -248,7 +248,7 @@ const ProductOverview: React.FC = () => {
     if (!window.confirm("Delete this project?")) return;
     try {
       await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });
-      navigate("/products");
+      navigate("/product");
     } catch (e) {
       console.error(e);
       alert("Failed to delete project");

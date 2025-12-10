@@ -784,7 +784,7 @@ export class TicketRepository {
       id: row.id,
       track_id: row.track_id,
       subject: row.subject,
-      description: undefined,
+      description: row.description,
       // Server-side lightweight preview (plain-text, first 200 chars) to speed up list views
       description_preview:
         typeof row.description === "string"

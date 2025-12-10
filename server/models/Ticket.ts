@@ -706,40 +706,42 @@ export class TicketRepository {
       );
 
     const ticketsQuery = `
-      SELECT
-        t.id,
-        t.track_id,
-        t.subject,
-        LEFT(t.description, 200) AS description,
-        t.priority_id,
-        t.status_id,
-        t.category_id,
-        t.team_id,
-        t.bucket_id,
-        t.demand,
-        t.created_by,
-        t.assigned_to,
-        t.mail_config_id,
-        (EXTRACT(EPOCH FROM (t.sla_time - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
-        tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
-        ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
-        tc.name as category_name, tc.color as category_color,
-        tb.name as bucket_name, tb.team_id as bucket_team_id,
-        creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
-        assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email,
-        mc.sources as mail_config_sources
-      FROM tickets t
-      LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
-      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
-      LEFT JOIN ticket_categories tc ON t.category_id = tc.id
-      LEFT JOIN ticket_buckets tb ON t.bucket_id = tb.id
-      LEFT JOIN users creator ON t.created_by = creator.id
-      LEFT JOIN users assignee ON t.assigned_to = assignee.id
-      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
-      ${whereClause}
-      ORDER BY t.created_at DESC
-      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
-    `;
+    SELECT
+      t.id,
+      t.track_id,
+      t.subject,
+      LEFT(t.description, 200) AS description,
+      t.priority_id,
+      t.status_id,
+      t.category_id,
+      t.team_id,
+      t.bucket_id,
+      t.demand,
+      t.created_by,
+      t.assigned_to,
+      t.mail_config_id,
+      t.created_at,
+      t.updated_at,
+      (EXTRACT(EPOCH FROM (t.sla_time - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
+      tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
+      ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
+      tc.name as category_name, tc.color as category_color,
+      tb.name as bucket_name, tb.team_id as bucket_team_id,
+      creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
+      assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email,
+      mc.sources as mail_config_sources
+    FROM tickets t
+    LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
+    LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+    LEFT JOIN ticket_categories tc ON t.category_id = tc.id
+    LEFT JOIN ticket_buckets tb ON t.bucket_id = tb.id
+    LEFT JOIN users creator ON t.created_by = creator.id
+    LEFT JOIN users assignee ON t.assigned_to = assignee.id
+    LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+    ${whereClause}
+    ORDER BY t.created_at DESC
+    LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+  `;
 
     if (debug)
       console.log(

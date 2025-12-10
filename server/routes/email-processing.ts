@@ -124,7 +124,7 @@ router.get(
       ct.mitra_ticket_id as mitra_ticket_id,
       t.subject as email_subject,
       creator.email as email_from,
-      t.description as description,
+      LEFT(t.description, 200) AS description,
       t.created_at,
       mc.name as config_name,
       mc.project_id as project_id,

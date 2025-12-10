@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Filter, X, Edit, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import {
   Select,
   SelectContent,
@@ -15,6 +17,18 @@ import {
 } from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
 import { formatDistanceToNowStrict } from "date-fns";
+
+// Safe wrapper: formats distance to now strictly, returns 'Unknown' on invalid dates
+const safeFormatDistanceToNow = (d?: string | number | Date | null): string => {
+  try {
+    if (!d) return "Unknown";
+    const dt = d instanceof Date ? d : new Date(d as any);
+    if (isNaN(dt.getTime())) return "Unknown";
+    return formatDistanceToNowStrict(dt as Date);
+  } catch (e) {
+    return "Unknown";
+  }
+};
 import { useAuth } from "@/lib/auth-context";
 import TicketCharts from "@/components/charts/TicketCharts";
 
@@ -69,6 +83,7 @@ interface Ticket {
   closed_at?: string;
   created_from_mail_config?: boolean;
   mail_config_id?: number;
+  mail_config_sources?: any;
   created_at: string;
   updated_at: string;
   __server_time_ms?: number;
@@ -106,10 +121,10 @@ const PRIORITY_OPTIONS = {
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
+  { value: "pending", label: "Pending" },
   { value: "in_progress", label: "In Progress" },
-  { value: "resolved", label: "Resolved" },
+  { value: "overdue", label: "Overdue" },
   { value: "closed", label: "Closed" },
-  { value: "on_hold", label: "On Hold" },
 ];
 
 export default function ManageTickets() {
@@ -119,6 +134,68 @@ export default function ManageTickets() {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [serverOverdueCounts, setServerOverdueCounts] = useState<any>(null);
+
+  const handleSummaryFetched = (summary: any) => {
+    try {
+      // Map statuses array to statusCounts object
+      if (summary && Array.isArray(summary.statuses)) {
+        const map: Record<string, number> = {};
+        for (const s of summary.statuses) {
+          const name = String(s.status || s.status_name || s.name || "").trim();
+          map[name] = Number(s.count || s.count || 0);
+        }
+        setStatusCounts(map);
+      }
+      if (summary && summary.overdue_counts) {
+        setServerOverdueCounts(summary.overdue_counts);
+      }
+    } catch (e) {
+      console.warn("handleSummaryFetched failed", e);
+    }
+  };
+
+  // Derived counts: overdue vs non-overdue for open and closed tickets
+  const {
+    overdueOpenCount,
+    nonOverdueOpenCount,
+    overdueClosedCount,
+    nonOverdueClosedCount,
+  } = ((): {
+    overdueOpenCount: number;
+    nonOverdueOpenCount: number;
+    overdueClosedCount: number;
+    nonOverdueClosedCount: number;
+  } => {
+    let overdueOpen = 0;
+    let nonOverdueOpen = 0;
+    let overdueClosed = 0;
+    let nonOverdueClosed = 0;
+
+    for (const t of tickets) {
+      const isClosed = Boolean(t.status && (t.status as any).is_closed);
+      const slaMs = (t as any).sla_remaining_ms;
+      const isOverdue =
+        (t.status &&
+          ((t.status as any).name || "").toLowerCase() === "overdue") ||
+        (slaMs !== null && typeof slaMs !== "undefined" && Number(slaMs) <= 0);
+
+      if (isClosed) {
+        if (isOverdue) overdueClosed += 1;
+        else nonOverdueClosed += 1;
+      } else {
+        if (isOverdue) overdueOpen += 1;
+        else nonOverdueOpen += 1;
+      }
+    }
+
+    return {
+      overdueOpenCount: overdueOpen,
+      nonOverdueOpenCount: nonOverdueOpen,
+      overdueClosedCount: overdueClosed,
+      nonOverdueClosedCount: nonOverdueClosed,
+    };
+  })();
   const [createdTickets, setCreatedTickets] = useState<any[]>([]);
   const [createdTicketsCount, setCreatedTicketsCount] = useState<number>(0);
   const [users, setUsers] = useState<User[]>([]);
@@ -128,6 +205,74 @@ export default function ManageTickets() {
   const serverTimeOffsetRef = useRef<number>(0); // clientNow - serverNow (ms) to adjust remaining time calculations
   const autoMarkedRef = useRef(new Set<number>());
   const { user: currentUser } = useAuth();
+  const [sourceTags, setSourceTags] = useState<string[]>([]);
+  const [statusesList, setStatusesList] = useState<any[]>([]);
+  const [statusesMap, setStatusesMap] = useState<Record<string, number>>({});
+  const [assignedOptionsState, setAssignedOptionsState] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const serverFilteredRef = useRef(false);
+
+  // Expose getMailConfigProviderName on window for TicketCharts to use
+  useEffect(() => {
+    const getMailConfigProviderName = (
+      sources: any,
+      sampleText?: string,
+    ): string | null => {
+      if (!sources) return null;
+      try {
+        const arr = Array.isArray(sources)
+          ? sources
+          : typeof sources === "string"
+            ? JSON.parse(sources)
+            : null;
+        if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
+
+        const senderEmail = extractEmailFromText(sampleText || "") || null;
+        const senderDomain = senderEmail
+          ? senderEmail.split("@").slice(1).join("@").toLowerCase()
+          : null;
+
+        // First try to find a rule whose domain matches the sender's domain
+        if (senderDomain) {
+          for (const src of arr) {
+            if (src && Array.isArray(src.emailRules)) {
+              for (const rule of src.emailRules) {
+                if (rule && rule.domain) {
+                  const ruleDomain = String(rule.domain || "").trim();
+                  const strippedRule = ruleDomain.startsWith("@")
+                    ? ruleDomain.slice(1).toLowerCase()
+                    : ruleDomain.toLowerCase();
+                  // match by exact suffix (e.g., payswiff.com matches subdomains too)
+                  if (
+                    senderDomain === strippedRule ||
+                    senderDomain.endsWith("." + strippedRule)
+                  ) {
+                    return formatProviderNameFromDomain(strippedRule);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Fallback: return first rule's provider name
+        for (const src of arr) {
+          if (src && Array.isArray(src.emailRules)) {
+            for (const rule of src.emailRules) {
+              if (rule && rule.domain) {
+                return formatProviderNameFromDomain(String(rule.domain));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        return null;
+      }
+      return null;
+    };
+    (window as any).getMailConfigProviderName = getMailConfigProviderName;
+  }, []);
 
   // realtime clock for countdowns
   useEffect(() => {
@@ -135,6 +280,112 @@ export default function ManageTickets() {
     return () => clearInterval(iv);
   }, []);
   const [activeTab, setActiveTab] = useState<"all" | "created">("all");
+
+  // Derive provider name from mail_config sources. Prefer a rule that matches the email sender when possible.
+  function extractEmailFromText(text: string | undefined): string | null {
+    if (!text) return null;
+    try {
+      const m = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      return m ? m[0].toLowerCase() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function formatProviderNameFromDomain(domain: string): string {
+    const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+    const main = stripped.split(".")[0] || stripped;
+    return main
+      .replace(/[^a-zA-Z0-9]/g, " ")
+      .split(" ")
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+
+  function getMailConfigProviderName(
+    sources: any,
+    sampleText?: string,
+  ): string | null {
+    if (!sources) return null;
+    try {
+      const arr = Array.isArray(sources)
+        ? sources
+        : typeof sources === "string"
+          ? JSON.parse(sources)
+          : null;
+      if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
+
+      const senderEmail = extractEmailFromText(sampleText || "") || null;
+      const senderDomain = senderEmail
+        ? senderEmail.split("@").slice(1).join("@").toLowerCase()
+        : null;
+
+      // First try to find a rule whose domain matches the sender's domain
+      if (senderDomain) {
+        for (const src of arr) {
+          if (src && Array.isArray(src.emailRules)) {
+            for (const rule of src.emailRules) {
+              if (rule && rule.domain) {
+                const ruleDomain = String(rule.domain || "").trim();
+                const strippedRule = ruleDomain.startsWith("@")
+                  ? ruleDomain.slice(1).toLowerCase()
+                  : ruleDomain.toLowerCase();
+                // match by exact suffix (e.g., payswiff.com matches subdomains too)
+                if (
+                  senderDomain === strippedRule ||
+                  senderDomain.endsWith("." + strippedRule)
+                ) {
+                  return formatProviderNameFromDomain(strippedRule);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback: return first rule's provider name
+      for (const src of arr) {
+        if (src && Array.isArray(src.emailRules)) {
+          for (const rule of src.emailRules) {
+            if (rule && rule.domain) {
+              return formatProviderNameFromDomain(String(rule.domain));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
+
+  // Helper function to classify a ticket into a tag based on description
+  const getTicketTag = (ticket: any): string => {
+    try {
+      const desc = String(ticket.description || "").toLowerCase();
+      if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
+        return "Razorpay";
+      }
+      if (desc.includes("payswiff") || desc.includes("@payswiff.com")) {
+        return "Payswiff";
+      }
+    } catch (e) {
+      // Silently ignore errors
+    }
+    return "Manual";
+  };
+
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDateString = (): string => {
+    const now = new Date();
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const ist = new Date(now.getTime() + istOffsetMs);
+    const yyyy = ist.getUTCFullYear();
+    const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(ist.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const [filters, setFilters] = useState<FilterOptions>({
     searchText: "",
     priority: "",
@@ -150,11 +401,14 @@ export default function ManageTickets() {
 
   // Show/hide filters and pagination state
   const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [pageSize, setPageSize] = useState<number>(10);
+  const filtersRef = useRef<HTMLDivElement | null>(null);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   useEffect(() => {
     fetchTickets(currentPage);
     fetchUsers();
+    fetchTags();
+    fetchAssignedOptions();
     // Always refresh created tickets count so the tab displays an accurate value
     fetchCreatedTicketsCount();
     if (activeTab === "created") {
@@ -171,19 +425,140 @@ export default function ManageTickets() {
     return () => {
       window.removeEventListener("createdTicketsUpdated", handler);
     };
-  }, [activeTab, currentPage]);
+  }, [activeTab, currentPage, pageSize]);
 
+  // When filters change, fetch fresh results from server (reset to page 1)
   useEffect(() => {
-    applyFilters();
-  }, [filters, tickets]);
+    setCurrentPage(1);
+    fetchTickets(1);
+  }, [filters]);
+
+  // Extract tags from tickets and update dropdown (must run before applyFilters)
+  useEffect(() => {
+    if (tickets && tickets.length > 0) {
+      // Extract tags from current tickets instead of making a new API call
+      const uniqueTags = new Set<string>();
+      uniqueTags.add("Manual");
+
+      for (const ticket of tickets) {
+        const tag = getTicketTag(ticket);
+        uniqueTags.add(tag);
+      }
+
+      // Convert set to array and sort with Manual first
+      const tagList = Array.from(uniqueTags).sort((a, b) => {
+        if (a === "Manual") return -1;
+        if (b === "Manual") return 1;
+        return a.localeCompare(b);
+      });
+
+      console.debug(
+        "[ManageTickets] Updated source tags from tickets:",
+        tagList,
+      );
+      setSourceTags(tagList);
+    }
+  }, [tickets]);
+
+  // Auto-mark tickets as overdue when SLA time reaches 0:00:00 (check every 15 seconds)
+  useEffect(() => {
+    if (!overdueStatusId) return;
+
+    const checkAndMarkOverdue = () => {
+      // Check each ticket (not just filtered) for overdue SLA
+      const ticketsToMarkOverdue = tickets.filter((t) => {
+        const slaMs = computeSlaMsForTicket(t);
+        return slaMs !== null && slaMs <= 0;
+      });
+
+      // Mark each overdue ticket
+      for (const ticket of ticketsToMarkOverdue) {
+        markOverdue(ticket);
+      }
+    };
+
+    // Check immediately
+    checkAndMarkOverdue();
+
+    // Set up interval to check every 15 seconds
+    const interval = setInterval(checkAndMarkOverdue, 15000);
+
+    return () => clearInterval(interval);
+  }, [overdueStatusId, tickets]);
+
+  // NOTE: applyFilters is now called directly in fetchTickets after normalizing data
+  // No need to call it here since we handle filtering there
+  // useEffect(() => {
+  //   applyFilters();
+  // }, [tickets]);
 
   const fetchTickets = async (page: number = 1) => {
     try {
       setIsLoading(true);
-      const response = await api.get(`/tickets?page=${page}&limit=20`);
+
+      // Build server-side filters
+      const serverFilters: any = {};
+      if (filters.searchText) serverFilters.search = filters.searchText;
+      if (
+        filters.priority !== undefined &&
+        String(filters.priority).trim() !== ""
+      ) {
+        const pid = Number.parseInt(String(filters.priority), 10);
+        if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
+      }
+      // Apply date filters for all tabs
+      if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
+      if (filters.dateTo) serverFilters.date_to = filters.dateTo;
+
+      // status -> map to status_id using statusesMap
+      if (
+        filters.status !== undefined &&
+        String(filters.status).trim() !== ""
+      ) {
+        const key = String(filters.status || "").toLowerCase();
+        const normalizedKey = key
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+        const sid = statusesMap[normalizedKey];
+        if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid)))
+          serverFilters.status_id = Number(sid);
+      }
+
+      // assigned to
+      if (
+        filters.assignedTo !== undefined &&
+        String(filters.assignedTo).trim() !== ""
+      ) {
+        if (filters.assignedTo === "unassigned") {
+          serverFilters.unassigned = true;
+        } else {
+          const aid = Number.parseInt(String(filters.assignedTo), 10);
+          if (!Number.isNaN(aid)) serverFilters.assigned_to = aid;
+        }
+      }
+
+      // Note: source/tag filter is applied client-side based on description analysis
+      // Don't apply to server filters
+
+      const response = await api.getTickets(serverFilters, page, pageSize);
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
-      const ticketsArray = data?.tickets ?? (Array.isArray(data) ? data : []);
+      console.debug("[ManageTickets] fetchTickets response data:", data);
+      // Support multiple response shapes: tickets, data.tickets, rows, items, or direct array
+      const ticketsArray =
+        data?.tickets ??
+        data?.data?.tickets ??
+        data?.rows ??
+        data?.items ??
+        (Array.isArray(data) ? data : []);
+      console.debug(
+        "[ManageTickets] fetchTickets ticketsArray length:",
+        (ticketsArray || []).length,
+        "page:",
+        page,
+        "pageSize:",
+        pageSize,
+      );
       // Capture server time when provided to correct client/server clock skew
       let serverMs: number | null = null;
       if (data?.server_time) {
@@ -208,6 +583,12 @@ export default function ManageTickets() {
 
         return {
           ...t,
+          priority_id: ((): number | null => {
+            const val =
+              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+            const num = Number(val);
+            return Number.isFinite(num) ? num : null;
+          })(),
           assigned_to_id:
             t.assigned_to_id ??
             (t.assigned_to !== undefined && t.assigned_to !== null
@@ -223,14 +604,239 @@ export default function ManageTickets() {
           __fetched_at_ms: fetchClientMs,
         };
       });
+
+      // Apply filters to normalized tickets and set both state variables
+      if (normalized.length === 0) {
+        console.error(
+          "[ManageTickets] ERROR: normalized array is EMPTY after parsing!",
+        );
+        console.error("[ManageTickets] Response was:", response);
+        console.error("[ManageTickets] Data was:", data);
+        console.error("[ManageTickets] ticketsArray was:", ticketsArray);
+      }
+      console.debug(
+        "[ManageTickets] setTickets called with count:",
+        normalized.length,
+        "tickets:",
+        normalized.map((t: any) => ({ id: t.id, subject: t.subject })),
+      );
       setTickets(normalized);
+      let filtered = [...normalized];
+      console.debug(
+        "[ManageTickets] Starting filter application with filtered.length:",
+        filtered.length,
+      );
+      console.debug("[ManageTickets] fetchTickets filtering START:", {
+        normalized_length: normalized.length,
+        filters,
+        filters_source_value: filters.source,
+        filters_source_is_empty: filters.source === "",
+        filters_source_truthy: Boolean(filters.source),
+      });
+
+      // Apply all filters the same way applyFilters does
+      if (filters.searchText) {
+        const searchLower = filters.searchText.toLowerCase();
+        filtered = filtered.filter(
+          (t) =>
+            t.subject.toLowerCase().includes(searchLower) ||
+            t.description.toLowerCase().includes(searchLower),
+        );
+      }
+
+      // Priority filter - skip if empty or "All"
+      const priorityValue = String(filters.priority || "").trim();
+      if (priorityValue && priorityValue !== "All") {
+        const priorityId = parseInt(priorityValue, 10);
+        if (!isNaN(priorityId)) {
+          filtered = filtered.filter((t) => t.priority_id === priorityId);
+        }
+      }
+
+      // Status filter - skip if empty or "All"
+      const statusValue = String(filters.status || "").trim();
+      if (statusValue && statusValue !== "All") {
+        const normalize = (s: any) =>
+          String(s || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        filtered = filtered.filter((t) => {
+          const statusName = (t.status as any)?.name || t.status || "";
+          const token = normalize(statusName);
+          return token === normalize(statusValue);
+        });
+      }
+
+      // Assigned To filter - skip if empty or "All"
+      const assignedValue = String(filters.assignedTo || "").trim();
+      if (assignedValue && assignedValue !== "All") {
+        if (assignedValue === "unassigned") {
+          filtered = filtered.filter(
+            (t) => t.assigned_to_id === null || t.assigned_to_id === undefined,
+          );
+        } else {
+          const assignedId = parseInt(assignedValue, 10);
+          if (!isNaN(assignedId)) {
+            filtered = filtered.filter((t) => t.assigned_to_id === assignedId);
+          }
+        }
+      }
+
+      // Handle source filter - skip if it's empty, "All", or whitespace
+      const sourceFilterValue = String(filters.source || "").trim();
+      if (sourceFilterValue && sourceFilterValue !== "All") {
+        console.debug(
+          "[ManageTickets] Applying source filter:",
+          filters.source,
+          "before:",
+          filtered.length,
+        );
+        filtered = filtered.filter((t) => {
+          const ticketTag = getTicketTag(t);
+          return ticketTag === filters.source;
+        });
+        console.debug("[ManageTickets] After source filter:", filtered.length);
+      } else {
+        console.debug(
+          "[ManageTickets] SKIPPING source filter - showing all tickets",
+          "filters.source value:",
+          JSON.stringify(filters.source),
+        );
+      }
+
+      // Date filters (only for "Created from Email" tab)
+      if (activeTab === "created") {
+        const expandIstDate = (dateStr: string, endOfDay = false) => {
+          const parts = String(dateStr).split("-");
+          if (parts.length !== 3) return null;
+          const [y, m, d] = parts.map((p) => parseInt(p, 10));
+          if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+          const hour = endOfDay ? 23 : 0;
+          const minute = endOfDay ? 59 : 0;
+          const second = endOfDay ? 59 : 0;
+          const istOffsetMs = 5.5 * 60 * 60 * 1000;
+          const utcTs =
+            Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
+          return new Date(utcTs);
+        };
+
+        if (filters.dateFrom) {
+          const dateFromDt = expandIstDate(filters.dateFrom, false);
+          if (dateFromDt) {
+            filtered = filtered.filter(
+              (t) => new Date(t.created_at).getTime() >= dateFromDt.getTime(),
+            );
+          }
+        }
+
+        if (filters.dateTo) {
+          const dateToDt = expandIstDate(filters.dateTo, true);
+          if (dateToDt) {
+            filtered = filtered.filter(
+              (t) => new Date(t.created_at).getTime() <= dateToDt.getTime(),
+            );
+          }
+        }
+      }
+
+      console.debug(
+        "[ManageTickets] Applied filters in fetchTickets, filtered count:",
+        filtered.length,
+        "normalized count:",
+        normalized.length,
+        "activeTab:",
+        activeTab,
+        "filtered array:",
+        filtered.map((t: any) => t.id),
+      );
+      console.debug(
+        "[ManageTickets] Calling setFilteredTickets with array of length:",
+        filtered.length,
+      );
+      if (filtered.length === 0 && normalized.length > 0) {
+        console.error(
+          "[ManageTickets] CRITICAL ERROR: All tickets were filtered out!",
+        );
+        console.error(
+          "[ManageTickets] normalized had",
+          normalized.length,
+          "tickets but filtered has 0",
+        );
+        console.error("[ManageTickets] Current filters state:", filters);
+      }
+      setFilteredTickets(filtered);
+      console.debug("[ManageTickets] setFilteredTickets called");
+
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
       const localCreatedCount = normalized.filter(
         (t: any) => t.created_from_mail_config,
       ).length;
       setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
-      setTotalTickets(data?.total ?? normalized.length);
-      setTotalPages(data?.pages ?? 1);
+      // Use filtered count if any client-side filters are active, otherwise use server total
+      const hasClientSideFilters = Boolean(
+        filters.searchText ||
+          filters.priority ||
+          filters.status ||
+          filters.assignedTo ||
+          filters.source ||
+          filters.dateFrom ||
+          filters.dateTo,
+      );
+      // Derive total tickets from multiple possible response shapes
+      let serverTotal = undefined as number | undefined;
+      if (data != null) {
+        const candidates = [
+          data.total,
+          data?.pagination?.total,
+          data?.meta?.total,
+          data?.pagination?.pagination?.total,
+          data?.pagination?.total_count,
+        ];
+        for (const c of candidates) {
+          if (c !== undefined && c !== null && String(c).trim() !== "") {
+            serverTotal = Number(c);
+            break;
+          }
+        }
+      }
+
+      // If server did not provide a total, fetch a lightweight count-only response
+      if (serverTotal === undefined) {
+        try {
+          const totalResp = await api.getTickets(serverFilters, 1, 1);
+          const totalData = totalResp?.data ?? totalResp;
+          const totalCandidates = [
+            totalData?.total,
+            totalData?.pagination?.total,
+            totalData?.meta?.total,
+            totalData?.pagination?.total_count,
+          ];
+          for (const c of totalCandidates) {
+            if (c !== undefined && c !== null && String(c).trim() !== "") {
+              serverTotal = Number(c);
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch total count fallback:", e);
+        }
+      }
+
+      const finalTotal = hasClientSideFilters
+        ? filtered.length
+        : (serverTotal ?? normalized.length);
+
+      setTotalTickets(finalTotal);
+
+      // Compute pages consistently from finalTotal and pageSize unless server explicitly provided pages
+      const serverPages =
+        data?.pages ?? data?.pagination?.pages ?? data?.meta?.pages;
+      const pagesFromTotal = Math.max(1, Math.ceil(finalTotal / pageSize));
+      const finalPages = hasClientSideFilters
+        ? 1
+        : (serverPages ?? pagesFromTotal);
+      setTotalPages(finalPages);
       setStatusCounts(data?.status_counts ?? {});
     } catch (error) {
       console.error("Error fetching tickets:", error);
@@ -272,6 +878,14 @@ export default function ManageTickets() {
     }
   };
 
+  const fetchTags = async () => {
+    // Initialize with Manual - actual tags will be extracted from tickets array via useEffect
+    console.debug(
+      "[ManageTickets] fetchTags called - initializing with Manual tag",
+    );
+    setSourceTags(["Manual"]);
+  };
+
   const fetchCreatedTicketsCount = async () => {
     try {
       const params = new URLSearchParams();
@@ -305,7 +919,10 @@ export default function ManageTickets() {
     }
   };
 
-  const fetchCreatedTickets = async (ignoreFilters: boolean = false) => {
+  const fetchCreatedTickets = async (
+    ignoreFilters: boolean = false,
+    overrides?: Record<string, string>,
+  ) => {
     try {
       setIsLoading(true);
       const params = new URLSearchParams();
@@ -315,6 +932,15 @@ export default function ManageTickets() {
         if (filters.priority) params.append("priority_id", filters.priority);
         if (filters.assignedTo)
           params.append("assigned_user_id", filters.assignedTo);
+      }
+
+      // Apply explicit overrides (used when opening Created tab without mutating filters)
+      if (overrides) {
+        Object.entries(overrides).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && String(v).trim() !== "") {
+            params.set(k, String(v));
+          }
+        });
       }
 
       const query = params.toString() ? `?${params}` : "";
@@ -398,6 +1024,11 @@ export default function ManageTickets() {
   };
 
   const applyFilters = () => {
+    console.debug(
+      "[ManageTickets] applyFilters called, tickets.length =",
+      tickets.length,
+    );
+    // Always apply filters to ensure consistency
     let filtered = [...tickets];
 
     // Search text filter
@@ -411,34 +1042,51 @@ export default function ManageTickets() {
     }
 
     // Priority filter
-    if (filters.priority) {
+    if (
+      filters.priority !== undefined &&
+      String(filters.priority).trim() !== ""
+    ) {
       filtered = filtered.filter(
-        (t) => t.priority_id === parseInt(filters.priority),
+        (t) => t.priority_id === parseInt(filters.priority, 10),
       );
     }
 
     // Status filter
-    if (filters.status) {
+    if (filters.status !== undefined && String(filters.status).trim() !== "") {
+      const normalize = (s: any) =>
+        String(s || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
       filtered = filtered.filter((t) => {
-        const statusName = (t.status as any)?.name || t.status;
-        return (
-          String(statusName).toLowerCase() === filters.status.toLowerCase()
-        );
+        const statusName = (t.status as any)?.name || t.status || "";
+        const token = normalize(statusName);
+        return token === normalize(filters.status);
       });
     }
 
     // Assigned to filter
-    if (filters.assignedTo) {
-      filtered = filtered.filter(
-        (t) => t.assigned_to_id === parseInt(filters.assignedTo),
-      );
+    if (
+      filters.assignedTo !== undefined &&
+      String(filters.assignedTo).trim() !== ""
+    ) {
+      if (filters.assignedTo === "unassigned") {
+        filtered = filtered.filter(
+          (t) => t.assigned_to_id === null || t.assigned_to_id === undefined,
+        );
+      } else {
+        filtered = filtered.filter(
+          (t) => t.assigned_to_id === parseInt(filters.assignedTo, 10),
+        );
+      }
     }
 
-    // Source filter (mail config vs manual)
-    if (filters.source === "mail_config") {
-      filtered = filtered.filter((t) => t.created_from_mail_config);
-    } else if (filters.source === "manual") {
-      filtered = filtered.filter((t) => !t.created_from_mail_config);
+    // Source filter (based on description classification: Razorpay, Payswiff, Manual)
+    if (filters.source && String(filters.source).trim() !== "") {
+      filtered = filtered.filter((t) => {
+        const ticketTag = getTicketTag(t);
+        return ticketTag === filters.source;
+      });
     }
 
     // Date range filter (interpret date-only inputs as full IST day ranges)
@@ -473,6 +1121,12 @@ export default function ManageTickets() {
       }
     }
 
+    console.debug(
+      "[ManageTickets] applyFilters setting filteredTickets, count:",
+      filtered.length,
+      "filters:",
+      filters,
+    );
     setFilteredTickets(filtered);
   };
 
@@ -506,8 +1160,407 @@ export default function ManageTickets() {
     if (user.first_name && user.last_name) {
       return `${user.first_name} ${user.last_name}`;
     }
+
     return "Unassigned";
   };
+
+  const fetchAssignedOptions = async () => {
+    try {
+      const resp = await api.get("/tickets/assigned-options");
+      const data = resp?.data ?? resp;
+      if (Array.isArray(data?.options)) setAssignedOptionsState(data.options);
+      else setAssignedOptionsState([]);
+    } catch (e) {
+      console.error("Error fetching assigned options:", e);
+      setAssignedOptionsState([]);
+    }
+  };
+
+  // Export all tickets to Excel with multiple sheets as requested
+  const exportAllTicketsToExcel = async () => {
+    try {
+      setIsLoading(true);
+      const allTickets: any[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      // Fetch all pages sequentially
+      do {
+        const resp = await api.getTickets({}, page, 100);
+        const data = resp?.data ?? resp;
+        const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
+
+        // Normalize similar to fetchTickets
+        const serverMs = data?.server_time
+          ? new Date(String(data.server_time)).getTime()
+          : null;
+        const fetchClientMs = Date.now();
+        const normalized = (ticketsArr || []).map((t: any) => {
+          let statusInfo = t.status;
+          if (!statusInfo && t.status_id) {
+            statusInfo = {
+              id: t.status_id,
+              name: t.status_name || "Unknown",
+              color: t.status_color || "#999",
+              is_closed: t.status_is_closed || false,
+              sort_order: 0,
+            };
+          }
+          const pr = ((): number | null => {
+            const val =
+              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+            const num = Number(val);
+            return Number.isFinite(num) ? num : null;
+          })();
+
+          return {
+            ...t,
+            priority_id: pr,
+            assigned_to_id:
+              t.assigned_to_id ??
+              (t.assigned_to !== undefined && t.assigned_to !== null
+                ? Number(t.assigned_to)
+                : null) ??
+              null,
+            track_id:
+              t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+            description: t.description || "",
+            status: statusInfo,
+            created_from_mail_config: t.created_from_mail_config ?? false,
+            __server_time_ms: serverMs,
+            __fetched_at_ms: fetchClientMs,
+          };
+        });
+
+        allTickets.push(...normalized);
+        totalPages = data?.pages ?? 1;
+        page += 1;
+      } while (page <= totalPages);
+
+      // Prepare summaries
+      const tagCounts = new Map<string, number>();
+      const userCounts = new Map<string, number>();
+      const statusCounts = new Map<string, number>();
+
+      const tagStatusCounts: Record<string, Record<string, number>> = {};
+
+      const createdEmailRows: any[] = [];
+
+      const normalizeTagForTicket = (t: any): string[] => {
+        // Priority: description content (razorpay/payswiff), explicit tags, mail config provider, Manual
+        try {
+          const desc = String(t.description || "").toLowerCase();
+          if (desc.includes("razorpay")) return ["Razorpay"];
+          if (desc.includes("payswiff")) return ["Payswiff"];
+        } catch (e) {}
+
+        try {
+          if (Array.isArray(t.tags) && t.tags.length > 0) {
+            return t.tags.map((x: any) => String(x).trim()).filter(Boolean);
+          }
+        } catch (e) {}
+
+        if (t.created_from_mail_config) {
+          try {
+            const prov = getMailConfigProviderName(
+              t.mail_config_sources || t.mail_config_sources,
+              t.description,
+            );
+            if (prov) return [prov];
+          } catch (e) {}
+        }
+
+        return [t.created_from_mail_config ? "Email" : "Manual"];
+      };
+
+      for (const t of allTickets) {
+        const tagNames = normalizeTagForTicket(t);
+
+        const statusLabel =
+          (t.status && (t.status.name || t.status)) || "Unknown";
+
+        for (const tg of tagNames) {
+          const key = String(tg || "");
+          tagCounts.set(key, (tagCounts.get(key) || 0) + 1);
+
+          if (!tagStatusCounts[key]) tagStatusCounts[key] = {};
+          tagStatusCounts[key][statusLabel] =
+            (tagStatusCounts[key][statusLabel] || 0) + 1;
+        }
+
+        // Assigned user
+        const assignedLabel =
+          t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        userCounts.set(assignedLabel, (userCounts.get(assignedLabel) || 0) + 1);
+
+        // Status
+        statusCounts.set(statusLabel, (statusCounts.get(statusLabel) || 0) + 1);
+
+        // Created-from-email rows
+        if (t.created_from_mail_config) {
+          const provider = ((): string => {
+            try {
+              const p = getMailConfigProviderName(
+                t.mail_config_sources || t.mail_config_sources,
+                t.description,
+              );
+              return (
+                p ||
+                (Array.isArray(t.tags) && t.tags.length
+                  ? String(t.tags[0])
+                  : "")
+              );
+            } catch (e) {
+              return Array.isArray(t.tags) && t.tags.length
+                ? String(t.tags[0])
+                : "";
+            }
+          })();
+
+          createdEmailRows.push([
+            t.id,
+            t.subject || t.track_id || "",
+            assignedLabel,
+            statusLabel,
+            (t.priority && t.priority.name) ||
+              (PRIORITY_OPTIONS[
+                t.priority_id as keyof typeof PRIORITY_OPTIONS
+              ] &&
+                PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS]
+                  .name) ||
+              "",
+            formatToIST(t.created_at),
+            formatToIST(t.updated_at),
+            provider,
+          ]);
+        }
+      }
+
+      // Build workbook
+      const wb = XLSX.utils.book_new();
+
+      // Build per-user status counts
+      const userStatusCounts: Record<string, Record<string, number>> = {};
+      for (const t of allTickets) {
+        const assignedLabel =
+          t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        const statusLabel =
+          (t.status && (t.status.name || t.status)) || "Unknown";
+        if (!userStatusCounts[assignedLabel])
+          userStatusCounts[assignedLabel] = {};
+        userStatusCounts[assignedLabel][statusLabel] =
+          (userStatusCounts[assignedLabel][statusLabel] || 0) + 1;
+      }
+
+      const tagRows = [["Tag", "Count"]];
+      Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
+
+      const userRows = [["User", "Count"]];
+      Array.from(userCounts.entries()).forEach(([k, v]) =>
+        userRows.push([k, v]),
+      );
+
+      const statusRows = [["Status", "Count"]];
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        statusRows.push([k, v]),
+      );
+
+      // Build Summary sheet with per-tag status breakdown
+      // Determine status columns from statusesList (fallback to common names)
+      const statusNames =
+        statusesList && statusesList.length > 0
+          ? statusesList.map((s: any) => s.name)
+          : ["Open", "In Progress", "Pending", "Overdue", "Closed"];
+
+      const summaryHeader = ["Tag", "Total", ...statusNames];
+      const summaryRows = [summaryHeader];
+
+      const uniqueTags = Array.from(
+        new Set<string>([...Array.from(tagCounts.keys())]),
+      );
+      for (const tagName of uniqueTags) {
+        const totalsByStatus = tagStatusCounts[tagName] || {};
+        const total = tagCounts.get(tagName) || 0;
+        const row = [tagName, total];
+        for (const sName of statusNames) {
+          row.push(totalsByStatus[sName] || 0);
+        }
+        summaryRows.push(row);
+      }
+
+      // Append a blank row and then user per-status summary
+      summaryRows.push([]);
+      summaryRows.push(["User", "Total", ...statusNames]);
+      const uniqueUsers = Array.from(
+        new Set<string>([...Array.from(userCounts.keys())]),
+      );
+      for (const userName of uniqueUsers) {
+        const totalsByStatus = userStatusCounts[userName] || {};
+        const total = userCounts.get(userName) || 0;
+        const row = [userName, total];
+        for (const sName of statusNames) {
+          row.push(totalsByStatus[sName] || 0);
+        }
+        summaryRows.push(row);
+      }
+
+      // Append overall status totals
+      summaryRows.push([]);
+      summaryRows.push(["Status", "Count"]);
+      Array.from(statusCounts.entries()).forEach(([k, v]) =>
+        summaryRows.push([k, v]),
+      );
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+      // Sheet 2: From Email
+      const wsEmailHeaders = [
+        [
+          "ticket_id",
+          "subject",
+          "assigned_to",
+          "status",
+          "Priority",
+          "created_at",
+          "Updated_at",
+          "tag",
+        ],
+      ];
+      const wsEmail = XLSX.utils.aoa_to_sheet([
+        ...wsEmailHeaders,
+        ...createdEmailRows,
+      ]);
+      XLSX.utils.book_append_sheet(wb, wsEmail, "From Email");
+
+      // Sheets for each tag (including Manual)
+      const uniqueTagsForSheets = Array.from(
+        new Set<string>([...Array.from(tagCounts.keys())]),
+      );
+      for (const tagName of uniqueTagsForSheets) {
+        const rows = [
+          [
+            "ticket_id",
+            "subject",
+            "assigned_to",
+            "status",
+            "Priority",
+            "created_at",
+            "Updated_at",
+            "tags",
+          ],
+        ];
+        for (const t of allTickets) {
+          let match = false;
+          try {
+            const norms = normalizeTagForTicket(t).map((x) =>
+              String(x).toLowerCase(),
+            );
+            if (norms.includes(String(tagName).toLowerCase())) match = true;
+          } catch (e) {}
+
+          if (match) {
+            rows.push([
+              t.id,
+              t.subject || t.track_id || "",
+              t.assignee?.name || getAssignedUserName(t.assigned_to_id),
+              (t.status && (t.status.name || t.status)) || "",
+              (t.priority && t.priority.name) ||
+                (PRIORITY_OPTIONS[
+                  t.priority_id as keyof typeof PRIORITY_OPTIONS
+                ] &&
+                  PRIORITY_OPTIONS[
+                    t.priority_id as keyof typeof PRIORITY_OPTIONS
+                  ].name) ||
+                "",
+              formatToIST(t.created_at),
+              formatToIST(t.updated_at),
+              Array.isArray(t.tags)
+                ? t.tags.join(", ")
+                : t.created_from_mail_config
+                  ? getMailConfigProviderName(
+                      t.mail_config_sources || t.mail_config_sources,
+                      t.description,
+                    ) || ""
+                  : "Manual",
+            ]);
+          }
+        }
+
+        const safeName = String(tagName || "Sheet").slice(0, 31);
+        const wsTag = XLSX.utils.aoa_to_sheet(rows);
+        XLSX.utils.book_append_sheet(wb, wsTag, safeName);
+      }
+
+      // Write and download
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/octet-stream" });
+      saveAs(
+        blob,
+        `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+
+      toast({ title: "Export ready", description: "Excel export downloaded" });
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast({
+        title: "Export failed",
+        description: "Could not generate Excel file",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const assignedOptions = (() => {
+    if (assignedOptionsState && assignedOptionsState.length > 0)
+      return assignedOptionsState;
+
+    // Fallback: derive from tickets and users
+    const map = new Map<string, string>();
+    for (const t of tickets) {
+      const id = (t as any).assigned_to_id ?? t.assigned_to ?? null;
+      if (id === null || id === undefined) {
+        if (!map.has("unassigned")) map.set("unassigned", "Unassigned");
+      } else {
+        const key = String(id);
+        if (!map.has(key)) {
+          let label = `User #${key}`;
+          const user = users.find((u) => Number(u.id) === Number(id));
+          if (user) {
+            if (user.firstname || user.lastname)
+              label = `${user.firstname || ""} ${user.lastname || ""}`.trim();
+            else if (user.name) label = user.name;
+            else if (user.first_name && user.last_name)
+              label = `${user.first_name} ${user.last_name}`;
+          } else if (
+            (t as any).assignee &&
+            ((t as any).assignee.name || (t as any).assignee.first_name)
+          ) {
+            label =
+              (t as any).assignee.name ||
+              `${(t as any).assignee.first_name || ""} ${(t as any).assignee.last_name || ""}`.trim();
+          }
+          map.set(key, label);
+        }
+      }
+    }
+    // Ensure users are present
+    for (const u of users) {
+      const k = String(u.id);
+      if (!map.has(k)) {
+        if (u.firstname || u.lastname)
+          map.set(k, `${u.firstname || ""} ${u.lastname || ""}`.trim());
+        else if (u.name) map.set(k, u.name);
+        else map.set(k, `User #${k}`);
+      }
+    }
+    return Array.from(map.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  })();
 
   const getPriorityBadge = (priority: number) => {
     const p = PRIORITY_OPTIONS[priority as keyof typeof PRIORITY_OPTIONS];
@@ -529,13 +1582,25 @@ export default function ManageTickets() {
     return `${formatRemaining(earliestRemaining)} hours remaining`;
   };
 
-  // fetch ticket metadata to discover overdue status id
+  // fetch ticket metadata to discover overdue status id and build statuses map
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const meta = await api.getTicketMetadata();
         const statuses = meta?.data?.statuses ?? meta?.statuses ?? [];
+        if (mounted) {
+          setStatusesList(statuses);
+          const map: Record<string, number> = {};
+          for (const s of statuses) {
+            const key = String(s.name || "")
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_+|_+$/g, "");
+            map[key] = Number(s.id);
+          }
+          setStatusesMap(map);
+        }
         const overdue = statuses.find((s: any) =>
           String(s.name).toLowerCase().includes("overdue"),
         );
@@ -656,26 +1721,21 @@ export default function ManageTickets() {
     if (!overdueStatusId) return;
     if (autoMarkedRef.current.has(ticket.id)) return;
 
-    // Avoid marking if already overdue, closed, or if status is In Progress
+    // Only convert Open or Pending tickets to Overdue
     const sName =
       (ticket.status && (ticket.status.name || ticket.status)) ||
       ticket.status ||
       "";
     const sNameLower = String(sName).toLowerCase();
-    if (sNameLower.includes("overdue")) return;
-    if (sNameLower.includes("in progress") || sNameLower.includes("inprogress"))
-      return;
-    if (
-      (ticket.status && ticket.status.is_closed) ||
-      /closed/i.test(String(sName || ""))
-    )
-      return;
+    const isOpen = sNameLower.includes("open");
+    const isPending = sNameLower.includes("pending");
+
+    if (!isOpen && !isPending) return;
 
     autoMarkedRef.current.add(ticket.id);
     try {
       await api.updateTicket(ticket.id, {
         status_id: overdueStatusId,
-        updated_by: currentUser?.id || 1,
       });
       // update local state
       setTickets((prev) =>
@@ -799,22 +1859,88 @@ export default function ManageTickets() {
           </div>
 
           <div className="ml-auto flex items-center gap-3">
-            {/* Date picker (IST day) placed left of Filters button */}
-            <div>
-              <label className="sr-only">Date</label>
-              <Input
-                type="date"
-                value={filters.dateFrom || ""}
-                onChange={(e) => {
-                  const d = e.target.value;
-                  // Set both from and to to the selected date (full IST day)
-                  setFilters({ ...filters, dateFrom: d, dateTo: d });
-                }}
-                className="mr-2"
-              />
-            </div>
+            {/* Date picker (IST day) placed left of Filters button - only shown for Created from Email tab */}
+            {activeTab === "created" && (
+              <div className="flex items-center gap-2">
+                <label className="sr-only">Date</label>
+                <Input
+                  type="date"
+                  value={filters.dateFrom || ""}
+                  onChange={(e) => {
+                    const d = e.target.value;
+                    // Set both from and to to the selected date (full IST day)
+                    setFilters({ ...filters, dateFrom: d, dateTo: d });
+                  }}
+                  className="w-40"
+                />
+                {filters.dateFrom && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilters({ ...filters, dateFrom: "", dateTo: "" });
+                    }}
+                    className="text-xs"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            )}
 
-            <Button variant="outline" onClick={() => setShowFilters((s) => !s)}>
+            {/* Date picker for All tab (filters all tickets by a single IST day) */}
+            {activeTab === "all" && (
+              <div className="flex items-center gap-2">
+                <label className="sr-only">Date</label>
+                <Input
+                  type="date"
+                  value={filters.dateFrom || ""}
+                  onChange={(e) => {
+                    const d = e.target.value;
+                    // Set both from and to to the selected date (full IST day)
+                    setFilters((f) => ({ ...f, dateFrom: d, dateTo: d }));
+                    // Reset to first page when applying a date filter
+                    setCurrentPage(1);
+                  }}
+                  className="w-40"
+                />
+                {filters.dateFrom && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilters((f) => ({ ...f, dateFrom: "", dateTo: "" }));
+                      setCurrentPage(1);
+                    }}
+                    className="text-xs"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Open filters and smooth scroll to the filter panel
+                setShowFilters((s) => {
+                  const willOpen = !s;
+                  if (willOpen) {
+                    // Delay scroll slightly to allow panel to render
+                    setTimeout(() => {
+                      if (filtersRef.current) {
+                        filtersRef.current.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      }
+                    }, 160);
+                  }
+                  return willOpen;
+                });
+              }}
+            >
               Filters
             </Button>
 
@@ -834,51 +1960,55 @@ export default function ManageTickets() {
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="20">20</SelectItem>
                   <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
+              Export Excel
+            </Button>
+
             <Link to="/tickets/create">
               <Button>Create Ticket</Button>
             </Link>
-
-            {/* {currentUser?.role === "admin" && activeTab === "all" && (
-              <div className="ml-4 text-right">
-                <div className="text-xs text-gray-500">Next SLA</div>
-                <div
-                  className={`text-sm font-medium ${nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0 ? "text-red-600" : "text-gray-700"}`}
-                >
-                  {nextSlaInfo.ticket
-                    ? nextSlaInfo.ms !== null && nextSlaInfo.ms <= 0
-                      ? `Overdue ${formatRemaining(Math.abs(nextSlaInfo.ms))} ��� ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
-                      : `${formatRemaining(nextSlaInfo.ms)} hours remaining — ${String(nextSlaInfo.ticket.subject).slice(0, 40)}`
-                    : "No SLA"}
-                </div>
-              </div>
-            )} */}
           </div>
         </div>
       </div>
 
       {/* Status counts and Charts */}
       {activeTab === "all" && (
-        <TicketCharts dateFrom={filters.dateFrom} dateTo={filters.dateTo} />
+        <TicketCharts
+          dateFrom={filters.dateFrom}
+          dateTo={filters.dateTo}
+          onSummaryFetched={handleSummaryFetched}
+        />
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {statusCounts["Open"] ?? 0}
+              {serverOverdueCounts?.totalOpen ??
+                overdueOpenCount + nonOverdueOpenCount}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
+            <div className="mt-2 text-xs text-gray-600 flex gap-3">
+              <span className="text-red-600">
+                Overdue: {serverOverdueCounts?.overdueOpen ?? overdueOpenCount}
+              </span>
+              <span className="text-green-600">
+                Active:{" "}
+                {serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
-            <p className="text-2xl md:text-3xl font-bold text-orange-500">
-              {statusCounts["In Progress"] ?? 0}
+            <p className="text-2xl md:text-3xl font-bold text-orange-600">
+              {statusCounts["In Progress"] ?? statusCounts["InProgress"] ?? 0}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress
@@ -896,15 +2026,6 @@ export default function ManageTickets() {
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <p className="text-2xl md:text-3xl font-bold text-green-600">
-              {(statusCounts["Resolved"] ?? 0) + (statusCounts["Closed"] ?? 0)}
-            </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-red-600">
               {statusCounts["Overdue"] ?? 0}
@@ -912,92 +2033,106 @@ export default function ManageTickets() {
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
           </CardContent>
         </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-gray-900">
+              {serverOverdueCounts?.totalClosed ??
+                overdueClosedCount + nonOverdueClosedCount}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
+            <div className="mt-2 text-xs text-gray-600 flex gap-3">
+              <span className="text-red-600">
+                Overdue:{" "}
+                {serverOverdueCounts?.overdueClosed ?? overdueClosedCount}
+              </span>
+              <span className="text-green-600">
+                On-time:{" "}
+                {serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters Card */}
+      {/* Filters panel */}
       {showFilters && (
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                Filters
-              </CardTitle>
-              {isAnyFilterActive && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="text-blue-600 hover:text-blue-700"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Clear All
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
+        <Card className="mb-6" ref={filtersRef as any}>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Search
                 </label>
-                <div className="relative">
-                  <Input
-                    placeholder="Search by subject or description..."
-                    value={filters.searchText}
-                    onChange={(e) =>
-                      setFilters({ ...filters, searchText: e.target.value })
-                    }
-                    className="pl-10"
-                  />
-                  <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                </div>
+                <Input
+                  placeholder="Search subject or description"
+                  value={filters.searchText}
+                  onChange={(e) =>
+                    setFilters({ ...filters, searchText: e.target.value })
+                  }
+                />
               </div>
 
-              {/* Priority */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Priority
                 </label>
                 <Select
-                  value={filters.priority}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, priority: value })
-                  }
+                  value={String(filters.priority)}
+                  onValueChange={(v) => setFilters({ ...filters, priority: v })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="All Priorities" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Priorities</SelectItem>
-                    {Object.entries(PRIORITY_OPTIONS).map(([key, val]) => (
-                      <SelectItem key={key} value={key}>
-                        {val.name}
+                    <SelectItem value="">All</SelectItem>
+                    {Object.entries(PRIORITY_OPTIONS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>
+                        {v.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Status */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Status
                 </label>
                 <Select
-                  value={filters.status}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, status: value })
-                  }
+                  value={String(filters.status)}
+                  onValueChange={(v) => setFilters({ ...filters, status: v })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Statuses</SelectItem>
-                    {STATUS_OPTIONS.map((opt) => (
+                    <SelectItem value="">All</SelectItem>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Assigned To
+                </label>
+                <Select
+                  value={String(filters.assignedTo)}
+                  onValueChange={(v) =>
+                    setFilters({ ...filters, assignedTo: v })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Users" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All</SelectItem>
+                    {assignedOptions.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
                       </SelectItem>
@@ -1006,553 +2141,389 @@ export default function ManageTickets() {
                 </Select>
               </div>
 
-              {/* Assigned To */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned To
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Source / Tag
                 </label>
                 <Select
-                  value={filters.assignedTo}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, assignedTo: value })
-                  }
+                  value={String(filters.source)}
+                  onValueChange={(v) => setFilters({ ...filters, source: v })}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Users" />
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Sources" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Users</SelectItem>
-                    {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id.toString()}>
-                        {getAssignedUserName(user.id)}
+                    <SelectItem value="">All</SelectItem>
+                    {sourceTags.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Source */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Source
-                </label>
-                <Select
-                  value={filters.source}
-                  onValueChange={(value) =>
-                    setFilters({ ...filters, source: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Sources" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All Sources</SelectItem>
-                    <SelectItem value="mail_config">
-                      From Mail Config
-                    </SelectItem>
-                    <SelectItem value="manual">Manual</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Date From */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  From Date
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date From
                 </label>
                 <Input
                   type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) =>
-                    setFilters({ ...filters, dateFrom: e.target.value })
-                  }
+                  value={filters.dateFrom || ""}
+                  onChange={(e) => {
+                    setFilters({ ...filters, dateFrom: e.target.value });
+                  }}
+                  className="w-full"
                 />
               </div>
 
-              {/* Date To */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  To Date
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date To
                 </label>
                 <Input
                   type="date"
-                  value={filters.dateTo}
-                  onChange={(e) =>
-                    setFilters({ ...filters, dateTo: e.target.value })
-                  }
+                  value={filters.dateTo || ""}
+                  onChange={(e) => {
+                    setFilters({ ...filters, dateTo: e.target.value });
+                  }}
+                  className="w-full"
                 />
+              </div>
+
+              <div className="md:col-span-2 flex items-center gap-2">
+                <Button variant="ghost" onClick={clearFilters}>
+                  <X size={14} /> Clear All
+                </Button>
+                <div className="ml-auto">
+                  <Button onClick={() => setShowFilters(false)}>Done</Button>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Tickets List - Conditional Tab Display */}
-      {activeTab === "all" ? (
-        <>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-            </div>
-          ) : filteredTickets.length === 0 ? (
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-center py-12">
-                  <p className="text-gray-600 text-lg">
-                    {tickets.length === 0
-                      ? "No tickets yet"
-                      : "No tickets match your filters"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {paginatedTickets.map((ticket) => {
-                const priority = getPriorityBadge(ticket.priority_id);
-                const slaMs = computeSlaMsForTicket(ticket);
-                return (
-                  <Card
-                    key={ticket.id}
-                    className="hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => navigate(`/tickets/${ticket.id}`)}
-                  >
-                    <CardContent className="pt-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900 truncate">
-                              {ticket.track_id ||
-                                `TKT-${String(ticket.id).padStart(4, "0")}`}
-                              : {ticket.subject}
-                            </h3>
-                            {ticket.created_from_mail_config && (
-                              <Badge className="bg-green-100 text-green-800">
-                                From Mail Config
-                              </Badge>
-                            )}
+      {/* Ticket list */}
+      <div>
+        {activeTab === "all" && (
+          <div>
+            {console.log(
+              "[ManageTickets RENDER] activeTab=all, isLoading=" +
+                isLoading +
+                ", paginatedTickets.length=" +
+                paginatedTickets.length +
+                ", filteredTickets.length=" +
+                filteredTickets.length,
+            ) || null}
+            {isLoading ? (
+              <div className="text-center py-8">Loading tickets...</div>
+            ) : paginatedTickets.length === 0 ? (
+              <div className="text-center py-8">No tickets found</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {paginatedTickets.map((t) => {
+                  const pr = getPriorityBadge(t.priority_id || 0);
+                  const slaMs = computeSlaMsForTicket(t);
+                  const slaText =
+                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                  const provider = getMailConfigProviderName(
+                    t.mail_config_sources || t.mail_config_sources,
+                    t.description,
+                  );
 
-                            <div className="ml-auto flex items-center gap-2">
-                              <Link
-                                to={`/tickets/${ticket.id}`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="View"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Search size={16} />
-                              </Link>
-                              <Link
-                                to={`/tickets/${ticket.id}/edit`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="Edit"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Edit size={16} />
-                              </Link>
-                              <button
-                                className="p-1 rounded hover:bg-gray-100 text-red-600"
-                                title="Delete"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (!confirm("Delete this ticket?")) return;
-                                  try {
-                                    await api.deleteTicket(ticket.id);
-                                    setTickets((prev) =>
-                                      prev.filter((p) => p.id !== ticket.id),
-                                    );
-                                    toast({
-                                      title: "Deleted",
-                                      description: "Ticket deleted",
-                                    });
-                                  } catch (delErr) {
-                                    console.error("Delete failed", delErr);
-                                    toast({
-                                      title: "Error",
-                                      description: "Failed to delete ticket",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                              >
-                                <Trash size={16} />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: ((): string => {
-                                  try {
-                                    const raw = ticket.description || "";
-                                    const parser = new DOMParser();
-                                    const doc = parser.parseFromString(
-                                      raw,
-                                      "text/html",
-                                    );
-                                    const plainText =
-                                      doc.body.textContent || "";
-                                    return plainText;
-                                  } catch (e) {
-                                    return ticket.description || "";
-                                  }
-                                })(),
-                              }}
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
-                            <div>
-                              <p className="text-gray-600">Status</p>
-                              <Badge variant="outline" className="mt-1">
-                                {typeof ticket.status === "object"
-                                  ? ticket.status?.name
-                                  : ticket.status}
-                              </Badge>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Priority</p>
-                              {priority && (
-                                <Badge className={`mt-1 ${priority.color}`}>
-                                  {priority.name}
-                                </Badge>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Assigned To</p>
-                              <p className="font-medium mt-1">
-                                {ticket.assignee?.name ||
-                                  getAssignedUserName(ticket.assigned_to_id)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Created</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(ticket.created_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Updated</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(ticket.updated_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">SLA</p>
-                              <p
-                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
-                              >
-                                {(() => {
-                                  const statusName =
-                                    (ticket.status &&
-                                      (ticket.status.name || ticket.status)) ||
-                                    "";
-                                  const isInProgress =
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("in progress") ||
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("inprogress");
-                                  if (isInProgress) return "No SLA";
-                                  if (slaMs === null) return "No SLA";
-                                  if (slaMs <= 0)
-                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
-                                  return `${formatRemaining(slaMs)} hours remaining`;
-                                })()}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Track ID</p>
-                              <Badge variant="secondary" className="mt-1">
-                                {ticket.track_id ||
-                                  `TKT-${String(ticket.id).padStart(4, "0")}`}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-2">
-                  <Button
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-gray-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    disabled={currentPage >= totalPages}
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  const assignedLabel =
+                    t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+                  const stripHtml = (s: any) => {
+                    try {
+                      if (!s) return "";
+                      return String(s)
+                        .replace(/<[^>]+>/g, " ")
+                        .replace(/\s+/g, " ")
+                        .trim();
+                    } catch (e) {
+                      return String(s || "");
                     }
-                  >
-                    Next
-                  </Button>
-                </div>
-                <div className="text-sm text-gray-600">
-                  {filteredTickets.length} items
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-            </div>
-          ) : effectiveCreatedTickets.length === 0 ? (
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-center py-12">
-                  <p className="text-gray-600 text-lg">
-                    No tickets created from email automation yet
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {effectiveCreatedTickets.map((ticket) => {
-                // Prefer original source ticket if available so card matches All Tickets layout
-                const source =
-                  ticket.__source_ticket ??
-                  ({
-                    id: ticket.ticket_id ?? ticket.id,
-                    track_id: ticket.track_id,
-                    subject: ticket.email_subject || ticket.subject || "",
-                    // Prefer mitra_response email_body if available
-                    description:
-                      (ticket.mitra_response &&
-                        ticket.mitra_response.email_body) ||
-                      ticket.description ||
-                      ticket.email_subject ||
-                      "",
-                    created_from_mail_config: true,
-                    created_at: ticket.created_at,
-                    updated_at: ticket.updated_at || ticket.created_at,
-                    sla_time: (ticket as any).sla_time ?? null,
-                    status: (ticket as any).status || null,
-                    priority_id: ticket.priority_id,
-                    assignee: ticket.assigned_to || null,
-                    assigned_to_id:
-                      (ticket.assigned_to &&
-                        (ticket.assigned_to.id ?? ticket.assigned_to_id)) ||
-                      ticket.assigned_to_id ||
-                      null,
-                  } as any);
+                  };
 
-                const priority = getPriorityBadge(source.priority_id);
-                const slaMs = computeSlaMsForTicket(source);
+                  return (
+                    <Card
+                      key={t.id}
+                      className="hover:shadow transition-shadow col-span-1 cursor-pointer"
+                      onClick={() => navigate(`/tickets/${t.id}`)}
+                    >
+                      <CardHeader className="py-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 pr-4">
+                            <CardTitle className="text-sm font-semibold mb-1 truncate">
+                              <Link
+                                to={`/tickets/${t.id}`}
+                                className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {t.subject || t.track_id}
+                              </Link>
+                            </CardTitle>
+                            <div className="text-xs text-gray-600 leading-tight">
+                              {stripHtml(t.description).slice(0, 180)}
+                            </div>
+                          </div>
 
-                return (
-                  <Card
-                    key={ticket.id}
-                    className="hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => {
-                      const targetId = source.id || ticket.id;
-                      if (targetId) navigate(`/tickets/${targetId}`);
-                    }}
-                  >
-                    <CardContent className="pt-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900 truncate">
-                              {source.track_id ||
-                                `TKT-${String(source.id).padStart(4, "0")}`}
-                              : {source.subject}
-                            </h3>
-                            {source.created_from_mail_config && (
+                          <div className="flex flex-col items-end text-right text-xs text-gray-500">
+                            {t.created_from_mail_config ? (
                               <Badge className="bg-green-100 text-green-800">
                                 From Mail Config
                               </Badge>
-                            )}
+                            ) : provider ? (
+                              <Badge variant="outline">{provider}</Badge>
+                            ) : null}
 
-                            <div className="ml-auto flex items-center gap-2">
-                              <Link
-                                to={`/tickets/${source.id}`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="View"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Search size={16} />
-                              </Link>
-                              <Link
-                                to={`/tickets/${source.id}/edit`}
-                                className="p-1 rounded hover:bg-gray-100"
-                                title="Edit"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Edit size={16} />
-                              </Link>
-                              <button
-                                className="p-1 rounded hover:bg-gray-100 text-red-600"
-                                title="Delete"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (!confirm("Delete this ticket?")) return;
-                                  try {
-                                    await api.deleteTicket(source.id);
-                                    setTickets((prev) =>
-                                      prev.filter((p) => p.id !== source.id),
-                                    );
-                                    toast({
-                                      title: "Deleted",
-                                      description: "Ticket deleted",
-                                    });
-                                  } catch (delErr) {
-                                    console.error("Delete failed", delErr);
-                                    toast({
-                                      title: "Error",
-                                      description: "Failed to delete ticket",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                              >
-                                <Trash size={16} />
-                              </button>
+                            <div className="mt-2 font-medium text-gray-700 text-[13px]">
+                              {assignedLabel}
                             </div>
-                          </div>
 
-                          <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: (() => {
-                                  try {
-                                    const raw =
-                                      source.description ||
-                                      ticket.email_subject ||
-                                      "";
-                                    const parser = new DOMParser();
-                                    const doc = parser.parseFromString(
-                                      raw,
-                                      "text/html",
-                                    );
-                                    const plainText =
-                                      doc.body.textContent || "";
-                                    return plainText;
-                                  } catch (e) {
-                                    return (
-                                      source.description ||
-                                      ticket.email_subject ||
-                                      ""
-                                    );
-                                  }
-                                })(),
-                              }}
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
-                            <div>
-                              <p className="text-gray-600">Status</p>
-                              <Badge variant="outline" className="mt-1">
-                                {typeof source.status === "object"
-                                  ? source.status?.name
-                                  : source.status}
-                              </Badge>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Priority</p>
-                              {priority && (
-                                <Badge className={`mt-1 ${priority.color}`}>
-                                  {priority.name}
-                                </Badge>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Assigned To</p>
-                              <p className="font-medium mt-1">
-                                {source.assignee?.name ||
-                                  getAssignedUserName(source.assigned_to_id)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Created</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(source.created_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Updated</p>
-                              <p className="font-medium mt-1">
-                                {formatToIST(source.updated_at)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">SLA</p>
-                              <p
-                                className={`font-medium mt-1 ${slaMs !== null && slaMs <= 0 ? "text-red-600" : ""}`}
-                              >
-                                {/* {(() => {
-                                  const statusName =
-                                    (source.status &&
-                                      (source.status.name || source.status)) ||
-                                    "";
-                                  const isInProgress =
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("in progress") ||
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("inprogress");
-                                  if (isInProgress) return "No SLA";
-                                  if (slaMs === null) return "No SLA";
-                                  if (slaMs <= 0)
-                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
-                                  return `${formatRemaining(slaMs)} hours remaining`;
-                                })()} */}
-
-                                {(() => {
-                                  const statusName =
-                                    (ticket.status &&
-                                      (ticket.status.name || ticket.status)) ||
-                                    "";
-                                  const isInProgress =
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("in progress") ||
-                                    String(statusName)
-                                      .toLowerCase()
-                                      .includes("inprogress");
-                                  if (isInProgress) return "No SLA";
-                                  if (slaMs === null) return "No SLA";
-                                  if (slaMs <= 0)
-                                    return `Overdue ${formatRemaining(Math.abs(slaMs))}`;
-                                  return `${formatRemaining(slaMs)} hours remaining`;
-                                })()}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Track ID</p>
-                              <Badge variant="secondary" className="mt-1">
-                                {source.track_id ||
-                                  `TKT-${String(source.id).padStart(4, "0")}`}
-                              </Badge>
+                            <div className="mt-1 text-gray-500 text-[11px]">
+                              {formatToIST(t.created_at)}
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      </CardHeader>
+                      <CardContent className="py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {pr && <Badge className={pr.color}>{pr.name}</Badge>}
+                          <Badge>
+                            {t.status?.name || (t.status as any) || "Unknown"}
+                          </Badge>
+                          {provider && (
+                            <Badge variant="outline">{provider}</Badge>
+                          )}
+
+                          <div className="ml-auto text-right text-xs text-gray-500">
+                            <div className={`text-gray-600`}>{slaText}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            Updated {safeFormatDistanceToNow(t.updated_at)} ago
+                          </div>
+
+                          <div className="flex gap-2 items-center">
+                            <Link to={`/tickets/${t.id}/edit`}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Edit size={14} />
+                              </Button>
+                            </Link>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                            >
+                              <Trash size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Pagination */}
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <div className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                disabled={currentPage >= totalPages}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+              >
+                Next
+              </Button>
             </div>
-          )}
-        </>
-      )}
+          </div>
+        )}
+
+        {activeTab === "created" && (
+          <div>
+            {isLoading ? (
+              <div className="text-center py-8">Loading created tickets...</div>
+            ) : effectiveCreatedTickets.length === 0 ? (
+              <div className="text-center py-8">
+                No created-from-email tickets
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {effectiveCreatedTickets.map((ct: any) => {
+                  const src = ct.__source_ticket || ct;
+
+                  // Normalize source ticket fields to reuse the same card layout
+                  const t = {
+                    id: ct.id || src.id,
+                    subject: ct.email_subject || src.subject || src.track_id,
+                    track_id: ct.mitra_ticket_id || src.track_id || `#${ct.id}`,
+                    description: src.description || ct.email_body || "",
+                    priority_id: ct.priority_id || src.priority_id || null,
+                    status: ct.status || src.status || null,
+                    priority: ct.priority || src.priority || null,
+                    mail_config_sources:
+                      src.mail_config_sources ||
+                      src.mail_config_sources ||
+                      null,
+                    created_from_mail_config:
+                      !!src.mail_config_id || !!ct.config_name || false,
+                    created_at: ct.created_at || src.created_at,
+                    updated_at: ct.updated_at || src.updated_at,
+                    assignee: ct.assigned_to || src.assignee || null,
+                    assigned_to_id:
+                      (ct.assigned_to && ct.assigned_to.id) ||
+                      src.assigned_to ||
+                      null,
+                    assignee:
+                      ct.assigned_to ||
+                      src.assignee ||
+                      (src.assigned_to
+                        ? {
+                            id: src.assigned_to,
+                            name: getAssignedUserName(src.assigned_to),
+                          }
+                        : null),
+                    __source_ticket: src,
+                  } as any;
+
+                  const pr = getPriorityBadge(t.priority_id || 0);
+                  const slaMs = computeSlaMsForTicket(t);
+                  const slaText =
+                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                  const provider = getMailConfigProviderName(
+                    t.mail_config_sources || t.mail_config_sources,
+                    t.description,
+                  );
+
+                  const assignedLabel =
+                    t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+                  const stripHtml = (s: any) => {
+                    try {
+                      if (!s) return "";
+                      return String(s)
+                        .replace(/<[^>]+>/g, " ")
+                        .replace(/\s+/g, " ")
+                        .trim();
+                    } catch (e) {
+                      return String(s || "");
+                    }
+                  };
+
+                  return (
+                    <Card
+                      key={ct.id}
+                      className="hover:shadow transition-shadow col-span-1 cursor-pointer"
+                      onClick={() => navigate(`/tickets/${t.id}`)}
+                    >
+                      <CardHeader className="py-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 pr-4">
+                            <CardTitle className="text-sm font-semibold mb-1 truncate">
+                              <Link
+                                to={`/tickets/${t.id}`}
+                                className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {t.subject || t.track_id}
+                              </Link>
+                            </CardTitle>
+                            <div className="text-xs text-gray-600 leading-tight">
+                              {stripHtml(t.description).slice(0, 180)}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end text-right text-xs text-gray-500">
+                            {t.created_from_mail_config ? (
+                              <Badge className="bg-green-100 text-green-800">
+                                From Mail Config
+                              </Badge>
+                            ) : provider ? (
+                              <Badge variant="outline">{provider}</Badge>
+                            ) : null}
+
+                            <div className="mt-2 font-medium text-gray-700 text-[13px]">
+                              {assignedLabel}
+                            </div>
+
+                            <div className="mt-1 text-gray-500 text-[11px]">
+                              {formatToIST(t.created_at)}
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {pr && <Badge className={pr.color}>{pr.name}</Badge>}
+                          <Badge>
+                            {t.status?.name || (t.status as any) || "Unknown"}
+                          </Badge>
+                          {provider && (
+                            <Badge variant="outline">{provider}</Badge>
+                          )}
+
+                          <div className="ml-auto text-right text-xs text-gray-500">
+                            <div className={`text-gray-600`}>{slaText}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            Updated {safeFormatDistanceToNow(t.updated_at)} ago
+                          </div>
+
+                          <div className="flex gap-2 items-center">
+                            <Link to={`/tickets/${t.id}/edit`}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Edit size={14} />
+                              </Button>
+                            </Link>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                            >
+                              <Trash size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

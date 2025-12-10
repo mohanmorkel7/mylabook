@@ -149,13 +149,6 @@ const navigationItems: NavigationItem[] = [
     icon: Bell,
     roles: ["admin", "sales", "product"],
   },
-  // m) Mails (Outlook)
-  {
-    name: "Mails",
-    href: "/mails",
-    icon: Mail,
-    roles: ["admin", "finance", "finops"],
-  },
   // n) Settings
   {
     name: "Settings",

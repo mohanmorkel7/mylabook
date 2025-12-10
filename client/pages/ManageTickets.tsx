@@ -2061,16 +2061,15 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {displayedOpen}
+              {openToShow}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
               <span className="text-red-600">
-                Overdue: {serverOverdueCounts?.overdueOpen ?? overdueOpenCount}
+                Overdue: {overdueOpenToShow}
               </span>
               <span className="text-green-600">
-                Active:{" "}
-                {serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount}
+                Active: {activeOpenToShow}
               </span>
             </div>
           </CardContent>

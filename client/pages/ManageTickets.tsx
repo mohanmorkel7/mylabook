@@ -1854,17 +1854,11 @@ export default function ManageTickets() {
     }));
   }, [createdTickets, tickets]);
 
-  // Compute exclusive counts to avoid double-counting (server totalOpen may include In Progress/Overdue)
-  const totalOpenFromServer =
-    serverOverdueCounts?.totalOpen ?? overdueOpenCount + nonOverdueOpenCount;
+  // Prefer server-side totals when available to avoid inconsistencies between paginated tickets and overall counts
+  const displayedOpen = serverOverdueCounts?.totalOpen ?? overdueOpenCount + nonOverdueOpenCount;
+  const displayedClosed = serverOverdueCounts?.totalClosed ?? overdueClosedCount + nonOverdueClosedCount;
   const inProgressCount = getStatusCount("In Progress");
   const overdueCount = getStatusCount("Overdue");
-  const openExclusiveCount = Math.max(
-    0,
-    Number(totalOpenFromServer || 0) -
-      Number(inProgressCount || 0) -
-      Number(overdueCount || 0),
-  );
 
   return (
     <div className="p-6">

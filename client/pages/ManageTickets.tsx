@@ -1157,8 +1157,13 @@ export default function ManageTickets() {
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(ticket.id);
-                                    setTickets((prev) =>
-                                      prev.filter((p) => p.id !== ticket.id),
+                                    setTickets((prev) => prev.filter((p) => p.id !== ticket.id));
+                                    // Also remove from createdTickets if present
+                                    setCreatedTickets((prev) =>
+                                      prev.filter((ct) => {
+                                        const tid = ct.ticket_id ?? ct.ticket_ref_id ?? ct.id;
+                                        return Number(tid) !== Number(ticket.id);
+                                      }),
                                     );
                                     toast({
                                       title: "Deleted",
@@ -1386,9 +1391,12 @@ export default function ManageTickets() {
                                   if (!confirm("Delete this ticket?")) return;
                                   try {
                                     await api.deleteTicket(source.id);
-                                    setTickets((prev) =>
-                                      prev.filter((p) => p.id !== source.id),
-                                    );
+                                    setTickets((prev) => prev.filter((p) => p.id !== source.id));
+                                    // Also remove from createdTickets list
+                                    setCreatedTickets((prev) => prev.filter((ct) => {
+                                      const tid = ct.ticket_id ?? ct.ticket_ref_id ?? ct.id;
+                                      return Number(tid) !== Number(source.id);
+                                    }));
                                     toast({
                                       title: "Deleted",
                                       description: "Ticket deleted",

@@ -1180,25 +1180,7 @@ export default function ManageTickets() {
                           </div>
 
                           <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: ((): string => {
-                                  try {
-                                    const raw = ticket.description || "";
-                                    const parser = new DOMParser();
-                                    const doc = parser.parseFromString(
-                                      raw,
-                                      "text/html",
-                                    );
-                                    const plainText =
-                                      doc.body.textContent || "";
-                                    return plainText;
-                                  } catch (e) {
-                                    return ticket.description || "";
-                                  }
-                                })(),
-                              }}
-                            />
+                            <div dangerouslySetInnerHTML={{ __html: (ticket.description_preview || (ticket.description ? String(ticket.description).replace(/<[^>]*>/g, "").slice(0,200) : "")) }} />
                           </div>
 
                           <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">
@@ -1427,32 +1409,7 @@ export default function ManageTickets() {
                           </div>
 
                           <div className="mt-2 mb-3 text-sm text-gray-700 line-clamp-1 cursor-pointer hover:underline overflow-hidden break-words">
-                            <div
-                              dangerouslySetInnerHTML={{
-                                __html: (() => {
-                                  try {
-                                    const raw =
-                                      source.description ||
-                                      ticket.email_subject ||
-                                      "";
-                                    const parser = new DOMParser();
-                                    const doc = parser.parseFromString(
-                                      raw,
-                                      "text/html",
-                                    );
-                                    const plainText =
-                                      doc.body.textContent || "";
-                                    return plainText;
-                                  } catch (e) {
-                                    return (
-                                      source.description ||
-                                      ticket.email_subject ||
-                                      ""
-                                    );
-                                  }
-                                })(),
-                              }}
-                            />
+                            <div dangerouslySetInnerHTML={{ __html: (source.description_preview || (source.description ? String(source.description).replace(/<[^>]*>/g, "").slice(0,200) : (ticket.email_subject || ""))) }} />
                           </div>
 
                           <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-sm">

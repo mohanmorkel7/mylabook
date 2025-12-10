@@ -621,7 +621,7 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     }
 
     const q = `
-      SELECT t.id as ticket_id, ts.name as status_name, mc.sources as sources, creator.email as email_from, t.tags as ticket_tags, t.description as ticket_description
+      SELECT t.id as ticket_id, ts.name as status_name, mc.sources as sources, creator.email as email_from, t.tags as ticket_tags, LEFT(t.description, 200) AS ticket_description
       FROM tickets t
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id

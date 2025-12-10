@@ -1998,7 +1998,8 @@ export default function ManageTickets() {
                 Overdue: {serverOverdueCounts?.overdueOpen ?? overdueOpenCount}
               </span>
               <span className="text-green-600">
-                Active: {serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount}
+                Active:{" "}
+                {serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount}
               </span>
             </div>
           </CardContent>
@@ -2042,10 +2043,12 @@ export default function ManageTickets() {
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
               <span className="text-red-600">
-                Overdue: {serverOverdueCounts?.overdueClosed ?? overdueClosedCount}
+                Overdue:{" "}
+                {serverOverdueCounts?.overdueClosed ?? overdueClosedCount}
               </span>
               <span className="text-green-600">
-                On-time: {serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount}
+                On-time:{" "}
+                {serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount}
               </span>
             </div>
           </CardContent>

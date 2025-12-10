@@ -1868,6 +1868,9 @@ export default function ManageTickets() {
   let openToShow = displayedOpen;
   let activeOpenToShow = nonOverdueOpenFromServer;
   let overdueOpenToShow = overdueOpenFromServer;
+  let overdueClosedToShow = overdueClosedFromServer;
+  let onTimeClosedToShow = Math.max(0, displayedClosed - overdueClosedToShow);
+
   if (typeof totalTickets === "number" && Number.isFinite(totalTickets)) {
     const sumBuckets = (Number(displayedOpen || 0) + Number(inProgressCount || 0) + Number(displayedClosed || 0));
     if (sumBuckets !== Number(totalTickets)) {
@@ -1876,6 +1879,8 @@ export default function ManageTickets() {
       // Recompute activeOpen from openToShow minus overdue
       overdueOpenToShow = overdueOpenFromServer;
       activeOpenToShow = Math.max(0, openToShow - overdueOpenToShow);
+      // Recompute closed on-time
+      onTimeClosedToShow = Math.max(0, displayedClosed - overdueClosedToShow);
     }
   }
 

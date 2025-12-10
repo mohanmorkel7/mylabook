@@ -155,6 +155,28 @@ export default function ManageTickets() {
     }
   };
 
+  // Helper to robustly read status counts from server summary with several key variants
+  function getStatusCount(name: string): number {
+    if (!statusCounts) return 0;
+    const variants = [
+      name,
+      name.replace(/\s+/g, ""),
+      name.toLowerCase(),
+      name.toLowerCase().replace(/\s+/g, ""),
+    ];
+    for (const v of variants) {
+      if (Object.prototype.hasOwnProperty.call(statusCounts, v))
+        return Number(statusCounts[v]) || 0;
+    }
+    // try case-insensitive match on keys
+    const keys = Object.keys(statusCounts || {});
+    for (const k of keys) {
+      if (k && String(k).toLowerCase().replace(/\s+/g, "") === name.toLowerCase().replace(/\s+/g, ""))
+        return Number((statusCounts as any)[k]) || 0;
+    }
+    return 0;
+  }
+
   // Derived counts: overdue vs non-overdue for open and closed tickets
   const {
     overdueOpenCount,

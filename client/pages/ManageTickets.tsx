@@ -2080,8 +2080,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-gray-900">
-              {serverOverdueCounts?.totalClosed ??
-                overdueClosedCount + nonOverdueClosedCount}
+              {displayedClosed}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">

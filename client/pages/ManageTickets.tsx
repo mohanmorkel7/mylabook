@@ -1861,7 +1861,9 @@ export default function ManageTickets() {
   const overdueCount = getStatusCount("Overdue");
   const openExclusiveCount = Math.max(
     0,
-    Number(totalOpenFromServer || 0) - Number(inProgressCount || 0) - Number(overdueCount || 0),
+    Number(totalOpenFromServer || 0) -
+      Number(inProgressCount || 0) -
+      Number(overdueCount || 0),
   );
 
   return (

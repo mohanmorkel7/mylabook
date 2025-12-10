@@ -2021,6 +2021,16 @@ export default function ManageTickets() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-gray-900">
+              {typeof totalTickets === "number" && totalTickets >= 0
+                ? totalTickets
+                : tickets.length}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Total</p>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
               {serverOverdueCounts?.totalOpen ??
                 overdueOpenCount + nonOverdueOpenCount}

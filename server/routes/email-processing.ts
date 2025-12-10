@@ -124,6 +124,7 @@ router.get(
       ct.mitra_ticket_id as mitra_ticket_id,
       t.subject as email_subject,
       creator.email as email_from,
+      t.description as description,
       t.created_at,
       mc.name as config_name,
       mc.project_id as project_id,
@@ -242,6 +243,17 @@ router.get(
             ? JSON.parse(row.mitra_response)
             : row.mitra_response
           : null,
+        // Lightweight preview for list views: prefer mitra_response.email_body when available
+        description_preview: (function() {
+          try {
+            const body = (row.mitra_response && (typeof row.mitra_response === 'object') && row.mitra_response.email_body) || row.description || "";
+            if (!body) return "";
+            const plain = String(body).replace(/<[^>]*>/g, "");
+            return plain.slice(0, 200);
+          } catch (e) {
+            return (row.description && String(row.description).slice(0, 200)) || "";
+          }
+        })(),
       }));
 
       // Get total count for pagination

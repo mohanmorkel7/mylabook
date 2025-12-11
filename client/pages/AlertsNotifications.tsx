@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 // Notification icon mapping
 const getNotificationIcon = (type: string) => {
@@ -68,6 +69,7 @@ export default function AlertsNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("all");
+  const { toast } = useToast();
 
   // Fetch notifications
   const { data: notificationsData, isLoading } = useQuery({
@@ -118,6 +120,21 @@ export default function AlertsNotifications() {
     markAllAsReadMutation.mutate();
   };
 
+  const triggerSLAMutation = useMutation({
+    mutationFn: () => apiClient.triggerFinOpsSLACheck(),
+    onSuccess: () => {
+      toast({ title: "SLA check triggered", description: "FinOps SLA check started" });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to trigger SLA check", description: String(err) });
+    },
+  });
+
+  const handleTriggerSLA = () => {
+    triggerSLAMutation.mutate();
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -131,6 +148,16 @@ export default function AlertsNotifications() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            onClick={handleTriggerSLA}
+            disabled={triggerSLAMutation.isLoading}
+            variant="secondary"
+          >
+            {triggerSLAMutation.isLoading ? (
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            ) : null}
+            Trigger SLA Check
+          </Button>
           <Button
             onClick={handleMarkAllAsRead}
             disabled={markAllAsReadMutation.isPending || unreadCount === 0}

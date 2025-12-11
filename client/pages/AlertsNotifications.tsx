@@ -123,7 +123,10 @@ export default function AlertsNotifications() {
   const triggerSLAMutation = useMutation({
     mutationFn: () => apiClient.triggerFinOpsSLACheck(),
     onSuccess: async () => {
-      toast({ title: "SLA check triggered", description: "FinOps SLA check started" });
+      toast({
+        title: "SLA check triggered",
+        description: "FinOps SLA check started",
+      });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
 
       // Try to show a native system notification when running inside Electron (Windows)
@@ -132,7 +135,10 @@ export default function AlertsNotifications() {
         const body = "FinOps SLA check started";
         const notifyOpts = { title, body, silent: false };
         // Electron preload API (exposed via contextBridge) - main process will show native notification
-        if ((window as any).electronAPI && typeof (window as any).electronAPI.notify === "function") {
+        if (
+          (window as any).electronAPI &&
+          typeof (window as any).electronAPI.notify === "function"
+        ) {
           try {
             await (window as any).electronAPI.notify(notifyOpts);
           } catch (e) {

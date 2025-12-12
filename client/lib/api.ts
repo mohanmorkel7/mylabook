@@ -1295,9 +1295,10 @@ export class ApiClient {
           error,
         );
       try {
+        const unassignedParam = unassigned ? `&unassigned=true` : "";
         const fallbackPath = date
-          ? `/finops/tasks?date=${encodeURIComponent(date)}${userNameParam}`
-          : `/finops/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}`;
+          ? `/finops/tasks?date=${encodeURIComponent(date)}${userNameParam}${unassignedParam}`
+          : `/finops/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}${unassignedParam ? `${userNameParam ? "&" : "?"}${unassignedParam.slice(1)}` : ""}`;
         const fallback = await this.requestWithRetry(fallbackPath, {}, 2);
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
           console.log(

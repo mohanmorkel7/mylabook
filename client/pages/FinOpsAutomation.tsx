@@ -78,8 +78,13 @@ export default function FinOpsAutomation() {
   // Add this line to define selectedTask
   const [selectedTask, setSelectedTask] = useState<AutomationTask | null>(null);
 
-  // Pulse alerts toggle (admin only)
+  // Pulse alerts toggle visibility
   const isAdmin = user?.role === "admin";
+  const isSpecificFinOpsDeptAdmin =
+    String(user?.id || "") === "226" &&
+    !!user?.department_admin &&
+    String(user?.admin_for_department || "").toLowerCase() === "finops";
+  const canSeePulseToggle = isAdmin || isSpecificFinOpsDeptAdmin;
 
   const { data: pulseAlertsEnabled = true } = useQuery({
     queryKey: ["finops-pulse-alerts"],
@@ -87,7 +92,7 @@ export default function FinOpsAutomation() {
       const response = await apiClient.get("/finops/settings/pulse-alerts");
       return response.enabled ?? true;
     },
-    enabled: isAdmin,
+    enabled: canSeePulseToggle,
     staleTime: Infinity,
   });
 

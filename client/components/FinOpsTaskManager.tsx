@@ -585,6 +585,13 @@ export default function FinOpsTaskManager({
 
       {/* Tasks List */}
       <div className="grid gap-4">
+        {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug_finops") === "1" && (
+          <Card>
+            <CardContent>
+              <pre className="whitespace-pre-wrap text-xs max-h-80 overflow-auto">{JSON.stringify(finopsTasks, null, 2)}</pre>
+            </CardContent>
+          </Card>
+        )}
         {isLoading ? (
           <Card>
             <CardContent className="p-8 text-center">

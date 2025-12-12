@@ -2192,7 +2192,15 @@ export default function ClientBasedFinOpsTaskManager() {
           </div>
 
           {/* 🎯 Right: Action buttons (normal size, outside the box) */}
-          <div className="flex gap-2 ml-4">
+          <div className="flex gap-2 ml-4 items-center">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Unassigned only</label>
+              <Switch
+                checked={unassignedOnly}
+                onCheckedChange={(val: any) => setUnassignedOnly(Boolean(val))}
+              />
+            </div>
+
             <Button
               variant="outline"
               onClick={async () => {

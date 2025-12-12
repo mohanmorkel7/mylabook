@@ -148,18 +148,8 @@ router.post("/", async (req: Request, res: Response) => {
         return res.status(409).json({ error: "Email already exists" });
       }
 
-      // If creating a department admin, ensure no other admin exists for that department
-      if (userData.department_admin && userData.admin_for_department) {
-        const conflictRes = await pool.query(
-          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 LIMIT 1",
-          [userData.admin_for_department],
-        );
-        if (conflictRes.rows.length > 0) {
-          return res.status(409).json({
-            error: `Department '${userData.admin_for_department}' already has an admin`,
-          });
-        }
-      }
+      // Multiple department admins allowed: no uniqueness enforced
+      // (previously prevented more than one admin per department)
 
       user = await UserRepository.create(userData);
     } else {
@@ -227,18 +217,8 @@ router.put("/:id", async (req: Request, res: Response) => {
         }
       }
 
-      // If updating to become a department admin, ensure uniqueness
-      if (userData.department_admin && userData.admin_for_department) {
-        const conflictRes = await pool.query(
-          "SELECT id FROM users WHERE department_admin = true AND admin_for_department = $1 AND id != $2 LIMIT 1",
-          [userData.admin_for_department, id],
-        );
-        if (conflictRes.rows.length > 0) {
-          return res.status(409).json({
-            error: `Department '${userData.admin_for_department}' already has an admin`,
-          });
-        }
-      }
+      // Multiple department admins allowed on update: no uniqueness enforced
+      // (previously prevented more than one admin per department)
 
       user = await UserRepository.update(id, userData);
       if (!user) {

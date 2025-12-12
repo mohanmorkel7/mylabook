@@ -1490,7 +1490,9 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
 
     if (await isDatabaseAvailable()) {
       const userId = (req as any).userId || updatedBy;
-      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
+      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [
+        userId,
+      ]);
       const role = userRes.rows[0]?.role;
       const existing = await TicketRepository.getById(id);
 

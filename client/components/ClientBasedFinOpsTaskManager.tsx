@@ -1865,7 +1865,9 @@ export default function ClientBasedFinOpsTaskManager() {
 
   const normalizedUserName = normalize(user?.name || user?.email || "");
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin =
+    user?.role === "admin" ||
+    (!!user?.department_admin && String(user?.admin_for_department || "").toLowerCase() === "finops");
 
   // Role-based visibility: non-admins see only tasks where they are assigned_to, reporting manager, or escalation manager
   if (!isAdmin) {

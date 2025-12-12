@@ -245,6 +245,13 @@ export default function FinOpsTaskManager({
     refetchInterval: 30000, // Refresh every 30 seconds for SLA monitoring
   });
 
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+        console.log("[FinOpsTaskManager] finopsTasks fetched:", finopsTasks.length, finopsTasks[0]);
+    } catch (e) {}
+  }, [finopsTasks]);
+
   // Overdue direct-call timers (seconds remaining)
   const [overdueTimers, setOverdueTimers] = useState<Record<number, number>>(
     {},

@@ -1275,9 +1275,10 @@ export class ApiClient {
         // ignore localStorage errors
       }
 
+      const unassignedParam = unassigned ? `&unassigned=true` : "";
       const prodPath = date
-        ? `/finops-production/tasks?date=${encodeURIComponent(date)}${userNameParam}`
-        : `/finops-production/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}`;
+        ? `/finops-production/tasks?date=${encodeURIComponent(date)}${userNameParam}${unassignedParam}`
+        : `/finops-production/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}${unassignedParam ? `${userNameParam ? "&" : "?"}${unassignedParam.slice(1)}` : ""}`;
       // Try production endpoint first
       const result = await this.requestWithRetry(prodPath, {}, 3);
 

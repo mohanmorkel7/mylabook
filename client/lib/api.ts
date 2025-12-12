@@ -1251,7 +1251,7 @@ export class ApiClient {
   }
 
   // FinOps Task Management methods with enhanced error handling
-  async getFinOpsTasks(date?: string) {
+  async getFinOpsTasks(date?: string, unassigned?: boolean) {
     let userNameParam = "";
     try {
       if (typeof window !== "undefined" && (window as any).__APP_DEBUG)

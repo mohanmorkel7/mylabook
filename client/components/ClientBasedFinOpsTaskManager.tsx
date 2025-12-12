@@ -898,12 +898,12 @@ export default function ClientBasedFinOpsTaskManager() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["client-finops-tasks", dateFilter],
+    queryKey: ["client-finops-tasks", dateFilter, unassignedOnly],
     queryFn: async () => {
       try {
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-          console.log("🔍 Fetching FinOps tasks...", { dateFilter });
-        const result = await apiClient.getFinOpsTasks(dateFilter);
+          console.log("🔍 Fetching FinOps tasks...", { dateFilter, unassignedOnly });
+        const result = await apiClient.getFinOpsTasks(dateFilter, unassignedOnly);
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
           console.log(
             "��� FinOps tasks query successful:",

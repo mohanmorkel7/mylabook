@@ -1251,7 +1251,7 @@ export class ApiClient {
   }
 
   // FinOps Task Management methods with enhanced error handling
-  async getFinOpsTasks(date?: string, unassigned?: boolean) {
+  async getFinOpsTasks(date?: string) {
     let userNameParam = "";
     try {
       if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
@@ -1275,10 +1275,9 @@ export class ApiClient {
         // ignore localStorage errors
       }
 
-      const unassignedParam = unassigned ? `&unassigned=true` : "";
       const prodPath = date
-        ? `/finops-production/tasks?date=${encodeURIComponent(date)}${userNameParam}${unassignedParam}`
-        : `/finops-production/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}${unassignedParam ? `${userNameParam ? "&" : "?"}${unassignedParam.slice(1)}` : ""}`;
+        ? `/finops-production/tasks?date=${encodeURIComponent(date)}${userNameParam}`
+        : `/finops-production/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}`;
       // Try production endpoint first
       const result = await this.requestWithRetry(prodPath, {}, 3);
 
@@ -1295,10 +1294,9 @@ export class ApiClient {
           error,
         );
       try {
-        const unassignedParam = unassigned ? `&unassigned=true` : "";
         const fallbackPath = date
-          ? `/finops/tasks?date=${encodeURIComponent(date)}${userNameParam}${unassignedParam}`
-          : `/finops/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}${unassignedParam ? `${userNameParam ? "&" : "?"}${unassignedParam.slice(1)}` : ""}`;
+          ? `/finops/tasks?date=${encodeURIComponent(date)}${userNameParam}`
+          : `/finops/tasks${userNameParam ? `?${userNameParam.slice(1)}` : ""}`;
         const fallback = await this.requestWithRetry(fallbackPath, {}, 2);
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
           console.log(

@@ -379,12 +379,15 @@ router.get("/tasks", async (req: Request, res: Response) => {
             if (ur.rows.length) {
               const row = ur.rows[0];
               const roleVal = String(row.role || "").toLowerCase();
-              if (roleVal === "admin" || roleVal === "finops admin") callerIsAdmin = true;
+              if (roleVal === "admin" || roleVal === "finops admin")
+                callerIsAdmin = true;
 
               // Treat department_admin for matching department as admin as well
               try {
                 const deptAdmin = !!row.department_admin;
-                const adminDept = String(row.admin_for_department || "").toLowerCase().trim();
+                const adminDept = String(row.admin_for_department || "")
+                  .toLowerCase()
+                  .trim();
                 if (deptAdmin && adminDept === "finops") callerIsAdmin = true;
               } catch (e) {}
 
@@ -406,11 +409,9 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
       // If caller is not FinOps admin and no user identity was provided, deny viewing the full list
       if (!callerIsAdmin && !normalizedUser) {
-        return res
-          .status(403)
-          .json({
-            error: "Forbidden: only FinOps admins can view the full task list",
-          });
+        return res.status(403).json({
+          error: "Forbidden: only FinOps admins can view the full task list",
+        });
       }
 
       let isManager = false;

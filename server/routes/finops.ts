@@ -400,7 +400,14 @@ router.get("/tasks", async (req: Request, res: Response) => {
       if (dateParam) {
         // When a specific date is requested, use finops_tracker to show historical statuses
         // If user is not a manager and userName provided, restrict to tasks assigned to this user
-        const trackerQuery = `
+        const unassigned = String(req.query.unassigned || "").toLowerCase() === "true";
+      const assignedFilterSql = unassigned
+        ? "AND COALESCE(t.assigned_to, '[]'::jsonb) = '[]'::jsonb"
+        : normalizedUser && !isManager && !callerIsAdmin
+        ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $2)"
+        : "";
+
+      const trackerQuery = `
           SELECT
             t.*,
             COALESCE(
@@ -432,7 +439,7 @@ router.get("/tasks", async (req: Request, res: Response) => {
           FROM finops_tasks t
           LEFT JOIN finops_tracker ft ON t.id = ft.task_id AND ft.run_date = $1
           WHERE t.deleted_at IS NULL
-          ${normalizedUser && !isManager && !callerIsAdmin ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $2)" : ""}
+          ${assignedFilterSql}
           GROUP BY t.id
           ORDER BY t.created_at DESC
         `;

@@ -372,6 +372,13 @@ export default function EnhancedFinOpsTaskManager() {
     refetchInterval: 30000, // Refresh every 30 seconds for SLA monitoring
   });
 
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+        console.log("[EnhancedFinOpsTaskManager] finopsTasks fetched:", finopsTasks.length, finopsTasks[0]);
+    } catch (e) {}
+  }, [finopsTasks]);
+
   // Fetch users for assignment
   const { data: users = [] } = useQuery({
     queryKey: ["users"],

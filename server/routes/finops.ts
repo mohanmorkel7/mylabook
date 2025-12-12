@@ -373,16 +373,24 @@ router.get("/tasks", async (req: Request, res: Response) => {
           const uid = parseInt(String(headerUserId), 10);
           if (!isNaN(uid)) {
             const ur = await pool.query(
-              "SELECT role, first_name, last_name FROM users WHERE id = $1 LIMIT 1",
+              "SELECT role, first_name, last_name, department_admin, admin_for_department FROM users WHERE id = $1 LIMIT 1",
               [uid],
             );
             if (ur.rows.length) {
-              const roleVal = String(ur.rows[0].role || "").toLowerCase();
-              if (roleVal === "admin" || roleVal === "finops admin")
-                callerIsAdmin = true;
+              const row = ur.rows[0];
+              const roleVal = String(row.role || "").toLowerCase();
+              if (roleVal === "admin" || roleVal === "finops admin") callerIsAdmin = true;
+
+              // Treat department_admin for matching department as admin as well
+              try {
+                const deptAdmin = !!row.department_admin;
+                const adminDept = String(row.admin_for_department || "").toLowerCase().trim();
+                if (deptAdmin && adminDept === "finops") callerIsAdmin = true;
+              } catch (e) {}
+
               if (!normalizedUser) {
-                const fn = ur.rows[0].first_name || "";
-                const ln = ur.rows[0].last_name || "";
+                const fn = row.first_name || "";
+                const ln = row.last_name || "";
                 const full = `${fn} ${ln}`.trim();
                 if (full) normalizedUser = full.toLowerCase();
               }

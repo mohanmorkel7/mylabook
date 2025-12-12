@@ -247,7 +247,7 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
     const dateParam = (req.query.date as string) || null;
     const userNameRaw = (req.query.user_name as string) || null;
-    const normalizedUser = userNameRaw
+    let normalizedUser = userNameRaw
       ? userNameRaw.trim().toLowerCase()
       : null;
     const callerRole =

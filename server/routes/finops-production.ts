@@ -490,7 +490,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
     }));
 
     console.log(`[finops-production] Returning ${tasks.length} tasks`);
-    if (tasks.length > 0) console.log("[finops-production] First task:", tasks[0]);
+    if (tasks.length > 0)
+      console.log("[finops-production] First task:", tasks[0]);
 
     res.json(tasks);
   } catch (error) {

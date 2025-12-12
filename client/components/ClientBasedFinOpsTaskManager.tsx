@@ -902,8 +902,14 @@ export default function ClientBasedFinOpsTaskManager() {
     queryFn: async () => {
       try {
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-          console.log("🔍 Fetching FinOps tasks...", { dateFilter, unassignedOnly });
-        const result = await apiClient.getFinOpsTasks(dateFilter, unassignedOnly);
+          console.log("🔍 Fetching FinOps tasks...", {
+            dateFilter,
+            unassignedOnly,
+          });
+        const result = await apiClient.getFinOpsTasks(
+          dateFilter,
+          unassignedOnly,
+        );
         if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
           console.log(
             "��� FinOps tasks query successful:",
@@ -956,7 +962,10 @@ export default function ClientBasedFinOpsTaskManager() {
     }) =>
       apiClient.updateFinOpsSubTask(taskId, subTaskId, status, userName, date),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"], exact: false });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
     },
   });
 
@@ -1143,7 +1152,10 @@ export default function ClientBasedFinOpsTaskManager() {
   const createTaskMutation = useMutation({
     mutationFn: (taskData: any) => apiClient.createFinOpsTask(taskData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"], exact: false });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
       setIsCreateDialogOpen(false);
       resetForm();
     },
@@ -1153,7 +1165,10 @@ export default function ClientBasedFinOpsTaskManager() {
     mutationFn: ({ id, taskData }: { id: number; taskData: any }) =>
       apiClient.updateFinOpsTask(id, taskData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"], exact: false });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
       setEditingTask(null);
       setIsCreateDialogOpen(false);
       resetForm();
@@ -1163,7 +1178,10 @@ export default function ClientBasedFinOpsTaskManager() {
   const deleteTaskMutation = useMutation({
     mutationFn: (id: number) => apiClient.deleteFinOpsTask(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"], exact: false });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
     },
   });
 

@@ -489,6 +489,9 @@ router.get("/tasks", async (req: Request, res: Response) => {
       subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
     }));
 
+    console.log(`[finops-production] Returning ${tasks.length} tasks`);
+    if (tasks.length > 0) console.log("[finops-production] First task:", tasks[0]);
+
     res.json(tasks);
   } catch (error) {
     console.error("Error fetching FinOps tasks:", error);

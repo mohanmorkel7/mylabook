@@ -338,7 +338,7 @@ router.get("/tasks", async (req: Request, res: Response) => {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization",
+      "Content-Type, Authorization, X-User-Id",
     );
 
     if (await isDatabaseAvailable()) {
@@ -3959,7 +3959,7 @@ router.get("/next-calls", async (req: Request, res: Response) => {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization",
+      "Content-Type, Authorization, X-User-Id",
     );
 
     if (await isDatabaseAvailable()) {

@@ -1489,17 +1489,23 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
     const updatedBy = normalizeUserId(req.body.updated_by || "1");
 
     if (await isDatabaseAvailable()) {
-      // Permission: only admin or creator can update
       const userId = (req as any).userId || updatedBy;
-      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [
-        userId,
-      ]);
+      const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [userId]);
       const role = userRes.rows[0]?.role;
       const existing = await TicketRepository.getById(id);
-      if (role !== "admin" && existing.created_by !== userId) {
-        return res
-          .status(403)
-          .json({ error: "Forbidden: not allowed to update ticket" });
+
+      // Determine if this update is only a status change
+      const isStatusChange =
+        updateData.status_id && updateData.status_id !== existing.status_id;
+
+      // Permission: allow any authenticated user to change status only.
+      // For other updates, require admin role or the ticket creator.
+      if (!isStatusChange) {
+        if (role !== "admin" && existing.created_by !== userId) {
+          return res
+            .status(403)
+            .json({ error: "Forbidden: not allowed to update ticket" });
+        }
       }
 
       // If the existing status is 'Overdue' and the update moves it to a non-overdue status, require a reason

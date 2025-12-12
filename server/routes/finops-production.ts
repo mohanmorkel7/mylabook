@@ -255,6 +255,37 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
     let callerIsAdmin = callerRole === "admin";
 
+    // Prefer x-user-id header to resolve caller role and department admin status
+    const headerUserId = req.headers["x-user-id"] as string | undefined;
+    if (!callerIsAdmin && headerUserId) {
+      try {
+        const uid = parseInt(String(headerUserId), 10);
+        if (!isNaN(uid)) {
+          const ur = await pool.query(
+            "SELECT role, department_admin, admin_for_department, first_name, last_name FROM users WHERE id = $1 LIMIT 1",
+            [uid],
+          );
+          if (ur.rows.length) {
+            const row = ur.rows[0];
+            const roleVal = String(row.role || "").toLowerCase();
+            if (roleVal === "admin" || roleVal === "finops admin") callerIsAdmin = true;
+            const deptAdmin = !!row.department_admin;
+            const adminDept = String(row.admin_for_department || "").toLowerCase().trim();
+            if (deptAdmin && adminDept === "finops") callerIsAdmin = true;
+
+            if (!normalizedUser) {
+              const fn = row.first_name || "";
+              const ln = row.last_name || "";
+              const full = `${fn} ${ln}`.trim();
+              if (full) normalizedUser = full.toLowerCase();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to resolve caller from x-user-id header:", (e as Error).message);
+      }
+    }
+
     if (!callerIsAdmin && normalizedUser) {
       try {
         const ur = await pool.query(

@@ -268,9 +268,12 @@ router.get("/tasks", async (req: Request, res: Response) => {
           if (ur.rows.length) {
             const row = ur.rows[0];
             const roleVal = String(row.role || "").toLowerCase();
-            if (roleVal === "admin" || roleVal === "finops admin") callerIsAdmin = true;
+            if (roleVal === "admin" || roleVal === "finops admin")
+              callerIsAdmin = true;
             const deptAdmin = !!row.department_admin;
-            const adminDept = String(row.admin_for_department || "").toLowerCase().trim();
+            const adminDept = String(row.admin_for_department || "")
+              .toLowerCase()
+              .trim();
             if (deptAdmin && adminDept === "finops") callerIsAdmin = true;
 
             if (!normalizedUser) {
@@ -282,7 +285,10 @@ router.get("/tasks", async (req: Request, res: Response) => {
           }
         }
       } catch (e) {
-        console.warn("Failed to resolve caller from x-user-id header:", (e as Error).message);
+        console.warn(
+          "Failed to resolve caller from x-user-id header:",
+          (e as Error).message,
+        );
       }
     }
 
@@ -890,7 +896,11 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     if (!approver_name || /undefined|null/i.test(String(approver_name))) {
       const headerName = (req.headers["x-user-name"] as string) || "";
       const headerUserId = (req.headers["x-user-id"] as string) || "";
-      if (headerName && typeof headerName === "string" && headerName.trim() !== "") {
+      if (
+        headerName &&
+        typeof headerName === "string" &&
+        headerName.trim() !== ""
+      ) {
         approver_name = headerName.trim();
       } else if (headerUserId && String(headerUserId).trim() !== "") {
         try {
@@ -909,7 +919,10 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
           }
           if (userRes && userRes.rows.length > 0) {
             const u = userRes.rows[0];
-            approver_name = `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() || u.email || approver_name;
+            approver_name =
+              `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() ||
+              u.email ||
+              approver_name;
           }
         } catch (e) {
           // ignore

@@ -357,8 +357,13 @@ router.get("/tasks", async (req: Request, res: Response) => {
       const headerUserId = req.headers["x-user-id"] as string | undefined;
       let callerIsAdmin = false;
       // Accept explicit role from caller (if provided by client) to allow admin bypass
-      const callerRole = (req.query.user_role as string) || (req.query.role as string) || null;
-      if (callerRole && (String(callerRole).toLowerCase() === "admin" || String(callerRole).toLowerCase() === "finops admin")) {
+      const callerRole =
+        (req.query.user_role as string) || (req.query.role as string) || null;
+      if (
+        callerRole &&
+        (String(callerRole).toLowerCase() === "admin" ||
+          String(callerRole).toLowerCase() === "finops admin")
+      ) {
         callerIsAdmin = true;
       }
 
@@ -373,7 +378,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
             );
             if (ur.rows.length) {
               const roleVal = String(ur.rows[0].role || "").toLowerCase();
-              if (roleVal === "admin" || roleVal === "finops admin") callerIsAdmin = true;
+              if (roleVal === "admin" || roleVal === "finops admin")
+                callerIsAdmin = true;
               if (!normalizedUser) {
                 const fn = ur.rows[0].first_name || "";
                 const ln = ur.rows[0].last_name || "";
@@ -383,13 +389,20 @@ router.get("/tasks", async (req: Request, res: Response) => {
             }
           }
         } catch (e) {
-          console.warn("Failed to resolve caller from x-user-id header:", (e as Error).message);
+          console.warn(
+            "Failed to resolve caller from x-user-id header:",
+            (e as Error).message,
+          );
         }
       }
 
       // If caller is not FinOps admin and no user identity was provided, deny viewing the full list
       if (!callerIsAdmin && !normalizedUser) {
-        return res.status(403).json({ error: "Forbidden: only FinOps admins can view the full task list" });
+        return res
+          .status(403)
+          .json({
+            error: "Forbidden: only FinOps admins can view the full task list",
+          });
       }
 
       let isManager = false;
@@ -420,14 +433,15 @@ router.get("/tasks", async (req: Request, res: Response) => {
       if (dateParam) {
         // When a specific date is requested, use finops_tracker to show historical statuses
         // If user is not a manager and userName provided, restrict to tasks assigned to this user
-        const unassigned = String(req.query.unassigned || "").toLowerCase() === "true";
-      const assignedFilterSql = unassigned
-        ? "AND COALESCE(t.assigned_to, '[]'::jsonb) = '[]'::jsonb"
-        : normalizedUser && !isManager && !callerIsAdmin
-        ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $2)"
-        : "";
+        const unassigned =
+          String(req.query.unassigned || "").toLowerCase() === "true";
+        const assignedFilterSql = unassigned
+          ? "AND COALESCE(t.assigned_to, '[]'::jsonb) = '[]'::jsonb"
+          : normalizedUser && !isManager && !callerIsAdmin
+            ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $2)"
+            : "";
 
-      const trackerQuery = `
+        const trackerQuery = `
           SELECT
             t.*,
             COALESCE(
@@ -470,12 +484,13 @@ router.get("/tasks", async (req: Request, res: Response) => {
             : await pool.query(trackerQuery, [dateParam]);
       } else {
         // Current view: load today's subtasks from finops_tracker (IST date)
-        const unassignedToday = String(req.query.unassigned || "").toLowerCase() === "true";
+        const unassignedToday =
+          String(req.query.unassigned || "").toLowerCase() === "true";
         const assignedFilterSqlToday = unassignedToday
           ? "AND COALESCE(t.assigned_to, '[]'::jsonb) = '[]'::jsonb"
           : normalizedUser && !isManager && !callerIsAdmin
-          ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $1)"
-          : "";
+            ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $1)"
+            : "";
 
         const trackerTodayQuery = `
           SELECT
@@ -1708,10 +1723,18 @@ router.patch(
       let userName = typeof user_name === "string" ? user_name.trim() : "";
 
       // If user_name not provided, try headers (x-user-name or x-user-id) before defaulting
-      if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+      if (
+        !userName ||
+        /undefined|null/i.test(userName) ||
+        userName.replace(/\s+/g, "") === ""
+      ) {
         const headerName = (req.headers["x-user-name"] as string) || "";
         const headerUserId = (req.headers["x-user-id"] as string) || "";
-        if (headerName && typeof headerName === "string" && headerName.trim() !== "") {
+        if (
+          headerName &&
+          typeof headerName === "string" &&
+          headerName.trim() !== ""
+        ) {
           userName = headerName.trim();
         } else if (headerUserId && String(headerUserId).trim() !== "") {
           // Try to resolve numeric user id or azure id/email
@@ -1732,14 +1755,21 @@ router.patch(
             }
             if (userRes && userRes.rows.length > 0) {
               const u = userRes.rows[0];
-              userName = `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() || u.email || "Unknown User";
+              userName =
+                `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() ||
+                u.email ||
+                "Unknown User";
             }
           } catch (e) {
             // ignore and fallback
           }
         }
 
-        if (!userName || /undefined|null/i.test(userName) || userName.replace(/\s+/g, "") === "") {
+        if (
+          !userName ||
+          /undefined|null/i.test(userName) ||
+          userName.replace(/\s+/g, "") === ""
+        ) {
           userName = "Unknown User";
         }
       }

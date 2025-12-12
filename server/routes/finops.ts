@@ -350,28 +350,48 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
       let result;
 
+      // Determine caller identity and role. Prefer x-user-id header if present.
       const userName = (req.query.user_name as string) || null;
-      const normalizedUser = userName ? userName.trim().toLowerCase() : null;
+      let normalizedUser = userName ? userName.trim().toLowerCase() : null;
+
+      const headerUserId = req.headers["x-user-id"] as string | undefined;
+      let callerIsAdmin = false;
       // Accept explicit role from caller (if provided by client) to allow admin bypass
-      const callerRole =
-        (req.query.user_role as string) || (req.query.role as string) || null;
-      let callerIsAdmin = callerRole === "admin";
-      // If role not provided, try to resolve role from users table by matching name or email
-      if (!callerIsAdmin && normalizedUser) {
+      const callerRole = (req.query.user_role as string) || (req.query.role as string) || null;
+      if (callerRole && (String(callerRole).toLowerCase() === "admin" || String(callerRole).toLowerCase() === "finops admin")) {
+        callerIsAdmin = true;
+      }
+
+      // If header user id provided, resolve role & name from DB (preferred)
+      if (headerUserId) {
         try {
-          const ur = await pool.query(
-            `SELECT role FROM users WHERE LOWER(CONCAT(first_name,' ',last_name)) = $1 OR LOWER(email) = $1 LIMIT 1`,
-            [normalizedUser],
-          );
-          if (ur.rows.length && ur.rows[0].role === "admin")
-            callerIsAdmin = true;
+          const uid = parseInt(String(headerUserId), 10);
+          if (!isNaN(uid)) {
+            const ur = await pool.query(
+              "SELECT role, first_name, last_name FROM users WHERE id = $1 LIMIT 1",
+              [uid],
+            );
+            if (ur.rows.length) {
+              const roleVal = String(ur.rows[0].role || "").toLowerCase();
+              if (roleVal === "admin" || roleVal === "finops admin") callerIsAdmin = true;
+              if (!normalizedUser) {
+                const fn = ur.rows[0].first_name || "";
+                const ln = ur.rows[0].last_name || "";
+                const full = `${fn} ${ln}`.trim();
+                if (full) normalizedUser = full.toLowerCase();
+              }
+            }
+          }
         } catch (e) {
-          console.warn(
-            "Failed to resolve caller role from users table:",
-            (e as Error).message,
-          );
+          console.warn("Failed to resolve caller from x-user-id header:", (e as Error).message);
         }
       }
+
+      // If caller is not FinOps admin and no user identity was provided, deny viewing the full list
+      if (!callerIsAdmin && !normalizedUser) {
+        return res.status(403).json({ error: "Forbidden: only FinOps admins can view the full task list" });
+      }
+
       let isManager = false;
       if (normalizedUser && !callerIsAdmin) {
         try {

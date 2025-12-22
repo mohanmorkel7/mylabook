@@ -123,7 +123,9 @@ class FinOpsScheduler {
    */
   private async executeWeeklyTasks(): Promise<void> {
     try {
-      const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+      const istNow = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+      );
       const today = istNow.toISOString().split("T")[0];
 
       const tasksToExecute = await pool.query(
@@ -155,7 +157,9 @@ class FinOpsScheduler {
    */
   private async executeMonthlyTasks(): Promise<void> {
     try {
-      const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+      const istNow = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+      );
       const today = istNow.toISOString().split("T")[0];
 
       const tasksToExecute = await pool.query(

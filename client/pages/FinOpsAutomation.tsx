@@ -383,6 +383,11 @@ export default function FinOpsAutomation() {
         <TabsContent value="activity-log" className="space-y-6">
           <FinOpsActivityLog />
         </TabsContent>
+
+        {/* Cumulative Data Tab */}
+        <TabsContent value="cumulative-data" className="space-y-6">
+          <FinOpsCumulativeData />
+        </TabsContent>
       </Tabs>
     </div>
   );

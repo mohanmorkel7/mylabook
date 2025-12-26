@@ -112,7 +112,9 @@ export default function FinOpsCumulativeData() {
     <div className="space-y-4">
       <div className="flex gap-4 items-center">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Dates</label>
+          <label className="block text-sm font-medium text-gray-700">
+            Dates
+          </label>
           <div className="mt-1 flex gap-2 flex-wrap">
             {isLoading ? (
               <div>Loading...</div>
@@ -131,19 +133,35 @@ export default function FinOpsCumulativeData() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button onClick={() => { setSelectedDate(dates[0] || null); }}>Select Latest</Button>
-          <Button onClick={() => { setSelectedDate(null); }}>Clear</Button>
+          <Button
+            onClick={() => {
+              setSelectedDate(dates[0] || null);
+            }}
+          >
+            Select Latest
+          </Button>
+          <Button
+            onClick={() => {
+              setSelectedDate(null);
+            }}
+          >
+            Clear
+          </Button>
         </div>
       </div>
 
       {selectedDate ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[("pending"), ("in_progress"), ("overdue"), ("delayed")].map((k) => (
+          {["pending", "in_progress", "overdue", "delayed"].map((k) => (
             <Card key={k} className="p-0">
               <CardHeader>
-                <CardTitle className="text-sm capitalize">{k.replace(/_/g, " ")}</CardTitle>
+                <CardTitle className="text-sm capitalize">
+                  {k.replace(/_/g, " ")}
+                </CardTitle>
                 <CardDescription>
-                  {(countsPerDate[selectedDate] && countsPerDate[selectedDate][k]) || 0}
+                  {(countsPerDate[selectedDate] &&
+                    countsPerDate[selectedDate][k]) ||
+                    0}
                 </CardDescription>
               </CardHeader>
               <CardContent></CardContent>
@@ -151,7 +169,9 @@ export default function FinOpsCumulativeData() {
           ))}
         </div>
       ) : (
-        <div className="text-sm text-gray-600">Select a date to view cumulative counts and tasks</div>
+        <div className="text-sm text-gray-600">
+          Select a date to view cumulative counts and tasks
+        </div>
       )}
 
       {selectedDate && (
@@ -159,7 +179,9 @@ export default function FinOpsCumulativeData() {
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Tasks for {selectedDate}</h3>
             <div className="flex gap-2">
-              <Button onClick={exportTasks} disabled={tasksLoading}>Export XLSX</Button>
+              <Button onClick={exportTasks} disabled={tasksLoading}>
+                Export XLSX
+              </Button>
               <Button onClick={() => window.print()}>Print</Button>
             </div>
           </div>
@@ -174,14 +196,22 @@ export default function FinOpsCumulativeData() {
                 <CardContent>
                   <div className="space-y-2">
                     {(t.subtasks || []).map((s: any) => (
-                      <div key={s.id} className="flex justify-between items-center border-b pb-2">
+                      <div
+                        key={s.id}
+                        className="flex justify-between items-center border-b pb-2"
+                      >
                         <div>
                           <div className="font-medium">{s.name}</div>
-                          <div className="text-xs text-gray-500">Status: {s.status} • Start: {s.start_time || s.scheduled_time || "-"}</div>
+                          <div className="text-xs text-gray-500">
+                            Status: {s.status} • Start:{" "}
+                            {s.start_time || s.scheduled_time || "-"}
+                          </div>
                         </div>
                         <div className="text-xs text-gray-500">
                           {s.started_at ? `Started: ${s.started_at}` : ""}
-                          {s.completed_at ? ` • Completed: ${s.completed_at}` : ""}
+                          {s.completed_at
+                            ? ` • Completed: ${s.completed_at}`
+                            : ""}
                         </div>
                       </div>
                     ))}

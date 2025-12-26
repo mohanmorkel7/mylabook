@@ -59,8 +59,6 @@ export default function FinOpsCumulativeData() {
         pending: 0,
         in_progress: 0,
         overdue: 0,
-        delayed: 0,
-        open: 0,
       } as Record<string, number>;
       rows.forEach((t: any) => {
         const subs = Array.isArray(t.subtasks) ? t.subtasks : [];

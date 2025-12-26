@@ -87,7 +87,8 @@ export default function FinOpsCumulativeData() {
     rowsForDate.forEach((t: any) => {
       const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
       subt.forEach((s: any) => {
-        if (String(s.status || "").toLowerCase() === "completed") return; // skip completed
+        const st = String(s.status || "").toLowerCase();
+        if (!["pending","in_progress","overdue"].includes(st)) return; // include only requested statuses
         rows.push({
           run_date: date,
           task: t.task_name,

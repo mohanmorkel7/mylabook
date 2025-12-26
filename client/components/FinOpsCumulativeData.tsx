@@ -13,7 +13,9 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 const IST_DATE_STRING = (): string => {
-  const ist = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const ist = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+  );
   return ist.toISOString().slice(0, 10);
 };
 
@@ -43,7 +45,9 @@ export default function FinOpsCumulativeData() {
       map[d].push(row);
     });
     // sort dates descending
-    const ordered: [string, any[]][] = Object.entries(map).sort((a, b) => b[0].localeCompare(a[0]));
+    const ordered: [string, any[]][] = Object.entries(map).sort((a, b) =>
+      b[0].localeCompare(a[0]),
+    );
     return ordered; // array of [date, rows]
   }, [tracker]);
 
@@ -51,7 +55,13 @@ export default function FinOpsCumulativeData() {
   const countsPerDate = useMemo(() => {
     const counts: Record<string, Record<string, number>> = {};
     byDate.forEach(([date, rows]) => {
-      const c = { pending: 0, in_progress: 0, overdue: 0, delayed: 0, open: 0 } as Record<string, number>;
+      const c = {
+        pending: 0,
+        in_progress: 0,
+        overdue: 0,
+        delayed: 0,
+        open: 0,
+      } as Record<string, number>;
       rows.forEach((t: any) => {
         const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
         subs.forEach((s: any) => {
@@ -130,7 +140,9 @@ export default function FinOpsCumulativeData() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Cumulative Data (historical dates)</h3>
+        <h3 className="text-lg font-semibold">
+          Cumulative Data (historical dates)
+        </h3>
         <div className="flex gap-2">
           <Button onClick={exportAll} disabled={isLoading}>
             Export All XLSX
@@ -141,7 +153,9 @@ export default function FinOpsCumulativeData() {
 
       <div className="space-y-8">
         {byDate.length === 0 && (
-          <div className="text-sm text-gray-600">No historical dates available</div>
+          <div className="text-sm text-gray-600">
+            No historical dates available
+          </div>
         )}
 
         {byDate.map(([date, rows]) => (
@@ -149,7 +163,9 @@ export default function FinOpsCumulativeData() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h4 className="font-semibold">{date}</h4>
-                <div className="text-sm text-gray-500">{rows.length} task(s)</div>
+                <div className="text-sm text-gray-500">
+                  {rows.length} task(s)
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={() => exportDate(date)}>
@@ -188,27 +204,38 @@ export default function FinOpsCumulativeData() {
                         <CardTitle>{t.task_name}</CardTitle>
                         <CardDescription>{t.period || ""}</CardDescription>
                       </div>
-                      <div className="text-sm text-gray-500">{t.task_name ? "" : ""}</div>
+                      <div className="text-sm text-gray-500">
+                        {t.task_name ? "" : ""}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {(t.subtasks || [])
-                        .filter((s: any) => String(s.status || "").toLowerCase() !== "completed")
+                        .filter(
+                          (s: any) =>
+                            String(s.status || "").toLowerCase() !==
+                            "completed",
+                        )
                         .map((s: any) => (
                           <div
                             key={s.subtask_id || s.id}
                             className="flex justify-between items-center border-b pb-2"
                           >
                             <div>
-                              <div className="font-medium">{s.subtask_name || s.name}</div>
+                              <div className="font-medium">
+                                {s.subtask_name || s.name}
+                              </div>
                               <div className="text-xs text-gray-500">
-                                Status: {s.status} • Start: {s.scheduled_time || s.start_time || "-"}
+                                Status: {s.status} • Start:{" "}
+                                {s.scheduled_time || s.start_time || "-"}
                               </div>
                             </div>
                             <div className="text-xs text-gray-500">
                               {s.started_at ? `Started: ${s.started_at}` : ""}
-                              {s.completed_at ? ` • Completed: ${s.completed_at}` : ""}
+                              {s.completed_at
+                                ? ` • Completed: ${s.completed_at}`
+                                : ""}
                             </div>
                           </div>
                         ))}

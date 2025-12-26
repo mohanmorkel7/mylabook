@@ -361,10 +361,11 @@ export default function FinOpsAutomation() {
       )}
 
       <Tabs defaultValue="task-management" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="task-management">Task Management</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="activity-log">Activity Log</TabsTrigger>
+          <TabsTrigger value="cumulative-data">Cumulative Data</TabsTrigger>
         </TabsList>
 
         {/* Task Management Tab */}

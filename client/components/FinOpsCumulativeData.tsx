@@ -172,13 +172,12 @@ export default function FinOpsCumulativeData() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* counts cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* counts cards (only pending, in_progress, overdue) */}
               {[
                 { key: "pending", label: "Pending" },
                 { key: "in_progress", label: "In-Progress" },
                 { key: "overdue", label: "Overdue" },
-                { key: "delayed", label: "Delayed" },
               ].map((c) => (
                 <Card key={c.key} className="p-0">
                   <CardHeader>

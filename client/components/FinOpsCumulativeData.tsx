@@ -88,7 +88,7 @@ export default function FinOpsCumulativeData() {
       const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
       subt.forEach((s: any) => {
         const st = String(s.status || "").toLowerCase();
-        if (!["pending","in_progress","overdue"].includes(st)) return; // include only requested statuses
+        if (!["pending", "in_progress", "overdue"].includes(st)) return; // include only requested statuses
         rows.push({
           run_date: date,
           task: t.task_name,
@@ -115,7 +115,7 @@ export default function FinOpsCumulativeData() {
         const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
         subt.forEach((s: any) => {
           const st = String(s.status || "").toLowerCase();
-          if (!["pending","in_progress","overdue"].includes(st)) return;
+          if (!["pending", "in_progress", "overdue"].includes(st)) return;
           rows.push({
             run_date: date,
             task: t.task_name,

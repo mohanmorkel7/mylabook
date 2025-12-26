@@ -97,9 +97,12 @@ export default function FinOpsCumulativeData() {
                     className="flex justify-between items-center border-b pb-2"
                   >
                     <div>
-                      <div className="font-medium">{s.subtask_name || s.name}</div>
+                      <div className="font-medium">
+                        {s.subtask_name || s.name}
+                      </div>
                       <div className="text-xs text-gray-500">
-                        Status: {s.status} • Start: {s.scheduled_time || s.start_time || "-"}
+                        Status: {s.status} • Start:{" "}
+                        {s.scheduled_time || s.start_time || "-"}
                       </div>
                     </div>
                     <div className="text-xs text-gray-500">

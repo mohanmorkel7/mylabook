@@ -1311,6 +1311,16 @@ export class ApiClient {
     }
   }
 
+  // New: fetch finops tracker rows (datewise history)
+  async getFinOpsTracker(date?: string, period?: string, taskId?: number) {
+    const params = new URLSearchParams();
+    if (date) params.append("date", date);
+    if (period) params.append("period", period);
+    if (taskId) params.append("task_id", String(taskId));
+    const path = `/finops-production/tracker${params.toString() ? "?" + params.toString() : ""}`;
+    return this.request(path);
+  }
+
   async getFinOpsNextCalls(alertKey?: string) {
     const params = alertKey ? `?alert_key=${encodeURIComponent(alertKey)}` : "";
     return this.request(`/finops-production/next-calls${params}`);

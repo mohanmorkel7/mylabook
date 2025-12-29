@@ -241,7 +241,11 @@ export class ApiClient {
               : 8000;
           if (endpoint.includes("/tickets")) timeoutMs = 30000; // allow tickets up to 30s
           // finops tracker can be slow depending on DB - allow up to 30s
-          if (endpoint.includes("/finops-production/tracker") || endpoint.includes("/finops/tracker")) timeoutMs = 30000;
+          if (
+            endpoint.includes("/finops-production/tracker") ||
+            endpoint.includes("/finops/tracker")
+          )
+            timeoutMs = 30000;
 
           // Use AbortController so the underlying fetch/connection is aborted on timeout
           const controller = new AbortController();
@@ -609,7 +613,11 @@ export class ApiClient {
         const xhr = new XMLHttpRequest();
         // Default XHR timeout, increase for known slow endpoints like finops tracker
         let xhrTimeout = 15000;
-        if (url.includes("/finops-production/tracker") || url.includes("/finops/tracker")) xhrTimeout = 30000;
+        if (
+          url.includes("/finops-production/tracker") ||
+          url.includes("/finops/tracker")
+        )
+          xhrTimeout = 30000;
         xhr.timeout = xhrTimeout;
 
         // Handle CORS for cross-origin requests

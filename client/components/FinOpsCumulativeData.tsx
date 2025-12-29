@@ -66,11 +66,17 @@ export default function FinOpsCumulativeData() {
 
       // Ensure duration = 'daily' (task-level or row-level)
       const duration =
-        (row.duration || row.period || row.task_duration || row.task_period || "") + "";
+        (row.duration ||
+          row.period ||
+          row.task_duration ||
+          row.task_period ||
+          "") + "";
       if (duration.toLowerCase() !== "daily") return;
 
       // Determine run_date in IST YYYY-MM-DD
-      const runDate = toISTDateString(row.run_date || row.run_date_at || row.date || row.run_date_string);
+      const runDate = toISTDateString(
+        row.run_date || row.run_date_at || row.date || row.run_date_string,
+      );
       if (!runDate || runDate === "unknown") return;
 
       // Exclude today (IST)
@@ -85,7 +91,12 @@ export default function FinOpsCumulativeData() {
       if (!map[runDate]) map[runDate] = {};
       const tasksMap = map[runDate];
 
-      const taskIdKey = String(row.task_id || row.task || row.task_name || `task_${row.id || Math.random()}`);
+      const taskIdKey = String(
+        row.task_id ||
+          row.task ||
+          row.task_name ||
+          `task_${row.id || Math.random()}`,
+      );
       if (!tasksMap[taskIdKey]) {
         tasksMap[taskIdKey] = {
           task_id: row.task_id || null,

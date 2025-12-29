@@ -1785,4 +1785,25 @@ router.get("/next-calls", async (req: Request, res: Response) => {
   }
 });
 
+// Historical cumulative tracker rows (matches exact SQL requested)
+router.get("/tracker/cumulative", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+    const query = `
+      SELECT ft.*
+      FROM finops_tracker ft
+      JOIN finops_tasks t ON t.id = ft.task_id
+      WHERE t.deleted_at IS NULL
+        AND t.duration = 'daily'
+        AND ft.status IN ('pending','overdue','open','delayed')
+        AND ft.run_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching cumulative tracker rows:", e);
+    res.status(500).json({ error: "Failed to fetch cumulative tracker rows", message: e.message });
+  }
+});
+
 export default router;

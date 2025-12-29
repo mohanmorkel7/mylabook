@@ -63,11 +63,17 @@ export default function FinOpsCumulativeData() {
 
       // Ensure duration = 'daily' (task-level or row-level)
       const duration =
-        (row.duration || row.period || row.task_duration || row.task_period || "") + "";
+        (row.duration ||
+          row.period ||
+          row.task_duration ||
+          row.task_period ||
+          "") + "";
       if (duration.toLowerCase() !== "daily") return;
 
       // Determine run_date in IST YYYY-MM-DD
-      const runDate = toISTDateString(row.run_date || row.run_date_at || row.date || row.run_date_string);
+      const runDate = toISTDateString(
+        row.run_date || row.run_date_at || row.date || row.run_date_string,
+      );
       if (!runDate || runDate === "unknown") return;
 
       // Exclude today (IST)
@@ -118,7 +124,10 @@ export default function FinOpsCumulativeData() {
         });
 
         // If there are no subtasks but row/status itself is a tracked status, count it
-        if ((!Array.isArray(t.subtasks) || t.subtasks.length === 0) && t.status) {
+        if (
+          (!Array.isArray(t.subtasks) || t.subtasks.length === 0) &&
+          t.status
+        ) {
           const rs = String(t.status).toLowerCase();
           if (allowedStatuses.has(rs)) {
             if (rs === "pending") c.pending++;
@@ -248,7 +257,9 @@ export default function FinOpsCumulativeData() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Cumulative Data (historical dates)</h3>
+        <h3 className="text-lg font-semibold">
+          Cumulative Data (historical dates)
+        </h3>
         <div className="flex gap-2">
           <Button onClick={exportAll} disabled={isLoading}>
             Export All XLSX
@@ -290,7 +301,9 @@ export default function FinOpsCumulativeData() {
 
       <div className="space-y-4">
         {byDate.length === 0 && (
-          <div className="text-sm text-gray-600">No historical dates available</div>
+          <div className="text-sm text-gray-600">
+            No historical dates available
+          </div>
         )}
 
         {/* Dates as accordions (details/summary) - no counts inside accordion */}
@@ -299,10 +312,18 @@ export default function FinOpsCumulativeData() {
             <summary className="flex items-center justify-between cursor-pointer list-none">
               <div className="flex items-center gap-3">
                 <h4 className="font-semibold">{date}</h4>
-                <div className="text-sm text-gray-500">{rows.length} task(s)</div>
+                <div className="text-sm text-gray-500">
+                  {rows.length} task(s)
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={(e) => { e.stopPropagation(); exportDate(date); }}>
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    exportDate(date);
+                  }}
+                >
                   Export {date}
                 </Button>
               </div>
@@ -315,7 +336,9 @@ export default function FinOpsCumulativeData() {
                     <div className="flex justify-between items-center w-full">
                       <div>
                         <CardTitle>{t.task_name || t.name}</CardTitle>
-                        <CardDescription>{t.period || t.duration || ""}</CardDescription>
+                        <CardDescription>
+                          {t.period || t.duration || ""}
+                        </CardDescription>
                       </div>
                       <div className="text-sm text-gray-500">{date}</div>
                     </div>
@@ -324,7 +347,9 @@ export default function FinOpsCumulativeData() {
                     <div className="space-y-2">
                       {(t.subtasks || [])
                         .filter((s: any) => {
-                          const st = String(s.status || s.state || "").toLowerCase();
+                          const st = String(
+                            s.status || s.state || "",
+                          ).toLowerCase();
                           return st !== "completed" && allowedStatuses.has(st);
                         })
                         .map((s: any) => (
@@ -333,29 +358,42 @@ export default function FinOpsCumulativeData() {
                             className="flex justify-between items-center border-b pb-2"
                           >
                             <div>
-                              <div className="font-medium">{s.subtask_name || s.name}</div>
+                              <div className="font-medium">
+                                {s.subtask_name || s.name}
+                              </div>
                               <div className="text-xs text-gray-500">
-                                Status: {s.status} • Start: {s.scheduled_time || s.start_time || "-"}
+                                Status: {s.status} • Start:{" "}
+                                {s.scheduled_time || s.start_time || "-"}
                               </div>
                             </div>
                             <div className="text-xs text-gray-500">
                               {s.started_at ? `Started: ${s.started_at}` : ""}
-                              {s.completed_at ? ` • Completed: ${s.completed_at}` : ""}
+                              {s.completed_at
+                                ? ` • Completed: ${s.completed_at}`
+                                : ""}
                               <div>Run Date: {date}</div>
                             </div>
                           </div>
                         ))}
 
                       {/* handle row-level status when subtasks absent or none matched */}
-                      {(!t.subtasks || t.subtasks.length === 0) && t.status && allowedStatuses.has(String(t.status).toLowerCase()) && (
-                        <div className="flex justify-between items-center border-b pb-2">
-                          <div>
-                            <div className="font-medium">{t.task_name || t.name}</div>
-                            <div className="text-xs text-gray-500">Status: {t.status}</div>
+                      {(!t.subtasks || t.subtasks.length === 0) &&
+                        t.status &&
+                        allowedStatuses.has(String(t.status).toLowerCase()) && (
+                          <div className="flex justify-between items-center border-b pb-2">
+                            <div>
+                              <div className="font-medium">
+                                {t.task_name || t.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                Status: {t.status}
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Run Date: {date}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500">Run Date: {date}</div>
-                        </div>
-                      )}
+                        )}
                     </div>
                   </CardContent>
                 </Card>

@@ -19,6 +19,23 @@ const IST_DATE_STRING = (): string => {
   return ist.toISOString().slice(0, 10);
 };
 
+const toISTDateString = (val: any) => {
+  try {
+    if (!val) return "unknown";
+    const d = new Date(val);
+    const ist = new Date(
+      d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+    );
+    return ist.toISOString().slice(0, 10);
+  } catch (e) {
+    try {
+      return String(val).slice(0, 10);
+    } catch (e2) {
+      return "unknown";
+    }
+  }
+};
+
 export default function FinOpsCumulativeData() {
   const { data: tracker = [], isLoading } = useQuery({
     queryKey: ["finops-tracker-all"],
@@ -33,46 +50,84 @@ export default function FinOpsCumulativeData() {
     staleTime: 60_000,
   });
 
-  // Group tracker rows by run_date (exclude today's IST date)
+  const today = IST_DATE_STRING();
+  const allowedStatuses = new Set(["pending", "overdue", "open", "delayed"]);
+
+  // filter rows according to SQL criteria and group by run_date (IST) excluding today's IST date
   const byDate = useMemo(() => {
     const map: Record<string, any[]> = {};
-    const today = IST_DATE_STRING();
+
     (tracker || []).forEach((row: any) => {
-      const d = row.run_date ? String(row.run_date) : "unknown";
-      if (!d) return;
-      if (d === today) return; // skip today's date as requested
-      if (!map[d]) map[d] = [];
-      map[d].push(row);
+      // Skip deleted tasks
+      if (row.deleted_at) return;
+
+      // Ensure duration = 'daily' (task-level or row-level)
+      const duration =
+        (row.duration || row.period || row.task_duration || row.task_period || "") + "";
+      if (duration.toLowerCase() !== "daily") return;
+
+      // Determine run_date in IST YYYY-MM-DD
+      const runDate = toISTDateString(row.run_date || row.run_date_at || row.date || row.run_date_string);
+      if (!runDate || runDate === "unknown") return;
+
+      // Exclude today (IST)
+      if (runDate === today) return;
+
+      // If row-level status exists, ensure it's in allowed set; otherwise proceed because subtasks may carry statuses
+      if (row.status) {
+        const rs = String(row.status).toLowerCase();
+        if (!allowedStatuses.has(rs)) return;
+      }
+
+      if (!map[runDate]) map[runDate] = [];
+      map[runDate].push(row);
     });
+
     // sort dates descending
     const ordered: [string, any[]][] = Object.entries(map).sort((a, b) =>
       b[0].localeCompare(a[0]),
     );
     return ordered; // array of [date, rows]
-  }, [tracker]);
+  }, [tracker, today]);
 
-  // Counts per date excluding 'completed'
+  // Counts per date: total, pending, overdue, open, delayed (exclude 'completed')
   const countsPerDate = useMemo(() => {
     const counts: Record<string, Record<string, number>> = {};
     byDate.forEach(([date, rows]) => {
-      const c = {
+      const c: Record<string, number> = {
+        total: 0,
         pending: 0,
-        in_progress: 0,
         overdue: 0,
-      } as Record<string, number>;
+        open: 0,
+        delayed: 0,
+      };
+
       rows.forEach((t: any) => {
         const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
         subs.forEach((s: any) => {
-          const st = String(s.status || "").toLowerCase();
-          if (st === "completed") return; // skip completed
-          if (st === "pending") {
-            c.pending++;
-            c.open++;
-          } else if (st === "in_progress") c.in_progress++;
+          const st = String(s.status || s.state || "").toLowerCase();
+          if (!st || st === "completed") return;
+          if (!allowedStatuses.has(st)) return; // only count the SQL-requested statuses
+
+          if (st === "pending") c.pending++;
           else if (st === "overdue") c.overdue++;
+          else if (st === "open") c.open++;
           else if (st === "delayed") c.delayed++;
-          else c.open++;
+
+          c.total++;
         });
+
+        // If there are no subtasks but row/status itself is a tracked status, count it
+        if ((!Array.isArray(t.subtasks) || t.subtasks.length === 0) && t.status) {
+          const rs = String(t.status).toLowerCase();
+          if (allowedStatuses.has(rs)) {
+            if (rs === "pending") c.pending++;
+            else if (rs === "overdue") c.overdue++;
+            else if (rs === "open") c.open++;
+            else if (rs === "delayed") c.delayed++;
+            c.total++;
+          }
+        }
       });
       counts[date] = c;
     });
@@ -86,19 +141,35 @@ export default function FinOpsCumulativeData() {
     const rowsForDate = groups[1];
     rowsForDate.forEach((t: any) => {
       const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
-      subt.forEach((s: any) => {
-        const st = String(s.status || "").toLowerCase();
-        if (!["pending", "in_progress", "overdue"].includes(st)) return; // include only requested statuses
-        rows.push({
-          run_date: date,
-          task: t.task_name,
-          subtask: s.subtask_name || s.name,
-          status: s.status,
-          start_time: s.scheduled_time || s.start_time || "",
-          started_at: s.started_at || "",
-          completed_at: s.completed_at || "",
+      if (subt.length === 0) {
+        // include row-level statuses if present and allowed
+        const rs = String(t.status || "").toLowerCase();
+        if (allowedStatuses.has(rs)) {
+          rows.push({
+            run_date: date,
+            task: t.task_name || t.name || "",
+            subtask: "",
+            status: t.status,
+            start_time: t.scheduled_time || t.start_time || "",
+            started_at: t.started_at || "",
+            completed_at: t.completed_at || "",
+          });
+        }
+      } else {
+        subt.forEach((s: any) => {
+          const st = String(s.status || s.state || "").toLowerCase();
+          if (!allowedStatuses.has(st)) return;
+          rows.push({
+            run_date: date,
+            task: t.task_name || t.name || "",
+            subtask: s.subtask_name || s.name || "",
+            status: s.status,
+            start_time: s.scheduled_time || s.start_time || "",
+            started_at: s.started_at || "",
+            completed_at: s.completed_at || "",
+          });
         });
-      });
+      }
     });
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -113,19 +184,34 @@ export default function FinOpsCumulativeData() {
     byDate.forEach(([date, rowsForDate]) => {
       rowsForDate.forEach((t: any) => {
         const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
-        subt.forEach((s: any) => {
-          const st = String(s.status || "").toLowerCase();
-          if (!["pending", "in_progress", "overdue"].includes(st)) return;
-          rows.push({
-            run_date: date,
-            task: t.task_name,
-            subtask: s.subtask_name || s.name,
-            status: s.status,
-            start_time: s.scheduled_time || s.start_time || "",
-            started_at: s.started_at || "",
-            completed_at: s.completed_at || "",
+        if (subt.length === 0) {
+          const rs = String(t.status || "").toLowerCase();
+          if (allowedStatuses.has(rs)) {
+            rows.push({
+              run_date: date,
+              task: t.task_name || t.name || "",
+              subtask: "",
+              status: t.status,
+              start_time: t.scheduled_time || t.start_time || "",
+              started_at: t.started_at || "",
+              completed_at: t.completed_at || "",
+            });
+          }
+        } else {
+          subt.forEach((s: any) => {
+            const st = String(s.status || s.state || "").toLowerCase();
+            if (!allowedStatuses.has(st)) return;
+            rows.push({
+              run_date: date,
+              task: t.task_name || t.name || "",
+              subtask: s.subtask_name || s.name || "",
+              status: s.status,
+              start_time: s.scheduled_time || s.start_time || "",
+              started_at: s.started_at || "",
+              completed_at: s.completed_at || "",
+            });
           });
-        });
+        }
       });
     });
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -140,9 +226,7 @@ export default function FinOpsCumulativeData() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">
-          Cumulative Data (historical dates)
-        </h3>
+        <h3 className="text-lg font-semibold">Cumulative Data (historical dates)</h3>
         <div className="flex gap-2">
           <Button onClick={exportAll} disabled={isLoading}>
             Export All XLSX
@@ -153,9 +237,7 @@ export default function FinOpsCumulativeData() {
 
       <div className="space-y-8">
         {byDate.length === 0 && (
-          <div className="text-sm text-gray-600">
-            No historical dates available
-          </div>
+          <div className="text-sm text-gray-600">No historical dates available</div>
         )}
 
         {byDate.map(([date, rows]) => (
@@ -163,9 +245,7 @@ export default function FinOpsCumulativeData() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h4 className="font-semibold">{date}</h4>
-                <div className="text-sm text-gray-500">
-                  {rows.length} task(s)
-                </div>
+                <div className="text-sm text-gray-500">{rows.length} task(s)</div>
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={() => exportDate(date)}>
@@ -174,12 +254,14 @@ export default function FinOpsCumulativeData() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* counts cards (only pending, in_progress, overdue) */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {/* counts cards: total, pending, overdue, open, delayed */}
               {[
+                { key: "total", label: "Total" },
                 { key: "pending", label: "Pending" },
-                { key: "in_progress", label: "In-Progress" },
                 { key: "overdue", label: "Overdue" },
+                { key: "open", label: "Open" },
+                { key: "delayed", label: "Delayed" },
               ].map((c) => (
                 <Card key={c.key} className="p-0">
                   <CardHeader>
@@ -200,44 +282,48 @@ export default function FinOpsCumulativeData() {
                   <CardHeader>
                     <div className="flex justify-between items-center w-full">
                       <div>
-                        <CardTitle>{t.task_name}</CardTitle>
-                        <CardDescription>{t.period || ""}</CardDescription>
+                        <CardTitle>{t.task_name || t.name}</CardTitle>
+                        <CardDescription>{t.period || t.duration || ""}</CardDescription>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {t.task_name ? "" : ""}
-                      </div>
+                      <div className="text-sm text-gray-500">{date}</div>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {(t.subtasks || [])
-                        .filter(
-                          (s: any) =>
-                            String(s.status || "").toLowerCase() !==
-                            "completed",
-                        )
+                        .filter((s: any) => {
+                          const st = String(s.status || s.state || "").toLowerCase();
+                          return st !== "completed" && allowedStatuses.has(st);
+                        })
                         .map((s: any) => (
                           <div
                             key={s.subtask_id || s.id}
                             className="flex justify-between items-center border-b pb-2"
                           >
                             <div>
-                              <div className="font-medium">
-                                {s.subtask_name || s.name}
-                              </div>
+                              <div className="font-medium">{s.subtask_name || s.name}</div>
                               <div className="text-xs text-gray-500">
-                                Status: {s.status} • Start:{" "}
-                                {s.scheduled_time || s.start_time || "-"}
+                                Status: {s.status} • Start: {s.scheduled_time || s.start_time || "-"}
                               </div>
                             </div>
                             <div className="text-xs text-gray-500">
                               {s.started_at ? `Started: ${s.started_at}` : ""}
-                              {s.completed_at
-                                ? ` • Completed: ${s.completed_at}`
-                                : ""}
+                              {s.completed_at ? ` • Completed: ${s.completed_at}` : ""}
+                              <div>Run Date: {date}</div>
                             </div>
                           </div>
                         ))}
+
+                      {/* handle row-level status when subtasks absent or none matched */}
+                      {(!t.subtasks || t.subtasks.length === 0) && t.status && allowedStatuses.has(String(t.status).toLowerCase()) && (
+                        <div className="flex justify-between items-center border-b pb-2">
+                          <div>
+                            <div className="font-medium">{t.task_name || t.name}</div>
+                            <div className="text-xs text-gray-500">Status: {t.status}</div>
+                          </div>
+                          <div className="text-xs text-gray-500">Run Date: {date}</div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

@@ -1790,7 +1790,7 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
     const query = `
-      SELECT ft.*
+      SELECT ft.*, t.client_name, t.client_id, t.assigned_to, t.reporting_managers, t.escalation_managers
       FROM finops_tracker ft
       JOIN finops_tasks t ON t.id = ft.task_id
       WHERE t.deleted_at IS NULL

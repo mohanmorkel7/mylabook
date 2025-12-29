@@ -1334,6 +1334,11 @@ export class ApiClient {
     return this.request(path);
   }
 
+  // Exact cumulative endpoint matching requested SQL
+  async getFinOpsCumulative() {
+    return this.request(`/finops-production/tracker/cumulative`);
+  }
+
   async getFinOpsNextCalls(alertKey?: string) {
     const params = alertKey ? `?alert_key=${encodeURIComponent(alertKey)}` : "";
     return this.request(`/finops-production/next-calls${params}`);

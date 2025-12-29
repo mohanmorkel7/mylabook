@@ -97,17 +97,18 @@ export default function TicketCharts({
           computedTo,
         });
         const params = new URLSearchParams();
+        // Prefer explicit dateFrom/dateTo props when provided (e.g., date picker in Manage Tickets)
         const useFrom =
-          range === "all"
-            ? undefined
-            : dateFrom && String(dateFrom).trim()
-              ? dateFrom
+          dateFrom && String(dateFrom).trim()
+            ? dateFrom
+            : range === "all"
+              ? undefined
               : computedFrom;
         const useTo =
-          range === "all"
-            ? undefined
-            : dateTo && String(dateTo).trim()
-              ? dateTo
+          dateTo && String(dateTo).trim()
+            ? dateTo
+            : range === "all"
+              ? undefined
               : computedTo;
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);

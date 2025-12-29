@@ -102,6 +102,11 @@ export default function FinOpsCumulativeData() {
           task_id: row.task_id || null,
           task_name: row.task_name || row.task || row.name || "",
           period: row.period || row.duration || row.task_period || "",
+          client_name: row.client_name || null,
+          client_id: row.client_id || null,
+          assigned_to: row.assigned_to || row.assigned || null,
+          reporting_managers: row.reporting_managers || null,
+          escalation_managers: row.escalation_managers || null,
           subtasks: [] as any[],
         };
       }

@@ -1802,7 +1802,12 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch (e: any) {
     console.error("Error fetching cumulative tracker rows:", e);
-    res.status(500).json({ error: "Failed to fetch cumulative tracker rows", message: e.message });
+    res
+      .status(500)
+      .json({
+        error: "Failed to fetch cumulative tracker rows",
+        message: e.message,
+      });
   }
 });
 

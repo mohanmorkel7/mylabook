@@ -382,6 +382,18 @@ export default function FinOpsCumulativeData() {
                         <CardDescription>
                           {t.period || t.duration || ""}
                         </CardDescription>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {t.client_name ? `Client: ${t.client_name}` : ""}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {t.assigned_to ? `Assigned: ${Array.isArray(t.assigned_to) ? (t.assigned_to as any[]).join(', ') : String(t.assigned_to)}` : ""}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {t.reporting_managers ? `Reporting: ${typeof t.reporting_managers === 'string' ? (() => { try { const p = JSON.parse(t.reporting_managers); return Array.isArray(p) ? p.join(', ') : String(t.reporting_managers); } catch { return String(t.reporting_managers); } })() : Array.isArray(t.reporting_managers) ? t.reporting_managers.join(', ') : ''}` : ""}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {t.escalation_managers ? `Escalation: ${typeof t.escalation_managers === 'string' ? (() => { try { const p = JSON.parse(t.escalation_managers); return Array.isArray(p) ? p.join(', ') : String(t.escalation_managers); } catch { return String(t.escalation_managers); } })() : Array.isArray(t.escalation_managers) ? t.escalation_managers.join(', ') : ''}` : ""}
+                        </div>
                       </div>
                       <div className="text-sm text-gray-500">{date}</div>
                     </div>

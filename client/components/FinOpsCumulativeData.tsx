@@ -55,8 +55,10 @@ export default function FinOpsCumulativeData() {
   const allowedStatuses = new Set(["pending", "overdue", "open", "delayed"]);
 
   // filter rows according to SQL criteria and group by run_date (IST) excluding today's IST date
+  // NOTE: the cumulative endpoint returns flat finops_tracker rows (one row per subtask/tracker).
+  // Convert these flat rows into tasks with subtasks so the UI shows subtask_name correctly.
   const byDate = useMemo(() => {
-    const map: Record<string, any[]> = {};
+    const map: Record<string, Record<string, any>> = {}; // date -> (taskId -> taskObj)
 
     (tracker || []).forEach((row: any) => {
       // Skip deleted tasks
@@ -64,17 +66,11 @@ export default function FinOpsCumulativeData() {
 
       // Ensure duration = 'daily' (task-level or row-level)
       const duration =
-        (row.duration ||
-          row.period ||
-          row.task_duration ||
-          row.task_period ||
-          "") + "";
+        (row.duration || row.period || row.task_duration || row.task_period || "") + "";
       if (duration.toLowerCase() !== "daily") return;
 
       // Determine run_date in IST YYYY-MM-DD
-      const runDate = toISTDateString(
-        row.run_date || row.run_date_at || row.date || row.run_date_string,
-      );
+      const runDate = toISTDateString(row.run_date || row.run_date_at || row.date || row.run_date_string);
       if (!runDate || runDate === "unknown") return;
 
       // Exclude today (IST)
@@ -86,15 +82,45 @@ export default function FinOpsCumulativeData() {
         if (!allowedStatuses.has(rs)) return;
       }
 
-      if (!map[runDate]) map[runDate] = [];
-      map[runDate].push(row);
+      if (!map[runDate]) map[runDate] = {};
+      const tasksMap = map[runDate];
+
+      const taskIdKey = String(row.task_id || row.task || row.task_name || `task_${row.id || Math.random()}`);
+      if (!tasksMap[taskIdKey]) {
+        tasksMap[taskIdKey] = {
+          task_id: row.task_id || null,
+          task_name: row.task_name || row.task || row.name || "",
+          period: row.period || row.duration || row.task_period || "",
+          subtasks: [] as any[],
+        };
+      }
+
+      // Build subtask entry from tracker row fields (finops_tracker columns)
+      const subtaskId = row.subtask_id || row.id || null;
+      const subtaskName = row.subtask_name || row.name || row.subtask || "";
+      const subtaskObj = {
+        subtask_id: subtaskId,
+        subtask_name: subtaskName,
+        status: row.status || null,
+        started_at: row.started_at || null,
+        completed_at: row.completed_at || null,
+        scheduled_time: row.scheduled_time || row.start_time || null,
+      };
+
+      // Only push meaningful subtasks (avoid pushing empty placeholder without name/status)
+      if (subtaskId || subtaskName || subtaskObj.status) {
+        tasksMap[taskIdKey].subtasks.push(subtaskObj);
+      } else {
+        // If no subtask data, still ensure the task exists (no subtasks)
+      }
     });
 
-    // sort dates descending
-    const ordered: [string, any[]][] = Object.entries(map).sort((a, b) =>
-      b[0].localeCompare(a[0]),
-    );
-    return ordered; // array of [date, rows]
+    // Convert map to ordered array of [date, tasks[]]
+    const ordered: [string, any[]][] = Object.entries(map)
+      .map(([date, tasksMap]) => [date, Object.values(tasksMap)])
+      .sort((a, b) => b[0].localeCompare(a[0]));
+
+    return ordered; // array of [date, tasks]
   }, [tracker, today]);
 
   // Counts per date: total, pending, overdue, open, delayed (exclude 'completed')

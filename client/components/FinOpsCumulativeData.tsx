@@ -41,7 +41,8 @@ export default function FinOpsCumulativeData() {
     queryKey: ["finops-tracker-all"],
     queryFn: async () => {
       try {
-        return await apiClient.getFinOpsTracker();
+        // Use the new cumulative endpoint that matches the exact SQL filter
+        return await apiClient.getFinOpsCumulative();
       } catch (e) {
         console.error("Failed to fetch finops tracker:", e);
         return [];

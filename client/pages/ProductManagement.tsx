@@ -553,6 +553,23 @@ function CreateProductDialog({
             />
           </div>
 
+          <div>
+            <Label>Related Products (from Product Master)</Label>
+            <MultiSelect
+              options={
+                (productMasters || []).map((p: any) => ({
+                  label: p.name,
+                  value: String(p.id),
+                }))
+              }
+              value={(formData.selected_product_ids || []) as string[]}
+              onChange={(vals) =>
+                setFormData((prev) => ({ ...prev, selected_product_ids: vals }))
+              }
+              placeholder="Search and select products..."
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="priority">Priority</Label>

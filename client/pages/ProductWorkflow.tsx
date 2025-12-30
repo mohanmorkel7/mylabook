@@ -740,414 +740,425 @@ function CreateProjectFromLeadDialog({
               </CardContent>
             </Card>
           )}
-          {!isProductCreation && (<>
-          {/* Lead Information Summary */}
-          {lead ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Lead Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <strong>Client:</strong> {lead.client_name}
-                  </div>
-                  <div>
-                    <strong>Project:</strong> {lead.project_title}
-                  </div>
-                  <div>
-                    <strong>Completed:</strong>{" "}
-                    {lead.completion_date &&
-                      format(new Date(lead.completion_date), "MMM d, yyyy")}
-                  </div>
-                  <div>
-                    <strong>Lead Steps:</strong> {lead.completed_steps}/
-                    {lead.total_steps}
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <strong>Description:</strong>
-                  <p className="text-gray-600">{lead.project_description}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Lead Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm text-gray-600">
-                  No lead selected. You can proceed to create a project without
-                  a lead or select a completed lead from the list.
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Project Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Project Configuration</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Project Name *</Label>
-                  <Input
-                    id="name"
-                    value={projectData.name}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        name: e.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="assigned_team">Assigned Team *</Label>
-                  <Select
-                    value={projectData.assigned_team}
-                    onValueChange={(value) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        assigned_team: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map((team) => (
-                        <SelectItem key={team} value={team}>
-                          {team}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="description">Project Description</Label>
-                <Textarea
-                  id="description"
-                  value={projectData.description}
-                  onChange={(e) =>
-                    setProjectData((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="template">Project Template</Label>
-                <Select
-                  value={projectData.template_id || "none"}
-                  onValueChange={handleTemplateSelect}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a template (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      Manual Steps (Create Custom)
-                    </SelectItem>
-                    {availableTemplates.length > 0 ? (
-                      availableTemplates.map((template: any) => (
-                        <SelectItem
-                          key={template.id}
-                          value={template.id.toString()}
-                        >
-                          {template.name}
-                          {template.description && (
-                            <span className="text-sm text-gray-500 block">
-                              {template.description}
-                            </span>
-                          )}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="loading" disabled>
-                        {allTemplates.length === 0
-                          ? "Loading templates..."
-                          : "No product templates available"}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-                {selectedTemplate && (
-                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
-                    <div className="text-sm font-medium text-blue-900">
-                      {selectedTemplate.name}
-                    </div>
-                    {selectedTemplate.description && (
-                      <div className="text-sm text-blue-700 mt-1">
-                        {selectedTemplate.description}
-                      </div>
-                    )}
-                    <div className="text-xs text-blue-600 mt-1">
-                      This will load {templateSteps?.steps?.length || 0}{" "}
-                      pre-defined steps
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="project_manager">Project Manager</Label>
-                  <Select
-                    value={projectData.project_manager_id}
-                    onValueChange={(value) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        project_manager_id: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select PM" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="p-2">
-                        <Input
-                          placeholder="Search users..."
-                          value={pmQuery}
-                          onChange={(e) => setPmQuery(e.target.value)}
-                          className="mb-2"
-                        />
-                      </div>
-                      {filteredPMs.length > 0 ? (
-                        filteredPMs.map((pm) => (
-                          <SelectItem key={pm.id} value={pm.id.toString()}>
-                            <div className="flex flex-col">
-                              <span>{pm.name}</span>
-                              <span className="text-xs text-gray-500">
-                                {pm.email}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="none" disabled>
-                          No users found
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="target_completion_date">
-                    Target Completion Date
-                  </Label>
-                  <Input
-                    id="target_completion_date"
-                    type="date"
-                    value={projectData.target_completion_date}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        target_completion_date: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="estimated_hours">Estimated Hours</Label>
-                  <Input
-                    id="estimated_hours"
-                    type="number"
-                    value={projectData.estimated_hours}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        estimated_hours: e.target.value,
-                      }))
-                    }
-                    placeholder="Total project hours"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Project Steps */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg">Project Steps</CardTitle>
-                <div className="flex items-center gap-3">
-                  <div className="text-sm text-gray-600">
-                    Total Probability:{" "}
-                    <span className="font-medium text-gray-900">
-                      {formattedTotalProbability}%
-                    </span>
-                    {probabilityInvalid && (
-                      <span className="ml-3 text-sm text-red-600">
-                        Total must equal 100%
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addStep}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Step
-                  </Button>
-                </div>
-              </div>
-              <CardDescription>
-                Define the specific steps for this product development project
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {steps.map((step, index) => (
-                <Card key={index} className="border-l-4 border-l-blue-500">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">Step {step.step_order}</Badge>
-                        <div className="text-sm text-gray-600">
-                          {step.probability_percent ?? 0}%
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveStep(index, "up")}
-                          disabled={index === 0}
-                        >
-                          <ArrowUp className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveStep(index, "down")}
-                          disabled={index === steps.length - 1}
-                        >
-                          <ArrowDown className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeStep(index)}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
+          {!isProductCreation && (
+            <>
+              {/* Lead Information Summary */}
+              {lead ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Lead Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <Label>Step Name *</Label>
-                        <Input
-                          value={step.step_name}
-                          onChange={(e) =>
-                            updateStep(index, "step_name", e.target.value)
-                          }
-                          placeholder="Enter step name"
-                          required
-                        />
+                        <strong>Client:</strong> {lead.client_name}
                       </div>
-
                       <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={step.step_description}
-                          onChange={(e) =>
-                            updateStep(
-                              index,
-                              "step_description",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Describe what needs to be done in this step"
-                          rows={2}
-                        />
+                        <strong>Project:</strong> {lead.project_title}
                       </div>
-
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <Label>Estimated Hours</Label>
-                          <Input
-                            type="number"
-                            value={step.estimated_hours || ""}
-                            onChange={(e) =>
-                              updateStep(
-                                index,
-                                "estimated_hours",
-                                e.target.value
-                                  ? parseInt(e.target.value)
-                                  : undefined,
-                              )
-                            }
-                            placeholder="Hours"
-                          />
-                        </div>
-                        <div>
-                          <Label>Due Date</Label>
-                          <Input
-                            type="date"
-                            value={step.due_date || ""}
-                            onChange={(e) =>
-                              updateStep(index, "due_date", e.target.value)
-                            }
-                          />
-                        </div>
-                        <div>
-                          <Label>Probability (%)</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={String(step.probability_percent ?? 0)}
-                            onChange={(e) =>
-                              updateStep(
-                                index,
-                                "probability_percent",
-                                e.target.value ? parseFloat(e.target.value) : 0,
-                              )
-                            }
-                          />
-                        </div>
+                      <div>
+                        <strong>Completed:</strong>{" "}
+                        {lead.completion_date &&
+                          format(new Date(lead.completion_date), "MMM d, yyyy")}
                       </div>
+                      <div>
+                        <strong>Lead Steps:</strong> {lead.completed_steps}/
+                        {lead.total_steps}
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <strong>Description:</strong>
+                      <p className="text-gray-600">
+                        {lead.project_description}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-
-              {steps.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Target className="w-12 h-12 mx-auto mb-2" />
-                  <p>
-                    No steps defined yet. Add steps to structure your project.
-                  </p>
-                </div>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Lead Information</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm text-gray-600">
+                      No lead selected. You can proceed to create a project
+                      without a lead or select a completed lead from the list.
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
 
-          </>)}
+              {/* Project Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    Project Configuration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Project Name *</Label>
+                      <Input
+                        id="name"
+                        value={projectData.name}
+                        onChange={(e) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            name: e.target.value,
+                          }))
+                        }
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="assigned_team">Assigned Team *</Label>
+                      <Select
+                        value={projectData.assigned_team}
+                        onValueChange={(value) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            assigned_team: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teams.map((team) => (
+                            <SelectItem key={team} value={team}>
+                              {team}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="description">Project Description</Label>
+                    <Textarea
+                      id="description"
+                      value={projectData.description}
+                      onChange={(e) =>
+                        setProjectData((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="template">Project Template</Label>
+                    <Select
+                      value={projectData.template_id || "none"}
+                      onValueChange={handleTemplateSelect}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a template (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          Manual Steps (Create Custom)
+                        </SelectItem>
+                        {availableTemplates.length > 0 ? (
+                          availableTemplates.map((template: any) => (
+                            <SelectItem
+                              key={template.id}
+                              value={template.id.toString()}
+                            >
+                              {template.name}
+                              {template.description && (
+                                <span className="text-sm text-gray-500 block">
+                                  {template.description}
+                                </span>
+                              )}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="loading" disabled>
+                            {allTemplates.length === 0
+                              ? "Loading templates..."
+                              : "No product templates available"}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {selectedTemplate && (
+                      <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                        <div className="text-sm font-medium text-blue-900">
+                          {selectedTemplate.name}
+                        </div>
+                        {selectedTemplate.description && (
+                          <div className="text-sm text-blue-700 mt-1">
+                            {selectedTemplate.description}
+                          </div>
+                        )}
+                        <div className="text-xs text-blue-600 mt-1">
+                          This will load {templateSteps?.steps?.length || 0}{" "}
+                          pre-defined steps
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="project_manager">Project Manager</Label>
+                      <Select
+                        value={projectData.project_manager_id}
+                        onValueChange={(value) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            project_manager_id: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select PM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="p-2">
+                            <Input
+                              placeholder="Search users..."
+                              value={pmQuery}
+                              onChange={(e) => setPmQuery(e.target.value)}
+                              className="mb-2"
+                            />
+                          </div>
+                          {filteredPMs.length > 0 ? (
+                            filteredPMs.map((pm) => (
+                              <SelectItem key={pm.id} value={pm.id.toString()}>
+                                <div className="flex flex-col">
+                                  <span>{pm.name}</span>
+                                  <span className="text-xs text-gray-500">
+                                    {pm.email}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>
+                              No users found
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="target_completion_date">
+                        Target Completion Date
+                      </Label>
+                      <Input
+                        id="target_completion_date"
+                        type="date"
+                        value={projectData.target_completion_date}
+                        onChange={(e) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            target_completion_date: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="estimated_hours">Estimated Hours</Label>
+                      <Input
+                        id="estimated_hours"
+                        type="number"
+                        value={projectData.estimated_hours}
+                        onChange={(e) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            estimated_hours: e.target.value,
+                          }))
+                        }
+                        placeholder="Total project hours"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Project Steps */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg">Project Steps</CardTitle>
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm text-gray-600">
+                        Total Probability:{" "}
+                        <span className="font-medium text-gray-900">
+                          {formattedTotalProbability}%
+                        </span>
+                        {probabilityInvalid && (
+                          <span className="ml-3 text-sm text-red-600">
+                            Total must equal 100%
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addStep}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Step
+                      </Button>
+                    </div>
+                  </div>
+                  <CardDescription>
+                    Define the specific steps for this product development
+                    project
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {steps.map((step, index) => (
+                    <Card key={index} className="border-l-4 border-l-blue-500">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">
+                              Step {step.step_order}
+                            </Badge>
+                            <div className="text-sm text-gray-600">
+                              {step.probability_percent ?? 0}%
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => moveStep(index, "up")}
+                              disabled={index === 0}
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => moveStep(index, "down")}
+                              disabled={index === steps.length - 1}
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeStep(index)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div>
+                            <Label>Step Name *</Label>
+                            <Input
+                              value={step.step_name}
+                              onChange={(e) =>
+                                updateStep(index, "step_name", e.target.value)
+                              }
+                              placeholder="Enter step name"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <Label>Description</Label>
+                            <Textarea
+                              value={step.step_description}
+                              onChange={(e) =>
+                                updateStep(
+                                  index,
+                                  "step_description",
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Describe what needs to be done in this step"
+                              rows={2}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <Label>Estimated Hours</Label>
+                              <Input
+                                type="number"
+                                value={step.estimated_hours || ""}
+                                onChange={(e) =>
+                                  updateStep(
+                                    index,
+                                    "estimated_hours",
+                                    e.target.value
+                                      ? parseInt(e.target.value)
+                                      : undefined,
+                                  )
+                                }
+                                placeholder="Hours"
+                              />
+                            </div>
+                            <div>
+                              <Label>Due Date</Label>
+                              <Input
+                                type="date"
+                                value={step.due_date || ""}
+                                onChange={(e) =>
+                                  updateStep(index, "due_date", e.target.value)
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label>Probability (%)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={String(step.probability_percent ?? 0)}
+                                onChange={(e) =>
+                                  updateStep(
+                                    index,
+                                    "probability_percent",
+                                    e.target.value
+                                      ? parseFloat(e.target.value)
+                                      : 0,
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {steps.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Target className="w-12 h-12 mx-auto mb-2" />
+                      <p>
+                        No steps defined yet. Add steps to structure your
+                        project.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
           {/* Submit Actions */}
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>

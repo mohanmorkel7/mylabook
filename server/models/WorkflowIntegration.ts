@@ -326,6 +326,7 @@ export class WorkflowRepository {
         data.target_completion_date,
         data.budget,
         data.estimated_hours,
+        JSON.stringify(data.product_master_ids || []),
         created_by,
       ],
     );

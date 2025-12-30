@@ -419,6 +419,8 @@ function CreateProductDialog({
     const payload: any = {
       name: formData.name,
       description: formData.description || null,
+      // Map UI category to backend project_type
+      project_type: "product_development",
       category: formData.category,
       status: formData.status,
       priority: formData.priority,

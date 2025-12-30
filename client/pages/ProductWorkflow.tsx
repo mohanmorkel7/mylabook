@@ -1144,6 +1144,7 @@ export default function ProductWorkflow() {
         // Open create dialog in edit mode with enriched project
         setSelectedLead(null);
         setSelectedProject(proj);
+        setIsProductCreationMode(false);
         setIsCreateDialogOpen(true);
       } catch (err) {
         console.error("Failed to load project from query param:", err);

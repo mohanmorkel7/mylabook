@@ -302,7 +302,7 @@ const ProductOverview: React.FC = () => {
               <h1 className="text-2xl font-bold text-gray-900">
                 {product.name}
               </h1>
-              <Badge className="text-xs">{product.id}</Badge>
+              <Badge className="text-xs">{product.product_id || product.id}</Badge>
               <Badge className="text-xs">
                 {formatStatusLabel(product.status)}
               </Badge>

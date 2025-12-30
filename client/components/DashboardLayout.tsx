@@ -121,7 +121,14 @@ const navigationItems: NavigationItem[] = [
     icon: DollarSign,
     roles: ["admin", "finance", "finops"],
   },
-  // j) Product
+  // j) Product Management
+  {
+    name: "Product Management",
+    href: "/product/dashboard",
+    icon: Target,
+    roles: ["admin", "product", "switch_team"],
+  },
+  // k) Product
   {
     name: "Product",
     href: "/product",

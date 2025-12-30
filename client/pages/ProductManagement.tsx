@@ -1139,10 +1139,13 @@ export default function ProductManagement() {
       {/* Create Product Dialog */}
       <CreateProductDialog
         isOpen={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
+        editing={editingProduct}
+        setEditing={(v: any) => setEditingProduct(v)}
+        onClose={() => { setIsCreateDialogOpen(false); setEditingProduct(null); }}
         onSuccess={() => {
-          // In real implementation, this would refetch data
-          console.log("Product created successfully");
+          // Parent cleanup after create/update
+          setIsCreateDialogOpen(false);
+          setEditingProduct(null);
         }}
       />
     </div>

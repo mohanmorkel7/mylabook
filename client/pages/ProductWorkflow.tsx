@@ -1475,9 +1475,9 @@ export default function ProductWorkflow() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Product Workflow</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Product Dashboard</h1>
           <p className="text-gray-600 mt-1">
-            Manage lead-to-product handoffs and project development
+            Overview of products from product_master table
           </p>
         </div>
         <div>

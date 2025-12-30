@@ -405,11 +405,17 @@ function CreateProductDialog({
       status: formData.status,
       priority: formData.priority,
       assigned_team: formData.assigned_team || null,
-      project_manager: formData.project_manager ? String(formData.project_manager) : null,
+      project_manager: formData.project_manager
+        ? String(formData.project_manager)
+        : null,
       target_completion_date: formData.target_release_date || null,
       budget: formData.budget ? Number(formData.budget) : null,
-      estimated_hours: formData.estimated_effort_hours ? Number(formData.estimated_effort_hours) : null,
-      tags: formData.tags ? formData.tags.split(",").map((t: string) => t.trim()) : [],
+      estimated_hours: formData.estimated_effort_hours
+        ? Number(formData.estimated_effort_hours)
+        : null,
+      tags: formData.tags
+        ? formData.tags.split(",").map((t: string) => t.trim())
+        : [],
       created_by: Number(user?.id || 1),
     };
 
@@ -428,7 +434,9 @@ function CreateProductDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit Product" : "Create New Product"}</DialogTitle>
+          <DialogTitle>
+            {editing ? "Edit Product" : "Create New Product"}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -718,7 +726,8 @@ export default function ProductManagement() {
   // Create / update mutations
   const createProjectMutation = useMutation({
     mutationFn: (data: any) => apiClient.createWorkflowProject(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
   });
 
   const updateProjectMutation = useMutation({
@@ -727,7 +736,8 @@ export default function ProductManagement() {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
   });
 
   return (
@@ -743,7 +753,12 @@ export default function ProductManagement() {
           </p>
         </div>
 
-        <Button onClick={() => { setEditingProduct(null); setIsCreateDialogOpen(true); }}>
+        <Button
+          onClick={() => {
+            setEditingProduct(null);
+            setIsCreateDialogOpen(true);
+          }}
+        >
           <Plus className="w-4 h-4 mr-2" />
           New Product
         </Button>
@@ -969,11 +984,27 @@ export default function ProductManagement() {
                     )}
 
                     <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setEditingProduct(product); setIsCreateDialogOpen(true); }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          setEditingProduct(product);
+                          setIsCreateDialogOpen(true);
+                        }}
+                      >
                         <Eye className="w-4 h-4 mr-1" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setEditingProduct(product); setIsCreateDialogOpen(true); }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => {
+                          setEditingProduct(product);
+                          setIsCreateDialogOpen(true);
+                        }}
+                      >
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </Button>
@@ -1062,7 +1093,14 @@ export default function ProductManagement() {
                             <Button variant="ghost" size="sm">
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => { setEditingProduct(product); setIsCreateDialogOpen(true); }}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingProduct(product);
+                                setIsCreateDialogOpen(true);
+                              }}
+                            >
                               <Edit className="w-4 h-4" />
                             </Button>
                           </div>
@@ -1141,7 +1179,10 @@ export default function ProductManagement() {
         isOpen={isCreateDialogOpen}
         editing={editingProduct}
         setEditing={(v: any) => setEditingProduct(v)}
-        onClose={() => { setIsCreateDialogOpen(false); setEditingProduct(null); }}
+        onClose={() => {
+          setIsCreateDialogOpen(false);
+          setEditingProduct(null);
+        }}
         onSuccess={() => {
           // Parent cleanup after create/update
           setIsCreateDialogOpen(false);

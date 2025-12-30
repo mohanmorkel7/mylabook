@@ -141,6 +141,8 @@ function CreateProjectFromLeadDialog({
       ? String(project.estimated_hours)
       : "",
     template_id: project?.template_id ? String(project.template_id) : "",
+    // new field: product_master_ids as array of ids
+    product_master_ids: project?.product_master_ids || [],
   }));
 
   const [steps, setSteps] = useState<ProjectStep[]>(() => {
@@ -169,6 +171,13 @@ function CreateProjectFromLeadDialog({
   const { data: allTemplates = [] } = useQuery({
     queryKey: ["templates"],
     queryFn: () => apiClient.getTemplates(),
+    enabled: isOpen,
+  });
+
+  // Fetch product_master list for multi-select
+  const { data: productMasters = [] } = useQuery({
+    queryKey: ["product-master"],
+    queryFn: () => apiClient.request('/product-master'),
     enabled: isOpen,
   });
 

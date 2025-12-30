@@ -1605,75 +1605,50 @@ export default function ProductWorkflow() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {projectsLoading ? (
+              {productsLoading ? (
                 <div className="text-center py-8">Loading products...</div>
-              ) : projects.length > 0 ? (
+              ) : products.length > 0 ? (
                 <div className="space-y-4">
-                  {projects.map((project: any) => (
+                  {products.map((p: any) => (
                     <Card
-                      key={project.id}
+                      key={p.id}
                       className="hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => handleViewProject(project)}
+                      onClick={() => navigate(`/products/${p.id}`)}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-lg">
-                                {project.name}
-                              </h3>
-                              <Badge
-                                variant="outline"
-                                className={getStatusColor(project.status)}
-                              >
-                                {formatStatusLabel(project.status)}
+                              <h3 className="font-semibold text-lg">{p.name}</h3>
+                              <Badge variant="outline" className={getStatusColor(p.status)}>
+                                {formatStatusLabel(p.status)}
                               </Badge>
+                              <span className="text-xs text-gray-500">{p.product_id}</span>
                             </div>
 
-                            <h4 className="font-medium text-gray-900 mb-2">
-                              {project.description}
-                            </h4>
-                            <p className="text-gray-600 mb-3">
-                              {project.source_type === "lead"
-                                ? `From Lead #${project.source_id}`
-                                : ""}
-                            </p>
+                            <h4 className="font-medium text-gray-900 mb-2">{p.description}</h4>
+                            <p className="text-gray-600 mb-3">Version: {p.current_version}</p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
-                                <span className="font-medium">Progress:</span>
+                                <span className="font-medium">Repository</span>
                                 <br />
-                                <div className="flex items-center gap-2">
-                                  <div className="w-20 bg-gray-200 rounded-full h-2">
-                                    <div
-                                      className="bg-blue-600 h-2 rounded-full"
-                                      style={{
-                                        width: `${project.progress_percentage || 0}%`,
-                                      }}
-                                    />
-                                  </div>
-                                  <span>
-                                    {project.progress_percentage || 0}%
-                                  </span>
-                                </div>
+                                <a href={p.repository_url} className="text-blue-600 text-sm" target="_blank" rel="noreferrer">{p.repository_url}</a>
                               </div>
                               <div>
-                                <span className="font-medium">Lead Steps:</span>
+                                <span className="font-medium">Product URL</span>
                                 <br />
-                                <div className="flex items-center gap-1">
-                                  <CheckCircle className="w-3 h-3 text-green-600" />
-                                  <span>
-                                    {project.completed_steps || 0}/
-                                    {project.total_steps || 0}
-                                  </span>
-                                </div>
+                                <a href={p.product_url} className="text-blue-600 text-sm" target="_blank" rel="noreferrer">{p.product_url}</a>
                               </div>
                               <div>
-                                <span className="font-medium">Status:</span>
+                                <span className="font-medium">Active</span>
                                 <br />
-                                <span className="text-sm text-gray-700">
-                                  {project.status}
-                                </span>
+                                <span className="text-sm text-gray-700">{p.is_active ? 'Yes' : 'No'}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium">Created</span>
+                                <br />
+                                <span className="text-sm text-gray-700">{p.created_at ? new Date(p.created_at).toLocaleDateString() : ''}</span>
                               </div>
                             </div>
                           </div>
@@ -1682,7 +1657,7 @@ export default function ProductWorkflow() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/product?id=${project.id}`);
+                                navigate(`/product_master?id=${p.id}`);
                               }}
                               title="Edit"
                               className="p-2 rounded hover:bg-gray-100"
@@ -1694,13 +1669,11 @@ export default function ProductWorkflow() {
                                 e.stopPropagation();
                                 if (!confirm("Delete this product?")) return;
                                 try {
-                                  await apiClient.request(
-                                    `/workflow/projects/${project.id}`,
-                                    { method: "DELETE" },
-                                  );
-                                  queryClient.invalidateQueries([
-                                    "workflow-projects",
-                                  ]);
+                                  await apiClient.request(`/product-master/${p.id}`, { method: "DELETE" });
+                                  // refresh list
+                                  const refreshed = await apiClient.request<any[]>('/product-master');
+                                  setProducts(Array.isArray(refreshed) ? refreshed : []);
+                                  setProductsCount((refreshed || []).length);
                                 } catch (err) {
                                   console.error(err);
                                   alert("Failed to delete product");
@@ -1720,12 +1693,8 @@ export default function ProductWorkflow() {
               ) : (
                 <div className="text-center py-12">
                   <Package className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No Products
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    There are no products to show at the moment.
-                  </p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Products</h3>
+                  <p className="text-gray-600 mb-4">There are no products to show at the moment.</p>
                 </div>
               )}
             </CardContent>

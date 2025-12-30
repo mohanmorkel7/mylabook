@@ -430,149 +430,78 @@ const ProductOverview: React.FC = () => {
 
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Product Pipeline</CardTitle>
-                  <CardDescription>Manage steps and team chat</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {stepsLoading ? (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4" />
-                  <p>Loading pipeline steps...</p>
-                </div>
-              ) : steps.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Target className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No steps yet
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Create steps to track your product development process.
-                  </p>
-                </div>
-              ) : (
-                <VCDraggableStepsList
-                  vcId={Number(id)}
-                  steps={steps}
-                  expandedSteps={expandedSteps}
-                  onToggleExpansion={(stepId: number) =>
-                    toggleStepExpansion(stepId)
-                  }
-                  onDeleteStep={handleDeleteStep}
-                  onReorderSteps={handleReorderSteps}
-                  updateStepStatus={updateStepStatus}
-                  stepApiBase="workflow"
-                />
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Details</CardTitle>
-              <CardDescription>Primary details and owners</CardDescription>
+              <CardTitle>Product Details</CardTitle>
+              <CardDescription>Metadata and links from product_master table</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Manager</span>
-                  <span className="text-gray-900">
-                    {product.project_manager_id || "-"}
-                  </span>
+              <div>
+                <div className="text-xs text-gray-600">Product ID</div>
+                <div className="font-semibold text-gray-900">
+                  {product.product_id || product.id}
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Status</span>
-                  <div>
-                    <Select
-                      value={product?.status}
-                      onValueChange={async (value: string) => {
-                        if (!product) return;
-                        const prev = product.status;
-                        setProduct((p: any) => ({ ...p, status: value }));
-                        try {
-                          // Update workflow project status directly so workflow_projects is the source of truth
-                          await apiClient.request(
-                            `/workflow/projects/${product.id}`,
-                            {
-                              method: "PATCH",
-                              body: JSON.stringify({ status: value }),
-                            },
-                          );
+              </div>
 
-                          // Refresh product details from workflow project to reflect any server-side normalization
-                          const refreshed = await apiClient.getWorkflowProject(
-                            product.id,
-                          );
-                          if (refreshed) {
-                            setProduct((p: any) => ({
-                              ...p,
-                              status: refreshed.status,
-                            }));
-                            // also update steps if available
-                            if (Array.isArray(refreshed.steps)) {
-                              setSteps(
-                                refreshed.steps.map((s: any) => ({
-                                  id: s.id,
-                                  name: s.step_name || s.name,
-                                  description:
-                                    s.step_description || s.description || null,
-                                  step_name: s.step_name || s.name,
-                                  step_description:
-                                    s.step_description || s.description || null,
-                                  probability_percent:
-                                    parseFloat(
-                                      s.probability ??
-                                        s.probability_percent ??
-                                        0,
-                                    ) || 0,
-                                  eta: s.eta || s.due_date,
-                                  status: s.status,
-                                  estimated_hours: s.estimated_hours,
-                                  project_id: s.project_id || Number(id),
-                                  isTemplate:
-                                    !!s.is_template || !!s.isTemplate || false,
-                                })),
-                              );
-                            }
-                          }
-                        } catch (err) {
-                          console.error("Failed to update project status", err);
-                          setProduct((p: any) => ({ ...p, status: prev }));
-                          alert("Failed to update status");
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-40 h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="upcoming">Upcoming</SelectItem>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="review">Review</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="delayed">Delayed</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
+              <div>
+                <div className="text-xs text-gray-600">Description</div>
+                <div className="text-gray-900">{product.description || "—"}</div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-gray-600">Repository</div>
+                  <div className="text-gray-900">
+                    {product.repository_url ? (
+                      <a
+                        className="text-blue-600 underline"
+                        href={product.repository_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open Repository
+                      </a>
+                    ) : (
+                      "—"
+                    )}
                   </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Target</span>
-                  <span className="text-gray-900">
-                    {product.target_completion_date || "-"}
-                  </span>
+
+                <div>
+                  <div className="text-xs text-gray-600">Product Link</div>
+                  <div className="text-gray-900">
+                    {product.product_url ? (
+                      <a
+                        className="text-blue-600 underline"
+                        href={product.product_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open Product
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Estimated Hours</span>
-                  <span className="text-gray-900">
-                    {product.estimated_hours || "-"}
-                  </span>
+
+                <div>
+                  <div className="text-xs text-gray-600">Current Version</div>
+                  <div className="text-gray-900">
+                    {product.current_version || "-"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-600">Active</div>
+                  <div className="text-gray-900">{product.is_active ? "Yes" : "No"}</div>
+                </div>
+              </div>
+
+              <div className="flex flex-col text-xs text-gray-500">
+                <div>
+                  Created: {product.created_at ? new Date(product.created_at).toLocaleString() : "-"} by {product.created_by || "-"}
+                </div>
+                <div>
+                  Updated: {product.updated_at ? new Date(product.updated_at).toLocaleString() : "-"} by {product.updated_by || "-"}
                 </div>
               </div>
             </CardContent>

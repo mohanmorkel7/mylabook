@@ -498,7 +498,7 @@ export class WorkflowRepository {
       // step upserts cannot roll it back or hold locks for extended periods.
       if (setClause.length > 0) {
         setClause.push("updated_at = CURRENT_TIMESTAMP");
-        const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
+        let query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
         values.push(id);
         try {
           console.log(
@@ -510,14 +510,64 @@ export class WorkflowRepository {
           // ignore logging errors
         }
 
-        const updateResult = await pool.query(query, values);
         try {
-          console.log(
-            "[WorkflowRepository.updateProject] Update result:",
-            updateResult.rows,
-          );
-        } catch (logErr) {
-          // ignore
+          const updateResult = await pool.query(query, values);
+          try {
+            console.log(
+              "[WorkflowRepository.updateProject] Update result:",
+              updateResult.rows,
+            );
+          } catch (logErr) {
+            // ignore
+          }
+        } catch (err: any) {
+          const isUndefinedColumn = err && (err.code === "42703" || /product_master_ids/.test(err.message || ""));
+          if (isUndefinedColumn) {
+            // Retry without product_master_ids set clause
+            console.warn("product_master_ids column missing in DB, retrying update without it");
+            // Remove any product_master_ids clause from setClause and corresponding value
+            const pmIndex = setClause.findIndex((s) => s.includes("product_master_ids"));
+            if (pmIndex !== -1) {
+              setClause.splice(pmIndex, 1);
+              // Rebuild values by removing the corresponding parameter (complex: rebuild from allowed fields)
+              const rebuiltValues: any[] = [];
+              let rebuildIdx = 1;
+              for (const key of [
+                "name",
+                "description",
+                "priority",
+                "assigned_team",
+                "project_manager_id",
+                "start_date",
+                "target_completion_date",
+                "budget",
+                "estimated_hours",
+                "status",
+                "source_type",
+                "source_id",
+                "template_id",
+              ]) {
+                if ((data as any)[key] !== undefined) {
+                  rebuiltValues.push((data as any)[key]);
+                  rebuildIdx++;
+                }
+              }
+              // Note: we intentionally ignore product_master_ids rebuild here
+              rebuiltValues.push(id);
+              query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${rebuildIdx} RETURNING id`;
+              try {
+                const retryRes = await pool.query(query, rebuiltValues);
+                console.warn("Update succeeded on retry without product_master_ids");
+              } catch (retryErr) {
+                throw retryErr;
+              }
+            } else {
+              // No product_master_ids clause found; rethrow
+              throw err;
+            }
+          } else {
+            throw err;
+          }
         }
       }
 

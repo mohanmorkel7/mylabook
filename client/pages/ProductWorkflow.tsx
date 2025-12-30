@@ -1064,6 +1064,7 @@ export default function ProductWorkflow() {
   const queryClient = useQueryClient();
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isProductCreationMode, setIsProductCreationMode] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [isProjectDetailOpen, setIsProjectDetailOpen] = useState(false);
   const [isLeadDetailOpen, setIsLeadDetailOpen] = useState(false);

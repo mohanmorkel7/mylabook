@@ -269,9 +269,17 @@ router.get("/projects/:id", async (req: Request, res: Response) => {
       // DB available but no project found - fallback to mock data if present
       const mockProject = WorkflowMockData.projects.find((p) => p.id === id);
       if (mockProject) {
-        const projectSteps = WorkflowMockData.steps.filter((s) => s.project_id === id);
-        const projectComments = WorkflowMockData.comments.filter((c) => c.project_id === id);
-        return res.json({ ...mockProject, steps: projectSteps, comments: projectComments });
+        const projectSteps = WorkflowMockData.steps.filter(
+          (s) => s.project_id === id,
+        );
+        const projectComments = WorkflowMockData.comments.filter(
+          (c) => c.project_id === id,
+        );
+        return res.json({
+          ...mockProject,
+          steps: projectSteps,
+          comments: projectComments,
+        });
       }
 
       return res.status(404).json({ error: "Project not found" });
@@ -283,10 +291,18 @@ router.get("/projects/:id", async (req: Request, res: Response) => {
       }
 
       // Add related data
-      const projectSteps = WorkflowMockData.steps.filter((s) => s.project_id === id);
-      const projectComments = WorkflowMockData.comments.filter((c) => c.project_id === id);
+      const projectSteps = WorkflowMockData.steps.filter(
+        (s) => s.project_id === id,
+      );
+      const projectComments = WorkflowMockData.comments.filter(
+        (c) => c.project_id === id,
+      );
 
-      res.json({ ...mockProject, steps: projectSteps, comments: projectComments });
+      res.json({
+        ...mockProject,
+        steps: projectSteps,
+        comments: projectComments,
+      });
     }
   } catch (error) {
     console.error("Error fetching project:", error);

@@ -124,14 +124,14 @@ const navigationItems: NavigationItem[] = [
   // j) Product Management
   {
     name: "Product Management",
-    href: "/product/dashboard",
+    href: "/product_dashboard",
     icon: Target,
     roles: ["admin", "product", "switch_team"],
   },
   // k) Product
   {
     name: "Product",
-    href: "/product",
+    href: "/product_master",
     icon: Grid3X3,
     roles: ["admin", "product", "switch_team"],
   },

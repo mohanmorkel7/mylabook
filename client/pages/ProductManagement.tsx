@@ -501,7 +501,13 @@ function CreateProductDialog({
                   <SelectItem value="">None</SelectItem>
                   {(allTemplates || [])
                     .filter((t: any) => {
-                      const cid = t.category_id ?? t.categoryId ?? (t.category && (typeof t.category === "object" ? t.category.id : undefined));
+                      const cid =
+                        t.category_id ??
+                        t.categoryId ??
+                        (t.category &&
+                          (typeof t.category === "object"
+                            ? t.category.id
+                            : undefined));
                       return Number(cid) === 1;
                     })
                     .map((tpl: any) => (
@@ -509,7 +515,9 @@ function CreateProductDialog({
                         <div className="flex flex-col">
                           <span>{tpl.name}</span>
                           {tpl.description && (
-                            <span className="text-xs text-gray-500">{tpl.description}</span>
+                            <span className="text-xs text-gray-500">
+                              {tpl.description}
+                            </span>
                           )}
                         </div>
                       </SelectItem>

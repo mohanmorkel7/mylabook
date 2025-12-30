@@ -431,7 +431,9 @@ const ProductOverview: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>Product Details</CardTitle>
-              <CardDescription>Metadata and links from product_master table</CardDescription>
+              <CardDescription>
+                Metadata and links from product_master table
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div>
@@ -443,7 +445,9 @@ const ProductOverview: React.FC = () => {
 
               <div>
                 <div className="text-xs text-gray-600">Description</div>
-                <div className="text-gray-900">{product.description || "—"}</div>
+                <div className="text-gray-900">
+                  {product.description || "—"}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -492,16 +496,26 @@ const ProductOverview: React.FC = () => {
 
                 <div>
                   <div className="text-xs text-gray-600">Active</div>
-                  <div className="text-gray-900">{product.is_active ? "Yes" : "No"}</div>
+                  <div className="text-gray-900">
+                    {product.is_active ? "Yes" : "No"}
+                  </div>
                 </div>
               </div>
 
               <div className="flex flex-col text-xs text-gray-500">
                 <div>
-                  Created: {product.created_at ? new Date(product.created_at).toLocaleString() : "-"} by {product.created_by || "-"}
+                  Created:{" "}
+                  {product.created_at
+                    ? new Date(product.created_at).toLocaleString()
+                    : "-"}{" "}
+                  by {product.created_by || "-"}
                 </div>
                 <div>
-                  Updated: {product.updated_at ? new Date(product.updated_at).toLocaleString() : "-"} by {product.updated_by || "-"}
+                  Updated:{" "}
+                  {product.updated_at
+                    ? new Date(product.updated_at).toLocaleString()
+                    : "-"}{" "}
+                  by {product.updated_by || "-"}
                 </div>
               </div>
             </CardContent>

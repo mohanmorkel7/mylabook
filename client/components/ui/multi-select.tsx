@@ -9,9 +9,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, X } from "lucide-react";
 
+interface OptionItem {
+  label: string;
+  value: string;
+}
+
 interface MultiSelectProps {
-  options: string[];
-  value: string[];
+  // Accept either simple string options or { label, value } objects for compatibility
+  options: Array<string | OptionItem>;
+  value: string[]; // array of option.value strings
   onChange: (value: string[]) => void;
   placeholder?: string;
   className?: string;

@@ -962,7 +962,7 @@ export default function ProductManagement() {
                 <Card
                   key={product.id}
                   className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/products/${product.id}`)}
+                  onClick={() => navigate(`/product_dashboard/${product.id}`)}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">

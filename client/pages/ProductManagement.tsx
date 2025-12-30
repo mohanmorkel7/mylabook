@@ -1040,7 +1040,7 @@ export default function ProductManagement() {
                         className="flex-1"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/products/${product.id}`);
+                          navigate(`/product_dashboard/${product.id}`);
                         }}
                       >
                         <Eye className="w-4 h-4 mr-1" />

@@ -1342,11 +1342,12 @@ export default function ProductWorkflow() {
           <Button
             onClick={() => {
               setSelectedLead(null);
+              setIsProductCreationMode(true);
               setIsCreateDialogOpen(true);
             }}
             className="btn btn-primary"
           >
-            Create Project
+            Create Product
           </Button>
         </div>
       </div>

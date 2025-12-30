@@ -135,7 +135,8 @@ function CreateProjectFromLeadDialog({
         current_version: project?.current_version || "",
         repository_url: project?.repository_url || "",
         product_url: project?.product_url || "",
-        is_active: project?.is_active === undefined ? true : !!project?.is_active,
+        is_active:
+          project?.is_active === undefined ? true : !!project?.is_active,
         status: project?.status || "pending",
       };
     }
@@ -504,7 +505,8 @@ function CreateProjectFromLeadDialog({
         current_version: projectData.current_version || null,
         repository_url: projectData.repository_url || null,
         product_url: projectData.product_url || null,
-        is_active: projectData.is_active === undefined ? true : !!projectData.is_active,
+        is_active:
+          projectData.is_active === undefined ? true : !!projectData.is_active,
         status: projectData.status || "pending",
         created_by: parseInt(user?.id || "1"),
       };
@@ -634,29 +636,67 @@ function CreateProjectFromLeadDialog({
                     <Label>Product Name *</Label>
                     <Input
                       value={projectData.name}
-                      onChange={(e) => setProjectData((prev: any) => ({ ...prev, name: e.target.value }))}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
                       required
                     />
                   </div>
                   <div>
                     <Label>Product ID</Label>
-                    <Input value={projectData.product_id || ""} disabled placeholder="Auto-generated after create (e.g. MYLA-PRD-001)" />
+                    <Input
+                      value={projectData.product_id || ""}
+                      disabled
+                      placeholder="Auto-generated after create (e.g. MYLA-PRD-001)"
+                    />
                   </div>
                   <div>
                     <Label>Current Version</Label>
-                    <Input value={projectData.current_version || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, current_version: e.target.value }))} />
+                    <Input
+                      value={projectData.current_version || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          current_version: e.target.value,
+                        }))
+                      }
+                    />
                   </div>
                   <div>
                     <Label>Repository URL</Label>
-                    <Input value={projectData.repository_url || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, repository_url: e.target.value }))} />
+                    <Input
+                      value={projectData.repository_url || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          repository_url: e.target.value,
+                        }))
+                      }
+                    />
                   </div>
                   <div>
                     <Label>Product URL</Label>
-                    <Input value={projectData.product_url || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, product_url: e.target.value }))} />
+                    <Input
+                      value={projectData.product_url || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          product_url: e.target.value,
+                        }))
+                      }
+                    />
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Status</Label>
-                    <Select value={projectData.status || "pending"} onValueChange={(v) => setProjectData((prev: any) => ({ ...prev, status: v }))}>
+                    <Select
+                      value={projectData.status || "pending"}
+                      onValueChange={(v) =>
+                        setProjectData((prev: any) => ({ ...prev, status: v }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -671,13 +711,30 @@ function CreateProjectFromLeadDialog({
                     <div>
                       <Label className="text-sm font-medium">Active</Label>
                       <div className="mt-1">
-                        <Switch checked={Boolean(projectData.is_active !== false)} onCheckedChange={(v: any) => setProjectData((prev: any) => ({ ...prev, is_active: !!v }))} />
+                        <Switch
+                          checked={Boolean(projectData.is_active !== false)}
+                          onCheckedChange={(v: any) =>
+                            setProjectData((prev: any) => ({
+                              ...prev,
+                              is_active: !!v,
+                            }))
+                          }
+                        />
                       </div>
                     </div>
                   </div>
                   <div className="md:col-span-2">
                     <Label>Description</Label>
-                    <Textarea value={projectData.description || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, description: e.target.value }))} rows={3} />
+                    <Textarea
+                      value={projectData.description || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                    />
                   </div>
                 </div>
               </CardContent>

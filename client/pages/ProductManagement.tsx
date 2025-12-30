@@ -587,8 +587,39 @@ export default function ProductManagement() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  // In real implementation, these would be actual API calls
-  const products = mockProducts;
+  // Fetch workflow projects from backend
+  const queryClient = useQueryClient();
+  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+    queryKey: ["workflow-projects"],
+    queryFn: () => apiClient.getWorkflowProjects(),
+  });
+
+  // Map projects to local product shape where possible
+  const products = (Array.isArray(projects) ? projects : []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    category: p.category || "feature",
+    status: p.status || "planning",
+    priority: p.priority || "medium",
+    assigned_team: p.assigned_team || "",
+    project_manager: p.project_manager_name || p.project_manager || "",
+    start_date: p.start_date || p.created_at,
+    target_release_date: p.target_completion_date || p.target_release_date,
+    actual_release_date: p.actual_release_date,
+    version: p.current_version || p.version,
+    progress_percentage: p.progress_percentage || p.progress || 0,
+    budget: p.budget,
+    estimated_effort_hours: p.estimated_hours || p.estimated_effort_hours,
+    actual_effort_hours: p.actual_effort_hours,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+    created_by: p.created_by,
+    tags: p.tags || [],
+    dependencies: p.dependencies || [],
+    features: p.features || [],
+    milestones: p.milestones || [],
+  }));
 
   // Calculate dashboard stats
   const totalProducts = products.length;
@@ -598,9 +629,10 @@ export default function ProductManagement() {
   const completedProducts = products.filter(
     (p) => p.status === "production",
   ).length;
-  const avgProgress =
-    products.reduce((sum, p) => sum + (p.progress_percentage || 0), 0) /
-    products.length;
+  const avgProgress = products.length
+    ? products.reduce((sum, p) => sum + (p.progress_percentage || 0), 0) /
+      products.length
+    : 0;
 
   // Filter products based on search and filters
   const filteredProducts = products.filter((product) => {
@@ -631,6 +663,21 @@ export default function ProductManagement() {
     const priorityObj = priorities.find((p) => p.value === priority);
     return priorityObj?.color || "text-gray-600";
   };
+
+  // Create / update mutations
+  const createProjectMutation = useMutation({
+    mutationFn: (data: any) => apiClient.createWorkflowProject(data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiClient.request(`/workflow/projects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
+  });
 
   return (
     <div className="p-6 space-y-6">

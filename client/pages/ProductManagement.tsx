@@ -329,13 +329,19 @@ function CreateProductDialog({
   isOpen,
   onClose,
   onSuccess,
+  editing,
+  setEditing,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  editing?: any;
+  setEditing?: (v: any) => void;
 }) {
   const { user } = useAuth();
-  const [formData, setFormData] = useState({
+  const queryClient = useQueryClient();
+
+  const [formData, setFormData] = useState(() => ({
     name: "",
     description: "",
     category: "",
@@ -347,37 +353,82 @@ function CreateProductDialog({
     budget: "",
     estimated_effort_hours: "",
     tags: "",
+  }));
+
+  useEffect(() => {
+    if (editing) {
+      setFormData({
+        name: editing.name || "",
+        description: editing.description || "",
+        category: editing.category || "feature",
+        status: editing.status || "planning",
+        priority: editing.priority || "medium",
+        assigned_team: editing.assigned_team || "",
+        project_manager: editing.project_manager || "",
+        target_release_date: editing.target_release_date || "",
+        budget: editing.budget || "",
+        estimated_effort_hours: editing.estimated_effort_hours || "",
+        tags: (editing.tags || []).join(", "),
+      });
+    }
+  }, [editing]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => apiClient.createWorkflowProject(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
+      onSuccess();
+      onClose();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiClient.request(`/workflow/projects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
+      onSuccess();
+      onClose();
+    },
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // In real implementation, this would call the API
-    console.log("Creating product:", formData);
+    const payload: any = {
+      name: formData.name,
+      description: formData.description || null,
+      category: formData.category,
+      status: formData.status,
+      priority: formData.priority,
+      assigned_team: formData.assigned_team || null,
+      project_manager: formData.project_manager ? String(formData.project_manager) : null,
+      target_completion_date: formData.target_release_date || null,
+      budget: formData.budget ? Number(formData.budget) : null,
+      estimated_hours: formData.estimated_effort_hours ? Number(formData.estimated_effort_hours) : null,
+      tags: formData.tags ? formData.tags.split(",").map((t: string) => t.trim()) : [],
+      created_by: Number(user?.id || 1),
+    };
 
-    // Reset form and close dialog
-    setFormData({
-      name: "",
-      description: "",
-      category: "",
-      status: "planning",
-      priority: "medium",
-      assigned_team: "",
-      project_manager: "",
-      target_release_date: "",
-      budget: "",
-      estimated_effort_hours: "",
-      tags: "",
-    });
-    onClose();
-    onSuccess();
+    try {
+      if (editing && editing.id) {
+        updateMutation.mutate({ id: editing.id, data: payload });
+      } else {
+        createMutation.mutate(payload);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Product</DialogTitle>
+          <DialogTitle>{editing ? "Edit Product" : "Create New Product"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -103,10 +103,39 @@ const ProductOverview: React.FC = () => {
             updated_at: pmRes.updated_at,
             created_by: pmRes.created_by,
             updated_by: pmRes.updated_by,
+            template_id: pmRes.template_id,
             meta: pmRes,
           };
           setProduct(normalized);
-          setSteps([]);
+
+          // If product is linked to a template, try loading template steps
+          if (normalized.template_id) {
+            try {
+              const tpl = await apiClient.getTemplate(Number(normalized.template_id));
+              if (tpl && tpl.steps) {
+                setSteps(
+                  tpl.steps.map((s: any, i: number) => ({
+                    id: s.id || i + 1,
+                    name: s.name,
+                    description: s.description || null,
+                    step_name: s.name,
+                    step_description: s.description || null,
+                    probability_percent: parseFloat(s.probability_percent ?? 0) || 0,
+                    eta: s.default_eta_days ? new Date(Date.now() + s.default_eta_days * 24*3600*1000).toISOString() : null,
+                    status: 'pending',
+                    estimated_hours: s.default_eta_days ? s.default_eta_days * 8 : undefined,
+                    project_id: Number(id),
+                    isTemplate: true,
+                  })),
+                );
+              }
+            } catch (tplErr) {
+              console.debug('Failed to load template steps', tplErr);
+            }
+          } else {
+            setSteps([]);
+          }
+
           return;
         }
       } catch (err) {
@@ -125,6 +154,7 @@ const ProductOverview: React.FC = () => {
           target_completion_date: res.target_completion_date,
           estimated_hours: res.estimated_hours,
           status: res.status,
+          template_id: res.template_id,
           meta: res,
         };
         const normalizedSteps = (res.steps || []).map((s: any) => ({
@@ -144,6 +174,32 @@ const ProductOverview: React.FC = () => {
         }));
         setProduct(normalized);
         setSteps(normalizedSteps);
+
+        // If workflow project has a template_id but no steps, try to load template steps
+        if ((!res.steps || res.steps.length === 0) && normalized.template_id) {
+          try {
+            const tpl = await apiClient.getTemplate(Number(normalized.template_id));
+            if (tpl && tpl.steps) {
+              setSteps(
+                tpl.steps.map((s: any, i: number) => ({
+                  id: s.id || i + 1,
+                  name: s.name,
+                  description: s.description || null,
+                  step_name: s.name,
+                  step_description: s.description || null,
+                  probability_percent: parseFloat(s.probability_percent ?? 0) || 0,
+                  eta: s.default_eta_days ? new Date(Date.now() + s.default_eta_days * 24*3600*1000).toISOString() : null,
+                  status: 'pending',
+                  estimated_hours: s.default_eta_days ? s.default_eta_days * 8 : undefined,
+                  project_id: Number(id),
+                  isTemplate: true,
+                })),
+              );
+            }
+          } catch (tplErr) {
+            console.debug('Failed to load template steps for workflow project', tplErr);
+          }
+        }
       } catch (e) {
         console.error(e);
       }

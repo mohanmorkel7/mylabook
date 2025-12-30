@@ -87,7 +87,7 @@ const ProductOverview: React.FC = () => {
     const load = async () => {
       try {
         // Try loading a product_master first (new feature). If not found, fall back to workflow project
-        const pmRes = await apiClient.request<any>(`/api/product-master/${id}`);
+        const pmRes = await apiClient.request<any>(`/product-master/${id}`);
         if (pmRes && pmRes.id) {
           const normalized: any = {
             id: pmRes.id,

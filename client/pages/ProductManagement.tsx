@@ -645,6 +645,7 @@ export default function ProductManagement() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
 
   // Fetch workflow projects from backend
   const queryClient = useQueryClient();

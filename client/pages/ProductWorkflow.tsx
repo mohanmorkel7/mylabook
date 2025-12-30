@@ -1513,18 +1513,56 @@ export default function ProductWorkflow() {
         </div>
       </div>
 
-      {/* Product Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* Product Statistics Cards (KPIs) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Active Projects
-                </p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {activeProjectsCount}
-                </p>
+                <p className="text-sm font-medium text-gray-500">Total Products</p>
+                <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-100">
+                <Package className="w-6 h-6 text-gray-700" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Active</p>
+                <p className="text-2xl font-bold text-blue-600">{activeProducts}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-blue-100">
+                <Users className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Pending</p>
+                <p className="text-2xl font-bold text-yellow-600">{pendingProducts}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-yellow-100">
+                <Clock className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">In Progress</p>
+                <p className="text-2xl font-bold text-blue-600">{inProgressProducts}</p>
               </div>
               <div className="p-3 rounded-lg bg-blue-100">
                 <PlayCircle className="w-6 h-6 text-blue-600" />
@@ -1537,67 +1575,11 @@ export default function ProductWorkflow() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Completed Projects
-                </p>
-                <p className="text-2xl font-bold text-green-600">
-                  {completedProjectsCount}
-                </p>
+                <p className="text-sm font-medium text-gray-500">Completed</p>
+                <p className="text-2xl font-bold text-green-600">{completedProducts}</p>
               </div>
               <div className="p-3 rounded-lg bg-green-100">
                 <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Related Projects
-                </p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {activeProjectsCount}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalProjectsCount} total projects
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-purple-100">
-                <Target className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Avg Progress
-                </p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {projects.length > 0
-                    ? Math.round(
-                        projects.reduce(
-                          (acc: number, p: any) =>
-                            acc +
-                            (p.progress_percentage ??
-                              p.progress ??
-                              p.progress_percent ??
-                              0),
-                          0,
-                        ) / projects.length,
-                      )
-                    : 0}
-                  %
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-orange-100">
-                <Package className="w-6 h-6 text-orange-600" />
               </div>
             </div>
           </CardContent>

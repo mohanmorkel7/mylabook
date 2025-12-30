@@ -16,9 +16,9 @@ class FinOpsScheduler {
 
     console.log("Initializing FinOps Scheduler...");
 
-    // Daily task execution at 5:00 AM
+    // Daily task execution at 5:30 AM (run after early-morning guard window)
     cron.schedule(
-      "0 5 * * *",
+      "30 5 * * *",
       async () => {
         console.log("Running daily task execution...");
         await finopsAlertService.checkDailyTaskExecution();

@@ -290,7 +290,7 @@ const ProductOverview: React.FC = () => {
     try {
       // If this is a product_master record (has product_id), call product-master API
       if (product && product.product_id) {
-        await apiClient.request(`/api/product-master/${product.id}`, { method: "DELETE" });
+        await apiClient.request(`/product-master/${product.id}`, { method: "DELETE" });
         navigate("/product_master");
       } else {
         await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });

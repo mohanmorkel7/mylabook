@@ -561,12 +561,10 @@ function CreateProductDialog({
           <div>
             <Label>Related Products (from Product Master)</Label>
             <MultiSelect
-              options={
-                (productMasters || []).map((p: any) => ({
-                  label: p.name,
-                  value: String(p.id),
-                }))
-              }
+              options={(productMasters || []).map((p: any) => ({
+                label: p.name,
+                value: String(p.id),
+              }))}
               value={(formData.selected_product_ids || []) as string[]}
               onChange={(vals) =>
                 setFormData((prev) => ({ ...prev, selected_product_ids: vals }))

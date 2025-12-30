@@ -452,6 +452,13 @@ export class WorkflowRepository {
         }
       }
 
+      // Allow updating product_master_ids if provided
+      if ((data as any).product_master_ids !== undefined) {
+        setClause.push(`product_master_ids = $${idx}`);
+        values.push(JSON.stringify((data as any).product_master_ids));
+        idx++;
+      }
+
       // Execute the project update outside of a long-running transaction so
       // step upserts cannot roll it back or hold locks for extended periods.
       if (setClause.length > 0) {

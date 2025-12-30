@@ -286,13 +286,19 @@ const ProductOverview: React.FC = () => {
   };
 
   const deleteProject = async () => {
-    if (!window.confirm("Delete this project?")) return;
+    if (!window.confirm("Delete this product?")) return;
     try {
-      await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });
-      navigate("/products");
+      // If this is a product_master record (has product_id), call product-master API
+      if (product && product.product_id) {
+        await apiClient.request(`/api/product-master/${product.id}`, { method: "DELETE" });
+        navigate("/product_master");
+      } else {
+        await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });
+        navigate("/product_master");
+      }
     } catch (e) {
       console.error(e);
-      alert("Failed to delete project");
+      alert("Failed to delete product");
     }
   };
 
@@ -305,7 +311,7 @@ const ProductOverview: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/products")}
+            onClick={() => navigate("/product_master")}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products
@@ -328,10 +334,14 @@ const ProductOverview: React.FC = () => {
         <div className="flex space-x-3">
           <Button
             variant="outline"
-            onClick={() => navigate(`/products/${id}/edit`)}
+            onClick={() => {
+              // Prefer product_master edit route for product_master records
+              if (product && product.product_id) navigate(`/product_master/${id}/edit`);
+              else navigate(`/products/${id}/edit`);
+            }}
           >
             <Edit className="w-4 h-4 mr-2" />
-            Edit Project
+            Edit Product
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>

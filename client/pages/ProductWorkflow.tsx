@@ -290,6 +290,21 @@ function CreateProjectFromLeadDialog({
     }
   }, [project]);
 
+  // If editing a product_master record in product-creation mode, sync product-specific fields
+  useEffect(() => {
+    if (!project || !isProductCreation) return;
+    setProjectData({
+      name: project.name || "",
+      product_id: project.product_id || "",
+      description: project.description || "",
+      current_version: project.current_version || "",
+      repository_url: project.repository_url || "",
+      product_url: project.product_url || "",
+      is_active: project.is_active === undefined ? true : !!project.is_active,
+      status: project.status || "pending",
+    });
+  }, [project, isProductCreation]);
+
   // If templates are loaded and a project has template_id, set selectedTemplate
   useEffect(() => {
     if (project && project.template_id && templates.length > 0) {

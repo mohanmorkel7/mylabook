@@ -9,7 +9,7 @@ export interface ProductMaster {
   repository_url?: string;
   product_url?: string;
   is_active: boolean;
-  status: 'pending' | 'inprogress' | 'completed';
+  status: "pending" | "inprogress" | "completed";
   created_at: string;
   updated_at: string;
   created_by?: number;
@@ -21,9 +21,9 @@ export class ProductMasterRepository {
     // generate product_id using DB function if not provided
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
       const prodIdRes = await client.query(
-        `SELECT generate_product_master_id() as pid`
+        `SELECT generate_product_master_id() as pid`,
       );
       const product_id = data.product_id || prodIdRes.rows[0].pid;
 
@@ -38,16 +38,16 @@ export class ProductMasterRepository {
           data.repository_url || null,
           data.product_url || null,
           data.is_active === undefined ? true : data.is_active,
-          data.status || 'pending',
+          data.status || "pending",
           data.created_by || null,
           data.updated_by || null,
         ],
       );
 
-      await client.query('COMMIT');
+      await client.query("COMMIT");
       return res.rows[0];
     } catch (e) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       throw e;
     } finally {
       client.release();
@@ -66,18 +66,23 @@ export class ProductMasterRepository {
       where.push(`is_active = $${idx++}`);
       vals.push(filter.is_active);
     }
-    const q = `SELECT * FROM product_master ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name ASC`;
+    const q = `SELECT * FROM product_master ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY name ASC`;
     const res = await pool.query(q, vals);
     return res.rows;
   }
 
   static async getById(id: number) {
-    const res = await pool.query('SELECT * FROM product_master WHERE id = $1', [id]);
+    const res = await pool.query("SELECT * FROM product_master WHERE id = $1", [
+      id,
+    ]);
     return res.rows[0] || null;
   }
 
   static async getByProductId(pid: string) {
-    const res = await pool.query('SELECT * FROM product_master WHERE product_id = $1', [pid]);
+    const res = await pool.query(
+      "SELECT * FROM product_master WHERE product_id = $1",
+      [pid],
+    );
     return res.rows[0] || null;
   }
 
@@ -91,12 +96,12 @@ export class ProductMasterRepository {
     }
     if (cols.length === 0) return null;
     vals.push(id);
-    const q = `UPDATE product_master SET ${cols.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
+    const q = `UPDATE product_master SET ${cols.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${idx} RETURNING *`;
     const res = await pool.query(q, vals);
     return res.rows[0] || null;
   }
 
   static async delete(id: number) {
-    await pool.query('DELETE FROM product_master WHERE id = $1', [id]);
+    await pool.query("DELETE FROM product_master WHERE id = $1", [id]);
   }
 }

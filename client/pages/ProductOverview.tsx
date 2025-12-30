@@ -113,7 +113,9 @@ export default function ProductOverview() {
 
           if (normalized.template_id) {
             try {
-              const tpl = await apiClient.getTemplate(Number(normalized.template_id));
+              const tpl = await apiClient.getTemplate(
+                Number(normalized.template_id),
+              );
               if (tpl && tpl.steps) {
                 setSteps(
                   tpl.steps.map((s: any, i: number) => ({
@@ -122,12 +124,17 @@ export default function ProductOverview() {
                     description: s.description || null,
                     step_name: s.name,
                     step_description: s.description || null,
-                    probability_percent: parseFloat(s.probability_percent ?? 0) || 0,
+                    probability_percent:
+                      parseFloat(s.probability_percent ?? 0) || 0,
                     eta: s.default_eta_days
-                      ? new Date(Date.now() + s.default_eta_days * 24 * 3600 * 1000).toISOString()
+                      ? new Date(
+                          Date.now() + s.default_eta_days * 24 * 3600 * 1000,
+                        ).toISOString()
                       : null,
                     status: "pending",
-                    estimated_hours: s.default_eta_days ? s.default_eta_days * 8 : undefined,
+                    estimated_hours: s.default_eta_days
+                      ? s.default_eta_days * 8
+                      : undefined,
                     project_id: Number(id),
                     isTemplate: true,
                   })),
@@ -167,7 +174,8 @@ export default function ProductOverview() {
           description: s.step_description || s.description || null,
           step_name: s.step_name || s.name,
           step_description: s.step_description || s.description || null,
-          probability_percent: parseFloat(s.probability ?? s.probability_percent ?? 0) || 0,
+          probability_percent:
+            parseFloat(s.probability ?? s.probability_percent ?? 0) || 0,
           eta: s.eta || s.due_date,
           status: s.status,
           estimated_hours: s.estimated_hours,
@@ -179,7 +187,9 @@ export default function ProductOverview() {
 
         if ((!res.steps || res.steps.length === 0) && normalized.template_id) {
           try {
-            const tpl = await apiClient.getTemplate(Number(normalized.template_id));
+            const tpl = await apiClient.getTemplate(
+              Number(normalized.template_id),
+            );
             if (tpl && tpl.steps) {
               setSteps(
                 tpl.steps.map((s: any, i: number) => ({
@@ -188,19 +198,27 @@ export default function ProductOverview() {
                   description: s.description || null,
                   step_name: s.name,
                   step_description: s.description || null,
-                  probability_percent: parseFloat(s.probability_percent ?? 0) || 0,
+                  probability_percent:
+                    parseFloat(s.probability_percent ?? 0) || 0,
                   eta: s.default_eta_days
-                    ? new Date(Date.now() + s.default_eta_days * 24 * 3600 * 1000).toISOString()
+                    ? new Date(
+                        Date.now() + s.default_eta_days * 24 * 3600 * 1000,
+                      ).toISOString()
                     : null,
                   status: "pending",
-                  estimated_hours: s.default_eta_days ? s.default_eta_days * 8 : undefined,
+                  estimated_hours: s.default_eta_days
+                    ? s.default_eta_days * 8
+                    : undefined,
                   project_id: Number(id),
                   isTemplate: true,
                 })),
               );
             }
           } catch (tplErr) {
-            console.debug("Failed to load template steps for workflow project", tplErr);
+            console.debug(
+              "Failed to load template steps for workflow project",
+              tplErr,
+            );
           }
         }
       } catch (e) {
@@ -226,14 +244,26 @@ export default function ProductOverview() {
         return Math.min(100, Math.round(pct));
       }
 
-      if (product && typeof product.progress === "number" && product.progress > 0) {
+      if (
+        product &&
+        typeof product.progress === "number" &&
+        product.progress > 0
+      ) {
         return Math.min(100, Math.round(product.progress));
       }
 
-      const completedCount = steps.filter((s: any) => s.status === "completed").length;
-      const inProgressCount = steps.filter((s: any) => s.status === "in_progress").length;
+      const completedCount = steps.filter(
+        (s: any) => s.status === "completed",
+      ).length;
+      const inProgressCount = steps.filter(
+        (s: any) => s.status === "in_progress",
+      ).length;
       const totalSteps = steps.length;
-      return totalSteps > 0 ? Math.round(((completedCount + inProgressCount * 0.5) / totalSteps) * 100) : 0;
+      return totalSteps > 0
+        ? Math.round(
+            ((completedCount + inProgressCount * 0.5) / totalSteps) * 100,
+          )
+        : 0;
     }
     return product?.progress || 0;
   })();
@@ -241,20 +271,25 @@ export default function ProductOverview() {
   const refetchSteps = async () => {
     setStepsLoading(true);
     try {
-      const res = await apiClient.request<any>(`/workflow/projects/${id}/steps`);
-      setSteps((res || []).map((s: any) => ({
-        id: s.id,
-        name: s.step_name || s.name,
-        description: s.step_description || s.description || null,
-        step_name: s.step_name || s.name,
-        step_description: s.step_description || s.description || null,
-        probability_percent: parseFloat(s.probability ?? s.probability_percent ?? 0) || 0,
-        eta: s.eta || s.due_date,
-        status: s.status,
-        estimated_hours: s.estimated_hours,
-        project_id: s.project_id || Number(id),
-        isTemplate: !!s.is_template || !!s.isTemplate || false,
-      })));
+      const res = await apiClient.request<any>(
+        `/workflow/projects/${id}/steps`,
+      );
+      setSteps(
+        (res || []).map((s: any) => ({
+          id: s.id,
+          name: s.step_name || s.name,
+          description: s.step_description || s.description || null,
+          step_name: s.step_name || s.name,
+          step_description: s.step_description || s.description || null,
+          probability_percent:
+            parseFloat(s.probability ?? s.probability_percent ?? 0) || 0,
+          eta: s.eta || s.due_date,
+          status: s.status,
+          estimated_hours: s.estimated_hours,
+          project_id: s.project_id || Number(id),
+          isTemplate: !!s.is_template || !!s.isTemplate || false,
+        })),
+      );
     } catch (e) {
       console.error("Failed to refetch steps:", e);
     } finally {
@@ -270,7 +305,9 @@ export default function ProductOverview() {
   const handleDeleteStep = async (stepId: number) => {
     if (!window.confirm("Delete this step?")) return;
     try {
-      await apiClient.request(`/workflow/steps/${stepId}`, { method: "DELETE" });
+      await apiClient.request(`/workflow/steps/${stepId}`, {
+        method: "DELETE",
+      });
       await refetchSteps();
     } catch (e) {
       console.error(e);
@@ -292,7 +329,10 @@ export default function ProductOverview() {
 
   const handleReorderSteps = async (reordered: any[]) => {
     try {
-      const stepOrders = reordered.map((s: any, idx: number) => ({ id: s.id, order: idx + 1 }));
+      const stepOrders = reordered.map((s: any, idx: number) => ({
+        id: s.id,
+        order: idx + 1,
+      }));
       await apiClient.request(`/workflow/projects/${id}/steps/reorder`, {
         method: "POST",
         body: JSON.stringify({ stepOrders }),
@@ -307,10 +347,14 @@ export default function ProductOverview() {
     if (!window.confirm("Delete this product?")) return;
     try {
       if (product && product.product_id) {
-        await apiClient.request(`/product-master/${product.id}`, { method: "DELETE" });
+        await apiClient.request(`/product-master/${product.id}`, {
+          method: "DELETE",
+        });
         navigate("/product_master");
       } else {
-        await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });
+        await apiClient.request(`/workflow/projects/${id}`, {
+          method: "DELETE",
+        });
         navigate("/product_master");
       }
     } catch (e) {
@@ -330,7 +374,9 @@ export default function ProductOverview() {
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbLink href={`/product_dashboard/${id}`}>{product.name || `#${id}`}</BreadcrumbLink>
+            <BreadcrumbLink href={`/product_dashboard/${id}`}>
+              {product.name || `#${id}`}
+            </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
@@ -341,15 +387,25 @@ export default function ProductOverview() {
 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="sm" onClick={() => navigate("/product_master")}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/product_master")}
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products
           </Button>
           <div>
             <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
-              <Badge className="text-xs">{product.product_id || product.id}</Badge>
-              <Badge className="text-xs">{formatStatusLabel(product.status)}</Badge>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {product.name}
+              </h1>
+              <Badge className="text-xs">
+                {product.product_id || product.id}
+              </Badge>
+              <Badge className="text-xs">
+                {formatStatusLabel(product.status)}
+              </Badge>
             </div>
             <p className="text-gray-600 mt-1">Product Overview & Pipeline</p>
           </div>
@@ -359,7 +415,8 @@ export default function ProductOverview() {
           <Button
             variant="outline"
             onClick={() => {
-              if (product && product.product_id) navigate(`/product_master/${id}/edit`);
+              if (product && product.product_id)
+                navigate(`/product_master/${id}/edit`);
               else navigate(`/products/${id}/edit`);
             }}
           >
@@ -375,12 +432,15 @@ export default function ProductOverview() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete this Project?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. All related steps and comments will be removed.
+                  This action cannot be undone. All related steps and comments
+                  will be removed.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={deleteProject}>Confirm Delete</AlertDialogAction>
+                <AlertDialogAction onClick={deleteProject}>
+                  Confirm Delete
+                </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -392,21 +452,31 @@ export default function ProductOverview() {
           <Card>
             <CardHeader>
               <CardTitle>Product Overview</CardTitle>
-              <CardDescription>Basic information and pipeline steps</CardDescription>
+              <CardDescription>
+                Basic information and pipeline steps
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="rounded-md border bg-slate-50 p-3">
                   <div className="text-xs text-slate-500">Status</div>
-                  <div className="mt-1 font-semibold text-slate-900">{product.status}</div>
+                  <div className="mt-1 font-semibold text-slate-900">
+                    {product.status}
+                  </div>
                 </div>
                 <div className="rounded-md border bg-slate-50 p-3">
-                  <div className="text-xs text-slate-500">Target Completion</div>
-                  <div className="mt-1 font-semibold text-slate-900">{product.target_completion_date || "TBD"}</div>
+                  <div className="text-xs text-slate-500">
+                    Target Completion
+                  </div>
+                  <div className="mt-1 font-semibold text-slate-900">
+                    {product.target_completion_date || "TBD"}
+                  </div>
                 </div>
                 <div className="rounded-md border bg-slate-50 p-3">
                   <div className="text-xs text-slate-500">Estimated Hours</div>
-                  <div className="mt-1 font-semibold text-slate-900">{product.estimated_hours || "TBD"}</div>
+                  <div className="mt-1 font-semibold text-slate-900">
+                    {product.estimated_hours || "TBD"}
+                  </div>
                 </div>
               </div>
 
@@ -419,20 +489,25 @@ export default function ProductOverview() {
                           completionPercentage === 100
                             ? "bg-green-500"
                             : completionPercentage >= 75
-                            ? "bg-blue-500"
-                            : completionPercentage >= 50
-                            ? "bg-yellow-500"
-                            : completionPercentage >= 25
-                            ? "bg-orange-500"
-                            : "bg-red-500"
+                              ? "bg-blue-500"
+                              : completionPercentage >= 50
+                                ? "bg-yellow-500"
+                                : completionPercentage >= 25
+                                  ? "bg-orange-500"
+                                  : "bg-red-500"
                         }`}
                         style={{ width: `${completionPercentage}%` }}
                       />
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-bold text-blue-600">{completionPercentage}% Complete</div>
-                    <div className="text-xs text-gray-500">{steps.filter((s) => s.status === "completed").length} of {steps.length} steps</div>
+                    <div className="text-sm font-bold text-blue-600">
+                      {completionPercentage}% Complete
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {steps.filter((s) => s.status === "completed").length} of{" "}
+                      {steps.length} steps
+                    </div>
                   </div>
                 </div>
               </div>
@@ -442,17 +517,23 @@ export default function ProductOverview() {
           <Card>
             <CardHeader>
               <CardTitle>Product Details</CardTitle>
-              <CardDescription>Metadata and links from product_master table</CardDescription>
+              <CardDescription>
+                Metadata and links from product_master table
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div>
                 <div className="text-xs text-gray-600">Product ID</div>
-                <div className="font-semibold text-gray-900">{product.product_id || product.id}</div>
+                <div className="font-semibold text-gray-900">
+                  {product.product_id || product.id}
+                </div>
               </div>
 
               <div>
                 <div className="text-xs text-gray-600">Description</div>
-                <div className="text-gray-900">{product.description || "—"}</div>
+                <div className="text-gray-900">
+                  {product.description || "—"}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -460,7 +541,14 @@ export default function ProductOverview() {
                   <div className="text-xs text-gray-600">Repository</div>
                   <div className="text-gray-900">
                     {product.repository_url ? (
-                      <a className="text-blue-600 underline" href={product.repository_url} target="_blank" rel="noreferrer">Open Repository</a>
+                      <a
+                        className="text-blue-600 underline"
+                        href={product.repository_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open Repository
+                      </a>
                     ) : (
                       "—"
                     )}
@@ -471,7 +559,14 @@ export default function ProductOverview() {
                   <div className="text-xs text-gray-600">Product Link</div>
                   <div className="text-gray-900">
                     {product.product_url ? (
-                      <a className="text-blue-600 underline" href={product.product_url} target="_blank" rel="noreferrer">Open Product</a>
+                      <a
+                        className="text-blue-600 underline"
+                        href={product.product_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open Product
+                      </a>
                     ) : (
                       "—"
                     )}
@@ -480,21 +575,33 @@ export default function ProductOverview() {
 
                 <div>
                   <div className="text-xs text-gray-600">Current Version</div>
-                  <div className="text-gray-900">{product.current_version || "-"}</div>
+                  <div className="text-gray-900">
+                    {product.current_version || "-"}
+                  </div>
                 </div>
 
                 <div>
                   <div className="text-xs text-gray-600">Active</div>
-                  <div className="text-gray-900">{product.is_active ? "Yes" : "No"}</div>
+                  <div className="text-gray-900">
+                    {product.is_active ? "Yes" : "No"}
+                  </div>
                 </div>
               </div>
 
               <div className="flex flex-col text-xs text-gray-500">
                 <div>
-                  Created: {product.created_at ? new Date(product.created_at).toLocaleString() : "-"} by {product.created_by || "-"}
+                  Created:{" "}
+                  {product.created_at
+                    ? new Date(product.created_at).toLocaleString()
+                    : "-"}{" "}
+                  by {product.created_by || "-"}
                 </div>
                 <div>
-                  Updated: {product.updated_at ? new Date(product.updated_at).toLocaleString() : "-"} by {product.updated_by || "-"}
+                  Updated:{" "}
+                  {product.updated_at
+                    ? new Date(product.updated_at).toLocaleString()
+                    : "-"}{" "}
+                  by {product.updated_by || "-"}
                 </div>
               </div>
             </CardContent>
@@ -518,8 +625,12 @@ export default function ProductOverview() {
               ) : steps.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Target className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No pipeline steps yet</h3>
-                  <p className="text-gray-600 mb-4">Create steps to track your product's progress.</p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No pipeline steps yet
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Create steps to track your product's progress.
+                  </p>
                 </div>
               ) : (
                 <VCDraggableStepsList
@@ -562,14 +673,18 @@ export default function ProductOverview() {
                 {product.project_manager_id && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Owner</span>
-                    <span className="text-gray-900">{product.project_manager_id}</span>
+                    <span className="text-gray-900">
+                      {product.project_manager_id}
+                    </span>
                   </div>
                 )}
 
                 {product.target_completion_date && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Target</span>
-                    <span className="text-gray-900">{product.target_completion_date}</span>
+                    <span className="text-gray-900">
+                      {product.target_completion_date}
+                    </span>
                   </div>
                 )}
               </div>

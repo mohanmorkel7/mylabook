@@ -477,6 +477,38 @@ function CreateProductDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            <div>
+              <Label htmlFor="template_id">Template (Product Templates)</Label>
+              <Select
+                value={(formData as any).template_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, template_id: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a product template (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {(allTemplates || [])
+                    .filter((t: any) => {
+                      const cid = t.category_id ?? t.categoryId ?? (t.category && (typeof t.category === "object" ? t.category.id : undefined));
+                      return Number(cid) === 1;
+                    })
+                    .map((tpl: any) => (
+                      <SelectItem key={tpl.id} value={String(tpl.id)}>
+                        <div className="flex flex-col">
+                          <span>{tpl.name}</span>
+                          {tpl.description && (
+                            <span className="text-xs text-gray-500">{tpl.description}</span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>

@@ -1050,7 +1050,8 @@ export default function ProductManagement() {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setEditingProduct(product);
                           setIsCreateDialogOpen(true);
                         }}

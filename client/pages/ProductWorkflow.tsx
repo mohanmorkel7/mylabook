@@ -740,6 +740,7 @@ function CreateProjectFromLeadDialog({
               </CardContent>
             </Card>
           )}
+          {!isProductCreation && (<>
           {/* Lead Information Summary */}
           {lead ? (
             <Card>
@@ -1146,6 +1147,7 @@ function CreateProjectFromLeadDialog({
             </CardContent>
           </Card>
 
+          </>)}
           {/* Submit Actions */}
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>

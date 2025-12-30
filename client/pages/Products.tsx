@@ -117,7 +117,7 @@ const ProductsPage: React.FC = () => {
           <div className="space-y-3 overflow-auto max-h-64">
             {products.map((p) => (
               <Link
-                to={`/products/${p.id}`}
+                to={`/product_master/${p.id}`}
                 key={p.id}
                 className="block p-3 border rounded hover:shadow"
               >

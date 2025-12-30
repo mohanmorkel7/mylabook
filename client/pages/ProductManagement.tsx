@@ -743,7 +743,7 @@ export default function ProductManagement() {
           </p>
         </div>
 
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
+        <Button onClick={() => { setEditingProduct(null); setIsCreateDialogOpen(true); }}>
           <Plus className="w-4 h-4 mr-2" />
           New Product
         </Button>

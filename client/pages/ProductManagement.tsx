@@ -1038,9 +1038,9 @@ export default function ProductManagement() {
                         variant="outline"
                         size="sm"
                         className="flex-1"
-                        onClick={() => {
-                          setEditingProduct(product);
-                          setIsCreateDialogOpen(true);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/products/${product.id}`);
                         }}
                       >
                         <Eye className="w-4 h-4 mr-1" />

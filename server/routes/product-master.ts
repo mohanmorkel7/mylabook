@@ -40,11 +40,24 @@ router.post("/", async (req, res) => {
   }
 });
 
-// GET /api/product-master/:id
+// GET /api/product-master/:id_or_pid
+// Accepts either numeric primary key (id) or product_id (e.g. MYLA-PRD-001)
 router.get("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const row = await ProductMasterRepository.getById(id);
+    const param = String(req.params.id);
+    let row: any = null;
+
+    // If param looks like the formatted product_id, query by product_id
+    if (/^MYLA-PRD-/.test(param)) {
+      row = await ProductMasterRepository.getByProductId(param);
+    } else if (!isNaN(Number(param))) {
+      // Numeric id
+      row = await ProductMasterRepository.getById(Number(param));
+    } else {
+      // Fallback: try product_id lookup
+      row = await ProductMasterRepository.getByProductId(param);
+    }
+
     if (!row) return res.status(404).json({ error: "Not found" });
     res.json(row);
   } catch (e: any) {

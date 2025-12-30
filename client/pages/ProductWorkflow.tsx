@@ -1334,6 +1334,9 @@ export default function ProductWorkflow() {
     enabled: !!user,
   });
 
+  // Local product_master loading state
+  const [productsLoading, setProductsLoading] = useState(false);
+
   // Fetch completed leads ready for project creation (only leads with status 'completed')
   const { data: allLeads = [], isLoading: leadsLoading } = useQuery({
     queryKey: ["completed-leads"],

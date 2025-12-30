@@ -235,7 +235,11 @@ export async function initializeDatabase() {
         );
       `);
       if (!pmTableCheck.rows[0].exists) {
-        const pmMigrationPath = path.join(__dirname, "migrations", "20251201_create_product_master.sql");
+        const pmMigrationPath = path.join(
+          __dirname,
+          "migrations",
+          "20251201_create_product_master.sql",
+        );
         if (fs.existsSync(pmMigrationPath)) {
           const pmSql = fs.readFileSync(pmMigrationPath, "utf8");
           try {

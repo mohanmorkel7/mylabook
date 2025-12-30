@@ -4,6 +4,8 @@ import { pool, isDatabaseAvailable } from "../database/connection";
 
 class FinOpsScheduler {
   private isInitialized = false;
+  // Track the last date (IST) when rollover was performed to avoid accidental double rollovers
+  private lastRolloverDate: string | null = null;
 
   /**
    * Initialize all scheduled jobs
@@ -306,6 +308,12 @@ class FinOpsScheduler {
    */
   private async syncTaskStatuses(): Promise<void> {
     try {
+      // Compute current IST time to make decisions based on user's local day boundary
+      const istNow = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+      );
+      const todayStr = istNow.toISOString().slice(0, 10);
+
       // Prefer finops_tracker for today's task status calculations (IST date). Fallback to finops_subtasks when tracker rows missing.
       const todayExpr = `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`;
 
@@ -376,9 +384,18 @@ class FinOpsScheduler {
         );
       }
 
-      // After syncing statuses, rollover fully completed daily tasks to the next day
+      // After syncing statuses, rollover fully completed daily tasks to the next day.
+      // To prevent unexpected rollovers at UTC boundaries (which map to 05:30 IST), only perform rollover once per IST day
+      // and only after a safe local time (05:30 IST).
       try {
-        await this.rolloverCompletedDailyTasks();
+        const hasRolloverRunToday = this.lastRolloverDate === todayStr;
+        const isAfterSafeRolloverTime =
+          istNow.getHours() > 5 || (istNow.getHours() === 5 && istNow.getMinutes() >= 30);
+
+        if (!hasRolloverRunToday && isAfterSafeRolloverTime) {
+          await this.rolloverCompletedDailyTasks();
+          this.lastRolloverDate = todayStr;
+        }
       } catch (err) {
         console.error("Error during rollover of completed daily tasks:", err);
       }

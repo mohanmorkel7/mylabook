@@ -1062,7 +1062,7 @@ export default function ProductManagement() {
                             <Button variant="ghost" size="sm">
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" onClick={() => { setEditingProduct(product); setIsCreateDialogOpen(true); }}>
                               <Edit className="w-4 h-4" />
                             </Button>
                           </div>

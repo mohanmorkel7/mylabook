@@ -1225,21 +1225,23 @@ export default function ProductWorkflow() {
       try {
         const res = await apiClient.request<any[]>("/product-master");
         const arr = Array.isArray(res) ? res : [];
-        setProducts(arr.map((p: any) => ({
-          id: p.id,
-          product_id: p.product_id,
-          name: p.name,
-          description: p.description,
-          current_version: p.current_version,
-          repository_url: p.repository_url,
-          product_url: p.product_url,
-          is_active: p.is_active,
-          status: p.status,
-          created_at: p.created_at,
-          updated_at: p.updated_at,
-          created_by: p.created_by,
-          updated_by: p.updated_by,
-        })));
+        setProducts(
+          arr.map((p: any) => ({
+            id: p.id,
+            product_id: p.product_id,
+            name: p.name,
+            description: p.description,
+            current_version: p.current_version,
+            repository_url: p.repository_url,
+            product_url: p.product_url,
+            is_active: p.is_active,
+            status: p.status,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+            created_by: p.created_by,
+            updated_by: p.updated_by,
+          })),
+        );
         setProductsCount(arr.length);
       } catch (e) {
         console.error("Failed to load product_master for dashboard:", e);
@@ -1452,7 +1454,9 @@ export default function ProductWorkflow() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Product Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Product Dashboard
+          </h1>
           <p className="text-gray-600 mt-1">
             Overview of products from product_master table
           </p>
@@ -1466,19 +1470,25 @@ export default function ProductWorkflow() {
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-gray-500">Active</div>
-                <div className="text-2xl font-semibold">{products.filter(p => p.is_active).length}</div>
+                <div className="text-2xl font-semibold">
+                  {products.filter((p) => p.is_active).length}
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-gray-500">Pending</div>
-                <div className="text-2xl font-semibold">{products.filter(p => p.status === 'pending').length}</div>
+                <div className="text-2xl font-semibold">
+                  {products.filter((p) => p.status === "pending").length}
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-gray-500">In Progress</div>
-                <div className="text-2xl font-semibold">{products.filter(p => p.status === 'inprogress').length}</div>
+                <div className="text-2xl font-semibold">
+                  {products.filter((p) => p.status === "inprogress").length}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1619,36 +1629,69 @@ export default function ProductWorkflow() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-lg">{p.name}</h3>
-                              <Badge variant="outline" className={getStatusColor(p.status)}>
+                              <h3 className="font-semibold text-lg">
+                                {p.name}
+                              </h3>
+                              <Badge
+                                variant="outline"
+                                className={getStatusColor(p.status)}
+                              >
                                 {formatStatusLabel(p.status)}
                               </Badge>
-                              <span className="text-xs text-gray-500">{p.product_id}</span>
+                              <span className="text-xs text-gray-500">
+                                {p.product_id}
+                              </span>
                             </div>
 
-                            <h4 className="font-medium text-gray-900 mb-2">{p.description}</h4>
-                            <p className="text-gray-600 mb-3">Version: {p.current_version}</p>
+                            <h4 className="font-medium text-gray-900 mb-2">
+                              {p.description}
+                            </h4>
+                            <p className="text-gray-600 mb-3">
+                              Version: {p.current_version}
+                            </p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
                                 <span className="font-medium">Repository</span>
                                 <br />
-                                <a href={p.repository_url} className="text-blue-600 text-sm" target="_blank" rel="noreferrer">{p.repository_url}</a>
+                                <a
+                                  href={p.repository_url}
+                                  className="text-blue-600 text-sm"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {p.repository_url}
+                                </a>
                               </div>
                               <div>
                                 <span className="font-medium">Product URL</span>
                                 <br />
-                                <a href={p.product_url} className="text-blue-600 text-sm" target="_blank" rel="noreferrer">{p.product_url}</a>
+                                <a
+                                  href={p.product_url}
+                                  className="text-blue-600 text-sm"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {p.product_url}
+                                </a>
                               </div>
                               <div>
                                 <span className="font-medium">Active</span>
                                 <br />
-                                <span className="text-sm text-gray-700">{p.is_active ? 'Yes' : 'No'}</span>
+                                <span className="text-sm text-gray-700">
+                                  {p.is_active ? "Yes" : "No"}
+                                </span>
                               </div>
                               <div>
                                 <span className="font-medium">Created</span>
                                 <br />
-                                <span className="text-sm text-gray-700">{p.created_at ? new Date(p.created_at).toLocaleDateString() : ''}</span>
+                                <span className="text-sm text-gray-700">
+                                  {p.created_at
+                                    ? new Date(
+                                        p.created_at,
+                                      ).toLocaleDateString()
+                                    : ""}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -1669,10 +1712,18 @@ export default function ProductWorkflow() {
                                 e.stopPropagation();
                                 if (!confirm("Delete this product?")) return;
                                 try {
-                                  await apiClient.request(`/product-master/${p.id}`, { method: "DELETE" });
+                                  await apiClient.request(
+                                    `/product-master/${p.id}`,
+                                    { method: "DELETE" },
+                                  );
                                   // refresh list
-                                  const refreshed = await apiClient.request<any[]>('/product-master');
-                                  setProducts(Array.isArray(refreshed) ? refreshed : []);
+                                  const refreshed =
+                                    await apiClient.request<any[]>(
+                                      "/product-master",
+                                    );
+                                  setProducts(
+                                    Array.isArray(refreshed) ? refreshed : [],
+                                  );
                                   setProductsCount((refreshed || []).length);
                                 } catch (err) {
                                   console.error(err);
@@ -1693,8 +1744,12 @@ export default function ProductWorkflow() {
               ) : (
                 <div className="text-center py-12">
                   <Package className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Products</h3>
-                  <p className="text-gray-600 mb-4">There are no products to show at the moment.</p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No Products
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    There are no products to show at the moment.
+                  </p>
                 </div>
               )}
             </CardContent>

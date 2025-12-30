@@ -961,7 +961,8 @@ export default function ProductManagement() {
               return (
                 <Card
                   key={product.id}
-                  className="hover:shadow-md transition-shadow"
+                  className="hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigate(`/products/${product.id}`)}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">

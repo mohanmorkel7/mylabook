@@ -1818,12 +1818,17 @@ export default function ProductWorkflow() {
       <CreateProjectFromLeadDialog
         lead={selectedLead}
         project={selectedProject}
+        isProductCreation={isProductCreationMode}
         isOpen={isCreateDialogOpen}
         onClose={() => {
           setIsCreateDialogOpen(false);
           setSelectedProject(null);
+          setIsProductCreationMode(false);
         }}
-        onSuccess={handleProjectCreated}
+        onSuccess={() => {
+          handleProjectCreated();
+          setIsProductCreationMode(false);
+        }}
       />
 
       {/* Project Detail Dialog (read-only overview) */}

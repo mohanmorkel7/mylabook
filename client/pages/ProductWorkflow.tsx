@@ -1451,9 +1451,18 @@ export default function ProductWorkflow() {
 
   const totalProducts = products.length;
   const activeProducts = products.filter((p: any) => p.is_active).length;
-  const pendingProducts = products.filter((p: any) => p.status === "pending").length;
-  const inProgressProducts = products.filter((p: any) => p.status === "in_progress" || p.status === "inprogress" || p.status === "in-progress").length;
-  const completedProducts = products.filter((p: any) => p.status === "completed").length;
+  const pendingProducts = products.filter(
+    (p: any) => p.status === "pending",
+  ).length;
+  const inProgressProducts = products.filter(
+    (p: any) =>
+      p.status === "in_progress" ||
+      p.status === "inprogress" ||
+      p.status === "in-progress",
+  ).length;
+  const completedProducts = products.filter(
+    (p: any) => p.status === "completed",
+  ).length;
 
   return (
     <div className="p-6 space-y-6">
@@ -1519,8 +1528,12 @@ export default function ProductWorkflow() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500">Total Products</p>
-                <p className="text-2xl font-bold text-gray-900">{totalProducts}</p>
+                <p className="text-sm font-medium text-gray-500">
+                  Total Products
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {totalProducts}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-gray-100">
                 <Package className="w-6 h-6 text-gray-700" />
@@ -1534,7 +1547,9 @@ export default function ProductWorkflow() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500">Active</p>
-                <p className="text-2xl font-bold text-blue-600">{activeProducts}</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {activeProducts}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-100">
                 <Users className="w-6 h-6 text-blue-600" />
@@ -1548,7 +1563,9 @@ export default function ProductWorkflow() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">{pendingProducts}</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {pendingProducts}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-yellow-100">
                 <Clock className="w-6 h-6 text-yellow-600" />
@@ -1562,7 +1579,9 @@ export default function ProductWorkflow() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500">In Progress</p>
-                <p className="text-2xl font-bold text-blue-600">{inProgressProducts}</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {inProgressProducts}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-100">
                 <PlayCircle className="w-6 h-6 text-blue-600" />
@@ -1576,7 +1595,9 @@ export default function ProductWorkflow() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500">Completed</p>
-                <p className="text-2xl font-bold text-green-600">{completedProducts}</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {completedProducts}
+                </p>
               </div>
               <div className="p-3 rounded-lg bg-green-100">
                 <CheckCircle className="w-6 h-6 text-green-600" />

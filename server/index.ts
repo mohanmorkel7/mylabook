@@ -33,6 +33,7 @@ import fundRaisesRouter from "./routes/fund-raises";
 import businessOfferingsRouter from "./routes/business-offerings";
 import finopsScheduler from "./services/finopsScheduler";
 import productsRouter from "./routes/products";
+import productMasterRouter from "./routes/product-master";
 import connectionsRouter from "./routes/connections";
 import mailConfigsRouter from "./routes/mail-configs";
 import emailProcessingRouter from "./routes/email-processing";

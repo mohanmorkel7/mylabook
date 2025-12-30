@@ -290,10 +290,14 @@ const ProductOverview: React.FC = () => {
     try {
       // If this is a product_master record (has product_id), call product-master API
       if (product && product.product_id) {
-        await apiClient.request(`/product-master/${product.id}`, { method: "DELETE" });
+        await apiClient.request(`/product-master/${product.id}`, {
+          method: "DELETE",
+        });
         navigate("/product_master");
       } else {
-        await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });
+        await apiClient.request(`/workflow/projects/${id}`, {
+          method: "DELETE",
+        });
         navigate("/product_master");
       }
     } catch (e) {
@@ -336,7 +340,8 @@ const ProductOverview: React.FC = () => {
             variant="outline"
             onClick={() => {
               // Prefer product_master edit route for product_master records
-              if (product && product.product_id) navigate(`/product_master/${id}/edit`);
+              if (product && product.product_id)
+                navigate(`/product_master/${id}/edit`);
               else navigate(`/products/${id}/edit`);
             }}
           >

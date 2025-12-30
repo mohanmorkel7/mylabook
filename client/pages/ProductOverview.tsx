@@ -73,6 +73,34 @@ const ProductOverview: React.FC = () => {
     if (!id) return;
     const load = async () => {
       try {
+        // Try loading a product_master first (new feature). If not found, fall back to workflow project
+        const pmRes = await apiClient.request<any>(`/api/product-master/${id}`);
+        if (pmRes && pmRes.id) {
+          const normalized: any = {
+            id: pmRes.id,
+            product_id: pmRes.product_id,
+            name: pmRes.name,
+            description: pmRes.description,
+            current_version: pmRes.current_version,
+            repository_url: pmRes.repository_url,
+            product_url: pmRes.product_url,
+            is_active: pmRes.is_active,
+            status: pmRes.status,
+            created_at: pmRes.created_at,
+            updated_at: pmRes.updated_at,
+            created_by: pmRes.created_by,
+            updated_by: pmRes.updated_by,
+            meta: pmRes,
+          };
+          setProduct(normalized);
+          setSteps([]);
+          return;
+        }
+      } catch (err) {
+        // ignore and fallback
+      }
+
+      try {
         const res = await apiClient.request<any>(`/workflow/projects/${id}`);
         if (!res) return;
         const normalized: any = {

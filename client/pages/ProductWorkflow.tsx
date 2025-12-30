@@ -1207,6 +1207,8 @@ export default function ProductWorkflow() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isProductCreationMode, setIsProductCreationMode] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsCount, setProductsCount] = useState<number>(0);
   const [isProjectDetailOpen, setIsProjectDetailOpen] = useState(false);
   const [isLeadDetailOpen, setIsLeadDetailOpen] = useState(false);
   const [selectedLeadForOverview, setSelectedLeadForOverview] =

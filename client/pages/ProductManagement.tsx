@@ -969,11 +969,11 @@ export default function ProductManagement() {
                     )}
 
                     <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setEditingProduct(product); setIsCreateDialogOpen(true); }}>
                         <Eye className="w-4 h-4 mr-1" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setEditingProduct(product); setIsCreateDialogOpen(true); }}>
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </Button>

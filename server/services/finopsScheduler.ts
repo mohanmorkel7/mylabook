@@ -390,7 +390,8 @@ class FinOpsScheduler {
       try {
         const hasRolloverRunToday = this.lastRolloverDate === todayStr;
         const isAfterSafeRolloverTime =
-          istNow.getHours() > 5 || (istNow.getHours() === 5 && istNow.getMinutes() >= 30);
+          istNow.getHours() > 5 ||
+          (istNow.getHours() === 5 && istNow.getMinutes() >= 30);
 
         if (!hasRolloverRunToday && isAfterSafeRolloverTime) {
           await this.rolloverCompletedDailyTasks();

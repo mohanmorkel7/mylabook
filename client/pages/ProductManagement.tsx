@@ -353,7 +353,15 @@ function CreateProductDialog({
     budget: "",
     estimated_effort_hours: "",
     tags: "",
+    template_id: undefined,
   }));
+
+  // load global templates for template selection
+  const { data: allTemplates = [] } = useQuery({
+    queryKey: ["templates"],
+    queryFn: () => apiClient.getTemplates(),
+    enabled: isOpen,
+  });
 
   useEffect(() => {
     if (editing) {

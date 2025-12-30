@@ -609,11 +609,15 @@ function CreateProjectFromLeadDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {project && project.id
-              ? "Edit Product Project"
-              : lead
-                ? "Create Product Project from Lead"
-                : "Create Product Project"}
+            {isProductCreation
+              ? project && project.id
+                ? "Edit Product"
+                : "Create Product"
+              : project && project.id
+                ? "Edit Product Project"
+                : lead
+                  ? "Create Product Project from Lead"
+                  : "Create Product Project"}
           </DialogTitle>
         </DialogHeader>
 

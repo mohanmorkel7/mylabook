@@ -306,8 +306,20 @@ class FinOpsScheduler {
    */
   private async syncTaskStatuses(): Promise<void> {
     try {
-      // Prefer finops_tracker for today's task status calculations (IST date). Fallback to finops_subtasks when tracker rows missing.
-      const todayExpr = `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`;
+      // Compute IST 'today' and guard early-morning status flips
+      const istNow = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+      );
+      const istHour = istNow.getHours();
+      const istMinute = istNow.getMinutes();
+
+      // Prevent status sync/rollover during early morning window before 05:30 IST
+      if (istHour < 5 || (istHour === 5 && istMinute < 30)) {
+        // Skip sync to avoid premature status transitions around day boundary
+        return;
+      }
+
+      const istDate = istNow.toISOString().split("T")[0];
 
       const tasksRes = await pool.query(`
         SELECT t.id, t.task_name
@@ -316,7 +328,7 @@ class FinOpsScheduler {
       `);
 
       for (const t of tasksRes.rows) {
-        // Try tracker counts for today
+        // Try tracker counts for today (using IST date parameter)
         const trackerCounts = await pool.query(
           `
           SELECT
@@ -325,9 +337,9 @@ class FinOpsScheduler {
             COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_subtasks,
             COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_subtasks
           FROM finops_tracker
-          WHERE task_id = $1 AND run_date = ${todayExpr}
+          WHERE task_id = $1 AND run_date = $2::date
         `,
-          [t.id],
+          [t.id, istDate],
         );
 
         let total = parseInt(trackerCounts.rows[0].total_subtasks, 10);

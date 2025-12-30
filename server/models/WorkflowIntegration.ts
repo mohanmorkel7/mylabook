@@ -306,30 +306,65 @@ export class WorkflowRepository {
     const priority = data.priority || "medium";
     const created_by = data.created_by || 1;
 
-    const result = await pool.query(
-      `INSERT INTO workflow_projects
-       (name, description, source_type, source_id, project_type, priority, assigned_team,
-        project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, product_master_ids, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-       RETURNING id`,
-      [
-        data.name,
-        data.description,
-        source_type,
-        data.source_id,
-        project_type,
-        priority,
-        data.assigned_team,
-        data.project_manager_id,
-        data.template_id ?? null,
-        data.start_date,
-        data.target_completion_date,
-        data.budget,
-        data.estimated_hours,
-        JSON.stringify(data.product_master_ids || []),
-        created_by,
-      ],
-    );
+    // Attempt to insert including product_master_ids, but fall back if DB schema doesn't have that column
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO workflow_projects
+         (name, description, source_type, source_id, project_type, priority, assigned_team,
+          project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, product_master_ids, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         RETURNING id`,
+        [
+          data.name,
+          data.description,
+          source_type,
+          data.source_id,
+          project_type,
+          priority,
+          data.assigned_team,
+          data.project_manager_id,
+          data.template_id ?? null,
+          data.start_date,
+          data.target_completion_date,
+          data.budget,
+          data.estimated_hours,
+          JSON.stringify(data.product_master_ids || []),
+          created_by,
+        ],
+      );
+    } catch (err: any) {
+      // If the column product_master_ids does not exist (SQLSTATE 42703), retry without it
+      const isUndefinedColumn = err && (err.code === "42703" || /product_master_ids/.test(err.message || ""));
+      if (isUndefinedColumn) {
+        console.warn("product_master_ids column missing in DB, retrying insert without it");
+        result = await pool.query(
+          `INSERT INTO workflow_projects
+           (name, description, source_type, source_id, project_type, priority, assigned_team,
+            project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           RETURNING id`,
+          [
+            data.name,
+            data.description,
+            source_type,
+            data.source_id,
+            project_type,
+            priority,
+            data.assigned_team,
+            data.project_manager_id,
+            data.template_id ?? null,
+            data.start_date,
+            data.target_completion_date,
+            data.budget,
+            data.estimated_hours,
+            created_by,
+          ],
+        );
+      } else {
+        throw err;
+      }
+    }
 
     const newProject = await this.getProjectById(result.rows[0].id);
 

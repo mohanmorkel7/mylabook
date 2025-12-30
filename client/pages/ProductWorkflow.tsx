@@ -472,8 +472,48 @@ function CreateProjectFromLeadDialog({
     },
   });
 
+  // Mutation for creating/updating product_master records
+  const createProductMutation = useMutation({
+    mutationFn: (data: any) => {
+      if (project && project.id) {
+        return apiClient.request(`/product-master/${project.id}`, {
+          method: "PUT",
+          body: JSON.stringify(data),
+        });
+      }
+      return apiClient.request(`/product-master`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["product-master"] });
+      onSuccess();
+      onClose();
+    },
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isProductCreation) {
+      const submitData: any = {
+        name: projectData.name,
+        description: projectData.description || null,
+        current_version: projectData.current_version || null,
+        repository_url: projectData.repository_url || null,
+        product_url: projectData.product_url || null,
+        is_active: projectData.is_active === undefined ? true : !!projectData.is_active,
+        status: projectData.status || "pending",
+        created_by: parseInt(user?.id || "1"),
+      };
+
+      // If editing existing product, do not send created_by
+      if (project && project.id) delete submitData.created_by;
+
+      createProductMutation.mutate(submitData);
+      return;
+    }
 
     const submitData: any = {
       ...projectData,

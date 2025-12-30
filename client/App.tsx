@@ -1016,7 +1016,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product"
+        path="/product_master"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
@@ -1027,7 +1027,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product/workflow"
+        path="/product_master/workflow"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
@@ -1038,7 +1038,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product/dashboard"
+        path="/product_dashboard"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
@@ -1095,7 +1095,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product/deployment/new"
+        path="/product_master/deployment/new"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
@@ -1106,7 +1106,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product/deployment/:id"
+        path="/product_master/deployment/:id"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
@@ -1117,7 +1117,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product/deployment/:id/edit"
+        path="/product_master/deployment/:id/edit"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
@@ -1128,7 +1128,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product/pipeline"
+        path="/product_master/pipeline"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>
@@ -1142,7 +1142,7 @@ function AppRoutes() {
       />
 
       <Route
-        path="/product/health"
+        path="/product_master/health"
         element={
           <ProtectedRoute allowedRoles={["admin", "product", "switch_team"]}>
             <DashboardLayout>

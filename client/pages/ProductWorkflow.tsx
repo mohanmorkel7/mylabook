@@ -1234,36 +1234,36 @@ export default function ProductWorkflow() {
   const location = useLocation();
   const routeParams = useParams();
 
-  // Load product_master items and counts for dashboard
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        const res = await apiClient.request<any[]>("/product-master");
-        const arr = Array.isArray(res) ? res : [];
-        setProducts(
-          arr.map((p: any) => ({
-            id: p.id,
-            product_id: p.product_id,
-            name: p.name,
-            description: p.description,
-            current_version: p.current_version,
-            repository_url: p.repository_url,
-            product_url: p.product_url,
-            is_active: p.is_active,
-            status: p.status,
-            created_at: p.created_at,
-            updated_at: p.updated_at,
-            created_by: p.created_by,
-            updated_by: p.updated_by,
-          })),
-        );
-        setProductsCount(arr.length);
-      } catch (e) {
-        console.error("Failed to load product_master for dashboard:", e);
-      }
-    };
+  // Fetch product_master items and counts for dashboard (exposed so we can refresh after edits)
+  const fetchProducts = async () => {
+    try {
+      const res = await apiClient.request<any[]>("/product-master");
+      const arr = Array.isArray(res) ? res : [];
+      setProducts(
+        arr.map((p: any) => ({
+          id: p.id,
+          product_id: p.product_id,
+          name: p.name,
+          description: p.description,
+          current_version: p.current_version,
+          repository_url: p.repository_url,
+          product_url: p.product_url,
+          is_active: p.is_active,
+          status: p.status,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          created_by: p.created_by,
+          updated_by: p.updated_by,
+        })),
+      );
+      setProductsCount(arr.length);
+    } catch (e) {
+      console.error("Failed to load product_master for dashboard:", e);
+    }
+  };
 
-    loadProducts();
+  useEffect(() => {
+    fetchProducts();
 
     // existing project query param handling (kept)
     const params = new URLSearchParams(location.search);
@@ -1290,6 +1290,13 @@ export default function ProductWorkflow() {
   function handleProjectCreated() {
     setSelectedLead(null);
     setIsCreateDialogOpen(false);
+
+    // refresh dashboard list so updates are reflected immediately without hard refresh
+    try {
+      fetchProducts();
+    } catch (e) {
+      // ignore
+    }
   }
 
   // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)

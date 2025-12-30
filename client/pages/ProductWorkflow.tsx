@@ -1097,20 +1097,30 @@ function CreateProjectFromLeadDialog({
             <Button
               type="submit"
               disabled={
-                !projectData.name.trim() ||
-                steps.length === 0 ||
-                createProjectMutation.isPending ||
-                probabilityInvalid
+                isProductCreation
+                  ? !projectData.name?.trim() || createProductMutation.isPending
+                  : !projectData.name.trim() ||
+                    steps.length === 0 ||
+                    createProjectMutation.isPending ||
+                    probabilityInvalid
               }
             >
               <Rocket className="w-4 h-4 mr-2" />
-              {createProjectMutation.isPending
-                ? project && project.id
-                  ? "Updating..."
-                  : "Creating..."
-                : project && project.id
-                  ? "Update Project"
-                  : "Create Project"}
+              {isProductCreation
+                ? createProductMutation.isPending
+                  ? project && project.id
+                    ? "Updating..."
+                    : "Creating..."
+                  : project && project.id
+                    ? "Update Product"
+                    : "Create Product"
+                : createProjectMutation.isPending
+                  ? project && project.id
+                    ? "Updating..."
+                    : "Creating..."
+                  : project && project.id
+                    ? "Update Project"
+                    : "Create Project"}
             </Button>
           </div>
         </form>

@@ -1709,7 +1709,10 @@ export default function ProductWorkflow() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/product_master?id=${p.id}`);
+                                // Open edit dialog in product creation mode using product_master data
+                                setSelectedProject(p);
+                                setIsProductCreationMode(true);
+                                setIsCreateDialogOpen(true);
                               }}
                               title="Edit"
                               className="p-2 rounded hover:bg-gray-100"

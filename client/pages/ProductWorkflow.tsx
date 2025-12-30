@@ -1304,6 +1304,7 @@ export default function ProductWorkflow() {
           lead={selectedLead}
           project={selectedProject}
           isOpen={isCreateDialogOpen}
+          isProductCreation={isProductCreationMode}
           onClose={() => {
             setIsCreateDialogOpen(false);
             setSelectedProject(null);

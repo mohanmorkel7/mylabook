@@ -60,6 +60,12 @@ const sidebarItems: SidebarItem[] = [
     roles: ["admin", "sales", "product", "development"],
   },
   {
+    name: "Product",
+    href: "/product",
+    icon: Grid3X3,
+    roles: ["admin", "product", "switch_team"],
+  },
+  {
     name: "Settings",
     href: "/admin/users",
     icon: Settings,

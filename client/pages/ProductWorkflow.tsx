@@ -112,7 +112,8 @@ function CreateProjectFromLeadDialog({
   isOpen,
   onClose,
   onSuccess,
-}: CreateProjectFromLeadDialogProps) {
+  isProductCreation = false,
+}: CreateProjectFromLeadDialogProps & { isProductCreation?: boolean }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -123,27 +124,43 @@ function CreateProjectFromLeadDialog({
     return date.toISOString().slice(0, 10);
   };
 
-  const [projectData, setProjectData] = useState<any>(() => ({
-    name: lead
-      ? `${lead.client_name} - ${lead.project_title}`
-      : project?.name || "",
-    description: lead
-      ? `Product development project for ${lead.client_name}`
-      : project?.description || "",
-    assigned_team: project?.assigned_team || "Product Team",
-    project_manager_id: project?.project_manager_id
-      ? String(project.project_manager_id)
-      : "",
-    target_completion_date: project?.target_completion_date
-      ? formatToDateInput(project.target_completion_date)
-      : "",
-    estimated_hours: project?.estimated_hours
-      ? String(project.estimated_hours)
-      : "",
-    template_id: project?.template_id ? String(project.template_id) : "",
-    // new field: product_master_ids as array of ids
-    product_master_ids: project?.product_master_ids || [],
-  }));
+  const [projectData, setProjectData] = useState<any>(() => {
+    if (isProductCreation) {
+      return {
+        // Product fields
+        name: project?.name || "",
+        product_id: project?.product_id || "",
+        description: project?.description || "",
+        current_version: project?.current_version || "",
+        repository_url: project?.repository_url || "",
+        product_url: project?.product_url || "",
+        is_active: project?.is_active === undefined ? true : !!project?.is_active,
+        status: project?.status || "pending",
+      };
+    }
+
+    return {
+      name: lead
+        ? `${lead.client_name} - ${lead.project_title}`
+        : project?.name || "",
+      description: lead
+        ? `Product development project for ${lead.client_name}`
+        : project?.description || "",
+      assigned_team: project?.assigned_team || "Product Team",
+      project_manager_id: project?.project_manager_id
+        ? String(project.project_manager_id)
+        : "",
+      target_completion_date: project?.target_completion_date
+        ? formatToDateInput(project.target_completion_date)
+        : "",
+      estimated_hours: project?.estimated_hours
+        ? String(project.estimated_hours)
+        : "",
+      template_id: project?.template_id ? String(project.template_id) : "",
+      // new field: product_master_ids as array of ids
+      product_master_ids: project?.product_master_ids || [],
+    };
+  });
 
   const [steps, setSteps] = useState<ProjectStep[]>(() => {
     if (project?.steps && Array.isArray(project.steps)) {

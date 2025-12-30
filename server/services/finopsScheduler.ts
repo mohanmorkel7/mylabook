@@ -66,9 +66,9 @@ class FinOpsScheduler {
       },
     );
 
-    // Weekly task execution on Mondays at 5:00 AM
+    // Weekly task execution on Mondays at 5:30 AM
     cron.schedule(
-      "0 5 * * 1",
+      "30 5 * * 1",
       async () => {
         console.log("Running weekly task execution...");
         await this.executeWeeklyTasks();
@@ -78,9 +78,9 @@ class FinOpsScheduler {
       },
     );
 
-    // Monthly task execution on the 1st of each month at 5:00 AM
+    // Monthly task execution on the 1st of each month at 5:30 AM
     cron.schedule(
-      "0 5 1 * *",
+      "30 5 1 * *",
       async () => {
         console.log("Running monthly task execution...");
         await this.executeMonthlyTasks();

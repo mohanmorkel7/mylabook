@@ -59,6 +59,19 @@ const ProductOverview: React.FC = () => {
   const [stepsLoading, setStepsLoading] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // If user visits legacy /products/:id route, redirect to /product_master/:id
+  useEffect(() => {
+    if (!id) return;
+    try {
+      if (location.pathname.startsWith("/products/")) {
+        navigate(`/product_master/${id}`, { replace: true });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [id, location.pathname, navigate]);
 
   const toggleStepExpansion = (stepId: number) => {
     setExpandedSteps((prev) => {

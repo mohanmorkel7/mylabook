@@ -1498,38 +1498,6 @@ export default function ProductWorkflow() {
           <p className="text-gray-600 mt-1">
             Overview of products from product_master table
           </p>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-500">Total Products</div>
-                <div className="text-2xl font-semibold">{productsCount}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-500">Active</div>
-                <div className="text-2xl font-semibold">
-                  {products.filter((p) => p.is_active).length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-500">Pending</div>
-                <div className="text-2xl font-semibold">
-                  {products.filter((p) => p.status === "pending").length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-500">In Progress</div>
-                <div className="text-2xl font-semibold">
-                  {products.filter((p) => p.status === "inprogress").length}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </div>
         <div>
           <Button

@@ -1071,6 +1071,16 @@ function AppRoutes() {
       />
 
       <Route
+        path="/product_dashboard/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              <ProductOverview />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/product_master/:id"
         element={
           <ProtectedRoute allowedRoles={["admin", "product"]}>

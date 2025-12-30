@@ -61,12 +61,15 @@ const ProductOverview: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // If user visits legacy /products/:id route, redirect to /product_master/:id
+  // Support multiple legacy/detail paths and prefer product_dashboard detail route
   useEffect(() => {
     if (!id) return;
     try {
       if (location.pathname.startsWith("/products/")) {
-        navigate(`/product_master/${id}`, { replace: true });
+        navigate(`/product_dashboard/${id}`, { replace: true });
+      } else if (location.pathname.startsWith("/product_master/")) {
+        // If old product_master/:id is used, redirect to product_dashboard/:id
+        navigate(`/product_dashboard/${id}`, { replace: true });
       }
     } catch (e) {
       // ignore

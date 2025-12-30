@@ -276,7 +276,7 @@ const ProductOverview: React.FC = () => {
     if (!window.confirm("Delete this project?")) return;
     try {
       await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });
-      navigate("/product");
+      navigate("/product_master");
     } catch (e) {
       console.error(e);
       alert("Failed to delete project");
@@ -292,7 +292,7 @@ const ProductOverview: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/product")}
+            onClick={() => navigate("/product_master")}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products

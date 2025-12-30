@@ -177,7 +177,7 @@ function CreateProjectFromLeadDialog({
   // Fetch product_master list for multi-select
   const { data: productMasters = [] } = useQuery({
     queryKey: ["product-master"],
-    queryFn: () => apiClient.request('/product-master'),
+    queryFn: () => apiClient.request("/product-master"),
     enabled: isOpen,
   });
 

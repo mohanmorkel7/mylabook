@@ -355,6 +355,8 @@ function CreateProductDialog({
     estimated_effort_hours: "",
     tags: "",
     template_id: undefined,
+    // selected product-master ids (string values)
+    selected_product_ids: [] as string[],
   }));
 
   // load global templates for template selection

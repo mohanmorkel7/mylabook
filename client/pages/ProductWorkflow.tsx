@@ -623,6 +623,66 @@ function CreateProjectFromLeadDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {isProductCreation && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Product Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Product Name *</Label>
+                    <Input
+                      value={projectData.name}
+                      onChange={(e) => setProjectData((prev: any) => ({ ...prev, name: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Product ID</Label>
+                    <Input value={projectData.product_id || ""} disabled placeholder="Auto-generated after create (e.g. MYLA-PRD-001)" />
+                  </div>
+                  <div>
+                    <Label>Current Version</Label>
+                    <Input value={projectData.current_version || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, current_version: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label>Repository URL</Label>
+                    <Input value={projectData.repository_url || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, repository_url: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label>Product URL</Label>
+                    <Input value={projectData.product_url || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, product_url: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Status</Label>
+                    <Select value={projectData.status || "pending"} onValueChange={(v) => setProjectData((prev: any) => ({ ...prev, status: v }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="inprogress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div>
+                      <Label className="text-sm font-medium">Active</Label>
+                      <div className="mt-1">
+                        <Switch checked={Boolean(projectData.is_active !== false)} onCheckedChange={(v: any) => setProjectData((prev: any) => ({ ...prev, is_active: !!v }))} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Description</Label>
+                    <Textarea value={projectData.description || ""} onChange={(e) => setProjectData((prev: any) => ({ ...prev, description: e.target.value }))} rows={3} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           {/* Lead Information Summary */}
           {lead ? (
             <Card>

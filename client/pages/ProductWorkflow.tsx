@@ -1449,6 +1449,12 @@ export default function ProductWorkflow() {
     }
   };
 
+  const totalProducts = products.length;
+  const activeProducts = products.filter((p: any) => p.is_active).length;
+  const pendingProducts = products.filter((p: any) => p.status === "pending").length;
+  const inProgressProducts = products.filter((p: any) => p.status === "in_progress" || p.status === "inprogress" || p.status === "in-progress").length;
+  const completedProducts = products.filter((p: any) => p.status === "completed").length;
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}

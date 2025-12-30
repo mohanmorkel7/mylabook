@@ -376,6 +376,7 @@ export function createServer() {
 
   try {
     app.use("/api/products", productsRouter);
+  app.use("/api/product-master", productMasterRouter);
     console.log("Products router loaded successfully");
   } catch (error) {
     console.error("Error loading Products router:", error);

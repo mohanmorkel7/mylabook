@@ -434,6 +434,11 @@ function CreateProductDialog({
       tags: formData.tags
         ? formData.tags.split(",").map((t: string) => t.trim())
         : [],
+      // include selected product-master ids when present
+      product_master_ids:
+        formData.selected_product_ids && formData.selected_product_ids.length
+          ? formData.selected_product_ids.map((v: string) => Number(v))
+          : undefined,
       created_by: Number(user?.id || 1),
     };
 

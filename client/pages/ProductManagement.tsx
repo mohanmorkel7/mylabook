@@ -366,6 +366,13 @@ function CreateProductDialog({
     enabled: isOpen,
   });
 
+  // load product master entries for multi-select
+  const { data: productMasters = [] } = useQuery({
+    queryKey: ["product-master"],
+    queryFn: () => apiClient.request<any[]>("/product-master"),
+    enabled: isOpen,
+  });
+
   useEffect(() => {
     if (editing) {
       setFormData({

@@ -78,7 +78,7 @@ export default function ProductSidebar() {
                 <div className="flex flex-col gap-2">
                   <Button
                     variant="ghost"
-                    onClick={() => navigate(`/products/${p.id}`)}
+                    onClick={() => navigate(`/product_dashboard/${p.id}`)}
                   >
                     View
                   </Button>

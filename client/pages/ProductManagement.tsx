@@ -729,10 +729,22 @@ export default function ProductManagement() {
 
   // Fetch workflow projects from backend
   const queryClient = useQueryClient();
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, refetch: refetchProjects } = useQuery({
     queryKey: ["workflow-projects"],
     queryFn: () => apiClient.getWorkflowProjects(),
+    // Ensure we fetch fresh data when the component mounts (useful after edits)
+    refetchOnMount: true,
   });
+
+  // Also trigger a refetch when this component mounts to guarantee fresh data
+  useEffect(() => {
+    try {
+      refetchProjects();
+    } catch (e) {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Map projects to local product shape where possible
   const products = (Array.isArray(projects) ? projects : []).map((p: any) => ({

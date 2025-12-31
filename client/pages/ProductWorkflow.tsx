@@ -233,31 +233,48 @@ function CreateProjectFromLeadDialog({
       if (!project) return;
       setProjectData((prev: any) => {
         const normPm = Array.isArray(project.product_master_ids)
-          ? project.product_master_ids.map((p: any) => (typeof p === 'object' ? String(p.id ?? p.value ?? p) : String(p)))
-          : typeof project.product_master_ids === 'string'
-          ? (function (s: string) {
-              try {
-                const parsed = JSON.parse(s);
-                if (Array.isArray(parsed)) return parsed.map((x: any) => String(x));
-              } catch (e) {}
-              return s;
-            })(project.product_master_ids)
-          : [];
+          ? project.product_master_ids.map((p: any) =>
+              typeof p === "object" ? String(p.id ?? p.value ?? p) : String(p),
+            )
+          : typeof project.product_master_ids === "string"
+            ? (function (s: string) {
+                try {
+                  const parsed = JSON.parse(s);
+                  if (Array.isArray(parsed))
+                    return parsed.map((x: any) => String(x));
+                } catch (e) {}
+                return s;
+              })(project.product_master_ids)
+            : [];
 
         return {
           ...prev,
           name: project.name || prev.name || "",
           assigned_team: project.assigned_team || prev.assigned_team || "",
           description: project.description || prev.description || "",
-          project_manager_id: project.project_manager_id ? String(project.project_manager_id) : prev.project_manager_id || "",
-          target_completion_date: project.target_completion_date ? (new Date(project.target_completion_date)).toISOString().slice(0,10) : prev.target_completion_date || "",
-          estimated_hours: project.estimated_hours ? String(project.estimated_hours) : prev.estimated_hours || "",
-          template_id: project.template_id ? String(project.template_id) : prev.template_id || "",
-          product_master_ids: Array.isArray(normPm) ? normPm : (Array.isArray(prev.product_master_ids) ? prev.product_master_ids : []),
+          project_manager_id: project.project_manager_id
+            ? String(project.project_manager_id)
+            : prev.project_manager_id || "",
+          target_completion_date: project.target_completion_date
+            ? new Date(project.target_completion_date)
+                .toISOString()
+                .slice(0, 10)
+            : prev.target_completion_date || "",
+          estimated_hours: project.estimated_hours
+            ? String(project.estimated_hours)
+            : prev.estimated_hours || "",
+          template_id: project.template_id
+            ? String(project.template_id)
+            : prev.template_id || "",
+          product_master_ids: Array.isArray(normPm)
+            ? normPm
+            : Array.isArray(prev.product_master_ids)
+              ? prev.product_master_ids
+              : [],
         };
       });
     } catch (e) {
-      console.debug('Hydration helper failed', e);
+      console.debug("Hydration helper failed", e);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);

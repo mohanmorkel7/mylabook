@@ -121,7 +121,10 @@ export function MultiSelect({
               >
                 <Checkbox
                   checked={value.includes(option.value)}
-                  onChange={() => handleToggle(option.value)}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    handleToggle(option.value);
+                  }}
                 />
                 <span className="text-sm">{option.label}</span>
               </div>

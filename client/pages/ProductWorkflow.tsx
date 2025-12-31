@@ -1301,7 +1301,7 @@ export default function ProductWorkflow() {
 
   // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)
   const isEditModalPath = Boolean(
-    location.pathname.match(/^\/products\/[0-9]+\/edit$/),
+    location.pathname.match(/^(?:\/products|\/product_master|\/product_dashboard)\/[0-9]+\/edit$/),
   );
 
   if (isEditModalPath) {
@@ -1316,7 +1316,7 @@ export default function ProductWorkflow() {
             setIsCreateDialogOpen(false);
             setSelectedProject(null);
             if ((routeParams as any)?.id)
-              navigate(`/products/${(routeParams as any).id}`);
+              navigate(`/product_dashboard/${(routeParams as any).id}`);
           }}
           onSuccess={handleProjectCreated}
         />
@@ -1439,7 +1439,7 @@ export default function ProductWorkflow() {
 
   const handleViewProject = (project: any) => {
     // Redirect to Product Overview page
-    navigate(`/products/${project.id}`);
+    navigate(`/product_dashboard/${project.id}`);
   };
 
   const getStatusIcon = (status: string) => {
@@ -1623,7 +1623,7 @@ export default function ProductWorkflow() {
                     <Card
                       key={p.id}
                       className="hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => navigate(`/products/${p.id}`)}
+                      onClick={() => navigate(`/product_dashboard/${p.id}`)}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">

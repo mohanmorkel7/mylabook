@@ -332,6 +332,10 @@ function CreateProjectFromLeadDialog({
   // When productMasters load, ensure projectData.product_master_ids are strings and match available options
   useEffect(() => {
     if (!isOpen) return;
+    // If user already interacted with the multiselect, don't auto-normalize to
+    // avoid clobbering their choice while the modal is open.
+    if (productMastersTouchedRef.current) return;
+
     if (
       (projectData.product_master_ids || []).length > 0 &&
       (productMasters || []).length > 0

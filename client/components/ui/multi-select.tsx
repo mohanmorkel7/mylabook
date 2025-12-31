@@ -122,7 +122,9 @@ export function MultiSelect({
                   // The Radix checkbox renders a button with role="checkbox" so
                   // detect that and avoid double toggling.
                   try {
-                    const el = (e.target as HTMLElement).closest('[role="checkbox"]');
+                    const el = (e.target as HTMLElement).closest(
+                      '[role="checkbox"]',
+                    );
                     if (el) return;
                   } catch (err) {
                     // ignore DOM issues

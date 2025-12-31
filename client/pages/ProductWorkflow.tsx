@@ -255,6 +255,12 @@ function CreateProjectFromLeadDialog({
   // If editing an existing project, sync internal state when project prop changes
   useEffect(() => {
     if (!project) return;
+
+    const normalizedTemplateId = project.template_id ? String(project.template_id) : "";
+    const normalizedProductMasterIds = Array.isArray(project.product_master_ids)
+      ? project.product_master_ids.map((pm: any) => String(pm))
+      : [];
+
     setProjectData({
       name: project.name || "",
       description: project.description || "",
@@ -268,12 +274,34 @@ function CreateProjectFromLeadDialog({
       estimated_hours: project.estimated_hours
         ? String(project.estimated_hours)
         : "",
-      template_id: project.template_id ? String(project.template_id) : "",
+      template_id: normalizedTemplateId,
       // preserve product_master relations when editing
-      product_master_ids: Array.isArray(project.product_master_ids)
-        ? project.product_master_ids.map((pm: any) => String(pm))
-        : [],
+      product_master_ids: normalizedProductMasterIds,
     });
+
+    // Ensure selectedTemplate is set so Select shows the selected value
+    (async () => {
+      try {
+        if (normalizedTemplateId) {
+          const found = templates.find((t: any) => String(t.id) === normalizedTemplateId);
+          if (found) setSelectedTemplate(found);
+          else {
+            const tpl = await apiClient.getTemplate(Number(normalizedTemplateId));
+            if (tpl) setSelectedTemplate(tpl);
+          }
+        }
+
+        // Refresh product-master options so MultiSelect can resolve labels
+        try {
+          await queryClient.invalidateQueries({ queryKey: ["product-master"] });
+          await queryClient.refetchQueries({ queryKey: ["product-master"] });
+        } catch (e) {
+          // ignore
+        }
+      } catch (e) {
+        console.debug("Failed to hydrate template/product-master for edit dialog", e);
+      }
+    })();
 
     if (Array.isArray(project.steps) && project.steps.length > 0) {
       setSteps(
@@ -293,7 +321,7 @@ function CreateProjectFromLeadDialog({
         })),
       );
     }
-  }, [project]);
+  }, [project, templates, queryClient]);
 
   // If editing a product_master record in product-creation mode, sync product-specific fields
   useEffect(() => {

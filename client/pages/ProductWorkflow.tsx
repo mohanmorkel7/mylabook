@@ -1301,7 +1301,9 @@ export default function ProductWorkflow() {
 
   // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)
   const isEditModalPath = Boolean(
-    location.pathname.match(/^(?:\/products|\/product_master|\/product_dashboard)\/[0-9]+\/edit$/),
+    location.pathname.match(
+      /^(?:\/products|\/product_master|\/product_dashboard)\/[0-9]+\/edit$/,
+    ),
   );
 
   if (isEditModalPath) {

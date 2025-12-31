@@ -161,7 +161,31 @@ function CreateProjectFromLeadDialog({
         : "",
       template_id: project?.template_id ? String(project.template_id) : "",
       // new field: product_master_ids as array of ids
-      product_master_ids: project?.product_master_ids || [],
+      product_master_ids: (() => {
+        const val = project?.product_master_ids;
+        if (val == null) return [];
+        if (Array.isArray(val))
+          return val
+            .map((item: any) => (typeof item === "object" ? String(item.id ?? item.value ?? item) : String(item)))
+            .filter(Boolean);
+        if (typeof val === "string") {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) return parsed.map((p: any) => String(typeof p === "object" ? p.id ?? p.value ?? p : p));
+          } catch (e) {
+            // not JSON
+          }
+          const s = val.trim();
+          if (s.startsWith("{") && s.endsWith("}")) {
+            const inner = s.slice(1, -1);
+            if (inner === "") return [];
+            return inner.split(",").map((p) => p.trim()).filter(Boolean).map((p) => String(p));
+          }
+          if (s.includes(",")) return s.split(",").map((p) => p.trim()).filter(Boolean).map((p) => String(p));
+          return [s];
+        }
+        return [String(val)];
+      })(),
     };
   });
 

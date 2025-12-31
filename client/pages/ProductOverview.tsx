@@ -416,9 +416,8 @@ export default function ProductOverview() {
           <Button
             variant="outline"
             onClick={() => {
-              if (product && product.product_id)
-                navigate(`/product_master/${id}/edit`);
-              else navigate(`/products/${id}/edit`);
+              // Navigate to the canonical dashboard edit path which mounts the workflow editor
+              navigate(`/product_dashboard/${id}/edit`);
             }}
           >
             <Edit className="w-4 h-4 mr-2" />

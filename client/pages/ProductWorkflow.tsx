@@ -24,6 +24,7 @@ function formatStatusLabel(s?: string) {
 import { useAuth } from "@/lib/auth-context";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -268,6 +269,10 @@ function CreateProjectFromLeadDialog({
         ? String(project.estimated_hours)
         : "",
       template_id: project.template_id ? String(project.template_id) : "",
+      // preserve product_master relations when editing
+      product_master_ids: Array.isArray(project.product_master_ids)
+        ? project.product_master_ids.map((pm: any) => String(pm))
+        : [],
     });
 
     if (Array.isArray(project.steps) && project.steps.length > 0) {
@@ -999,6 +1004,24 @@ function CreateProjectFromLeadDialog({
                         placeholder="Total project hours"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <Label>Related Products (from Product Master)</Label>
+                    <MultiSelect
+                      options={(productMasters || []).map((p: any) => ({
+                        label: p.name,
+                        value: String(p.id),
+                      }))}
+                      value={(projectData.product_master_ids || []) as string[]}
+                      onChange={(vals) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          product_master_ids: vals,
+                        }))
+                      }
+                      placeholder="Search and select products..."
+                    />
                   </div>
                 </CardContent>
               </Card>

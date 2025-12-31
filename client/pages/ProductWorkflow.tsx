@@ -1266,13 +1266,18 @@ function CreateProjectFromLeadDialog({
                         label: p.name,
                         value: String(p.id),
                       }))}
-                      value={(projectData.product_master_ids || []) as string[]}
-                      onChange={(vals) =>
+                      value={((projectData.product_master_ids || []) as any).map(String)}
+                      onChange={(vals) => {
+                        console.debug("MultiSelect change", {
+                          vals,
+                          current: projectData.product_master_ids,
+                          optionsCount: (productMasters || []).length,
+                        });
                         setProjectData((prev: any) => ({
                           ...prev,
-                          product_master_ids: vals,
-                        }))
-                      }
+                          product_master_ids: vals.map(String),
+                        }));
+                      }}
                       placeholder="Search and select products..."
                     />
                   </div>

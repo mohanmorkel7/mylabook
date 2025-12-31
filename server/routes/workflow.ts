@@ -263,6 +263,9 @@ router.get("/projects/:id", async (req: Request, res: Response) => {
       const project = await WorkflowRepository.getProjectById(id, true, true);
 
       if (project) {
+        // Ensure forward-compatible fields are present for the client
+        project.template_id = project.template_id ?? null;
+        project.product_master_ids = project.product_master_ids ?? [];
         return res.json(project);
       }
 
@@ -277,6 +280,8 @@ router.get("/projects/:id", async (req: Request, res: Response) => {
         );
         return res.json({
           ...mockProject,
+          template_id: mockProject.template_id ?? null,
+          product_master_ids: mockProject.product_master_ids ?? [],
           steps: projectSteps,
           comments: projectComments,
         });
@@ -458,6 +463,8 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       );
       res.json({
         ...mockProject,
+        template_id: mockProject.template_id ?? null,
+        product_master_ids: mockProject.product_master_ids ?? [],
         steps: projectSteps,
         comments: projectComments,
       });

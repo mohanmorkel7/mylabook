@@ -271,6 +271,22 @@ export class WorkflowRepository {
 
     const project = result.rows[0] as WorkflowProject;
 
+    // Ensure forward-compatible fields (template_id, product_master_ids) are attached
+    try {
+      const extraRes: QueryResult = await pool.query(
+        "SELECT template_id, product_master_ids FROM workflow_projects WHERE id = $1",
+        [id],
+      );
+      if (extraRes && extraRes.rows && extraRes.rows.length > 0) {
+        const extra = extraRes.rows[0] as any;
+        if (extra.template_id !== undefined) project["template_id"] = extra.template_id;
+        if (extra.product_master_ids !== undefined)
+          project["product_master_ids"] = extra.product_master_ids;
+      }
+    } catch (e) {
+      // Ignore - keep existing project shape if columns missing
+    }
+
     if (includeSteps) {
       project.steps = await this.getProjectSteps(id);
     }

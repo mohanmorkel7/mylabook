@@ -729,7 +729,11 @@ export default function ProductManagement() {
 
   // Fetch workflow projects from backend
   const queryClient = useQueryClient();
-  const { data: projects = [], isLoading: projectsLoading, refetch: refetchProjects } = useQuery({
+  const {
+    data: projects = [],
+    isLoading: projectsLoading,
+    refetch: refetchProjects,
+  } = useQuery({
     queryKey: ["workflow-projects"],
     queryFn: () => apiClient.getWorkflowProjects(),
     // Ensure we fetch fresh data when the component mounts (useful after edits)

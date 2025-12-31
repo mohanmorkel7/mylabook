@@ -392,7 +392,15 @@ export default function ProductOverview() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => { try { queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }); queryClient.invalidateQueries({ queryKey: ["product-master"] }); } catch (e) {} navigate("/product_dashboard"); }}
+            onClick={() => {
+              try {
+                queryClient.invalidateQueries({
+                  queryKey: ["workflow-projects"],
+                });
+                queryClient.invalidateQueries({ queryKey: ["product-master"] });
+              } catch (e) {}
+              navigate("/product_dashboard");
+            }}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products

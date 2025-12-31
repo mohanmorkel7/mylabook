@@ -279,7 +279,8 @@ export class WorkflowRepository {
       );
       if (extraRes && extraRes.rows && extraRes.rows.length > 0) {
         const extra = extraRes.rows[0] as any;
-        if (extra.template_id !== undefined) project["template_id"] = extra.template_id;
+        if (extra.template_id !== undefined)
+          project["template_id"] = extra.template_id;
         if (extra.product_master_ids !== undefined)
           project["product_master_ids"] = extra.product_master_ids;
       }

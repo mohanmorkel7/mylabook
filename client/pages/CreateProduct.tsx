@@ -95,7 +95,7 @@ const CreateProduct: React.FC = () => {
         });
       }
 
-      navigate(`/products/${created.id}`);
+      navigate(`/product_dashboard/${created.id}`);
     } catch (e) {
       console.error(e);
       alert("Failed to create product");

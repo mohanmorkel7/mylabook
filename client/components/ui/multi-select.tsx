@@ -117,12 +117,23 @@ export function MultiSelect({
                 key={option.value}
                 data-option={option.label}
                 className="flex items-center space-x-2 p-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => handleToggle(option.value)}
+                onClick={(e) => {
+                  // If the user clicked the inner checkbox/button, let that handler run.
+                  // The Radix checkbox renders a button with role="checkbox" so
+                  // detect that and avoid double toggling.
+                  try {
+                    const el = (e.target as HTMLElement).closest('[role="checkbox"]');
+                    if (el) return;
+                  } catch (err) {
+                    // ignore DOM issues
+                  }
+                  handleToggle(option.value);
+                }}
               >
                 <Checkbox
                   checked={value.includes(option.value)}
-                  onChange={(e) => {
-                    e.stopPropagation();
+                  onClick={(ev: any) => {
+                    ev.stopPropagation();
                     handleToggle(option.value);
                   }}
                 />

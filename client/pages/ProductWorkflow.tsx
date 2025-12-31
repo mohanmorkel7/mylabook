@@ -166,12 +166,19 @@ function CreateProjectFromLeadDialog({
         if (val == null) return [];
         if (Array.isArray(val))
           return val
-            .map((item: any) => (typeof item === "object" ? String(item.id ?? item.value ?? item) : String(item)))
+            .map((item: any) =>
+              typeof item === "object"
+                ? String(item.id ?? item.value ?? item)
+                : String(item),
+            )
             .filter(Boolean);
         if (typeof val === "string") {
           try {
             const parsed = JSON.parse(val);
-            if (Array.isArray(parsed)) return parsed.map((p: any) => String(typeof p === "object" ? p.id ?? p.value ?? p : p));
+            if (Array.isArray(parsed))
+              return parsed.map((p: any) =>
+                String(typeof p === "object" ? (p.id ?? p.value ?? p) : p),
+              );
           } catch (e) {
             // not JSON
           }
@@ -179,9 +186,18 @@ function CreateProjectFromLeadDialog({
           if (s.startsWith("{") && s.endsWith("}")) {
             const inner = s.slice(1, -1);
             if (inner === "") return [];
-            return inner.split(",").map((p) => p.trim()).filter(Boolean).map((p) => String(p));
+            return inner
+              .split(",")
+              .map((p) => p.trim())
+              .filter(Boolean)
+              .map((p) => String(p));
           }
-          if (s.includes(",")) return s.split(",").map((p) => p.trim()).filter(Boolean).map((p) => String(p));
+          if (s.includes(","))
+            return s
+              .split(",")
+              .map((p) => p.trim())
+              .filter(Boolean)
+              .map((p) => String(p));
           return [s];
         }
         return [String(val)];
@@ -332,7 +348,8 @@ function CreateProjectFromLeadDialog({
         return val
           .map((item: any) => {
             if (item == null) return null;
-            if (typeof item === "object") return String(item.id ?? item.value ?? item);
+            if (typeof item === "object")
+              return String(item.id ?? item.value ?? item);
             return String(item);
           })
           .filter((x: any) => x !== null);
@@ -344,7 +361,10 @@ function CreateProjectFromLeadDialog({
         // JSON
         try {
           const parsed = JSON.parse(s);
-          if (Array.isArray(parsed)) return parsed.map((p: any) => String(typeof p === "object" ? p.id ?? p.value ?? p : p));
+          if (Array.isArray(parsed))
+            return parsed.map((p: any) =>
+              String(typeof p === "object" ? (p.id ?? p.value ?? p) : p),
+            );
         } catch (e) {
           // not JSON
         }
@@ -352,11 +372,19 @@ function CreateProjectFromLeadDialog({
         if (s.startsWith("{") && s.endsWith("}")) {
           const inner = s.slice(1, -1);
           if (inner === "") return [];
-          return inner.split(",").map((p) => p.trim()).filter(Boolean).map((p) => String(p));
+          return inner
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .map((p) => String(p));
         }
         // comma separated
         if (s.includes(",")) {
-          return s.split(",").map((p) => p.trim()).filter(Boolean).map((p) => String(p));
+          return s
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .map((p) => String(p));
         }
         // single value
         return [s];
@@ -367,7 +395,9 @@ function CreateProjectFromLeadDialog({
     };
 
     const normalizedTemplateId = normalizeTemplateId(project.template_id);
-    const normalizedProductMasterIds = normalizeProductMasterIds(project.product_master_ids);
+    const normalizedProductMasterIds = normalizeProductMasterIds(
+      project.product_master_ids,
+    );
 
     setProjectData((prev: any) => {
       // Only update if different to avoid extra renders
@@ -376,19 +406,26 @@ function CreateProjectFromLeadDialog({
         : [];
       const samePm =
         normalizedProductMasterIds.length === prevPm.length &&
-        normalizedProductMasterIds.every((v: any, i: number) => String(prevPm[i]) === String(v));
-      const sameTemplate = String(prev.template_id || "") === String(normalizedTemplateId);
+        normalizedProductMasterIds.every(
+          (v: any, i: number) => String(prevPm[i]) === String(v),
+        );
+      const sameTemplate =
+        String(prev.template_id || "") === String(normalizedTemplateId);
       if (samePm && sameTemplate) return prev;
 
       return {
         name: project.name || "",
         description: project.description || "",
         assigned_team: project.assigned_team || "Product Team",
-        project_manager_id: project.project_manager_id ? String(project.project_manager_id) : "",
+        project_manager_id: project.project_manager_id
+          ? String(project.project_manager_id)
+          : "",
         target_completion_date: project.target_completion_date
           ? formatToDateInput(project.target_completion_date)
           : "",
-        estimated_hours: project.estimated_hours ? String(project.estimated_hours) : "",
+        estimated_hours: project.estimated_hours
+          ? String(project.estimated_hours)
+          : "",
         template_id: normalizedTemplateId,
         // preserve product_master relations when editing
         product_master_ids: normalizedProductMasterIds,
@@ -399,11 +436,15 @@ function CreateProjectFromLeadDialog({
     (async () => {
       try {
         if (normalizedTemplateId) {
-          const found = templates.find((t: any) => String(t.id) === String(normalizedTemplateId));
+          const found = templates.find(
+            (t: any) => String(t.id) === String(normalizedTemplateId),
+          );
           if (found) setSelectedTemplate(found);
           else {
             try {
-              const tpl = await apiClient.getTemplate(Number(normalizedTemplateId));
+              const tpl = await apiClient.getTemplate(
+                Number(normalizedTemplateId),
+              );
               if (tpl) setSelectedTemplate(tpl);
             } catch (err) {
               // ignore
@@ -421,7 +462,10 @@ function CreateProjectFromLeadDialog({
           // ignore
         }
       } catch (e) {
-        console.debug("Failed to hydrate template/product-master for edit dialog", e);
+        console.debug(
+          "Failed to hydrate template/product-master for edit dialog",
+          e,
+        );
       }
     })();
 
@@ -433,9 +477,13 @@ function CreateProjectFromLeadDialog({
           step_description: s.step_description || s.description || "",
           step_order: s.step_order ?? i + 1,
           status: s.status || "pending",
-          probability_percent: parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
+          probability_percent:
+            parseFloat(s.probability_percent ?? s.probability ?? 0) || 0,
           estimated_hours: s.estimated_hours,
-          due_date: s.due_date || s.dueDate || s.eta ? formatToDateInput(s.due_date || s.dueDate || s.eta) : "",
+          due_date:
+            s.due_date || s.dueDate || s.eta
+              ? formatToDateInput(s.due_date || s.dueDate || s.eta)
+              : "",
         })),
       );
     }

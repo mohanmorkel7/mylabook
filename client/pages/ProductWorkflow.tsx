@@ -256,7 +256,9 @@ function CreateProjectFromLeadDialog({
   useEffect(() => {
     if (!project) return;
 
-    const normalizedTemplateId = project.template_id ? String(project.template_id) : "";
+    const normalizedTemplateId = project.template_id
+      ? String(project.template_id)
+      : "";
     const normalizedProductMasterIds = Array.isArray(project.product_master_ids)
       ? project.product_master_ids.map((pm: any) => String(pm))
       : [];
@@ -283,10 +285,14 @@ function CreateProjectFromLeadDialog({
     (async () => {
       try {
         if (normalizedTemplateId) {
-          const found = templates.find((t: any) => String(t.id) === normalizedTemplateId);
+          const found = templates.find(
+            (t: any) => String(t.id) === normalizedTemplateId,
+          );
           if (found) setSelectedTemplate(found);
           else {
-            const tpl = await apiClient.getTemplate(Number(normalizedTemplateId));
+            const tpl = await apiClient.getTemplate(
+              Number(normalizedTemplateId),
+            );
             if (tpl) setSelectedTemplate(tpl);
           }
         }
@@ -299,7 +305,10 @@ function CreateProjectFromLeadDialog({
           // ignore
         }
       } catch (e) {
-        console.debug("Failed to hydrate template/product-master for edit dialog", e);
+        console.debug(
+          "Failed to hydrate template/product-master for edit dialog",
+          e,
+        );
       }
     })();
 

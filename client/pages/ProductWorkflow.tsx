@@ -333,6 +333,7 @@ function CreateProjectFromLeadDialog({
 
   // If editing an existing project, sync internal state when project prop changes
   useEffect(() => {
+    console.debug("CreateProjectFromLeadDialog hydrate attempt", { project, isOpen });
     if (!project) return;
 
     const normalizeTemplateId = (val: any) => {

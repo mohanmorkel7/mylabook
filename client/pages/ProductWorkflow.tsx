@@ -510,6 +510,8 @@ function CreateProjectFromLeadDialog({
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["product-master"] });
+      // Also refresh workflow projects so dashboard reflects product edits immediately
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
       onSuccess();
       onClose();
     },

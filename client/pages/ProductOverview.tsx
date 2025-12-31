@@ -62,13 +62,14 @@ export default function ProductOverview() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Redirect legacy paths to canonical product_dashboard detail route
+  // Redirect legacy paths to canonical product_dashboard detail route (but allow editing paths)
   useEffect(() => {
     if (!id) return;
     try {
-      if (location.pathname.startsWith("/products/")) {
+      // Only redirect bare legacy detail pages, not edit or other subroutes
+      if (/^\/products\/\d+\/?$/.test(location.pathname)) {
         navigate(`/product_dashboard/${id}`, { replace: true });
-      } else if (location.pathname.startsWith("/product_master/")) {
+      } else if (/^\/product_master\/\d+\/?$/.test(location.pathname)) {
         navigate(`/product_dashboard/${id}`, { replace: true });
       }
     } catch (e) {
@@ -350,12 +351,12 @@ export default function ProductOverview() {
         await apiClient.request(`/product-master/${product.id}`, {
           method: "DELETE",
         });
-        navigate("/product_master");
+        navigate("/product_dashboard");
       } else {
         await apiClient.request(`/workflow/projects/${id}`, {
           method: "DELETE",
         });
-        navigate("/product_master");
+        navigate("/product_dashboard");
       }
     } catch (e) {
       console.error(e);
@@ -390,7 +391,7 @@ export default function ProductOverview() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/product_master")}
+            onClick={() => navigate("/product_dashboard")}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products

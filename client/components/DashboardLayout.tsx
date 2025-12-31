@@ -128,13 +128,6 @@ const navigationItems: NavigationItem[] = [
     icon: Target,
     roles: ["admin", "product", "switch_team"],
   },
-  // k) Product
-  {
-    name: "Product",
-    href: "/product_master",
-    icon: Grid3X3,
-    roles: ["admin", "product", "switch_team"],
-  },
   // Keep Proposals (not specified in ordering list)
   {
     name: "Proposals",

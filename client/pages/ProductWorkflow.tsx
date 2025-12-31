@@ -1283,6 +1283,7 @@ function CreateProjectFromLeadDialog({
                           current: projectData.product_master_ids,
                           optionsCount: (productMasters || []).length,
                         });
+                        productMastersTouchedRef.current = true;
                         setProjectData((prev: any) => ({
                           ...prev,
                           product_master_ids: vals.map(String),

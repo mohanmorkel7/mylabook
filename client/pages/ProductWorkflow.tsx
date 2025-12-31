@@ -383,6 +383,10 @@ function CreateProjectFromLeadDialog({
       (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
   );
 
+  // Track if user interacted with the product master multiselect to avoid
+  // effects overwriting their selection while the modal is open.
+  const productMastersTouchedRef = useRef(false);
+
   // If editing an existing project, sync internal state when project prop changes
   useEffect(() => {
     console.debug("CreateProjectFromLeadDialog hydrate attempt", {

@@ -335,9 +335,13 @@ export class WorkflowRepository {
       );
     } catch (err: any) {
       // If the column product_master_ids does not exist (SQLSTATE 42703), retry without it
-      const isUndefinedColumn = err && (err.code === "42703" || /product_master_ids/.test(err.message || ""));
+      const isUndefinedColumn =
+        err &&
+        (err.code === "42703" || /product_master_ids/.test(err.message || ""));
       if (isUndefinedColumn) {
-        console.warn("product_master_ids column missing in DB, retrying insert without it");
+        console.warn(
+          "product_master_ids column missing in DB, retrying insert without it",
+        );
         result = await pool.query(
           `INSERT INTO workflow_projects
            (name, description, source_type, source_id, project_type, priority, assigned_team,
@@ -521,12 +525,19 @@ export class WorkflowRepository {
             // ignore
           }
         } catch (err: any) {
-          const isUndefinedColumn = err && (err.code === "42703" || /product_master_ids/.test(err.message || ""));
+          const isUndefinedColumn =
+            err &&
+            (err.code === "42703" ||
+              /product_master_ids/.test(err.message || ""));
           if (isUndefinedColumn) {
             // Retry without product_master_ids set clause
-            console.warn("product_master_ids column missing in DB, retrying update without it");
+            console.warn(
+              "product_master_ids column missing in DB, retrying update without it",
+            );
             // Remove any product_master_ids clause from setClause and corresponding value
-            const pmIndex = setClause.findIndex((s) => s.includes("product_master_ids"));
+            const pmIndex = setClause.findIndex((s) =>
+              s.includes("product_master_ids"),
+            );
             if (pmIndex !== -1) {
               setClause.splice(pmIndex, 1);
               // Rebuild values by removing the corresponding parameter (complex: rebuild from allowed fields)
@@ -557,7 +568,9 @@ export class WorkflowRepository {
               query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${rebuildIdx} RETURNING id`;
               try {
                 const retryRes = await pool.query(query, rebuiltValues);
-                console.warn("Update succeeded on retry without product_master_ids");
+                console.warn(
+                  "Update succeeded on retry without product_master_ids",
+                );
               } catch (retryErr) {
                 throw retryErr;
               }

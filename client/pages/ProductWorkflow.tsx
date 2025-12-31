@@ -229,7 +229,9 @@ function CreateProjectFromLeadDialog({
   useEffect(() => {
     if (!isOpen) return;
     if (projectData.template_id && !selectedTemplate && templates.length > 0) {
-      const found = templates.find((t: any) => String(t.id) === String(projectData.template_id));
+      const found = templates.find(
+        (t: any) => String(t.id) === String(projectData.template_id),
+      );
       if (found) setSelectedTemplate(found);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -238,12 +240,25 @@ function CreateProjectFromLeadDialog({
   // When productMasters load, ensure projectData.product_master_ids are strings and match available options
   useEffect(() => {
     if (!isOpen) return;
-    if ((projectData.product_master_ids || []).length > 0 && (productMasters || []).length > 0) {
-      const normalized = (projectData.product_master_ids || []).map((id: any) => String(id));
+    if (
+      (projectData.product_master_ids || []).length > 0 &&
+      (productMasters || []).length > 0
+    ) {
+      const normalized = (projectData.product_master_ids || []).map((id: any) =>
+        String(id),
+      );
       // Only set if different to avoid rerender loops
-      const same = normalized.length === (projectData.product_master_ids || []).length && normalized.every((v: any, i: number) => String((projectData.product_master_ids || [])[i]) === v);
+      const same =
+        normalized.length === (projectData.product_master_ids || []).length &&
+        normalized.every(
+          (v: any, i: number) =>
+            String((projectData.product_master_ids || [])[i]) === v,
+        );
       if (!same) {
-        setProjectData((prev: any) => ({ ...prev, product_master_ids: normalized }));
+        setProjectData((prev: any) => ({
+          ...prev,
+          product_master_ids: normalized,
+        }));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

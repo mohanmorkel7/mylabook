@@ -336,10 +336,12 @@ function CreateProjectFromLeadDialog({
           }
         }
 
-        // Refresh product-master options so MultiSelect can resolve labels
+        // Refresh product-master options only if they're not already cached to avoid refetch loops
         try {
-          await queryClient.invalidateQueries({ queryKey: ["product-master"] });
-          await queryClient.refetchQueries({ queryKey: ["product-master"] });
+          const existing = queryClient.getQueryData(["product-master"]);
+          if (!existing) {
+            await queryClient.refetchQueries({ queryKey: ["product-master"] });
+          }
         } catch (e) {
           // ignore
         }

@@ -1102,6 +1102,19 @@ function AppRoutes() {
       />
 
       <Route
+        path="/product_dashboard/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "product"]}>
+            <DashboardLayout>
+              {/* Keep overview visible and mount workflow so it can open the edit dialog modal */}
+              <ProductOverview />
+              <ProductWorkflow />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/product_master/:id/edit"
         element={
           <ProtectedRoute allowedRoles={["admin", "product"]}>

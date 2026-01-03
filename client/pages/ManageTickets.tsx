@@ -899,7 +899,14 @@ export default function ManageTickets() {
         ? 1
         : (serverPages ?? pagesFromTotal);
       setTotalPages(finalPages);
-      setStatusCounts(data?.status_counts ?? {});
+      // Avoid overwriting statusCounts that may already be set by TicketCharts' summary
+      const serverStatusCounts = data?.status_counts ?? {};
+      setStatusCounts((prev) => {
+        try {
+          if (prev && Object.keys(prev || {}).length > 0) return prev;
+        } catch (e) {}
+        return serverStatusCounts || {};
+      });
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({

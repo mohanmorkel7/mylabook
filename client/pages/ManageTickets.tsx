@@ -158,26 +158,49 @@ export default function ManageTickets() {
   // Helper to robustly read status counts from server summary with several key variants
   function getStatusCount(name: string): number {
     if (!statusCounts) return 0;
-    const variants = [
-      name,
-      name.replace(/\s+/g, ""),
-      name.toLowerCase(),
-      name.toLowerCase().replace(/\s+/g, ""),
-    ];
-    for (const v of variants) {
-      if (Object.prototype.hasOwnProperty.call(statusCounts, v))
-        return Number(statusCounts[v]) || 0;
+
+    // Normalizer: remove all non-alphanumeric and lowercase for robust comparisons
+    const normalize = (s: any) =>
+      String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+    const target = normalize(name);
+
+    // 1) Direct exact key match (preserve original behavior)
+    if (Object.prototype.hasOwnProperty.call(statusCounts, name))
+      return Number((statusCounts as any)[name]) || 0;
+
+    // 2) If we have a statusesMap (name -> id), prefer looking up by id
+    try {
+      const sid = (statusesMap && (statusesMap as any)[target]) || undefined;
+      if (sid !== undefined && sid !== null) {
+        if (Object.prototype.hasOwnProperty.call(statusCounts, String(sid)))
+          return Number((statusCounts as any)[String(sid)]) || 0;
+        if (Object.prototype.hasOwnProperty.call(statusCounts, sid as any))
+          return Number((statusCounts as any)[sid as any]) || 0;
+      }
+    } catch (e) {
+      // ignore
     }
-    // try case-insensitive match on keys
+
+    // 3) Try normalized key matching across statusCounts keys
     const keys = Object.keys(statusCounts || {});
     for (const k of keys) {
-      if (
-        k &&
-        String(k).toLowerCase().replace(/\s+/g, "") ===
-          name.toLowerCase().replace(/\s+/g, "")
-      )
-        return Number((statusCounts as any)[k]) || 0;
+      if (normalize(k) === target) return Number((statusCounts as any)[k]) || 0;
     }
+
+    // 4) Fallback: try to find a numeric key whose associated status name matches (rare)
+    for (const k of keys) {
+      try {
+        const val = (statusCounts as any)[k];
+        // If value is an object like { status: 'In Progress', count: 4 }
+        if (val && typeof val === "object") {
+          const label =
+            val.status || val.status_name || val.name || val.statusLabel || "";
+          if (normalize(label) === target) return Number(val.count || 0) || 0;
+        }
+      } catch (e) {}
+    }
+
     return 0;
   }
 

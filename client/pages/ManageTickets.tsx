@@ -161,7 +161,9 @@ export default function ManageTickets() {
 
     // Normalizer: remove all non-alphanumeric and lowercase for robust comparisons
     const normalize = (s: any) =>
-      String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+      String(s || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "");
 
     const target = normalize(name);
 

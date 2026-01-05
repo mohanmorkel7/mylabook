@@ -42,7 +42,8 @@ export default function ProductSidebar() {
       }
     };
     window.addEventListener("productMasterUpdated", handler as any);
-    return () => window.removeEventListener("productMasterUpdated", handler as any);
+    return () =>
+      window.removeEventListener("productMasterUpdated", handler as any);
   }, []);
 
   return (

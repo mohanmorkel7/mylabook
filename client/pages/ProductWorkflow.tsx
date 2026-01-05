@@ -771,6 +771,16 @@ function CreateProjectFromLeadDialog({
       queryClient.invalidateQueries({ queryKey: ["product-master"] });
       // Also refresh workflow projects so dashboard reflects product edits immediately
       queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
+      try {
+        const updatedId = (result && (result.id || result.data?.id)) || (project && project.id);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("productMasterUpdated", { detail: { id: updatedId } }),
+          );
+        }
+      } catch (e) {
+        console.warn("Failed to emit productMasterUpdated event", e);
+      }
       onSuccess();
       onClose();
     },

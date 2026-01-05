@@ -228,6 +228,24 @@ export default function ProductOverview() {
       }
     };
     load();
+
+    // Listen for product-master updates dispatched elsewhere (e.g., after edit/create)
+    const onUpdated = (ev: any) => {
+      try {
+        const detail = ev && ev.detail;
+        // If an id is present, only reload when it matches current id
+        if (detail && detail.id && String(detail.id) !== String(id)) return;
+        // Reload the product data
+        load();
+      } catch (e) {
+        // ignore
+      }
+    };
+    window.addEventListener("productMasterUpdated", onUpdated as any);
+
+    return () => {
+      window.removeEventListener("productMasterUpdated", onUpdated as any);
+    };
   }, [id]);
 
   const completionPercentage = (() => {

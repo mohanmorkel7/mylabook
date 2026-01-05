@@ -1011,7 +1011,14 @@ export default function ProductManagement() {
                 <Card
                   key={product.id}
                   className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => { const target = location.pathname.startsWith("/product_master") ? `/product_master/${product.id}` : `/product_dashboard/${product.id}`; navigate(target); }}
+                  onClick={() => {
+                    const target = location.pathname.startsWith(
+                      "/product_master",
+                    )
+                      ? `/product_master/${product.id}`
+                      : `/product_dashboard/${product.id}`;
+                    navigate(target);
+                  }}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -1089,7 +1096,11 @@ export default function ProductManagement() {
                         className="flex-1"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const target = location.pathname.startsWith("/product_master") ? `/product_master/${product.id}` : `/product_dashboard/${product.id}`;
+                          const target = location.pathname.startsWith(
+                            "/product_master",
+                          )
+                            ? `/product_master/${product.id}`
+                            : `/product_dashboard/${product.id}`;
                           navigate(target);
                         }}
                       >

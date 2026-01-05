@@ -32,6 +32,17 @@ export default function ProductSidebar() {
 
   useEffect(() => {
     fetch();
+
+    const handler = (ev: any) => {
+      try {
+        // Always refresh small sidebar list when products change
+        fetch();
+      } catch (e) {
+        // ignore
+      }
+    };
+    window.addEventListener("productMasterUpdated", handler as any);
+    return () => window.removeEventListener("productMasterUpdated", handler as any);
   }, []);
 
   return (

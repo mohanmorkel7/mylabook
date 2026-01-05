@@ -425,8 +425,11 @@ export default function ProductOverview() {
           <Button
             variant="outline"
             onClick={() => {
-              // Navigate to the canonical dashboard edit path which mounts the workflow editor
-              navigate(`/product_dashboard/${id}/edit`);
+              // Navigate to the canonical edit path. Prefer staying under product_master when the current path is product_master
+              const editTarget = location.pathname.startsWith("/product_master")
+                ? `/product_master/${id}/edit`
+                : `/product_dashboard/${id}/edit`;
+              navigate(editTarget);
             }}
           >
             <Edit className="w-4 h-4 mr-2" />

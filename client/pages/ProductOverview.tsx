@@ -399,7 +399,11 @@ export default function ProductOverview() {
                 });
                 queryClient.invalidateQueries({ queryKey: ["product-master"] });
               } catch (e) {}
-              navigate("/product_dashboard");
+              // Prefer returning to the matching list route based on current path
+              const target = location.pathname.startsWith("/product_master")
+                ? "/product_master"
+                : "/product_dashboard";
+              navigate(target);
             }}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />

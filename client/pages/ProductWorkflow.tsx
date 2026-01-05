@@ -1563,6 +1563,19 @@ export default function ProductWorkflow() {
     if (!pid) return;
     const loadProject = async () => {
       try {
+        // If routed from /product_master/:id, load product_master record and open modal in Product edit mode
+        if (location.pathname.startsWith("/product_master")) {
+          const pm = await apiClient.request<any>(`/product-master/${pid}`);
+          if (pm) {
+            setSelectedProject(pm);
+            setSelectedLead(null);
+            setIsProductCreationMode(true); // show product fields in modal
+            setIsCreateDialogOpen(true);
+            return;
+          }
+        }
+
+        // Fallback: load workflow project and open in project edit mode
         const proj = await apiClient.getWorkflowProject(pid);
         setSelectedProject(proj);
         // Open create dialog in edit mode with enriched project

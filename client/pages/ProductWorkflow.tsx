@@ -1542,7 +1542,9 @@ export default function ProductWorkflow() {
   // If URL indicates an edit path like /product_master/:id/edit, ensure modal opens and data loads
   useEffect(() => {
     try {
-      const m = (location.pathname || "").match(/^(?:\/products|\/product_master|\/product_dashboard)\/(\d+)\/edit$/);
+      const m = (location.pathname || "").match(
+        /^(?:\/products|\/product_master|\/product_dashboard)\/(\d+)\/edit$/,
+      );
       if (!m) return;
       const pid = m[1];
       const isPm = location.pathname.startsWith("/product_master");

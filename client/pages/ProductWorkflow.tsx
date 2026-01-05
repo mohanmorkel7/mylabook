@@ -1609,8 +1609,10 @@ export default function ProductWorkflow() {
           onClose={() => {
             setIsCreateDialogOpen(false);
             setSelectedProject(null);
-            if ((routeParams as any)?.id)
-              navigate(`/product_dashboard/${(routeParams as any).id}`);
+            if ((routeParams as any)?.id) {
+              const target = location.pathname.startsWith("/product_master") ? `/product_master/${(routeParams as any).id}` : `/product_dashboard/${(routeParams as any).id}`;
+              navigate(target);
+            }
           }}
           onSuccess={handleProjectCreated}
         />
@@ -1733,7 +1735,8 @@ export default function ProductWorkflow() {
 
   const handleViewProject = (project: any) => {
     // Redirect to Product Overview page
-    navigate(`/product_dashboard/${project.id}`);
+    const target = location.pathname.startsWith("/product_master") ? `/product_master/${project.id}` : `/product_dashboard/${project.id}`;
+    navigate(target);
   };
 
   const getStatusIcon = (status: string) => {
@@ -1917,7 +1920,10 @@ export default function ProductWorkflow() {
                     <Card
                       key={p.id}
                       className="hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => navigate(`/product_dashboard/${p.id}`)}
+                      onClick={() => {
+                        const target = location.pathname.startsWith("/product_master") ? `/product_master/${p.id}` : `/product_dashboard/${p.id}`;
+                        navigate(target);
+                      }}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">

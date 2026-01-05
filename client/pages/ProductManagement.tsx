@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -719,6 +719,7 @@ function CreateProductDialog({
 
 export default function ProductManagement() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1010,7 +1011,7 @@ export default function ProductManagement() {
                 <Card
                   key={product.id}
                   className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/product_master/${product.id}`)}
+                  onClick={() => { const target = location.pathname.startsWith("/product_master") ? `/product_master/${product.id}` : `/product_dashboard/${product.id}`; navigate(target); }}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -1088,7 +1089,8 @@ export default function ProductManagement() {
                         className="flex-1"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/product_master/${product.id}`);
+                          const target = location.pathname.startsWith("/product_master") ? `/product_master/${product.id}` : `/product_dashboard/${product.id}`;
+                          navigate(target);
                         }}
                       >
                         <Eye className="w-4 h-4 mr-1" />

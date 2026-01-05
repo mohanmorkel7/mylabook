@@ -1010,7 +1010,7 @@ export default function ProductManagement() {
                 <Card
                   key={product.id}
                   className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/product_dashboard/${product.id}`)}
+                  onClick={() => navigate(`/product_master/${product.id}`)}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -1088,7 +1088,7 @@ export default function ProductManagement() {
                         className="flex-1"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/product_dashboard/${product.id}`);
+                          navigate(`/product_master/${product.id}`);
                         }}
                       >
                         <Eye className="w-4 h-4 mr-1" />

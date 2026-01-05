@@ -23,6 +23,7 @@ const CreateProduct: React.FC = () => {
   const [steps, setSteps] = useState<any[]>([]);
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Fetch templates (filter: category=Product)

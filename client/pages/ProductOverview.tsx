@@ -70,9 +70,9 @@ export default function ProductOverview() {
       // Only redirect bare legacy detail pages, not edit or other subroutes
       if (/^\/products\/\d+\/?$/.test(location.pathname)) {
         navigate(`/product_dashboard/${id}`, { replace: true });
-      } else if (/^\/product_master\/\d+\/?$/.test(location.pathname)) {
-        navigate(`/product_dashboard/${id}`, { replace: true });
       }
+      // preserve /product_master/:id as a valid canonical detail route — do not auto-redirect to /product_dashboard
+      // previously we redirected /product_master/:id -> /product_dashboard/:id which caused unwanted navigation
     } catch (e) {
       // ignore
     }

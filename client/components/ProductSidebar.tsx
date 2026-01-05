@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -78,7 +78,10 @@ export default function ProductSidebar() {
                 <div className="flex flex-col gap-2">
                   <Button
                     variant="ghost"
-                    onClick={() => navigate(`/product_dashboard/${p.id}`)}
+                    onClick={() => {
+                      const target = location.pathname.startsWith("/product_master") ? `/product_master/${p.id}` : `/product_dashboard/${p.id}`;
+                      navigate(target);
+                    }}
                   >
                     View
                   </Button>

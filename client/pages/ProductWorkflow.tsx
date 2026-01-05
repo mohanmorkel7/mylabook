@@ -1574,30 +1574,35 @@ export default function ProductWorkflow() {
     const params = new URLSearchParams(location.search);
     const pid = params.get("id") || (routeParams as any)?.id;
     if (!pid) return;
+    // Immediately open the modal so the UI is responsive while we fetch details
+    const initialProductMode = location.pathname.startsWith("/product_master");
+    setIsCreateDialogOpen(true);
+    setIsProductCreationMode(initialProductMode);
+
     const loadProject = async () => {
       try {
-        // If routed from /product_master/:id, load product_master record and open modal in Product edit mode
-        if (location.pathname.startsWith("/product_master")) {
-          const pm = await apiClient.request<any>(`/product-master/${pid}`);
-          if (pm) {
-            setSelectedProject(pm);
-            setSelectedLead(null);
-            setIsProductCreationMode(true); // show product fields in modal
-            setIsCreateDialogOpen(true);
-            return;
+        // If routed from /product_master/:id, try loading product_master record
+        if (initialProductMode) {
+          try {
+            const pm = await apiClient.request<any>(`/product-master/${pid}`);
+            if (pm) {
+              setSelectedProject(pm);
+              setSelectedLead(null);
+              return;
+            }
+          } catch (e) {
+            // fallthrough to workflow project
           }
         }
 
         // Fallback: load workflow project and open in project edit mode
         const proj = await apiClient.getWorkflowProject(pid);
         setSelectedProject(proj);
-        // Open create dialog in edit mode with enriched project
         setSelectedLead(null);
-        setSelectedProject(proj);
         setIsProductCreationMode(false);
-        setIsCreateDialogOpen(true);
       } catch (err) {
         console.error("Failed to load project from query param:", err);
+        // If fetching failed, keep modal open but show an error state (handled inside modal)
       }
     };
     loadProject();

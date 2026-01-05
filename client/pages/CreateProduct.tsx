@@ -96,7 +96,9 @@ const CreateProduct: React.FC = () => {
         });
       }
 
-      const target = location.pathname.startsWith("/product_master") ? `/product_master/${created.id}` : `/product_dashboard/${created.id}`;
+      const target = location.pathname.startsWith("/product_master")
+        ? `/product_master/${created.id}`
+        : `/product_dashboard/${created.id}`;
       navigate(target);
     } catch (e) {
       console.error(e);

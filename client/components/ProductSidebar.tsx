@@ -79,7 +79,11 @@ export default function ProductSidebar() {
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      const target = location.pathname.startsWith("/product_master") ? `/product_master/${p.id}` : `/product_dashboard/${p.id}`;
+                      const target = location.pathname.startsWith(
+                        "/product_master",
+                      )
+                        ? `/product_master/${p.id}`
+                        : `/product_dashboard/${p.id}`;
                       navigate(target);
                     }}
                   >

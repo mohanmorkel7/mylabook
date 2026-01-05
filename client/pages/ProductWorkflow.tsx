@@ -1610,7 +1610,9 @@ export default function ProductWorkflow() {
             setIsCreateDialogOpen(false);
             setSelectedProject(null);
             if ((routeParams as any)?.id) {
-              const target = location.pathname.startsWith("/product_master") ? `/product_master/${(routeParams as any).id}` : `/product_dashboard/${(routeParams as any).id}`;
+              const target = location.pathname.startsWith("/product_master")
+                ? `/product_master/${(routeParams as any).id}`
+                : `/product_dashboard/${(routeParams as any).id}`;
               navigate(target);
             }
           }}
@@ -1735,7 +1737,9 @@ export default function ProductWorkflow() {
 
   const handleViewProject = (project: any) => {
     // Redirect to Product Overview page
-    const target = location.pathname.startsWith("/product_master") ? `/product_master/${project.id}` : `/product_dashboard/${project.id}`;
+    const target = location.pathname.startsWith("/product_master")
+      ? `/product_master/${project.id}`
+      : `/product_dashboard/${project.id}`;
     navigate(target);
   };
 
@@ -1921,7 +1925,11 @@ export default function ProductWorkflow() {
                       key={p.id}
                       className="hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => {
-                        const target = location.pathname.startsWith("/product_master") ? `/product_master/${p.id}` : `/product_dashboard/${p.id}`;
+                        const target = location.pathname.startsWith(
+                          "/product_master",
+                        )
+                          ? `/product_master/${p.id}`
+                          : `/product_dashboard/${p.id}`;
                         navigate(target);
                       }}
                     >

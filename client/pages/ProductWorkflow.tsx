@@ -1539,6 +1539,39 @@ export default function ProductWorkflow() {
   const location = useLocation();
   const routeParams = useParams();
 
+  // If URL indicates an edit path like /product_master/:id/edit, ensure modal opens and data loads
+  useEffect(() => {
+    try {
+      const m = (location.pathname || "").match(/^(?:\/products|\/product_master|\/product_dashboard)\/(\d+)\/edit$/);
+      if (!m) return;
+      const pid = m[1];
+      const isPm = location.pathname.startsWith("/product_master");
+      setIsCreateDialogOpen(true);
+      setIsProductCreationMode(isPm);
+
+      (async () => {
+        try {
+          if (isPm) {
+            const pm = await apiClient.request<any>(`/product-master/${pid}`);
+            if (pm) {
+              setSelectedProject(pm);
+              setSelectedLead(null);
+              return;
+            }
+          }
+          const proj = await apiClient.getWorkflowProject(pid);
+          setSelectedProject(proj);
+          setSelectedLead(null);
+          setIsProductCreationMode(false);
+        } catch (e) {
+          console.error("Failed to load project for edit modal:", e);
+        }
+      })();
+    } catch (e) {
+      // ignore
+    }
+  }, [location.pathname]);
+
   // Fetch product_master items and counts for dashboard (exposed so we can refresh after edits)
   const fetchProducts = async () => {
     try {

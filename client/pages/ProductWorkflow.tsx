@@ -772,10 +772,13 @@ function CreateProjectFromLeadDialog({
       // Also refresh workflow projects so dashboard reflects product edits immediately
       queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
       try {
-        const updatedId = (result && (result.id || result.data?.id)) || (project && project.id);
+        const updatedId =
+          (result && (result.id || result.data?.id)) || (project && project.id);
         if (typeof window !== "undefined") {
           window.dispatchEvent(
-            new CustomEvent("productMasterUpdated", { detail: { id: updatedId } }),
+            new CustomEvent("productMasterUpdated", {
+              detail: { id: updatedId },
+            }),
           );
         }
       } catch (e) {

@@ -159,7 +159,8 @@ export function initialize() {
                     }
 
                     // Create ticket
-                    const title = String(msg.text || "").substring(0, 255) ||
+                    const title =
+                      String(msg.text || "").substring(0, 255) ||
                       "(No subject)";
                     const description = `Slack from: from@slack.com\nReceived: ${new Date(Number(msg.ts) * 1000).toISOString()}\n\n---\n\n${title}`;
 

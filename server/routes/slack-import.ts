@@ -9,13 +9,23 @@ const router = express.Router();
 function getTodayStartTs() {
   const now = new Date();
   return Math.floor(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0) / 1000,
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+    ) / 1000,
   );
 }
 
 async function ensureSlackCategoryId(): Promise<number> {
   const name = "Slack";
-  const res = await pool.query("SELECT id FROM ticket_categories WHERE name = $1", [name]);
+  const res = await pool.query(
+    "SELECT id FROM ticket_categories WHERE name = $1",
+    [name],
+  );
   if (res.rows.length > 0) return res.rows[0].id;
 
   const insert = await pool.query(
@@ -38,7 +48,9 @@ async function getAllChannels(client: WebClient) {
       cursor,
     });
 
-    channels = channels.concat((res.channels || []).filter((c: any) => c.is_member));
+    channels = channels.concat(
+      (res.channels || []).filter((c: any) => c.is_member),
+    );
     cursor = res.response_metadata?.next_cursor;
   } while (cursor);
 
@@ -48,7 +60,8 @@ async function getAllChannels(client: WebClient) {
 router.post("/import-slack", async (req: Request, res: Response) => {
   try {
     const token = process.env.SLACK_BOT_TOKEN;
-    if (!token) return res.status(400).json({ error: "Missing SLACK_BOT_TOKEN" });
+    if (!token)
+      return res.status(400).json({ error: "Missing SLACK_BOT_TOKEN" });
 
     const client = new WebClient(token);
     const todayTs = getTodayStartTs();
@@ -95,7 +108,10 @@ router.post("/import-slack", async (req: Request, res: Response) => {
               await TicketRepository.create(ticketData as any, createdBy);
               inserted++;
             } catch (err: any) {
-              console.warn("Failed to create ticket from slack thread:", err?.message || err);
+              console.warn(
+                "Failed to create ticket from slack thread:",
+                err?.message || err,
+              );
             }
           }
         }

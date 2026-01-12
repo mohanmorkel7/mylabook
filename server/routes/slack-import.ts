@@ -93,7 +93,7 @@ router.post("/import-slack", async (req: Request, res: Response) => {
 
             try {
               const ticketData = {
-                subject: `Slack Ticket : ${String(thread.thread_title || "").substring(0, 255)}`,
+                subject: String(thread.thread_title || "").substring(0, 255),
                 description: `Slack from: from@slack.com\nReceived: ${thread.created_time}\n\n---\n\n${thread.thread_title || ""}`,
                 priority_id: 3,
                 status_id: 1,

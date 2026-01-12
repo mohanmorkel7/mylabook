@@ -376,6 +376,13 @@ export function createServer() {
   }
 
   try {
+    app.use('/api/tickets', slackImportRouter);
+    console.log('Slack import route loaded successfully (mounted at /api/tickets/import-slack)');
+  } catch (error) {
+    console.error('Error loading Slack import route:', error);
+  }
+
+  try {
     app.use("/api/products", productsRouter);
     app.use("/api/product-master", productMasterRouter);
     console.log("Products router loaded successfully");

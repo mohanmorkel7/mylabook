@@ -259,12 +259,37 @@ router.get("/projects/:id", async (req: Request, res: Response) => {
     }
 
     if (await isDatabaseAvailable()) {
+      // Try DB first
       const project = await WorkflowRepository.getProjectById(id, true, true);
-      if (!project) {
-        return res.status(404).json({ error: "Project not found" });
+
+      if (project) {
+        // Ensure forward-compatible fields are present for the client
+        project.template_id = project.template_id ?? null;
+        project.product_master_ids = project.product_master_ids ?? [];
+        return res.json(project);
       }
-      res.json(project);
+
+      // DB available but no project found - fallback to mock data if present
+      const mockProject = WorkflowMockData.projects.find((p) => p.id === id);
+      if (mockProject) {
+        const projectSteps = WorkflowMockData.steps.filter(
+          (s) => s.project_id === id,
+        );
+        const projectComments = WorkflowMockData.comments.filter(
+          (c) => c.project_id === id,
+        );
+        return res.json({
+          ...mockProject,
+          template_id: mockProject.template_id ?? null,
+          product_master_ids: mockProject.product_master_ids ?? [],
+          steps: projectSteps,
+          comments: projectComments,
+        });
+      }
+
+      return res.status(404).json({ error: "Project not found" });
     } else {
+      // DB not available - use mock data
       const mockProject = WorkflowMockData.projects.find((p) => p.id === id);
       if (!mockProject) {
         return res.status(404).json({ error: "Project not found" });
@@ -438,6 +463,8 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       );
       res.json({
         ...mockProject,
+        template_id: mockProject.template_id ?? null,
+        product_master_ids: mockProject.product_master_ids ?? [],
         steps: projectSteps,
         comments: projectComments,
       });

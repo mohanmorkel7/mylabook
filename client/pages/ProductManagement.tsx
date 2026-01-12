@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Dialog,
   DialogContent,
@@ -329,13 +330,19 @@ function CreateProductDialog({
   isOpen,
   onClose,
   onSuccess,
+  editing,
+  setEditing,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  editing?: any;
+  setEditing?: (v: any) => void;
 }) {
   const { user } = useAuth();
-  const [formData, setFormData] = useState({
+  const queryClient = useQueryClient();
+
+  const [formData, setFormData] = useState(() => ({
     name: "",
     description: "",
     category: "",
@@ -347,37 +354,114 @@ function CreateProductDialog({
     budget: "",
     estimated_effort_hours: "",
     tags: "",
+    template_id: undefined,
+    // selected product-master ids (string values)
+    selected_product_ids: [] as string[],
+  }));
+
+  // load global templates for template selection
+  const { data: allTemplates = [] } = useQuery({
+    queryKey: ["templates"],
+    queryFn: () => apiClient.getTemplates(),
+    enabled: isOpen,
+  });
+
+  // load product master entries for multi-select
+  const { data: productMasters = [] } = useQuery({
+    queryKey: ["product-master"],
+    queryFn: () => apiClient.request<any[]>("/product-master"),
+    enabled: isOpen,
+  });
+
+  useEffect(() => {
+    if (editing) {
+      setFormData({
+        name: editing.name || "",
+        description: editing.description || "",
+        category: editing.category || "feature",
+        status: editing.status || "planning",
+        priority: editing.priority || "medium",
+        assigned_team: editing.assigned_team || "",
+        project_manager: editing.project_manager || "",
+        target_release_date: editing.target_release_date || "",
+        budget: editing.budget || "",
+        estimated_effort_hours: editing.estimated_effort_hours || "",
+        tags: (editing.tags || []).join(", "),
+      });
+    }
+  }, [editing]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => apiClient.createWorkflowProject(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
+      onSuccess();
+      onClose();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiClient.request(`/workflow/projects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
+      onSuccess();
+      onClose();
+    },
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // In real implementation, this would call the API
-    console.log("Creating product:", formData);
+    const payload: any = {
+      name: formData.name,
+      description: formData.description || null,
+      // Map UI category to backend project_type
+      project_type: "product_development",
+      category: formData.category,
+      status: formData.status,
+      priority: formData.priority,
+      assigned_team: formData.assigned_team || null,
+      project_manager: formData.project_manager
+        ? String(formData.project_manager)
+        : null,
+      target_completion_date: formData.target_release_date || null,
+      budget: formData.budget ? Number(formData.budget) : null,
+      estimated_hours: formData.estimated_effort_hours
+        ? Number(formData.estimated_effort_hours)
+        : null,
+      tags: formData.tags
+        ? formData.tags.split(",").map((t: string) => t.trim())
+        : [],
+      // include selected product-master ids when present
+      product_master_ids:
+        formData.selected_product_ids && formData.selected_product_ids.length
+          ? formData.selected_product_ids.map((v: string) => Number(v))
+          : undefined,
+      created_by: Number(user?.id || 1),
+    };
 
-    // Reset form and close dialog
-    setFormData({
-      name: "",
-      description: "",
-      category: "",
-      status: "planning",
-      priority: "medium",
-      assigned_team: "",
-      project_manager: "",
-      target_release_date: "",
-      budget: "",
-      estimated_effort_hours: "",
-      tags: "",
-    });
-    onClose();
-    onSuccess();
+    try {
+      if (editing && editing.id) {
+        updateMutation.mutate({ id: editing.id, data: payload });
+      } else {
+        createMutation.mutate(payload);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Product</DialogTitle>
+          <DialogTitle>
+            {editing ? "Edit Product" : "Create New Product"}
+          </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -418,6 +502,46 @@ function CreateProductDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            <div>
+              <Label htmlFor="template_id">Template (Product Templates)</Label>
+              <Select
+                value={(formData as any).template_id}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, template_id: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a product template (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {(allTemplates || [])
+                    .filter((t: any) => {
+                      const cid =
+                        t.category_id ??
+                        t.categoryId ??
+                        (t.category &&
+                          (typeof t.category === "object"
+                            ? t.category.id
+                            : undefined));
+                      return Number(cid) === 1;
+                    })
+                    .map((tpl: any) => (
+                      <SelectItem key={tpl.id} value={String(tpl.id)}>
+                        <div className="flex flex-col">
+                          <span>{tpl.name}</span>
+                          {tpl.description && (
+                            <span className="text-xs text-gray-500">
+                              {tpl.description}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>
@@ -433,6 +557,21 @@ function CreateProductDialog({
               }
               placeholder="Describe the product"
               rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>Related Products (from Product Master)</Label>
+            <MultiSelect
+              options={(productMasters || []).map((p: any) => ({
+                label: p.name,
+                value: String(p.id),
+              }))}
+              value={(formData.selected_product_ids || []) as string[]}
+              onChange={(vals) =>
+                setFormData((prev) => ({ ...prev, selected_product_ids: vals }))
+              }
+              placeholder="Search and select products..."
             />
           </div>
 
@@ -580,15 +719,64 @@ function CreateProductDialog({
 
 export default function ProductManagement() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
 
-  // In real implementation, these would be actual API calls
-  const products = mockProducts;
+  // Fetch workflow projects from backend
+  const queryClient = useQueryClient();
+  const {
+    data: projects = [],
+    isLoading: projectsLoading,
+    refetch: refetchProjects,
+  } = useQuery({
+    queryKey: ["workflow-projects"],
+    queryFn: () => apiClient.getWorkflowProjects(),
+    // Ensure we fetch fresh data when the component mounts (useful after edits)
+    refetchOnMount: true,
+  });
+
+  // Also trigger a refetch when this component mounts to guarantee fresh data
+  useEffect(() => {
+    try {
+      refetchProjects();
+    } catch (e) {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Map projects to local product shape where possible
+  const products = (Array.isArray(projects) ? projects : []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    category: p.category || "feature",
+    status: p.status || "planning",
+    priority: p.priority || "medium",
+    assigned_team: p.assigned_team || "",
+    project_manager: p.project_manager_name || p.project_manager || "",
+    start_date: p.start_date || p.created_at,
+    target_release_date: p.target_completion_date || p.target_release_date,
+    actual_release_date: p.actual_release_date,
+    version: p.current_version || p.version,
+    progress_percentage: p.progress_percentage || p.progress || 0,
+    budget: p.budget,
+    estimated_effort_hours: p.estimated_hours || p.estimated_effort_hours,
+    actual_effort_hours: p.actual_effort_hours,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+    created_by: p.created_by,
+    tags: p.tags || [],
+    dependencies: p.dependencies || [],
+    features: p.features || [],
+    milestones: p.milestones || [],
+  }));
 
   // Calculate dashboard stats
   const totalProducts = products.length;
@@ -598,9 +786,10 @@ export default function ProductManagement() {
   const completedProducts = products.filter(
     (p) => p.status === "production",
   ).length;
-  const avgProgress =
-    products.reduce((sum, p) => sum + (p.progress_percentage || 0), 0) /
-    products.length;
+  const avgProgress = products.length
+    ? products.reduce((sum, p) => sum + (p.progress_percentage || 0), 0) /
+      products.length
+    : 0;
 
   // Filter products based on search and filters
   const filteredProducts = products.filter((product) => {
@@ -632,6 +821,23 @@ export default function ProductManagement() {
     return priorityObj?.color || "text-gray-600";
   };
 
+  // Create / update mutations
+  const createProjectMutation = useMutation({
+    mutationFn: (data: any) => apiClient.createWorkflowProject(data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiClient.request(`/workflow/projects/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] }),
+  });
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -645,7 +851,12 @@ export default function ProductManagement() {
           </p>
         </div>
 
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
+        <Button
+          onClick={() => {
+            setEditingProduct(null);
+            setIsCreateDialogOpen(true);
+          }}
+        >
           <Plus className="w-4 h-4 mr-2" />
           New Product
         </Button>
@@ -799,7 +1010,15 @@ export default function ProductManagement() {
               return (
                 <Card
                   key={product.id}
-                  className="hover:shadow-md transition-shadow"
+                  className="hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => {
+                    const target = location.pathname.startsWith(
+                      "/product_master",
+                    )
+                      ? `/product_master/${product.id}`
+                      : `/product_dashboard/${product.id}`;
+                    navigate(target);
+                  }}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -871,11 +1090,33 @@ export default function ProductManagement() {
                     )}
 
                     <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const target = location.pathname.startsWith(
+                            "/product_master",
+                          )
+                            ? `/product_master/${product.id}`
+                            : `/product_dashboard/${product.id}`;
+                          navigate(target);
+                        }}
+                      >
                         <Eye className="w-4 h-4 mr-1" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingProduct(product);
+                          setIsCreateDialogOpen(true);
+                        }}
+                      >
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </Button>
@@ -964,7 +1205,14 @@ export default function ProductManagement() {
                             <Button variant="ghost" size="sm">
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingProduct(product);
+                                setIsCreateDialogOpen(true);
+                              }}
+                            >
                               <Edit className="w-4 h-4" />
                             </Button>
                           </div>
@@ -1041,10 +1289,16 @@ export default function ProductManagement() {
       {/* Create Product Dialog */}
       <CreateProductDialog
         isOpen={isCreateDialogOpen}
-        onClose={() => setIsCreateDialogOpen(false)}
+        editing={editingProduct}
+        setEditing={(v: any) => setEditingProduct(v)}
+        onClose={() => {
+          setIsCreateDialogOpen(false);
+          setEditingProduct(null);
+        }}
         onSuccess={() => {
-          // In real implementation, this would refetch data
-          console.log("Product created successfully");
+          // Parent cleanup after create/update
+          setIsCreateDialogOpen(false);
+          setEditingProduct(null);
         }}
       />
     </div>

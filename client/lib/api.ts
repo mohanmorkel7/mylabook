@@ -233,13 +233,19 @@ export class ApiClient {
               "fetch for request",
             );
 
-          // Add timeout to prevent hanging requests - longer for notifications, login, and tickets
+          // Add timeout to prevent hanging requests - longer for notifications, login, tickets, and finops tracker
           let timeoutMs =
             endpoint.includes("notifications") ||
             endpoint.includes("/auth/login")
               ? 15000
               : 8000;
           if (endpoint.includes("/tickets")) timeoutMs = 30000; // allow tickets up to 30s
+          // finops tracker can be slow depending on DB - allow up to 30s
+          if (
+            endpoint.includes("/finops-production/tracker") ||
+            endpoint.includes("/finops/tracker")
+          )
+            timeoutMs = 30000;
 
           // Use AbortController so the underlying fetch/connection is aborted on timeout
           const controller = new AbortController();
@@ -605,7 +611,14 @@ export class ApiClient {
     return new Promise((resolve, reject) => {
       try {
         const xhr = new XMLHttpRequest();
-        xhr.timeout = 15000; // Shorter timeout for faster fallback
+        // Default XHR timeout, increase for known slow endpoints like finops tracker
+        let xhrTimeout = 15000;
+        if (
+          url.includes("/finops-production/tracker") ||
+          url.includes("/finops/tracker")
+        )
+          xhrTimeout = 30000;
+        xhr.timeout = xhrTimeout;
 
         // Handle CORS for cross-origin requests
         if (url.includes("://") && !url.startsWith(window.location.origin)) {
@@ -1309,6 +1322,21 @@ export class ApiClient {
         return [];
       }
     }
+  }
+
+  // New: fetch finops tracker rows (datewise history)
+  async getFinOpsTracker(date?: string, period?: string, taskId?: number) {
+    const params = new URLSearchParams();
+    if (date) params.append("date", date);
+    if (period) params.append("period", period);
+    if (taskId) params.append("task_id", String(taskId));
+    const path = `/finops-production/tracker${params.toString() ? "?" + params.toString() : ""}`;
+    return this.request(path);
+  }
+
+  // Exact cumulative endpoint matching requested SQL
+  async getFinOpsCumulative() {
+    return this.request(`/finops-production/tracker/cumulative`);
   }
 
   async getFinOpsNextCalls(alertKey?: string) {

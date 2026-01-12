@@ -314,6 +314,14 @@ router.get("/", async (req: Request, res: Response) => {
       const ticketsWithFlag = result.tickets.map((ticket: any) => ({
         ...ticket,
         created_from_mail_config: Boolean(ticket.mail_config_id),
+        // Ensure a lightweight preview is always present for list views
+        description_preview:
+          ticket.description_preview ||
+          (typeof ticket.description === "string"
+            ? ticket.description.replace(/<[^>]*>/g, "").slice(0, 200)
+            : ticket.description
+              ? String(ticket.description).slice(0, 200)
+              : ""),
       }));
       res.json({
         ...result,
@@ -613,7 +621,7 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
     }
 
     const q = `
-      SELECT t.id as ticket_id, ts.name as status_name, mc.sources as sources, creator.email as email_from, t.tags as ticket_tags, t.description as ticket_description
+      SELECT t.id as ticket_id, ts.name as status_name, mc.sources as sources, creator.email as email_from, t.tags as ticket_tags, LEFT(t.description, 200) AS ticket_description
       FROM tickets t
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
       LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
@@ -1481,17 +1489,25 @@ router.put("/:id", authenticateToken, async (req: Request, res: Response) => {
     const updatedBy = normalizeUserId(req.body.updated_by || "1");
 
     if (await isDatabaseAvailable()) {
-      // Permission: only admin or creator can update
       const userId = (req as any).userId || updatedBy;
       const userRes = await pool.query("SELECT role FROM users WHERE id = $1", [
         userId,
       ]);
       const role = userRes.rows[0]?.role;
       const existing = await TicketRepository.getById(id);
-      if (role !== "admin" && existing.created_by !== userId) {
-        return res
-          .status(403)
-          .json({ error: "Forbidden: not allowed to update ticket" });
+
+      // Determine if this update is only a status change
+      const isStatusChange =
+        updateData.status_id && updateData.status_id !== existing.status_id;
+
+      // Permission: allow any authenticated user to change status only.
+      // For other updates, require admin role or the ticket creator.
+      if (!isStatusChange) {
+        if (role !== "admin" && existing.created_by !== userId) {
+          return res
+            .status(403)
+            .json({ error: "Forbidden: not allowed to update ticket" });
+        }
       }
 
       // If the existing status is 'Overdue' and the update moves it to a non-overdue status, require a reason

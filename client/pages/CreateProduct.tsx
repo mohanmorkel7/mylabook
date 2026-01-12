@@ -23,6 +23,7 @@ const CreateProduct: React.FC = () => {
   const [steps, setSteps] = useState<any[]>([]);
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Fetch templates (filter: category=Product)
@@ -95,7 +96,10 @@ const CreateProduct: React.FC = () => {
         });
       }
 
-      navigate(`/products/${created.id}`);
+      const target = location.pathname.startsWith("/product_master")
+        ? `/product_master/${created.id}`
+        : `/product_dashboard/${created.id}`;
+      navigate(target);
     } catch (e) {
       console.error(e);
       alert("Failed to create product");

@@ -247,13 +247,48 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
     const dateParam = (req.query.date as string) || null;
     const userNameRaw = (req.query.user_name as string) || null;
-    const normalizedUser = userNameRaw
-      ? userNameRaw.trim().toLowerCase()
-      : null;
+    let normalizedUser = userNameRaw ? userNameRaw.trim().toLowerCase() : null;
     const callerRole =
       (req.query.user_role as string) || (req.query.role as string) || null;
 
     let callerIsAdmin = callerRole === "admin";
+
+    // Prefer x-user-id header to resolve caller role and department admin status
+    const headerUserId = req.headers["x-user-id"] as string | undefined;
+    if (!callerIsAdmin && headerUserId) {
+      try {
+        const uid = parseInt(String(headerUserId), 10);
+        if (!isNaN(uid)) {
+          const ur = await pool.query(
+            "SELECT role, department_admin, admin_for_department, first_name, last_name FROM users WHERE id = $1 LIMIT 1",
+            [uid],
+          );
+          if (ur.rows.length) {
+            const row = ur.rows[0];
+            const roleVal = String(row.role || "").toLowerCase();
+            if (roleVal === "admin" || roleVal === "finops admin")
+              callerIsAdmin = true;
+            const deptAdmin = !!row.department_admin;
+            const adminDept = String(row.admin_for_department || "")
+              .toLowerCase()
+              .trim();
+            if (deptAdmin && adminDept === "finops") callerIsAdmin = true;
+
+            if (!normalizedUser) {
+              const fn = row.first_name || "";
+              const ln = row.last_name || "";
+              const full = `${fn} ${ln}`.trim();
+              if (full) normalizedUser = full.toLowerCase();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(
+          "Failed to resolve caller from x-user-id header:",
+          (e as Error).message,
+        );
+      }
+    }
 
     if (!callerIsAdmin && normalizedUser) {
       try {
@@ -453,6 +488,10 @@ router.get("/tasks", async (req: Request, res: Response) => {
       ...row,
       subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
     }));
+
+    console.log(`[finops-production] Returning ${tasks.length} tasks`);
+    if (tasks.length > 0)
+      console.log("[finops-production] First task:", tasks[0]);
 
     res.json(tasks);
   } catch (error) {
@@ -859,7 +898,11 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     if (!approver_name || /undefined|null/i.test(String(approver_name))) {
       const headerName = (req.headers["x-user-name"] as string) || "";
       const headerUserId = (req.headers["x-user-id"] as string) || "";
-      if (headerName && typeof headerName === "string" && headerName.trim() !== "") {
+      if (
+        headerName &&
+        typeof headerName === "string" &&
+        headerName.trim() !== ""
+      ) {
         approver_name = headerName.trim();
       } else if (headerUserId && String(headerUserId).trim() !== "") {
         try {
@@ -878,7 +921,10 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
           }
           if (userRes && userRes.rows.length > 0) {
             const u = userRes.rows[0];
-            approver_name = `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() || u.email || approver_name;
+            approver_name =
+              `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() ||
+              u.email ||
+              approver_name;
           }
         } catch (e) {
           // ignore
@@ -1736,6 +1782,30 @@ router.get("/next-calls", async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Error fetching next calls:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Historical cumulative tracker rows (matches exact SQL requested)
+router.get("/tracker/cumulative", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+    const query = `
+      SELECT ft.*, t.client_name, t.client_id, t.assigned_to, t.reporting_managers, t.escalation_managers
+      FROM finops_tracker ft
+      JOIN finops_tasks t ON t.id = ft.task_id
+      WHERE t.deleted_at IS NULL
+        AND t.duration = 'daily'
+        AND ft.status IN ('pending','overdue','open','delayed')
+        AND ft.run_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching cumulative tracker rows:", e);
+    res.status(500).json({
+      error: "Failed to fetch cumulative tracker rows",
+      message: e.message,
+    });
   }
 });
 

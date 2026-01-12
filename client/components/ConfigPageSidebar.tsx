@@ -12,6 +12,7 @@ import {
   Ticket,
   Mail,
   ChevronRight,
+  Grid3X3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,12 @@ const sidebarItems: SidebarItem[] = [
     href: "/tickets",
     icon: Ticket,
     roles: ["admin", "sales", "product", "development"],
+  },
+  {
+    name: "Product",
+    href: "/product_dashboard",
+    icon: Grid3X3,
+    roles: ["admin", "product", "switch_team"],
   },
   {
     name: "Settings",

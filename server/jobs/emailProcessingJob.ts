@@ -10,12 +10,15 @@ import { MailConfigRepository } from "../models/MailConfig";
 
 export function initialize() {
   try {
-    // TEMPORARILY DISABLED: Email processing job disabled to prevent memory overflow
-    // Enable by setting ENABLE_EMAIL_PROCESSING_JOB=true
-    // if (process.env.ENABLE_EMAIL_PROCESSING_JOB !== "true") {
-    //   console.log("Email processing job disabled (memory management)");
-    //   return;
-    // }
+    // Gate the email processing job behind an environment variable to avoid
+    // running it in local dev by default (it may reach external mail servers
+    // and cause blocking I/O, timeouts, or excessive CPU/memory usage).
+    if (process.env.ENABLE_EMAIL_PROCESSING_JOB !== "true") {
+      console.log(
+        "Email processing job disabled by default. Set ENABLE_EMAIL_PROCESSING_JOB=true to enable.",
+      );
+      return;
+    }
 
     // Schedule job to run every minute
     cron.schedule(

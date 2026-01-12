@@ -155,6 +155,57 @@ export default function ManageTickets() {
     }
   };
 
+  // Helper to robustly read status counts from server summary with several key variants
+  function getStatusCount(name: string): number {
+    if (!statusCounts) return 0;
+
+    // Normalizer: remove all non-alphanumeric and lowercase for robust comparisons
+    const normalize = (s: any) =>
+      String(s || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "");
+
+    const target = normalize(name);
+
+    // 1) Direct exact key match (preserve original behavior)
+    if (Object.prototype.hasOwnProperty.call(statusCounts, name))
+      return Number((statusCounts as any)[name]) || 0;
+
+    // 2) If we have a statusesMap (name -> id), prefer looking up by id
+    try {
+      const sid = (statusesMap && (statusesMap as any)[target]) || undefined;
+      if (sid !== undefined && sid !== null) {
+        if (Object.prototype.hasOwnProperty.call(statusCounts, String(sid)))
+          return Number((statusCounts as any)[String(sid)]) || 0;
+        if (Object.prototype.hasOwnProperty.call(statusCounts, sid as any))
+          return Number((statusCounts as any)[sid as any]) || 0;
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // 3) Try normalized key matching across statusCounts keys
+    const keys = Object.keys(statusCounts || {});
+    for (const k of keys) {
+      if (normalize(k) === target) return Number((statusCounts as any)[k]) || 0;
+    }
+
+    // 4) Fallback: try to find a numeric key whose associated status name matches (rare)
+    for (const k of keys) {
+      try {
+        const val = (statusCounts as any)[k];
+        // If value is an object like { status: 'In Progress', count: 4 }
+        if (val && typeof val === "object") {
+          const label =
+            val.status || val.status_name || val.name || val.statusLabel || "";
+          if (normalize(label) === target) return Number(val.count || 0) || 0;
+        }
+      } catch (e) {}
+    }
+
+    return 0;
+  }
+
   // Derived counts: overdue vs non-overdue for open and closed tickets
   const {
     overdueOpenCount,
@@ -201,6 +252,7 @@ export default function ManageTickets() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState<number>(Date.now());
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [overdueStatusId, setOverdueStatusId] = useState<number | null>(null);
   const serverTimeOffsetRef = useRef<number>(0); // clientNow - serverNow (ms) to adjust remaining time calculations
   const autoMarkedRef = useRef(new Set<number>());
@@ -359,10 +411,20 @@ export default function ManageTickets() {
     return null;
   }
 
-  // Helper function to classify a ticket into a tag based on description
+  // Helper function to classify a ticket into a tag. Prefer mail_config_sources provider, then description_preview or description
   const getTicketTag = (ticket: any): string => {
     try {
-      const desc = String(ticket.description || "").toLowerCase();
+      // Prefer explicit provider derived from mail config sources
+      const provider = getMailConfigProviderName(
+        ticket.mail_config_sources || ticket.mail_config_sources,
+        ticket.description_preview || ticket.description,
+      );
+      if (provider) return provider;
+
+      // Fallback to scanning the description preview or full description
+      const desc = String(
+        ticket.description_preview || ticket.description || "",
+      ).toLowerCase();
       if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
         return "Razorpay";
       }
@@ -837,7 +899,14 @@ export default function ManageTickets() {
         ? 1
         : (serverPages ?? pagesFromTotal);
       setTotalPages(finalPages);
-      setStatusCounts(data?.status_counts ?? {});
+      // Avoid overwriting statusCounts that may already be set by TicketCharts' summary
+      const serverStatusCounts = data?.status_counts ?? {};
+      setStatusCounts((prev) => {
+        try {
+          if (prev && Object.keys(prev || {}).length > 0) return prev;
+        } catch (e) {}
+        return serverStatusCounts || {};
+      });
     } catch (error) {
       console.error("Error fetching tickets:", error);
       toast({
@@ -1817,6 +1886,51 @@ export default function ManageTickets() {
     }));
   }, [createdTickets, tickets]);
 
+  // Prefer server-side totals when available to avoid inconsistencies between paginated tickets and overall counts
+  const displayedOpen =
+    serverOverdueCounts?.totalOpen ?? overdueOpenCount + nonOverdueOpenCount;
+  const displayedClosed =
+    serverOverdueCounts?.totalClosed ??
+    overdueClosedCount + nonOverdueClosedCount;
+  const inProgressCount = getStatusCount("In Progress");
+  // Per-server overdue breakdowns
+  const overdueOpenFromServer =
+    serverOverdueCounts?.overdueOpen ?? overdueOpenCount;
+  const nonOverdueOpenFromServer =
+    serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount;
+  const overdueClosedFromServer =
+    serverOverdueCounts?.overdueClosed ?? overdueClosedCount;
+  const nonOverdueClosedFromServer =
+    serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount;
+
+  // Reconcile with totalTickets: ensure major buckets sum to total if server provided a total
+  let openToShow = displayedOpen;
+  let activeOpenToShow = nonOverdueOpenFromServer;
+  let overdueOpenToShow = overdueOpenFromServer;
+  let overdueClosedToShow = overdueClosedFromServer;
+  let onTimeClosedToShow = Math.max(0, displayedClosed - overdueClosedToShow);
+
+  if (typeof totalTickets === "number" && Number.isFinite(totalTickets)) {
+    const sumBuckets =
+      Number(displayedOpen || 0) +
+      Number(inProgressCount || 0) +
+      Number(displayedClosed || 0);
+    if (sumBuckets !== Number(totalTickets)) {
+      // Adjust Open to make totals match, prefer keeping InProgress and Closed stable
+      openToShow = Math.max(
+        0,
+        Number(totalTickets) -
+          Number(inProgressCount || 0) -
+          Number(displayedClosed || 0),
+      );
+      // Recompute activeOpen from openToShow minus overdue
+      overdueOpenToShow = overdueOpenFromServer;
+      activeOpenToShow = Math.max(0, openToShow - overdueOpenToShow);
+      // Recompute closed on-time
+      onTimeClosedToShow = Math.max(0, displayedClosed - overdueClosedToShow);
+    }
+  }
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -1988,19 +2102,23 @@ export default function ManageTickets() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
+            <p className="text-2xl md:text-3xl font-bold text-gray-900">
+              {typeof totalTickets === "number" && totalTickets >= 0
+                ? totalTickets
+                : tickets.length}
+            </p>
+            <p className="mt-2 text-sm font-medium text-gray-600">Total</p>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {serverOverdueCounts?.totalOpen ??
-                overdueOpenCount + nonOverdueOpenCount}
+              {openToShow}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
-              <span className="text-red-600">
-                Overdue: {serverOverdueCounts?.overdueOpen ?? overdueOpenCount}
-              </span>
-              <span className="text-green-600">
-                Active:{" "}
-                {serverOverdueCounts?.nonOverdueOpen ?? nonOverdueOpenCount}
-              </span>
+              <span className="text-red-600">Overdue: {overdueOpenToShow}</span>
+              <span className="text-green-600">Active: {activeOpenToShow}</span>
             </div>
           </CardContent>
         </Card>
@@ -2008,7 +2126,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-orange-600">
-              {statusCounts["In Progress"] ?? statusCounts["InProgress"] ?? 0}
+              {getStatusCount("In Progress")}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">
               In Progress
@@ -2018,17 +2136,8 @@ export default function ManageTickets() {
 
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
-            <p className="text-2xl md:text-3xl font-bold text-yellow-600">
-              {statusCounts["Pending"] ?? 0}
-            </p>
-            <p className="mt-2 text-sm font-medium text-gray-600">Pending</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-red-600">
-              {statusCounts["Overdue"] ?? 0}
+              {getStatusCount("Overdue")}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Overdue</p>
           </CardContent>
@@ -2037,18 +2146,15 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-gray-900">
-              {serverOverdueCounts?.totalClosed ??
-                overdueClosedCount + nonOverdueClosedCount}
+              {displayedClosed}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Closed</p>
             <div className="mt-2 text-xs text-gray-600 flex gap-3">
               <span className="text-red-600">
-                Overdue:{" "}
-                {serverOverdueCounts?.overdueClosed ?? overdueClosedCount}
+                Overdue: {overdueClosedToShow}
               </span>
               <span className="text-green-600">
-                On-time:{" "}
-                {serverOverdueCounts?.nonOverdueClosed ?? nonOverdueClosedCount}
+                On-time: {onTimeClosedToShow}
               </span>
             </div>
           </CardContent>
@@ -2261,11 +2367,24 @@ export default function ManageTickets() {
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {t.subject || t.track_id}
+                                {t.subject ? (
+                                  <>
+                                    {t.subject}
+                                    {t.track_id ? (
+                                      <span className="ml-2 text-xs text-gray-500">
+                                        {t.track_id}
+                                      </span>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  t.track_id
+                                )}
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">
-                              {stripHtml(t.description).slice(0, 180)}
+                              {stripHtml(
+                                t.description_preview || t.description,
+                              ).slice(0, 200)}
                             </div>
                           </div>
 
@@ -2321,8 +2440,47 @@ export default function ManageTickets() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={(e) => {
+                              disabled={deletingId === t.id}
+                              onClick={async (e) => {
                                 e.stopPropagation();
+                                if (
+                                  !confirm(
+                                    "Are you sure you want to delete this ticket? This action cannot be undone.",
+                                  )
+                                )
+                                  return;
+                                try {
+                                  setDeletingId(t.id);
+                                  await api.deleteTicket(t.id);
+                                  // remove ticket from local state to reflect deletion immediately
+                                  setTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setFilteredTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setTotalTickets((n) =>
+                                    Math.max(0, (n || 1) - 1),
+                                  );
+                                  toast({
+                                    title: "Ticket deleted",
+                                    description:
+                                      "The ticket was removed successfully.",
+                                  });
+                                } catch (err: any) {
+                                  console.error(
+                                    "Failed to delete ticket:",
+                                    err,
+                                  );
+                                  toast({
+                                    title: "Delete failed",
+                                    description:
+                                      err?.message || "Failed to delete ticket",
+                                    variant: "destructive",
+                                  });
+                                } finally {
+                                  setDeletingId(null);
+                                }
                               }}
                             >
                               <Trash size={14} />
@@ -2446,11 +2604,24 @@ export default function ManageTickets() {
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {t.subject || t.track_id}
+                                {t.subject ? (
+                                  <>
+                                    {t.subject}
+                                    {t.track_id ? (
+                                      <span className="ml-2 text-xs text-gray-500">
+                                        {t.track_id}
+                                      </span>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  t.track_id
+                                )}
                               </Link>
                             </CardTitle>
                             <div className="text-xs text-gray-600 leading-tight">
-                              {stripHtml(t.description).slice(0, 180)}
+                              {stripHtml(
+                                t.description_preview || t.description,
+                              ).slice(0, 200)}
                             </div>
                           </div>
 
@@ -2507,8 +2678,47 @@ export default function ManageTickets() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={(e) => {
+                              disabled={deletingId === t.id}
+                              onClick={async (e) => {
                                 e.stopPropagation();
+                                if (
+                                  !confirm(
+                                    "Are you sure you want to delete this ticket? This action cannot be undone.",
+                                  )
+                                )
+                                  return;
+                                try {
+                                  setDeletingId(t.id);
+                                  await api.deleteTicket(t.id);
+                                  // remove ticket from local state to reflect deletion immediately
+                                  setTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setFilteredTickets((prev) =>
+                                    prev.filter((x) => x.id !== t.id),
+                                  );
+                                  setTotalTickets((n) =>
+                                    Math.max(0, (n || 1) - 1),
+                                  );
+                                  toast({
+                                    title: "Ticket deleted",
+                                    description:
+                                      "The ticket was removed successfully.",
+                                  });
+                                } catch (err: any) {
+                                  console.error(
+                                    "Failed to delete ticket:",
+                                    err,
+                                  );
+                                  toast({
+                                    title: "Delete failed",
+                                    description:
+                                      err?.message || "Failed to delete ticket",
+                                    variant: "destructive",
+                                  });
+                                } finally {
+                                  setDeletingId(null);
+                                }
                               }}
                             >
                               <Trash size={14} />

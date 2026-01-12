@@ -123,9 +123,15 @@ const navigationItems: NavigationItem[] = [
   },
   // j) Product Management
   {
-    name: "Product Management",
-    href: "/product",
+    name: "Product",
+    href: "/product_master",
     icon: Grid3X3,
+    roles: ["admin", "product", "switch_team"],
+  },
+  {
+    name: "Product Management",
+    href: "/product_dashboard",
+    icon: Target,
     roles: ["admin", "product", "switch_team"],
   },
   // Keep Proposals (not specified in ordering list)

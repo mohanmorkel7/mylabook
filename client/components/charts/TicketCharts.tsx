@@ -97,17 +97,18 @@ export default function TicketCharts({
           computedTo,
         });
         const params = new URLSearchParams();
+        // Prefer explicit dateFrom/dateTo props when provided (e.g., date picker in Manage Tickets)
         const useFrom =
-          range === "all"
-            ? undefined
-            : dateFrom && String(dateFrom).trim()
-              ? dateFrom
+          dateFrom && String(dateFrom).trim()
+            ? dateFrom
+            : range === "all"
+              ? undefined
               : computedFrom;
         const useTo =
-          range === "all"
-            ? undefined
-            : dateTo && String(dateTo).trim()
-              ? dateTo
+          dateTo && String(dateTo).trim()
+            ? dateTo
+            : range === "all"
+              ? undefined
               : computedTo;
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
@@ -686,9 +687,7 @@ export default function TicketCharts({
               <span className="font-medium text-gray-900">{totalAssigned}</span>
             </div>
           </div>
-          <div
-            style={{ overflowX: "auto", overflowY: "visible" }}
-          >
+          <div style={{ overflowX: "auto", overflowY: "visible" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : assigned.length === 0 ? (
@@ -742,9 +741,7 @@ export default function TicketCharts({
               </span>
             </div>
           </div>
-          <div
-            style={{ overflowX: "auto", overflowY: "visible" }}
-          >
+          <div style={{ overflowX: "auto", overflowY: "visible" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : userStatus.length === 0 ? (
@@ -769,9 +766,7 @@ export default function TicketCharts({
             </div>
           </div>
 
-          <div
-            style={{ overflowX: "auto", overflowY: "visible" }}
-          >
+          <div style={{ overflowX: "auto", overflowY: "visible" }}>
             {loading ? (
               <div className="text-sm text-gray-500">Loading…</div>
             ) : tagStatus.length === 0 ? (

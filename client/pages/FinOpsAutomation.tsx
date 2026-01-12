@@ -41,6 +41,7 @@ import { format } from "date-fns";
 import ClientBasedFinOpsTaskManager from "@/components/ClientBasedFinOpsTaskManager";
 import FinOpsNotifications from "@/components/FinOpsNotifications";
 import FinOpsActivityLog from "@/components/FinOpsActivityLog";
+import FinOpsCumulativeData from "@/components/FinOpsCumulativeData";
 
 interface AutomationTask {
   id: number;
@@ -78,8 +79,13 @@ export default function FinOpsAutomation() {
   // Add this line to define selectedTask
   const [selectedTask, setSelectedTask] = useState<AutomationTask | null>(null);
 
-  // Pulse alerts toggle (admin only)
+  // Pulse alerts toggle visibility
   const isAdmin = user?.role === "admin";
+  const isSpecificFinOpsDeptAdmin =
+    String(user?.id || "") === "226" &&
+    !!user?.department_admin &&
+    String(user?.admin_for_department || "").toLowerCase() === "finops";
+  const canSeePulseToggle = isAdmin || isSpecificFinOpsDeptAdmin;
 
   const { data: pulseAlertsEnabled = true } = useQuery({
     queryKey: ["finops-pulse-alerts"],
@@ -87,7 +93,7 @@ export default function FinOpsAutomation() {
       const response = await apiClient.get("/finops/settings/pulse-alerts");
       return response.enabled ?? true;
     },
-    enabled: isAdmin,
+    enabled: canSeePulseToggle,
     staleTime: Infinity,
   });
 
@@ -297,7 +303,7 @@ export default function FinOpsAutomation() {
         </div>
 
         <div className="flex gap-4 items-center">
-          {isAdmin && (
+          {canSeePulseToggle && (
             <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
               <span className="text-sm font-medium text-gray-700">
                 Pulse Alerts: {pulseAlertsEnabled ? "ON" : "OFF"}
@@ -356,10 +362,11 @@ export default function FinOpsAutomation() {
       )}
 
       <Tabs defaultValue="task-management" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="task-management">Task Management</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="activity-log">Activity Log</TabsTrigger>
+          <TabsTrigger value="cumulative-data">Cumulative Data</TabsTrigger>
         </TabsList>
 
         {/* Task Management Tab */}
@@ -375,6 +382,11 @@ export default function FinOpsAutomation() {
         {/* Activity Log Tab */}
         <TabsContent value="activity-log" className="space-y-6">
           <FinOpsActivityLog />
+        </TabsContent>
+
+        {/* Cumulative Data Tab */}
+        <TabsContent value="cumulative-data" className="space-y-6">
+          <FinOpsCumulativeData />
         </TabsContent>
       </Tabs>
     </div>

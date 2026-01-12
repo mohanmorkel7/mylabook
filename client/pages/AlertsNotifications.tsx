@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 // Notification icon mapping
 const getNotificationIcon = (type: string) => {
@@ -68,6 +69,7 @@ export default function AlertsNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("all");
+  const { toast } = useToast();
 
   // Fetch notifications
   const { data: notificationsData, isLoading } = useQuery({
@@ -118,6 +120,56 @@ export default function AlertsNotifications() {
     markAllAsReadMutation.mutate();
   };
 
+  const triggerSLAMutation = useMutation({
+    mutationFn: () => apiClient.triggerFinOpsSLACheck(),
+    onSuccess: async () => {
+      toast({
+        title: "SLA check triggered",
+        description: "FinOps SLA check started",
+      });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+
+      // Try to show a native system notification when running inside Electron (Windows)
+      try {
+        const title = "SLA check triggered";
+        const body = "FinOps SLA check started";
+        const notifyOpts = { title, body, silent: false };
+        // Electron preload API (exposed via contextBridge) - main process will show native notification
+        if (
+          (window as any).electronAPI &&
+          typeof (window as any).electronAPI.notify === "function"
+        ) {
+          try {
+            await (window as any).electronAPI.notify(notifyOpts);
+          } catch (e) {
+            // ignore notification errors
+          }
+        } else if ("Notification" in window) {
+          // Fallback to browser Notification API (not native Windows toast)
+          try {
+            if (Notification.permission === "granted") {
+              new Notification(title, { body });
+            } else if (Notification.permission !== "denied") {
+              const perm = await Notification.requestPermission();
+              if (perm === "granted") new Notification(title, { body });
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to trigger SLA check", description: String(err) });
+    },
+  });
+
+  const handleTriggerSLA = () => {
+    triggerSLAMutation.mutate();
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -131,6 +183,16 @@ export default function AlertsNotifications() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            onClick={handleTriggerSLA}
+            disabled={triggerSLAMutation.isLoading}
+            variant="secondary"
+          >
+            {triggerSLAMutation.isLoading ? (
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            ) : null}
+            Trigger SLA Check
+          </Button>
           <Button
             onClick={handleMarkAllAsRead}
             disabled={markAllAsReadMutation.isPending || unreadCount === 0}

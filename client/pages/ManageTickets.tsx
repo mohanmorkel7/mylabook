@@ -2415,16 +2415,31 @@ export default function ManageTickets() {
                           </Badge>
 
                           {/* Render tag badges (e.g., Slack) when present */}
-                          {Array.isArray(t.tags) && t.tags.length > 0
-                            ? t.tags.map((tg: any, idx: number) => (
-                                <Badge
-                                  key={`tag-${t.id}-${idx}`}
-                                  variant="secondary"
-                                >
-                                  {String(tg)}
-                                </Badge>
-                              ))
-                            : null}
+                          {(() => {
+                            const raw = (t as any).tags;
+                            if (Array.isArray(raw) && raw.length > 0) return raw;
+                            if (typeof raw === "string") {
+                              try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                              } catch (e) {
+                                // not JSON
+                              }
+                              const m = raw.match(/^\{(.+)\}$/);
+                              if (m && m[1]) {
+                                return m[1]
+                                  .split(",")
+                                  .map((s) => s.replace(/^\"|\"$/g, "").trim())
+                                  .filter(Boolean);
+                              }
+                              return raw ? [raw] : [];
+                            }
+                            return [];
+                          })().map((tg: any, idx: number) => (
+                            <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                              {String(tg)}
+                            </Badge>
+                          ))}
 
                           {provider && (
                             <Badge variant="outline">{provider}</Badge>
@@ -2666,16 +2681,31 @@ export default function ManageTickets() {
                           </Badge>
 
                           {/* Render tag badges (e.g., Slack) when present */}
-                          {Array.isArray(t.tags) && t.tags.length > 0
-                            ? t.tags.map((tg: any, idx: number) => (
-                                <Badge
-                                  key={`tag-${t.id}-${idx}`}
-                                  variant="secondary"
-                                >
-                                  {String(tg)}
-                                </Badge>
-                              ))
-                            : null}
+                          {(() => {
+                            const raw = (t as any).tags;
+                            if (Array.isArray(raw) && raw.length > 0) return raw;
+                            if (typeof raw === "string") {
+                              try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                              } catch (e) {
+                                // not JSON
+                              }
+                              const m = raw.match(/^\{(.+)\}$/);
+                              if (m && m[1]) {
+                                return m[1]
+                                  .split(",")
+                                  .map((s) => s.replace(/^\"|\"$/g, "").trim())
+                                  .filter(Boolean);
+                              }
+                              return raw ? [raw] : [];
+                            }
+                            return [];
+                          })().map((tg: any, idx: number) => (
+                            <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                              {String(tg)}
+                            </Badge>
+                          ))}
 
                           {provider && (
                             <Badge variant="outline">{provider}</Badge>

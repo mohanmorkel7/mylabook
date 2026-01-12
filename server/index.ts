@@ -84,6 +84,15 @@ export function createServer() {
     );
   }
 
+  // Start Slack Processing Job (background cron)
+  try {
+    setTimeout(() => {
+      initializeSlackProcessingJob();
+    }, 800);
+  } catch (e) {
+    console.error("Failed to initialize Slack Processing Job:", (e as any)?.message);
+  }
+
   // Start Overdue Ticket Job: run every 30 seconds (guarded)
   try {
     const enableOverdue =

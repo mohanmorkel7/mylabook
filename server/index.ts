@@ -90,7 +90,10 @@ export function createServer() {
       initializeSlackProcessingJob();
     }, 800);
   } catch (e) {
-    console.error("Failed to initialize Slack Processing Job:", (e as any)?.message);
+    console.error(
+      "Failed to initialize Slack Processing Job:",
+      (e as any)?.message,
+    );
   }
 
   // Start Overdue Ticket Job: run every 30 seconds (guarded)

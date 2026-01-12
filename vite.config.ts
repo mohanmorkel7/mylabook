@@ -71,9 +71,9 @@ function expressPlugin(): Plugin {
           try {
             // If request is for API or server-side paths, forward to Express app
             if (
-              req.url.startsWith('/api') ||
-              req.url.startsWith('/__api') ||
-              req.url.startsWith('/server')
+              req.url.startsWith("/api") ||
+              req.url.startsWith("/__api") ||
+              req.url.startsWith("/server")
             ) {
               return app(req, res, next);
             }

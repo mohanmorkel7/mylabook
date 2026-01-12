@@ -1977,13 +1977,20 @@ export default function ManageTickets() {
               variant="ghost"
               onClick={async () => {
                 try {
-                  const resp = await api.post('/tickets/import-slack');
+                  const resp = await api.post("/tickets/import-slack");
                   const payload = resp?.data ?? resp;
-                  toast({ title: 'Slack import started', description: `Inserted: ${payload.inserted || 0}` });
+                  toast({
+                    title: "Slack import started",
+                    description: `Inserted: ${payload.inserted || 0}`,
+                  });
                   // Refresh tickets and charts
                   fetchTickets(currentPage);
                 } catch (e: any) {
-                  toast({ title: 'Slack import failed', description: e?.message || String(e), variant: 'destructive' });
+                  toast({
+                    title: "Slack import failed",
+                    description: e?.message || String(e),
+                    variant: "destructive",
+                  });
                 }
               }}
             >

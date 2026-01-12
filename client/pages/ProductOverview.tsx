@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { apiClient } from "@/lib/api";
 import { VCDraggableStepsList } from "@/components/VCDraggableStepsList";
 import { Button } from "@/components/ui/button";
@@ -13,13 +12,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Target, Edit, ArrowLeft } from "lucide-react";
 import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   AlertDialog,
   AlertDialogTrigger,
   AlertDialogContent,
@@ -30,6 +22,16 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbSeparator,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 
 const STATUS_LABELS: Record<string, string> = {
   upcoming: "Upcoming",
@@ -52,13 +54,29 @@ function formatStatusLabel(s?: string) {
   );
 }
 
-const ProductOverview: React.FC = () => {
+export default function ProductOverview() {
   const { id } = useParams();
   const [product, setProduct] = useState<any>(null);
   const [steps, setSteps] = useState<any[]>([]);
   const [stepsLoading, setStepsLoading] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Redirect legacy paths to canonical product_dashboard detail route (but allow editing paths)
+  useEffect(() => {
+    if (!id) return;
+    try {
+      // Only redirect bare legacy detail pages, not edit or other subroutes
+      if (/^\/products\/\d+\/?$/.test(location.pathname)) {
+        navigate(`/product_dashboard/${id}`, { replace: true });
+      }
+      // preserve /product_master/:id as a valid canonical detail route — do not auto-redirect to /product_dashboard
+      // previously we redirected /product_master/:id -> /product_dashboard/:id which caused unwanted navigation
+    } catch (e) {
+      // ignore
+    }
+  }, [id, location.pathname, navigate]);
 
   const toggleStepExpansion = (stepId: number) => {
     setExpandedSteps((prev) => {
@@ -69,9 +87,74 @@ const ProductOverview: React.FC = () => {
     });
   };
 
+  // Load product (product_master preferred, fallback to workflow_projects)
   useEffect(() => {
     if (!id) return;
     const load = async () => {
+      try {
+        const pmRes = await apiClient.request<any>(`/product-master/${id}`);
+        if (pmRes && pmRes.id) {
+          const normalized: any = {
+            id: pmRes.id,
+            product_id: pmRes.product_id,
+            name: pmRes.name,
+            description: pmRes.description,
+            current_version: pmRes.current_version,
+            repository_url: pmRes.repository_url,
+            product_url: pmRes.product_url,
+            is_active: pmRes.is_active,
+            status: pmRes.status,
+            created_at: pmRes.created_at,
+            updated_at: pmRes.updated_at,
+            created_by: pmRes.created_by,
+            updated_by: pmRes.updated_by,
+            template_id: pmRes.template_id,
+            meta: pmRes,
+          };
+          setProduct(normalized);
+
+          if (normalized.template_id) {
+            try {
+              const tpl = await apiClient.getTemplate(
+                Number(normalized.template_id),
+              );
+              if (tpl && tpl.steps) {
+                setSteps(
+                  tpl.steps.map((s: any, i: number) => ({
+                    id: s.id || i + 1,
+                    name: s.name,
+                    description: s.description || null,
+                    step_name: s.name,
+                    step_description: s.description || null,
+                    probability_percent:
+                      parseFloat(s.probability_percent ?? 0) || 0,
+                    eta: s.default_eta_days
+                      ? new Date(
+                          Date.now() + s.default_eta_days * 24 * 3600 * 1000,
+                        ).toISOString()
+                      : null,
+                    status: "pending",
+                    estimated_hours: s.default_eta_days
+                      ? s.default_eta_days * 8
+                      : undefined,
+                    project_id: Number(id),
+                    isTemplate: true,
+                  })),
+                );
+              }
+            } catch (tplErr) {
+              console.debug("Failed to load template steps", tplErr);
+            }
+          } else {
+            setSteps([]);
+          }
+
+          return;
+        }
+      } catch (err) {
+        // ignore and fallback
+      }
+
       try {
         const res = await apiClient.request<any>(`/workflow/projects/${id}`);
         if (!res) return;
@@ -84,11 +167,11 @@ const ProductOverview: React.FC = () => {
           target_completion_date: res.target_completion_date,
           estimated_hours: res.estimated_hours,
           status: res.status,
+          template_id: res.template_id,
           meta: res,
         };
         const normalizedSteps = (res.steps || []).map((s: any) => ({
           id: s.id,
-          // Components expect 'name' and 'description' fields
           name: s.step_name || s.name,
           description: s.step_description || s.description || null,
           step_name: s.step_name || s.name,
@@ -103,27 +186,67 @@ const ProductOverview: React.FC = () => {
         }));
         setProduct(normalized);
         setSteps(normalizedSteps);
+
+        if ((!res.steps || res.steps.length === 0) && normalized.template_id) {
+          try {
+            const tpl = await apiClient.getTemplate(
+              Number(normalized.template_id),
+            );
+            if (tpl && tpl.steps) {
+              setSteps(
+                tpl.steps.map((s: any, i: number) => ({
+                  id: s.id || i + 1,
+                  name: s.name,
+                  description: s.description || null,
+                  step_name: s.name,
+                  step_description: s.description || null,
+                  probability_percent:
+                    parseFloat(s.probability_percent ?? 0) || 0,
+                  eta: s.default_eta_days
+                    ? new Date(
+                        Date.now() + s.default_eta_days * 24 * 3600 * 1000,
+                      ).toISOString()
+                    : null,
+                  status: "pending",
+                  estimated_hours: s.default_eta_days
+                    ? s.default_eta_days * 8
+                    : undefined,
+                  project_id: Number(id),
+                  isTemplate: true,
+                })),
+              );
+            }
+          } catch (tplErr) {
+            console.debug(
+              "Failed to load template steps for workflow project",
+              tplErr,
+            );
+          }
+        }
       } catch (e) {
         console.error(e);
       }
     };
     load();
-  }, [id]);
 
-  const formatRemaining = (eta?: string | null, createdAt?: string) => {
-    if (!eta) return "No ETA";
-    try {
-      const d = new Date(eta);
-      const now = new Date();
-      const diff = d.getTime() - now.getTime();
-      if (diff <= 0) return "Overdue";
-      const days = Math.floor(diff / (24 * 3600 * 1000));
-      const hours = Math.floor((diff % (24 * 3600 * 1000)) / 3600000);
-      return `${days} Days ${hours} Hours Remaining`;
-    } catch (e) {
-      return "Invalid ETA";
-    }
-  };
+    // Listen for product-master updates dispatched elsewhere (e.g., after edit/create)
+    const onUpdated = (ev: any) => {
+      try {
+        const detail = ev && ev.detail;
+        // If an id is present, only reload when it matches current id
+        if (detail && detail.id && String(detail.id) !== String(id)) return;
+        // Reload the product data
+        load();
+      } catch (e) {
+        // ignore
+      }
+    };
+    window.addEventListener("productMasterUpdated", onUpdated as any);
+
+    return () => {
+      window.removeEventListener("productMasterUpdated", onUpdated as any);
+    };
+  }, [id]);
 
   const completionPercentage = (() => {
     if (steps && steps.length > 0) {
@@ -136,14 +259,11 @@ const ProductOverview: React.FC = () => {
         if (s.status === "completed") totalCompletedProbability += prob;
       });
 
-      // If steps define probability weights, use them to compute progress
       if (totalStepProbability > 0) {
-        // normalize in case probabilities sum to something other than 100
         const pct = (totalCompletedProbability / totalStepProbability) * 100;
         return Math.min(100, Math.round(pct));
       }
 
-      // If the server provides a project-level progress value, prefer showing that
       if (
         product &&
         typeof product.progress === "number" &&
@@ -152,7 +272,6 @@ const ProductOverview: React.FC = () => {
         return Math.min(100, Math.round(product.progress));
       }
 
-      // Fallback to simple step-count based estimate
       const completedCount = steps.filter(
         (s: any) => s.status === "completed",
       ).length;
@@ -245,13 +364,22 @@ const ProductOverview: React.FC = () => {
   };
 
   const deleteProject = async () => {
-    if (!window.confirm("Delete this project?")) return;
+    if (!window.confirm("Delete this product?")) return;
     try {
-      await apiClient.request(`/workflow/projects/${id}`, { method: "DELETE" });
-      navigate("/product");
+      if (product && product.product_id) {
+        await apiClient.request(`/product-master/${product.id}`, {
+          method: "DELETE",
+        });
+        navigate("/product_dashboard");
+      } else {
+        await apiClient.request(`/workflow/projects/${id}`, {
+          method: "DELETE",
+        });
+        navigate("/product_dashboard");
+      }
     } catch (e) {
       console.error(e);
-      alert("Failed to delete project");
+      alert("Failed to delete product");
     }
   };
 
@@ -259,12 +387,42 @@ const ProductOverview: React.FC = () => {
 
   return (
     <div className="p-6">
+      <Breadcrumb className="mb-4">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink href="/product_dashboard">Products</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink href={`/product_dashboard/${id}`}>
+              {product.name || `#${id}`}
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>Overview</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/product")}
+            onClick={() => {
+              try {
+                queryClient.invalidateQueries({
+                  queryKey: ["workflow-projects"],
+                });
+                queryClient.invalidateQueries({ queryKey: ["product-master"] });
+              } catch (e) {}
+              // Prefer returning to the matching list route based on current path
+              const target = location.pathname.startsWith("/product_master")
+                ? "/product_master"
+                : "/product_dashboard";
+              navigate(target);
+            }}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Products
@@ -274,7 +432,9 @@ const ProductOverview: React.FC = () => {
               <h1 className="text-2xl font-bold text-gray-900">
                 {product.name}
               </h1>
-              <Badge className="text-xs">{product.id}</Badge>
+              <Badge className="text-xs">
+                {product.product_id || product.id}
+              </Badge>
               <Badge className="text-xs">
                 {formatStatusLabel(product.status)}
               </Badge>
@@ -282,14 +442,22 @@ const ProductOverview: React.FC = () => {
             <p className="text-gray-600 mt-1">Product Overview & Pipeline</p>
           </div>
         </div>
+
         <div className="flex space-x-3">
           <Button
             variant="outline"
-            onClick={() => navigate(`/products/${id}/edit`)}
+            onClick={() => {
+              // Navigate to the canonical edit path. Prefer staying under product_master when the current path is product_master
+              const editTarget = location.pathname.startsWith("/product_master")
+                ? `/product_master/${id}/edit`
+                : `/product_dashboard/${id}/edit`;
+              navigate(editTarget);
+            }}
           >
             <Edit className="w-4 h-4 mr-2" />
-            Edit Project
+            Edit Product
           </Button>
+
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive">Delete</Button>
@@ -351,7 +519,17 @@ const ProductOverview: React.FC = () => {
                   <div className="flex-1 max-w-sm">
                     <div className="w-full bg-gray-200 rounded-full h-3 relative">
                       <div
-                        className={`h-3 rounded-full transition-all duration-500 ${completionPercentage === 100 ? "bg-green-500" : completionPercentage >= 75 ? "bg-blue-500" : completionPercentage >= 50 ? "bg-yellow-500" : completionPercentage >= 25 ? "bg-orange-500" : "bg-red-500"}`}
+                        className={`h-3 rounded-full transition-all duration-500 ${
+                          completionPercentage === 100
+                            ? "bg-green-500"
+                            : completionPercentage >= 75
+                              ? "bg-blue-500"
+                              : completionPercentage >= 50
+                                ? "bg-yellow-500"
+                                : completionPercentage >= 25
+                                  ? "bg-orange-500"
+                                  : "bg-red-500"
+                        }`}
                         style={{ width: `${completionPercentage}%` }}
                       />
                     </div>
@@ -372,9 +550,102 @@ const ProductOverview: React.FC = () => {
 
           <Card>
             <CardHeader>
+              <CardTitle>Product Details</CardTitle>
+              <CardDescription>
+                Metadata and links from product_master table
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div>
+                <div className="text-xs text-gray-600">Product ID</div>
+                <div className="font-semibold text-gray-900">
+                  {product.product_id || product.id}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-gray-600">Description</div>
+                <div className="text-gray-900">
+                  {product.description || "—"}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-gray-600">Repository</div>
+                  <div className="text-gray-900">
+                    {product.repository_url ? (
+                      <a
+                        className="text-blue-600 underline"
+                        href={product.repository_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open Repository
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-600">Product Link</div>
+                  <div className="text-gray-900">
+                    {product.product_url ? (
+                      <a
+                        className="text-blue-600 underline"
+                        href={product.product_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open Product
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-600">Current Version</div>
+                  <div className="text-gray-900">
+                    {product.current_version || "-"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-600">Active</div>
+                  <div className="text-gray-900">
+                    {product.is_active ? "Yes" : "No"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col text-xs text-gray-500">
+                <div>
+                  Created:{" "}
+                  {product.created_at
+                    ? new Date(product.created_at).toLocaleString()
+                    : "-"}{" "}
+                  by {product.created_by || "-"}
+                </div>
+                <div>
+                  Updated:{" "}
+                  {product.updated_at
+                    ? new Date(product.updated_at).toLocaleString()
+                    : "-"}{" "}
+                  by {product.updated_by || "-"}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Product Pipeline</CardTitle>
+                  <CardTitle>{`${product.name || "Product"} Pipeline`}</CardTitle>
                   <CardDescription>Manage steps and team chat</CardDescription>
                 </div>
               </div>
@@ -389,10 +660,10 @@ const ProductOverview: React.FC = () => {
                 <div className="text-center py-8 text-gray-500">
                   <Target className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No steps yet
+                    No pipeline steps yet
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    Create steps to track your product development process.
+                    Create steps to track your product's progress.
                   </p>
                 </div>
               ) : (
@@ -400,9 +671,7 @@ const ProductOverview: React.FC = () => {
                   vcId={Number(id)}
                   steps={steps}
                   expandedSteps={expandedSteps}
-                  onToggleExpansion={(stepId: number) =>
-                    toggleStepExpansion(stepId)
-                  }
+                  onToggleExpansion={toggleStepExpansion}
                   onDeleteStep={handleDeleteStep}
                   onReorderSteps={handleReorderSteps}
                   updateStepStatus={updateStepStatus}
@@ -416,106 +685,42 @@ const ProductOverview: React.FC = () => {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Project Details</CardTitle>
-              <CardDescription>Primary details and owners</CardDescription>
+              <CardTitle>Product Metadata</CardTitle>
+              <CardDescription>Primary metadata and links</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Manager</span>
-                  <span className="text-gray-900">
-                    {product.project_manager_id || "-"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Status</span>
-                  <div>
-                    <Select
-                      value={product?.status}
-                      onValueChange={async (value: string) => {
-                        if (!product) return;
-                        const prev = product.status;
-                        setProduct((p: any) => ({ ...p, status: value }));
-                        try {
-                          // Update workflow project status directly so workflow_projects is the source of truth
-                          await apiClient.request(
-                            `/workflow/projects/${product.id}`,
-                            {
-                              method: "PATCH",
-                              body: JSON.stringify({ status: value }),
-                            },
-                          );
-
-                          // Refresh product details from workflow project to reflect any server-side normalization
-                          const refreshed = await apiClient.getWorkflowProject(
-                            product.id,
-                          );
-                          if (refreshed) {
-                            setProduct((p: any) => ({
-                              ...p,
-                              status: refreshed.status,
-                            }));
-                            // also update steps if available
-                            if (Array.isArray(refreshed.steps)) {
-                              setSteps(
-                                refreshed.steps.map((s: any) => ({
-                                  id: s.id,
-                                  name: s.step_name || s.name,
-                                  description:
-                                    s.step_description || s.description || null,
-                                  step_name: s.step_name || s.name,
-                                  step_description:
-                                    s.step_description || s.description || null,
-                                  probability_percent:
-                                    parseFloat(
-                                      s.probability ??
-                                        s.probability_percent ??
-                                        0,
-                                    ) || 0,
-                                  eta: s.eta || s.due_date,
-                                  status: s.status,
-                                  estimated_hours: s.estimated_hours,
-                                  project_id: s.project_id || Number(id),
-                                  isTemplate:
-                                    !!s.is_template || !!s.isTemplate || false,
-                                })),
-                              );
-                            }
-                          }
-                        } catch (err) {
-                          console.error("Failed to update project status", err);
-                          setProduct((p: any) => ({ ...p, status: prev }));
-                          alert("Failed to update status");
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-40 h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="upcoming">Upcoming</SelectItem>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="review">Review</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="delayed">Delayed</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
+                {product.name && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Name</span>
+                    <span className="text-gray-900">{product.name}</span>
                   </div>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Target</span>
-                  <span className="text-gray-900">
-                    {product.target_completion_date || "-"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Estimated Hours</span>
-                  <span className="text-gray-900">
-                    {product.estimated_hours || "-"}
-                  </span>
-                </div>
+                )}
+
+                {product.description && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Description</span>
+                    <span className="text-gray-900">{product.description}</span>
+                  </div>
+                )}
+
+                {product.project_manager_id && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Owner</span>
+                    <span className="text-gray-900">
+                      {product.project_manager_id}
+                    </span>
+                  </div>
+                )}
+
+                {product.target_completion_date && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Target</span>
+                    <span className="text-gray-900">
+                      {product.target_completion_date}
+                    </span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -523,6 +728,4 @@ const ProductOverview: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default ProductOverview;
+}

@@ -9,9 +9,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, X } from "lucide-react";
 
+interface OptionItem {
+  label: string;
+  value: string;
+}
+
 interface MultiSelectProps {
-  options: string[];
-  value: string[];
+  // Accept either simple string options or { label, value } objects for compatibility
+  options: Array<string | OptionItem>;
+  value: string[]; // array of option.value strings
   onChange: (value: string[]) => void;
   placeholder?: string;
   className?: string;
@@ -26,16 +32,21 @@ export function MultiSelect({
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
 
-  const handleToggle = (option: string) => {
-    if (value.includes(option)) {
-      onChange(value.filter((item) => item !== option));
+  // Normalize options into { label, value } items
+  const normalizedOptions: OptionItem[] = options.map((opt) =>
+    typeof opt === "string" ? { label: opt, value: opt } : (opt as OptionItem),
+  );
+
+  const handleToggle = (optionValue: string) => {
+    if (value.includes(optionValue)) {
+      onChange(value.filter((item) => item !== optionValue));
     } else {
-      onChange([...value, option]);
+      onChange([...value, optionValue]);
     }
   };
 
-  const handleRemove = (option: string) => {
-    onChange(value.filter((item) => item !== option));
+  const handleRemove = (optionValue: string) => {
+    onChange(value.filter((item) => item !== optionValue));
   };
 
   return (
@@ -52,20 +63,25 @@ export function MultiSelect({
               {value.length === 0 ? (
                 <span className="text-gray-500">{placeholder}</span>
               ) : (
-                value.map((item) => (
-                  <Badge
-                    key={item}
-                    variant="secondary"
-                    className="text-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemove(item);
-                    }}
-                  >
-                    {item}
-                    <X className="ml-1 h-3 w-3 cursor-pointer" />
-                  </Badge>
-                ))
+                // show labels for selected values
+                value.map((val) => {
+                  const found = normalizedOptions.find((o) => o.value === val);
+                  const label = found ? found.label : val;
+                  return (
+                    <Badge
+                      key={val}
+                      variant="secondary"
+                      className="text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemove(val);
+                      }}
+                    >
+                      {label}
+                      <X className="ml-1 h-3 w-3 cursor-pointer" />
+                    </Badge>
+                  );
+                })
               )}
             </div>
             <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -96,18 +112,27 @@ export function MultiSelect({
             />
           </div>
           <div className="max-h-60 overflow-auto">
-            {options.map((option) => (
+            {normalizedOptions.map((option) => (
               <div
-                key={option}
-                data-option={option}
+                key={option.value}
+                data-option={option.label}
                 className="flex items-center space-x-2 p-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => handleToggle(option)}
               >
                 <Checkbox
-                  checked={value.includes(option)}
-                  onChange={() => handleToggle(option)}
+                  checked={value.includes(option.value)}
+                  onCheckedChange={() => {
+                    handleToggle(option.value);
+                  }}
                 />
-                <span className="text-sm">{option}</span>
+                <span
+                  className="text-sm"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    handleToggle(option.value);
+                  }}
+                >
+                  {option.label}
+                </span>
               </div>
             ))}
           </div>

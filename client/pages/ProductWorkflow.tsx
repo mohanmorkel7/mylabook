@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 
@@ -24,6 +24,7 @@ function formatStatusLabel(s?: string) {
 import { useAuth } from "@/lib/auth-context";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +51,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Plus,
@@ -112,7 +114,8 @@ function CreateProjectFromLeadDialog({
   isOpen,
   onClose,
   onSuccess,
-}: CreateProjectFromLeadDialogProps) {
+  isProductCreation = false,
+}: CreateProjectFromLeadDialogProps & { isProductCreation?: boolean }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -123,25 +126,84 @@ function CreateProjectFromLeadDialog({
     return date.toISOString().slice(0, 10);
   };
 
-  const [projectData, setProjectData] = useState<any>(() => ({
-    name: lead
-      ? `${lead.client_name} - ${lead.project_title}`
-      : project?.name || "",
-    description: lead
-      ? `Product development project for ${lead.client_name}`
-      : project?.description || "",
-    assigned_team: project?.assigned_team || "Product Team",
-    project_manager_id: project?.project_manager_id
-      ? String(project.project_manager_id)
-      : "",
-    target_completion_date: project?.target_completion_date
-      ? formatToDateInput(project.target_completion_date)
-      : "",
-    estimated_hours: project?.estimated_hours
-      ? String(project.estimated_hours)
-      : "",
-    template_id: project?.template_id ? String(project.template_id) : "",
-  }));
+  const [projectData, setProjectData] = useState<any>(() => {
+    if (isProductCreation) {
+      return {
+        // Product fields
+        name: project?.name || "",
+        product_id: project?.product_id || "",
+        description: project?.description || "",
+        current_version: project?.current_version || "",
+        repository_url: project?.repository_url || "",
+        product_url: project?.product_url || "",
+        is_active:
+          project?.is_active === undefined ? true : !!project?.is_active,
+        status: project?.status || "pending",
+      };
+    }
+
+    return {
+      name: lead
+        ? `${lead.client_name} - ${lead.project_title}`
+        : project?.name || "",
+      description: lead
+        ? `Product development project for ${lead.client_name}`
+        : project?.description || "",
+      assigned_team: project?.assigned_team || "Product Team",
+      project_manager_id: project?.project_manager_id
+        ? String(project.project_manager_id)
+        : "",
+      target_completion_date: project?.target_completion_date
+        ? formatToDateInput(project.target_completion_date)
+        : "",
+      estimated_hours: project?.estimated_hours
+        ? String(project.estimated_hours)
+        : "",
+      template_id: project?.template_id ? String(project.template_id) : "",
+      // new field: product_master_ids as array of ids
+      product_master_ids: (() => {
+        const val = project?.product_master_ids;
+        if (val == null) return [];
+        if (Array.isArray(val))
+          return val
+            .map((item: any) =>
+              typeof item === "object"
+                ? String(item.id ?? item.value ?? item)
+                : String(item),
+            )
+            .filter(Boolean);
+        if (typeof val === "string") {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed))
+              return parsed.map((p: any) =>
+                String(typeof p === "object" ? (p.id ?? p.value ?? p) : p),
+              );
+          } catch (e) {
+            // not JSON
+          }
+          const s = val.trim();
+          if (s.startsWith("{") && s.endsWith("}")) {
+            const inner = s.slice(1, -1);
+            if (inner === "") return [];
+            return inner
+              .split(",")
+              .map((p) => p.trim())
+              .filter(Boolean)
+              .map((p) => String(p));
+          }
+          if (s.includes(","))
+            return s
+              .split(",")
+              .map((p) => p.trim())
+              .filter(Boolean)
+              .map((p) => String(p));
+          return [s];
+        }
+        return [String(val)];
+      })(),
+    };
+  });
 
   const [steps, setSteps] = useState<ProjectStep[]>(() => {
     if (project?.steps && Array.isArray(project.steps)) {
@@ -165,10 +227,69 @@ function CreateProjectFromLeadDialog({
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [templateChangedByUser, setTemplateChangedByUser] = useState(false);
 
+  // Simple hydration: ensure core project fields populate when `project` prop is set (helps route-open flow)
+  useEffect(() => {
+    try {
+      if (!project) return;
+      setProjectData((prev: any) => {
+        const normPm = Array.isArray(project.product_master_ids)
+          ? project.product_master_ids.map((p: any) =>
+              typeof p === "object" ? String(p.id ?? p.value ?? p) : String(p),
+            )
+          : typeof project.product_master_ids === "string"
+            ? (function (s: string) {
+                try {
+                  const parsed = JSON.parse(s);
+                  if (Array.isArray(parsed))
+                    return parsed.map((x: any) => String(x));
+                } catch (e) {}
+                return s;
+              })(project.product_master_ids)
+            : [];
+
+        return {
+          ...prev,
+          name: project.name || prev.name || "",
+          assigned_team: project.assigned_team || prev.assigned_team || "",
+          description: project.description || prev.description || "",
+          project_manager_id: project.project_manager_id
+            ? String(project.project_manager_id)
+            : prev.project_manager_id || "",
+          target_completion_date: project.target_completion_date
+            ? new Date(project.target_completion_date)
+                .toISOString()
+                .slice(0, 10)
+            : prev.target_completion_date || "",
+          estimated_hours: project.estimated_hours
+            ? String(project.estimated_hours)
+            : prev.estimated_hours || "",
+          template_id: project.template_id
+            ? String(project.template_id)
+            : prev.template_id || "",
+          product_master_ids: Array.isArray(normPm)
+            ? normPm
+            : Array.isArray(prev.product_master_ids)
+              ? prev.product_master_ids
+              : [],
+        };
+      });
+    } catch (e) {
+      console.debug("Hydration helper failed", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
+
   // Fetch available templates
   const { data: allTemplates = [] } = useQuery({
     queryKey: ["templates"],
     queryFn: () => apiClient.getTemplates(),
+    enabled: isOpen,
+  });
+
+  // Fetch product_master list for multi-select
+  const { data: productMasters = [] } = useQuery({
+    queryKey: ["product-master"],
+    queryFn: () => apiClient.request("/product-master"),
     enabled: isOpen,
   });
 
@@ -195,6 +316,49 @@ function CreateProjectFromLeadDialog({
     if (exists) return templates;
     return [selectedTemplate, ...templates];
   })();
+
+  // If templates have loaded after projectData was set, ensure selectedTemplate is hydrated
+  useEffect(() => {
+    if (!isOpen) return;
+    if (projectData.template_id && !selectedTemplate && templates.length > 0) {
+      const found = templates.find(
+        (t: any) => String(t.id) === String(projectData.template_id),
+      );
+      if (found) setSelectedTemplate(found);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates.length, isOpen, projectData.template_id]);
+
+  // When productMasters load, ensure projectData.product_master_ids are strings and match available options
+  useEffect(() => {
+    if (!isOpen) return;
+    // If user already interacted with the multiselect, don't auto-normalize to
+    // avoid clobbering their choice while the modal is open.
+    if (productMastersTouchedRef.current) return;
+
+    if (
+      (projectData.product_master_ids || []).length > 0 &&
+      (productMasters || []).length > 0
+    ) {
+      const normalized = (projectData.product_master_ids || []).map((id: any) =>
+        String(id),
+      );
+      // Only set if different to avoid rerender loops
+      const same =
+        normalized.length === (projectData.product_master_ids || []).length &&
+        normalized.every(
+          (v: any, i: number) =>
+            String((projectData.product_master_ids || [])[i]) === v,
+        );
+      if (!same) {
+        setProjectData((prev: any) => ({
+          ...prev,
+          product_master_ids: normalized,
+        }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productMasters.length, isOpen]);
 
   // Fetch template steps when template is selected
   const { data: templateSteps = [] } = useQuery({
@@ -223,24 +387,151 @@ function CreateProjectFromLeadDialog({
       (pm.email || "").toLowerCase().includes(pmQuery.toLowerCase()),
   );
 
+  // Track if user interacted with the product master multiselect to avoid
+  // effects overwriting their selection while the modal is open.
+  const productMastersTouchedRef = useRef(false);
+
   // If editing an existing project, sync internal state when project prop changes
   useEffect(() => {
-    if (!project) return;
-    setProjectData({
-      name: project.name || "",
-      description: project.description || "",
-      assigned_team: project.assigned_team || "Product Team",
-      project_manager_id: project.project_manager_id
-        ? String(project.project_manager_id)
-        : "",
-      target_completion_date: project.target_completion_date
-        ? formatToDateInput(project.target_completion_date)
-        : "",
-      estimated_hours: project.estimated_hours
-        ? String(project.estimated_hours)
-        : "",
-      template_id: project.template_id ? String(project.template_id) : "",
+    console.debug("CreateProjectFromLeadDialog hydrate attempt", {
+      project,
+      isOpen,
     });
+    if (!project) return;
+
+    const normalizeTemplateId = (val: any) => {
+      if (val == null) return "";
+      if (typeof val === "object") return String(val.id ?? val.value ?? "");
+      return String(val);
+    };
+
+    const normalizeProductMasterIds = (val: any) => {
+      if (val == null) return [];
+      // Already an array
+      if (Array.isArray(val)) {
+        return val
+          .map((item: any) => {
+            if (item == null) return null;
+            if (typeof item === "object")
+              return String(item.id ?? item.value ?? item);
+            return String(item);
+          })
+          .filter((x: any) => x !== null);
+      }
+
+      // String shapes: JSON array, Postgres array '{1,2}', or comma separated
+      if (typeof val === "string") {
+        const s = val.trim();
+        // JSON
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed))
+            return parsed.map((p: any) =>
+              String(typeof p === "object" ? (p.id ?? p.value ?? p) : p),
+            );
+        } catch (e) {
+          // not JSON
+        }
+        // Postgres array style: {1,2}
+        if (s.startsWith("{") && s.endsWith("}")) {
+          const inner = s.slice(1, -1);
+          if (inner === "") return [];
+          return inner
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .map((p) => String(p));
+        }
+        // comma separated
+        if (s.includes(",")) {
+          return s
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .map((p) => String(p));
+        }
+        // single value
+        return [s];
+      }
+
+      // number or other scalar
+      return [String(val)];
+    };
+
+    const normalizedTemplateId = normalizeTemplateId(project.template_id);
+    const normalizedProductMasterIds = normalizeProductMasterIds(
+      project.product_master_ids,
+    );
+
+    setProjectData((prev: any) => {
+      // Only update if different to avoid extra renders
+      const prevPm = Array.isArray(prev.product_master_ids)
+        ? prev.product_master_ids.map(String)
+        : [];
+      const samePm =
+        normalizedProductMasterIds.length === prevPm.length &&
+        normalizedProductMasterIds.every(
+          (v: any, i: number) => String(prevPm[i]) === String(v),
+        );
+      const sameTemplate =
+        String(prev.template_id || "") === String(normalizedTemplateId);
+      if (samePm && sameTemplate) return prev;
+
+      return {
+        name: project.name || "",
+        description: project.description || "",
+        assigned_team: project.assigned_team || "Product Team",
+        project_manager_id: project.project_manager_id
+          ? String(project.project_manager_id)
+          : "",
+        target_completion_date: project.target_completion_date
+          ? formatToDateInput(project.target_completion_date)
+          : "",
+        estimated_hours: project.estimated_hours
+          ? String(project.estimated_hours)
+          : "",
+        template_id: normalizedTemplateId,
+        // preserve product_master relations when editing
+        product_master_ids: normalizedProductMasterIds,
+      };
+    });
+
+    // Ensure selectedTemplate is set so Select shows the selected value
+    (async () => {
+      try {
+        if (normalizedTemplateId) {
+          const found = templates.find(
+            (t: any) => String(t.id) === String(normalizedTemplateId),
+          );
+          if (found) setSelectedTemplate(found);
+          else {
+            try {
+              const tpl = await apiClient.getTemplate(
+                Number(normalizedTemplateId),
+              );
+              if (tpl) setSelectedTemplate(tpl);
+            } catch (err) {
+              // ignore
+            }
+          }
+        }
+
+        // Refresh product-master options only if they're not already cached to avoid refetch loops
+        try {
+          const existing = queryClient.getQueryData(["product-master"]);
+          if (!existing) {
+            await queryClient.refetchQueries({ queryKey: ["product-master"] });
+          }
+        } catch (e) {
+          // ignore
+        }
+      } catch (e) {
+        console.debug(
+          "Failed to hydrate template/product-master for edit dialog",
+          e,
+        );
+      }
+    })();
 
     if (Array.isArray(project.steps) && project.steps.length > 0) {
       setSteps(
@@ -260,7 +551,23 @@ function CreateProjectFromLeadDialog({
         })),
       );
     }
-  }, [project]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, templates, queryClient]);
+
+  // If editing a product_master record in product-creation mode, sync product-specific fields
+  useEffect(() => {
+    if (!project || !isProductCreation) return;
+    setProjectData({
+      name: project.name || "",
+      product_id: project.product_id || "",
+      description: project.description || "",
+      current_version: project.current_version || "",
+      repository_url: project.repository_url || "",
+      product_url: project.product_url || "",
+      is_active: project.is_active === undefined ? true : !!project.is_active,
+      status: project.status || "pending",
+    });
+  }, [project, isProductCreation]);
 
   // If templates are loaded and a project has template_id, set selectedTemplate
   useEffect(() => {
@@ -446,8 +753,64 @@ function CreateProjectFromLeadDialog({
     },
   });
 
+  // Mutation for creating/updating product_master records
+  const createProductMutation = useMutation({
+    mutationFn: (data: any) => {
+      if (project && project.id) {
+        return apiClient.request(`/product-master/${project.id}`, {
+          method: "PUT",
+          body: JSON.stringify(data),
+        });
+      }
+      return apiClient.request(`/product-master`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["product-master"] });
+      // Also refresh workflow projects so dashboard reflects product edits immediately
+      queryClient.invalidateQueries({ queryKey: ["workflow-projects"] });
+      try {
+        const updatedId =
+          (result && (result.id || result.data?.id)) || (project && project.id);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("productMasterUpdated", {
+              detail: { id: updatedId },
+            }),
+          );
+        }
+      } catch (e) {
+        console.warn("Failed to emit productMasterUpdated event", e);
+      }
+      onSuccess();
+      onClose();
+    },
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isProductCreation) {
+      const submitData: any = {
+        name: projectData.name,
+        description: projectData.description || null,
+        current_version: projectData.current_version || null,
+        repository_url: projectData.repository_url || null,
+        product_url: projectData.product_url || null,
+        is_active:
+          projectData.is_active === undefined ? true : !!projectData.is_active,
+        status: projectData.status || "pending",
+        created_by: parseInt(user?.id || "1"),
+      };
+
+      // If editing existing product, do not send created_by
+      if (project && project.id) delete submitData.created_by;
+
+      createProductMutation.mutate(submitData);
+      return;
+    }
 
     const submitData: any = {
       ...projectData,
@@ -543,421 +906,579 @@ function CreateProjectFromLeadDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {project && project.id
-              ? "Edit Product Project"
-              : lead
-                ? "Create Product Project from Lead"
-                : "Create Product Project"}
+            {isProductCreation
+              ? project && project.id
+                ? "Edit Product"
+                : "Create Product"
+              : project && project.id
+                ? "Edit Product Project"
+                : lead
+                  ? "Create Product Project from Lead"
+                  : "Create Product Project"}
           </DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Lead Information Summary */}
-          {lead ? (
+          {isProductCreation && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Lead Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <strong>Client:</strong> {lead.client_name}
-                  </div>
-                  <div>
-                    <strong>Project:</strong> {lead.project_title}
-                  </div>
-                  <div>
-                    <strong>Completed:</strong>{" "}
-                    {lead.completion_date &&
-                      format(new Date(lead.completion_date), "MMM d, yyyy")}
-                  </div>
-                  <div>
-                    <strong>Lead Steps:</strong> {lead.completed_steps}/
-                    {lead.total_steps}
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <strong>Description:</strong>
-                  <p className="text-gray-600">{lead.project_description}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Lead Information</CardTitle>
+                <CardTitle className="text-lg">Product Details</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-sm text-gray-600">
-                  No lead selected. You can proceed to create a project without
-                  a lead or select a completed lead from the list.
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Product Name *</Label>
+                    <Input
+                      value={projectData.name}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Product ID</Label>
+                    <Input
+                      value={projectData.product_id || ""}
+                      disabled
+                      placeholder="Auto-generated after create (e.g. MYLA-PRD-001)"
+                    />
+                  </div>
+                  <div>
+                    <Label>Current Version</Label>
+                    <Input
+                      value={projectData.current_version || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          current_version: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Repository URL</Label>
+                    <Input
+                      value={projectData.repository_url || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          repository_url: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Product URL</Label>
+                    <Input
+                      value={projectData.product_url || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          product_url: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Status</Label>
+                    <Select
+                      value={projectData.status || "pending"}
+                      onValueChange={(v) =>
+                        setProjectData((prev: any) => ({ ...prev, status: v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="inprogress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div>
+                      <Label className="text-sm font-medium">Active</Label>
+                      <div className="mt-1">
+                        <Switch
+                          checked={Boolean(projectData.is_active !== false)}
+                          onCheckedChange={(v: any) =>
+                            setProjectData((prev: any) => ({
+                              ...prev,
+                              is_active: !!v,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Description</Label>
+                    <Textarea
+                      value={projectData.description || ""}
+                      onChange={(e) =>
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
-
-          {/* Project Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Project Configuration</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Project Name *</Label>
-                  <Input
-                    id="name"
-                    value={projectData.name}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        name: e.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="assigned_team">Assigned Team *</Label>
-                  <Select
-                    value={projectData.assigned_team}
-                    onValueChange={(value) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        assigned_team: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map((team) => (
-                        <SelectItem key={team} value={team}>
-                          {team}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="description">Project Description</Label>
-                <Textarea
-                  id="description"
-                  value={projectData.description}
-                  onChange={(e) =>
-                    setProjectData((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="template">Project Template</Label>
-                <Select
-                  value={projectData.template_id || "none"}
-                  onValueChange={handleTemplateSelect}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a template (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      Manual Steps (Create Custom)
-                    </SelectItem>
-                    {availableTemplates.length > 0 ? (
-                      availableTemplates.map((template: any) => (
-                        <SelectItem
-                          key={template.id}
-                          value={template.id.toString()}
-                        >
-                          {template.name}
-                          {template.description && (
-                            <span className="text-sm text-gray-500 block">
-                              {template.description}
-                            </span>
-                          )}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="loading" disabled>
-                        {allTemplates.length === 0
-                          ? "Loading templates..."
-                          : "No product templates available"}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-                {selectedTemplate && (
-                  <div className="mt-2 p-3 bg-blue-50 rounded-lg">
-                    <div className="text-sm font-medium text-blue-900">
-                      {selectedTemplate.name}
-                    </div>
-                    {selectedTemplate.description && (
-                      <div className="text-sm text-blue-700 mt-1">
-                        {selectedTemplate.description}
-                      </div>
-                    )}
-                    <div className="text-xs text-blue-600 mt-1">
-                      This will load {templateSteps?.steps?.length || 0}{" "}
-                      pre-defined steps
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="project_manager">Project Manager</Label>
-                  <Select
-                    value={projectData.project_manager_id}
-                    onValueChange={(value) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        project_manager_id: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select PM" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="p-2">
-                        <Input
-                          placeholder="Search users..."
-                          value={pmQuery}
-                          onChange={(e) => setPmQuery(e.target.value)}
-                          className="mb-2"
-                        />
-                      </div>
-                      {filteredPMs.length > 0 ? (
-                        filteredPMs.map((pm) => (
-                          <SelectItem key={pm.id} value={pm.id.toString()}>
-                            <div className="flex flex-col">
-                              <span>{pm.name}</span>
-                              <span className="text-xs text-gray-500">
-                                {pm.email}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="none" disabled>
-                          No users found
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="target_completion_date">
-                    Target Completion Date
-                  </Label>
-                  <Input
-                    id="target_completion_date"
-                    type="date"
-                    value={projectData.target_completion_date}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        target_completion_date: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="estimated_hours">Estimated Hours</Label>
-                  <Input
-                    id="estimated_hours"
-                    type="number"
-                    value={projectData.estimated_hours}
-                    onChange={(e) =>
-                      setProjectData((prev) => ({
-                        ...prev,
-                        estimated_hours: e.target.value,
-                      }))
-                    }
-                    placeholder="Total project hours"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Project Steps */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg">Project Steps</CardTitle>
-                <div className="flex items-center gap-3">
-                  <div className="text-sm text-gray-600">
-                    Total Probability:{" "}
-                    <span className="font-medium text-gray-900">
-                      {formattedTotalProbability}%
-                    </span>
-                    {probabilityInvalid && (
-                      <span className="ml-3 text-sm text-red-600">
-                        Total must equal 100%
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addStep}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Step
-                  </Button>
-                </div>
-              </div>
-              <CardDescription>
-                Define the specific steps for this product development project
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {steps.map((step, index) => (
-                <Card key={index} className="border-l-4 border-l-blue-500">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">Step {step.step_order}</Badge>
-                        <div className="text-sm text-gray-600">
-                          {step.probability_percent ?? 0}%
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveStep(index, "up")}
-                          disabled={index === 0}
-                        >
-                          <ArrowUp className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveStep(index, "down")}
-                          disabled={index === steps.length - 1}
-                        >
-                          <ArrowDown className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeStep(index)}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
+          {!isProductCreation && (
+            <>
+              {/* Lead Information Summary */}
+              {lead ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Lead Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <Label>Step Name *</Label>
-                        <Input
-                          value={step.step_name}
-                          onChange={(e) =>
-                            updateStep(index, "step_name", e.target.value)
-                          }
-                          placeholder="Enter step name"
-                          required
-                        />
+                        <strong>Client:</strong> {lead.client_name}
                       </div>
-
                       <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={step.step_description}
-                          onChange={(e) =>
-                            updateStep(
-                              index,
-                              "step_description",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Describe what needs to be done in this step"
-                          rows={2}
-                        />
+                        <strong>Project:</strong> {lead.project_title}
                       </div>
-
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <Label>Estimated Hours</Label>
-                          <Input
-                            type="number"
-                            value={step.estimated_hours || ""}
-                            onChange={(e) =>
-                              updateStep(
-                                index,
-                                "estimated_hours",
-                                e.target.value
-                                  ? parseInt(e.target.value)
-                                  : undefined,
-                              )
-                            }
-                            placeholder="Hours"
-                          />
-                        </div>
-                        <div>
-                          <Label>Due Date</Label>
-                          <Input
-                            type="date"
-                            value={step.due_date || ""}
-                            onChange={(e) =>
-                              updateStep(index, "due_date", e.target.value)
-                            }
-                          />
-                        </div>
-                        <div>
-                          <Label>Probability (%)</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={String(step.probability_percent ?? 0)}
-                            onChange={(e) =>
-                              updateStep(
-                                index,
-                                "probability_percent",
-                                e.target.value ? parseFloat(e.target.value) : 0,
-                              )
-                            }
-                          />
-                        </div>
+                      <div>
+                        <strong>Completed:</strong>{" "}
+                        {lead.completion_date &&
+                          format(new Date(lead.completion_date), "MMM d, yyyy")}
                       </div>
+                      <div>
+                        <strong>Lead Steps:</strong> {lead.completed_steps}/
+                        {lead.total_steps}
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <strong>Description:</strong>
+                      <p className="text-gray-600">
+                        {lead.project_description}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-
-              {steps.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Target className="w-12 h-12 mx-auto mb-2" />
-                  <p>
-                    No steps defined yet. Add steps to structure your project.
-                  </p>
-                </div>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Lead Information</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm text-gray-600">
+                      No lead selected. You can proceed to create a project
+                      without a lead or select a completed lead from the list.
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
 
+              {/* Project Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    Project Configuration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Project Name *</Label>
+                      <Input
+                        id="name"
+                        value={projectData.name}
+                        onChange={(e) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            name: e.target.value,
+                          }))
+                        }
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="assigned_team">Assigned Team *</Label>
+                      <Select
+                        value={projectData.assigned_team}
+                        onValueChange={(value) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            assigned_team: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teams.map((team) => (
+                            <SelectItem key={team} value={team}>
+                              {team}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="description">Project Description</Label>
+                    <Textarea
+                      id="description"
+                      value={projectData.description}
+                      onChange={(e) =>
+                        setProjectData((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="template">Project Template</Label>
+                    <Select
+                      value={projectData.template_id || "none"}
+                      onValueChange={handleTemplateSelect}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a template (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          Manual Steps (Create Custom)
+                        </SelectItem>
+                        {availableTemplates.length > 0 ? (
+                          availableTemplates.map((template: any) => (
+                            <SelectItem
+                              key={template.id}
+                              value={template.id.toString()}
+                            >
+                              {template.name}
+                              {template.description && (
+                                <span className="text-sm text-gray-500 block">
+                                  {template.description}
+                                </span>
+                              )}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="loading" disabled>
+                            {allTemplates.length === 0
+                              ? "Loading templates..."
+                              : "No product templates available"}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {selectedTemplate && (
+                      <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                        <div className="text-sm font-medium text-blue-900">
+                          {selectedTemplate.name}
+                        </div>
+                        {selectedTemplate.description && (
+                          <div className="text-sm text-blue-700 mt-1">
+                            {selectedTemplate.description}
+                          </div>
+                        )}
+                        <div className="text-xs text-blue-600 mt-1">
+                          This will load {templateSteps?.steps?.length || 0}{" "}
+                          pre-defined steps
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="project_manager">Project Manager</Label>
+                      <Select
+                        value={projectData.project_manager_id}
+                        onValueChange={(value) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            project_manager_id: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select PM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="p-2">
+                            <Input
+                              placeholder="Search users..."
+                              value={pmQuery}
+                              onChange={(e) => setPmQuery(e.target.value)}
+                              className="mb-2"
+                            />
+                          </div>
+                          {filteredPMs.length > 0 ? (
+                            filteredPMs.map((pm) => (
+                              <SelectItem key={pm.id} value={pm.id.toString()}>
+                                <div className="flex flex-col">
+                                  <span>{pm.name}</span>
+                                  <span className="text-xs text-gray-500">
+                                    {pm.email}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>
+                              No users found
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="target_completion_date">
+                        Target Completion Date
+                      </Label>
+                      <Input
+                        id="target_completion_date"
+                        type="date"
+                        value={projectData.target_completion_date}
+                        onChange={(e) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            target_completion_date: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="estimated_hours">Estimated Hours</Label>
+                      <Input
+                        id="estimated_hours"
+                        type="number"
+                        value={projectData.estimated_hours}
+                        onChange={(e) =>
+                          setProjectData((prev) => ({
+                            ...prev,
+                            estimated_hours: e.target.value,
+                          }))
+                        }
+                        placeholder="Total project hours"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>Related Products (from Product Master)</Label>
+                    <MultiSelect
+                      options={(productMasters || []).map((p: any) => ({
+                        label: p.name,
+                        value: String(p.id),
+                      }))}
+                      value={(
+                        (projectData.product_master_ids || []) as any
+                      ).map(String)}
+                      onChange={(vals) => {
+                        console.debug("MultiSelect change", {
+                          vals,
+                          current: projectData.product_master_ids,
+                          optionsCount: (productMasters || []).length,
+                        });
+                        productMastersTouchedRef.current = true;
+                        setProjectData((prev: any) => ({
+                          ...prev,
+                          product_master_ids: vals.map(String),
+                        }));
+                      }}
+                      placeholder="Search and select products..."
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Project Steps */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg">Project Steps</CardTitle>
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm text-gray-600">
+                        Total Probability:{" "}
+                        <span className="font-medium text-gray-900">
+                          {formattedTotalProbability}%
+                        </span>
+                        {probabilityInvalid && (
+                          <span className="ml-3 text-sm text-red-600">
+                            Total must equal 100%
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addStep}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Step
+                      </Button>
+                    </div>
+                  </div>
+                  <CardDescription>
+                    Define the specific steps for this product development
+                    project
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {steps.map((step, index) => (
+                    <Card key={index} className="border-l-4 border-l-blue-500">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">
+                              Step {step.step_order}
+                            </Badge>
+                            <div className="text-sm text-gray-600">
+                              {step.probability_percent ?? 0}%
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => moveStep(index, "up")}
+                              disabled={index === 0}
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => moveStep(index, "down")}
+                              disabled={index === steps.length - 1}
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeStep(index)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div>
+                            <Label>Step Name *</Label>
+                            <Input
+                              value={step.step_name}
+                              onChange={(e) =>
+                                updateStep(index, "step_name", e.target.value)
+                              }
+                              placeholder="Enter step name"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <Label>Description</Label>
+                            <Textarea
+                              value={step.step_description}
+                              onChange={(e) =>
+                                updateStep(
+                                  index,
+                                  "step_description",
+                                  e.target.value,
+                                )
+                              }
+                              placeholder="Describe what needs to be done in this step"
+                              rows={2}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <Label>Estimated Hours</Label>
+                              <Input
+                                type="number"
+                                value={step.estimated_hours || ""}
+                                onChange={(e) =>
+                                  updateStep(
+                                    index,
+                                    "estimated_hours",
+                                    e.target.value
+                                      ? parseInt(e.target.value)
+                                      : undefined,
+                                  )
+                                }
+                                placeholder="Hours"
+                              />
+                            </div>
+                            <div>
+                              <Label>Due Date</Label>
+                              <Input
+                                type="date"
+                                value={step.due_date || ""}
+                                onChange={(e) =>
+                                  updateStep(index, "due_date", e.target.value)
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label>Probability (%)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={String(step.probability_percent ?? 0)}
+                                onChange={(e) =>
+                                  updateStep(
+                                    index,
+                                    "probability_percent",
+                                    e.target.value
+                                      ? parseFloat(e.target.value)
+                                      : 0,
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {steps.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Target className="w-12 h-12 mx-auto mb-2" />
+                      <p>
+                        No steps defined yet. Add steps to structure your
+                        project.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
           {/* Submit Actions */}
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -966,20 +1487,30 @@ function CreateProjectFromLeadDialog({
             <Button
               type="submit"
               disabled={
-                !projectData.name.trim() ||
-                steps.length === 0 ||
-                createProjectMutation.isPending ||
-                probabilityInvalid
+                isProductCreation
+                  ? !projectData.name?.trim() || createProductMutation.isPending
+                  : !projectData.name.trim() ||
+                    steps.length === 0 ||
+                    createProjectMutation.isPending ||
+                    probabilityInvalid
               }
             >
               <Rocket className="w-4 h-4 mr-2" />
-              {createProjectMutation.isPending
-                ? project && project.id
-                  ? "Updating..."
-                  : "Creating..."
-                : project && project.id
-                  ? "Update Project"
-                  : "Create Project"}
+              {isProductCreation
+                ? createProductMutation.isPending
+                  ? project && project.id
+                    ? "Updating..."
+                    : "Creating..."
+                  : project && project.id
+                    ? "Update Product"
+                    : "Create Product"
+                : createProjectMutation.isPending
+                  ? project && project.id
+                    ? "Updating..."
+                    : "Creating..."
+                  : project && project.id
+                    ? "Update Project"
+                    : "Create Project"}
             </Button>
           </div>
         </form>
@@ -994,7 +1525,10 @@ export default function ProductWorkflow() {
   const queryClient = useQueryClient();
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isProductCreationMode, setIsProductCreationMode] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsCount, setProductsCount] = useState<number>(0);
   const [isProjectDetailOpen, setIsProjectDetailOpen] = useState(false);
   const [isLeadDetailOpen, setIsLeadDetailOpen] = useState(false);
   const [selectedLeadForOverview, setSelectedLeadForOverview] =
@@ -1005,77 +1539,105 @@ export default function ProductWorkflow() {
   const location = useLocation();
   const routeParams = useParams();
 
+  // If URL indicates an edit path like /product_master/:id/edit, ensure modal opens and data loads
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    // Prefer query param `id`, fallback to route param `id` (for /products/:id/edit)
-    const pid = params.get("id") || (routeParams as any)?.id;
-    if (!pid) return;
-    const loadProject = async () => {
-      try {
-        const proj = await apiClient.getWorkflowProject(pid);
-        setSelectedProject(proj);
+    try {
+      const m = (location.pathname || "").match(
+        /^(?:\/products|\/product_master|\/product_dashboard)\/(\d+)\/edit$/,
+      );
+      if (!m) return;
+      const pid = m[1];
+      const isPm = location.pathname.startsWith("/product_master");
+      setIsCreateDialogOpen(true);
+      setIsProductCreationMode(isPm);
 
-        // Try to fetch a linked product record to obtain template and step probabilities
+      (async () => {
         try {
-          const product = await apiClient.request(`/products/${proj.id}`);
-          if (product) {
-            // copy template if available
-            if (product.template_id) {
-              proj.template_id = product.template_id;
-            }
-
-            // If product has steps with probabilities, merge into proj.steps by step_order or name
-            if (
-              Array.isArray(product.steps) &&
-              product.steps.length > 0 &&
-              Array.isArray(proj.steps)
-            ) {
-              const psByOrder: any = {};
-              product.steps.forEach((s: any) => {
-                if (s.step_order !== undefined && s.step_order !== null)
-                  psByOrder[s.step_order] = s;
-              });
-
-              proj.steps = proj.steps.map((s: any, i: number) => {
-                const byOrder = psByOrder[s.step_order];
-                const byName = product.steps.find(
-                  (ps: any) =>
-                    (ps.name || ps.step_name) === (s.step_name || s.name),
-                );
-                const source = byOrder || byName;
-                if (source) {
-                  return {
-                    ...s,
-                    probability_percent:
-                      parseFloat(
-                        source.probability_percent ??
-                          source.probability ??
-                          s.probability_percent ??
-                          0,
-                      ) || 0,
-                    due_date:
-                      s.due_date || source.eta || source.due_date || s.due_date,
-                  };
-                }
-                return s;
-              });
+          if (isPm) {
+            const pm = await apiClient.request<any>(`/product-master/${pid}`);
+            if (pm) {
+              setSelectedProject(pm);
+              setSelectedLead(null);
+              return;
             }
           }
-        } catch (prodErr) {
-          // ignore - product fallback may not exist
-          console.debug(
-            "No linked product or failed to fetch product for project",
-            pid,
-            prodErr,
-          );
+          const proj = await apiClient.getWorkflowProject(pid);
+          setSelectedProject(proj);
+          setSelectedLead(null);
+          setIsProductCreationMode(false);
+        } catch (e) {
+          console.error("Failed to load project for edit modal:", e);
+        }
+      })();
+    } catch (e) {
+      // ignore
+    }
+  }, [location.pathname]);
+
+  // Fetch product_master items and counts for dashboard (exposed so we can refresh after edits)
+  const fetchProducts = async () => {
+    try {
+      const res = await apiClient.request<any[]>("/product-master");
+      const arr = Array.isArray(res) ? res : [];
+      setProducts(
+        arr.map((p: any) => ({
+          id: p.id,
+          product_id: p.product_id,
+          name: p.name,
+          description: p.description,
+          current_version: p.current_version,
+          repository_url: p.repository_url,
+          product_url: p.product_url,
+          is_active: p.is_active,
+          status: p.status,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          created_by: p.created_by,
+          updated_by: p.updated_by,
+        })),
+      );
+      setProductsCount(arr.length);
+    } catch (e) {
+      console.error("Failed to load product_master for dashboard:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+
+    // existing project query param handling (kept)
+    const params = new URLSearchParams(location.search);
+    const pid = params.get("id") || (routeParams as any)?.id;
+    if (!pid) return;
+    // Immediately open the modal so the UI is responsive while we fetch details
+    const initialProductMode = location.pathname.startsWith("/product_master");
+    setIsCreateDialogOpen(true);
+    setIsProductCreationMode(initialProductMode);
+
+    const loadProject = async () => {
+      try {
+        // If routed from /product_master/:id, try loading product_master record
+        if (initialProductMode) {
+          try {
+            const pm = await apiClient.request<any>(`/product-master/${pid}`);
+            if (pm) {
+              setSelectedProject(pm);
+              setSelectedLead(null);
+              return;
+            }
+          } catch (e) {
+            // fallthrough to workflow project
+          }
         }
 
-        // Open create dialog in edit mode with enriched project
-        setSelectedLead(null);
+        // Fallback: load workflow project and open in project edit mode
+        const proj = await apiClient.getWorkflowProject(pid);
         setSelectedProject(proj);
-        setIsCreateDialogOpen(true);
+        setSelectedLead(null);
+        setIsProductCreationMode(false);
       } catch (err) {
         console.error("Failed to load project from query param:", err);
+        // If fetching failed, keep modal open but show an error state (handled inside modal)
       }
     };
     loadProject();
@@ -1086,11 +1648,20 @@ export default function ProductWorkflow() {
   function handleProjectCreated() {
     setSelectedLead(null);
     setIsCreateDialogOpen(false);
+
+    // refresh dashboard list so updates are reflected immediately without hard refresh
+    try {
+      fetchProducts();
+    } catch (e) {
+      // ignore
+    }
   }
 
   // If current path is /products/:id/edit then render only the modals (so overview remains visible underneath)
   const isEditModalPath = Boolean(
-    location.pathname.match(/^\/products\/[0-9]+\/edit$/),
+    location.pathname.match(
+      /^(?:\/products|\/product_master|\/product_dashboard)\/[0-9]+\/edit$/,
+    ),
   );
 
   if (isEditModalPath) {
@@ -1100,11 +1671,16 @@ export default function ProductWorkflow() {
           lead={selectedLead}
           project={selectedProject}
           isOpen={isCreateDialogOpen}
+          isProductCreation={isProductCreationMode}
           onClose={() => {
             setIsCreateDialogOpen(false);
             setSelectedProject(null);
-            if ((routeParams as any)?.id)
-              navigate(`/products/${(routeParams as any).id}`);
+            if ((routeParams as any)?.id) {
+              const target = location.pathname.startsWith("/product_master")
+                ? `/product_master/${(routeParams as any).id}`
+                : `/product_dashboard/${(routeParams as any).id}`;
+              navigate(target);
+            }
           }}
           onSuccess={handleProjectCreated}
         />
@@ -1146,6 +1722,9 @@ export default function ProductWorkflow() {
       ),
     enabled: !!user,
   });
+
+  // Local product_master loading state
+  const [productsLoading, setProductsLoading] = useState(false);
 
   // Fetch completed leads ready for project creation (only leads with status 'completed')
   const { data: allLeads = [], isLoading: leadsLoading } = useQuery({
@@ -1224,7 +1803,10 @@ export default function ProductWorkflow() {
 
   const handleViewProject = (project: any) => {
     // Redirect to Product Overview page
-    navigate(`/products/${project.id}`);
+    const target = location.pathname.startsWith("/product_master")
+      ? `/product_master/${project.id}`
+      : `/product_dashboard/${project.id}`;
+    navigate(target);
   };
 
   const getStatusIcon = (status: string) => {
@@ -1257,40 +1839,106 @@ export default function ProductWorkflow() {
     }
   };
 
+  const totalProducts = products.length;
+  const activeProducts = products.filter((p: any) => p.is_active).length;
+  const pendingProducts = products.filter(
+    (p: any) => p.status === "pending",
+  ).length;
+  const inProgressProducts = products.filter(
+    (p: any) =>
+      p.status === "in_progress" ||
+      p.status === "inprogress" ||
+      p.status === "in-progress",
+  ).length;
+  const completedProducts = products.filter(
+    (p: any) => p.status === "completed",
+  ).length;
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Product Workflow</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Product Dashboard
+          </h1>
           <p className="text-gray-600 mt-1">
-            Manage lead-to-product handoffs and project development
+            Overview of products from product_master table
           </p>
         </div>
         <div>
           <Button
             onClick={() => {
               setSelectedLead(null);
+              setIsProductCreationMode(true);
               setIsCreateDialogOpen(true);
             }}
             className="btn btn-primary"
           >
-            Create Project
+            Create Product
           </Button>
         </div>
       </div>
 
-      {/* Product Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* Product Statistics Cards (KPIs) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Active Projects
+                <p className="text-sm font-medium text-gray-500">
+                  Total Products
                 </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {totalProducts}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-gray-100">
+                <Package className="w-6 h-6 text-gray-700" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Active</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {activeProjectsCount}
+                  {activeProducts}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-blue-100">
+                <Users className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Pending</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {pendingProducts}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-yellow-100">
+                <Clock className="w-6 h-6 text-yellow-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">In Progress</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {inProgressProducts}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-blue-100">
@@ -1304,67 +1952,13 @@ export default function ProductWorkflow() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Completed Projects
-                </p>
+                <p className="text-sm font-medium text-gray-500">Completed</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {completedProjectsCount}
+                  {completedProducts}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-green-100">
                 <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Related Projects
-                </p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {activeProjectsCount}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {totalProjectsCount} total projects
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-purple-100">
-                <Target className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Avg Progress
-                </p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {projects.length > 0
-                    ? Math.round(
-                        projects.reduce(
-                          (acc: number, p: any) =>
-                            acc +
-                            (p.progress_percentage ??
-                              p.progress ??
-                              p.progress_percent ??
-                              0),
-                          0,
-                        ) / projects.length,
-                      )
-                    : 0}
-                  %
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-orange-100">
-                <Package className="w-6 h-6 text-orange-600" />
               </div>
             </div>
           </CardContent>
@@ -1388,74 +1982,89 @@ export default function ProductWorkflow() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {projectsLoading ? (
+              {productsLoading ? (
                 <div className="text-center py-8">Loading products...</div>
-              ) : projects.length > 0 ? (
+              ) : products.length > 0 ? (
                 <div className="space-y-4">
-                  {projects.map((project: any) => (
+                  {products.map((p: any) => (
                     <Card
-                      key={project.id}
+                      key={p.id}
                       className="hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => handleViewProject(project)}
+                      onClick={() => {
+                        const target = location.pathname.startsWith(
+                          "/product_master",
+                        )
+                          ? `/product_master/${p.id}`
+                          : `/product_dashboard/${p.id}`;
+                        navigate(target);
+                      }}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <h3 className="font-semibold text-lg">
-                                {project.name}
+                                {p.name}
                               </h3>
                               <Badge
                                 variant="outline"
-                                className={getStatusColor(project.status)}
+                                className={getStatusColor(p.status)}
                               >
-                                {formatStatusLabel(project.status)}
+                                {formatStatusLabel(p.status)}
                               </Badge>
+                              <span className="text-xs text-gray-500">
+                                {p.product_id}
+                              </span>
                             </div>
 
                             <h4 className="font-medium text-gray-900 mb-2">
-                              {project.description}
+                              {p.description}
                             </h4>
                             <p className="text-gray-600 mb-3">
-                              {project.source_type === "lead"
-                                ? `From Lead #${project.source_id}`
-                                : ""}
+                              Version: {p.current_version}
                             </p>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
-                                <span className="font-medium">Progress:</span>
+                                <span className="font-medium">Repository</span>
                                 <br />
-                                <div className="flex items-center gap-2">
-                                  <div className="w-20 bg-gray-200 rounded-full h-2">
-                                    <div
-                                      className="bg-blue-600 h-2 rounded-full"
-                                      style={{
-                                        width: `${project.progress_percentage || 0}%`,
-                                      }}
-                                    />
-                                  </div>
-                                  <span>
-                                    {project.progress_percentage || 0}%
-                                  </span>
-                                </div>
+                                <a
+                                  href={p.repository_url}
+                                  className="text-blue-600 text-sm"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {p.repository_url}
+                                </a>
                               </div>
                               <div>
-                                <span className="font-medium">Lead Steps:</span>
+                                <span className="font-medium">Product URL</span>
                                 <br />
-                                <div className="flex items-center gap-1">
-                                  <CheckCircle className="w-3 h-3 text-green-600" />
-                                  <span>
-                                    {project.completed_steps || 0}/
-                                    {project.total_steps || 0}
-                                  </span>
-                                </div>
+                                <a
+                                  href={p.product_url}
+                                  className="text-blue-600 text-sm"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {p.product_url}
+                                </a>
                               </div>
                               <div>
-                                <span className="font-medium">Status:</span>
+                                <span className="font-medium">Active</span>
                                 <br />
                                 <span className="text-sm text-gray-700">
-                                  {project.status}
+                                  {p.is_active ? "Yes" : "No"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium">Created</span>
+                                <br />
+                                <span className="text-sm text-gray-700">
+                                  {p.created_at
+                                    ? new Date(
+                                        p.created_at,
+                                      ).toLocaleDateString()
+                                    : ""}
                                 </span>
                               </div>
                             </div>
@@ -1465,7 +2074,10 @@ export default function ProductWorkflow() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/product?id=${project.id}`);
+                                // Open edit dialog in product creation mode using product_master data
+                                setSelectedProject(p);
+                                setIsProductCreationMode(true);
+                                setIsCreateDialogOpen(true);
                               }}
                               title="Edit"
                               className="p-2 rounded hover:bg-gray-100"
@@ -1478,12 +2090,18 @@ export default function ProductWorkflow() {
                                 if (!confirm("Delete this product?")) return;
                                 try {
                                   await apiClient.request(
-                                    `/workflow/projects/${project.id}`,
+                                    `/product-master/${p.id}`,
                                     { method: "DELETE" },
                                   );
-                                  queryClient.invalidateQueries([
-                                    "workflow-projects",
-                                  ]);
+                                  // refresh list
+                                  const refreshed =
+                                    await apiClient.request<any[]>(
+                                      "/product-master",
+                                    );
+                                  setProducts(
+                                    Array.isArray(refreshed) ? refreshed : [],
+                                  );
+                                  setProductsCount((refreshed || []).length);
                                 } catch (err) {
                                   console.error(err);
                                   alert("Failed to delete product");
@@ -1745,12 +2363,17 @@ export default function ProductWorkflow() {
       <CreateProjectFromLeadDialog
         lead={selectedLead}
         project={selectedProject}
+        isProductCreation={isProductCreationMode}
         isOpen={isCreateDialogOpen}
         onClose={() => {
           setIsCreateDialogOpen(false);
           setSelectedProject(null);
+          setIsProductCreationMode(false);
         }}
-        onSuccess={handleProjectCreated}
+        onSuccess={() => {
+          handleProjectCreated();
+          setIsProductCreationMode(false);
+        }}
       />
 
       {/* Project Detail Dialog (read-only overview) */}

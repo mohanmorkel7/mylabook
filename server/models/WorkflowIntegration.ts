@@ -271,6 +271,23 @@ export class WorkflowRepository {
 
     const project = result.rows[0] as WorkflowProject;
 
+    // Ensure forward-compatible fields (template_id, product_master_ids) are attached
+    try {
+      const extraRes: QueryResult = await pool.query(
+        "SELECT template_id, product_master_ids FROM workflow_projects WHERE id = $1",
+        [id],
+      );
+      if (extraRes && extraRes.rows && extraRes.rows.length > 0) {
+        const extra = extraRes.rows[0] as any;
+        if (extra.template_id !== undefined)
+          project["template_id"] = extra.template_id;
+        if (extra.product_master_ids !== undefined)
+          project["product_master_ids"] = extra.product_master_ids;
+      }
+    } catch (e) {
+      // Ignore - keep existing project shape if columns missing
+    }
+
     if (includeSteps) {
       project.steps = await this.getProjectSteps(id);
     }
@@ -306,29 +323,69 @@ export class WorkflowRepository {
     const priority = data.priority || "medium";
     const created_by = data.created_by || 1;
 
-    const result = await pool.query(
-      `INSERT INTO workflow_projects
-       (name, description, source_type, source_id, project_type, priority, assigned_team,
-        project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-       RETURNING id`,
-      [
-        data.name,
-        data.description,
-        source_type,
-        data.source_id,
-        project_type,
-        priority,
-        data.assigned_team,
-        data.project_manager_id,
-        data.template_id ?? null,
-        data.start_date,
-        data.target_completion_date,
-        data.budget,
-        data.estimated_hours,
-        created_by,
-      ],
-    );
+    // Attempt to insert including product_master_ids, but fall back if DB schema doesn't have that column
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO workflow_projects
+         (name, description, source_type, source_id, project_type, priority, assigned_team,
+          project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, product_master_ids, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         RETURNING id`,
+        [
+          data.name,
+          data.description,
+          source_type,
+          data.source_id,
+          project_type,
+          priority,
+          data.assigned_team,
+          data.project_manager_id,
+          data.template_id ?? null,
+          data.start_date,
+          data.target_completion_date,
+          data.budget,
+          data.estimated_hours,
+          JSON.stringify(data.product_master_ids || []),
+          created_by,
+        ],
+      );
+    } catch (err: any) {
+      // If the column product_master_ids does not exist (SQLSTATE 42703), retry without it
+      const isUndefinedColumn =
+        err &&
+        (err.code === "42703" || /product_master_ids/.test(err.message || ""));
+      if (isUndefinedColumn) {
+        console.warn(
+          "product_master_ids column missing in DB, retrying insert without it",
+        );
+        result = await pool.query(
+          `INSERT INTO workflow_projects
+           (name, description, source_type, source_id, project_type, priority, assigned_team,
+            project_manager_id, template_id, start_date, target_completion_date, budget, estimated_hours, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           RETURNING id`,
+          [
+            data.name,
+            data.description,
+            source_type,
+            data.source_id,
+            project_type,
+            priority,
+            data.assigned_team,
+            data.project_manager_id,
+            data.template_id ?? null,
+            data.start_date,
+            data.target_completion_date,
+            data.budget,
+            data.estimated_hours,
+            created_by,
+          ],
+        );
+      } else {
+        throw err;
+      }
+    }
 
     const newProject = await this.getProjectById(result.rows[0].id);
 
@@ -451,11 +508,18 @@ export class WorkflowRepository {
         }
       }
 
+      // Allow updating product_master_ids if provided
+      if ((data as any).product_master_ids !== undefined) {
+        setClause.push(`product_master_ids = $${idx}`);
+        values.push(JSON.stringify((data as any).product_master_ids));
+        idx++;
+      }
+
       // Execute the project update outside of a long-running transaction so
       // step upserts cannot roll it back or hold locks for extended periods.
       if (setClause.length > 0) {
         setClause.push("updated_at = CURRENT_TIMESTAMP");
-        const query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
+        let query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${idx} RETURNING id`;
         values.push(id);
         try {
           console.log(
@@ -467,14 +531,73 @@ export class WorkflowRepository {
           // ignore logging errors
         }
 
-        const updateResult = await pool.query(query, values);
         try {
-          console.log(
-            "[WorkflowRepository.updateProject] Update result:",
-            updateResult.rows,
-          );
-        } catch (logErr) {
-          // ignore
+          const updateResult = await pool.query(query, values);
+          try {
+            console.log(
+              "[WorkflowRepository.updateProject] Update result:",
+              updateResult.rows,
+            );
+          } catch (logErr) {
+            // ignore
+          }
+        } catch (err: any) {
+          const isUndefinedColumn =
+            err &&
+            (err.code === "42703" ||
+              /product_master_ids/.test(err.message || ""));
+          if (isUndefinedColumn) {
+            // Retry without product_master_ids set clause
+            console.warn(
+              "product_master_ids column missing in DB, retrying update without it",
+            );
+            // Remove any product_master_ids clause from setClause and corresponding value
+            const pmIndex = setClause.findIndex((s) =>
+              s.includes("product_master_ids"),
+            );
+            if (pmIndex !== -1) {
+              setClause.splice(pmIndex, 1);
+              // Rebuild values by removing the corresponding parameter (complex: rebuild from allowed fields)
+              const rebuiltValues: any[] = [];
+              let rebuildIdx = 1;
+              for (const key of [
+                "name",
+                "description",
+                "priority",
+                "assigned_team",
+                "project_manager_id",
+                "start_date",
+                "target_completion_date",
+                "budget",
+                "estimated_hours",
+                "status",
+                "source_type",
+                "source_id",
+                "template_id",
+              ]) {
+                if ((data as any)[key] !== undefined) {
+                  rebuiltValues.push((data as any)[key]);
+                  rebuildIdx++;
+                }
+              }
+              // Note: we intentionally ignore product_master_ids rebuild here
+              rebuiltValues.push(id);
+              query = `UPDATE workflow_projects SET ${setClause.join(", ")} WHERE id = $${rebuildIdx} RETURNING id`;
+              try {
+                const retryRes = await pool.query(query, rebuiltValues);
+                console.warn(
+                  "Update succeeded on retry without product_master_ids",
+                );
+              } catch (retryErr) {
+                throw retryErr;
+              }
+            } else {
+              // No product_master_ids clause found; rethrow
+              throw err;
+            }
+          } else {
+            throw err;
+          }
         }
       }
 

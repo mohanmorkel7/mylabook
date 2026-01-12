@@ -955,7 +955,10 @@ export default function ClientBasedFinOpsTaskManager() {
     }) =>
       apiClient.updateFinOpsSubTask(taskId, subTaskId, status, userName, date),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
     },
   });
 
@@ -1142,7 +1145,10 @@ export default function ClientBasedFinOpsTaskManager() {
   const createTaskMutation = useMutation({
     mutationFn: (taskData: any) => apiClient.createFinOpsTask(taskData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
       setIsCreateDialogOpen(false);
       resetForm();
     },
@@ -1152,7 +1158,10 @@ export default function ClientBasedFinOpsTaskManager() {
     mutationFn: ({ id, taskData }: { id: number; taskData: any }) =>
       apiClient.updateFinOpsTask(id, taskData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
       setEditingTask(null);
       setIsCreateDialogOpen(false);
       resetForm();
@@ -1162,7 +1171,10 @@ export default function ClientBasedFinOpsTaskManager() {
   const deleteTaskMutation = useMutation({
     mutationFn: (id: number) => apiClient.deleteFinOpsTask(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-finops-tasks"] });
+      queryClient.invalidateQueries({
+        queryKey: ["client-finops-tasks"],
+        exact: false,
+      });
     },
   });
 
@@ -1853,7 +1865,10 @@ export default function ClientBasedFinOpsTaskManager() {
 
   const normalizedUserName = normalize(user?.name || user?.email || "");
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin =
+    user?.role === "admin" ||
+    (!!user?.department_admin &&
+      String(user?.admin_for_department || "").toLowerCase() === "finops");
 
   // Role-based visibility: non-admins see only tasks where they are assigned_to, reporting manager, or escalation manager
   if (!isAdmin) {
@@ -2191,7 +2206,7 @@ export default function ClientBasedFinOpsTaskManager() {
           </div>
 
           {/* 🎯 Right: Action buttons (normal size, outside the box) */}
-          <div className="flex gap-2 ml-4">
+          <div className="flex gap-2 ml-4 items-center">
             <Button
               variant="outline"
               onClick={async () => {

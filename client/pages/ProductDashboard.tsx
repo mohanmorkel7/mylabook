@@ -113,7 +113,7 @@ export default function ProductDashboard() {
   }>({});
 
   const handleNewDeployment = () => {
-    navigate("/product/deployment/new");
+    navigate("/product_master/deployment/new");
   };
 
   const updateDeploymentStatus = (deploymentId: string, newStatus: string) => {

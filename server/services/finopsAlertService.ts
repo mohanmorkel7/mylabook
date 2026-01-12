@@ -248,7 +248,7 @@ class FinOpsAlertService {
     try {
       console.log("Checking for daily tasks to execute...");
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = getCurrentISTTime().toISOString().split("T")[0];
 
       const tasksToExecute = await pool.query(
         `
@@ -289,7 +289,7 @@ class FinOpsAlertService {
    * Check SLA for individual subtask and send alerts if needed
    */
   private async checkSubtaskSLA(task: any, subtask: any): Promise<void> {
-    const now = new Date();
+    const now = getCurrentISTTime();
 
     // console.log(
     //   `Checking SLA for subtask ${subtask.id} (${subtask.name}): status=${subtask.status}`,
@@ -309,7 +309,7 @@ class FinOpsAlertService {
 
     if (subtask.start_time) {
       // Parse start_time (format: "HH:MM:SS" or "HH:MM")
-      const today = new Date();
+      const today = getCurrentISTTime();
       const [hours, minutes] = subtask.start_time.split(":").map(Number);
 
       dueTime = new Date(
@@ -642,7 +642,7 @@ class FinOpsAlertService {
       ON finops_external_alerts(task_id, subtask_id, alert_group, alert_bucket);
     `);
 
-      const now = new Date();
+      const now = getCurrentISTTime();
       for (const row of result.rows) {
         const since = row.overdue_since ? new Date(row.overdue_since) : null;
         if (!since) continue;

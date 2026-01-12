@@ -226,6 +226,34 @@ export async function initializeDatabase() {
       }
     }
 
+    // Try to apply product_master migration if missing
+    try {
+      const pmTableCheck = await client.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'product_master'
+        );
+      `);
+      if (!pmTableCheck.rows[0].exists) {
+        const pmMigrationPath = path.join(
+          __dirname,
+          "migrations",
+          "20251201_create_product_master.sql",
+        );
+        if (fs.existsSync(pmMigrationPath)) {
+          const pmSql = fs.readFileSync(pmMigrationPath, "utf8");
+          try {
+            await client.query(pmSql);
+            console.log("Product master migration applied successfully");
+          } catch (pmErr) {
+            console.log("Product master migration failed:", pmErr.message);
+          }
+        }
+      }
+    } catch (pmCheckErr) {
+      console.log("Product master migration check failed:", pmCheckErr.message);
+    }
+
     // Always try to apply VC schema options migration (even if tables exist)
     try {
       const vcOptionsMigrationPath = path.join(

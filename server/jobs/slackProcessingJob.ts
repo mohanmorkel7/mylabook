@@ -92,7 +92,9 @@ export function initialize() {
 
           await ensureSlackProcessingTable();
 
-          const slackClient = new WebClient(token);
+          // Configure httpsAgent to allow self-signed certs in development if needed
+const slackAgent = new https.Agent({ rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0' ? true : false });
+const slackClient = new WebClient(token, { slackAgent });
 
           // Get or create Slack category id once
           const slackCategoryId = await ensureSlackCategoryId();

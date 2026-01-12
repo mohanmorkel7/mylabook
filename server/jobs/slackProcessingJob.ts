@@ -1,7 +1,5 @@
 import cron from "node-cron";
 import { WebClient } from "@slack/web-api";
-import { getAllActiveConfigs } from "../services/emailProcessorService";
-import { MailConfigRepository } from "../models/MailConfig";
 import { TicketRepository } from "../models/Ticket";
 import { pool, isDatabaseAvailable } from "../database/connection";
 
@@ -34,6 +32,22 @@ function getTodayStartTs() {
       0,
     ) / 1000,
   );
+}
+
+async function ensureSlackProcessingTable() {
+  // Create a simple table to track processed Slack threads to avoid duplicates
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS slack_processing_log (
+      id SERIAL PRIMARY KEY,
+      thread_ts VARCHAR(255) NOT NULL UNIQUE,
+      channel_id VARCHAR(255),
+      ticket_id INTEGER,
+      status VARCHAR(50) DEFAULT 'processing',
+      error_message TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      processed_at TIMESTAMP
+    )
+  `);
 }
 
 export function initialize() {
@@ -75,291 +89,147 @@ export function initialize() {
             return;
           }
 
-          const slackClient = new WebClient(token);
+          await ensureSlackProcessingTable();
 
-          const configs = await getAllActiveConfigs();
-          if (!configs || configs.length === 0) {
-            // nothing to process
-            return;
-          }
+          const slackClient = new WebClient(token);
 
           // Get or create Slack category id once
           const slackCategoryId = await ensureSlackCategoryId();
 
-          for (const config of configs) {
+          // Fetch channels bot is a member of
+          let channels: any[] = [];
+          try {
+            let cursor: string | undefined;
+            do {
+              const listRes: any = await slackClient.conversations.list({
+                types: "public_channel,private_channel",
+                limit: 200,
+                cursor,
+              });
+              channels = channels.concat(
+                (listRes.channels || []).filter((c: any) => c.is_member),
+              );
+              cursor = listRes.response_metadata?.next_cursor;
+            } while (cursor);
+          } catch (e) {
+            console.error(
+              "Failed to list Slack channels for bot:",
+              e?.message || e,
+            );
+            return;
+          }
+
+          const sinceSec = getTodayStartTs();
+
+          for (const channel of channels) {
             try {
-              const sources = Array.isArray((config as any).sources)
-                ? (config as any).sources
-                : [];
-              const slackSources = sources.filter(
-                (s: any) => s.type === "Slack",
-              );
-              if (!slackSources || slackSources.length === 0) continue;
+              let cursor: string | undefined;
+              do {
+                const history: any = await slackClient.conversations.history({
+                  channel: channel.id,
+                  oldest: sinceSec,
+                  limit: 200,
+                  cursor,
+                });
 
-              // Compute 'since' timestamp for this config (use last_processed_at with 30s buffer)
-              const rawSince = config.last_processed_at
-                ? new Date(config.last_processed_at)
-                : undefined;
-              const since = rawSince
-                ? new Date(rawSince.getTime() - 30 * 1000)
-                : undefined;
-              const sinceSec = since
-                ? Math.floor(since.getTime() / 1000)
-                : getTodayStartTs();
+                const messages = history.messages || [];
+                for (const msg of messages) {
+                  // Only parent thread messages
+                  if (msg.thread_ts && msg.thread_ts === msg.ts) {
+                    const threadTs = String(msg.thread_ts);
 
-              let processedMaxDate: Date | null = null;
-              let fetchedMaxDate: Date | null = null;
-              let anyFetchSucceeded = false;
-              let anyProcessed = false;
-
-              for (const s of slackSources) {
-                // If slackType is Channel, slackName should be channel id or name — prefer channel id
-                // Try to get channels via conversations.list and filter by name if needed
-                let channelsToCheck: any[] = [];
-
-                // If slackName looks like a channel id (starts with C or G), use it directly
-                if (
-                  s.slackName &&
-                  typeof s.slackName === "string" &&
-                  /^[CG]/.test(s.slackName)
-                ) {
-                  channelsToCheck = [{ id: s.slackName, name: s.slackName }];
-                } else if (s.slackName) {
-                  // Try to find matching channels by name
-                  try {
-                    let cursor: string | undefined;
-                    do {
-                      const listRes: any = await slackClient.conversations.list(
-                        {
-                          types: "public_channel,private_channel",
-                          limit: 200,
-                          cursor,
-                        },
+                    // Attempt to claim this thread in slack_processing_log
+                    try {
+                      const claimRes: any = await pool.query(
+                        `INSERT INTO slack_processing_log (thread_ts, channel_id, status)
+                         VALUES ($1, $2, 'processing') ON CONFLICT (thread_ts) DO NOTHING RETURNING id`,
+                        [threadTs, channel.id],
                       );
-                      const found = (listRes.channels || []).filter(
-                        (c: any) =>
-                          c.name === s.slackName ||
-                          `#${c.name}` === s.slackName,
-                      );
-                      if (found.length > 0)
-                        channelsToCheck = channelsToCheck.concat(found);
-                      cursor = listRes.response_metadata?.next_cursor;
-                    } while (cursor);
-                  } catch (e) {
-                    console.warn(
-                      "Failed to list Slack channels for source",
-                      s,
-                      e?.message || e,
-                    );
-                    continue;
-                  }
-                } else {
-                  // No slackName specified — process all channels the bot is a member of
-                  try {
-                    let cursor: string | undefined;
-                    do {
-                      const listRes: any = await slackClient.conversations.list(
-                        {
-                          types: "public_channel,private_channel",
-                          limit: 200,
-                          cursor,
-                        },
-                      );
-                      channelsToCheck = channelsToCheck.concat(
-                        (listRes.channels || []).filter(
-                          (c: any) => c.is_member,
-                        ),
-                      );
-                      cursor = listRes.response_metadata?.next_cursor;
-                    } while (cursor);
-                  } catch (e) {
-                    console.warn(
-                      "Failed to list Slack channels for default source",
-                      e?.message || e,
-                    );
-                    continue;
-                  }
-                }
 
-                for (const channel of channelsToCheck) {
-                  try {
-                    let cursor: string | undefined;
-                    do {
-                      const history: any =
-                        await slackClient.conversations.history({
-                          channel: channel.id,
-                          oldest: sinceSec,
-                          limit: 200,
-                          cursor,
-                        });
-
-                      anyFetchSucceeded = true;
-
-                      const messages = history.messages || [];
-                      for (const msg of messages) {
-                        // Only consider parent thread messages
-                        if (msg.thread_ts && msg.thread_ts === msg.ts) {
-                          // Update fetchedMaxDate
-                          try {
-                            const dt = new Date(Number(msg.ts) * 1000);
-                            if (!isNaN(dt.getTime())) {
-                              if (!fetchedMaxDate || dt > fetchedMaxDate)
-                                fetchedMaxDate = dt;
-                            }
-                          } catch (e) {}
-
-                          // Attempt to claim for this mail config (use thread_ts as unique ID)
-                          const title =
-                            String(msg.text || "").substring(0, 255) ||
-                            "(No subject)";
-                          const fromLabel =
-                            channel.id || s.slackName || "slack";
-
-                          const claimed =
-                            await MailConfigRepository.claimEmailProcessing(
-                              config.id,
-                              String(msg.thread_ts),
-                              title,
-                              fromLabel,
-                            );
-                          if (!claimed) continue; // another process handled it
-
-                          // Create ticket
-                          try {
-                            const ticketData: any = {
-                              subject: `Slack Ticket : ${title}`,
-                              description: `Slack from: from@slack.com\nReceived: ${new Date(Number(msg.ts) * 1000).toISOString()}\n\n---\n\n${title}`,
-                              priority_id: config.priority_id || 3,
-                              status_id: config.status_id || 1,
-                              category_id: slackCategoryId,
-                              team_id: config.team_id || config.team_id || 7,
-                              bucket_id: config.bucket_id || 5,
-                              demand: config.demand ?? 1,
-                              tags: ["Slack"],
-                              custom_fields: {
-                                slack_thread_ts: String(msg.thread_ts),
-                                slack_channel: channel.id,
-                              },
-                            };
-
-                            const createdBy = Number(
-                              process.env.SLACK_TICKET_CREATED_BY ||
-                                config.user_id ||
-                                76,
-                            );
-                            const createdTicket = await TicketRepository.create(
-                              ticketData as any,
-                              createdBy,
-                            );
-
-                            anyProcessed = true;
-
-                            // Log processed message atomically and insert created_tickets for UI
-                            try {
-                              await MailConfigRepository.logProcessedEmailAtomic(
-                                config.id,
-                                String(msg.thread_ts),
-                                title,
-                                fromLabel,
-                                createdTicket?.id ||
-                                  createdTicket?.ticket?.id ||
-                                  null,
-                                "success",
-                              );
-                            } catch (e) {
-                              console.warn(
-                                "Failed to log processed Slack message:",
-                                e?.message || e,
-                              );
-                            }
-
-                            // Track processedMaxDate
-                            try {
-                              const dt = new Date(Number(msg.ts) * 1000);
-                              if (!isNaN(dt.getTime())) {
-                                if (!processedMaxDate || dt > processedMaxDate)
-                                  processedMaxDate = dt;
-                              }
-                            } catch (e) {}
-                          } catch (err) {
-                            console.error(
-                              "Failed to create ticket from slack thread:",
-                              err?.message || err,
-                            );
-                            // Record failure in log to avoid reprocessing the same thread repeatedly
-                            try {
-                              await MailConfigRepository.logProcessedEmailAtomic(
-                                config.id,
-                                String(msg.thread_ts),
-                                title,
-                                fromLabel,
-                                null,
-                                "failed",
-                                String((err as any)?.message || err),
-                              );
-                            } catch (e) {
-                              console.warn(
-                                "Failed to log failed Slack processing:",
-                                e?.message || e,
-                              );
-                            }
-                          }
-                        }
+                      if (!claimRes.rows || claimRes.rows.length === 0) {
+                        // Already processed or claimed
+                        continue;
                       }
+                    } catch (claimErr) {
+                      console.error(
+                        "Error claiming slack thread:",
+                        claimErr?.message || claimErr,
+                      );
+                      continue;
+                    }
 
-                      cursor = history.response_metadata?.next_cursor;
-                    } while (cursor);
-                  } catch (channelErr) {
-                    console.error(
-                      "Error reading Slack history for channel",
-                      channel.id,
-                      channelErr?.message || channelErr,
-                    );
-                    continue;
+                    // Create ticket
+                    const title = String(msg.text || "").substring(0, 255) ||
+                      "(No subject)";
+                    const description = `Slack from: from@slack.com\nReceived: ${new Date(Number(msg.ts) * 1000).toISOString()}\n\n---\n\n${title}`;
+
+                    try {
+                      const ticketData: any = {
+                        subject: `Slack Ticket : ${title}`,
+                        description,
+                        priority_id: 3,
+                        status_id: 1,
+                        category_id: slackCategoryId,
+                        team_id: 7,
+                        bucket_id: 5,
+                        demand: 1,
+                        tags: ["Slack"],
+                        custom_fields: {
+                          slack_thread_ts: threadTs,
+                          slack_channel: channel.id,
+                        },
+                      };
+
+                      const createdBy = Number(
+                        process.env.SLACK_TICKET_CREATED_BY || 76,
+                      );
+
+                      const createdTicket = await TicketRepository.create(
+                        ticketData as any,
+                        createdBy,
+                      );
+
+                      // Update processing log with ticket id and processed_at
+                      try {
+                        await pool.query(
+                          `UPDATE slack_processing_log SET ticket_id = $1, status = 'success', processed_at = NOW() WHERE thread_ts = $2`,
+                          [createdTicket?.id || null, threadTs],
+                        );
+                      } catch (updErr) {
+                        console.warn(
+                          "Failed to update slack_processing_log after ticket create:",
+                          updErr?.message || updErr,
+                        );
+                      }
+                    } catch (err) {
+                      console.error(
+                        "Failed to create ticket from slack thread:",
+                        err?.message || err,
+                      );
+                      try {
+                        await pool.query(
+                          `UPDATE slack_processing_log SET status = 'failed', error_message = $1, processed_at = NOW() WHERE thread_ts = $2`,
+                          [String((err as any)?.message || err), threadTs],
+                        );
+                      } catch (logErr) {
+                        console.warn(
+                          "Failed to log failed Slack processing in slack_processing_log:",
+                          logErr?.message || logErr,
+                        );
+                      }
+                    }
                   }
                 }
-              }
 
-              // Advance last_processed_at similar to email processing job logic
-              if (processedMaxDate) {
-                if (!rawSince || processedMaxDate > rawSince) {
-                  await MailConfigRepository.updateLastProcessedAt(
-                    config.id,
-                    processedMaxDate,
-                  );
-                } else {
-                  console.log(
-                    `Computed processedMaxDate (${processedMaxDate.toISOString()}) is not newer than existing last_processed_at for config ${config.id}; skipping update`,
-                  );
-                }
-              } else if (fetchedMaxDate) {
-                if (!rawSince || fetchedMaxDate > rawSince) {
-                  console.log(
-                    `Advancing last_processed_at for config ${config.id} to fetchedMaxDate ${fetchedMaxDate.toISOString()} (no matches created)`,
-                  );
-                  await MailConfigRepository.updateLastProcessedAt(
-                    config.id,
-                    fetchedMaxDate,
-                  );
-                } else {
-                  console.log(
-                    `FetchedMaxDate (${fetchedMaxDate?.toISOString()}) is not newer than existing last_processed_at for config ${config.id}; skipping update`,
-                  );
-                }
-              } else if (!anyFetchSucceeded) {
-                console.log(
-                  `Skipping update of last_processed_at for config ${config.id} because no Slack fetch succeeded`,
-                );
-              } else {
-                console.log(
-                  `Not updating last_processed_at for config ${config.id} because no threads were processed and no fetched date available`,
-                );
-              }
-            } catch (configErr) {
+                cursor = history.response_metadata?.next_cursor;
+              } while (cursor);
+            } catch (channelErr) {
               console.error(
-                `Error processing slack config ${config.id}:`,
-                (configErr as any)?.message || configErr,
+                "Error reading Slack history for channel",
+                channel.id,
+                channelErr?.message || channelErr,
               );
+              continue;
             }
           }
         } catch (err) {

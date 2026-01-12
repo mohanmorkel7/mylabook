@@ -1973,29 +1973,6 @@ export default function ManageTickets() {
           </div>
 
           <div className="ml-auto flex items-center gap-3">
-            <Button
-              variant="ghost"
-              onClick={async () => {
-                try {
-                  const resp = await api.post("/tickets/import-slack");
-                  const payload = resp?.data ?? resp;
-                  toast({
-                    title: "Slack import started",
-                    description: `Inserted: ${payload.inserted || 0}`,
-                  });
-                  // Refresh tickets and charts
-                  fetchTickets(currentPage);
-                } catch (e: any) {
-                  toast({
-                    title: "Slack import failed",
-                    description: e?.message || String(e),
-                    variant: "destructive",
-                  });
-                }
-              }}
-            >
-              Import Slack
-            </Button>
             {/* Date picker (IST day) placed left of Filters button - only shown for Created from Email tab */}
             {activeTab === "created" && (
               <div className="flex items-center gap-2">

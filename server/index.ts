@@ -494,5 +494,21 @@ export function createServer() {
     console.error("Error loading FinOps production router:", error);
   }
 
+  // Allow Vite dev server to serve SPA assets by passing through non-API requests
+  app.use((req, _res, next) => {
+    // Keep Express handling API and internal vite paths, pass others to Vite middleware
+    if (
+      req.url.startsWith("/api") ||
+      req.url.startsWith("/@vite") ||
+      req.url.startsWith("/sockjs") ||
+      req.url.startsWith("/__vite_ping")
+    ) {
+      return next();
+    }
+
+    // Otherwise, do not send a response here; pass control to Vite middleware which will serve index.html/assets
+    return next();
+  });
+
   return app;
 }

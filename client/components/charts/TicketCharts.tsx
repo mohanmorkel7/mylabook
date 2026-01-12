@@ -183,22 +183,49 @@ export default function TicketCharts({
             for (const t of ticketsArr) {
               let tag = "Manual";
               try {
-                const desc = String(t.description || "").toLowerCase();
-                if (desc.includes("razorpay")) tag = "Razorpay";
-                else if (desc.includes("payswiff")) tag = "Payswiff";
-                else if (Array.isArray(t.tags) && t.tags.length)
-                  tag = String(t.tags[0]);
-                else if (t.created_from_mail_config) {
-                  // prefer mail config provider name if available
+                // Normalize tags: support array, JSON-string, or Postgres-style '{A,B}' string
+                const rawTags = (t as any).tags;
+                let firstTag: string | null = null;
+                if (Array.isArray(rawTags) && rawTags.length > 0) {
+                  firstTag = String(rawTags[0]);
+                } else if (typeof rawTags === "string" && rawTags.trim()) {
                   try {
-                    const prov = (window as any).getMailConfigProviderName
-                      ? (window as any).getMailConfigProviderName(
-                          t.mail_config_sources,
-                          t.description,
-                        )
-                      : null;
-                    if (prov) tag = prov;
-                  } catch (e) {}
+                    const parsed = JSON.parse(rawTags);
+                    if (Array.isArray(parsed) && parsed.length > 0) firstTag = String(parsed[0]);
+                  } catch (e) {
+                    // not JSON
+                  }
+                  if (!firstTag) {
+                    const m = rawTags.match(/^\{(.+)\}$/);
+                    if (m && m[1]) {
+                      const arr = m[1]
+                        .split(",")
+                        .map((s) => s.replace(/^\"|\"$/g, "").trim())
+                        .filter(Boolean);
+                      if (arr.length) firstTag = arr[0];
+                    }
+                  }
+                  if (!firstTag) firstTag = rawTags;
+                }
+
+                if (firstTag) {
+                  tag = String(firstTag);
+                } else {
+                  const desc = String(t.description || "").toLowerCase();
+                  if (desc.includes("razorpay")) tag = "Razorpay";
+                  else if (desc.includes("payswiff")) tag = "Payswiff";
+                  else if (t.created_from_mail_config) {
+                    // prefer mail config provider name if available
+                    try {
+                      const prov = (window as any).getMailConfigProviderName
+                        ? (window as any).getMailConfigProviderName(
+                            t.mail_config_sources,
+                            t.description,
+                          )
+                        : null;
+                      if (prov) tag = prov;
+                    } catch (e) {}
+                  }
                 }
               } catch (e) {}
 

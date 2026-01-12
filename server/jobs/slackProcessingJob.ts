@@ -93,13 +93,16 @@ export function initialize() {
           await ensureSlackProcessingTable();
 
           // Configure httpsAgent to allow self-signed certs in development if needed
-const slackAgent = new https.Agent({
-  rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "0" ? true : false,
-});
-if (!slackAgent.options.rejectUnauthorized) {
-  console.warn("Slack client: TLS verification disabled (NODE_TLS_REJECT_UNAUTHORIZED=0)");
-}
-const slackClient = new WebClient(token, { agent: slackAgent });
+          const slackAgent = new https.Agent({
+            rejectUnauthorized:
+              process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "0" ? true : false,
+          });
+          if (!slackAgent.options.rejectUnauthorized) {
+            console.warn(
+              "Slack client: TLS verification disabled (NODE_TLS_REJECT_UNAUTHORIZED=0)",
+            );
+          }
+          const slackClient = new WebClient(token, { agent: slackAgent });
 
           // Get or create Slack category id once
           const slackCategoryId = await ensureSlackCategoryId();

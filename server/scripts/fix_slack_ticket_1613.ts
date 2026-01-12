@@ -3,7 +3,10 @@ import { pool } from "../database/connection";
 async function fix() {
   try {
     const ticketId = 1613;
-    const res = await pool.query("SELECT tags, assigned_to FROM tickets WHERE id = $1", [ticketId]);
+    const res = await pool.query(
+      "SELECT tags, assigned_to FROM tickets WHERE id = $1",
+      [ticketId],
+    );
     if (!res.rows || res.rows.length === 0) {
       console.error("Ticket not found:", ticketId);
       process.exit(1);
@@ -20,7 +23,10 @@ async function fix() {
       } catch (e) {
         const m = tags.match(/^\{(.+)\}$/);
         if (m && m[1]) {
-          tags = m[1].split(",").map((s) => s.replace(/^\"|\"$/g, "").trim()).filter(Boolean);
+          tags = m[1]
+            .split(",")
+            .map((s) => s.replace(/^\"|\"$/g, "").trim())
+            .filter(Boolean);
         } else {
           tags = [String(tags)];
         }
@@ -34,13 +40,39 @@ async function fix() {
     const assignedTo = row.assigned_to || 76;
 
     try {
-      await pool.query("UPDATE tickets SET tags = $1, assigned_to = $2 WHERE id = $3", [tags, assignedTo, ticketId]);
-      console.log("Updated ticket", ticketId, "tags ->", tags, "assigned_to ->", assignedTo);
+      await pool.query(
+        "UPDATE tickets SET tags = $1, assigned_to = $2 WHERE id = $3",
+        [tags, assignedTo, ticketId],
+      );
+      console.log(
+        "Updated ticket",
+        ticketId,
+        "tags ->",
+        tags,
+        "assigned_to ->",
+        assignedTo,
+      );
     } catch (e: any) {
-      console.warn("Failed to update tags using parameterized query, trying text[] literal", e.message || e);
-      const tagsLiteral = "{" + tags.map((s: string) => '"' + s.replace(/"/g, '""') + '"').join(",") + "}";
-      await pool.query(`UPDATE tickets SET tags = $1::text[], assigned_to = $2 WHERE id = $3`, [tagsLiteral, assignedTo, ticketId]);
-      console.log("Updated ticket (text[])", ticketId, "tags ->", tags, "assigned_to ->", assignedTo);
+      console.warn(
+        "Failed to update tags using parameterized query, trying text[] literal",
+        e.message || e,
+      );
+      const tagsLiteral =
+        "{" +
+        tags.map((s: string) => '"' + s.replace(/"/g, '""') + '"').join(",") +
+        "}";
+      await pool.query(
+        `UPDATE tickets SET tags = $1::text[], assigned_to = $2 WHERE id = $3`,
+        [tagsLiteral, assignedTo, ticketId],
+      );
+      console.log(
+        "Updated ticket (text[])",
+        ticketId,
+        "tags ->",
+        tags,
+        "assigned_to ->",
+        assignedTo,
+      );
     }
 
     process.exit(0);

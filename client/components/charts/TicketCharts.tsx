@@ -191,7 +191,8 @@ export default function TicketCharts({
                 } else if (typeof rawTags === "string" && rawTags.trim()) {
                   try {
                     const parsed = JSON.parse(rawTags);
-                    if (Array.isArray(parsed) && parsed.length > 0) firstTag = String(parsed[0]);
+                    if (Array.isArray(parsed) && parsed.length > 0)
+                      firstTag = String(parsed[0]);
                   } catch (e) {
                     // not JSON
                   }

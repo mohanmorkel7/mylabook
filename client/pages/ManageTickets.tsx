@@ -2417,11 +2417,13 @@ export default function ManageTickets() {
                           {/* Render tag badges (e.g., Slack) when present */}
                           {(() => {
                             const raw = (t as any).tags;
-                            if (Array.isArray(raw) && raw.length > 0) return raw;
+                            if (Array.isArray(raw) && raw.length > 0)
+                              return raw;
                             if (typeof raw === "string") {
                               try {
                                 const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                                if (Array.isArray(parsed) && parsed.length > 0)
+                                  return parsed;
                               } catch (e) {
                                 // not JSON
                               }
@@ -2436,7 +2438,10 @@ export default function ManageTickets() {
                             }
                             return [];
                           })().map((tg: any, idx: number) => (
-                            <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                            <Badge
+                              key={`tag-${t.id}-${idx}`}
+                              variant="secondary"
+                            >
                               {String(tg)}
                             </Badge>
                           ))}
@@ -2683,11 +2688,13 @@ export default function ManageTickets() {
                           {/* Render tag badges (e.g., Slack) when present */}
                           {(() => {
                             const raw = (t as any).tags;
-                            if (Array.isArray(raw) && raw.length > 0) return raw;
+                            if (Array.isArray(raw) && raw.length > 0)
+                              return raw;
                             if (typeof raw === "string") {
                               try {
                                 const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                                if (Array.isArray(parsed) && parsed.length > 0)
+                                  return parsed;
                               } catch (e) {
                                 // not JSON
                               }
@@ -2702,7 +2709,10 @@ export default function ManageTickets() {
                             }
                             return [];
                           })().map((tg: any, idx: number) => (
-                            <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                            <Badge
+                              key={`tag-${t.id}-${idx}`}
+                              variant="secondary"
+                            >
                               {String(tg)}
                             </Badge>
                           ))}

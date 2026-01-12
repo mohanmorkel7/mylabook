@@ -177,7 +177,7 @@ export function initialize() {
 
                     try {
                       const ticketData: any = {
-                        subject: `Slack Ticket : ${title}`,
+                        subject: `${title}`,
                         description,
                         priority_id: 3,
                         status_id: 1,

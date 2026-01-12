@@ -2413,6 +2413,16 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Render tag badges (e.g., Slack) when present */}
+                          {Array.isArray(t.tags) && t.tags.length > 0 ? (
+                            t.tags.map((tg: any, idx: number) => (
+                              <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                                {String(tg)}
+                              </Badge>
+                            ))
+                          ) : null}
+
                           {provider && (
                             <Badge variant="outline">{provider}</Badge>
                           )}
@@ -2651,6 +2661,16 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Render tag badges (e.g., Slack) when present */}
+                          {Array.isArray(t.tags) && t.tags.length > 0 ? (
+                            t.tags.map((tg: any, idx: number) => (
+                              <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                                {String(tg)}
+                              </Badge>
+                            ))
+                          ) : null}
+
                           {provider && (
                             <Badge variant="outline">{provider}</Badge>
                           )}

@@ -40,6 +40,7 @@ import emailProcessingRouter from "./routes/email-processing";
 import slackImportRouter from "./routes/slack-import";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
 import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
+import { initialize as initializeSlackProcessingJob } from "./jobs/slackProcessingJob";
 
 // Production routes (database-only, no mock fallback)
 import templatesProductionRouter from "./routes/templates-production";

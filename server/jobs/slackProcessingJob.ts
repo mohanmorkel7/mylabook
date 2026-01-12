@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { WebClient } from "@slack/web-api";
 import { TicketRepository } from "../models/Ticket";
+import https from "https";
 import { pool, isDatabaseAvailable } from "../database/connection";
 
 async function ensureSlackCategoryId(): Promise<number> {

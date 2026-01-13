@@ -1331,7 +1331,7 @@ export default function ManageTickets() {
             desc.includes("@slack.com") ||
             desc.includes("slack from") ||
             desc.includes("from@slack.com") ||
-            desc.includes("\bslack\b")
+            /\bslack\b/.test(desc)
           )
             return ["Slack"];
 

@@ -1316,17 +1316,23 @@ export default function ManageTickets() {
       const createdEmailRows: any[] = [];
 
       const normalizeTagForTicket = (t: any): string[] => {
-        // Priority: description content (razorpay/payswiff), explicit tags, mail config provider, Manual
+        // Priority: explicit tags, description content (Slack, Razorpay, Payswiff), mail config provider, Manual
         try {
-          const desc = String(t.description || "").toLowerCase();
-          if (desc.includes("razorpay")) return ["Razorpay"];
-          if (desc.includes("payswiff")) return ["Payswiff"];
-        } catch (e) {}
-
-        try {
+          // 1) Explicit tags
           if (Array.isArray(t.tags) && t.tags.length > 0) {
             return t.tags.map((x: any) => String(x).trim()).filter(Boolean);
           }
+        } catch (e) {}
+
+        try {
+          const desc = String(t.description || "").toLowerCase();
+          // 2) Slack detection: look for '@slack.com' or 'slack from' patterns
+          if (desc.includes("@slack.com") || desc.includes("slack from") || desc.includes("from@slack.com") || desc.includes("\bslack\b"))
+            return ["Slack"];
+
+          // 3) Known providers by description
+          if (desc.includes("razorpay")) return ["Razorpay"];
+          if (desc.includes("payswiff")) return ["Payswiff"];
         } catch (e) {}
 
         if (t.created_from_mail_config) {

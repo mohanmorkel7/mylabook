@@ -213,7 +213,8 @@ export default function TicketCharts({
                   tag = String(firstTag);
                 } else {
                   const desc = String(t.description || "").toLowerCase();
-                  if (desc.includes("razorpay")) tag = "Razorpay";
+                  if (desc.includes("@slack.com") || desc.includes("slack from") || desc.includes("from@slack.com") || /\bslack\b/.test(desc)) tag = "Slack";
+                  else if (desc.includes("razorpay")) tag = "Razorpay";
                   else if (desc.includes("payswiff")) tag = "Payswiff";
                   else if (t.created_from_mail_config) {
                     // prefer mail config provider name if available

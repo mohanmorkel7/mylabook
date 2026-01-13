@@ -2429,11 +2429,13 @@ export default function ManageTickets() {
                           {(() => {
                             const raw = (t as any).tags;
                             let parsedTags: string[] = [];
-                            if (Array.isArray(raw) && raw.length > 0) parsedTags = raw.map(String);
+                            if (Array.isArray(raw) && raw.length > 0)
+                              parsedTags = raw.map(String);
                             else if (typeof raw === "string") {
                               try {
                                 const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length > 0) parsedTags = parsed.map(String);
+                                if (Array.isArray(parsed) && parsed.length > 0)
+                                  parsedTags = parsed.map(String);
                               } catch (e) {
                                 // not JSON
                               }
@@ -2442,7 +2444,9 @@ export default function ManageTickets() {
                                 if (m && m[1]) {
                                   parsedTags = m[1]
                                     .split(",")
-                                    .map((s) => s.replace(/^\"|\"$/g, "").trim())
+                                    .map((s) =>
+                                      s.replace(/^\"|\"$/g, "").trim(),
+                                    )
                                     .filter(Boolean);
                                 } else if (raw) {
                                   parsedTags = [raw];
@@ -2455,13 +2459,18 @@ export default function ManageTickets() {
                             // Fallback: derive tag(s) from description/mail config
                             try {
                               const derived = normalizeTagForTicket(t);
-                              if (Array.isArray(derived) && derived.length > 0) return derived;
-                              if (typeof derived === "string" && derived) return [derived];
+                              if (Array.isArray(derived) && derived.length > 0)
+                                return derived;
+                              if (typeof derived === "string" && derived)
+                                return [derived];
                             } catch (e) {}
 
                             return [];
                           })().map((tg: any, idx: number) => (
-                            <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                            <Badge
+                              key={`tag-${t.id}-${idx}`}
+                              variant="secondary"
+                            >
                               {String(tg)}
                             </Badge>
                           ))}
@@ -2709,11 +2718,13 @@ export default function ManageTickets() {
                           {(() => {
                             const raw = (t as any).tags;
                             let parsedTags: string[] = [];
-                            if (Array.isArray(raw) && raw.length > 0) parsedTags = raw.map(String);
+                            if (Array.isArray(raw) && raw.length > 0)
+                              parsedTags = raw.map(String);
                             else if (typeof raw === "string") {
                               try {
                                 const parsed = JSON.parse(raw);
-                                if (Array.isArray(parsed) && parsed.length > 0) parsedTags = parsed.map(String);
+                                if (Array.isArray(parsed) && parsed.length > 0)
+                                  parsedTags = parsed.map(String);
                               } catch (e) {
                                 // not JSON
                               }
@@ -2722,7 +2733,9 @@ export default function ManageTickets() {
                                 if (m && m[1]) {
                                   parsedTags = m[1]
                                     .split(",")
-                                    .map((s) => s.replace(/^\"|\"$/g, "").trim())
+                                    .map((s) =>
+                                      s.replace(/^\"|\"$/g, "").trim(),
+                                    )
                                     .filter(Boolean);
                                 } else if (raw) {
                                   parsedTags = [raw];
@@ -2735,13 +2748,18 @@ export default function ManageTickets() {
                             // Fallback: derive tag(s) from description/mail config
                             try {
                               const derived = normalizeTagForTicket(t);
-                              if (Array.isArray(derived) && derived.length > 0) return derived;
-                              if (typeof derived === "string" && derived) return [derived];
+                              if (Array.isArray(derived) && derived.length > 0)
+                                return derived;
+                              if (typeof derived === "string" && derived)
+                                return [derived];
                             } catch (e) {}
 
                             return [];
                           })().map((tg: any, idx: number) => (
-                            <Badge key={`tag-${t.id}-${idx}`} variant="secondary">
+                            <Badge
+                              key={`tag-${t.id}-${idx}`}
+                              variant="secondary"
+                            >
                               {String(tg)}
                             </Badge>
                           ))}

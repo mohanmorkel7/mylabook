@@ -1327,7 +1327,12 @@ export default function ManageTickets() {
         try {
           const desc = String(t.description || "").toLowerCase();
           // 2) Slack detection: look for '@slack.com' or 'slack from' patterns
-          if (desc.includes("@slack.com") || desc.includes("slack from") || desc.includes("from@slack.com") || desc.includes("\bslack\b"))
+          if (
+            desc.includes("@slack.com") ||
+            desc.includes("slack from") ||
+            desc.includes("from@slack.com") ||
+            desc.includes("\bslack\b")
+          )
             return ["Slack"];
 
           // 3) Known providers by description

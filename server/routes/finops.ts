@@ -45,11 +45,20 @@ async function getFinOpsSettings() {
 // Ensure finops_tasks has recurrence columns for weekly/monthly scheduling
 async function ensureFinOpsRecurrenceColumns() {
   try {
-    await pool.query(`ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS weekly_days JSONB DEFAULT '[]'::jsonb`);
-    await pool.query(`ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS monthly_day INTEGER`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_finops_tasks_weekly_days ON finops_tasks USING GIN (weekly_days)`);
+    await pool.query(
+      `ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS weekly_days JSONB DEFAULT '[]'::jsonb`,
+    );
+    await pool.query(
+      `ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS monthly_day INTEGER`,
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_finops_tasks_weekly_days ON finops_tasks USING GIN (weekly_days)`,
+    );
   } catch (e) {
-    console.warn('Failed to ensure finops_tasks recurrence columns:', (e as Error).message);
+    console.warn(
+      "Failed to ensure finops_tasks recurrence columns:",
+      (e as Error).message,
+    );
   }
 }
 
@@ -681,7 +690,9 @@ router.post("/tasks", async (req: Request, res: Response) => {
           duration,
           is_active,
           created_by,
-          JSON.stringify(Array.isArray(req.body.weekly_days) ? req.body.weekly_days : []),
+          JSON.stringify(
+            Array.isArray(req.body.weekly_days) ? req.body.weekly_days : [],
+          ),
           req.body.monthly_day ?? null,
         ]);
 
@@ -1077,7 +1088,9 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
       is_active,
       client_id,
       client_name,
-      JSON.stringify(Array.isArray(req.body.weekly_days) ? req.body.weekly_days : []),
+      JSON.stringify(
+        Array.isArray(req.body.weekly_days) ? req.body.weekly_days : [],
+      ),
       req.body.monthly_day ?? null,
       taskId,
     ]);
@@ -2715,20 +2728,31 @@ router.post("/tracker/seed", async (req: Request, res: Response) => {
         if (!row.subtask_id) continue;
         // Respect recurrence: skip weekly/monthly rows that do not apply to runDate
         try {
-          const runDateObj = new Date(runDate + 'T00:00:00');
-          if (String(row.duration || '') === 'weekly') {
+          const runDateObj = new Date(runDate + "T00:00:00");
+          if (String(row.duration || "") === "weekly") {
             const rawDays = row.weekly_days || [];
-            const days = Array.isArray(rawDays) ? rawDays.map((d: any) => (typeof d === 'number' ? d : Number(d))).filter((n: any) => !isNaN(n)) : [];
+            const days = Array.isArray(rawDays)
+              ? rawDays
+                  .map((d: any) => (typeof d === "number" ? d : Number(d)))
+                  .filter((n: any) => !isNaN(n))
+              : [];
             if (days.length > 0) {
               if (!days.includes(runDateObj.getDay())) continue;
             } else {
-              const eff = row.effective_from ? new Date(row.effective_from).getDay() : null;
+              const eff = row.effective_from
+                ? new Date(row.effective_from).getDay()
+                : null;
               if (eff !== null && eff !== runDateObj.getDay()) continue;
             }
           }
-          if (String(row.duration || '') === 'monthly') {
-            const monthlyDay = row.monthly_day ?? (row.effective_from ? new Date(row.effective_from).getDate() : null);
-            if (monthlyDay === null || monthlyDay !== runDateObj.getDate()) continue;
+          if (String(row.duration || "") === "monthly") {
+            const monthlyDay =
+              row.monthly_day ??
+              (row.effective_from
+                ? new Date(row.effective_from).getDate()
+                : null);
+            if (monthlyDay === null || monthlyDay !== runDateObj.getDate())
+              continue;
           }
         } catch (e) {
           // ignore parsing errors and proceed

@@ -248,7 +248,15 @@ const convertTo24Hour = (time12: string, period: string): string => {
   return `${adjustedHours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 };
 
-const DAY_NAMES = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+const DAY_NAMES = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
 const dayNameToIndex: Record<string, number> = {
   sunday: 0,
   monday: 1,
@@ -1319,7 +1327,11 @@ export default function ClientBasedFinOpsTaskManager() {
         return taskStart <= today && days.includes(dayIndex);
       }
       if (currentTask.duration === "monthly") {
-        const monthlyDay = (currentTask as any).monthly_day ?? (currentTask.effective_from ? new Date(currentTask.effective_from).getDate() : null);
+        const monthlyDay =
+          (currentTask as any).monthly_day ??
+          (currentTask.effective_from
+            ? new Date(currentTask.effective_from).getDate()
+            : null);
         if (!monthlyDay) return false;
         return taskStart <= today && monthlyDay === today.getDate();
       }
@@ -1899,7 +1911,11 @@ export default function ClientBasedFinOpsTaskManager() {
           return taskDate <= filterDate && days.includes(dayIndex);
         }
         if (task.duration === "monthly") {
-          const monthlyDay = (task as any).monthly_day ?? (task.effective_from ? new Date(task.effective_from).getDate() : null);
+          const monthlyDay =
+            (task as any).monthly_day ??
+            (task.effective_from
+              ? new Date(task.effective_from).getDate()
+              : null);
           if (!monthlyDay) return false;
           return taskDate <= filterDate && monthlyDay === filterDate.getDate();
         }
@@ -3258,15 +3274,29 @@ export default function ClientBasedFinOpsTaskManager() {
                                       if (task.duration === "daily")
                                         return taskStart <= today;
                                       if (task.duration === "weekly") {
-                                        const days = weeklyDaysToNumbers((task as any).weekly_days);
+                                        const days = weeklyDaysToNumbers(
+                                          (task as any).weekly_days,
+                                        );
                                         if (days.length === 0) return false;
                                         const dayIndex = today.getDay();
-                                        return taskStart <= today && days.includes(dayIndex);
+                                        return (
+                                          taskStart <= today &&
+                                          days.includes(dayIndex)
+                                        );
                                       }
                                       if (task.duration === "monthly") {
-                                        const monthlyDay = (task as any).monthly_day ?? (task.effective_from ? new Date(task.effective_from).getDate() : null);
+                                        const monthlyDay =
+                                          (task as any).monthly_day ??
+                                          (task.effective_from
+                                            ? new Date(
+                                                task.effective_from,
+                                              ).getDate()
+                                            : null);
                                         if (!monthlyDay) return false;
-                                        return taskStart <= today && monthlyDay === today.getDate();
+                                        return (
+                                          taskStart <= today &&
+                                          monthlyDay === today.getDate()
+                                        );
                                       }
                                       return (
                                         taskStart.toDateString() ===
@@ -3613,7 +3643,18 @@ export default function ClientBasedFinOpsTaskManager() {
                               }))
                             }
                           >
-                            {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d]} ×
+                            {
+                              [
+                                "Sunday",
+                                "Monday",
+                                "Tuesday",
+                                "Wednesday",
+                                "Thursday",
+                                "Friday",
+                                "Saturday",
+                              ][d]
+                            }{" "}
+                            ×
                           </Badge>
                         ))}
                       </div>
@@ -3628,10 +3669,17 @@ export default function ClientBasedFinOpsTaskManager() {
                           <Label>Day of month</Label>
                           <div className="flex items-center gap-2 mt-1">
                             <Select
-                              value={taskForm.monthly_day ? String(taskForm.monthly_day) : ""}
+                              value={
+                                taskForm.monthly_day
+                                  ? String(taskForm.monthly_day)
+                                  : ""
+                              }
                               onValueChange={(val) => {
                                 const num = val ? Number(val) : null;
-                                setTaskForm((prev) => ({ ...prev, monthly_day: num }));
+                                setTaskForm((prev) => ({
+                                  ...prev,
+                                  monthly_day: num,
+                                }));
                               }}
                             >
                               <SelectTrigger className="w-48">
@@ -3639,7 +3687,10 @@ export default function ClientBasedFinOpsTaskManager() {
                               </SelectTrigger>
                               <SelectContent>
                                 {Array.from({ length: 31 }).map((_, i) => (
-                                  <SelectItem key={`md-${i+1}`} value={String(i+1)}>
+                                  <SelectItem
+                                    key={`md-${i + 1}`}
+                                    value={String(i + 1)}
+                                  >
                                     {i + 1}
                                   </SelectItem>
                                 ))}
@@ -3648,9 +3699,13 @@ export default function ClientBasedFinOpsTaskManager() {
 
                             <div className="flex flex-wrap gap-2">
                               {taskForm.monthly_day ? (
-                                <Badge variant="secondary">{taskForm.monthly_day} ×</Badge>
+                                <Badge variant="secondary">
+                                  {taskForm.monthly_day} ×
+                                </Badge>
                               ) : (
-                                <span className="text-xs text-gray-500">Leave empty to use effective from day</span>
+                                <span className="text-xs text-gray-500">
+                                  Leave empty to use effective from day
+                                </span>
                               )}
                             </div>
                           </div>

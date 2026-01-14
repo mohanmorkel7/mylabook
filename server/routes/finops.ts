@@ -42,6 +42,17 @@ async function getFinOpsSettings() {
   return res.rows[0];
 }
 
+// Ensure finops_tasks has recurrence columns for weekly/monthly scheduling
+async function ensureFinOpsRecurrenceColumns() {
+  try {
+    await pool.query(`ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS weekly_days JSONB DEFAULT '[]'::jsonb`);
+    await pool.query(`ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS monthly_day INTEGER`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_finops_tasks_weekly_days ON finops_tasks USING GIN (weekly_days)`);
+  } catch (e) {
+    console.warn('Failed to ensure finops_tasks recurrence columns:', (e as Error).message);
+  }
+}
+
 // GET pulse alerts setting
 router.get("/settings/pulse-alerts", async (req, res) => {
   try {

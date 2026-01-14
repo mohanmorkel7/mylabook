@@ -1044,6 +1044,8 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
     // Update main task
     // -----------------------------
     console.log(`[Task ${taskId}] Updating main task...`);
+    await ensureFinOpsRecurrenceColumns();
+
     const updateTaskQuery = `
       UPDATE finops_tasks
       SET
@@ -1057,8 +1059,10 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
         is_active = $8,
         client_id = $9,
         client_name = $10,
+        weekly_days = $11,
+        monthly_day = $12,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $11
+      WHERE id = $13
     `;
     await client.query(updateTaskQuery, [
       task_name,
@@ -1073,6 +1077,8 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
       is_active,
       client_id,
       client_name,
+      JSON.stringify(Array.isArray(req.body.weekly_days) ? req.body.weekly_days : []),
+      req.body.monthly_day ?? null,
       taskId,
     ]);
     console.log(`[Task ${taskId}] Main task updated successfully.`);

@@ -170,12 +170,13 @@ class FinOpsScheduler {
 
       const tasksToExecute = await pool.query(
         `
-        SELECT * FROM finops_tasks 
-        WHERE is_active = true 
+        SELECT * FROM finops_tasks
+        WHERE is_active = true
         AND duration = 'monthly'
         AND effective_from <= $1
         AND (last_run_at IS NULL OR last_run_at < (CURRENT_TIMESTAMP - INTERVAL '28 days'))
         AND deleted_at IS NULL
+        AND COALESCE(monthly_day, EXTRACT(DAY FROM effective_from::date)) = EXTRACT(DAY FROM $1::date)
       `,
         [today],
       );

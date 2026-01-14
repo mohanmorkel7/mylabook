@@ -2713,6 +2713,27 @@ router.post("/tracker/seed", async (req: Request, res: Response) => {
       const todayStr = new Date().toISOString().slice(0, 10);
       for (const row of tasksRes.rows) {
         if (!row.subtask_id) continue;
+        // Respect recurrence: skip weekly/monthly rows that do not apply to runDate
+        try {
+          const runDateObj = new Date(runDate + 'T00:00:00');
+          if (String(row.duration || '') === 'weekly') {
+            const rawDays = row.weekly_days || [];
+            const days = Array.isArray(rawDays) ? rawDays.map((d: any) => (typeof d === 'number' ? d : Number(d))).filter((n: any) => !isNaN(n)) : [];
+            if (days.length > 0) {
+              if (!days.includes(runDateObj.getDay())) continue;
+            } else {
+              const eff = row.effective_from ? new Date(row.effective_from).getDay() : null;
+              if (eff !== null && eff !== runDateObj.getDay()) continue;
+            }
+          }
+          if (String(row.duration || '') === 'monthly') {
+            const monthlyDay = row.monthly_day ?? (row.effective_from ? new Date(row.effective_from).getDate() : null);
+            if (monthlyDay === null || monthlyDay !== runDateObj.getDate()) continue;
+          }
+        } catch (e) {
+          // ignore parsing errors and proceed
+        }
+
         // For today and future dates keep tasks pending; past dates mark as completed
         const initialStatus = runDate >= todayStr ? "pending" : "completed";
         const period = String(row.duration || "daily");

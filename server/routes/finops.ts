@@ -2552,8 +2552,13 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
         AND t.deleted_at IS NULL
         AND (
           (t.duration = 'daily' AND t.effective_from <= $1)
-          OR (t.duration = 'weekly' AND EXTRACT(DOW FROM $1::date) = EXTRACT(DOW FROM t.effective_from::date))
-          OR (t.duration = 'monthly' AND EXTRACT(DAY FROM $1::date) = EXTRACT(DAY FROM t.effective_from::date))
+          OR (
+            t.duration = 'weekly' AND (
+              (jsonb_array_length(COALESCE(t.weekly_days,'[]'::jsonb)) > 0 AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.weekly_days,'[]'::jsonb)) AS d WHERE (d::int) = EXTRACT(DOW FROM $1::date)))
+              OR (jsonb_array_length(COALESCE(t.weekly_days,'[]'::jsonb)) = 0 AND EXTRACT(DOW FROM $1::date) = EXTRACT(DOW FROM t.effective_from::date))
+            )
+          )
+          OR (t.duration = 'monthly' AND COALESCE(t.monthly_day, EXTRACT(DAY FROM t.effective_from::date)) = EXTRACT(DAY FROM $1::date))
         )
         GROUP BY t.id
         ORDER BY t.created_at DESC

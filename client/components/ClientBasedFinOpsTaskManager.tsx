@@ -3663,54 +3663,40 @@ export default function ClientBasedFinOpsTaskManager() {
                           Pick up to two days
                         </span>
                       )}
+                    </div>
+                  </div>
+                )}
 
-                      {taskForm.duration === "monthly" && (
-                        <div className="mt-3 w-full">
-                          <Label>Day of month</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Select
-                              value={
-                                taskForm.monthly_day
-                                  ? String(taskForm.monthly_day)
-                                  : ""
-                              }
-                              onValueChange={(val) => {
-                                const num = val ? Number(val) : null;
-                                setTaskForm((prev) => ({
-                                  ...prev,
-                                  monthly_day: num,
-                                }));
-                              }}
-                            >
-                              <SelectTrigger className="w-48">
-                                <SelectValue placeholder="Select day of month" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Array.from({ length: 31 }).map((_, i) => (
-                                  <SelectItem
-                                    key={`md-${i + 1}`}
-                                    value={String(i + 1)}
-                                  >
-                                    {i + 1}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                {taskForm.duration === "monthly" && (
+                  <div className="mt-3 w-full">
+                    <Label>Day of month</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Select
+                        value={taskForm.monthly_day ? String(taskForm.monthly_day) : ""}
+                        onValueChange={(val) => {
+                          const num = val ? Number(val) : null;
+                          setTaskForm((prev) => ({ ...prev, monthly_day: num }));
+                        }}
+                      >
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Select day of month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 31 }).map((_, i) => (
+                            <SelectItem key={`md-${i + 1}`} value={String(i + 1)}>
+                              {i + 1}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                            <div className="flex flex-wrap gap-2">
-                              {taskForm.monthly_day ? (
-                                <Badge variant="secondary">
-                                  {taskForm.monthly_day} ×
-                                </Badge>
-                              ) : (
-                                <span className="text-xs text-gray-500">
-                                  Leave empty to use effective from day
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {taskForm.monthly_day ? (
+                          <Badge variant="secondary">{taskForm.monthly_day} ×</Badge>
+                        ) : (
+                          <span className="text-xs text-gray-500">Leave empty to use effective from day</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}

@@ -42,6 +42,26 @@ async function getFinOpsSettings() {
   return res.rows[0];
 }
 
+// Ensure finops_tasks has recurrence columns for weekly/monthly scheduling
+async function ensureFinOpsRecurrenceColumns() {
+  try {
+    await pool.query(
+      `ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS weekly_days JSONB DEFAULT '[]'::jsonb`,
+    );
+    await pool.query(
+      `ALTER TABLE finops_tasks ADD COLUMN IF NOT EXISTS monthly_day INTEGER`,
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_finops_tasks_weekly_days ON finops_tasks USING GIN (weekly_days)`,
+    );
+  } catch (e) {
+    console.warn(
+      "Failed to ensure finops_tasks recurrence columns:",
+      (e as Error).message,
+    );
+  }
+}
+
 // GET pulse alerts setting
 router.get("/settings/pulse-alerts", async (req, res) => {
   try {
@@ -644,12 +664,15 @@ router.post("/tasks", async (req: Request, res: Response) => {
       try {
         await client.query("BEGIN");
 
-        // Insert main task with client information
+        // Ensure recurrence columns exist (backwards compatible)
+        await ensureFinOpsRecurrenceColumns();
+
+        // Insert main task with client information and recurrence fields
         const taskQuery = `
           INSERT INTO finops_tasks (
             task_name, description, client_id, client_name, assigned_to, reporting_managers,
-            escalation_managers, effective_from, duration, is_active, created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            escalation_managers, effective_from, duration, is_active, created_by, weekly_days, monthly_day
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING id
         `;
 
@@ -661,12 +684,16 @@ router.post("/tasks", async (req: Request, res: Response) => {
           typeof assigned_to === "string"
             ? assigned_to
             : JSON.stringify(assigned_to || []),
-          JSON.stringify(reporting_managers),
-          JSON.stringify(escalation_managers),
+          JSON.stringify(reporting_managers || []),
+          JSON.stringify(escalation_managers || []),
           effective_from,
           duration,
           is_active,
           created_by,
+          JSON.stringify(
+            Array.isArray(req.body.weekly_days) ? req.body.weekly_days : [],
+          ),
+          req.body.monthly_day ?? null,
         ]);
 
         console.log("✅ Task inserted with ID:", taskResult.rows[0].id);
@@ -1028,6 +1055,8 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
     // Update main task
     // -----------------------------
     console.log(`[Task ${taskId}] Updating main task...`);
+    await ensureFinOpsRecurrenceColumns();
+
     const updateTaskQuery = `
       UPDATE finops_tasks
       SET
@@ -1041,8 +1070,10 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
         is_active = $8,
         client_id = $9,
         client_name = $10,
+        weekly_days = $11,
+        monthly_day = $12,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $11
+      WHERE id = $13
     `;
     await client.query(updateTaskQuery, [
       task_name,
@@ -1057,6 +1088,10 @@ router.put("/tasks/:id", async (req: Request, res: Response) => {
       is_active,
       client_id,
       client_name,
+      JSON.stringify(
+        Array.isArray(req.body.weekly_days) ? req.body.weekly_days : [],
+      ),
+      req.body.monthly_day ?? null,
       taskId,
     ]);
     console.log(`[Task ${taskId}] Main task updated successfully.`);
@@ -2530,8 +2565,13 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
         AND t.deleted_at IS NULL
         AND (
           (t.duration = 'daily' AND t.effective_from <= $1)
-          OR (t.duration = 'weekly' AND EXTRACT(DOW FROM $1::date) = EXTRACT(DOW FROM t.effective_from::date))
-          OR (t.duration = 'monthly' AND EXTRACT(DAY FROM $1::date) = EXTRACT(DAY FROM t.effective_from::date))
+          OR (
+            t.duration = 'weekly' AND (
+              (jsonb_array_length(COALESCE(t.weekly_days,'[]'::jsonb)) > 0 AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.weekly_days,'[]'::jsonb)) AS d WHERE (d::int) = EXTRACT(DOW FROM $1::date)))
+              OR (jsonb_array_length(COALESCE(t.weekly_days,'[]'::jsonb)) = 0 AND EXTRACT(DOW FROM $1::date) = EXTRACT(DOW FROM t.effective_from::date))
+            )
+          )
+          OR (t.duration = 'monthly' AND COALESCE(t.monthly_day, EXTRACT(DAY FROM t.effective_from::date)) = EXTRACT(DAY FROM $1::date))
         )
         GROUP BY t.id
         ORDER BY t.created_at DESC
@@ -2686,6 +2726,38 @@ router.post("/tracker/seed", async (req: Request, res: Response) => {
       const todayStr = new Date().toISOString().slice(0, 10);
       for (const row of tasksRes.rows) {
         if (!row.subtask_id) continue;
+        // Respect recurrence: skip weekly/monthly rows that do not apply to runDate
+        try {
+          const runDateObj = new Date(runDate + "T00:00:00");
+          if (String(row.duration || "") === "weekly") {
+            const rawDays = row.weekly_days || [];
+            const days = Array.isArray(rawDays)
+              ? rawDays
+                  .map((d: any) => (typeof d === "number" ? d : Number(d)))
+                  .filter((n: any) => !isNaN(n))
+              : [];
+            if (days.length > 0) {
+              if (!days.includes(runDateObj.getDay())) continue;
+            } else {
+              const eff = row.effective_from
+                ? new Date(row.effective_from).getDay()
+                : null;
+              if (eff !== null && eff !== runDateObj.getDay()) continue;
+            }
+          }
+          if (String(row.duration || "") === "monthly") {
+            const monthlyDay =
+              row.monthly_day ??
+              (row.effective_from
+                ? new Date(row.effective_from).getDate()
+                : null);
+            if (monthlyDay === null || monthlyDay !== runDateObj.getDate())
+              continue;
+          }
+        } catch (e) {
+          // ignore parsing errors and proceed
+        }
+
         // For today and future dates keep tasks pending; past dates mark as completed
         const initialStatus = runDate >= todayStr ? "pending" : "completed";
         const period = String(row.duration || "daily");

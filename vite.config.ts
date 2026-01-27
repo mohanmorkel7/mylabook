@@ -66,10 +66,19 @@ function expressPlugin(): Plugin {
       try {
         const app = createServer();
 
-        // Add Express app as middleware to Vite dev server with error handling
+        // Mount Express app only for API and server-side routes so Vite handles SPA assets
         server.middlewares.use((req, res, next) => {
           try {
-            app(req, res, next);
+            // If request is for API or server-side paths, forward to Express app
+            if (
+              req.url.startsWith("/api") ||
+              req.url.startsWith("/__api") ||
+              req.url.startsWith("/server")
+            ) {
+              return app(req, res, next);
+            }
+            // Otherwise let Vite handle static files and index.html
+            return next();
           } catch (error) {
             console.error("Express middleware error:", error);
             next(error);

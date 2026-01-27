@@ -248,6 +248,45 @@ const convertTo24Hour = (time12: string, period: string): string => {
   return `${adjustedHours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 };
 
+const DAY_NAMES = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+const dayNameToIndex: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+const weeklyDaysToNumbers = (raw: any): number[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((d: any) => {
+        if (typeof d === "number") return d;
+        const s = String(d).toLowerCase().trim();
+        if (/^\d+$/.test(s)) return Number(s);
+        if (s in dayNameToIndex) return dayNameToIndex[s];
+        const short = s.slice(0, 3);
+        for (const [k, v] of Object.entries(dayNameToIndex)) {
+          if (k.slice(0, 3) === short) return v;
+        }
+        return NaN;
+      })
+      .filter((n: number) => !isNaN(n));
+  }
+  return [];
+};
+
 // Enhanced interfaces with client integration
 interface ClientBasedFinOpsSubTask {
   id: string;
@@ -278,6 +317,8 @@ interface ClientBasedFinOpsTask {
   escalation_managers: string[];
   effective_from: string;
   duration: "daily" | "weekly" | "monthly";
+  weekly_days?: any;
+  monthly_day?: number | null;
   is_active: boolean;
   subtasks: ClientBasedFinOpsSubTask[];
   created_at: string;
@@ -885,7 +926,8 @@ export default function ClientBasedFinOpsTaskManager() {
     escalation_managers: [] as string[],
     effective_from: new Date().toISOString().split("T")[0],
     duration: "daily" as "daily" | "weekly" | "monthly",
-    weekly_days: [] as string[],
+    weekly_days: [] as number[],
+    monthly_day: null as number | null,
     is_active: true,
     subtasks: [] as ClientBasedFinOpsSubTask[],
   });
@@ -1205,7 +1247,8 @@ export default function ClientBasedFinOpsTaskManager() {
       escalation_managers: [],
       effective_from: new Date().toISOString().split("T")[0],
       duration: "daily",
-      weekly_days: [],
+      weekly_days: [] as number[],
+      monthly_day: null as number | null,
       is_active: true,
       subtasks: [],
     });
@@ -1278,14 +1321,19 @@ export default function ClientBasedFinOpsTaskManager() {
       if (!currentTask) return true;
       if (currentTask.duration === "daily") return taskStart <= today;
       if (currentTask.duration === "weekly") {
-        const days = Array.isArray((currentTask as any).weekly_days)
-          ? ((currentTask as any).weekly_days as string[]).map((d) =>
-              d.toLowerCase(),
-            )
-          : [];
+        const days = weeklyDaysToNumbers((currentTask as any).weekly_days);
         if (days.length === 0) return false;
-        const day = dayNames[today.getDay()];
-        return taskStart <= today && days.includes(day);
+        const dayIndex = today.getDay();
+        return taskStart <= today && days.includes(dayIndex);
+      }
+      if (currentTask.duration === "monthly") {
+        const monthlyDay =
+          (currentTask as any).monthly_day ??
+          (currentTask.effective_from
+            ? new Date(currentTask.effective_from).getDate()
+            : null);
+        if (!monthlyDay) return false;
+        return taskStart <= today && monthlyDay === today.getDate();
       }
       return taskStart.toDateString() === today.toDateString();
     })();
@@ -1740,9 +1788,32 @@ export default function ClientBasedFinOpsTaskManager() {
         ? new Date(task.effective_from).toISOString().split("T")[0]
         : new Date().toISOString().split("T")[0],
       duration: task.duration || "daily",
-      weekly_days: Array.isArray((task as any).weekly_days)
-        ? (task as any).weekly_days
-        : [],
+      weekly_days: (() => {
+        const raw = (task as any).weekly_days;
+        if (!raw) return [] as number[];
+        if (Array.isArray(raw)) {
+          return raw
+            .map((d: any) => {
+              if (typeof d === "number") return d;
+              const s = String(d).toLowerCase().trim();
+              const dayMap: Record<string, number> = {
+                sunday: 0,
+                monday: 1,
+                tuesday: 2,
+                wednesday: 3,
+                thursday: 4,
+                friday: 5,
+                saturday: 6,
+              };
+              if (/^\d+$/.test(s)) return Number(s);
+              if (s in dayMap) return dayMap[s];
+              return null;
+            })
+            .filter((n: any) => n !== null) as number[];
+        }
+        return [] as number[];
+      })(),
+      monthly_day: (task as any).monthly_day ?? null,
       is_active: task.is_active ?? true,
       subtasks: (task.subtasks || []).map((subtask) => ({
         ...subtask,
@@ -1834,16 +1905,20 @@ export default function ClientBasedFinOpsTaskManager() {
           return taskDate <= filterDate;
         }
         if (task.duration === "weekly") {
-          const days = Array.isArray((task as any).weekly_days)
-            ? ((task as any).weekly_days as string[]).map((d) =>
-                d.toLowerCase(),
-              )
-            : [];
+          const days = weeklyDaysToNumbers((task as any).weekly_days);
           if (days.length === 0) return false;
-          const day = dayNames[filterDate.getDay()];
-          return taskDate <= filterDate && days.includes(day);
+          const dayIndex = filterDate.getDay();
+          return taskDate <= filterDate && days.includes(dayIndex);
         }
-        // monthly and others: fallback to exact date match
+        if (task.duration === "monthly") {
+          const monthlyDay =
+            (task as any).monthly_day ??
+            (task.effective_from
+              ? new Date(task.effective_from).getDate()
+              : null);
+          if (!monthlyDay) return false;
+          return taskDate <= filterDate && monthlyDay === filterDate.getDate();
+        }
         return taskDate.toDateString() === filterDate.toDateString();
       })();
       if (!isActiveOnDate) {
@@ -3188,15 +3263,6 @@ export default function ClientBasedFinOpsTaskManager() {
                                 />
                                 {(slaWarning || subtask.start_time) &&
                                   (() => {
-                                    const dayNames = [
-                                      "sunday",
-                                      "monday",
-                                      "tuesday",
-                                      "wednesday",
-                                      "thursday",
-                                      "friday",
-                                      "saturday",
-                                    ];
                                     const today = dateFilter
                                       ? new Date(dateFilter)
                                       : new Date();
@@ -3208,19 +3274,28 @@ export default function ClientBasedFinOpsTaskManager() {
                                       if (task.duration === "daily")
                                         return taskStart <= today;
                                       if (task.duration === "weekly") {
-                                        const days = Array.isArray(
+                                        const days = weeklyDaysToNumbers(
                                           (task as any).weekly_days,
-                                        )
-                                          ? (
-                                              (task as any)
-                                                .weekly_days as string[]
-                                            ).map((d) => d.toLowerCase())
-                                          : [];
+                                        );
                                         if (days.length === 0) return false;
-                                        const day = dayNames[today.getDay()];
+                                        const dayIndex = today.getDay();
                                         return (
                                           taskStart <= today &&
-                                          days.includes(day)
+                                          days.includes(dayIndex)
+                                        );
+                                      }
+                                      if (task.duration === "monthly") {
+                                        const monthlyDay =
+                                          (task as any).monthly_day ??
+                                          (task.effective_from
+                                            ? new Date(
+                                                task.effective_from,
+                                              ).getDate()
+                                            : null);
+                                        if (!monthlyDay) return false;
+                                        return (
+                                          taskStart <= today &&
+                                          monthlyDay === today.getDate()
                                         );
                                       }
                                       return (
@@ -3512,13 +3587,24 @@ export default function ClientBasedFinOpsTaskManager() {
                     <div className="flex items-center gap-2 mt-1">
                       <Select
                         onValueChange={(value) => {
-                          const v = value.toLowerCase();
+                          const day = value.toLowerCase();
+                          const dayMap: Record<string, number> = {
+                            sunday: 0,
+                            monday: 1,
+                            tuesday: 2,
+                            wednesday: 3,
+                            thursday: 4,
+                            friday: 5,
+                            saturday: 6,
+                          };
+                          const idx = dayMap[day];
+                          if (idx === undefined) return;
                           setTaskForm((prev) => ({
                             ...prev,
-                            weekly_days: prev.weekly_days.includes(v)
+                            weekly_days: prev.weekly_days.includes(idx)
                               ? prev.weekly_days
                               : prev.weekly_days.length < 2
-                                ? [...prev.weekly_days, v]
+                                ? [...prev.weekly_days, idx]
                                 : prev.weekly_days,
                           }));
                         }}
@@ -3557,7 +3643,18 @@ export default function ClientBasedFinOpsTaskManager() {
                               }))
                             }
                           >
-                            {d.charAt(0).toUpperCase() + d.slice(1)} ×
+                            {
+                              [
+                                "Sunday",
+                                "Monday",
+                                "Tuesday",
+                                "Wednesday",
+                                "Thursday",
+                                "Friday",
+                                "Saturday",
+                              ][d]
+                            }{" "}
+                            ×
                           </Badge>
                         ))}
                       </div>
@@ -3566,6 +3663,54 @@ export default function ClientBasedFinOpsTaskManager() {
                           Pick up to two days
                         </span>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {taskForm.duration === "monthly" && (
+                  <div className="mt-3 w-full">
+                    <Label>Day of month</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Select
+                        value={
+                          taskForm.monthly_day
+                            ? String(taskForm.monthly_day)
+                            : ""
+                        }
+                        onValueChange={(val) => {
+                          const num = val ? Number(val) : null;
+                          setTaskForm((prev) => ({
+                            ...prev,
+                            monthly_day: num,
+                          }));
+                        }}
+                      >
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Select day of month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 31 }).map((_, i) => (
+                            <SelectItem
+                              key={`md-${i + 1}`}
+                              value={String(i + 1)}
+                            >
+                              {i + 1}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <div className="flex flex-wrap gap-2">
+                        {taskForm.monthly_day ? (
+                          <Badge variant="secondary">
+                            {taskForm.monthly_day} ×
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-500">
+                            Leave empty to use effective from day
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}

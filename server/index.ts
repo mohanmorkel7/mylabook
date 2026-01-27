@@ -37,8 +37,10 @@ import productMasterRouter from "./routes/product-master";
 import connectionsRouter from "./routes/connections";
 import mailConfigsRouter from "./routes/mail-configs";
 import emailProcessingRouter from "./routes/email-processing";
+import slackImportRouter from "./routes/slack-import";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
 import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
+import { initialize as initializeSlackProcessingJob } from "./jobs/slackProcessingJob";
 
 // Production routes (database-only, no mock fallback)
 import templatesProductionRouter from "./routes/templates-production";
@@ -78,6 +80,18 @@ export function createServer() {
   } catch (e) {
     console.error(
       "Failed to initialize Email Processing Job:",
+      (e as any)?.message,
+    );
+  }
+
+  // Start Slack Processing Job (background cron)
+  try {
+    setTimeout(() => {
+      initializeSlackProcessingJob();
+    }, 800);
+  } catch (e) {
+    console.error(
+      "Failed to initialize Slack Processing Job:",
       (e as any)?.message,
     );
   }
@@ -375,6 +389,15 @@ export function createServer() {
   }
 
   try {
+    app.use("/api/tickets", slackImportRouter);
+    console.log(
+      "Slack import route loaded successfully (mounted at /api/tickets/import-slack)",
+    );
+  } catch (error) {
+    console.error("Error loading Slack import route:", error);
+  }
+
+  try {
     app.use("/api/products", productsRouter);
     app.use("/api/product-master", productMasterRouter);
     console.log("Products router loaded successfully");
@@ -493,6 +516,22 @@ export function createServer() {
   } catch (error) {
     console.error("Error loading FinOps production router:", error);
   }
+
+  // Allow Vite dev server to serve SPA assets by passing through non-API requests
+  app.use((req, _res, next) => {
+    // Keep Express handling API and internal vite paths, pass others to Vite middleware
+    if (
+      req.url.startsWith("/api") ||
+      req.url.startsWith("/@vite") ||
+      req.url.startsWith("/sockjs") ||
+      req.url.startsWith("/__vite_ping")
+    ) {
+      return next();
+    }
+
+    // Otherwise, do not send a response here; pass control to Vite middleware which will serve index.html/assets
+    return next();
+  });
 
   return app;
 }

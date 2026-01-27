@@ -1316,17 +1316,28 @@ export default function ManageTickets() {
       const createdEmailRows: any[] = [];
 
       const normalizeTagForTicket = (t: any): string[] => {
-        // Priority: description content (razorpay/payswiff), explicit tags, mail config provider, Manual
+        // Priority: explicit tags, description content (Slack, Razorpay, Payswiff), mail config provider, Manual
         try {
-          const desc = String(t.description || "").toLowerCase();
-          if (desc.includes("razorpay")) return ["Razorpay"];
-          if (desc.includes("payswiff")) return ["Payswiff"];
-        } catch (e) {}
-
-        try {
+          // 1) Explicit tags
           if (Array.isArray(t.tags) && t.tags.length > 0) {
             return t.tags.map((x: any) => String(x).trim()).filter(Boolean);
           }
+        } catch (e) {}
+
+        try {
+          const desc = String(t.description || "").toLowerCase();
+          // 2) Slack detection: look for '@slack.com' or 'slack from' patterns
+          if (
+            desc.includes("@slack.com") ||
+            desc.includes("slack from") ||
+            desc.includes("from@slack.com") ||
+            /\bslack\b/.test(desc)
+          )
+            return ["Slack"];
+
+          // 3) Known providers by description
+          if (desc.includes("razorpay")) return ["Razorpay"];
+          if (desc.includes("payswiff")) return ["Payswiff"];
         } catch (e) {}
 
         if (t.created_from_mail_config) {
@@ -2413,6 +2424,57 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Render tag badges (e.g., Slack) when present */}
+                          {(() => {
+                            const raw = (t as any).tags;
+                            let parsedTags: string[] = [];
+                            if (Array.isArray(raw) && raw.length > 0)
+                              parsedTags = raw.map(String);
+                            else if (typeof raw === "string") {
+                              try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length > 0)
+                                  parsedTags = parsed.map(String);
+                              } catch (e) {
+                                // not JSON
+                              }
+                              if (parsedTags.length === 0) {
+                                const m = raw.match(/^\{(.+)\}$/);
+                                if (m && m[1]) {
+                                  parsedTags = m[1]
+                                    .split(",")
+                                    .map((s) =>
+                                      s.replace(/^\"|\"$/g, "").trim(),
+                                    )
+                                    .filter(Boolean);
+                                } else if (raw) {
+                                  parsedTags = [raw];
+                                }
+                              }
+                            }
+
+                            if (parsedTags.length > 0) return parsedTags;
+
+                            // Fallback: derive tag(s) from description/mail config
+                            try {
+                              const derived = normalizeTagForTicket(t);
+                              if (Array.isArray(derived) && derived.length > 0)
+                                return derived;
+                              if (typeof derived === "string" && derived)
+                                return [derived];
+                            } catch (e) {}
+
+                            return [];
+                          })().map((tg: any, idx: number) => (
+                            <Badge
+                              key={`tag-${t.id}-${idx}`}
+                              variant="secondary"
+                            >
+                              {String(tg)}
+                            </Badge>
+                          ))}
+
                           {provider && (
                             <Badge variant="outline">{provider}</Badge>
                           )}
@@ -2651,6 +2713,57 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Render tag badges (e.g., Slack) when present */}
+                          {(() => {
+                            const raw = (t as any).tags;
+                            let parsedTags: string[] = [];
+                            if (Array.isArray(raw) && raw.length > 0)
+                              parsedTags = raw.map(String);
+                            else if (typeof raw === "string") {
+                              try {
+                                const parsed = JSON.parse(raw);
+                                if (Array.isArray(parsed) && parsed.length > 0)
+                                  parsedTags = parsed.map(String);
+                              } catch (e) {
+                                // not JSON
+                              }
+                              if (parsedTags.length === 0) {
+                                const m = raw.match(/^\{(.+)\}$/);
+                                if (m && m[1]) {
+                                  parsedTags = m[1]
+                                    .split(",")
+                                    .map((s) =>
+                                      s.replace(/^\"|\"$/g, "").trim(),
+                                    )
+                                    .filter(Boolean);
+                                } else if (raw) {
+                                  parsedTags = [raw];
+                                }
+                              }
+                            }
+
+                            if (parsedTags.length > 0) return parsedTags;
+
+                            // Fallback: derive tag(s) from description/mail config
+                            try {
+                              const derived = normalizeTagForTicket(t);
+                              if (Array.isArray(derived) && derived.length > 0)
+                                return derived;
+                              if (typeof derived === "string" && derived)
+                                return [derived];
+                            } catch (e) {}
+
+                            return [];
+                          })().map((tg: any, idx: number) => (
+                            <Badge
+                              key={`tag-${t.id}-${idx}`}
+                              variant="secondary"
+                            >
+                              {String(tg)}
+                            </Badge>
+                          ))}
+
                           {provider && (
                             <Badge variant="outline">{provider}</Badge>
                           )}

@@ -2041,7 +2041,7 @@ router.patch(
             `
             UPDATE finops_subtasks
             SET status = $1,
-                started_at = CASE WHEN $2 THEN COALESCE(started_at, $4) ELSE started_at END,
+                started_at = CASE WHEN ($2 OR $3) THEN COALESCE(started_at, $4) ELSE started_at END,
                 completed_at = CASE WHEN $3 THEN $4 ELSE NULL END,
                 updated_at = CURRENT_TIMESTAMP
             WHERE task_id = $5 AND id = $6

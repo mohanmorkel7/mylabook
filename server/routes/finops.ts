@@ -1917,7 +1917,7 @@ router.patch(
 
           const st = stRes.rows[0];
 
-          const startedAt = status === "in_progress" ? updateDateObj : null;
+          const startedAt = status === "in_progress" ? updateDateObj : (status === "completed" ? updateDateObj : null);
           const completedAt = status === "completed" ? updateDateObj : null;
 
           const insertRes = await pool.query(
@@ -2090,10 +2090,7 @@ router.patch(
             );
           }
         } catch (e) {
-          console.warn(
-            "Failed to persist delayed/overdue timestamps:",
-            e?.message || e,
-          );
+          console.warn("Failed to persist delayed/overdue timestamps:", e?.message || e);
         }
 
         // Fetch updated row for logging/notifications

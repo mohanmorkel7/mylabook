@@ -91,6 +91,8 @@ interface EnhancedFinOpsSubTask {
   assigned_to?: string;
   started_at?: string;
   completed_at?: string;
+  delayed_at?: string;
+  overdue_at?: string;
   due_at?: string;
   delay_reason?: string;
   delay_notes?: string;

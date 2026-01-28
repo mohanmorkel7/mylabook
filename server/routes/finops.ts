@@ -2196,6 +2196,10 @@ router.patch(
         if (status === "delayed") {
           (subtask as any).delay_reason = delay_reason;
           (subtask as any).delay_notes = delay_notes;
+          (subtask as any).delayed_at = updateDateObj.toISOString();
+        }
+        if (status === "overdue") {
+          (subtask as any).overdue_at = updateDateObj.toISOString();
         }
 
         res.json({

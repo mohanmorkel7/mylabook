@@ -2062,6 +2062,37 @@ router.patch(
           );
         }
 
+        // Ensure delayed/overdue timestamp columns exist and persist them
+        try {
+          await pool.query(`
+            ALTER TABLE finops_subtasks
+              ADD COLUMN IF NOT EXISTS delayed_at TIMESTAMP NULL,
+              ADD COLUMN IF NOT EXISTS overdue_at TIMESTAMP NULL
+          `);
+
+          if (status === "delayed") {
+            await pool.query(
+              `UPDATE finops_subtasks SET delayed_at = COALESCE(delayed_at, $1) WHERE task_id = $2 AND id = $3`,
+              [updateDateObj, taskId, subtaskId],
+            );
+            await pool.query(
+              `UPDATE finops_tracker SET delayed_at = COALESCE(delayed_at, $1) WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+              [updateDateObj, updateDate, taskId, subtaskId],
+            );
+          } else if (status === "overdue") {
+            await pool.query(
+              `UPDATE finops_subtasks SET overdue_at = COALESCE(overdue_at, $1) WHERE task_id = $2 AND id = $3`,
+              [updateDateObj, taskId, subtaskId],
+            );
+            await pool.query(
+              `UPDATE finops_tracker SET overdue_at = COALESCE(overdue_at, $1) WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+              [updateDateObj, updateDate, taskId, subtaskId],
+            );
+          }
+        } catch (e) {
+          console.warn("Failed to persist delayed/overdue timestamps:", e?.message || e);
+        }
+
         // Fetch updated row for logging/notifications
         const updatedRes = await pool.query(
           `

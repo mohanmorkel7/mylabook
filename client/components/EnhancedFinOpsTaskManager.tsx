@@ -891,19 +891,44 @@ export default function EnhancedFinOpsTaskManager() {
                                   <div className="text-xs text-gray-500 flex items-center gap-3">
                                     <span>Start: {subtask.start_time}</span>
                                     {subtask.started_at && (
-                                      <span>Started: {format(new Date(subtask.started_at), "h:mm a")}</span>
+                                      <span>
+                                        Started:{" "}
+                                        {format(
+                                          new Date(subtask.started_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
                                     )}
                                     {subtask.completed_at && (
-                                      <span>Completed: {format(new Date(subtask.completed_at), "h:mm a")}</span>
+                                      <span>
+                                        Completed:{" "}
+                                        {format(
+                                          new Date(subtask.completed_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
                                     )}
                                     {subtask.delayed_at && (
-                                      <span className="text-yellow-700">Delayed: {format(new Date(subtask.delayed_at), "h:mm a")}</span>
+                                      <span className="text-yellow-700">
+                                        Delayed:{" "}
+                                        {format(
+                                          new Date(subtask.delayed_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
                                     )}
                                     {subtask.overdue_at && (
-                                      <span className="text-red-700">Overdue: {format(new Date(subtask.overdue_at), "h:mm a")}</span>
+                                      <span className="text-red-700">
+                                        Overdue:{" "}
+                                        {format(
+                                          new Date(subtask.overdue_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
                                     )}
                                     <span>
-                                      SLA: {subtask.sla_hours}h {subtask.sla_minutes}m
+                                      SLA: {subtask.sla_hours}h{" "}
+                                      {subtask.sla_minutes}m
                                     </span>
                                     {subtask.status === "delayed" &&
                                       subtask.delay_reason && (

@@ -2090,7 +2090,10 @@ router.patch(
             );
           }
         } catch (e) {
-          console.warn("Failed to persist delayed/overdue timestamps:", e?.message || e);
+          console.warn(
+            "Failed to persist delayed/overdue timestamps:",
+            e?.message || e,
+          );
         }
 
         // Fetch updated row for logging/notifications

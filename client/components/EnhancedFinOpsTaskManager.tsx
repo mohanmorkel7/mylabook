@@ -274,9 +274,13 @@ function SortableSubTaskItem({
                   try {
                     if (subtask.start_time && subtask.status === "pending") {
                       const istNow = new Date(
-                        new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+                        new Date().toLocaleString("en-US", {
+                          timeZone: "Asia/Kolkata",
+                        }),
                       );
-                      const [hh, mm] = (subtask.start_time || "").split(":").map(Number);
+                      const [hh, mm] = (subtask.start_time || "")
+                        .split(":")
+                        .map(Number);
                       const scheduled = new Date(
                         istNow.getFullYear(),
                         istNow.getMonth(),
@@ -284,14 +288,27 @@ function SortableSubTaskItem({
                         hh || 0,
                         mm || 0,
                       );
-                      const scheduledMinus30 = new Date(scheduled.getTime() - 30 * 60000);
-                      if (istNow.getTime() < scheduledMinus30.getTime()) isEditable = false;
+                      const scheduledMinus30 = new Date(
+                        scheduled.getTime() - 30 * 60000,
+                      );
+                      if (istNow.getTime() < scheduledMinus30.getTime())
+                        isEditable = false;
                     }
                   } catch (e) {}
 
                   return (
-                    <Select value={subtask.status} onValueChange={handleStatusChange} disabled={!isEditable}>
-                      <SelectTrigger title={isEditable ? undefined : "Locked until 30 minutes before Start time (IST)"}>
+                    <Select
+                      value={subtask.status}
+                      onValueChange={handleStatusChange}
+                      disabled={!isEditable}
+                    >
+                      <SelectTrigger
+                        title={
+                          isEditable
+                            ? undefined
+                            : "Locked until 30 minutes before Start time (IST)"
+                        }
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

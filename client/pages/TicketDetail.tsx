@@ -1008,7 +1008,7 @@ export default function TicketDetailPage() {
                 <div>
                   <div className="text-gray-500">Created</div>
                   <div className="font-medium">
-                    {new Date(ticket.created_at).toLocaleString()}
+                    {formatToISTDateTime(ticket.created_at)}
                   </div>
                 </div>
 

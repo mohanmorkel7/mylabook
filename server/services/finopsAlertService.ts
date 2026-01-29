@@ -254,12 +254,12 @@ class FinOpsAlertService {
     try {
       console.log("Checking for daily tasks to execute...");
 
-      const today = getCurrentISTTime().toISOString().split("T")[0];
+      const today = getCurrentISTDateString();
 
       const tasksToExecute = await pool.query(
         `
-        SELECT * FROM finops_tasks 
-        WHERE is_active = true 
+        SELECT * FROM finops_tasks
+        WHERE is_active = true
         AND duration = 'daily'
         AND effective_from <= $1
         AND (last_run_at IS NULL OR DATE(last_run_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') < $1)

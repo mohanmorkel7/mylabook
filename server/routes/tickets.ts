@@ -308,11 +308,24 @@ router.get("/", async (req: Request, res: Response) => {
         try {
           const offset = (page - 1) * effectiveLimit;
           const rowsRes = await pool.query(
-            `SELECT t.*,
+            `SELECT
+              t.id, t.track_id, t.subject, t.description,
+              t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
+              t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
               to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
               to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
-              to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso
+              to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
+              tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
+              ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
+              tc.id as category_id_join, tc.name as category_name, tc.color as category_color,
+              creator.id as creator_id, creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
+              assignee.id as assignee_id, assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
              FROM tickets t
+             LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
+             LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+             LEFT JOIN ticket_categories tc ON t.category_id = tc.id
+             LEFT JOIN users creator ON t.created_by = creator.id
+             LEFT JOIN users assignee ON t.assigned_to = assignee.id
              ORDER BY t.created_at DESC
              LIMIT $1 OFFSET $2`,
             [effectiveLimit, offset],
@@ -324,12 +337,49 @@ router.get("/", async (req: Request, res: Response) => {
           const totalCount = Number(countRes.rows[0]?.cnt || 0);
           const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
 
-          // Map iso fields back to created_at/updated_at/sla_time for client
+          // Map iso fields and reshape data for client
           const tickets = (rowsRes.rows || []).map((r: any) => ({
-            ...r,
+            id: r.id,
+            track_id: r.track_id,
+            subject: r.subject,
+            description: r.description,
+            priority_id: r.priority_id,
+            status_id: r.status_id,
+            category_id: r.category_id,
+            created_by: r.created_by,
+            assigned_to: r.assigned_to,
             created_at: r.created_at_iso || r.created_at,
             updated_at: r.updated_at_iso || r.updated_at,
             sla_time: r.sla_time_iso || r.sla_time,
+            demand: r.demand,
+            mail_config_id: r.mail_config_id,
+            priority: r.priority_id_join ? {
+              id: r.priority_id_join,
+              name: r.priority_name,
+              level: r.priority_level,
+              color: r.priority_color,
+            } : null,
+            status: r.status_id_join ? {
+              id: r.status_id_join,
+              name: r.status_name,
+              color: r.status_color,
+              is_closed: r.status_is_closed,
+            } : null,
+            category: r.category_id_join ? {
+              id: r.category_id_join,
+              name: r.category_name,
+              color: r.category_color,
+            } : null,
+            creator: r.creator_id ? {
+              id: r.creator_id,
+              name: r.creator_name,
+              email: r.creator_email,
+            } : null,
+            assignee: r.assignee_id ? {
+              id: r.assignee_id,
+              name: r.assignee_name,
+              email: r.assignee_email,
+            } : null,
           }));
 
           return res.json({

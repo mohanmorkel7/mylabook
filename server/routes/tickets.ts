@@ -321,8 +321,25 @@ router.get("/", async (req: Request, res: Response) => {
           `Tickets fetch failed or timed out after ${dur}ms:`,
           err?.message || err,
         );
-        // If the underlying DB query is still running it will complete eventually, but respond with 504 to the client.
-        return res.status(504).json({ error: "Tickets request timed out" });
+        // If the DB query timed out, return a graceful fallback so the UI can render instead of a hard 504.
+        try {
+          const fallback = FALLBACK_TICKETS.map((t) => ({
+            ...t,
+            description_preview: t.description.slice(0, 200),
+          }));
+          return res.status(200).json({
+            tickets: fallback,
+            total: fallback.length,
+            pages: 1,
+            status: "fallback",
+            server_time: new Date().toISOString(),
+            message:
+              "Database timeout — returning fallback tickets. Please check DB connectivity.",
+          });
+        } catch (e) {
+          // If even the fallback fails, return 504
+          return res.status(504).json({ error: "Tickets request timed out" });
+        }
       }
 
       const dur = Date.now() - startMs;

@@ -632,7 +632,7 @@ export default function TicketDetailPage() {
                       <div className="font-medium">
                         {c.user?.name || "User"}
                       </div>
-                      <div>{new Date(c.created_at).toLocaleString()}</div>
+                      <div>{formatToISTDateTime(c.created_at)}</div>
                     </div>
                     <div
                       className="mt-2 text-gray-900"

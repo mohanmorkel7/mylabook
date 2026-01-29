@@ -504,8 +504,7 @@ function SortableSubTaskItem({
                     )}
                     <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
                       <span>
-                        Start:{" "}
-                        {(() => {
+                        Start: {(() => {
                           if (!subtask.start_time) return "Not set";
                           const { time, period } = convertTo12Hour(
                             subtask.start_time,
@@ -515,17 +514,39 @@ function SortableSubTaskItem({
                             : subtask.start_time;
                         })()}
                       </span>
+
                       {subtask.started_at && (
                         <span>
-                          Started:{" "}
-                          {new Date(subtask.started_at).toLocaleTimeString(
+                          In progress: {new Date(subtask.started_at).toLocaleTimeString(
                             "en-US",
-                            {
-                              hour: "numeric",
-                              minute: "2-digit",
-                              hour12: true,
-                              timeZone: "Asia/Kolkata",
-                            },
+                            { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" },
+                          )}
+                        </span>
+                      )}
+
+                      {subtask.delayed_at && (
+                        <span className="text-yellow-700">
+                          Delayed: {new Date(subtask.delayed_at).toLocaleTimeString(
+                            "en-US",
+                            { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" },
+                          )}
+                        </span>
+                      )}
+
+                      {subtask.overdue_at && (
+                        <span className="text-red-700">
+                          Overdue: {new Date(subtask.overdue_at).toLocaleTimeString(
+                            "en-US",
+                            { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" },
+                          )}
+                        </span>
+                      )}
+
+                      {subtask.completed_at && (
+                        <span className="text-green-700">
+                          Completed: {new Date(subtask.completed_at).toLocaleTimeString(
+                            "en-US",
+                            { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" },
                           )}
                         </span>
                       )}

@@ -1016,7 +1016,7 @@ export default function TicketDetailPage() {
                   <div>
                     <div className="text-gray-500">Last Updated</div>
                     <div className="font-medium">
-                      {new Date(ticket.updated_at).toLocaleString()}
+                      {formatToISTDateTime(ticket.updated_at)}
                     </div>
                   </div>
                 )}

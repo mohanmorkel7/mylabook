@@ -722,8 +722,44 @@ export class TicketRepository {
       t.mail_config_id,
       t.created_at,
       t.updated_at,
-      to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
-      (EXTRACT(EPOCH FROM ((t.sla_time AT TIME ZONE 'Asia/Kolkata') - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
+      to_char((
+        CASE
+          WHEN t.sla_time IS NOT NULL THEN t.sla_time
+          WHEN t.demand IS NOT NULL THEN t.created_at + (t.demand * INTERVAL '5 hours')
+          ELSE (
+            t.created_at + (
+              CASE COALESCE(t.priority_id, 0)
+                WHEN 0 THEN INTERVAL '2 hours'
+                WHEN 1 THEN INTERVAL '2 hours'
+                WHEN 2 THEN INTERVAL '5 hours'
+                WHEN 3 THEN INTERVAL '8 hours'
+                WHEN 4 THEN INTERVAL '24 hours'
+                WHEN 5 THEN INTERVAL '48 hours'
+                ELSE INTERVAL '5 hours'
+              END
+            )
+          )
+        END
+      ) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
+      (EXTRACT(EPOCH FROM ((
+        CASE
+          WHEN t.sla_time IS NOT NULL THEN t.sla_time
+          WHEN t.demand IS NOT NULL THEN t.created_at + (t.demand * INTERVAL '5 hours')
+          ELSE (
+            t.created_at + (
+              CASE COALESCE(t.priority_id, 0)
+                WHEN 0 THEN INTERVAL '2 hours'
+                WHEN 1 THEN INTERVAL '2 hours'
+                WHEN 2 THEN INTERVAL '5 hours'
+                WHEN 3 THEN INTERVAL '8 hours'
+                WHEN 4 THEN INTERVAL '24 hours'
+                WHEN 5 THEN INTERVAL '48 hours'
+                ELSE INTERVAL '5 hours'
+              END
+            )
+          )
+        END
+      ) AT TIME ZONE 'Asia/Kolkata') - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
       tc.name as category_name, tc.color as category_color,

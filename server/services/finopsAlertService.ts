@@ -332,7 +332,9 @@ class FinOpsAlertService {
 
       // If the scheduled time has passed today, the task is overdue
       // Treat equality/near-equality as overdue (minutes >= 0)
-      const minutesOverdue = Math.floor((now.getTime() - dueTime.getTime()) / (1000 * 60));
+      const minutesOverdue = Math.floor(
+        (now.getTime() - dueTime.getTime()) / (1000 * 60),
+      );
 
       if (minutesOverdue >= 0) {
         console.log(

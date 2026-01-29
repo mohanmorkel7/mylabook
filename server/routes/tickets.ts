@@ -481,7 +481,7 @@ router.get("/summary", async (req: Request, res: Response) => {
     const totalOpen = Number(openRes.rows[0]?.cnt || 0);
 
     // Count currently-overdue open tickets: SLA timestamp in the past OR status name indicates overdue
-    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND ((t.sla_time IS NOT NULL AND t.sla_time < NOW()) OR LOWER(ts.name) LIKE '%overdue%')`;
+    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND ((t.sla_time IS NOT NULL AND (t.sla_time AT TIME ZONE 'Asia/Kolkata') < NOW()) OR LOWER(ts.name) LIKE '%overdue%')`;
     const overdueOpenRes = await pool.query(overdueOpenQuery, values);
     const overdueOpen = Number(overdueOpenRes.rows[0]?.cnt || 0);
     const nonOverdueOpen = Math.max(0, totalOpen - overdueOpen);

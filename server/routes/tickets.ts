@@ -353,33 +353,43 @@ router.get("/", async (req: Request, res: Response) => {
             sla_time: r.sla_time_iso || r.sla_time,
             demand: r.demand,
             mail_config_id: r.mail_config_id,
-            priority: r.priority_id_join ? {
-              id: r.priority_id_join,
-              name: r.priority_name,
-              level: r.priority_level,
-              color: r.priority_color,
-            } : null,
-            status: r.status_id_join ? {
-              id: r.status_id_join,
-              name: r.status_name,
-              color: r.status_color,
-              is_closed: r.status_is_closed,
-            } : null,
-            category: r.category_id_join ? {
-              id: r.category_id_join,
-              name: r.category_name,
-              color: r.category_color,
-            } : null,
-            creator: r.creator_id ? {
-              id: r.creator_id,
-              name: r.creator_name,
-              email: r.creator_email,
-            } : null,
-            assignee: r.assignee_id ? {
-              id: r.assignee_id,
-              name: r.assignee_name,
-              email: r.assignee_email,
-            } : null,
+            priority: r.priority_id_join
+              ? {
+                  id: r.priority_id_join,
+                  name: r.priority_name,
+                  level: r.priority_level,
+                  color: r.priority_color,
+                }
+              : null,
+            status: r.status_id_join
+              ? {
+                  id: r.status_id_join,
+                  name: r.status_name,
+                  color: r.status_color,
+                  is_closed: r.status_is_closed,
+                }
+              : null,
+            category: r.category_id_join
+              ? {
+                  id: r.category_id_join,
+                  name: r.category_name,
+                  color: r.category_color,
+                }
+              : null,
+            creator: r.creator_id
+              ? {
+                  id: r.creator_id,
+                  name: r.creator_name,
+                  email: r.creator_email,
+                }
+              : null,
+            assignee: r.assignee_id
+              ? {
+                  id: r.assignee_id,
+                  name: r.assignee_name,
+                  email: r.assignee_email,
+                }
+              : null,
           }));
 
           return res.json({

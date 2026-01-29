@@ -650,7 +650,7 @@ class FinOpsAlertService {
       ON finops_external_alerts(task_id, subtask_id, alert_group, alert_bucket);
     `);
 
-      const now = getCurrentISTTime();
+      const now = new Date();
       for (const row of result.rows) {
         const since = row.overdue_since ? new Date(row.overdue_since) : null;
         if (!since) continue;

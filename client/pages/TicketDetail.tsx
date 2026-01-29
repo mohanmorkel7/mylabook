@@ -421,9 +421,7 @@ export default function TicketDetailPage() {
             )}
             <span>Created {formatToISTDateTime(ticket.created_at)}</span>
             {ticket.updated_at && (
-              <span>
-                • Updated {formatToISTDateTime(ticket.updated_at)}
-              </span>
+              <span>• Updated {formatToISTDateTime(ticket.updated_at)}</span>
             )}
           </div>
         </div>

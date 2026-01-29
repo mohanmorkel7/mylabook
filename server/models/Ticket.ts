@@ -722,6 +722,7 @@ export class TicketRepository {
       t.mail_config_id,
       t.created_at,
       t.updated_at,
+      to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
       (EXTRACT(EPOCH FROM ((t.sla_time AT TIME ZONE 'Asia/Kolkata') - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,

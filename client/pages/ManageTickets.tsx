@@ -1752,17 +1752,9 @@ export default function ManageTickets() {
           ? clientNowMs - serverTimeOffsetRef.current
           : clientNowMs;
 
-      // Prefer using the authoritative sla_time timestamp when available. This avoids
-      // inconsistencies when server-provided sla_remaining_ms is stale or computed
-      // with a different reference time.
-      if (ticket.sla_time) {
-        const parsed = parseTimestampAsUTC(ticket.sla_time);
-        const ts = parsed ? parsed.getTime() : NaN;
-        if (isNaN(ts)) return null;
-        return ts - serverNowMs;
-      }
-
-      // If server provided a precomputed remaining ms, adjust it based on elapsed time since that computation
+      // If server provided a precomputed remaining ms, prefer using it and adjust
+      // for elapsed time since server computed it. This uses the server's authoritative
+      // SLA calculation and avoids mismatches due to server/client timezone handling.
       if (
         ticket.sla_remaining_ms !== undefined &&
         ticket.sla_remaining_ms !== null
@@ -1772,6 +1764,14 @@ export default function ManageTickets() {
         );
         const elapsedSinceBase = serverNowMs - baseTime;
         return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
+      }
+
+      // Fallback to using sla_time timestamp if available
+      if (ticket.sla_time) {
+        const parsed = parseTimestampAsUTC(ticket.sla_time);
+        const ts = parsed ? parsed.getTime() : NaN;
+        if (isNaN(ts)) return null;
+        return ts - serverNowMs;
       }
 
       // Fallback mapping (use priority IDs that the UI uses)

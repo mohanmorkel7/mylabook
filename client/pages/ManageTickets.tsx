@@ -1793,10 +1793,7 @@ export default function ManageTickets() {
         ? parseTimestampAsUTC(ticket.created_at).getTime()
         : NaN;
       if (isNaN(createdTs)) return null;
-      const IST_OFFSET_MS = 5.5 * 3600 * 1000;
-      // Add IST offset to created_at so SLA calculation uses IST wall clock as requested
-      const istCreatedTs = createdTs + IST_OFFSET_MS;
-      const slaTs = istCreatedTs + hours * 3600 * 1000;
+      const slaTs = createdTs + hours * 3600 * 1000;
       return slaTs - serverNowMs;
     } catch (e) {
       console.error("SLA compute error", e);

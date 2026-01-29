@@ -1779,8 +1779,12 @@ export default function ManageTickets() {
           }
 
           // Otherwise treat as IST wall time (YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS)
-          const tsPart = s.includes("T") ? s.split("T")[0] + "T" + s.split("T")[1] : s;
-          const match = tsPart.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+          const tsPart = s.includes("T")
+            ? s.split("T")[0] + "T" + s.split("T")[1]
+            : s;
+          const match = tsPart.match(
+            /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/,
+          );
           if (!match) return null;
           const y = Number(match[1]);
           const m = Number(match[2]);

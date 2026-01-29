@@ -289,11 +289,8 @@ class FinOpsAlertService {
    * Check SLA for individual subtask and send alerts if needed
    */
   private async checkSubtaskSLA(task: any, subtask: any): Promise<void> {
-    const now = getCurrentISTTime();
-
-    // console.log(
-    //   `Checking SLA for subtask ${subtask.id} (${subtask.name}): status=${subtask.status}`,
-    // );
+    // Use server 'now' for accurate epoch comparisons, but derive the IST date components explicitly
+    const now = new Date();
 
     // Only check pending tasks for overdue status
     if (subtask.status !== "pending") {
@@ -303,28 +300,33 @@ class FinOpsAlertService {
       return;
     }
 
-    // Calculate due time based on task schedule (start_time)
+    // Calculate due time based on task schedule (start_time) using explicit IST timezone parsing
     // For pending tasks, we check against their scheduled start time
     let dueTime: Date;
 
     if (subtask.start_time) {
       // Parse start_time (format: "HH:MM:SS" or "HH:MM")
-      const today = getCurrentISTTime();
+      // Get IST date components (year/month/day) using a safe extraction from an IST-localized Date instance
+      const istNowForParts = new Date(
+        new Date().toLocaleString("en-US", { timeZone: IST_TIMEZONE }),
+      );
+      const year = istNowForParts.getFullYear();
+      const month = istNowForParts.getMonth() + 1; // 1-based month
+      const day = istNowForParts.getDate();
+
       const [hours, minutes] = subtask.start_time.split(":").map(Number);
 
-      dueTime = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate(),
-        hours,
-        minutes || 0,
-      );
+      // Build a timezone-aware ISO string for IST (+05:30) so Date parsing yields the correct UTC epoch for that IST wall time
+      const two = (n: number) => String(n).padStart(2, "0");
+      const iso = `${year}-${two(month)}-${two(day)}T${two(
+        hours || 0,
+      )}:${two(minutes || 0)}:00+05:30`;
+
+      dueTime = new Date(iso);
 
       // If the scheduled time has passed today, the task is overdue
       // Treat equality/near-equality as overdue (minutes >= 0)
-      const minutesOverdue = Math.floor(
-        (now.getTime() - dueTime.getTime()) / (1000 * 60),
-      );
+      const minutesOverdue = Math.floor((now.getTime() - dueTime.getTime()) / (1000 * 60));
 
       if (minutesOverdue >= 0) {
         console.log(

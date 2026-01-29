@@ -189,8 +189,7 @@ const FALLBACK_TICKETS = [
     id: 1,
     track_id: "TKT-0001",
     subject: "(Mock) System unavailable",
-    description:
-      "Mock ticket returned because the database is currently unreachable.",
+    description: "Mock ticket returned because the database is currently unreachable.",
     priority_id: 3,
     status_id: 2,
     category_id: 1,
@@ -199,13 +198,7 @@ const FALLBACK_TICKETS = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     priority: { id: 3, name: "High", level: 3, color: "#EF4444" },
-    status: {
-      id: 2,
-      name: "In Progress",
-      color: "#F59E0B",
-      is_closed: false,
-      sort_order: 2,
-    },
+    status: { id: 2, name: "In Progress", color: "#F59E0B", is_closed: false, sort_order: 2 },
     category: { id: 1, name: "Technical Issue", color: "#EF4444" },
     creator: { id: 1, name: "System", email: "system@mock" },
     assignee: { id: 1, name: "System", email: "system@mock" },
@@ -303,6 +296,46 @@ router.get("/", async (req: Request, res: Response) => {
 
       const startMs = Date.now();
       // Protect the route from extremely slow DB calls by racing with a timeout
+      // If client requests simple listing (raw tickets table), run a lightweight query
+      if (String(req.query.simple || "").trim() === "1") {
+        try {
+          const offset = (page - 1) * effectiveLimit;
+          const rowsRes = await pool.query(
+            `SELECT t.*,
+              to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
+              to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
+              to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso
+             FROM tickets t
+             ORDER BY t.created_at DESC
+             LIMIT $1 OFFSET $2`,
+            [effectiveLimit, offset],
+          );
+
+          const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM tickets`);
+          const totalCount = Number(countRes.rows[0]?.cnt || 0);
+          const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
+
+          // Map iso fields back to created_at/updated_at/sla_time for client
+          const tickets = (rowsRes.rows || []).map((r: any) => ({
+            ...r,
+            created_at: r.created_at_iso || r.created_at,
+            updated_at: r.updated_at_iso || r.updated_at,
+            sla_time: r.sla_time_iso || r.sla_time,
+          }));
+
+          return res.json({
+            tickets,
+            total: totalCount,
+            pages,
+            server_time: new Date().toISOString(),
+            mode: "simple",
+          });
+        } catch (err) {
+          console.error("Simple tickets query failed:", err?.message || err);
+          // Fall through to heavy query path which will handle timeouts/fallback
+        }
+      }
+
       const getAllPromise = TicketRepository.getAll(
         filters,
         page,

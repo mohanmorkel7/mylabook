@@ -1752,6 +1752,16 @@ export default function ManageTickets() {
           ? clientNowMs - serverTimeOffsetRef.current
           : clientNowMs;
 
+      // Prefer using the authoritative sla_time timestamp when available. This avoids
+      // inconsistencies when server-provided sla_remaining_ms is stale or computed
+      // with a different reference time.
+      if (ticket.sla_time) {
+        const parsed = parseTimestampAsUTC(ticket.sla_time);
+        const ts = parsed ? parsed.getTime() : NaN;
+        if (isNaN(ts)) return null;
+        return ts - serverNowMs;
+      }
+
       // If server provided a precomputed remaining ms, adjust it based on elapsed time since that computation
       if (
         ticket.sla_remaining_ms !== undefined &&
@@ -1762,14 +1772,6 @@ export default function ManageTickets() {
         );
         const elapsedSinceBase = serverNowMs - baseTime;
         return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
-      }
-
-      // If SLA timestamp is available, compute remaining relative to serverNowMs
-      if (ticket.sla_time) {
-        const parsed = parseTimestampAsUTC(ticket.sla_time);
-        const ts = parsed ? parsed.getTime() : NaN;
-        if (isNaN(ts)) return null;
-        return ts - serverNowMs;
       }
 
       // Fallback mapping (use priority IDs that the UI uses)
@@ -2372,8 +2374,8 @@ export default function ManageTickets() {
                     slaMs === null
                       ? "No SLA"
                       : slaMs <= 0
-                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                        : formatRemaining(slaMs);
+                      ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                      : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -2664,8 +2666,8 @@ export default function ManageTickets() {
                     slaMs === null
                       ? "No SLA"
                       : slaMs <= 0
-                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                        : formatRemaining(slaMs);
+                      ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                      : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,

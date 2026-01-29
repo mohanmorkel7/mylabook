@@ -422,7 +422,7 @@ export default function TicketDetailPage() {
             <span>Created {formatToISTDateTime(ticket.created_at)}</span>
             {ticket.updated_at && (
               <span>
-                • Updated {new Date(ticket.updated_at).toLocaleString()}
+                • Updated {formatToISTDateTime(ticket.updated_at)}
               </span>
             )}
           </div>

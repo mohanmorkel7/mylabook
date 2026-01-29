@@ -1759,7 +1759,10 @@ export default function ManageTickets() {
         const parsed = parseTimestampAsUTC(ticket.sla_time);
         const ts = parsed ? parsed.getTime() : NaN;
         if (isNaN(ts)) return null;
-        return ts - serverNowMs;
+        const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+        // Interpret sla_time in IST by adding the +05:30 offset so comparisons use IST wall clock
+        const istSlaTs = ts + IST_OFFSET_MS;
+        return istSlaTs - serverNowMs;
       }
 
       // If server provided a precomputed remaining ms, adjust it based on elapsed time since that computation

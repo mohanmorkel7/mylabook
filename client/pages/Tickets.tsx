@@ -237,9 +237,7 @@ useEffect(() => {
                   <td className="p-2">{t.status?.name}</td>
                   <td className="p-2">{t.assignee?.name || "-"}</td>
                   <td className="p-2">
-                    {t.created_at
-                      ? new Date(t.created_at).toLocaleString()
-                      : "-"}
+                    {t.created_at ? formatToISTDateTime(t.created_at) : "-"}
                   </td>
                   <td className="p-2">
                     <Link

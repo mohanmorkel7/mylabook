@@ -2369,7 +2369,11 @@ export default function ManageTickets() {
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);
                   const slaText =
-                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                    slaMs === null
+                      ? "No SLA"
+                      : slaMs <= 0
+                      ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                      : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -2657,7 +2661,11 @@ export default function ManageTickets() {
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);
                   const slaText =
-                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                    slaMs === null
+                      ? "No SLA"
+                      : slaMs <= 0
+                      ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                      : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,

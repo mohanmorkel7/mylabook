@@ -137,6 +137,13 @@ useEffect(() => {
 
   return (
     <div className="p-4">
+      {fallbackInfo && (
+        <div className="mb-4 p-3 rounded bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
+          <strong>Notice:</strong>{' '}
+          {fallbackInfo.message || "Showing fallback/mock tickets because the server or database is unavailable."}
+          {fallbackInfo.mode && <span className="ml-2">(mode: {fallbackInfo.mode})</span>}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Tickets</h1>
         <div className="flex items-center gap-2">

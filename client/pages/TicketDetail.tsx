@@ -43,6 +43,7 @@ import {
 import { ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
+import { formatToISTDateTime } from "@/lib/dateUtils";
 
 // Inline styles for email content rendering
 const emailBodyStyles = `

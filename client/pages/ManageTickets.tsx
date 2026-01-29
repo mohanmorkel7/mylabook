@@ -1952,8 +1952,14 @@ export default function ManageTickets() {
     activeOpenToShow = 0;
   } else {
     // Also defensively clamp overdue/active to not exceed openToShow
-    overdueOpenToShow = Math.max(0, Math.min(Number(overdueOpenToShow || 0), Number(openToShow)));
-    activeOpenToShow = Math.max(0, Number(openToShow) - Number(overdueOpenToShow || 0));
+    overdueOpenToShow = Math.max(
+      0,
+      Math.min(Number(overdueOpenToShow || 0), Number(openToShow)),
+    );
+    activeOpenToShow = Math.max(
+      0,
+      Number(openToShow) - Number(overdueOpenToShow || 0),
+    );
   }
 
   return (
@@ -2143,8 +2149,12 @@ export default function ManageTickets() {
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
             {openToShow > 0 ? (
               <div className="mt-2 text-xs text-gray-600 flex gap-3">
-                <span className="text-red-600">Overdue: {overdueOpenToShow}</span>
-                <span className="text-green-600">Active: {activeOpenToShow}</span>
+                <span className="text-red-600">
+                  Overdue: {overdueOpenToShow}
+                </span>
+                <span className="text-green-600">
+                  Active: {activeOpenToShow}
+                </span>
               </div>
             ) : null}
           </CardContent>

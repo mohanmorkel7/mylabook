@@ -419,7 +419,7 @@ export default function TicketDetailPage() {
                 {ticket.priority.name}
               </Badge>
             )}
-            <span>Created {new Date(ticket.created_at).toLocaleString()}</span>
+            <span>Created {formatToISTDateTime(ticket.created_at)}</span>
             {ticket.updated_at && (
               <span>
                 • Updated {new Date(ticket.updated_at).toLocaleString()}

@@ -85,8 +85,15 @@ export default function TicketsPage() {
     } catch (e) {
       setFallbackInfo(null);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error("Failed to load tickets:", err);
+    // Surface fallback info if available
+    try {
+      const m = err?.message || String(err || "Unknown error");
+      setFallbackInfo({ message: m, status: "error" });
+    } catch (e) {
+      setFallbackInfo({ message: "Failed to load tickets", status: "error" });
+    }
   } finally {
     setLoading(false);
   }

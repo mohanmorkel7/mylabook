@@ -19,7 +19,7 @@ export async function runMarkOverdueTickets() {
       `SELECT t.id, t.status_id, ts.name as status_name, ts.is_closed
        FROM tickets t
        LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
-       WHERE t.sla_time IS NOT NULL AND t.sla_time < NOW()`,
+       WHERE t.sla_time IS NOT NULL AND (t.sla_time AT TIME ZONE 'Asia/Kolkata') < NOW()`,
     );
 
     // console.log(

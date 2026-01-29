@@ -557,6 +557,8 @@ export default function ManageTickets() {
   const fetchTickets = async (page: number = 1) => {
     try {
       setIsLoading(true);
+      // Clear any server-provided overdue counts while loading fresh data to avoid stale summaries
+      setServerOverdueCounts(null);
 
       // Build server-side filters
       const serverFilters: any = {};
@@ -1936,10 +1938,28 @@ export default function ManageTickets() {
       );
       // Recompute activeOpen from openToShow minus overdue
       overdueOpenToShow = overdueOpenFromServer;
+      // Clamp overdue to not exceed openToShow
+      if (overdueOpenToShow > openToShow) overdueOpenToShow = openToShow;
       activeOpenToShow = Math.max(0, openToShow - overdueOpenToShow);
       // Recompute closed on-time
       onTimeClosedToShow = Math.max(0, displayedClosed - overdueClosedToShow);
     }
+  }
+
+  // Ensure breakdown doesn't show non-zero values when openToShow is zero
+  if (!openToShow || Number(openToShow) <= 0) {
+    overdueOpenToShow = 0;
+    activeOpenToShow = 0;
+  } else {
+    // Also defensively clamp overdue/active to not exceed openToShow
+    overdueOpenToShow = Math.max(
+      0,
+      Math.min(Number(overdueOpenToShow || 0), Number(openToShow)),
+    );
+    activeOpenToShow = Math.max(
+      0,
+      Number(openToShow) - Number(overdueOpenToShow || 0),
+    );
   }
 
   return (
@@ -2127,10 +2147,16 @@ export default function ManageTickets() {
               {openToShow}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
-            <div className="mt-2 text-xs text-gray-600 flex gap-3">
-              <span className="text-red-600">Overdue: {overdueOpenToShow}</span>
-              <span className="text-green-600">Active: {activeOpenToShow}</span>
-            </div>
+            {openToShow > 0 ? (
+              <div className="mt-2 text-xs text-gray-600 flex gap-3">
+                <span className="text-red-600">
+                  Overdue: {overdueOpenToShow}
+                </span>
+                <span className="text-green-600">
+                  Active: {activeOpenToShow}
+                </span>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

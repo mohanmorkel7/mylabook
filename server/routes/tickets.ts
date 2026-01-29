@@ -183,6 +183,28 @@ router.get("/metadata", async (req: Request, res: Response) => {
   }
 });
 
+// Fallback mock tickets used when DB is unavailable or queries time out
+const FALLBACK_TICKETS = [
+  {
+    id: 1,
+    track_id: "TKT-0001",
+    subject: "(Mock) System unavailable",
+    description: "Mock ticket returned because the database is currently unreachable.",
+    priority_id: 3,
+    status_id: 2,
+    category_id: 1,
+    created_by: 1,
+    assigned_to: 1,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    priority: { id: 3, name: "High", level: 3, color: "#EF4444" },
+    status: { id: 2, name: "In Progress", color: "#F59E0B", is_closed: false, sort_order: 2 },
+    category: { id: 1, name: "Technical Issue", color: "#EF4444" },
+    creator: { id: 1, name: "System", email: "system@mock" },
+    assignee: { id: 1, name: "System", email: "system@mock" },
+  },
+];
+
 // Get all tickets with filtering and pagination
 router.get("/", async (req: Request, res: Response) => {
   try {

@@ -524,6 +524,8 @@ router.get("/summary", async (req: Request, res: Response) => {
         nonOverdueClosed,
         totalOpen,
         totalClosed,
+        // historical ever-overdue open (for debugging/compatibility). May be undefined if computation failed.
+        everOverdueOpen: (values as any)._everOverdueOpen,
       },
     });
   } catch (err) {

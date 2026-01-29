@@ -480,10 +480,29 @@ router.get("/summary", async (req: Request, res: Response) => {
     const openRes = await pool.query(openQuery, values);
     const totalOpen = Number(openRes.rows[0]?.cnt || 0);
 
-    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND t.ever_overdue = TRUE`;
+    // Count currently-overdue open tickets: SLA timestamp in the past OR status name indicates overdue
+    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND ((t.sla_time IS NOT NULL AND (t.sla_time AT TIME ZONE 'Asia/Kolkata') < NOW()) OR LOWER(ts.name) LIKE '%overdue%')`;
     const overdueOpenRes = await pool.query(overdueOpenQuery, values);
     const overdueOpen = Number(overdueOpenRes.rows[0]?.cnt || 0);
     const nonOverdueOpen = Math.max(0, totalOpen - overdueOpen);
+
+    // Also compute historical ever-overdue count for debugging/compatibility
+    try {
+      const histQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND t.ever_overdue = TRUE`;
+      const histRes = await pool.query(histQuery, values);
+      const everOverdueOpen = Number(histRes.rows[0]?.cnt || 0);
+      // expose under a debugging key
+      // Note: we keep overdueOpen as the current overdue count
+      // and provide ever_overdue_open for historical reference
+      // (client can use if needed)
+      // Attach to response later via overdue_counts
+      // We'll pass everOverdueOpen in the response object
+      // by adding a field below.
+      // Save into a local variable available later
+      (values as any)._everOverdueOpen = everOverdueOpen;
+    } catch (e) {
+      // ignore historical computation errors
+    }
 
     // Closed
     const closedQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS TRUE)`;
@@ -505,6 +524,8 @@ router.get("/summary", async (req: Request, res: Response) => {
         nonOverdueClosed,
         totalOpen,
         totalClosed,
+        // historical ever-overdue open (for debugging/compatibility). May be undefined if computation failed.
+        everOverdueOpen: (values as any)._everOverdueOpen,
       },
     });
   } catch (err) {

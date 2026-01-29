@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import apiClient from "@/lib/api";
+import { formatToISTDateTime } from "@/lib/dateUtils";
 
 export default function TicketsPage() {
   const [filters, setFilters] = useState<any>({});

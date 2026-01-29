@@ -73,6 +73,18 @@ export default function TicketsPage() {
     const resp = await apiClient.getTickets(localFilters, page, limit);
     console.log("[TicketsPage] API response:", resp);
     setTicketsResp(resp);
+    // Capture fallback/mode info if server indicates it's returning fallback/mock data
+    try {
+      const status = resp?.status || resp?.mode || null;
+      const message = resp?.message || resp?.msg || null;
+      if (status === "fallback" || status === "mock" || resp?.status === "fallback") {
+        setFallbackInfo({ mode: resp?.mode, status: resp?.status, message });
+      } else {
+        setFallbackInfo(null);
+      }
+    } catch (e) {
+      setFallbackInfo(null);
+    }
   } catch (err) {
     console.error("Failed to load tickets:", err);
   } finally {

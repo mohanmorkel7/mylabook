@@ -2372,8 +2372,8 @@ export default function ManageTickets() {
                     slaMs === null
                       ? "No SLA"
                       : slaMs <= 0
-                      ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                      : formatRemaining(slaMs);
+                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                        : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -2664,8 +2664,8 @@ export default function ManageTickets() {
                     slaMs === null
                       ? "No SLA"
                       : slaMs <= 0
-                      ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
-                      : formatRemaining(slaMs);
+                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                        : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,

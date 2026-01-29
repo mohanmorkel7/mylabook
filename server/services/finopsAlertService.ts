@@ -754,7 +754,7 @@ class FinOpsAlertService {
         })),
       ];
 
-      const currentTimeIST = formatISTDateTime(getCurrentISTTime());
+      const currentTimeIST = formatISTDateTime(new Date());
       const subject = `⚠️ SLA Warning: ${task.task_name} - ${subtask.name}`;
       const message = `
         <h2>SLA Warning Alert</h2>
@@ -828,7 +828,7 @@ class FinOpsAlertService {
         })),
       ];
 
-      const currentTimeIST = formatISTDateTime(getCurrentISTTime());
+      const currentTimeIST = formatISTDateTime(new Date());
       const subject = `🚨 SLA OVERDUE: ${task.task_name} - ${subtask.name}`;
       const message = `
         <h2 style="color: #dc2626;">SLA OVERDUE ALERT</h2>

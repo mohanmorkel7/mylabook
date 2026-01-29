@@ -1766,12 +1766,35 @@ export default function ManageTickets() {
         return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
       }
 
-      // Fallback to using sla_time timestamp if available
+      // Fallback to using sla_time timestamp if available. Interpret the incoming
+      // sla_time as IST wall time when it lacks an explicit timezone (DB TIMESTAMP without tz).
       if (ticket.sla_time) {
-        const parsed = parseTimestampAsUTC(ticket.sla_time);
-        const ts = parsed ? parsed.getTime() : NaN;
-        if (isNaN(ts)) return null;
-        return ts - serverNowMs;
+        try {
+          const s = String(ticket.sla_time || "").trim();
+          // If timestamp contains timezone info or a trailing 'Z', treat it as UTC
+          if (/[Tt].*Z$/.test(s) || /[+\-]\d{2}:?\d{2}$/.test(s)) {
+            const parsed = new Date(s);
+            if (isNaN(parsed.getTime())) return null;
+            return parsed.getTime() - serverNowMs;
+          }
+
+          // Otherwise treat as IST wall time (YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS)
+          const tsPart = s.includes("T") ? s.split("T")[0] + "T" + s.split("T")[1] : s;
+          const match = tsPart.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+          if (!match) return null;
+          const y = Number(match[1]);
+          const m = Number(match[2]);
+          const d = Number(match[3]);
+          const hh = Number(match[4] || 0);
+          const mm = Number(match[5] || 0);
+          const ss = Number(match[6] || 0);
+          const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+          // Compute UTC epoch for the IST wall-time by subtracting IST offset
+          const dueUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss) - IST_OFFSET_MS;
+          return dueUtcMs - serverNowMs;
+        } catch (e) {
+          return null;
+        }
       }
 
       // Fallback mapping (use priority IDs that the UI uses)

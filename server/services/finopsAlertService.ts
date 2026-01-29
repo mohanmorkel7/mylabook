@@ -4,10 +4,16 @@ import * as nodemailer from "nodemailer";
 // IST timezone helper functions
 const IST_TIMEZONE = "Asia/Kolkata";
 
+// Return the current instant (server time) as a Date object. Use this for epoch comparisons.
 const getCurrentISTTime = (): Date => {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: IST_TIMEZONE }),
-  );
+  return new Date();
+};
+
+// Get current IST date string 'YYYY-MM-DD' — safe and used for DB queries that rely on IST day boundary
+const getCurrentISTDateString = (): string => {
+  const parts = new Date().toLocaleString("en-CA", { timeZone: IST_TIMEZONE });
+  // en-CA formats as YYYY-MM-DD, hh:mm:ss
+  return parts.split(" ")[0];
 };
 
 const convertToIST = (date: Date | string): Date => {

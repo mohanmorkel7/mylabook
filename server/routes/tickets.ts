@@ -542,10 +542,6 @@ router.get("/summary", async (req: Request, res: Response) => {
 // Returns counts grouped by assigned user and by status for a date range
 router.get("/summary/user-status", async (req: Request, res: Response) => {
   try {
-    if (!(await isDatabaseAvailable())) {
-      return res.status(503).json({ error: "Database unavailable" });
-    }
-
     // Parse query
     const status_id = req.query.status_id
       ? parseInt(req.query.status_id as string)

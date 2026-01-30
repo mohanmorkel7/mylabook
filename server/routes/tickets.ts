@@ -401,7 +401,15 @@ router.get("/", async (req: Request, res: Response) => {
           });
         } catch (err) {
           console.error("Simple tickets query failed:", err?.message || err);
-          // Fall through to heavy query path which will handle timeouts/fallback
+          // Return empty result instead of falling back to heavy query
+          return res.status(200).json({
+            tickets: [],
+            total: 0,
+            pages: 0,
+            server_time: new Date().toISOString(),
+            mode: "simple",
+            message: "Simple query failed, returning empty results",
+          });
         }
       }
 

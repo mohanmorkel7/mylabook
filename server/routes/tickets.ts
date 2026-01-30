@@ -71,7 +71,9 @@ router.get("/metadata", async (req: Request, res: Response) => {
         // Teams table may not exist
       }
       try {
-        const bucketsRes = await pool.query("SELECT * FROM ticket_buckets LIMIT 50");
+        const bucketsRes = await pool.query(
+          "SELECT * FROM ticket_buckets LIMIT 50",
+        );
         buckets = bucketsRes.rows;
       } catch (e) {
         // Buckets table may not exist
@@ -436,7 +438,13 @@ router.get("/", async (req: Request, res: Response) => {
           created_at: new Date("2024-01-16T14:30:00Z"),
           updated_at: new Date("2024-01-16T14:30:00Z"),
           priority: { id: 2, name: "Medium", level: 2, color: "#F59E0B" },
-          status: { id: 1, name: "Open", color: "#EF4444", is_closed: false, sort_order: 1 },
+          status: {
+            id: 1,
+            name: "Open",
+            color: "#EF4444",
+            is_closed: false,
+            sort_order: 1,
+          },
           category: { id: 2, name: "Performance", color: "#F59E0B" },
           creator: { id: 2, name: "Jane Smith", email: "jane@banani.com" },
           assignee: { id: 2, name: "Jane Smith", email: "jane@banani.com" },
@@ -823,21 +831,24 @@ router.post("/:ticketId/comments", async (req: Request, res: Response) => {
 });
 
 // Get user notifications
-router.get("/notifications/user/:userId", async (req: Request, res: Response) => {
-  try {
-    if (await isDatabaseAvailable()) {
-      const userId = parseInt(req.params.userId);
-      const notifications =
-        await TicketRepository.getUserNotifications(userId);
-      res.json({ notifications });
-    } else {
-      res.status(503).json({ error: "Database unavailable" });
+router.get(
+  "/notifications/user/:userId",
+  async (req: Request, res: Response) => {
+    try {
+      if (await isDatabaseAvailable()) {
+        const userId = parseInt(req.params.userId);
+        const notifications =
+          await TicketRepository.getUserNotifications(userId);
+        res.json({ notifications });
+      } else {
+        res.status(503).json({ error: "Database unavailable" });
+      }
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
     }
-  } catch (error) {
-    console.error("Error fetching notifications:", error);
-    res.status(500).json({ error: "Failed to fetch notifications" });
-  }
-});
+  },
+);
 
 // Mark notification as read
 router.put(
@@ -859,26 +870,30 @@ router.put(
 );
 
 // Upload file for a ticket
-router.post("/:ticketId/upload", upload.single("file"), async (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+router.post(
+  "/:ticketId/upload",
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const fileInfo = {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        path: `/uploads/tickets/${req.file.filename}`,
+      };
+
+      res.json(fileInfo);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ error: "Failed to upload file" });
     }
-
-    const fileInfo = {
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      path: `/uploads/tickets/${req.file.filename}`,
-    };
-
-    res.json(fileInfo);
-  } catch (error) {
-    console.error("Error uploading file:", error);
-    res.status(500).json({ error: "Failed to upload file" });
-  }
-});
+  },
+);
 
 // Get assigned options
 router.get("/assigned-options/get", async (req: Request, res: Response) => {

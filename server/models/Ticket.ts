@@ -1003,7 +1003,10 @@ export class TicketRepository {
         sla_epoch: firstRow.debug_sla_epoch,
         now_epoch: firstRow.debug_now_epoch,
         epoch_diff: firstRow.debug_sla_epoch - firstRow.debug_now_epoch,
-        epoch_diff_hours: ((firstRow.debug_sla_epoch - firstRow.debug_now_epoch) / 3600).toFixed(2),
+        epoch_diff_hours: (
+          (firstRow.debug_sla_epoch - firstRow.debug_now_epoch) /
+          3600
+        ).toFixed(2),
         sla_remaining_ms: firstRow.sla_remaining_ms,
         sla_remaining_hours: firstRow.sla_remaining_ms
           ? (firstRow.sla_remaining_ms / (1000 * 60 * 60)).toFixed(2)

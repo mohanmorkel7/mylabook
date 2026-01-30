@@ -1031,9 +1031,9 @@ export class TicketRepository {
         to_char((
           CASE
             WHEN t.sla_time IS NOT NULL THEN t.sla_time
-            WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'Asia/Kolkata') + make_interval(hours => t.demand * 5)
+            WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'UTC') + make_interval(hours => t.demand * 5)
             ELSE (
-              (t.created_at AT TIME ZONE 'Asia/Kolkata') + (
+              (t.created_at AT TIME ZONE 'UTC') + (
                 CASE COALESCE(t.priority_id, 0)
                   WHEN 0 THEN INTERVAL '2 hours'
                   WHEN 1 THEN INTERVAL '2 hours'

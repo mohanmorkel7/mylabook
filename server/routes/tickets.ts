@@ -183,35 +183,6 @@ router.get("/metadata", async (req: Request, res: Response) => {
   }
 });
 
-// Fallback mock tickets used when DB is unavailable or queries time out
-const FALLBACK_TICKETS = [
-  {
-    id: 1,
-    track_id: "TKT-0001",
-    subject: "(Mock) System unavailable",
-    description:
-      "Mock ticket returned because the database is currently unreachable.",
-    priority_id: 3,
-    status_id: 2,
-    category_id: 1,
-    created_by: 1,
-    assigned_to: 1,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    priority: { id: 3, name: "High", level: 3, color: "#EF4444" },
-    status: {
-      id: 2,
-      name: "In Progress",
-      color: "#F59E0B",
-      is_closed: false,
-      sort_order: 2,
-    },
-    category: { id: 1, name: "Technical Issue", color: "#EF4444" },
-    creator: { id: 1, name: "System", email: "system@mock" },
-    assignee: { id: 1, name: "System", email: "system@mock" },
-  },
-];
-
 // Get all tickets with filtering and pagination
 router.get("/", async (req: Request, res: Response) => {
   try {
@@ -303,108 +274,6 @@ router.get("/", async (req: Request, res: Response) => {
 
       const startMs = Date.now();
       // Protect the route from extremely slow DB calls by racing with a timeout
-      // If client requests simple listing (raw tickets table), run a lightweight query
-      if (String(req.query.simple || "").trim() === "1") {
-        try {
-          const offset = (page - 1) * effectiveLimit;
-          const rowsRes = await pool.query(
-            `SELECT
-              t.id, t.track_id, t.subject, t.description,
-              t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
-              t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
-              to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
-              to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
-              to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
-              tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
-              ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
-              tc.id as category_id_join, tc.name as category_name, tc.color as category_color,
-              creator.id as creator_id, creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
-              assignee.id as assignee_id, assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
-             FROM tickets t
-             LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
-             LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
-             LEFT JOIN ticket_categories tc ON t.category_id = tc.id
-             LEFT JOIN users creator ON t.created_by = creator.id
-             LEFT JOIN users assignee ON t.assigned_to = assignee.id
-             ORDER BY t.created_at DESC
-             LIMIT $1 OFFSET $2`,
-            [effectiveLimit, offset],
-          );
-
-          const countRes = await pool.query(
-            `SELECT COUNT(*) AS cnt FROM tickets`,
-          );
-          const totalCount = Number(countRes.rows[0]?.cnt || 0);
-          const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
-
-          // Map iso fields and reshape data for client
-          const tickets = (rowsRes.rows || []).map((r: any) => ({
-            id: r.id,
-            track_id: r.track_id,
-            subject: r.subject,
-            description: r.description,
-            priority_id: r.priority_id,
-            status_id: r.status_id,
-            category_id: r.category_id,
-            created_by: r.created_by,
-            assigned_to: r.assigned_to,
-            created_at: r.created_at_iso || r.created_at,
-            updated_at: r.updated_at_iso || r.updated_at,
-            sla_time: r.sla_time_iso || r.sla_time,
-            demand: r.demand,
-            mail_config_id: r.mail_config_id,
-            priority: r.priority_id_join
-              ? {
-                  id: r.priority_id_join,
-                  name: r.priority_name,
-                  level: r.priority_level,
-                  color: r.priority_color,
-                }
-              : null,
-            status: r.status_id_join
-              ? {
-                  id: r.status_id_join,
-                  name: r.status_name,
-                  color: r.status_color,
-                  is_closed: r.status_is_closed,
-                }
-              : null,
-            category: r.category_id_join
-              ? {
-                  id: r.category_id_join,
-                  name: r.category_name,
-                  color: r.category_color,
-                }
-              : null,
-            creator: r.creator_id
-              ? {
-                  id: r.creator_id,
-                  name: r.creator_name,
-                  email: r.creator_email,
-                }
-              : null,
-            assignee: r.assignee_id
-              ? {
-                  id: r.assignee_id,
-                  name: r.assignee_name,
-                  email: r.assignee_email,
-                }
-              : null,
-          }));
-
-          return res.json({
-            tickets,
-            total: totalCount,
-            pages,
-            server_time: new Date().toISOString(),
-            mode: "simple",
-          });
-        } catch (err) {
-          console.error("Simple tickets query failed:", err?.message || err);
-          // Fall through to heavy query path which will handle timeouts/fallback
-        }
-      }
-
       const getAllPromise = TicketRepository.getAll(
         filters,
         page,
@@ -430,25 +299,8 @@ router.get("/", async (req: Request, res: Response) => {
           `Tickets fetch failed or timed out after ${dur}ms:`,
           err?.message || err,
         );
-        // If the DB query timed out, return a graceful fallback so the UI can render instead of a hard 504.
-        try {
-          const fallback = FALLBACK_TICKETS.map((t) => ({
-            ...t,
-            description_preview: t.description.slice(0, 200),
-          }));
-          return res.status(200).json({
-            tickets: fallback,
-            total: fallback.length,
-            pages: 1,
-            status: "fallback",
-            server_time: new Date().toISOString(),
-            message:
-              "Database timeout — returning fallback tickets. Please check DB connectivity.",
-          });
-        } catch (e) {
-          // If even the fallback fails, return 504
-          return res.status(504).json({ error: "Tickets request timed out" });
-        }
+        // If the underlying DB query is still running it will complete eventually, but respond with 504 to the client.
+        return res.status(504).json({ error: "Tickets request timed out" });
       }
 
       const dur = Date.now() - startMs;
@@ -628,29 +480,10 @@ router.get("/summary", async (req: Request, res: Response) => {
     const openRes = await pool.query(openQuery, values);
     const totalOpen = Number(openRes.rows[0]?.cnt || 0);
 
-    // Count currently-overdue open tickets: SLA timestamp in the past OR status name indicates overdue
-    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND ((t.sla_time IS NOT NULL AND (t.sla_time AT TIME ZONE 'Asia/Kolkata') < NOW()) OR LOWER(ts.name) LIKE '%overdue%')`;
+    const overdueOpenQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND t.ever_overdue = TRUE`;
     const overdueOpenRes = await pool.query(overdueOpenQuery, values);
     const overdueOpen = Number(overdueOpenRes.rows[0]?.cnt || 0);
     const nonOverdueOpen = Math.max(0, totalOpen - overdueOpen);
-
-    // Also compute historical ever-overdue count for debugging/compatibility
-    try {
-      const histQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS FALSE OR ts.is_closed IS NULL) AND t.ever_overdue = TRUE`;
-      const histRes = await pool.query(histQuery, values);
-      const everOverdueOpen = Number(histRes.rows[0]?.cnt || 0);
-      // expose under a debugging key
-      // Note: we keep overdueOpen as the current overdue count
-      // and provide ever_overdue_open for historical reference
-      // (client can use if needed)
-      // Attach to response later via overdue_counts
-      // We'll pass everOverdueOpen in the response object
-      // by adding a field below.
-      // Save into a local variable available later
-      (values as any)._everOverdueOpen = everOverdueOpen;
-    } catch (e) {
-      // ignore historical computation errors
-    }
 
     // Closed
     const closedQuery = `SELECT COUNT(*) as cnt FROM tickets t LEFT JOIN ticket_statuses ts ON t.status_id = ts.id ${where} AND (ts.is_closed IS TRUE)`;
@@ -672,8 +505,6 @@ router.get("/summary", async (req: Request, res: Response) => {
         nonOverdueClosed,
         totalOpen,
         totalClosed,
-        // historical ever-overdue open (for debugging/compatibility). May be undefined if computation failed.
-        everOverdueOpen: (values as any)._everOverdueOpen,
       },
     });
   } catch (err) {

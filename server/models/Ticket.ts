@@ -725,9 +725,9 @@ export class TicketRepository {
       to_char((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
-          WHEN t.demand IS NOT NULL THEN t.created_at + make_interval(hours => t.demand * 5)
+          WHEN t.demand IS NOT NULL THEN TIMEZONE('Asia/Kolkata', t.created_at) + make_interval(hours => t.demand * 5)
           ELSE (
-            t.created_at + (
+            TIMEZONE('Asia/Kolkata', t.created_at) + (
               CASE COALESCE(t.priority_id, 0)
                 WHEN 0 THEN INTERVAL '2 hours'
                 WHEN 1 THEN INTERVAL '2 hours'
@@ -745,9 +745,9 @@ export class TicketRepository {
         (
           CASE
             WHEN t.sla_time IS NOT NULL THEN t.sla_time
-            WHEN t.demand IS NOT NULL THEN t.created_at + make_interval(hours => t.demand * 5)
+            WHEN t.demand IS NOT NULL THEN TIMEZONE('Asia/Kolkata', t.created_at) + make_interval(hours => t.demand * 5)
             ELSE (
-              t.created_at + (
+              TIMEZONE('Asia/Kolkata', t.created_at) + (
                 CASE COALESCE(t.priority_id, 0)
                   WHEN 0 THEN INTERVAL '2 hours'
                   WHEN 1 THEN INTERVAL '2 hours'
@@ -769,12 +769,12 @@ export class TicketRepository {
       to_char((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
-          WHEN t.demand IS NOT NULL THEN t.created_at + make_interval(hours => t.demand * 5)
-          ELSE t.created_at + INTERVAL '5 hours'
+          WHEN t.demand IS NOT NULL THEN TIMEZONE('Asia/Kolkata', t.created_at) + make_interval(hours => t.demand * 5)
+          ELSE TIMEZONE('Asia/Kolkata', t.created_at) + INTERVAL '5 hours'
         END
       ), 'YYYY-MM-DD HH24:MI:SS') as debug_sla_deadline_raw,
-      to_char(t.created_at, 'YYYY-MM-DD HH24:MI:SS') as debug_created_at,
-      EXTRACT(EPOCH FROM (t.created_at + make_interval(hours => 5))) as debug_sla_epoch,
+      to_char(TIMEZONE('Asia/Kolkata', t.created_at), 'YYYY-MM-DD HH24:MI:SS') as debug_created_at,
+      EXTRACT(EPOCH FROM (TIMEZONE('Asia/Kolkata', t.created_at) + make_interval(hours => 5))) as debug_sla_epoch,
       EXTRACT(EPOCH FROM TIMEZONE('Asia/Kolkata', NOW())) as debug_now_epoch,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,

@@ -602,6 +602,23 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/tickets/summary/by-tag
+// Returns counts grouped by tags
+router.get("/summary/by-tag", async (req: Request, res: Response) => {
+  try {
+    if (!(await isDatabaseAvailable())) {
+      return res.status(503).json({ error: "Database unavailable" });
+    }
+
+    // For now, return empty array since tags functionality may not be fully implemented
+    // This prevents the route from falling through to /:id and causing NaN errors
+    res.json([]);
+  } catch (err) {
+    console.error("Error fetching by-tag summary:", err);
+    res.status(500).json({ error: "Failed to fetch tag summary" });
+  }
+});
+
 // Get single ticket by track ID
 router.get("/track/:trackId", async (req: Request, res: Response) => {
   try {

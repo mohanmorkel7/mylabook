@@ -315,7 +315,8 @@ router.get("/", async (req: Request, res: Response) => {
           mode: "simple",
         });
       } catch (err) {
-        console.error("Simple tickets query failed:", err?.message || err);
+        console.error("[GET /api/tickets] Simple tickets query failed:", err?.message || err);
+      console.error("[GET /api/tickets] Full error:", err);
         // Return empty result instead of falling back to heavy query
         return res.status(200).json({
           tickets: [],
@@ -328,6 +329,7 @@ router.get("/", async (req: Request, res: Response) => {
       }
     }
 
+    console.log("[GET /api/tickets] Using complex query via TicketRepository.getAll");
     const getAllPromise = TicketRepository.getAll(
       filters,
       page,
@@ -350,9 +352,10 @@ router.get("/", async (req: Request, res: Response) => {
     } catch (err) {
       const dur = Date.now() - startMs;
       console.error(
-        `Tickets fetch failed or timed out after ${dur}ms:`,
+        `[GET /api/tickets] Tickets fetch failed or timed out after ${dur}ms:`,
         err?.message || err,
       );
+      console.error("[GET /api/tickets] Full error:", err);
       // If the DB query timed out, return a graceful fallback so the UI can render instead of a hard 504.
       try {
         const fallback = FALLBACK_TICKETS.map((t) => ({
@@ -399,7 +402,7 @@ router.get("/", async (req: Request, res: Response) => {
       tickets: ticketsWithFlag,
     });
     console.log(
-      `[GET /api/tickets] responded successfully (page=${page}, limit=${effectiveLimit})`,
+      `[GET /api/tickets] Responded successfully (page=${page}, limit=${effectiveLimit}, tickets=${ticketsWithFlag.length})`,
     );
   } catch (error) {
     console.error("Error fetching tickets:", error);

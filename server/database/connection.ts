@@ -63,8 +63,8 @@ export function withTimeout<T>(
 // Check if database is available with timeout
 export async function isDatabaseAvailable(): Promise<boolean> {
   try {
-    const client = await withTimeout(pool.connect(), 3000);
-    await withTimeout(client.query("SELECT 1"), 2000);
+    const client = await withTimeout(pool.connect(), 10000);
+    await withTimeout(client.query("SELECT 1"), 8000);
     client.release();
     return true;
   } catch (error) {

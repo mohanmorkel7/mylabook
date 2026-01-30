@@ -602,25 +602,6 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
   }
 });
 
-// Get single ticket by ID
-router.get("/:id", async (req: Request, res: Response) => {
-  try {
-    if (await isDatabaseAvailable()) {
-      const ticket = await TicketRepository.getById(parseInt(req.params.id));
-      if (ticket) {
-        res.json(ticket);
-      } else {
-        res.status(404).json({ error: "Ticket not found" });
-      }
-    } else {
-      res.status(503).json({ error: "Database unavailable" });
-    }
-  } catch (error) {
-    console.error("Error fetching ticket:", error);
-    res.status(500).json({ error: "Failed to fetch ticket" });
-  }
-});
-
 // Get single ticket by track ID
 router.get("/track/:trackId", async (req: Request, res: Response) => {
   try {
@@ -879,6 +860,25 @@ router.get("/health/check", async (req: Request, res: Response) => {
     res.json({ status: isAvailable ? "healthy" : "unhealthy" });
   } catch (error) {
     res.json({ status: "error", message: error });
+  }
+});
+
+// Get single ticket by ID (MUST be last to avoid catching specific routes)
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    if (await isDatabaseAvailable()) {
+      const ticket = await TicketRepository.getById(parseInt(req.params.id));
+      if (ticket) {
+        res.json(ticket);
+      } else {
+        res.status(404).json({ error: "Ticket not found" });
+      }
+    } else {
+      res.status(503).json({ error: "Database unavailable" });
+    }
+  } catch (error) {
+    console.error("Error fetching ticket:", error);
+    res.status(500).json({ error: "Failed to fetch ticket" });
   }
 });
 

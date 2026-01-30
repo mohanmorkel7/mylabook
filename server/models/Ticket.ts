@@ -765,6 +765,7 @@ export class TicketRepository {
       )) * 1000)::BIGINT AS sla_remaining_ms,
       to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') as debug_now_utc,
       to_char(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_now_ist,
+      to_char(TIMEZONE('Asia/Kolkata', NOW()), 'YYYY-MM-DD HH24:MI:SS') as debug_now_ist2,
       to_char((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
@@ -773,6 +774,8 @@ export class TicketRepository {
         END
       ), 'YYYY-MM-DD HH24:MI:SS') as debug_sla_deadline_raw,
       to_char(t.created_at, 'YYYY-MM-DD HH24:MI:SS') as debug_created_at,
+      EXTRACT(EPOCH FROM (t.created_at + make_interval(hours => 5))) as debug_sla_epoch,
+      EXTRACT(EPOCH FROM TIMEZONE('Asia/Kolkata', NOW())) as debug_now_epoch,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
       tc.name as category_name, tc.color as category_color,

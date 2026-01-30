@@ -982,6 +982,22 @@ export class TicketRepository {
         `[TicketRepository.getAll] finished - tickets=${tickets.length} total=${total} pages=${pages} elapsed=${Date.now() - startTs}ms`,
       );
 
+    // Log first ticket's SLA debug info
+    if (tickets.length > 0 && ticketsResult.rows.length > 0) {
+      const firstRow = ticketsResult.rows[0];
+      console.log(`[TicketRepository.getAll] First ticket SLA debug:`, {
+        id: firstRow.id,
+        track_id: firstRow.track_id,
+        demand: firstRow.demand,
+        created_at: firstRow.debug_created_at,
+        sla_deadline: firstRow.debug_sla_deadline_raw,
+        now_utc: firstRow.debug_now_utc,
+        now_ist: firstRow.debug_now_ist,
+        sla_remaining_ms: firstRow.sla_remaining_ms,
+        sla_remaining_hours: firstRow.sla_remaining_ms ? (firstRow.sla_remaining_ms / (1000 * 60 * 60)).toFixed(2) : null,
+      });
+    }
+
     return {
       tickets,
       total,

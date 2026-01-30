@@ -845,22 +845,18 @@ router.post(
 );
 
 // Get assigned options
-router.get("/assigned-options/get", async (req: Request, res: Response) => {
+router.get("/assigned-options", async (req: Request, res: Response) => {
   try {
-    if (await isDatabaseAvailable()) {
-      const users = await pool.query(
-        "SELECT id, first_name, last_name, email FROM users ORDER BY first_name, last_name",
-      );
-      res.json({
-        users: users.rows.map((user: any) => ({
-          id: user.id,
-          name: `${user.first_name} ${user.last_name}`,
-          email: user.email,
-        })),
-      });
-    } else {
-      res.status(503).json({ error: "Database unavailable" });
-    }
+    const users = await pool.query(
+      "SELECT id, first_name, last_name, email FROM users ORDER BY first_name, last_name",
+    );
+    res.json({
+      users: users.rows.map((user: any) => ({
+        id: user.id,
+        name: `${user.first_name} ${user.last_name}`,
+        email: user.email,
+      })),
+    });
   } catch (error) {
     console.error("Error fetching assigned options:", error);
     res.status(500).json({ error: "Failed to fetch options" });

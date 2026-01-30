@@ -725,7 +725,7 @@ export class TicketRepository {
       to_char((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
-          WHEN t.demand IS NOT NULL THEN t.created_at + (t.demand * INTERVAL '5 hours')
+          WHEN t.demand IS NOT NULL THEN t.created_at + (INTERVAL '1 hour' * (t.demand * 5))
           ELSE (
             t.created_at + (
               CASE COALESCE(t.priority_id, 0)
@@ -744,7 +744,7 @@ export class TicketRepository {
       (EXTRACT(EPOCH FROM ((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
-          WHEN t.demand IS NOT NULL THEN t.created_at + (t.demand * INTERVAL '5 hours')
+          WHEN t.demand IS NOT NULL THEN t.created_at + (INTERVAL '1 hour' * (t.demand * 5))
           ELSE (
             t.created_at + (
               CASE COALESCE(t.priority_id, 0)
@@ -765,7 +765,7 @@ export class TicketRepository {
       to_char((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
-          WHEN t.demand IS NOT NULL THEN t.created_at + (t.demand * INTERVAL '5 hours')
+          WHEN t.demand IS NOT NULL THEN t.created_at + (INTERVAL '1 hour' * (t.demand * 5))
           ELSE t.created_at + INTERVAL '5 hours'
         END
       ), 'YYYY-MM-DD HH24:MI:SS') as debug_sla_deadline_raw,
@@ -1017,7 +1017,7 @@ export class TicketRepository {
         to_char((
           CASE
             WHEN t.sla_time IS NOT NULL THEN t.sla_time
-            WHEN t.demand IS NOT NULL THEN t.created_at + (t.demand * INTERVAL '5 hours')
+            WHEN t.demand IS NOT NULL THEN t.created_at + (INTERVAL '1 hour' * (t.demand * 5))
             ELSE (
               t.created_at + (
                 CASE COALESCE(t.priority_id, 0)

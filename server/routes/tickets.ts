@@ -186,10 +186,11 @@ router.get("/", async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
 
-    if (await isDatabaseAvailable()) {
-      // Determine viewer from x-user-id header (if provided) to enforce non-admin visibility restrictions
-      let viewerId: number | undefined = undefined;
-      let restrictToViewer = false;
+    // Try database query directly without preliminary availability check
+    // This allows slower database connections to work even if quick availability checks time out
+    // Determine viewer from x-user-id header (if provided) to enforce non-admin visibility restrictions
+    let viewerId: number | undefined = undefined;
+    let restrictToViewer = false;
       try {
         const headerUserId = req.headers["x-user-id"] as string | undefined;
         if (headerUserId) {
@@ -394,69 +395,9 @@ router.get("/", async (req: Request, res: Response) => {
         ...result,
         tickets: ticketsWithFlag,
       });
-      console.log(
-        `[GET /api/tickets] responded successfully (page=${page}, limit=${effectiveLimit})`,
-      );
-    } else {
-      // Mock tickets for development
-      const mockTickets = [
-        {
-          id: 1,
-          track_id: "TKT-0001",
-          subject: "Login page not loading",
-          description:
-            "Users are reporting that the login page is not loading properly",
-          priority_id: 3,
-          status_id: 2,
-          category_id: 1,
-          created_by: 1,
-          assigned_to: 1,
-          created_at: new Date("2024-01-15T10:00:00Z"),
-          updated_at: new Date("2024-01-15T10:00:00Z"),
-          priority: { id: 3, name: "High", level: 3, color: "#EF4444" },
-          status: {
-            id: 2,
-            name: "In Progress",
-            color: "#F59E0B",
-            is_closed: false,
-            sort_order: 2,
-          },
-          category: { id: 1, name: "Technical Issue", color: "#EF4444" },
-          creator: { id: 1, name: "John Doe", email: "admin@banani.com" },
-          assignee: { id: 1, name: "John Doe", email: "admin@banani.com" },
-        },
-        {
-          id: 2,
-          track_id: "TKT-0002",
-          subject: "Database connection issues",
-          description: "Some users experiencing slow database connections",
-          priority_id: 2,
-          status_id: 1,
-          category_id: 2,
-          created_by: 2,
-          assigned_to: 2,
-          created_at: new Date("2024-01-16T14:30:00Z"),
-          updated_at: new Date("2024-01-16T14:30:00Z"),
-          priority: { id: 2, name: "Medium", level: 2, color: "#F59E0B" },
-          status: {
-            id: 1,
-            name: "Open",
-            color: "#EF4444",
-            is_closed: false,
-            sort_order: 1,
-          },
-          category: { id: 2, name: "Performance", color: "#F59E0B" },
-          creator: { id: 2, name: "Jane Smith", email: "jane@banani.com" },
-          assignee: { id: 2, name: "Jane Smith", email: "jane@banani.com" },
-        },
-      ];
-
-      res.json({
-        tickets: mockTickets,
-        total: mockTickets.length,
-        pages: 1,
-      });
-    }
+    console.log(
+      `[GET /api/tickets] responded successfully (page=${page}, limit=${effectiveLimit})`,
+    );
   } catch (error) {
     console.error("Error fetching tickets:", error);
     res.status(500).json({ error: "Failed to fetch tickets" });

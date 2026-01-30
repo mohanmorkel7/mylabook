@@ -760,7 +760,7 @@ export class TicketRepository {
               )
             )
           END
-          - TIMEZONE('Asia/Kolkata', NOW())
+          - NOW()
         )
       )) * 1000)::BIGINT AS sla_remaining_ms,
       to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') as debug_now_utc,

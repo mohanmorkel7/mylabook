@@ -775,7 +775,7 @@ export class TicketRepository {
       ), 'YYYY-MM-DD HH24:MI:SS') as debug_sla_deadline_raw,
       to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_created_at,
       EXTRACT(EPOCH FROM ((t.created_at AT TIME ZONE 'Asia/Kolkata') + make_interval(hours => 5))) as debug_sla_epoch,
-      EXTRACT(EPOCH FROM TIMEZONE('Asia/Kolkata', NOW())) as debug_now_epoch,
+      EXTRACT(EPOCH FROM NOW()) as debug_now_epoch,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
       tc.name as category_name, tc.color as category_color,

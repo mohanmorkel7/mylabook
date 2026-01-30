@@ -759,7 +759,7 @@ export class TicketRepository {
             )
           )
         END
-      ) AT TIME ZONE 'Asia/Kolkata' - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
+      ) - (NOW() AT TIME ZONE 'Asia/Kolkata'))) * 1000)::BIGINT AS sla_remaining_ms,
       to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') as debug_now_utc,
       to_char(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_now_ist,
       to_char((

@@ -760,6 +760,16 @@ export class TicketRepository {
           )
         END
       ) AT TIME ZONE 'Asia/Kolkata' - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
+      to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') as debug_now_utc,
+      to_char(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_now_ist,
+      to_char((
+        CASE
+          WHEN t.sla_time IS NOT NULL THEN t.sla_time
+          WHEN t.demand IS NOT NULL THEN t.created_at + (t.demand * INTERVAL '5 hours')
+          ELSE t.created_at + INTERVAL '5 hours'
+        END
+      ), 'YYYY-MM-DD HH24:MI:SS') as debug_sla_deadline_raw,
+      to_char(t.created_at, 'YYYY-MM-DD HH24:MI:SS') as debug_created_at,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
       tc.name as category_name, tc.color as category_color,

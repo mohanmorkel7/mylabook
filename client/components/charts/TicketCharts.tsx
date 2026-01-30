@@ -128,13 +128,21 @@ export default function TicketCharts({
 
         // Fetch user-status summary in parallel
         try {
-          console.log("[TicketCharts] Fetching user-status from:", `/tickets/summary/user-status${query}`);
+          console.log(
+            "[TicketCharts] Fetching user-status from:",
+            `/tickets/summary/user-status${query}`,
+          );
           const resp2 = await api.get(`/tickets/summary/user-status${query}`);
           console.log("[TicketCharts] user-status raw response:", resp2);
           const p2 = resp2?.data ?? resp2;
           console.log("[TicketCharts] user-status p2:", p2);
           const rawData = p2?.data || [];
-          console.log("[TicketCharts] user-status rawData:", rawData, "length:", rawData.length);
+          console.log(
+            "[TicketCharts] user-status rawData:",
+            rawData,
+            "length:",
+            rawData.length,
+          );
 
           // Transform flat data to grouped format: { user_id, name, counts: { statusName: count } }
           const grouped: Record<
@@ -155,10 +163,18 @@ export default function TicketCharts({
           });
 
           const transformedData = Object.values(grouped);
-          console.log("[TicketCharts] user-status transformed data:", transformedData, "length:", transformedData.length);
+          console.log(
+            "[TicketCharts] user-status transformed data:",
+            transformedData,
+            "length:",
+            transformedData.length,
+          );
           if (mounted) setUserStatus(transformedData);
         } catch (e2) {
-          console.error("TicketCharts: failed to fetch user-status summary", e2);
+          console.error(
+            "TicketCharts: failed to fetch user-status summary",
+            e2,
+          );
         }
 
         // Fetch tag-status summary (fallback to client-side classification if server data is unreliable)

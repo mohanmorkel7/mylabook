@@ -759,7 +759,7 @@ export class TicketRepository {
             )
           )
         END
-      ) - (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')) * 1000)::BIGINT AS sla_remaining_ms,
+      ) - (NOW() AT TIME ZONE 'Asia/Kolkata')) * 1000)::BIGINT AS sla_remaining_ms,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
       tc.name as category_name, tc.color as category_color,

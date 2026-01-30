@@ -994,7 +994,9 @@ export class TicketRepository {
         now_utc: firstRow.debug_now_utc,
         now_ist: firstRow.debug_now_ist,
         sla_remaining_ms: firstRow.sla_remaining_ms,
-        sla_remaining_hours: firstRow.sla_remaining_ms ? (firstRow.sla_remaining_ms / (1000 * 60 * 60)).toFixed(2) : null,
+        sla_remaining_hours: firstRow.sla_remaining_ms
+          ? (firstRow.sla_remaining_ms / (1000 * 60 * 60)).toFixed(2)
+          : null,
       });
     }
 

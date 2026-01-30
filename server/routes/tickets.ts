@@ -866,8 +866,14 @@ router.get("/health/check", async (req: Request, res: Response) => {
 // Get single ticket by ID (MUST be last to avoid catching specific routes)
 router.get("/:id", async (req: Request, res: Response) => {
   try {
+    console.log(`[GET /api/tickets/:id] Requested ID: "${req.params.id}", URL: ${req.url}`);
+    const ticketId = parseInt(req.params.id);
+    if (isNaN(ticketId)) {
+      console.error(`[GET /api/tickets/:id] Invalid ID - not a number: "${req.params.id}"`);
+      return res.status(400).json({ error: "Invalid ticket ID - must be a number" });
+    }
     if (await isDatabaseAvailable()) {
-      const ticket = await TicketRepository.getById(parseInt(req.params.id));
+      const ticket = await TicketRepository.getById(ticketId);
       if (ticket) {
         res.json(ticket);
       } else {

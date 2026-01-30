@@ -269,7 +269,7 @@ export default function TicketDetailPage() {
         watcher_user_ids: t.watchers || [],
       });
       const c = await apiClient.getTicketComments(parseInt(id));
-      setComments(c);
+      setComments(Array.isArray(c) ? c : []);
     } catch (e) {
       console.error(e);
     }
@@ -624,7 +624,7 @@ export default function TicketDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {comments.map((c) => (
+                {(comments || []).map((c) => (
                   <div key={c.id} className="p-4 border rounded-lg bg-white">
                     <div className="flex items-center justify-between text-sm text-gray-600">
                       <div className="font-medium">

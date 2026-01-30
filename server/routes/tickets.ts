@@ -214,10 +214,13 @@ router.get("/", async (req: Request, res: Response) => {
     const effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
     const startMs = Date.now();
+    console.log(`[GET /api/tickets] Starting query (page=${page}, limit=${effectiveLimit}, simple=${req.query.simple})`);
+
     // Protect the route from extremely slow DB calls by racing with a timeout
     // If client requests simple listing (raw tickets table), run a lightweight query
     if (String(req.query.simple || "").trim() === "1") {
       try {
+        console.log("[GET /api/tickets] Using simple query mode");
         const offset = (page - 1) * effectiveLimit;
         const rowsRes = await pool.query(
           `SELECT

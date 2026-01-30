@@ -130,7 +130,24 @@ export default function TicketCharts({
         try {
           const resp2 = await api.get(`/tickets/summary/user-status${query}`);
           const p2 = resp2?.data ?? resp2;
-          if (mounted) setUserStatus(p2?.data || []);
+          const rawData = p2?.data || [];
+
+          // Transform flat data to grouped format: { user_id, name, counts: { statusName: count } }
+          const grouped: Record<number, { user_id: number; name: string; counts: Record<string, number> }> = {};
+          rawData.forEach((row: any) => {
+            const userId = row.user_id || 0;
+            if (!grouped[userId]) {
+              grouped[userId] = {
+                user_id: userId,
+                name: row.user_name || "Unknown",
+                counts: {},
+              };
+            }
+            const statusName = row.status_name || "Unknown";
+            grouped[userId].counts[statusName] = row.count || 0;
+          });
+
+          if (mounted) setUserStatus(Object.values(grouped));
         } catch (e2) {
           console.warn("TicketCharts: failed to fetch user-status summary", e2);
         }

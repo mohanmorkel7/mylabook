@@ -454,7 +454,9 @@ router.get("/summary", async (req: Request, res: Response) => {
     `;
     const assignedRes = await pool.query(assignedQuery, values);
     const assigned = assignedRes.rows.map((row: any) => ({
-      user: { id: row.id, name: row.name, email: row.email },
+      user_id: row.id,
+      name: row.name,
+      email: row.email,
       count: Number(row.count),
     }));
 

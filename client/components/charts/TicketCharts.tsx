@@ -133,7 +133,10 @@ export default function TicketCharts({
           const rawData = p2?.data || [];
 
           // Transform flat data to grouped format: { user_id, name, counts: { statusName: count } }
-          const grouped: Record<number, { user_id: number; name: string; counts: Record<string, number> }> = {};
+          const grouped: Record<
+            number,
+            { user_id: number; name: string; counts: Record<string, number> }
+          > = {};
           rawData.forEach((row: any) => {
             const userId = row.user_id || 0;
             if (!grouped[userId]) {

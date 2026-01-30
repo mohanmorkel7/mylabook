@@ -740,7 +740,7 @@ export class TicketRepository {
             )
           )
         END
-      ) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
+      ), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
       (EXTRACT(EPOCH FROM ((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
@@ -759,7 +759,7 @@ export class TicketRepository {
             )
           )
         END
-      ) AT TIME ZONE 'Asia/Kolkata' - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
+      ) AT TIME ZONE 'Asia/Kolkata' - NOW() AT TIME ZONE 'Asia/Kolkata')) * 1000)::BIGINT AS sla_remaining_ms,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
       tc.name as category_name, tc.color as category_color,
@@ -1004,7 +1004,7 @@ export class TicketRepository {
               )
             )
           END
-        ) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
+        ), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
         ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
         tc.name as category_name, tc.color as category_color,

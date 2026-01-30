@@ -579,14 +579,16 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
     `;
 
     const result = await pool.query(query, values);
+    const responseData = result.rows.map((row: any) => ({
+      user_id: row.user_id,
+      user_name: row.user_name,
+      status_id: row.status_id,
+      status_name: row.status_name,
+      count: Number(row.count),
+    }));
+    console.log(`[GET /api/tickets/summary/user-status] Returning ${responseData.length} rows`);
     res.json({
-      data: result.rows.map((row: any) => ({
-        user_id: row.user_id,
-        user_name: row.user_name,
-        status_id: row.status_id,
-        status_name: row.status_name,
-        count: Number(row.count),
-      })),
+      data: responseData,
     });
   } catch (err) {
     console.error("Error fetching user-status summary:", err);

@@ -769,12 +769,12 @@ export class TicketRepository {
       to_char((
         CASE
           WHEN t.sla_time IS NOT NULL THEN t.sla_time
-          WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'UTC') + make_interval(hours => t.demand * 5)
+          WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'UTC') + ((t.demand * 5) * INTERVAL '1 hour')
           ELSE (t.created_at AT TIME ZONE 'UTC') + INTERVAL '5 hours'
         END
       ) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_sla_deadline_raw,
       to_char((t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_created_at,
-      EXTRACT(EPOCH FROM ((t.created_at AT TIME ZONE 'UTC') + make_interval(hours => 5))) as debug_sla_epoch,
+      EXTRACT(EPOCH FROM ((t.created_at AT TIME ZONE 'UTC') + ((t.demand * 5) * INTERVAL '1 hour'))) as debug_sla_epoch,
       EXTRACT(EPOCH FROM NOW()) as debug_now_epoch,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,

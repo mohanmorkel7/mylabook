@@ -586,7 +586,9 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
       status_name: row.status_name,
       count: Number(row.count),
     }));
-    console.log(`[GET /api/tickets/summary/user-status] Returning ${responseData.length} rows`);
+    console.log(
+      `[GET /api/tickets/summary/user-status] Returning ${responseData.length} rows`,
+    );
     res.json({
       data: responseData,
     });

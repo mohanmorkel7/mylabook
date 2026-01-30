@@ -704,6 +704,9 @@ router.put("/:id", async (req: Request, res: Response) => {
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid ticket ID - must be a number" });
+    }
 
     if (await isDatabaseAvailable()) {
       // Permission: only admin or creator can delete

@@ -191,36 +191,36 @@ router.get("/", async (req: Request, res: Response) => {
     // Determine viewer from x-user-id header (if provided) to enforce non-admin visibility restrictions
     let viewerId: number | undefined = undefined;
     let restrictToViewer = false;
-      try {
-        const headerUserId = req.headers["x-user-id"] as string | undefined;
-        if (headerUserId) {
-          viewerId = normalizeUserId(headerUserId);
-          const roleRes = await pool.query(
-            "SELECT role FROM users WHERE id = $1",
-            [viewerId],
-          );
-          const role = roleRes.rows[0]?.role;
-          const roleLower = String(role || "").toLowerCase();
-          // Allow full visibility for Admin and FinOps Admin roles
-          if (role && !(roleLower === "admin" || roleLower === "finops admin"))
-            restrictToViewer = true;
-        }
-      } catch (e) {
-        // ignore and default to unrestricted listing
+    try {
+      const headerUserId = req.headers["x-user-id"] as string | undefined;
+      if (headerUserId) {
+        viewerId = normalizeUserId(headerUserId);
+        const roleRes = await pool.query(
+          "SELECT role FROM users WHERE id = $1",
+          [viewerId],
+        );
+        const role = roleRes.rows[0]?.role;
+        const roleLower = String(role || "").toLowerCase();
+        // Allow full visibility for Admin and FinOps Admin roles
+        if (role && !(roleLower === "admin" || roleLower === "finops admin"))
+          restrictToViewer = true;
       }
+    } catch (e) {
+      // ignore and default to unrestricted listing
+    }
 
-      // Cap limit to avoid huge responses
-      const MAX_LIMIT = 100;
-      const effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+    // Cap limit to avoid huge responses
+    const MAX_LIMIT = 100;
+    const effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-      const startMs = Date.now();
-      // Protect the route from extremely slow DB calls by racing with a timeout
-      // If client requests simple listing (raw tickets table), run a lightweight query
-      if (String(req.query.simple || "").trim() === "1") {
-        try {
-          const offset = (page - 1) * effectiveLimit;
-          const rowsRes = await pool.query(
-            `SELECT
+    const startMs = Date.now();
+    // Protect the route from extremely slow DB calls by racing with a timeout
+    // If client requests simple listing (raw tickets table), run a lightweight query
+    if (String(req.query.simple || "").trim() === "1") {
+      try {
+        const offset = (page - 1) * effectiveLimit;
+        const rowsRes = await pool.query(
+          `SELECT
               t.id, t.track_id, t.subject, t.description,
               t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
               t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
@@ -240,161 +240,161 @@ router.get("/", async (req: Request, res: Response) => {
              LEFT JOIN users assignee ON t.assigned_to = assignee.id
              ORDER BY t.created_at DESC
              LIMIT $1 OFFSET $2`,
-            [effectiveLimit, offset],
-          );
+          [effectiveLimit, offset],
+        );
 
-          const countRes = await pool.query(
-            `SELECT COUNT(*) AS cnt FROM tickets`,
-          );
-          const totalCount = Number(countRes.rows[0]?.cnt || 0);
-          const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
+        const countRes = await pool.query(
+          `SELECT COUNT(*) AS cnt FROM tickets`,
+        );
+        const totalCount = Number(countRes.rows[0]?.cnt || 0);
+        const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
 
-          // Map iso fields and reshape data for client
-          const tickets = (rowsRes.rows || []).map((r: any) => ({
-            id: r.id,
-            track_id: r.track_id,
-            subject: r.subject,
-            description: r.description,
-            priority_id: r.priority_id,
-            status_id: r.status_id,
-            category_id: r.category_id,
-            created_by: r.created_by,
-            assigned_to: r.assigned_to,
-            created_at: r.created_at_iso || r.created_at,
-            updated_at: r.updated_at_iso || r.updated_at,
-            sla_time: r.sla_time_iso || r.sla_time,
-            demand: r.demand,
-            mail_config_id: r.mail_config_id,
-            priority: r.priority_id_join
-              ? {
-                  id: r.priority_id_join,
-                  name: r.priority_name,
-                  level: r.priority_level,
-                  color: r.priority_color,
-                }
-              : null,
-            status: r.status_id_join
-              ? {
-                  id: r.status_id_join,
-                  name: r.status_name,
-                  color: r.status_color,
-                  is_closed: r.status_is_closed,
-                }
-              : null,
-            category: r.category_id_join
-              ? {
-                  id: r.category_id_join,
-                  name: r.category_name,
-                  color: r.category_color,
-                }
-              : null,
-            creator: r.creator_id
-              ? {
-                  id: r.creator_id,
-                  name: r.creator_name,
-                  email: r.creator_email,
-                }
-              : null,
-            assignee: r.assignee_id
-              ? {
-                  id: r.assignee_id,
-                  name: r.assignee_name,
-                  email: r.assignee_email,
-                }
-              : null,
-          }));
+        // Map iso fields and reshape data for client
+        const tickets = (rowsRes.rows || []).map((r: any) => ({
+          id: r.id,
+          track_id: r.track_id,
+          subject: r.subject,
+          description: r.description,
+          priority_id: r.priority_id,
+          status_id: r.status_id,
+          category_id: r.category_id,
+          created_by: r.created_by,
+          assigned_to: r.assigned_to,
+          created_at: r.created_at_iso || r.created_at,
+          updated_at: r.updated_at_iso || r.updated_at,
+          sla_time: r.sla_time_iso || r.sla_time,
+          demand: r.demand,
+          mail_config_id: r.mail_config_id,
+          priority: r.priority_id_join
+            ? {
+                id: r.priority_id_join,
+                name: r.priority_name,
+                level: r.priority_level,
+                color: r.priority_color,
+              }
+            : null,
+          status: r.status_id_join
+            ? {
+                id: r.status_id_join,
+                name: r.status_name,
+                color: r.status_color,
+                is_closed: r.status_is_closed,
+              }
+            : null,
+          category: r.category_id_join
+            ? {
+                id: r.category_id_join,
+                name: r.category_name,
+                color: r.category_color,
+              }
+            : null,
+          creator: r.creator_id
+            ? {
+                id: r.creator_id,
+                name: r.creator_name,
+                email: r.creator_email,
+              }
+            : null,
+          assignee: r.assignee_id
+            ? {
+                id: r.assignee_id,
+                name: r.assignee_name,
+                email: r.assignee_email,
+              }
+            : null,
+        }));
 
-          return res.json({
-            tickets,
-            total: totalCount,
-            pages,
-            server_time: new Date().toISOString(),
-            mode: "simple",
-          });
-        } catch (err) {
-          console.error("Simple tickets query failed:", err?.message || err);
-          // Return empty result instead of falling back to heavy query
-          return res.status(200).json({
-            tickets: [],
-            total: 0,
-            pages: 0,
-            server_time: new Date().toISOString(),
-            mode: "simple",
-            message: "Simple query failed, returning empty results",
-          });
-        }
-      }
-
-      const getAllPromise = TicketRepository.getAll(
-        filters,
-        page,
-        effectiveLimit,
-        viewerId,
-        restrictToViewer,
-      );
-      const TIMEOUT_MS = 60000; // 60 seconds - increase to allow complex queries to finish
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () =>
-            reject(new Error(`Tickets query timed out after ${TIMEOUT_MS}ms`)),
-          TIMEOUT_MS,
-        ),
-      );
-
-      let result: any;
-      try {
-        result = await Promise.race([getAllPromise, timeoutPromise]);
+        return res.json({
+          tickets,
+          total: totalCount,
+          pages,
+          server_time: new Date().toISOString(),
+          mode: "simple",
+        });
       } catch (err) {
-        const dur = Date.now() - startMs;
-        console.error(
-          `Tickets fetch failed or timed out after ${dur}ms:`,
-          err?.message || err,
-        );
-        // If the DB query timed out, return a graceful fallback so the UI can render instead of a hard 504.
-        try {
-          const fallback = FALLBACK_TICKETS.map((t) => ({
-            ...t,
-            description_preview: t.description.slice(0, 200),
-          }));
-          return res.status(200).json({
-            tickets: fallback,
-            total: fallback.length,
-            pages: 1,
-            status: "fallback",
-            server_time: new Date().toISOString(),
-            message:
-              "Database timeout — returning fallback tickets. Please check DB connectivity.",
-          });
-        } catch (e) {
-          // If even the fallback fails, return 504
-          return res.status(504).json({ error: "Tickets request timed out" });
-        }
+        console.error("Simple tickets query failed:", err?.message || err);
+        // Return empty result instead of falling back to heavy query
+        return res.status(200).json({
+          tickets: [],
+          total: 0,
+          pages: 0,
+          server_time: new Date().toISOString(),
+          mode: "simple",
+          message: "Simple query failed, returning empty results",
+        });
       }
+    }
 
+    const getAllPromise = TicketRepository.getAll(
+      filters,
+      page,
+      effectiveLimit,
+      viewerId,
+      restrictToViewer,
+    );
+    const TIMEOUT_MS = 60000; // 60 seconds - increase to allow complex queries to finish
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () =>
+          reject(new Error(`Tickets query timed out after ${TIMEOUT_MS}ms`)),
+        TIMEOUT_MS,
+      ),
+    );
+
+    let result: any;
+    try {
+      result = await Promise.race([getAllPromise, timeoutPromise]);
+    } catch (err) {
       const dur = Date.now() - startMs;
-      if (dur > 2000) {
-        console.warn(
-          `Tickets query took ${dur}ms (page=${page}, limit=${effectiveLimit})`,
-        );
+      console.error(
+        `Tickets fetch failed or timed out after ${dur}ms:`,
+        err?.message || err,
+      );
+      // If the DB query timed out, return a graceful fallback so the UI can render instead of a hard 504.
+      try {
+        const fallback = FALLBACK_TICKETS.map((t) => ({
+          ...t,
+          description_preview: t.description.slice(0, 200),
+        }));
+        return res.status(200).json({
+          tickets: fallback,
+          total: fallback.length,
+          pages: 1,
+          status: "fallback",
+          server_time: new Date().toISOString(),
+          message:
+            "Database timeout — returning fallback tickets. Please check DB connectivity.",
+        });
+      } catch (e) {
+        // If even the fallback fails, return 504
+        return res.status(504).json({ error: "Tickets request timed out" });
       }
+    }
 
-      // Add created_from_mail_config flag for frontend
-      const ticketsWithFlag = result.tickets.map((ticket: any) => ({
-        ...ticket,
-        created_from_mail_config: Boolean(ticket.mail_config_id),
-        // Ensure a lightweight preview is always present for list views
-        description_preview:
-          ticket.description_preview ||
-          (typeof ticket.description === "string"
-            ? ticket.description.replace(/<[^>]*>/g, "").slice(0, 200)
-            : ticket.description
-              ? String(ticket.description).slice(0, 200)
-              : ""),
-      }));
-      res.json({
-        ...result,
-        tickets: ticketsWithFlag,
-      });
+    const dur = Date.now() - startMs;
+    if (dur > 2000) {
+      console.warn(
+        `Tickets query took ${dur}ms (page=${page}, limit=${effectiveLimit})`,
+      );
+    }
+
+    // Add created_from_mail_config flag for frontend
+    const ticketsWithFlag = result.tickets.map((ticket: any) => ({
+      ...ticket,
+      created_from_mail_config: Boolean(ticket.mail_config_id),
+      // Ensure a lightweight preview is always present for list views
+      description_preview:
+        ticket.description_preview ||
+        (typeof ticket.description === "string"
+          ? ticket.description.replace(/<[^>]*>/g, "").slice(0, 200)
+          : ticket.description
+            ? String(ticket.description).slice(0, 200)
+            : ""),
+    }));
+    res.json({
+      ...result,
+      tickets: ticketsWithFlag,
+    });
     console.log(
       `[GET /api/tickets] responded successfully (page=${page}, limit=${effectiveLimit})`,
     );

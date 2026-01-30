@@ -214,7 +214,9 @@ router.get("/", async (req: Request, res: Response) => {
     const effectiveLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
     const startMs = Date.now();
-    console.log(`[GET /api/tickets] Starting query (page=${page}, limit=${effectiveLimit}, simple=${req.query.simple})`);
+    console.log(
+      `[GET /api/tickets] Starting query (page=${page}, limit=${effectiveLimit}, simple=${req.query.simple})`,
+    );
 
     // Protect the route from extremely slow DB calls by racing with a timeout
     // If client requests simple listing (raw tickets table), run a lightweight query
@@ -315,8 +317,11 @@ router.get("/", async (req: Request, res: Response) => {
           mode: "simple",
         });
       } catch (err) {
-        console.error("[GET /api/tickets] Simple tickets query failed:", err?.message || err);
-      console.error("[GET /api/tickets] Full error:", err);
+        console.error(
+          "[GET /api/tickets] Simple tickets query failed:",
+          err?.message || err,
+        );
+        console.error("[GET /api/tickets] Full error:", err);
         // Return empty result instead of falling back to heavy query
         return res.status(200).json({
           tickets: [],
@@ -329,7 +334,9 @@ router.get("/", async (req: Request, res: Response) => {
       }
     }
 
-    console.log("[GET /api/tickets] Using complex query via TicketRepository.getAll");
+    console.log(
+      "[GET /api/tickets] Using complex query via TicketRepository.getAll",
+    );
     const getAllPromise = TicketRepository.getAll(
       filters,
       page,

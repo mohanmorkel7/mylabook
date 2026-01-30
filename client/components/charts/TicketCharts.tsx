@@ -137,7 +137,7 @@ export default function TicketCharts({
           const p2 = resp2?.data ?? resp2;
           console.log("[TicketCharts] user-status p2:", p2);
           // p2 could be {data: [...]} or [...] depending on how api client unwraps response
-          const rawData = Array.isArray(p2) ? p2 : (p2?.data || []);
+          const rawData = Array.isArray(p2) ? p2 : p2?.data || [];
           console.log(
             "[TicketCharts] user-status rawData:",
             rawData,

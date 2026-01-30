@@ -421,10 +421,6 @@ router.get("/", async (req: Request, res: Response) => {
 // Returns aggregated counts (assigned users, statuses, overdue stats)
 router.get("/summary", async (req: Request, res: Response) => {
   try {
-    if (!(await isDatabaseAvailable())) {
-      return res.status(503).json({ error: "Database unavailable" });
-    }
-
     // Parse and validate date filters
     let where = "WHERE 1=1";
     const values: any[] = [];
@@ -602,10 +598,6 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
 // Returns counts grouped by tags
 router.get("/summary/by-tag", async (req: Request, res: Response) => {
   try {
-    if (!(await isDatabaseAvailable())) {
-      return res.status(503).json({ error: "Database unavailable" });
-    }
-
     // For now, return empty array since tags functionality may not be fully implemented
     // This prevents the route from falling through to /:id and causing NaN errors
     res.json([]);

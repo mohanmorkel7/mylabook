@@ -566,6 +566,8 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
     const assigned_to = req.query.assigned_to
       ? parseInt(req.query.assigned_to as string)
       : null;
+    const date_from = req.query.date_from as string;
+    const date_to = req.query.date_to as string;
 
     // Build WHERE clause
     let where = "WHERE 1=1";
@@ -581,6 +583,20 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
     if (assigned_to !== null) {
       where += ` AND t.assigned_to = $${paramIndex}`;
       values.push(assigned_to);
+      paramIndex++;
+    }
+
+    if (date_from) {
+      where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex}`;
+      const dateFromValue = date_from.includes('T') ? date_from : date_from + " 00:00:00";
+      values.push(dateFromValue);
+      paramIndex++;
+    }
+
+    if (date_to) {
+      where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex}`;
+      const dateToValue = date_to.includes('T') ? date_to : date_to + " 23:59:59";
+      values.push(dateToValue);
       paramIndex++;
     }
 

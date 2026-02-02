@@ -573,13 +573,17 @@ export class TicketRepository {
     }
 
     if (filters.date_from) {
-      whereConditions.push(`(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex++}`);
-      queryParams.push(filters.date_from + ' 00:00:00');
+      whereConditions.push(
+        `(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex++}`,
+      );
+      queryParams.push(filters.date_from + " 00:00:00");
     }
 
     if (filters.date_to) {
-      whereConditions.push(`(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex++}`);
-      queryParams.push(filters.date_to + ' 23:59:59');
+      whereConditions.push(
+        `(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex++}`,
+      );
+      queryParams.push(filters.date_to + " 23:59:59");
     }
 
     // Support 'unassigned' (tickets with no assignee)

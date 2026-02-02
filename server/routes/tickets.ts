@@ -429,20 +429,29 @@ router.get("/summary", async (req: Request, res: Response) => {
     const date_from = req.query.date_from as string;
     const date_to = req.query.date_to as string;
 
-    console.log('[GET /api/tickets/summary] Date filters:', { date_from, date_to });
+    console.log("[GET /api/tickets/summary] Date filters:", {
+      date_from,
+      date_to,
+    });
 
     if (date_from) {
       // Treat date_from as start of day in IST, convert to UTC for comparison
       where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex}`;
-      values.push(date_from + ' 00:00:00');
-      console.log('[GET /api/tickets/summary] date_from filter:', date_from + ' 00:00:00');
+      values.push(date_from + " 00:00:00");
+      console.log(
+        "[GET /api/tickets/summary] date_from filter:",
+        date_from + " 00:00:00",
+      );
       paramIndex++;
     }
     if (date_to) {
       // Treat date_to as end of day in IST, convert to UTC for comparison
       where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex}`;
-      values.push(date_to + ' 23:59:59');
-      console.log('[GET /api/tickets/summary] date_to filter:', date_to + ' 23:59:59');
+      values.push(date_to + " 23:59:59");
+      console.log(
+        "[GET /api/tickets/summary] date_to filter:",
+        date_to + " 23:59:59",
+      );
       paramIndex++;
     }
 

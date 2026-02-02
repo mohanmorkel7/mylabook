@@ -677,7 +677,7 @@ export class TicketRepository {
     let status_counts: Record<string, number> = {};
     try {
       const statusCountsQuery = `
-        SELECT ts.name, COUNT(*) as count
+        SELECT COALESCE(ts.name, 'Unknown') as status_name, COUNT(DISTINCT t.id) as count
         FROM tickets t
         LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
         ${whereClause}
@@ -690,8 +690,11 @@ export class TicketRepository {
       );
       status_counts = {};
       statusCountsResult.rows.forEach((row: any) => {
-        status_counts[row.name || "Unknown"] = parseInt(row.count);
+        status_counts[row.status_name] = parseInt(row.count);
       });
+      if (debug) {
+        console.log('[TicketRepository.getAll] status_counts:', status_counts);
+      }
     } catch (e) {
       console.warn("Failed to compute status counts:", e?.message || e);
       status_counts = {};

@@ -633,6 +633,11 @@ export class TicketRepository {
         ${whereClause}
       `;
 
+      if (debug) {
+        console.log("[TicketRepository.getAll] countQuery:", countQuery);
+        console.log("[TicketRepository.getAll] countQuery params:", queryParams);
+      }
+
       // Run COUNT(*) but timeout if takes too long (fast path preferred). This avoids long-running COUNT on very large tables.
       const COUNT_TIMEOUT_MS = 2000; // 2s
       const countPromise = pool.query(countQuery, queryParams);
@@ -647,6 +652,9 @@ export class TicketRepository {
       try {
         countResult = await Promise.race([countPromise, timeoutPromise]);
         total = parseInt(countResult.rows[0].count);
+        if (debug) {
+          console.log("[TicketRepository.getAll] COUNT result:", total);
+        }
       } catch (countErr) {
         // COUNT timed out or failed; fall back to an estimate
         console.warn(
@@ -660,6 +668,9 @@ export class TicketRepository {
           estRes2.rows[0] && estRes2.rows[0].estimate
             ? Number(estRes2.rows[0].estimate)
             : 0;
+        if (debug) {
+          console.log("[TicketRepository.getAll] COUNT fallback estimate:", total);
+        }
       }
     } catch (outerErr) {
       console.warn(

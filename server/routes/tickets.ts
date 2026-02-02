@@ -438,7 +438,9 @@ router.get("/summary", async (req: Request, res: Response) => {
       // Treat date_from as start of day in IST, convert to UTC for comparison
       where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex}`;
       // If date_from is already an ISO timestamp, use it as-is; otherwise append time
-      const dateFromValue = date_from.includes('T') ? date_from : date_from + " 00:00:00";
+      const dateFromValue = date_from.includes("T")
+        ? date_from
+        : date_from + " 00:00:00";
       values.push(dateFromValue);
       console.log(
         "[GET /api/tickets/summary] date_from filter:",
@@ -450,12 +452,11 @@ router.get("/summary", async (req: Request, res: Response) => {
       // Treat date_to as end of day in IST, convert to UTC for comparison
       where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex}`;
       // If date_to is already an ISO timestamp, use it as-is; otherwise append time
-      const dateToValue = date_to.includes('T') ? date_to : date_to + " 23:59:59";
+      const dateToValue = date_to.includes("T")
+        ? date_to
+        : date_to + " 23:59:59";
       values.push(dateToValue);
-      console.log(
-        "[GET /api/tickets/summary] date_to filter:",
-        dateToValue,
-      );
+      console.log("[GET /api/tickets/summary] date_to filter:", dateToValue);
       paramIndex++;
     }
 
@@ -588,14 +589,18 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
 
     if (date_from) {
       where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex}`;
-      const dateFromValue = date_from.includes('T') ? date_from : date_from + " 00:00:00";
+      const dateFromValue = date_from.includes("T")
+        ? date_from
+        : date_from + " 00:00:00";
       values.push(dateFromValue);
       paramIndex++;
     }
 
     if (date_to) {
       where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex}`;
-      const dateToValue = date_to.includes('T') ? date_to : date_to + " 23:59:59";
+      const dateToValue = date_to.includes("T")
+        ? date_to
+        : date_to + " 23:59:59";
       values.push(dateToValue);
       paramIndex++;
     }

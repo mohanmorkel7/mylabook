@@ -669,44 +669,26 @@ export class TicketRepository {
       total = 0;
     }
 
-    // Get status counts (without filters to show total counts per status)
-    // This can be expensive on large datasets. Use a short in-memory cache to avoid
-    // running the aggregation on every request (TTL: 15s).
+    // Get status counts (with filters to show counts matching the current query)
     if (debug)
-      console.log(
-        "[TicketRepository.getAll] computing status counts (cachePresent=",
-        !!(global as any)._ticketStatusCountsCache,
-        ")",
-      );
-    const cacheAny: any = (global as any)._ticketStatusCountsCache || {};
-    const CACHE_TTL_MS = 15 * 1000; // 15 seconds
+      console.log("[TicketRepository.getAll] computing status counts with filters");
     let status_counts: Record<string, number> = {};
     try {
-      if (
-        cacheAny._status_counts &&
-        cacheAny._status_counts_ts &&
-        Date.now() - cacheAny._status_counts_ts < CACHE_TTL_MS
-      ) {
-        status_counts = cacheAny._status_counts;
-      } else {
-        const statusCountsQuery = `
-          SELECT ts.name, COUNT(*) as count
-          FROM tickets t
-          LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
-          GROUP BY ts.name
-          ORDER BY ts.name
-        `;
-        const statusCountsResult = await pool.query(statusCountsQuery, []);
-        status_counts = {};
-        statusCountsResult.rows.forEach((row: any) => {
-          status_counts[row.name || "Unknown"] = parseInt(row.count);
-        });
-        cacheAny._status_counts = status_counts;
-        cacheAny._status_counts_ts = Date.now();
-        (global as any)._ticketStatusCountsCache = cacheAny;
-      }
+      const statusCountsQuery = `
+        SELECT ts.name, COUNT(*) as count
+        FROM tickets t
+        LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+        ${whereClause}
+        GROUP BY ts.name
+        ORDER BY ts.name
+      `;
+      const statusCountsResult = await pool.query(statusCountsQuery, queryParams);
+      status_counts = {};
+      statusCountsResult.rows.forEach((row: any) => {
+        status_counts[row.name || "Unknown"] = parseInt(row.count);
+      });
     } catch (e) {
-      console.warn("Failed to compute status counts cache:", e?.message || e);
+      console.warn("Failed to compute status counts:", e?.message || e);
       status_counts = {};
     }
 

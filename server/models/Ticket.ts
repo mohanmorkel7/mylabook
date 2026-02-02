@@ -635,7 +635,10 @@ export class TicketRepository {
 
       if (debug) {
         console.log("[TicketRepository.getAll] countQuery:", countQuery);
-        console.log("[TicketRepository.getAll] countQuery params:", queryParams);
+        console.log(
+          "[TicketRepository.getAll] countQuery params:",
+          queryParams,
+        );
       }
 
       // Run COUNT(*) but timeout if takes too long (fast path preferred). This avoids long-running COUNT on very large tables.
@@ -669,7 +672,10 @@ export class TicketRepository {
             ? Number(estRes2.rows[0].estimate)
             : 0;
         if (debug) {
-          console.log("[TicketRepository.getAll] COUNT fallback estimate:", total);
+          console.log(
+            "[TicketRepository.getAll] COUNT fallback estimate:",
+            total,
+          );
         }
       }
     } catch (outerErr) {

@@ -693,7 +693,7 @@ export class TicketRepository {
         status_counts[row.status_name] = parseInt(row.count);
       });
       if (debug) {
-        console.log('[TicketRepository.getAll] status_counts:', status_counts);
+        console.log("[TicketRepository.getAll] status_counts:", status_counts);
       }
     } catch (e) {
       console.warn("Failed to compute status counts:", e?.message || e);

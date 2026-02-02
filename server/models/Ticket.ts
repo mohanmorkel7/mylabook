@@ -576,14 +576,22 @@ export class TicketRepository {
       whereConditions.push(
         `(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex++}`,
       );
-      queryParams.push(filters.date_from + " 00:00:00");
+      // If date_from is already an ISO timestamp, use it as-is; otherwise append time
+      const dateFromValue = filters.date_from.includes('T')
+        ? filters.date_from
+        : filters.date_from + " 00:00:00";
+      queryParams.push(dateFromValue);
     }
 
     if (filters.date_to) {
       whereConditions.push(
         `(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex++}`,
       );
-      queryParams.push(filters.date_to + " 23:59:59");
+      // If date_to is already an ISO timestamp, use it as-is; otherwise append time
+      const dateToValue = filters.date_to.includes('T')
+        ? filters.date_to
+        : filters.date_to + " 23:59:59";
+      queryParams.push(dateToValue);
     }
 
     // Support 'unassigned' (tickets with no assignee)

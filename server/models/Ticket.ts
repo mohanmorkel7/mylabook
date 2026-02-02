@@ -671,7 +671,9 @@ export class TicketRepository {
 
     // Get status counts (with filters to show counts matching the current query)
     if (debug)
-      console.log("[TicketRepository.getAll] computing status counts with filters");
+      console.log(
+        "[TicketRepository.getAll] computing status counts with filters",
+      );
     let status_counts: Record<string, number> = {};
     try {
       const statusCountsQuery = `
@@ -682,7 +684,10 @@ export class TicketRepository {
         GROUP BY ts.name
         ORDER BY ts.name
       `;
-      const statusCountsResult = await pool.query(statusCountsQuery, queryParams);
+      const statusCountsResult = await pool.query(
+        statusCountsQuery,
+        queryParams,
+      );
       status_counts = {};
       statusCountsResult.rows.forEach((row: any) => {
         status_counts[row.name || "Unknown"] = parseInt(row.count);

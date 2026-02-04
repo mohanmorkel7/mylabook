@@ -428,12 +428,16 @@ router.get("/summary", async (req: Request, res: Response) => {
     });
 
     if (date_from) {
-      // Treat date_from as start of day in IST, convert to UTC for comparison
-      where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex}`;
-      // If date_from is already an ISO timestamp, use it as-is; otherwise append time
-      const dateFromValue = date_from.includes("T")
-        ? date_from
-        : date_from + " 00:00:00";
+      where += ` AND t.created_at >= $${paramIndex}`;
+      // Convert IST date to UTC for direct comparison (allows index usage)
+      let dateFromValue: string;
+      if (date_from.includes("T")) {
+        dateFromValue = date_from;
+      } else {
+        // Parse IST date and convert to UTC (IST 00:00:00 = UTC 18:30:00 previous day)
+        const date = new Date(`${date_from}T00:00:00+05:30`);
+        dateFromValue = date.toISOString();
+      }
       values.push(dateFromValue);
       console.log(
         "[GET /api/tickets/summary] date_from filter:",
@@ -442,12 +446,16 @@ router.get("/summary", async (req: Request, res: Response) => {
       paramIndex++;
     }
     if (date_to) {
-      // Treat date_to as end of day in IST, convert to UTC for comparison
-      where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex}`;
-      // If date_to is already an ISO timestamp, use it as-is; otherwise append time
-      const dateToValue = date_to.includes("T")
-        ? date_to
-        : date_to + " 23:59:59";
+      where += ` AND t.created_at <= $${paramIndex}`;
+      // Convert IST date to UTC for direct comparison
+      let dateToValue: string;
+      if (date_to.includes("T")) {
+        dateToValue = date_to;
+      } else {
+        // Parse IST date end of day and convert to UTC
+        const date = new Date(`${date_to}T23:59:59+05:30`);
+        dateToValue = date.toISOString();
+      }
       values.push(dateToValue);
       console.log("[GET /api/tickets/summary] date_to filter:", dateToValue);
       paramIndex++;

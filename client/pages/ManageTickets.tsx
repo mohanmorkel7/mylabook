@@ -891,13 +891,13 @@ export default function ManageTickets() {
         ? filtered.length
         : (serverTotal ?? normalized.length);
 
-      console.log('[ManageTickets] Setting total:', {
+      console.log("[ManageTickets] Setting total:", {
         hasClientSideFilters,
         serverTotal,
         normalizedLength: normalized.length,
         finalTotal,
         dataTotal: data?.total,
-        raw_data: data
+        raw_data: data,
       });
 
       setTotalTickets(finalTotal);

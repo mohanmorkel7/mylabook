@@ -573,24 +573,33 @@ export class TicketRepository {
     }
 
     if (filters.date_from) {
-      whereConditions.push(
-        `(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex++}`,
-      );
-      // If date_from is already an ISO timestamp, use it as-is; otherwise append time
-      const dateFromValue = filters.date_from.includes("T")
-        ? filters.date_from
-        : filters.date_from + " 00:00:00";
+      whereConditions.push(`t.created_at >= $${paramIndex++}`);
+      // Convert IST date to UTC for direct comparison (allows index usage)
+      // If already ISO timestamp with 'T', use as-is; otherwise treat as IST date and convert to UTC
+      let dateFromValue: string;
+      if (filters.date_from.includes("T")) {
+        dateFromValue = filters.date_from;
+      } else {
+        // Parse IST date (YYYY-MM-DD) and convert to UTC
+        // IST is UTC+5:30, so IST 00:00:00 = UTC 18:30:00 previous day
+        const parts = filters.date_from.split("-");
+        const date = new Date(`${filters.date_from}T00:00:00+05:30`);
+        dateFromValue = date.toISOString();
+      }
       queryParams.push(dateFromValue);
     }
 
     if (filters.date_to) {
-      whereConditions.push(
-        `(t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex++}`,
-      );
-      // If date_to is already an ISO timestamp, use it as-is; otherwise append time
-      const dateToValue = filters.date_to.includes("T")
-        ? filters.date_to
-        : filters.date_to + " 23:59:59";
+      whereConditions.push(`t.created_at <= $${paramIndex++}`);
+      // Convert IST date to UTC for direct comparison
+      let dateToValue: string;
+      if (filters.date_to.includes("T")) {
+        dateToValue = filters.date_to;
+      } else {
+        // Parse IST date and set to end of day (23:59:59)
+        const date = new Date(`${filters.date_to}T23:59:59+05:30`);
+        dateToValue = date.toISOString();
+      }
       queryParams.push(dateToValue);
     }
 

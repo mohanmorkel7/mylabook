@@ -147,7 +147,7 @@ router.get("/", async (req: Request, res: Response) => {
       const second = endOfDay ? 59 : 0;
       // Return timestamp string in format PostgreSQL can parse
       // The database query will handle timezone conversion using AT TIME ZONE
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
     }
 
     const filters: TicketFilters & any = {

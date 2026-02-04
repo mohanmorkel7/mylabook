@@ -495,6 +495,9 @@ router.get("/summary", async (req: Request, res: Response) => {
       count: Number(r.count),
     }));
 
+    console.log('[GET /api/tickets/summary] statuses:', statuses);
+    console.log('[GET /api/tickets/summary] statuses total:', statuses.reduce((sum, s) => sum + s.count, 0));
+
     // Compute overdue vs non-overdue splits for open and closed tickets using ever_overdue flag (historical)
 
     // Open (not closed)

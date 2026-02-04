@@ -138,16 +138,9 @@ router.get("/", async (req: Request, res: Response) => {
     const raw_date_to = req.query.date_to as string | undefined;
 
     function expandIstDate(dateStr: string, endOfDay = false) {
-      const parts = String(dateStr).split("-");
-      if (parts.length !== 3) return dateStr;
-      const [y, m, d] = parts.map((p) => parseInt(p, 10));
-      if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
-      const hour = endOfDay ? 23 : 0;
-      const minute = endOfDay ? 59 : 0;
-      const second = endOfDay ? 59 : 0;
-      // Return timestamp string in format PostgreSQL can parse
-      // The database query will handle timezone conversion using AT TIME ZONE
-      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
+      // Just return the date string as-is - the Ticket model will append time
+      // This avoids double-appending time portions
+      return dateStr;
     }
 
     const filters: TicketFilters & any = {

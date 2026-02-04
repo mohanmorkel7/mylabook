@@ -110,6 +110,15 @@ export default function TicketCharts({
             : range === "all"
               ? undefined
               : computedTo;
+        console.log("[TicketCharts] Date filter logic:", {
+          dateFrom,
+          dateTo,
+          range,
+          'dateFrom && String(dateFrom).trim()': dateFrom && String(dateFrom).trim(),
+          'dateTo && String(dateTo).trim()': dateTo && String(dateTo).trim(),
+          useFrom,
+          useTo,
+        });
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
         const query = params.toString() ? `?${params.toString()}` : "";

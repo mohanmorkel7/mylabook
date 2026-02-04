@@ -145,9 +145,9 @@ router.get("/", async (req: Request, res: Response) => {
       const hour = endOfDay ? 23 : 0;
       const minute = endOfDay ? 59 : 0;
       const second = endOfDay ? 59 : 0;
-      const istOffsetMs = 5.5 * 60 * 60 * 1000;
-      const utcTs = Date.UTC(y, m - 1, d, hour, minute, second) - istOffsetMs;
-      return new Date(utcTs).toISOString();
+      // Return timestamp string in format PostgreSQL can parse
+      // The database query will handle timezone conversion using AT TIME ZONE
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
     }
 
     const filters: TicketFilters & any = {

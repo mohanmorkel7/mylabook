@@ -114,8 +114,9 @@ export default function TicketCharts({
           dateFrom,
           dateTo,
           range,
-          'dateFrom && String(dateFrom).trim()': dateFrom && String(dateFrom).trim(),
-          'dateTo && String(dateTo).trim()': dateTo && String(dateTo).trim(),
+          "dateFrom && String(dateFrom).trim()":
+            dateFrom && String(dateFrom).trim(),
+          "dateTo && String(dateTo).trim()": dateTo && String(dateTo).trim(),
           useFrom,
           useTo,
         });

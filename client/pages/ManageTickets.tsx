@@ -838,14 +838,10 @@ export default function ManageTickets() {
       ).length;
       setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
       // Use filtered count if any client-side filters are active, otherwise use server total
+      // Note: dateFrom/dateTo, searchText, priority, status, assignedTo are all SERVER-SIDE filters
+      // Only 'source' is client-side (based on description analysis)
       const hasClientSideFilters = Boolean(
-        filters.searchText ||
-          filters.priority ||
-          filters.status ||
-          filters.assignedTo ||
-          filters.source ||
-          filters.dateFrom ||
-          filters.dateTo,
+        filters.source,
       );
       // Derive total tickets from multiple possible response shapes
       let serverTotal = undefined as number | undefined;

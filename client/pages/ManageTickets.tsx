@@ -2179,16 +2179,6 @@ export default function ManageTickets() {
               {openToShow}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
-            {openToShow > 0 ? (
-              <div className="mt-2 text-xs text-gray-600 flex gap-3">
-                <span className="text-red-600">
-                  Overdue: {overdueOpenToShow}
-                </span>
-                <span className="text-green-600">
-                  Active: {activeOpenToShow}
-                </span>
-              </div>
-            ) : null}
           </CardContent>
         </Card>
 

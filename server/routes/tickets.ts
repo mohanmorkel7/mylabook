@@ -595,19 +595,27 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
     }
 
     if (date_from) {
-      where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' >= $${paramIndex}`;
-      const dateFromValue = date_from.includes("T")
-        ? date_from
-        : date_from + " 00:00:00";
+      where += ` AND t.created_at >= $${paramIndex}`;
+      let dateFromValue: string;
+      if (date_from.includes("T")) {
+        dateFromValue = date_from;
+      } else {
+        const date = new Date(`${date_from}T00:00:00+05:30`);
+        dateFromValue = date.toISOString();
+      }
       values.push(dateFromValue);
       paramIndex++;
     }
 
     if (date_to) {
-      where += ` AND (t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata' <= $${paramIndex}`;
-      const dateToValue = date_to.includes("T")
-        ? date_to
-        : date_to + " 23:59:59";
+      where += ` AND t.created_at <= $${paramIndex}`;
+      let dateToValue: string;
+      if (date_to.includes("T")) {
+        dateToValue = date_to;
+      } else {
+        const date = new Date(`${date_to}T23:59:59+05:30`);
+        dateToValue = date.toISOString();
+      }
       values.push(dateToValue);
       paramIndex++;
     }

@@ -700,22 +700,40 @@ router.post(
 
       if (await isDatabaseAvailable()) {
         // Parse numeric fields from FormData (everything comes as strings)
-        if (ticketData.priority_id && typeof ticketData.priority_id === "string") {
-          (ticketData as any).priority_id = parseInt(ticketData.priority_id as any);
+        if (
+          ticketData.priority_id &&
+          typeof ticketData.priority_id === "string"
+        ) {
+          (ticketData as any).priority_id = parseInt(
+            ticketData.priority_id as any,
+          );
         }
         if (ticketData.status_id && typeof ticketData.status_id === "string") {
           (ticketData as any).status_id = parseInt(ticketData.status_id as any);
         }
-        if (ticketData.category_id && typeof ticketData.category_id === "string") {
-          (ticketData as any).category_id = parseInt(ticketData.category_id as any);
+        if (
+          ticketData.category_id &&
+          typeof ticketData.category_id === "string"
+        ) {
+          (ticketData as any).category_id = parseInt(
+            ticketData.category_id as any,
+          );
         }
         if (ticketData.team_id && typeof ticketData.team_id === "string") {
           (ticketData as any).team_id = parseInt(ticketData.team_id as any);
         }
-        if ((ticketData as any).assigned_to && typeof (ticketData as any).assigned_to === "string") {
-          (ticketData as any).assigned_to = parseInt((ticketData as any).assigned_to);
+        if (
+          (ticketData as any).assigned_to &&
+          typeof (ticketData as any).assigned_to === "string"
+        ) {
+          (ticketData as any).assigned_to = parseInt(
+            (ticketData as any).assigned_to,
+          );
         }
-        if ((ticketData as any).demand !== undefined && typeof (ticketData as any).demand === "string") {
+        if (
+          (ticketData as any).demand !== undefined &&
+          typeof (ticketData as any).demand === "string"
+        ) {
           (ticketData as any).demand = parseInt((ticketData as any).demand);
         }
 
@@ -725,7 +743,9 @@ router.post(
           typeof (req.body as any).watchers === "string"
         ) {
           try {
-            (ticketData as any).watchers = JSON.parse((req.body as any).watchers);
+            (ticketData as any).watchers = JSON.parse(
+              (req.body as any).watchers,
+            );
             console.log(
               "[Ticket Create] Parsed watchers:",
               (ticketData as any).watchers,
@@ -817,18 +837,18 @@ router.post(
       } else {
         res.status(503).json({ error: "Database unavailable" });
       }
-  } catch (error) {
-    console.error("Error creating ticket:", error);
-    console.error("Error details:", {
-      message: error?.message,
-      stack: error?.stack,
-      requestBody: req.body,
-    });
-    res.status(500).json({
-      error: "Failed to create ticket",
-      details: error?.message || String(error),
-    });
-  }
+    } catch (error) {
+      console.error("Error creating ticket:", error);
+      console.error("Error details:", {
+        message: error?.message,
+        stack: error?.stack,
+        requestBody: req.body,
+      });
+      res.status(500).json({
+        error: "Failed to create ticket",
+        details: error?.message || String(error),
+      });
+    }
   },
 );
 

@@ -806,7 +806,8 @@ router.post(
       details: error?.message || String(error),
     });
   }
-});
+  },
+);
 
 // Update a ticket
 router.put("/:id", async (req: Request, res: Response) => {

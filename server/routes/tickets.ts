@@ -758,9 +758,9 @@ router.post(
             bucketErr,
           );
         }
-        }
+      }
 
-        // Validate referenced foreign keys before attempting insert
+      // Validate referenced foreign keys before attempting insert
         const validationChecks = [];
 
         if (ticketData.priority_id) {

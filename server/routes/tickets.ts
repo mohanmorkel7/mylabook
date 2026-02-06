@@ -699,21 +699,41 @@ router.post(
       const ticketData: CreateTicketRequest = req.body;
 
       if (await isDatabaseAvailable()) {
+        // Parse numeric fields from FormData (everything comes as strings)
+        if (ticketData.priority_id && typeof ticketData.priority_id === "string") {
+          (ticketData as any).priority_id = parseInt(ticketData.priority_id as any);
+        }
+        if (ticketData.status_id && typeof ticketData.status_id === "string") {
+          (ticketData as any).status_id = parseInt(ticketData.status_id as any);
+        }
+        if (ticketData.category_id && typeof ticketData.category_id === "string") {
+          (ticketData as any).category_id = parseInt(ticketData.category_id as any);
+        }
+        if (ticketData.team_id && typeof ticketData.team_id === "string") {
+          (ticketData as any).team_id = parseInt(ticketData.team_id as any);
+        }
+        if ((ticketData as any).assigned_to && typeof (ticketData as any).assigned_to === "string") {
+          (ticketData as any).assigned_to = parseInt((ticketData as any).assigned_to);
+        }
+        if ((ticketData as any).demand !== undefined && typeof (ticketData as any).demand === "string") {
+          (ticketData as any).demand = parseInt((ticketData as any).demand);
+        }
+
         // Parse watchers if it's a JSON string (from FormData)
         if (
           (req.body as any).watchers &&
           typeof (req.body as any).watchers === "string"
         ) {
-        try {
-          (ticketData as any).watchers = JSON.parse((req.body as any).watchers);
-          console.log(
-            "[Ticket Create] Parsed watchers:",
-            (ticketData as any).watchers,
-          );
-        } catch (parseErr) {
-          console.warn("[Ticket Create] Failed to parse watchers:", parseErr);
+          try {
+            (ticketData as any).watchers = JSON.parse((req.body as any).watchers);
+            console.log(
+              "[Ticket Create] Parsed watchers:",
+              (ticketData as any).watchers,
+            );
+          } catch (parseErr) {
+            console.warn("[Ticket Create] Failed to parse watchers:", parseErr);
+          }
         }
-      }
 
       // Convert bucket_name to bucket_id if provided
       if ((req.body as any).bucket_name && !ticketData.bucket_id) {

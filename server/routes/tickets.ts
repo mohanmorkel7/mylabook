@@ -735,8 +735,8 @@ router.post(
           }
         }
 
-      // Convert bucket_name to bucket_id if provided
-      if ((req.body as any).bucket_name && !ticketData.bucket_id) {
+        // Convert bucket_name to bucket_id if provided
+        if ((req.body as any).bucket_name && !ticketData.bucket_id) {
         try {
           const bucketResult = await pool.query(
             "SELECT id FROM ticket_buckets WHERE name = $1 LIMIT 1",

@@ -693,6 +693,16 @@ router.post("/", async (req: Request, res: Response) => {
     const ticketData: CreateTicketRequest = req.body;
 
     if (await isDatabaseAvailable()) {
+      // Parse watchers if it's a JSON string (from FormData)
+      if ((req.body as any).watchers && typeof (req.body as any).watchers === "string") {
+        try {
+          (ticketData as any).watchers = JSON.parse((req.body as any).watchers);
+          console.log("[Ticket Create] Parsed watchers:", (ticketData as any).watchers);
+        } catch (parseErr) {
+          console.warn("[Ticket Create] Failed to parse watchers:", parseErr);
+        }
+      }
+
       // Convert bucket_name to bucket_id if provided
       if ((req.body as any).bucket_name && !ticketData.bucket_id) {
         try {

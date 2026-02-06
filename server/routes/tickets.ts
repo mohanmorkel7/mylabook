@@ -693,14 +693,17 @@ router.post(
   upload.array("attachments", 10),
   async (req: Request, res: Response) => {
     try {
+      console.log("[POST /tickets] Received request body:", req.body);
+      console.log("[POST /tickets] Received files:", req.files);
+
       const ticketData: CreateTicketRequest = req.body;
 
-    if (await isDatabaseAvailable()) {
-      // Parse watchers if it's a JSON string (from FormData)
-      if (
-        (req.body as any).watchers &&
-        typeof (req.body as any).watchers === "string"
-      ) {
+      if (await isDatabaseAvailable()) {
+        // Parse watchers if it's a JSON string (from FormData)
+        if (
+          (req.body as any).watchers &&
+          typeof (req.body as any).watchers === "string"
+        ) {
         try {
           (ticketData as any).watchers = JSON.parse((req.body as any).watchers);
           console.log(

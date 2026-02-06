@@ -787,7 +787,15 @@ router.post("/", async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error("Error creating ticket:", error);
-    res.status(500).json({ error: "Failed to create ticket" });
+    console.error("Error details:", {
+      message: error?.message,
+      stack: error?.stack,
+      requestBody: req.body,
+    });
+    res.status(500).json({
+      error: "Failed to create ticket",
+      details: error?.message || String(error),
+    });
   }
 });
 

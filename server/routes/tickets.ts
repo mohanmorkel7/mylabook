@@ -737,30 +737,30 @@ router.post(
 
         // Convert bucket_name to bucket_id if provided
         if ((req.body as any).bucket_name && !ticketData.bucket_id) {
-        try {
-          const bucketResult = await pool.query(
-            "SELECT id FROM ticket_buckets WHERE name = $1 LIMIT 1",
-            [(req.body as any).bucket_name],
-          );
-          if (bucketResult.rows.length > 0) {
-            (ticketData as any).bucket_id = bucketResult.rows[0].id;
-            console.log(
-              `[Ticket Create] Converted bucket_name "${(req.body as any).bucket_name}" to bucket_id ${bucketResult.rows[0].id}`,
+          try {
+            const bucketResult = await pool.query(
+              "SELECT id FROM ticket_buckets WHERE name = $1 LIMIT 1",
+              [(req.body as any).bucket_name],
             );
-          } else {
-            console.warn(
-              `[Ticket Create] bucket_name "${(req.body as any).bucket_name}" not found in database`,
+            if (bucketResult.rows.length > 0) {
+              (ticketData as any).bucket_id = bucketResult.rows[0].id;
+              console.log(
+                `[Ticket Create] Converted bucket_name "${(req.body as any).bucket_name}" to bucket_id ${bucketResult.rows[0].id}`,
+              );
+            } else {
+              console.warn(
+                `[Ticket Create] bucket_name "${(req.body as any).bucket_name}" not found in database`,
+              );
+            }
+          } catch (bucketErr) {
+            console.error(
+              "[Ticket Create] Error converting bucket_name to bucket_id:",
+              bucketErr,
             );
           }
-        } catch (bucketErr) {
-          console.error(
-            "[Ticket Create] Error converting bucket_name to bucket_id:",
-            bucketErr,
-          );
         }
-      }
 
-      // Validate referenced foreign keys before attempting insert
+        // Validate referenced foreign keys before attempting insert
         const validationChecks = [];
 
         if (ticketData.priority_id) {

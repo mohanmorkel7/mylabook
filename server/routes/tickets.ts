@@ -889,16 +889,21 @@ router.delete("/:id", async (req: Request, res: Response) => {
 
     if (await isDatabaseAvailable()) {
       // Permission: only admin or creator can delete
-      const ticket = await TicketRepository.getById(id);
-      if (!ticket) {
-        return res.status(404).json({ error: "Ticket not found" });
-      }
-
-      const success = await TicketRepository.delete(id);
-      if (success) {
-        res.json({ message: "Ticket deleted successfully" });
-      } else {
-        res.status(500).json({ error: "Failed to delete ticket" });
+      try {
+        const ticket = await TicketRepository.getById(id);
+        // If we get here, ticket exists, proceed with deletion
+        const success = await TicketRepository.delete(id);
+        if (success) {
+          res.json({ message: "Ticket deleted successfully" });
+        } else {
+          res.status(500).json({ error: "Failed to delete ticket" });
+        }
+      } catch (getByIdError: any) {
+        // getById throws "Ticket not found" error if ticket doesn't exist
+        if (getByIdError?.message?.includes("Ticket not found")) {
+          return res.status(404).json({ error: "Ticket not found" });
+        }
+        throw getByIdError; // Re-throw other errors
       }
     } else {
       res.status(503).json({ error: "Database unavailable" });

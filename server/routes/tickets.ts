@@ -755,7 +755,22 @@ router.post("/", async (req: Request, res: Response) => {
         }
       }
 
-      const ticket = await TicketRepository.create(ticketData);
+      // Get created_by from request body or headers
+      let createdBy = (req.body as any).created_by || (req as any).userId;
+      if (!createdBy) {
+        // Try to get from x-user-id header
+        const headerUserId = req.headers["x-user-id"] as string | undefined;
+        if (headerUserId) {
+          createdBy = normalizeUserId(headerUserId);
+        }
+      }
+      if (!createdBy) {
+        return res.status(400).json({
+          error: "created_by is required (user ID not found)",
+        });
+      }
+
+      const ticket = await TicketRepository.create(ticketData, createdBy);
       res.status(201).json(ticket);
     } else {
       res.status(503).json({ error: "Database unavailable" });

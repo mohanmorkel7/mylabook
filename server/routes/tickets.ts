@@ -688,9 +688,12 @@ router.get("/track/:trackId", async (req: Request, res: Response) => {
 });
 
 // Create a new ticket
-router.post("/", async (req: Request, res: Response) => {
-  try {
-    const ticketData: CreateTicketRequest = req.body;
+router.post(
+  "/",
+  upload.array("attachments", 10),
+  async (req: Request, res: Response) => {
+    try {
+      const ticketData: CreateTicketRequest = req.body;
 
     if (await isDatabaseAvailable()) {
       // Parse watchers if it's a JSON string (from FormData)

@@ -758,65 +758,65 @@ router.post(
             bucketErr,
           );
         }
-      }
+        }
 
-      // Validate referenced foreign keys before attempting insert
-      const validationChecks = [];
+        // Validate referenced foreign keys before attempting insert
+        const validationChecks = [];
 
-      if (ticketData.priority_id) {
-        validationChecks.push(
-          pool.query("SELECT 1 FROM ticket_priorities WHERE id = $1", [
-            ticketData.priority_id,
-          ]),
-        );
-      }
-      if (ticketData.status_id) {
-        validationChecks.push(
-          pool.query("SELECT 1 FROM ticket_statuses WHERE id = $1", [
-            ticketData.status_id,
-          ]),
-        );
-      }
-      if (ticketData.category_id) {
-        validationChecks.push(
-          pool.query("SELECT 1 FROM ticket_categories WHERE id = $1", [
-            ticketData.category_id,
-          ]),
-        );
-      }
+        if (ticketData.priority_id) {
+          validationChecks.push(
+            pool.query("SELECT 1 FROM ticket_priorities WHERE id = $1", [
+              ticketData.priority_id,
+            ]),
+          );
+        }
+        if (ticketData.status_id) {
+          validationChecks.push(
+            pool.query("SELECT 1 FROM ticket_statuses WHERE id = $1", [
+              ticketData.status_id,
+            ]),
+          );
+        }
+        if (ticketData.category_id) {
+          validationChecks.push(
+            pool.query("SELECT 1 FROM ticket_categories WHERE id = $1", [
+              ticketData.category_id,
+            ]),
+          );
+        }
 
-      if (validationChecks.length > 0) {
-        const results = await Promise.all(validationChecks);
-        for (const result of results) {
-          if (result.rows.length === 0) {
-            return res.status(400).json({
-              error:
-                "Invalid reference: priority, status, or category does not exist",
-            });
+        if (validationChecks.length > 0) {
+          const results = await Promise.all(validationChecks);
+          for (const result of results) {
+            if (result.rows.length === 0) {
+              return res.status(400).json({
+                error:
+                  "Invalid reference: priority, status, or category does not exist",
+              });
+            }
           }
         }
-      }
 
-      // Get created_by from request body or headers
-      let createdBy = (req.body as any).created_by || (req as any).userId;
-      if (!createdBy) {
-        // Try to get from x-user-id header
-        const headerUserId = req.headers["x-user-id"] as string | undefined;
-        if (headerUserId) {
-          createdBy = normalizeUserId(headerUserId);
+        // Get created_by from request body or headers
+        let createdBy = (req.body as any).created_by || (req as any).userId;
+        if (!createdBy) {
+          // Try to get from x-user-id header
+          const headerUserId = req.headers["x-user-id"] as string | undefined;
+          if (headerUserId) {
+            createdBy = normalizeUserId(headerUserId);
+          }
         }
-      }
-      if (!createdBy) {
-        return res.status(400).json({
-          error: "created_by is required (user ID not found)",
-        });
-      }
+        if (!createdBy) {
+          return res.status(400).json({
+            error: "created_by is required (user ID not found)",
+          });
+        }
 
-      const ticket = await TicketRepository.create(ticketData, createdBy);
-      res.status(201).json(ticket);
-    } else {
-      res.status(503).json({ error: "Database unavailable" });
-    }
+        const ticket = await TicketRepository.create(ticketData, createdBy);
+        res.status(201).json(ticket);
+      } else {
+        res.status(503).json({ error: "Database unavailable" });
+      }
   } catch (error) {
     console.error("Error creating ticket:", error);
     console.error("Error details:", {

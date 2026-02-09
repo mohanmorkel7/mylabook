@@ -1862,9 +1862,16 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
 router.get(
   "/debug/pending-approval-alerts",
   async (req: Request, res: Response) => {
+    console.log(
+      "[Debug] Pending approval alerts endpoint called with query:",
+      req.query,
+    );
     try {
       await requireDatabase();
       const processNow = req.query.process === "true";
+      console.log(
+        `[Debug] Process now: ${processNow}, Database connected: true`,
+      );
 
       // Get all pending approval alerts
       const alerts = await pool.query(

@@ -2054,7 +2054,7 @@ router.get(
         }
       }
 
-      res.json({
+      const response = {
         scheduled_alerts: alerts.rows,
         completed_without_approval: completedWithoutApproval.rows,
         processed: processNow,
@@ -2063,7 +2063,12 @@ router.get(
         info: processNow
           ? "Alerts processed"
           : "Add ?process=true to manually process alerts",
-      });
+      };
+
+      console.log(
+        `[Debug] Returning response: ${alerts.rows.length} scheduled alerts, ${completedWithoutApproval.rows.length} completed without approval`,
+      );
+      res.json(response);
     } catch (error: any) {
       console.error("Error in debug endpoint:", error);
       res.status(500).json({ error: error.message });

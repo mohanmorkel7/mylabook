@@ -1858,6 +1858,35 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
   }
 });
 
+// Manual trigger for approval check (for testing)
+router.post(
+  "/trigger-approval-check",
+  async (req: Request, res: Response) => {
+    try {
+      console.log("[Manual Trigger] Approval check triggered manually");
+
+      // Import and call the approval check handler
+      const { handler } = await import("../../netlify/functions/finops-approval-check");
+      const result = await handler({} as any, {} as any);
+
+      console.log("[Manual Trigger] Approval check completed:", result);
+
+      if (result.statusCode === 200) {
+        const body = JSON.parse(result.body);
+        res.json(body);
+      } else {
+        res.status(result.statusCode).json(JSON.parse(result.body));
+      }
+    } catch (error: any) {
+      console.error("[Manual Trigger] Error:", error);
+      res.status(500).json({
+        error: "Failed to trigger approval check",
+        message: error.message
+      });
+    }
+  }
+);
+
 // Debug endpoint: Check pending approval alerts and manually process them
 router.get(
   "/debug/pending-approval-alerts",

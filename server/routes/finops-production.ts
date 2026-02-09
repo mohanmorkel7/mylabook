@@ -1858,4 +1858,210 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
   }
 });
 
+// Debug endpoint: Check pending approval alerts and manually process them
+router.get(
+  "/debug/pending-approval-alerts",
+  async (req: Request, res: Response) => {
+    try {
+      await requireDatabase();
+      const processNow = req.query.process === "true";
+
+      // Get all pending approval alerts
+      const alerts = await pool.query(
+        `SELECT id, task_id, subtask_id, alert_group, title, next_call_at, created_at
+       FROM finops_external_alerts
+       WHERE alert_group = 'pending_approval_reporting'
+       ORDER BY next_call_at ASC`,
+      );
+
+      // Get completed subtasks without approval
+      const completedWithoutApproval = await pool.query(
+        `SELECT
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.completed_at,
+          ft.approved_at,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND ft.approved_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM finops_approvals fa
+            WHERE fa.task_id = ft.task_id
+            AND fa.subtask_id = ft.subtask_id
+          )
+        ORDER BY ft.completed_at DESC`,
+      );
+
+      let processedCount = 0;
+      const results: any[] = [];
+
+      if (processNow && alerts.rows.length > 0) {
+        const parseManagers = (val: any): string[] => {
+          if (!val) return [];
+          if (Array.isArray(val))
+            return val
+              .map(String)
+              .map((s) => s.trim())
+              .filter(Boolean);
+          try {
+            const p = JSON.parse(val);
+            return Array.isArray(p)
+              ? p
+                  .map(String)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              : [];
+          } catch {}
+          return String(val)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        };
+
+        // Process alerts whose time has arrived
+        for (const alertRow of alerts.rows) {
+          const nextCallAt = alertRow.next_call_at
+            ? new Date(alertRow.next_call_at)
+            : null;
+          if (!nextCallAt || nextCallAt > new Date()) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "not_ready",
+              message: `Scheduled for ${nextCallAt}`,
+            });
+            continue;
+          }
+
+          // Check if already approved
+          const approvalCheck = await pool.query(
+            `SELECT 1 FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 LIMIT 1`,
+            [alertRow.task_id, alertRow.subtask_id],
+          );
+
+          if (approvalCheck.rows.length > 0) {
+            await pool.query(
+              `DELETE FROM finops_external_alerts WHERE id = $1`,
+              [alertRow.id],
+            );
+            results.push({
+              alert_id: alertRow.id,
+              status: "deleted",
+              message: "Already approved",
+            });
+            continue;
+          }
+
+          // Get task metadata
+          const taskMeta = await pool.query(
+            `SELECT reporting_managers, escalation_managers FROM finops_tasks WHERE id = $1 LIMIT 1`,
+            [alertRow.task_id],
+          );
+
+          const meta = taskMeta.rows[0] || {};
+          const names = Array.from(
+            new Set([
+              ...parseManagers(meta.reporting_managers),
+              ...parseManagers(meta.escalation_managers),
+            ]),
+          );
+
+          if (!names.length) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "no_recipients",
+              message: "No managers found",
+            });
+            continue;
+          }
+
+          // Get user IDs
+          const lowered = names.map((n) => n.toLowerCase());
+          const users = await pool.query(
+            `SELECT azure_object_id FROM users WHERE LOWER(CONCAT(first_name,' ',last_name)) = ANY($1)`,
+            [lowered],
+          );
+          const user_ids = users.rows
+            .map((r) => r.azure_object_id)
+            .filter((id) => !!id);
+
+          if (!user_ids.length) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "no_user_ids",
+              message: "No user IDs resolved",
+              managers: names,
+            });
+            continue;
+          }
+
+          // Send alert
+          try {
+            const resp = await fetch(
+              "https://pulsealerts.mylapay.com/direct-call",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  receiver: "CRM_Switch",
+                  title: alertRow.title,
+                  user_ids,
+                }),
+              },
+            );
+
+            if (resp.ok) {
+              // Schedule next check in 15 minutes
+              await pool.query(
+                `UPDATE finops_external_alerts SET next_call_at = NOW() + INTERVAL '15 minutes' WHERE id = $1`,
+                [alertRow.id],
+              );
+              processedCount++;
+              results.push({
+                alert_id: alertRow.id,
+                status: "sent",
+                message: "Alert sent successfully",
+                recipients: user_ids.length,
+                next_call_at: "NOW + 15 minutes",
+              });
+            } else {
+              results.push({
+                alert_id: alertRow.id,
+                status: "failed",
+                message: `Pulse call failed: ${resp.status}`,
+              });
+            }
+          } catch (err) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "error",
+              message: (err as Error).message,
+            });
+          }
+        }
+      }
+
+      res.json({
+        scheduled_alerts: alerts.rows,
+        completed_without_approval: completedWithoutApproval.rows,
+        processed: processNow,
+        processed_count: processedCount,
+        results: processNow ? results : undefined,
+        info: processNow
+          ? "Alerts processed"
+          : "Add ?process=true to manually process alerts",
+      });
+    } catch (error: any) {
+      console.error("Error in debug endpoint:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
 export default router;

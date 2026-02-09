@@ -894,9 +894,16 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
           console.log(
             `[Subtask Update] Scheduling pending approval alert: "${title}"`,
           );
+          console.log(
+            `[Subtask Update] Alert will be sent 15 minutes after completion if not approved`,
+          );
+          console.log(
+            `[Subtask Update] Additional checks run every 1 minute via finops-approval-check cron`,
+          );
 
           // Schedule alert for 15 minutes from now (only to reporting and escalation managers)
           // alert_group = 'pending_approval_reporting' ensures only reporting managers are notified
+          // NOTE: A cron job also runs every 1 minute to check for unapproved completed subtasks
           const alertResult = await client.query(
             `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
            VALUES ($1, $2, 'pending_approval_reporting', -1, $3, NOW() + INTERVAL '15 minutes')
@@ -907,8 +914,7 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
           );
 
           console.log(
-            `[Subtask Update] Alert scheduled successfully:`,
-            alertResult.rows[0],
+            `[Subtask Update] Alert scheduled successfully for ${alertResult.rows[0]?.next_call_at}`,
           );
         } catch (alertError) {
           console.error(

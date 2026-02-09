@@ -872,29 +872,51 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
 
       // Schedule 15-minute delayed approval alert when status changes to completed
       if (status === "completed") {
-        // Ensure finops_external_alerts table exists
-        await ensureExternalAlertsSchema();
+        try {
+          console.log(
+            `[Subtask Update] Status changed to completed for task_id=${updated.task_id}, subtask_id=${subtaskId}`,
+          );
 
-        // Fetch task metadata for alert title
-        const meta = await client.query(
-          `SELECT task_name, client_name FROM finops_tasks WHERE id = $1 LIMIT 1`,
-          [updated.task_id],
-        );
-        const row = meta.rows[0] || {};
-        const taskName = row.task_name || "Unknown Task";
-        const clientName = row.client_name || "Unknown Client";
-        const subtaskName = updated.subtask_name || "Unknown Subtask";
-        const title = `You need to approve the subtask "${subtaskName}" under the task "${taskName}" for the client "${clientName}".`;
+          // Ensure finops_external_alerts table exists
+          await ensureExternalAlertsSchema();
 
-        // Schedule alert for 15 minutes from now (only to reporting and escalation managers)
-        // alert_group = 'pending_approval_reporting' ensures only reporting managers are notified
-        await client.query(
-          `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+          // Fetch task metadata for alert title
+          const meta = await client.query(
+            `SELECT task_name, client_name FROM finops_tasks WHERE id = $1 LIMIT 1`,
+            [updated.task_id],
+          );
+          const row = meta.rows[0] || {};
+          const taskName = row.task_name || "Unknown Task";
+          const clientName = row.client_name || "Unknown Client";
+          const subtaskName = updated.subtask_name || "Unknown Subtask";
+          const title = `You need to approve the subtask "${subtaskName}" under the task "${taskName}" for the client "${clientName}".`;
+
+          console.log(
+            `[Subtask Update] Scheduling pending approval alert: "${title}"`,
+          );
+
+          // Schedule alert for 15 minutes from now (only to reporting and escalation managers)
+          // alert_group = 'pending_approval_reporting' ensures only reporting managers are notified
+          const alertResult = await client.query(
+            `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
            VALUES ($1, $2, 'pending_approval_reporting', -1, $3, NOW() + INTERVAL '15 minutes')
            ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO UPDATE
-           SET title = EXCLUDED.title, next_call_at = EXCLUDED.next_call_at`,
-          [updated.task_id, subtaskId, title],
-        );
+           SET title = EXCLUDED.title, next_call_at = EXCLUDED.next_call_at
+           RETURNING id, next_call_at`,
+            [updated.task_id, subtaskId, title],
+          );
+
+          console.log(
+            `[Subtask Update] Alert scheduled successfully:`,
+            alertResult.rows[0],
+          );
+        } catch (alertError) {
+          console.error(
+            `[Subtask Update] Failed to schedule approval alert:`,
+            alertError,
+          );
+          // Don't fail the entire transaction if alert scheduling fails
+        }
       }
 
       await client.query("COMMIT");

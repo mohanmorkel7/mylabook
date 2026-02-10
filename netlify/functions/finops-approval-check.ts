@@ -10,15 +10,37 @@ export const handler: Handler = async () => {
   console.log(`[finops-approval-check] START ${startedAt}`);
 
   try {
-    // Initialize database connection
-    try {
-      await initializeDatabase();
-      console.log("[finops-approval-check] Database initialized");
-    } catch (dbErr: any) {
-      console.warn(
-        "[finops-approval-check] Database init warning:",
-        dbErr?.message || dbErr,
-      );
+    // Initialize database connection with retry logic
+    let dbConnected = false;
+    let retries = 3;
+
+    while (retries > 0 && !dbConnected) {
+      try {
+        await initializeDatabase();
+        console.log("[finops-approval-check] Database initialized successfully");
+        dbConnected = true;
+      } catch (dbErr: any) {
+        retries--;
+        console.warn(
+          `[finops-approval-check] Database init failed (${retries} retries left):`,
+          dbErr?.message || dbErr,
+        );
+        if (retries > 0) {
+          // Wait 2 seconds before retrying
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    }
+
+    if (!dbConnected) {
+      console.error("[finops-approval-check] Failed to connect to database after retries");
+      return {
+        statusCode: 503,
+        body: JSON.stringify({
+          ok: false,
+          error: "Database unavailable",
+        }),
+      };
     }
 
     // Ensure finops_external_alerts table exists

@@ -1538,9 +1538,7 @@ export class ApiClient {
   }
 
   async getTodaysPendingApprovals() {
-    return this.request(
-      "/finops-production/public/today-pending-approvals"
-    );
+    return this.request("/finops-production/public/today-pending-approvals");
   }
 
   // FinOps Clients Management methods

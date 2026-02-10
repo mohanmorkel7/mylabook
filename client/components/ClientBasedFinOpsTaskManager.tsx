@@ -251,13 +251,17 @@ const PendingApprovalTimer = ({
   if (!timeLeft) return null;
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded border ${
-      isReady
-        ? "border-red-300 bg-red-50"
-        : "border-yellow-300 bg-yellow-50"
-    }`}>
-      <Clock8 className={`h-4 w-4 ${isReady ? "text-red-600" : "text-yellow-600"}`} />
-      <span className={`text-sm font-medium ${isReady ? "text-red-700" : "text-yellow-700"}`}>
+    <div
+      className={`flex items-center gap-2 px-3 py-2 rounded border ${
+        isReady ? "border-red-300 bg-red-50" : "border-yellow-300 bg-yellow-50"
+      }`}
+    >
+      <Clock8
+        className={`h-4 w-4 ${isReady ? "text-red-600" : "text-yellow-600"}`}
+      />
+      <span
+        className={`text-sm font-medium ${isReady ? "text-red-700" : "text-yellow-700"}`}
+      >
         {isReady ? "⚠️ " : "⏱️ "} Approval pending: {timeLeft}
       </span>
     </div>

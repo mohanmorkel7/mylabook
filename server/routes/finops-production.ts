@@ -1131,9 +1131,14 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
       }
 
       // Insert approval record
-      await client.query(
+      console.log(
+        `[Approve] Inserting approval: task_id=${row.task_id}, subtask_id=${subtaskId}, tracker_id=${tracker_id}, approved_by=${approver_name}`,
+      );
+
+      const approvalRes = await client.query(
         `INSERT INTO finops_approvals (task_id, subtask_id, tracker_id, approved_by, note)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, approved_at`,
         [
           row.task_id,
           subtaskId,
@@ -1143,15 +1148,42 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
         ],
       );
 
+      console.log(
+        `[Approve] Approval record created:`,
+        approvalRes.rows[0],
+      );
+
       // Update finops_tracker to set approved_by/approved_at for today's tracker row
       try {
-        await client.query(
-          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+        const trackerUpdateRes = await client.query(
+          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+           RETURNING id, approved_by, approved_at`,
           [approver_name, row.task_id, subtaskId],
+        );
+        console.log(
+          `[Approve] Tracker updated:`,
+          trackerUpdateRes.rows[0],
         );
       } catch (e) {
         console.warn(
-          "Failed to update finops_tracker approval fields:",
+          "[Approve] Failed to update finops_tracker approval fields:",
+          (e as Error).message,
+        );
+      }
+
+      // Clean up pending approval alerts for this subtask
+      try {
+        const deleteRes = await client.query(
+          `DELETE FROM finops_external_alerts WHERE task_id = $1 AND subtask_id = $2 AND alert_group = 'pending_approval_reporting'
+           RETURNING id`,
+          [row.task_id, subtaskId],
+        );
+        console.log(
+          `[Approve] Cleaned up ${deleteRes.rows.length} pending approval alerts`,
+        );
+      } catch (e) {
+        console.warn(
+          "[Approve] Failed to clean up alerts:",
           (e as Error).message,
         );
       }

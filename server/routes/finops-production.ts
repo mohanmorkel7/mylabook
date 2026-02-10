@@ -1938,6 +1938,156 @@ router.post("/trigger-approval-check", async (req: Request, res: Response) => {
   }
 });
 
+// Debug: Manually send pending approval alerts that are ready
+router.post(
+  "/debug/send-pending-alerts",
+  async (req: Request, res: Response) => {
+    try {
+      await requireDatabase();
+
+      console.log("[Debug] Manually sending pending approval alerts");
+
+      // Get all pending approval alerts that are ready to send
+      const alertsQuery = `
+        SELECT id, task_id, subtask_id, title, next_call_at
+        FROM finops_external_alerts
+        WHERE alert_group = 'pending_approval_reporting'
+          AND next_call_at <= NOW()
+        LIMIT 20
+      `;
+
+      const alertsRes = await pool.query(alertsQuery);
+
+      console.log(
+        `[Debug] Found ${alertsRes.rows.length} alerts ready to send`,
+      );
+
+      let sent = 0;
+      const results = [];
+
+      const parseManagers = (val: any): string[] => {
+        if (!val) return [];
+        if (Array.isArray(val))
+          return val.map(String).map(s => s.trim()).filter(Boolean);
+        if (typeof val === "string") {
+          let s = val.trim();
+          if (s.startsWith("{") && s.endsWith("}")) {
+            s = s.slice(1, -1);
+            return s
+              .split(",")
+              .map(x => x.trim())
+              .map(x => x.replace(/^"|"$/g, ""))
+              .filter(Boolean);
+          }
+          try {
+            const p = JSON.parse(s);
+            if (Array.isArray(p))
+              return p.map(String).map(x => x.trim()).filter(Boolean);
+          } catch {}
+          return s.split(",").map(x => x.trim()).filter(Boolean);
+        }
+        return [];
+      };
+
+      for (const alert of alertsRes.rows) {
+        try {
+          // Get managers for this task
+          const taskRes = await pool.query(
+            `SELECT reporting_managers, escalation_managers FROM finops_tasks WHERE id = $1`,
+            [alert.task_id],
+          );
+
+          const task = taskRes.rows[0] || {};
+          const managers = Array.from(
+            new Set([
+              ...parseManagers(task.reporting_managers),
+              ...parseManagers(task.escalation_managers),
+            ]),
+          );
+
+          // Resolve user IDs
+          const usersRes = await pool.query(
+            `SELECT azure_object_id FROM users WHERE LOWER(CONCAT(first_name, ' ', last_name)) = ANY($1)`,
+            [managers.map(m => m.toLowerCase())],
+          );
+
+          const userIds = usersRes.rows
+            .map((u: any) => u.azure_object_id)
+            .filter((id: any) => !!id);
+
+          if (userIds.length === 0) {
+            results.push({
+              alert_id: alert.id,
+              status: "skipped",
+              reason: "no_users_resolved",
+            });
+            continue;
+          }
+
+          console.log(
+            `[Debug] Sending alert ${alert.id} to ${userIds.length} users`,
+          );
+
+          // Send alert
+          const response = await fetch(
+            "https://pulsealerts.mylapay.com/direct-call",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                receiver: "CRM_Switch",
+                title: alert.title,
+                user_ids: userIds,
+              }),
+            },
+          );
+
+          console.log(
+            `[Debug] Alert ${alert.id} - Response status: ${response.status}`,
+          );
+
+          if (response.ok) {
+            // Reschedule for 15 minutes later
+            await pool.query(
+              `UPDATE finops_external_alerts SET next_call_at = NOW() + INTERVAL '15 minutes' WHERE id = $1`,
+              [alert.id],
+            );
+
+            sent++;
+            results.push({
+              alert_id: alert.id,
+              subtask_id: alert.subtask_id,
+              status: "sent",
+              user_count: userIds.length,
+            });
+          } else {
+            results.push({
+              alert_id: alert.id,
+              status: "failed",
+              response_status: response.status,
+            });
+          }
+        } catch (e: any) {
+          results.push({
+            alert_id: alert.id,
+            status: "error",
+            error: e.message,
+          });
+        }
+      }
+
+      res.json({
+        total_alerts_ready: alertsRes.rows.length,
+        alerts_sent: sent,
+        results,
+      });
+    } catch (error: any) {
+      console.error("[Debug] Error sending alerts:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 // Debug: Comprehensive alert troubleshooting endpoint
 router.get(
   "/debug/alert-troubleshoot",

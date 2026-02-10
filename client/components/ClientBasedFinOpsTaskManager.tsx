@@ -218,6 +218,7 @@ const PendingApprovalTimer = ({
 }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
   const [isReady, setIsReady] = useState(false);
+  const alertTriggeredRef = useRef<Set<number>>(new Set()); // Track triggered cycles
 
   useEffect(() => {
     const updateTimer = () => {

@@ -235,8 +235,12 @@ export const handler: Handler = async () => {
             `[finops-approval-check] Next call scheduled for: ${nextCallAt}, Now: ${new Date()}`,
           );
 
-          // Only send if the scheduled time has arrived
-          if (nextCallAt && nextCallAt <= new Date()) {
+          // Only send if the scheduled time has arrived (within 5 seconds to account for cron timing)
+          const timeUntilSend = nextCallAt ? nextCallAt.getTime() - new Date().getTime() : 0;
+          if (nextCallAt && timeUntilSend <= 5000) {
+            console.log(
+              `[finops-approval-check] ✅ Alert ready to send (${Math.round(timeUntilSend / 1000)}s remaining)`,
+            );
             // Check pulse alerts setting
             const pulseSetting = await pool.query(
               `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,

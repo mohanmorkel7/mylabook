@@ -1052,12 +1052,32 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
       .map((n) => n.toLowerCase().replace(/\s+/g, " ").trim())
       .includes(normalizedApprover);
 
+    console.log(`[Approve] Checking authorization for "${approver_name}"`);
+    console.log(`[Approve] Is Admin: ${isAdmin}`);
+    console.log(`[Approve] Is Reporter: ${isReporter}`);
+    console.log(`[Approve] Is Escalator: ${isEscalator}`);
+    console.log(`[Approve] Reporting managers: ${JSON.stringify(reporters)}`);
+    console.log(`[Approve] Escalation managers: ${JSON.stringify(escalators)}`);
+
     if (!isAdmin && !isReporter && !isEscalator) {
+      console.warn(
+        `[Approve] UNAUTHORIZED: ${approver_name} cannot approve. Not admin/reporter/escalator`,
+      );
       return res.status(403).json({
         error:
           "Only admin, reporting managers, or escalation managers can approve",
+        details: {
+          approver_name,
+          isAdmin,
+          isReporter,
+          isEscalator,
+          reporters,
+          escalators,
+        },
       });
     }
+
+    console.log(`[Approve] AUTHORIZED: ${approver_name} can approve`);
 
     // Ensure finops_approvals table exists and has correct schema (outside transaction)
     try {

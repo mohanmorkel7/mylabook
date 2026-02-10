@@ -230,7 +230,14 @@ const PendingApprovalTimer = ({
 
       if (diffMs >= fifteenMinutesMs) {
         setIsReady(true);
-        setTimeLeft("Ready for approval alert!");
+        // Show how long it's been waiting for approval
+        const elapsedMs = diffMs - fifteenMinutesMs;
+        const elapsedSeconds = Math.floor(elapsedMs / 1000);
+        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+        const elapsedSecs = elapsedSeconds % 60;
+        setTimeLeft(
+          `Ready for ${elapsedMinutes}m ${elapsedSecs}s (alert should be sent)`
+        );
       } else {
         setIsReady(false);
         const remainingMs = fifteenMinutesMs - diffMs;

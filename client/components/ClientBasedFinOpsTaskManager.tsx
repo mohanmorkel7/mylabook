@@ -241,14 +241,16 @@ const PendingApprovalTimer = ({
       if (cycleNumber > 0) {
         setIsReady(true);
 
-        // Check if we just hit 0m 0s (trigger point for alert)
-        if (timeInCurrentCycle < 1000) {
-          // We just hit the alert trigger point
+        // Check if we just hit 0m 0s (trigger point for alert) - only once per cycle
+        if (timeInCurrentCycle < 1000 && !alertTriggeredRef.current.has(cycleNumber)) {
+          // Mark this cycle as triggered
+          alertTriggeredRef.current.add(cycleNumber);
+
           console.log(
             `[PendingApprovalTimer] Alert trigger point reached for cycle ${cycleNumber}`,
           );
 
-          // Trigger the alert API call
+          // Trigger the alert API call (non-blocking)
           triggerApprovalAlert();
         }
 

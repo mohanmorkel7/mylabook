@@ -236,7 +236,7 @@ const PendingApprovalTimer = ({
         const elapsedMinutes = Math.floor(elapsedSeconds / 60);
         const elapsedSecs = elapsedSeconds % 60;
         setTimeLeft(
-          `Ready for ${elapsedMinutes}m ${elapsedSecs}s (alert should be sent)`
+          `Ready for ${elapsedMinutes}m ${elapsedSecs}s (alert should be sent)`,
         );
       } else {
         setIsReady(false);

@@ -1968,23 +1968,32 @@ router.post(
       const parseManagers = (val: any): string[] => {
         if (!val) return [];
         if (Array.isArray(val))
-          return val.map(String).map(s => s.trim()).filter(Boolean);
+          return val
+            .map(String)
+            .map((s) => s.trim())
+            .filter(Boolean);
         if (typeof val === "string") {
           let s = val.trim();
           if (s.startsWith("{") && s.endsWith("}")) {
             s = s.slice(1, -1);
             return s
               .split(",")
-              .map(x => x.trim())
-              .map(x => x.replace(/^"|"$/g, ""))
+              .map((x) => x.trim())
+              .map((x) => x.replace(/^"|"$/g, ""))
               .filter(Boolean);
           }
           try {
             const p = JSON.parse(s);
             if (Array.isArray(p))
-              return p.map(String).map(x => x.trim()).filter(Boolean);
+              return p
+                .map(String)
+                .map((x) => x.trim())
+                .filter(Boolean);
           } catch {}
-          return s.split(",").map(x => x.trim()).filter(Boolean);
+          return s
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
         }
         return [];
       };
@@ -2008,7 +2017,7 @@ router.post(
           // Resolve user IDs
           const usersRes = await pool.query(
             `SELECT azure_object_id FROM users WHERE LOWER(CONCAT(first_name, ' ', last_name)) = ANY($1)`,
-            [managers.map(m => m.toLowerCase())],
+            [managers.map((m) => m.toLowerCase())],
           );
 
           const userIds = usersRes.rows
@@ -2085,20 +2094,18 @@ router.post(
       console.error("[Debug] Error sending alerts:", error);
       res.status(500).json({ error: error.message });
     }
-  }
+  },
 );
 
 // Debug: Comprehensive alert troubleshooting endpoint
-router.get(
-  "/debug/alert-troubleshoot",
-  async (req: Request, res: Response) => {
-    try {
-      await requireDatabase();
+router.get("/debug/alert-troubleshoot", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
 
-      console.log("[Debug] Starting alert troubleshooting");
+    console.log("[Debug] Starting alert troubleshooting");
 
-      // 1. Check completed subtasks that should trigger alerts
-      const completedQuery = `
+    // 1. Check completed subtasks that should trigger alerts
+    const completedQuery = `
         SELECT
           ft.task_id,
           ft.subtask_id,
@@ -2122,10 +2129,10 @@ router.get(
         LIMIT 10
       `;
 
-      const completedRes = await pool.query(completedQuery);
+    const completedRes = await pool.query(completedQuery);
 
-      // 2. Check all pending approval alerts
-      const alertsQuery = `
+    // 2. Check all pending approval alerts
+    const alertsQuery = `
         SELECT
           id,
           task_id,
@@ -2144,89 +2151,105 @@ router.get(
         LIMIT 20
       `;
 
-      const alertsRes = await pool.query(alertsQuery);
+    const alertsRes = await pool.query(alertsQuery);
 
-      // 3. Check if pulse alerts are enabled
-      const settingsRes = await pool.query(
-        `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
-      );
-      const pulseEnabled = settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
+    // 3. Check if pulse alerts are enabled
+    const settingsRes = await pool.query(
+      `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+    );
+    const pulseEnabled = settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
 
-      // 4. Parse managers and resolve user IDs for first few completed subtasks
-      const parseManagers = (val: any): string[] => {
-        if (!val) return [];
-        if (Array.isArray(val))
-          return val.map(String).map(s => s.trim()).filter(Boolean);
-        if (typeof val === "string") {
-          let s = val.trim();
-          if (s.startsWith("{") && s.endsWith("}")) {
-            s = s.slice(1, -1);
-            return s.split(",").map(x => x.trim()).map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
-          }
-          try {
-            const p = JSON.parse(s);
-            if (Array.isArray(p))
-              return p.map(String).map(x => x.trim()).filter(Boolean);
-          } catch {}
-          return s.split(",").map(x => x.trim()).filter(Boolean);
+    // 4. Parse managers and resolve user IDs for first few completed subtasks
+    const parseManagers = (val: any): string[] => {
+      if (!val) return [];
+      if (Array.isArray(val))
+        return val
+          .map(String)
+          .map((s) => s.trim())
+          .filter(Boolean);
+      if (typeof val === "string") {
+        let s = val.trim();
+        if (s.startsWith("{") && s.endsWith("}")) {
+          s = s.slice(1, -1);
+          return s
+            .split(",")
+            .map((x) => x.trim())
+            .map((x) => x.replace(/^"|"$/g, ""))
+            .filter(Boolean);
         }
-        return [];
-      };
-
-      const managerResololution: any[] = [];
-      for (const row of completedRes.rows.slice(0, 3)) {
-        const reporting = parseManagers(row.reporting_managers);
-        const escalation = parseManagers(row.escalation_managers);
-        const allManagers = Array.from(new Set([...reporting, ...escalation]));
-
-        const usersRes = await pool.query(
-          `SELECT azure_object_id, CONCAT(first_name, ' ', last_name) as full_name FROM users WHERE LOWER(CONCAT(first_name, ' ', last_name)) = ANY($1)`,
-          [allManagers.map(n => n.toLowerCase())],
-        );
-
-        managerResololution.push({
-          subtask_id: row.subtask_id,
-          subtask_name: row.subtask_name,
-          reporting_managers: reporting,
-          escalation_managers: escalation,
-          resolved_users: usersRes.rows,
-          resolved_user_count: usersRes.rows.length,
-        });
+        try {
+          const p = JSON.parse(s);
+          if (Array.isArray(p))
+            return p
+              .map(String)
+              .map((x) => x.trim())
+              .filter(Boolean);
+        } catch {}
+        return s
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
       }
+      return [];
+    };
 
-      res.json({
-        timestamp: new Date().toISOString(),
-        pulse_alerts_enabled: pulseEnabled,
-        completed_subtasks_eligible: completedRes.rows.length,
-        pending_approval_alerts: alertsRes.rows.length,
-        alerts_ready_to_send: alertsRes.rows.filter((r: any) => r.status === "READY_TO_SEND").length,
-        completed_subtasks: completedRes.rows.map((row: any) => ({
-          subtask_id: row.subtask_id,
-          subtask_name: row.subtask_name,
-          task_name: row.task_name,
-          client_name: row.client_name,
-          completed_at: row.completed_at,
-          seconds_since_completion: row.seconds_since_completion,
-          minutes_since_completion: Math.round(row.seconds_since_completion / 60),
-          approved: !!row.approved_at,
-          is_active: row.is_active,
-          deleted: !!row.deleted_at,
-        })),
-        pending_alerts: alertsRes.rows,
-        manager_resolution_sample: managerResololution,
-        summary: {
-          total_eligible_subtasks: completedRes.rows.length,
-          total_pending_alerts: alertsRes.rows.length,
-          alerts_ready_now: alertsRes.rows.filter((r: any) => r.status === "READY_TO_SEND").length,
-          pulse_enabled: pulseEnabled,
-        },
+    const managerResololution: any[] = [];
+    for (const row of completedRes.rows.slice(0, 3)) {
+      const reporting = parseManagers(row.reporting_managers);
+      const escalation = parseManagers(row.escalation_managers);
+      const allManagers = Array.from(new Set([...reporting, ...escalation]));
+
+      const usersRes = await pool.query(
+        `SELECT azure_object_id, CONCAT(first_name, ' ', last_name) as full_name FROM users WHERE LOWER(CONCAT(first_name, ' ', last_name)) = ANY($1)`,
+        [allManagers.map((n) => n.toLowerCase())],
+      );
+
+      managerResololution.push({
+        subtask_id: row.subtask_id,
+        subtask_name: row.subtask_name,
+        reporting_managers: reporting,
+        escalation_managers: escalation,
+        resolved_users: usersRes.rows,
+        resolved_user_count: usersRes.rows.length,
       });
-    } catch (error: any) {
-      console.error("[Debug] Troubleshooting error:", error);
-      res.status(500).json({ error: error.message });
     }
-  },
-);
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      pulse_alerts_enabled: pulseEnabled,
+      completed_subtasks_eligible: completedRes.rows.length,
+      pending_approval_alerts: alertsRes.rows.length,
+      alerts_ready_to_send: alertsRes.rows.filter(
+        (r: any) => r.status === "READY_TO_SEND",
+      ).length,
+      completed_subtasks: completedRes.rows.map((row: any) => ({
+        subtask_id: row.subtask_id,
+        subtask_name: row.subtask_name,
+        task_name: row.task_name,
+        client_name: row.client_name,
+        completed_at: row.completed_at,
+        seconds_since_completion: row.seconds_since_completion,
+        minutes_since_completion: Math.round(row.seconds_since_completion / 60),
+        approved: !!row.approved_at,
+        is_active: row.is_active,
+        deleted: !!row.deleted_at,
+      })),
+      pending_alerts: alertsRes.rows,
+      manager_resolution_sample: managerResololution,
+      summary: {
+        total_eligible_subtasks: completedRes.rows.length,
+        total_pending_alerts: alertsRes.rows.length,
+        alerts_ready_now: alertsRes.rows.filter(
+          (r: any) => r.status === "READY_TO_SEND",
+        ).length,
+        pulse_enabled: pulseEnabled,
+      },
+    });
+  } catch (error: any) {
+    console.error("[Debug] Troubleshooting error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Public endpoint to check today's pending approvals (no auth required)
 router.get(

@@ -10,6 +10,11 @@ const dbConfig = {
   password: process.env.PG_PASSWORD || "myl@p@y-crm$102019",
   port: Number(process.env.PG_PORT) || 2019,
   ssl: false,
+  // Increase pool size and timeouts for remote database
+  max: 20, // max number of clients in the pool
+  idleTimeoutMillis: 30000, // 30 seconds
+  connectionTimeoutMillis: 20000, // 20 seconds for connection
+  statement_timeout: 60000, // 60 seconds for statement execution
 };
 
 // Log the actual connection parameters being used (hide password for security)
@@ -20,6 +25,9 @@ console.log("🔗 Database connection config:", {
   port: dbConfig.port,
   password: dbConfig.password ? "[SET]" : "[NOT SET]",
   ssl: dbConfig.ssl,
+  max: dbConfig.max,
+  idleTimeoutMillis: dbConfig.idleTimeoutMillis,
+  connectionTimeoutMillis: dbConfig.connectionTimeoutMillis,
 });
 
 const pool = new Pool(dbConfig);

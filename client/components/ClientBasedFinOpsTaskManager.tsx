@@ -315,7 +315,7 @@ const PendingApprovalTimer = ({
       <span
         className={`text-sm font-medium ${isReady ? "text-red-700" : "text-yellow-700"}`}
       >
-        {isReady ? "⚠️ " : "⏱️ "} Approval pending: {timeLeft}
+        {isReady ? "⏰ " : "⏳ "} Approval alert countdown: {timeLeft}
       </span>
     </div>
   );

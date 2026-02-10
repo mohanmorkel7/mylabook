@@ -736,6 +736,17 @@ function SortableSubTaskItem({
                   </div>
                 </div>
 
+                {/* Show pending approval timer if completed but not approved */}
+                {subtask.status === "completed" &&
+                  !(subtask as any).approved_by && (
+                    <div className="mt-2">
+                      <PendingApprovalTimer
+                        subtaskId={subtask.id}
+                        completedAt={subtask.completed_at}
+                      />
+                    </div>
+                  )}
+
                 {/* Show approval info if present */}
                 {subtask.status === "completed" &&
                   (subtask as any).approved_by && (

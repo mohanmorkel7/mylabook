@@ -238,9 +238,7 @@ export const handler: Handler = async () => {
 
           // Only send if the scheduled time has arrived
           if (nextCallAt && nextCallAt <= now) {
-            console.log(
-              `[finops-approval-check] ✅ Alert ready to send NOW`,
-            );
+            console.log(`[finops-approval-check] ✅ Alert ready to send NOW`);
             // Check pulse alerts setting
             const pulseSetting = await pool.query(
               `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,

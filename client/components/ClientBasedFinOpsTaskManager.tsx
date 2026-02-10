@@ -228,22 +228,38 @@ const PendingApprovalTimer = ({
       const diffMs = now - completedTime;
       const fifteenMinutesMs = 15 * 60 * 1000;
 
-      if (diffMs >= fifteenMinutesMs) {
+      // Calculate which 15-minute cycle we're in
+      const cycleNumber = Math.floor(diffMs / fifteenMinutesMs);
+      const timeInCurrentCycle = diffMs % fifteenMinutesMs;
+      const remainingInCycle = fifteenMinutesMs - timeInCurrentCycle;
+      const remainingSeconds = Math.ceil(remainingInCycle / 1000);
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+
+      // If we're ready for alerts (past first 15 minutes)
+      if (cycleNumber > 0) {
         setIsReady(true);
-        // Show how long it's been waiting for approval
-        const elapsedMs = diffMs - fifteenMinutesMs;
-        const elapsedSeconds = Math.floor(elapsedMs / 1000);
-        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-        const elapsedSecs = elapsedSeconds % 60;
-        setTimeLeft(
-          `Ready for ${elapsedMinutes}m ${elapsedSecs}s (alert should be sent)`,
-        );
+
+        // Check if we just hit 0m 0s (trigger point for alert)
+        if (timeInCurrentCycle < 1000) {
+          // We just hit the alert trigger point
+          console.log(
+            `[PendingApprovalTimer] Alert trigger point reached for cycle ${cycleNumber}`,
+          );
+
+          // Trigger the alert API call
+          triggerApprovalAlert();
+        }
+
+        // Show countdown in current cycle
+        if (minutes === 0 && seconds === 0) {
+          setTimeLeft(`0m 0s ⚠️ Alert triggered now!`);
+        } else {
+          setTimeLeft(`${minutes}m ${seconds}s (Cycle ${cycleNumber})`);
+        }
       } else {
+        // Before first 15 minutes
         setIsReady(false);
-        const remainingMs = fifteenMinutesMs - diffMs;
-        const remainingSeconds = Math.ceil(remainingMs / 1000);
-        const minutes = Math.floor(remainingSeconds / 60);
-        const seconds = remainingSeconds % 60;
         setTimeLeft(`${minutes}m ${seconds}s`);
       }
     };
@@ -252,7 +268,38 @@ const PendingApprovalTimer = ({
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [completedAt]);
+  }, [completedAt, subtaskId]);
+
+  // Function to trigger the approval alert
+  const triggerApprovalAlert = async () => {
+    try {
+      console.log(
+        `[PendingApprovalTimer] Triggering approval alert for subtask ${subtaskId}`,
+      );
+
+      const response = await fetch(
+        "/api/finops-production/debug/send-pending-alerts",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(
+          `[PendingApprovalTimer] Alert triggered successfully:`,
+          data,
+        );
+      } else {
+        console.warn(
+          `[PendingApprovalTimer] Alert trigger failed with status ${response.status}`,
+        );
+      }
+    } catch (error) {
+      console.error(`[PendingApprovalTimer] Error triggering alert:`, error);
+    }
+  };
 
   if (!timeLeft) return null;
 

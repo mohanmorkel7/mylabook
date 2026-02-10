@@ -90,7 +90,26 @@ export const handler: Handler = async () => {
       LIMIT 50
     `;
 
-    const result = await pool.query(query);
+    let result;
+    try {
+      // Set query timeout to 30 seconds
+      result = await Promise.race([
+        pool.query(query),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Query timeout after 30s")), 30000),
+        ),
+      ]);
+    } catch (queryErr: any) {
+      console.error("[finops-approval-check] Query timeout/error:", queryErr?.message);
+      return {
+        statusCode: 504,
+        body: JSON.stringify({
+          ok: false,
+          error: "Database query timeout",
+        }),
+      };
+    }
+
     console.log(
       `[finops-approval-check] Found ${result.rows.length} unapproved completed subtasks older than 15 minutes`,
     );

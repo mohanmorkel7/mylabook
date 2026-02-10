@@ -1148,10 +1148,7 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
         ],
       );
 
-      console.log(
-        `[Approve] Approval record created:`,
-        approvalRes.rows[0],
-      );
+      console.log(`[Approve] Approval record created:`, approvalRes.rows[0]);
 
       // Update finops_tracker to set approved_by/approved_at for today's tracker row
       try {
@@ -1160,10 +1157,7 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
            RETURNING id, approved_by, approved_at`,
           [approver_name, row.task_id, subtaskId],
         );
-        console.log(
-          `[Approve] Tracker updated:`,
-          trackerUpdateRes.rows[0],
-        );
+        console.log(`[Approve] Tracker updated:`, trackerUpdateRes.rows[0]);
       } catch (e) {
         console.warn(
           "[Approve] Failed to update finops_tracker approval fields:",
@@ -1945,16 +1939,14 @@ router.post("/trigger-approval-check", async (req: Request, res: Response) => {
 });
 
 // Debug: Check all completed subtasks and approval status
-router.get(
-  "/debug/completed-subtasks",
-  async (req: Request, res: Response) => {
-    try {
-      await requireDatabase();
+router.get("/debug/completed-subtasks", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
 
-      console.log("[Debug] Checking all completed subtasks");
+    console.log("[Debug] Checking all completed subtasks");
 
-      // Get all completed subtasks from today
-      const completedQuery = `
+    // Get all completed subtasks from today
+    const completedQuery = `
         SELECT
           ft.id as tracker_id,
           ft.task_id,
@@ -1983,10 +1975,10 @@ router.get(
         LIMIT 50
       `;
 
-      const completedResult = await pool.query(completedQuery);
+    const completedResult = await pool.query(completedQuery);
 
-      // Get all finops_approvals
-      const approvalsQuery = `
+    // Get all finops_approvals
+    const approvalsQuery = `
         SELECT
           fa.id,
           fa.task_id,
@@ -2000,10 +1992,10 @@ router.get(
         LIMIT 100
       `;
 
-      const approvalsResult = await pool.query(approvalsQuery);
+    const approvalsResult = await pool.query(approvalsQuery);
 
-      // Get all pending approval alerts
-      const alertsQuery = `
+    // Get all pending approval alerts
+    const alertsQuery = `
         SELECT
           id,
           task_id,
@@ -2023,36 +2015,35 @@ router.get(
         LIMIT 50
       `;
 
-      const alertsResult = await pool.query(alertsQuery);
+    const alertsResult = await pool.query(alertsQuery);
 
-      console.log(
-        `[Debug] Completed subtasks: ${completedResult.rows.length}, Approvals: ${approvalsResult.rows.length}, Pending alerts: ${alertsResult.rows.length}`,
-      );
+    console.log(
+      `[Debug] Completed subtasks: ${completedResult.rows.length}, Approvals: ${approvalsResult.rows.length}, Pending alerts: ${alertsResult.rows.length}`,
+    );
 
-      res.json({
-        timestamp: new Date().toISOString(),
-        database_time: new Date().toISOString(),
-        completed_subtasks_today: completedResult.rows,
-        approvals_on_record: approvalsResult.rows,
-        pending_approval_alerts: alertsResult.rows,
-        summary: {
-          total_completed_today: completedResult.rows.length,
-          total_approved: approvalsResult.rows.length,
-          total_pending_alerts: alertsResult.rows.length,
-          completed_without_approval: completedResult.rows.filter(
-            (row) => !row.approved_at,
-          ).length,
-          ready_for_alerts_count: completedResult.rows.filter((row) =>
-            row.ready_for_alert.includes("Ready"),
-          ).length,
-        },
-      });
-    } catch (error: any) {
-      console.error("[Debug] Error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  },
-);
+    res.json({
+      timestamp: new Date().toISOString(),
+      database_time: new Date().toISOString(),
+      completed_subtasks_today: completedResult.rows,
+      approvals_on_record: approvalsResult.rows,
+      pending_approval_alerts: alertsResult.rows,
+      summary: {
+        total_completed_today: completedResult.rows.length,
+        total_approved: approvalsResult.rows.length,
+        total_pending_alerts: alertsResult.rows.length,
+        completed_without_approval: completedResult.rows.filter(
+          (row) => !row.approved_at,
+        ).length,
+        ready_for_alerts_count: completedResult.rows.filter((row) =>
+          row.ready_for_alert.includes("Ready"),
+        ).length,
+      },
+    });
+  } catch (error: any) {
+    console.error("[Debug] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Debug endpoint: Check pending approval alerts and manually process them
 router.get(

@@ -1892,6 +1892,116 @@ router.post("/trigger-approval-check", async (req: Request, res: Response) => {
   }
 });
 
+// Debug: Check all completed subtasks and approval status
+router.get(
+  "/debug/completed-subtasks",
+  async (req: Request, res: Response) => {
+    try {
+      await requireDatabase();
+
+      console.log("[Debug] Checking all completed subtasks");
+
+      // Get all completed subtasks from today
+      const completedQuery = `
+        SELECT
+          ft.id as tracker_id,
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.status,
+          ft.completed_at,
+          ft.approved_at,
+          ft.approved_by,
+          ft.run_date,
+          EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer as seconds_since_completion,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers,
+          CASE
+            WHEN ft.completed_at < NOW() - INTERVAL '15 minutes' THEN 'YES - Ready for alert'
+            ELSE 'NO - Wait ' || (900 - EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer) || ' more seconds'
+          END as ready_for_alert
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND t.is_active = true
+        ORDER BY ft.completed_at DESC
+        LIMIT 50
+      `;
+
+      const completedResult = await pool.query(completedQuery);
+
+      // Get all finops_approvals
+      const approvalsQuery = `
+        SELECT
+          fa.id,
+          fa.task_id,
+          fa.subtask_id,
+          fa.tracker_id,
+          fa.approved_by,
+          fa.approved_at,
+          fa.note
+        FROM finops_approvals fa
+        ORDER BY fa.approved_at DESC
+        LIMIT 100
+      `;
+
+      const approvalsResult = await pool.query(approvalsQuery);
+
+      // Get all pending approval alerts
+      const alertsQuery = `
+        SELECT
+          id,
+          task_id,
+          subtask_id,
+          alert_group,
+          title,
+          next_call_at,
+          created_at,
+          NOW() as current_time,
+          CASE
+            WHEN next_call_at <= NOW() THEN 'READY TO SEND'
+            ELSE 'WAITING - ' || (EXTRACT(EPOCH FROM (next_call_at - NOW()))::integer) || ' seconds left'
+          END as alert_status
+        FROM finops_external_alerts
+        WHERE alert_group = 'pending_approval_reporting'
+        ORDER BY next_call_at ASC
+        LIMIT 50
+      `;
+
+      const alertsResult = await pool.query(alertsQuery);
+
+      console.log(
+        `[Debug] Completed subtasks: ${completedResult.rows.length}, Approvals: ${approvalsResult.rows.length}, Pending alerts: ${alertsResult.rows.length}`,
+      );
+
+      res.json({
+        timestamp: new Date().toISOString(),
+        database_time: new Date().toISOString(),
+        completed_subtasks_today: completedResult.rows,
+        approvals_on_record: approvalsResult.rows,
+        pending_approval_alerts: alertsResult.rows,
+        summary: {
+          total_completed_today: completedResult.rows.length,
+          total_approved: approvalsResult.rows.length,
+          total_pending_alerts: alertsResult.rows.length,
+          completed_without_approval: completedResult.rows.filter(
+            (row) => !row.approved_at,
+          ).length,
+          ready_for_alerts_count: completedResult.rows.filter((row) =>
+            row.ready_for_alert.includes("Ready"),
+          ).length,
+        },
+      });
+    } catch (error: any) {
+      console.error("[Debug] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
 // Debug endpoint: Check pending approval alerts and manually process them
 router.get(
   "/debug/pending-approval-alerts",

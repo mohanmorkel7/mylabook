@@ -155,12 +155,23 @@ export const handler: Handler = async () => {
         const subtaskName = row.subtask_name || "Unknown Subtask";
         const title = `You need to approve the subtask "${subtaskName}" under the task "${taskName}" for the client "${clientName}".`;
 
+        console.log(`[finops-approval-check] Raw managers data:`, {
+          reporting_managers_raw: row.reporting_managers,
+          escalation_managers_raw: row.escalation_managers,
+        });
+
         // Get reporting and escalation managers
         const reportingManagers = parseManagers(row.reporting_managers);
         const escalationManagers = parseManagers(row.escalation_managers);
         const allManagers = Array.from(
           new Set([...reportingManagers, ...escalationManagers]),
         );
+
+        console.log(`[finops-approval-check] Parsed managers:`, {
+          reportingManagers,
+          escalationManagers,
+          allManagers,
+        });
 
         if (allManagers.length === 0) {
           console.warn(

@@ -209,6 +209,61 @@ const convertNameToValueFormat = (name: string, users: any[]): string => {
   return user ? `${name} (${user.email || "no-email"})` : `${name} (no-email)`;
 };
 
+// Component to show pending approval countdown timer
+const PendingApprovalTimer = ({
+  subtaskId,
+  completedAt,
+}: {
+  subtaskId: number;
+  completedAt: string;
+}) => {
+  const [timeLeft, setTimeLeft] = useState<string>("");
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!completedAt) return;
+
+      const completedTime = new Date(completedAt).getTime();
+      const now = new Date().getTime();
+      const diffMs = now - completedTime;
+      const fifteenMinutesMs = 15 * 60 * 1000;
+
+      if (diffMs >= fifteenMinutesMs) {
+        setIsReady(true);
+        setTimeLeft("Ready for approval alert!");
+      } else {
+        setIsReady(false);
+        const remainingMs = fifteenMinutesMs - diffMs;
+        const remainingSeconds = Math.ceil(remainingMs / 1000);
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        setTimeLeft(`${minutes}m ${seconds}s`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [completedAt]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2 rounded border ${
+      isReady
+        ? "border-red-300 bg-red-50"
+        : "border-yellow-300 bg-yellow-50"
+    }`}>
+      <Clock8 className={`h-4 w-4 ${isReady ? "text-red-600" : "text-yellow-600"}`} />
+      <span className={`text-sm font-medium ${isReady ? "text-red-700" : "text-yellow-700"}`}>
+        {isReady ? "⚠️ " : "⏱️ "} Approval pending: {timeLeft}
+      </span>
+    </div>
+  );
+};
+
 // Format ISO timestamp to "YYYY-MM-DD h:mm:ss AM/PM"
 const formatDateTime = (iso?: string | null) => {
   if (!iso) return "";

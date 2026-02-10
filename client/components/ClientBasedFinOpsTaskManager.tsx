@@ -243,9 +243,7 @@ const PendingApprovalTimer = ({
         // Show countdown in current cycle
         // Alert is triggered by backend cron every 1 minute (no need for client-side trigger)
         if (minutes === 0 && seconds === 0) {
-          setTimeLeft(
-            `0m 0s (Alert will be sent by system every 15 minutes)`,
-          );
+          setTimeLeft(`0m 0s (Alert will be sent by system every 15 minutes)`);
         } else {
           setTimeLeft(`${minutes}m ${seconds}s (Cycle ${cycleNumber})`);
         }

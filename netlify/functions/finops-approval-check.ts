@@ -17,7 +17,9 @@ export const handler: Handler = async () => {
     while (retries > 0 && !dbConnected) {
       try {
         await initializeDatabase();
-        console.log("[finops-approval-check] Database initialized successfully");
+        console.log(
+          "[finops-approval-check] Database initialized successfully",
+        );
         dbConnected = true;
       } catch (dbErr: any) {
         retries--;
@@ -27,13 +29,15 @@ export const handler: Handler = async () => {
         );
         if (retries > 0) {
           // Wait 2 seconds before retrying
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       }
     }
 
     if (!dbConnected) {
-      console.error("[finops-approval-check] Failed to connect to database after retries");
+      console.error(
+        "[finops-approval-check] Failed to connect to database after retries",
+      );
       return {
         statusCode: 503,
         body: JSON.stringify({
@@ -100,7 +104,10 @@ export const handler: Handler = async () => {
         ),
       ]);
     } catch (queryErr: any) {
-      console.error("[finops-approval-check] Query timeout/error:", queryErr?.message);
+      console.error(
+        "[finops-approval-check] Query timeout/error:",
+        queryErr?.message,
+      );
       return {
         statusCode: 504,
         body: JSON.stringify({

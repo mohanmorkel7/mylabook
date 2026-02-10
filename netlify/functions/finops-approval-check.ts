@@ -208,23 +208,32 @@ export const handler: Handler = async () => {
         }
 
         console.log(
-          `[finops-approval-check] Resolved ${userIds.length} user IDs`,
+          `[finops-approval-check] Resolved ${userIds.length} user IDs:`,
+          userIds,
         );
 
         // Check if alert already exists
         const existingAlert = await pool.query(
-          `SELECT id, next_call_at FROM finops_external_alerts 
-           WHERE task_id = $1 
-             AND subtask_id = $2 
+          `SELECT id, next_call_at FROM finops_external_alerts
+           WHERE task_id = $1
+             AND subtask_id = $2
              AND alert_group = 'pending_approval_reporting'
            LIMIT 1`,
           [row.task_id, row.subtask_id],
+        );
+
+        console.log(
+          `[finops-approval-check] Existing alert found: ${existingAlert.rows.length > 0}`,
         );
 
         if (existingAlert.rows.length > 0) {
           const nextCallAt = existingAlert.rows[0].next_call_at
             ? new Date(existingAlert.rows[0].next_call_at)
             : null;
+
+          console.log(
+            `[finops-approval-check] Next call scheduled for: ${nextCallAt}, Now: ${new Date()}`,
+          );
 
           // Only send if the scheduled time has arrived
           if (nextCallAt && nextCallAt <= new Date()) {
@@ -235,6 +244,10 @@ export const handler: Handler = async () => {
             const pulseEnabled =
               pulseSetting.rows[0]?.pulse_alerts_enabled ?? true;
 
+            console.log(
+              `[finops-approval-check] Pulse alerts enabled: ${pulseEnabled}`,
+            );
+
             if (!pulseEnabled) {
               console.log(
                 "[finops-approval-check] Pulse alerts disabled, skipping",
@@ -244,6 +257,15 @@ export const handler: Handler = async () => {
 
             // Send the alert
             try {
+              console.log(
+                `[finops-approval-check] Sending alert to ${userIds.length} users:`,
+                {
+                  receiver: "CRM_Switch",
+                  title,
+                  user_ids: userIds,
+                },
+              );
+
               const response = await fetch(
                 "https://pulsealerts.mylapay.com/direct-call",
                 {
@@ -257,48 +279,72 @@ export const handler: Handler = async () => {
                 },
               );
 
+              console.log(
+                `[finops-approval-check] Pulse API response status: ${response.status}`,
+              );
+
               if (response.ok) {
                 console.log(
-                  `[finops-approval-check] Alert sent for subtask ${row.subtask_id}`,
+                  `[finops-approval-check] ✅ Alert sent successfully for subtask ${row.subtask_id}`,
                 );
                 alertsSent++;
 
                 // Reschedule for another 15 minutes
-                await pool.query(
-                  `UPDATE finops_external_alerts 
-                   SET next_call_at = NOW() + INTERVAL '15 minutes' 
-                   WHERE id = $1`,
+                const updateRes = await pool.query(
+                  `UPDATE finops_external_alerts
+                   SET next_call_at = NOW() + INTERVAL '15 minutes'
+                   WHERE id = $1
+                   RETURNING next_call_at`,
                   [existingAlert.rows[0].id],
+                );
+
+                console.log(
+                  `[finops-approval-check] Alert rescheduled for: ${updateRes.rows[0]?.next_call_at}`,
                 );
               } else {
                 console.warn(
-                  `[finops-approval-check] Pulse call failed with status ${response.status}`,
+                  `[finops-approval-check] ❌ Pulse call failed with status ${response.status}`,
+                );
+                const responseText = await response.text();
+                console.warn(
+                  `[finops-approval-check] Response body: ${responseText}`,
                 );
               }
             } catch (fetchError: any) {
               console.error(
-                `[finops-approval-check] Error sending alert:`,
+                `[finops-approval-check] ❌ Error sending alert:`,
                 fetchError?.message,
               );
             }
           } else {
             console.log(
-              `[finops-approval-check] Alert already scheduled for ${nextCallAt}, skipping`,
+              `[finops-approval-check] Alert not yet ready - scheduled for ${nextCallAt}`,
             );
           }
         } else {
           // No alert exists, create one scheduled for immediate send
-          await pool.query(
+          console.log(
+            `[finops-approval-check] Creating new alert for subtask ${row.subtask_id}`,
+          );
+
+          const insertRes = await pool.query(
             `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
              VALUES ($1, $2, 'pending_approval_reporting', -1, $3, NOW())
-             ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
+             ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING
+             RETURNING id`,
             [row.task_id, row.subtask_id, title],
           );
 
-          console.log(
-            `[finops-approval-check] Scheduled new alert for subtask ${row.subtask_id}`,
-          );
-          alertsScheduled++;
+          if (insertRes.rows.length > 0) {
+            console.log(
+              `[finops-approval-check] ✅ New alert created with id ${insertRes.rows[0].id}`,
+            );
+            alertsScheduled++;
+          } else {
+            console.log(
+              `[finops-approval-check] Alert already exists (on conflict), skipping insert`,
+            );
+          }
         }
       } catch (rowError: any) {
         console.error(

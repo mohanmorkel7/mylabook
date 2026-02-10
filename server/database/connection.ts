@@ -55,7 +55,7 @@ const originalQuery = (pool as any).query.bind(pool);
 // Add timeout wrapper for database operations
 export function withTimeout<T>(
   promise: Promise<T>,
-  timeoutMs: number = 5000,
+  timeoutMs: number = 30000, // Increased to 30 seconds
 ): Promise<T> {
   return Promise.race([
     promise,
@@ -71,8 +71,8 @@ export function withTimeout<T>(
 // Check if database is available with timeout
 export async function isDatabaseAvailable(): Promise<boolean> {
   try {
-    const client = await withTimeout(pool.connect(), 10000);
-    await withTimeout(client.query("SELECT 1"), 8000);
+    const client = await withTimeout(pool.connect(), 25000); // 25 seconds for connection
+    await withTimeout(client.query("SELECT 1"), 15000); // 15 seconds for query
     client.release();
     return true;
   } catch (error) {

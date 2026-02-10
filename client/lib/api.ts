@@ -1537,6 +1537,12 @@ export class ApiClient {
     });
   }
 
+  async getTodaysPendingApprovals() {
+    return this.request(
+      "/finops-production/public/today-pending-approvals"
+    );
+  }
+
   // FinOps Clients Management methods
   async getFinOpsClients() {
     return this.request("/finops/clients");

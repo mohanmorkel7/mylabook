@@ -262,45 +262,6 @@ const PendingApprovalTimer = ({
     return () => clearInterval(interval);
   }, [completedAt, subtaskId]);
 
-  // Function to trigger the approval alert (non-blocking)
-  const triggerApprovalAlert = () => {
-    // Fire and forget - don't block the timer
-    console.log(
-      `[PendingApprovalTimer] Triggering approval alert for subtask ${subtaskId}`,
-    );
-
-    // Use a separate Promise that doesn't block
-    Promise.race([
-      fetch("/api/finops-production/debug/send-pending-alerts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      })
-        .then((response) => {
-          if (response.ok) {
-            console.log(
-              `[PendingApprovalTimer] Alert triggered successfully`,
-            );
-          } else {
-            console.warn(
-              `[PendingApprovalTimer] Alert trigger failed with status ${response.status}`,
-            );
-          }
-        })
-        .catch((error) => {
-          console.warn(
-            `[PendingApprovalTimer] Error triggering alert (non-critical):`,
-            error?.message,
-          );
-        }),
-      // Timeout after 5 seconds to ensure it doesn't block
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Alert timeout")), 5000),
-      ),
-    ]).catch(() => {
-      // Silently ignore timeout and errors
-    });
-  };
-
   if (!timeLeft) return null;
 
   return (

@@ -73,6 +73,41 @@ export const handler: Handler = async () => {
       `[finops-approval-check] Found ${result.rows.length} unapproved completed subtasks older than 15 minutes`,
     );
 
+    // Debug: Also log all completed subtasks regardless of 15-minute condition
+    const debugQuery = `
+      SELECT
+        ft.task_id,
+        ft.subtask_id,
+        ft.subtask_name,
+        ft.status,
+        ft.completed_at,
+        ft.approved_at,
+        ft.run_date,
+        EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer as seconds_since_completion,
+        t.task_name,
+        t.reporting_managers,
+        t.escalation_managers
+      FROM finops_tracker ft
+      JOIN finops_tasks t ON t.id = ft.task_id
+      WHERE ft.status = 'completed'
+        AND ft.run_date = CURRENT_DATE
+        AND t.is_active = true
+        AND t.deleted_at IS NULL
+      ORDER BY ft.completed_at DESC
+      LIMIT 20
+    `;
+
+    const debugResult = await pool.query(debugQuery);
+    console.log(
+      `[finops-approval-check] DEBUG: Total completed subtasks today: ${debugResult.rows.length}`,
+    );
+    debugResult.rows.forEach((row: any) => {
+      const hasApproval = row.approved_at ? "YES" : "NO";
+      console.log(
+        `[finops-approval-check] DEBUG: subtask_id=${row.subtask_id}, name="${row.subtask_name}", seconds_since_completion=${row.seconds_since_completion}, already_approved=${hasApproval}, reporting_managers=${row.reporting_managers}, escalation_managers=${row.escalation_managers}`,
+      );
+    });
+
     let alertsSent = 0;
     let alertsScheduled = 0;
 

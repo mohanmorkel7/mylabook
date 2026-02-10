@@ -1938,6 +1938,74 @@ router.post("/trigger-approval-check", async (req: Request, res: Response) => {
   }
 });
 
+// Get today's pending approvals only (completed but not approved)
+router.get(
+  "/debug/today-pending-approvals",
+  async (req: Request, res: Response) => {
+    try {
+      await requireDatabase();
+
+      console.log("[Debug] Checking today's pending approvals");
+
+      const query = `
+        SELECT
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.status,
+          ft.completed_at,
+          ft.approved_at,
+          ft.approved_by,
+          EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer as seconds_since_completion,
+          ROUND((EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::numeric / 60), 1) as minutes_since_completion,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND ft.approved_at IS NULL
+          AND t.is_active = true
+          AND t.deleted_at IS NULL
+        ORDER BY ft.completed_at ASC
+      `;
+
+      const result = await pool.query(query);
+
+      console.log(
+        `[Debug] Found ${result.rows.length} subtasks pending approval today`,
+      );
+
+      res.json({
+        timestamp: new Date().toISOString(),
+        today: new Date().toISOString().split("T")[0],
+        pending_approvals_count: result.rows.length,
+        pending_approvals: result.rows.map((row) => ({
+          subtask_id: row.subtask_id,
+          subtask_name: row.subtask_name,
+          task_name: row.task_name,
+          client_name: row.client_name,
+          completed_at: row.completed_at,
+          minutes_since_completion: row.minutes_since_completion,
+          seconds_since_completion: row.seconds_since_completion,
+          ready_for_alert: row.seconds_since_completion > 900 ? "YES" : "NO",
+          waiting_for_alert:
+            row.seconds_since_completion > 900
+              ? null
+              : 900 - row.seconds_since_completion + " seconds",
+          reporting_managers: row.reporting_managers,
+          escalation_managers: row.escalation_managers,
+        })),
+      });
+    } catch (error: any) {
+      console.error("[Debug] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
 // Debug: Check all completed subtasks and approval status
 router.get("/debug/completed-subtasks", async (req: Request, res: Response) => {
   try {

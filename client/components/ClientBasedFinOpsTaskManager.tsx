@@ -1223,6 +1223,52 @@ export default function ClientBasedFinOpsTaskManager() {
   const recentManualUpdates = useRef<Record<string, number>>({});
   const UPDATE_BLOCK_WINDOW = 60 * 1000; // 1 minute
 
+  // Track which subtasks have already been notified for SLA warnings (to avoid duplicate notifications)
+  const notifiedSLAWarnings = useRef<Set<string>>(new Set());
+
+  // Function to show Windows system notification for SLA warnings
+  const showSLANotification = async (
+    taskName: string,
+    subtaskName: string,
+    minutesRemaining: number,
+  ) => {
+    try {
+      // Check if notifications are supported by the browser
+      if (!("Notification" in window)) {
+        console.log("Notifications API not supported by this browser");
+        return;
+      }
+
+      // Request permission if not already granted
+      if (Notification.permission === "default") {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          console.log("Notification permission denied by user");
+          return;
+        }
+      }
+
+      // Only show notification if permission is granted
+      if (Notification.permission === "granted") {
+        const notification = new Notification("SLA Warning", {
+          icon: "/clock-icon.svg", // Make sure this icon exists or use a default
+          badge: "/clock-icon.svg",
+          body: `Task: ${taskName}\nSubtask: ${subtaskName}\nTime Remaining: ${minutesRemaining} minutes`,
+          tag: `sla-warning-${taskName}-${subtaskName}`, // Prevents duplicate notifications
+          requireInteraction: true, // Keeps notification visible until user interacts
+        });
+
+        // Handle notification click
+        notification.onclick = () => {
+          window.focus();
+          // Scroll to the task/subtask (optional)
+        };
+      }
+    } catch (error) {
+      console.error("Error showing SLA notification:", error);
+    }
+  };
+
   // Wrapper to mark manual updates and call mutation
   const performSubtaskUpdate = (args: {
     taskId: number;

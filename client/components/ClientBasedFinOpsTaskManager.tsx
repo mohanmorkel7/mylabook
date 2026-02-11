@@ -1239,9 +1239,15 @@ export default function ClientBasedFinOpsTaskManager() {
         return;
       }
 
+      console.log(
+        `[SLA Notification] Current permission: ${Notification.permission}`,
+      );
+
       // Request permission if not already granted
       if (Notification.permission === "default") {
+        console.log("[SLA Notification] Requesting permission...");
         const permission = await Notification.requestPermission();
+        console.log(`[SLA Notification] Permission result: ${permission}`);
         if (permission !== "granted") {
           console.log("Notification permission denied by user");
           return;
@@ -1250,24 +1256,48 @@ export default function ClientBasedFinOpsTaskManager() {
 
       // Only show notification if permission is granted
       if (Notification.permission === "granted") {
+        console.log(
+          `[SLA Notification] Creating notification for ${subtaskName}`,
+        );
         const notification = new Notification("SLA Warning", {
-          icon: "/clock-icon.svg", // Make sure this icon exists or use a default
-          badge: "/clock-icon.svg",
           body: `Task: ${taskName}\nSubtask: ${subtaskName}\nTime Remaining: ${minutesRemaining} minutes`,
           tag: `sla-warning-${taskName}-${subtaskName}`, // Prevents duplicate notifications
           requireInteraction: true, // Keeps notification visible until user interacts
         });
+
+        console.log("[SLA Notification] Notification created successfully");
 
         // Handle notification click
         notification.onclick = () => {
           window.focus();
           // Scroll to the task/subtask (optional)
         };
+      } else {
+        console.warn(
+          `[SLA Notification] Permission not granted. Current: ${Notification.permission}`,
+        );
       }
     } catch (error) {
       console.error("Error showing SLA notification:", error);
     }
   };
+
+  // Request notification permission on component mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      console.log("[SLA Setup] Checking notification permission...");
+      if (Notification.permission === "default") {
+        console.log("[SLA Setup] Requesting notification permission...");
+        Notification.requestPermission().then((permission) => {
+          console.log(`[SLA Setup] Notification permission: ${permission}`);
+        });
+      } else {
+        console.log(
+          `[SLA Setup] Notification permission already set to: ${Notification.permission}`,
+        );
+      }
+    }
+  }, []);
 
   // Wrapper to mark manual updates and call mutation
   const performSubtaskUpdate = (args: {
@@ -1836,6 +1866,10 @@ export default function ClientBasedFinOpsTaskManager() {
   useEffect(() => {
     if (!finopsTasks || finopsTasks.length === 0) return;
 
+    console.log(
+      `[SLA Monitor] Checking ${finopsTasks.length} tasks for SLA warnings`,
+    );
+
     finopsTasks.forEach((task) => {
       if (!task.subtasks) return;
 
@@ -1849,6 +1883,10 @@ export default function ClientBasedFinOpsTaskManager() {
 
             // Check if we've already notified for this subtask
             if (!notifiedSLAWarnings.current.has(notificationKey)) {
+              console.log(
+                `[SLA Monitor] New SLA warning detected for: ${subtask.name}`,
+              );
+
               // Mark as notified to prevent duplicate notifications
               notifiedSLAWarnings.current.add(notificationKey);
 
@@ -1859,17 +1897,16 @@ export default function ClientBasedFinOpsTaskManager() {
                 ? parseInt(minutesMatch[1], 10)
                 : 0;
 
+              console.log(
+                `[SLA Monitor] Triggering notification - Task: ${task.task_name}, Subtask: ${subtask.name}, Minutes: ${minutesRemaining}`,
+              );
+
               // Show the system notification
               showSLANotification(
                 task.task_name,
                 subtask.name,
                 minutesRemaining,
               );
-
-              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-                console.log(
-                  `📢 SLA warning notification shown for ${subtask.name}`,
-                );
             }
           }
         }
@@ -2588,6 +2625,36 @@ export default function ClientBasedFinOpsTaskManager() {
 
           {/* 🎯 Right: Action buttons (normal size, outside the box) */}
           <div className="flex gap-2 ml-4 items-center">
+            {/* Enable Notifications Button */}
+            {typeof window !== "undefined" &&
+              "Notification" in window &&
+              Notification.permission !== "granted" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (Notification.permission === "default") {
+                      const permission = await Notification.requestPermission();
+                      console.log(
+                        `[Notification] Permission requested: ${permission}`,
+                      );
+                      if (permission === "granted") {
+                        alert("Notifications enabled! You'll receive SLA warnings.");
+                        // Show a test notification
+                        new Notification("Notifications Enabled", {
+                          body: "You will now receive SLA warning notifications",
+                        });
+                      } else {
+                        alert(
+                          "Notification permission denied. Please enable notifications in browser settings.",
+                        );
+                      }
+                    }
+                  }}
+                >
+                  🔔 Enable Notifications
+                </Button>
+              )}
             <Button
               variant="outline"
               onClick={async () => {

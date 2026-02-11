@@ -1682,9 +1682,9 @@ export async function getTodayEmails(
 
       console.log("getTodayEmails: requesting app token from Azure AD");
 
-      // Add 10-second timeout to token acquisition
+      // Add 15-second timeout to token acquisition (Azure AD can be slow)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       let res;
       try {

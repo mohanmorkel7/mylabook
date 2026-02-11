@@ -219,8 +219,11 @@ class FinOpsAlertService {
       //   return;
       // }
 
-      const { isDatabaseAvailable } = await import("../database/connection");
-      if (!(await isDatabaseAvailable())) return;
+      // Check if database is available before proceeding
+      if (!(await isDatabaseAvailable())) {
+        console.log("Database not available, skipping SLA alert check");
+        return;
+      }
       console.log("Starting SLA alert check...");
 
       // Get all active tasks with their subtasks

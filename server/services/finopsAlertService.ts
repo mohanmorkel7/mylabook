@@ -1397,23 +1397,36 @@ class FinOpsAlertService {
    */
   async checkIncompleteSubtasks(): Promise<void> {
     try {
+      // Skip if database is not available
+      if (!(await isDatabaseAvailable())) {
+        console.log("Database not available, skipping incomplete subtask check");
+        return;
+      }
+
       console.log("Checking for incomplete subtasks...");
 
       const incompleteSubtasks = await pool.query(`
-        SELECT t.*, st.*, 
+        SELECT t.*, st.*,
                t.task_name, t.assigned_to, t.reporting_managers, t.escalation_managers
         FROM finops_subtasks st
         JOIN finops_tasks t ON st.task_id = t.id
       `);
 
       for (const subtask of incompleteSubtasks.rows) {
-        await this.logActivity(
-          subtask.task_id,
-          String(subtask.id),
-          "incomplete_check",
-          "System",
-          `Subtask ${subtask.name} remains incomplete`,
-        );
+        try {
+          await this.logActivity(
+            subtask.task_id,
+            String(subtask.id),
+            "incomplete_check",
+            "System",
+            `Subtask ${subtask.name} remains incomplete`,
+          );
+        } catch (logErr) {
+          console.warn(
+            `Error logging incomplete subtask ${subtask.id}:`,
+            (logErr as Error).message,
+          );
+        }
       }
 
       console.log("Incomplete subtask check completed");

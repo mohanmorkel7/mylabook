@@ -1,4 +1,4 @@
-import { pool } from "../database/connection";
+import { pool, isDatabaseAvailable } from "../database/connection";
 import * as nodemailer from "nodemailer";
 
 // IST timezone helper functions

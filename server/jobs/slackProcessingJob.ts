@@ -186,6 +186,7 @@ export function initialize() {
                         bucket_id: 5,
                         demand: 1,
                         tags: ["Slack"],
+                        assigned_to: 76, // Default assign Slack tickets to user 76
                         custom_fields: {
                           slack_thread_ts: threadTs,
                           slack_channel: channel.id,

@@ -2477,8 +2477,8 @@ export default function ManageTickets() {
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
 
-                          {/* Show Slack badge if description starts with "Slack from : " */}
-                          {t.description && String(t.description).trim().startsWith("Slack from : ") && (
+                          {/* Show Slack badge if description starts with "Slack from" */}
+                          {t.description && String(t.description).trim().toLowerCase().startsWith("slack from") && (
                             <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
                           )}
 
@@ -2775,8 +2775,8 @@ export default function ManageTickets() {
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
 
-                          {/* Show Slack badge if description starts with "Slack from : " */}
-                          {t.description && String(t.description).trim().startsWith("Slack from : ") && (
+                          {/* Show Slack badge if description starts with "Slack from" */}
+                          {t.description && String(t.description).trim().toLowerCase().startsWith("slack from") && (
                             <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
                           )}
 

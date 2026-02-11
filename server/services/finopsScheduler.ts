@@ -327,6 +327,12 @@ class FinOpsScheduler {
    */
   private async syncTaskStatuses(): Promise<void> {
     try {
+      // Skip if database is not available
+      if (!(await isDatabaseAvailable())) {
+        console.log("Database not available, skipping task status sync");
+        return;
+      }
+
       // Compute current IST time to make decisions based on user's local day boundary
       const istNow = new Date(
         new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
@@ -343,64 +349,72 @@ class FinOpsScheduler {
       `);
 
       for (const t of tasksRes.rows) {
-        // Try tracker counts for today
-        const trackerCounts = await pool.query(
-          `
-          SELECT
-            COUNT(*) as total_subtasks,
-            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_subtasks,
-            COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_subtasks,
-            COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_subtasks
-          FROM finops_tracker
-          WHERE task_id = $1 AND run_date = ${todayExpr}
-        `,
-          [t.id],
-        );
-
-        let total = parseInt(trackerCounts.rows[0].total_subtasks, 10);
-        let completed = parseInt(trackerCounts.rows[0].completed_subtasks, 10);
-        let overdue = parseInt(trackerCounts.rows[0].overdue_subtasks, 10);
-        let inProgress = parseInt(
-          trackerCounts.rows[0].in_progress_subtasks,
-          10,
-        );
-
-        // Fallback to finops_subtasks when no tracker rows for today
-        if (total === 0) {
-          const subtasks = await pool.query(
-            `SELECT status FROM finops_subtasks WHERE task_id = $1`,
+        try {
+          // Try tracker counts for today
+          const trackerCounts = await pool.query(
+            `
+            SELECT
+              COUNT(*) as total_subtasks,
+              COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_subtasks,
+              COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_subtasks,
+              COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_subtasks
+            FROM finops_tracker
+            WHERE task_id = $1 AND run_date = ${todayExpr}
+          `,
             [t.id],
           );
-          total = subtasks.rows.length;
-          completed = subtasks.rows.filter(
-            (st) => st.status === "completed",
-          ).length;
-          overdue = subtasks.rows.filter(
-            (st) => st.status === "overdue",
-          ).length;
-          inProgress = subtasks.rows.filter(
-            (st) => st.status === "in_progress",
-          ).length;
-        }
 
-        let newStatus = "active";
-        if (overdue > 0) {
-          newStatus = "overdue";
-        } else if (completed === total && total > 0) {
-          newStatus = "completed";
-        } else if (inProgress > 0) {
-          newStatus = "in_progress";
-        }
+          let total = parseInt(trackerCounts.rows[0].total_subtasks, 10);
+          let completed = parseInt(trackerCounts.rows[0].completed_subtasks, 10);
+          let overdue = parseInt(trackerCounts.rows[0].overdue_subtasks, 10);
+          let inProgress = parseInt(
+            trackerCounts.rows[0].in_progress_subtasks,
+            10,
+          );
 
-        // Update task status if it has changed
-        await pool.query(
-          `
-          UPDATE finops_tasks
-          SET status = $1, updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2 AND status != $1
-        `,
-          [newStatus, t.id],
-        );
+          // Fallback to finops_subtasks when no tracker rows for today
+          if (total === 0) {
+            const subtasks = await pool.query(
+              `SELECT status FROM finops_subtasks WHERE task_id = $1`,
+              [t.id],
+            );
+            total = subtasks.rows.length;
+            completed = subtasks.rows.filter(
+              (st) => st.status === "completed",
+            ).length;
+            overdue = subtasks.rows.filter(
+              (st) => st.status === "overdue",
+            ).length;
+            inProgress = subtasks.rows.filter(
+              (st) => st.status === "in_progress",
+            ).length;
+          }
+
+          let newStatus = "active";
+          if (overdue > 0) {
+            newStatus = "overdue";
+          } else if (completed === total && total > 0) {
+            newStatus = "completed";
+          } else if (inProgress > 0) {
+            newStatus = "in_progress";
+          }
+
+          // Update task status if it has changed
+          await pool.query(
+            `
+            UPDATE finops_tasks
+            SET status = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2 AND status != $1
+          `,
+            [newStatus, t.id],
+          );
+        } catch (taskErr) {
+          console.warn(
+            `Error syncing status for task ${t.id} (${t.task_name}):`,
+            (taskErr as Error).message,
+          );
+          // Continue with next task instead of failing entire sync
+        }
       }
 
       // After syncing statuses, rollover fully completed daily tasks to the next day.

@@ -2477,6 +2477,11 @@ export default function ManageTickets() {
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
 
+                          {/* Show Slack badge if description starts with "Slack from : " */}
+                          {t.description && String(t.description).trim().startsWith("Slack from : ") && (
+                            <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
+                          )}
+
                           {/* Render tag badges (e.g., Slack) when present */}
                           {(() => {
                             const raw = (t as any).tags;
@@ -2769,6 +2774,11 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Show Slack badge if description starts with "Slack from : " */}
+                          {t.description && String(t.description).trim().startsWith("Slack from : ") && (
+                            <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
+                          )}
 
                           {/* Render tag badges (e.g., Slack) when present */}
                           {(() => {

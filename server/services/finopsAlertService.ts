@@ -1019,79 +1019,87 @@ class FinOpsAlertService {
 
       // Upsert tracker rows for today's IST date for each subtask (do not mutate finops_subtasks)
       for (const subtask of subtasks.rows) {
-        // Ensure tracking table exists with expanded columns (no-op if already created)
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_tracker (
-            id SERIAL PRIMARY KEY,
-            run_date DATE NOT NULL,
-            period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-            task_id INTEGER NOT NULL,
-            task_name TEXT,
-            subtask_id INTEGER NOT NULL DEFAULT 0,
-            subtask_name TEXT,
-            status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-            started_at TIMESTAMP NULL,
-            completed_at TIMESTAMP NULL,
-            scheduled_time TIME NULL,
-            subtask_scheduled_date DATE NULL,
-            description TEXT,
-            sla_hours INTEGER,
-            sla_minutes INTEGER,
-            order_position INTEGER,
-            delay_reason TEXT,
-            delay_notes TEXT,
-            notification_sent_15min BOOLEAN DEFAULT false,
-            notification_sent_start BOOLEAN DEFAULT false,
-            notification_sent_escalation BOOLEAN DEFAULT false,
-            auto_notify BOOLEAN DEFAULT true,
-            assigned_to TEXT,
-            reporting_managers TEXT,
-            escalation_managers TEXT,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(run_date, period, task_id, subtask_id)
-          );
-        `);
+        try {
+          // Ensure tracking table exists with expanded columns (no-op if already created)
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS finops_tracker (
+              id SERIAL PRIMARY KEY,
+              run_date DATE NOT NULL,
+              period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
+              task_id INTEGER NOT NULL,
+              task_name TEXT,
+              subtask_id INTEGER NOT NULL DEFAULT 0,
+              subtask_name TEXT,
+              status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
+              started_at TIMESTAMP NULL,
+              completed_at TIMESTAMP NULL,
+              scheduled_time TIME NULL,
+              subtask_scheduled_date DATE NULL,
+              description TEXT,
+              sla_hours INTEGER,
+              sla_minutes INTEGER,
+              order_position INTEGER,
+              delay_reason TEXT,
+              delay_notes TEXT,
+              notification_sent_15min BOOLEAN DEFAULT false,
+              notification_sent_start BOOLEAN DEFAULT false,
+              notification_sent_escalation BOOLEAN DEFAULT false,
+              auto_notify BOOLEAN DEFAULT true,
+              assigned_to TEXT,
+              reporting_managers TEXT,
+              escalation_managers TEXT,
+              created_at TIMESTAMP DEFAULT NOW(),
+              updated_at TIMESTAMP DEFAULT NOW(),
+              UNIQUE(run_date, period, task_id, subtask_id)
+            );
+          `);
 
-        // Upsert into finops_tracker for datewise tracking (do not touch finops_subtasks table)
-        // When a row already exists, preserve the existing status if it's not 'pending' (e.g., if already 'completed')
-        // Only update metadata fields like description, sla_hours, sla_minutes, and order_position
-        await pool.query(
-          `
-          INSERT INTO finops_tracker (
-            run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position
-          ) VALUES (
-            (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $1, $2, $3, $4, $5, 'pending', NULL, NULL, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $7, $8, $9, $10
-          )
-          ON CONFLICT (run_date, period, task_id, subtask_id)
-          DO UPDATE SET
-            status = CASE
-              WHEN finops_tracker.status IN ('completed', 'in_progress', 'overdue', 'delayed', 'cancelled') THEN finops_tracker.status
-              ELSE EXCLUDED.status
-            END,
-            started_at = CASE WHEN finops_tracker.started_at IS NULL THEN EXCLUDED.started_at ELSE finops_tracker.started_at END,
-            completed_at = CASE WHEN finops_tracker.completed_at IS NULL THEN EXCLUDED.completed_at ELSE finops_tracker.completed_at END,
-            scheduled_time = EXCLUDED.scheduled_time,
-            subtask_scheduled_date = EXCLUDED.subtask_scheduled_date,
-            description = EXCLUDED.description,
-            sla_hours = EXCLUDED.sla_hours,
-            sla_minutes = EXCLUDED.sla_minutes,
-            order_position = EXCLUDED.order_position,
-            updated_at = NOW()
-          `,
-          [
-            String(task.duration || "daily"),
-            task.id,
-            task.task_name || "",
-            subtask.id,
-            subtask.name || "",
-            subtask.start_time || null,
-            subtask.description || null,
-            subtask.sla_hours || null,
-            subtask.sla_minutes || null,
-            subtask.order_position || null,
-          ],
-        );
+          // Upsert into finops_tracker for datewise tracking (do not touch finops_subtasks table)
+          // When a row already exists, preserve the existing status if it's not 'pending' (e.g., if already 'completed')
+          // Only update metadata fields like description, sla_hours, sla_minutes, and order_position
+          await pool.query(
+            `
+            INSERT INTO finops_tracker (
+              run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position
+            ) VALUES (
+              (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $1, $2, $3, $4, $5, 'pending', NULL, NULL, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $7, $8, $9, $10
+            )
+            ON CONFLICT (run_date, period, task_id, subtask_id)
+            DO UPDATE SET
+              status = CASE
+                WHEN finops_tracker.status IN ('completed', 'in_progress', 'overdue', 'delayed', 'cancelled') THEN finops_tracker.status
+                ELSE EXCLUDED.status
+              END,
+              started_at = CASE WHEN finops_tracker.started_at IS NULL THEN EXCLUDED.started_at ELSE finops_tracker.started_at END,
+              completed_at = CASE WHEN finops_tracker.completed_at IS NULL THEN EXCLUDED.completed_at ELSE finops_tracker.completed_at END,
+              scheduled_time = EXCLUDED.scheduled_time,
+              subtask_scheduled_date = EXCLUDED.subtask_scheduled_date,
+              description = EXCLUDED.description,
+              sla_hours = EXCLUDED.sla_hours,
+              sla_minutes = EXCLUDED.sla_minutes,
+              order_position = EXCLUDED.order_position,
+              updated_at = NOW()
+            `,
+            [
+              String(task.duration || "daily"),
+              task.id,
+              task.task_name || "",
+              subtask.id,
+              subtask.name || "",
+              subtask.start_time || null,
+              subtask.description || null,
+              subtask.sla_hours || null,
+              subtask.sla_minutes || null,
+              subtask.order_position || null,
+            ],
+          );
+        } catch (subtaskErr) {
+          console.warn(
+            `Error upserting subtask tracker ${subtask.id} for task ${task.id}:`,
+            (subtaskErr as Error).message,
+          );
+          // Continue with next subtask instead of failing entire task execution
+        }
       }
 
       // Update task last run time

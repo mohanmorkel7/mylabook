@@ -63,25 +63,42 @@ pool.on("remove", () => {
   console.log("[POOL] Connection removed from pool");
 });
 
-// Periodically check pool health and drain if needed
-setInterval(async () => {
-  const poolSize = (pool as any).totalCount;
-  const idleCount = (pool as any).idleCount;
-  const waitingCount = (pool as any).waitingCount || 0;
+// Periodically check pool health and drain if needed (only when server is running, not during build)
+// Note: Skip monitoring during build to avoid blocking the build process
+let poolMonitoringInterval: any = null;
 
-  console.log(
-    `[POOL STATS] Total: ${poolSize}, Idle: ${idleCount}, Waiting: ${waitingCount}`,
-  );
+export function startPoolMonitoring() {
+  if (poolMonitoringInterval) return; // Already started
 
-  // If too many waiting connections, drain to reset
-  if (waitingCount > 10) {
-    console.warn(
-      `[POOL] ${waitingCount} connections waiting, draining pool...`,
-    );
-    await pool.drain();
-    connectionErrors = 0;
+  poolMonitoringInterval = setInterval(async () => {
+    const poolSize = (pool as any).totalCount;
+    const idleCount = (pool as any).idleCount;
+    const waitingCount = (pool as any).waitingCount || 0;
+
+    // Only log if there are actual connections
+    if (poolSize > 0 || waitingCount > 0) {
+      console.log(
+        `[POOL STATS] Total: ${poolSize}, Idle: ${idleCount}, Waiting: ${waitingCount}`,
+      );
+    }
+
+    // If too many waiting connections, drain to reset
+    if (waitingCount > 10) {
+      console.warn(
+        `[POOL] ${waitingCount} connections waiting, draining pool...`,
+      );
+      await pool.drain();
+      connectionErrors = 0;
+    }
+  }, 30000); // Check every 30 seconds
+}
+
+export function stopPoolMonitoring() {
+  if (poolMonitoringInterval) {
+    clearInterval(poolMonitoringInterval);
+    poolMonitoringInterval = null;
   }
-}, 30000); // Check every 30 seconds
+}
 
 // Defensive override: temporarily ignore any INSERTs into finops_activity_log
 // This prevents runtime errors while activity logging is disabled.

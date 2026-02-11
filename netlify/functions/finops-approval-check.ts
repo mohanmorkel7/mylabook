@@ -372,7 +372,7 @@ export const handler: Handler = async () => {
             );
           }
         } else {
-          // No alert exists, create one scheduled for immediate send
+          // No alert exists, create one and send immediately
           console.log(
             `[finops-approval-check] Creating new alert for subtask ${row.subtask_id}`,
           );
@@ -390,6 +390,68 @@ export const handler: Handler = async () => {
               `[finops-approval-check] ✅ New alert created with id ${insertRes.rows[0].id}`,
             );
             alertsScheduled++;
+
+            // Send the alert immediately on creation
+            console.log(
+              `[finops-approval-check] Sending alert immediately to ${userIds.length} users:`,
+              {
+                receiver: "CRM_Switch",
+                title,
+                user_ids: userIds,
+              },
+            );
+
+            try {
+              const response = await fetch(
+                "https://pulsealerts.mylapay.com/direct-call",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    receiver: "CRM_Switch",
+                    title,
+                    user_ids: userIds,
+                  }),
+                },
+              );
+
+              console.log(
+                `[finops-approval-check] Pulse API response status: ${response.status}`,
+              );
+
+              if (response.ok) {
+                console.log(
+                  `[finops-approval-check] ✅ Alert sent successfully for subtask ${row.subtask_id}`,
+                );
+                alertsSent++;
+
+                // Reschedule for another 15 minutes
+                const updateRes = await pool.query(
+                  `UPDATE finops_external_alerts
+                   SET next_call_at = NOW() + INTERVAL '15 minutes'
+                   WHERE id = $1
+                   RETURNING next_call_at`,
+                  [insertRes.rows[0].id],
+                );
+
+                console.log(
+                  `[finops-approval-check] Alert rescheduled for: ${updateRes.rows[0]?.next_call_at}`,
+                );
+              } else {
+                console.warn(
+                  `[finops-approval-check] ❌ Pulse call failed with status ${response.status}`,
+                );
+                const responseText = await response.text();
+                console.warn(
+                  `[finops-approval-check] Response body: ${responseText}`,
+                );
+              }
+            } catch (fetchError: any) {
+              console.error(
+                `[finops-approval-check] ❌ Error sending alert:`,
+                fetchError?.message,
+              );
+            }
           } else {
             console.log(
               `[finops-approval-check] Alert already exists (on conflict), skipping insert`,

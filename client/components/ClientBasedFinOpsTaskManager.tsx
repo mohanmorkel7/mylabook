@@ -1853,16 +1853,20 @@ export default function ClientBasedFinOpsTaskManager() {
               notifiedSLAWarnings.current.add(notificationKey);
 
               // Extract minutes remaining from the message (e.g., "SLA Warning - 7 min remaining" -> 7)
-              const minutesMatch = slaWarning.message.match(/(\d+) min remaining/);
-              const minutesRemaining = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
+              const minutesMatch =
+                slaWarning.message.match(/(\d+) min remaining/);
+              const minutesRemaining = minutesMatch
+                ? parseInt(minutesMatch[1], 10)
+                : 0;
 
               // Show the system notification
-              showSLANotification(task.task_name, subtask.name, minutesRemaining);
+              showSLANotification(
+                task.task_name,
+                subtask.name,
+                minutesRemaining,
+              );
 
-              if (
-                typeof window !== "undefined" &&
-                (window as any).__APP_DEBUG
-              )
+              if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
                 console.log(
                   `📢 SLA warning notification shown for ${subtask.name}`,
                 );

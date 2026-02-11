@@ -588,11 +588,11 @@ class FinOpsScheduler {
    */
   public getStatus(): { initialized: boolean; activeJobs: string[] } {
     const activeJobs = [
-      "Daily Task Execution (5:00 AM)",
-      "SLA Monitoring (Every minute)",
+      "Daily Task Execution (Midnight IST)",
+      "SLA Monitoring (Every 30 seconds)",
       "Incomplete Subtask Check (Every 30 minutes)",
-      "Weekly Task Execution (Mondays 5:00 AM)",
-      "Monthly Task Execution (1st of month 5:00 AM)",
+      "Weekly Task Execution (Mondays Midnight IST)",
+      "Monthly Task Execution (1st of month Midnight IST)",
       "Task Status Sync (Every minute)",
       "Database Cleanup (Sundays 2:00 AM)",
     ];

@@ -1832,6 +1832,47 @@ export default function ClientBasedFinOpsTaskManager() {
     return null;
   };
 
+  // Monitor for new SLA warnings and show system notifications
+  useEffect(() => {
+    if (!finopsTasks || finopsTasks.length === 0) return;
+
+    finopsTasks.forEach((task) => {
+      if (!task.subtasks) return;
+
+      task.subtasks.forEach((subtask) => {
+        if (subtask.status === "pending" && subtask.start_time) {
+          const slaWarning = getSLAWarning(subtask.start_time, subtask.status);
+
+          // Only notify for warning type (not overdue), and only once per subtask
+          if (slaWarning && slaWarning.type === "warning") {
+            const notificationKey = `${task.id}-${subtask.id}`;
+
+            // Check if we've already notified for this subtask
+            if (!notifiedSLAWarnings.current.has(notificationKey)) {
+              // Mark as notified to prevent duplicate notifications
+              notifiedSLAWarnings.current.add(notificationKey);
+
+              // Extract minutes remaining from the message (e.g., "SLA Warning - 7 min remaining" -> 7)
+              const minutesMatch = slaWarning.message.match(/(\d+) min remaining/);
+              const minutesRemaining = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
+
+              // Show the system notification
+              showSLANotification(task.task_name, subtask.name, minutesRemaining);
+
+              if (
+                typeof window !== "undefined" &&
+                (window as any).__APP_DEBUG
+              )
+                console.log(
+                  `📢 SLA warning notification shown for ${subtask.name}`,
+                );
+            }
+          }
+        }
+      });
+    });
+  }, [finopsTasks]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {

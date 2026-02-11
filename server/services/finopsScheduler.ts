@@ -365,7 +365,10 @@ class FinOpsScheduler {
           );
 
           let total = parseInt(trackerCounts.rows[0].total_subtasks, 10);
-          let completed = parseInt(trackerCounts.rows[0].completed_subtasks, 10);
+          let completed = parseInt(
+            trackerCounts.rows[0].completed_subtasks,
+            10,
+          );
           let overdue = parseInt(trackerCounts.rows[0].overdue_subtasks, 10);
           let inProgress = parseInt(
             trackerCounts.rows[0].in_progress_subtasks,

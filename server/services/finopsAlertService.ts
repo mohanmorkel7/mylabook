@@ -1407,7 +1407,9 @@ class FinOpsAlertService {
     try {
       // Skip if database is not available
       if (!(await isDatabaseAvailable())) {
-        console.log("Database not available, skipping incomplete subtask check");
+        console.log(
+          "Database not available, skipping incomplete subtask check",
+        );
         return;
       }
 

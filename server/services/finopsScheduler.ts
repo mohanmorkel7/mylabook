@@ -18,11 +18,11 @@ class FinOpsScheduler {
 
     console.log("Initializing FinOps Scheduler...");
 
-    // Daily task execution at 5:00 AM
+    // Daily task execution at 12:00 AM (midnight) IST - resets subtasks to pending for the new day
     cron.schedule(
-      "0 5 * * *",
+      "0 0 * * *",
       async () => {
-        console.log("Running daily task execution...");
+        console.log("Running daily task execution at midnight IST...");
         await finopsAlertService.checkDailyTaskExecution();
       },
       {

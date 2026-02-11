@@ -2450,7 +2450,8 @@ export async function getTodayEmails(
     )}/mailFolders`;
 
     const controller2 = new AbortController();
-    const timeoutId2 = setTimeout(() => controller2.abort(), 10000);
+    // Increased timeout from 10s to 20s for fetching mail folders
+    const timeoutId2 = setTimeout(() => controller2.abort(), 20000);
 
     let foldersRes;
     try {

@@ -32,6 +32,22 @@ console.log("🔗 Database connection config:", {
 
 const pool = new Pool(dbConfig);
 
+// Add error listeners for connection pool recovery
+pool.on("error", (error: Error, client) => {
+  console.error(
+    "[POOL ERROR] Connection error in idle client:",
+    error.message,
+  );
+});
+
+pool.on("connect", () => {
+  console.log("[POOL] New connection established");
+});
+
+pool.on("remove", () => {
+  console.log("[POOL] Connection removed from pool");
+});
+
 // Defensive override: temporarily ignore any INSERTs into finops_activity_log
 // This prevents runtime errors while activity logging is disabled.
 const originalQuery = (pool as any).query.bind(pool);
@@ -66,6 +82,48 @@ export function withTimeout<T>(
       ),
     ),
   ]);
+}
+
+// Retry helper with exponential backoff for transient connection errors
+export async function queryWithRetry<T>(
+  queryFn: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelayMs: number = 500,
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await withTimeout(queryFn(), 60000); // Use shorter timeout for individual retries
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = error.message || String(error);
+
+      // Check if error is retryable (connection errors, timeouts)
+      const isRetryable =
+        errorMsg.includes("Connection terminated") ||
+        errorMsg.includes("connection refused") ||
+        errorMsg.includes("timeout") ||
+        errorMsg.includes("ECONNRESET") ||
+        errorMsg.includes("ETIMEDOUT");
+
+      if (!isRetryable || attempt === maxRetries - 1) {
+        // Last attempt or non-retryable error, throw it
+        throw error;
+      }
+
+      // Calculate exponential backoff delay
+      const delayMs = initialDelayMs * Math.pow(2, attempt);
+      console.warn(
+        `[RETRY] Query attempt ${attempt + 1} failed: ${errorMsg}. Retrying in ${delayMs}ms...`,
+      );
+
+      // Wait before retrying
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw lastError;
 }
 
 // Check if database is available with timeout

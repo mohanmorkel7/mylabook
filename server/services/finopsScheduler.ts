@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import finopsAlertService from "./finopsAlertService";
-import { pool, isDatabaseAvailable } from "../database/connection";
+import { pool, isDatabaseAvailable, queryWithRetry } from "../database/connection";
 
 class FinOpsScheduler {
   private isInitialized = false;
@@ -342,26 +342,33 @@ class FinOpsScheduler {
       // Prefer finops_tracker for today's task status calculations (IST date). Fallback to finops_subtasks when tracker rows missing.
       const todayExpr = `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`;
 
-      const tasksRes = await pool.query(`
-        SELECT t.id, t.task_name
-        FROM finops_tasks t
-        WHERE t.is_active = true AND t.deleted_at IS NULL
-      `);
+      const tasksRes = await queryWithRetry(
+        () => pool.query(`
+          SELECT t.id, t.task_name
+          FROM finops_tasks t
+          WHERE t.is_active = true AND t.deleted_at IS NULL
+        `),
+        2,
+      );
 
       for (const t of tasksRes.rows) {
         try {
-          // Try tracker counts for today
-          const trackerCounts = await pool.query(
-            `
-            SELECT
-              COUNT(*) as total_subtasks,
-              COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_subtasks,
-              COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_subtasks,
-              COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_subtasks
-            FROM finops_tracker
-            WHERE task_id = $1 AND run_date = ${todayExpr}
-          `,
-            [t.id],
+          // Try tracker counts for today with retry
+          const trackerCounts = await queryWithRetry(
+            () =>
+              pool.query(
+                `
+              SELECT
+                COUNT(*) as total_subtasks,
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_subtasks,
+                COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_subtasks,
+                COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_subtasks
+              FROM finops_tracker
+              WHERE task_id = $1 AND run_date = ${todayExpr}
+            `,
+                [t.id],
+              ),
+            2,
           );
 
           let total = parseInt(trackerCounts.rows[0].total_subtasks, 10);
@@ -377,9 +384,13 @@ class FinOpsScheduler {
 
           // Fallback to finops_subtasks when no tracker rows for today
           if (total === 0) {
-            const subtasks = await pool.query(
-              `SELECT status FROM finops_subtasks WHERE task_id = $1`,
-              [t.id],
+            const subtasks = await queryWithRetry(
+              () =>
+                pool.query(
+                  `SELECT status FROM finops_subtasks WHERE task_id = $1`,
+                  [t.id],
+                ),
+              2,
             );
             total = subtasks.rows.length;
             completed = subtasks.rows.filter(
@@ -402,14 +413,18 @@ class FinOpsScheduler {
             newStatus = "in_progress";
           }
 
-          // Update task status if it has changed
-          await pool.query(
-            `
-            UPDATE finops_tasks
-            SET status = $1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2 AND status != $1
-          `,
-            [newStatus, t.id],
+          // Update task status if it has changed with retry
+          await queryWithRetry(
+            () =>
+              pool.query(
+                `
+              UPDATE finops_tasks
+              SET status = $1, updated_at = CURRENT_TIMESTAMP
+              WHERE id = $2 AND status != $1
+            `,
+                [newStatus, t.id],
+              ),
+            2,
           );
         } catch (taskErr) {
           console.warn(

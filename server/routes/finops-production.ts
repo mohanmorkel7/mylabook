@@ -65,13 +65,13 @@ router.get("/external-alerts", async (req: Request, res: Response) => {
 // Production database availability check - with timeout
 async function requireDatabase() {
   try {
-    // Set 20 second timeout for database connectivity check
+    // Set 5 second timeout for database connectivity check (fail fast if database is unavailable)
     await Promise.race([
       pool.query("SELECT 1"),
       new Promise((_, reject) =>
         setTimeout(
-          () => reject(new Error("Database connectivity check timeout (20s)")),
-          20000,
+          () => reject(new Error("Database connectivity check timeout (5s)")),
+          5000,
         ),
       ),
     ]);

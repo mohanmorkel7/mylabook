@@ -14,7 +14,7 @@ const dbConfig = {
   max: 20, // max number of clients in the pool
   idleTimeoutMillis: 30000, // 30 seconds
   connectionTimeoutMillis: 20000, // 20 seconds for connection
-  statement_timeout: 60000, // 60 seconds for statement execution
+  statement_timeout: 120000, // 120 seconds (2 minutes) for statement execution - remote DB is slow
 };
 
 // Log the actual connection parameters being used (hide password for security)
@@ -55,7 +55,7 @@ const originalQuery = (pool as any).query.bind(pool);
 // Add timeout wrapper for database operations
 export function withTimeout<T>(
   promise: Promise<T>,
-  timeoutMs: number = 30000, // Increased to 30 seconds
+  timeoutMs: number = 130000, // 130 seconds - slightly higher than statement_timeout to let DB timeout first
 ): Promise<T> {
   return Promise.race([
     promise,

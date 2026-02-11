@@ -433,10 +433,33 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
       `;
 
-      result =
-        normalizedUser && !callerIsManager && !callerIsAdmin
-          ? await pool.query(trackerQuery, [dateParam, normalizedUser])
-          : await pool.query(trackerQuery, [dateParam]);
+      try {
+        result =
+          normalizedUser && !callerIsManager && !callerIsAdmin
+            ? await pool.query(trackerQuery, [dateParam, normalizedUser])
+            : await pool.query(trackerQuery, [dateParam]);
+      } catch (trackerError: any) {
+        // If the complex tracker query times out, fall back to simple subtasks only
+        if (
+          trackerError.message?.includes("timeout") ||
+          trackerError.code === "57014"
+        ) {
+          console.warn("Tracker query timed out, falling back to simple query");
+          const simpleFallback = `
+            SELECT t.* , '[]'::json as subtasks
+            FROM finops_tasks t
+            WHERE t.deleted_at IS NULL
+            ${filterDateClause}
+            ORDER BY t.task_name
+          `;
+          result =
+            normalizedUser && !callerIsManager && !callerIsAdmin
+              ? await pool.query(simpleFallback, [dateParam, normalizedUser])
+              : await pool.query(simpleFallback, [dateParam]);
+        } else {
+          throw trackerError;
+        }
+      }
     } else {
       // Today's view
       const trackerTodayQuery = `
@@ -487,10 +510,33 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
       `;
 
-      result =
-        normalizedUser && !callerIsManager && !callerIsAdmin
-          ? await pool.query(trackerTodayQuery, [normalizedUser])
-          : await pool.query(trackerTodayQuery);
+      try {
+        result =
+          normalizedUser && !callerIsManager && !callerIsAdmin
+            ? await pool.query(trackerTodayQuery, [normalizedUser])
+            : await pool.query(trackerTodayQuery);
+      } catch (todayError: any) {
+        // If the complex tracker query times out, fall back to simple subtasks only
+        if (
+          todayError.message?.includes("timeout") ||
+          todayError.code === "57014"
+        ) {
+          console.warn("Today's query timed out, falling back to simple query");
+          const simpleTodayFallback = `
+            SELECT t.*, '[]'::json as subtasks
+            FROM finops_tasks t
+            WHERE t.deleted_at IS NULL
+            ${filterTodayClause}
+            ORDER BY t.task_name
+          `;
+          result =
+            normalizedUser && !callerIsManager && !callerIsAdmin
+              ? await pool.query(simpleTodayFallback, [normalizedUser])
+              : await pool.query(simpleTodayFallback);
+        } else {
+          throw todayError;
+        }
+      }
     }
 
     const tasks = result.rows.map((row) => ({

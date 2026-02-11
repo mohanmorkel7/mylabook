@@ -1187,22 +1187,74 @@ class FinOpsAlertService {
       GROUP BY t.id
     `;
 
-    const result = await pool.query(query);
-    const tasksWithSubtasks = result.rows.map((row) => ({
-      ...row,
-      subtasks: row.subtasks || [],
-    }));
+    try {
+      const result = await pool.query(query);
+      const tasksWithSubtasks = result.rows.map((row) => ({
+        ...row,
+        subtasks: row.subtasks || [],
+      }));
 
-    // Debug: log subtask statuses from finops_tracker
-    // for (const task of tasksWithSubtasks) {
-    //   for (const subtask of task.subtasks) {
-    //     console.log(
-    //       `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
-    //     );
-    //   }
-    // }
+      // Debug: log subtask statuses from finops_tracker
+      // for (const task of tasksWithSubtasks) {
+      //   for (const subtask of task.subtasks) {
+      //     console.log(
+      //       `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
+      //     );
+      //   }
+      // }
 
-    return tasksWithSubtasks;
+      return tasksWithSubtasks;
+    } catch (error: any) {
+      // If the complex query times out, use a simpler fallback query that doesn't join finops_tracker
+      if (
+        error.message?.includes("timeout") ||
+        error.code === "57014" // PostgreSQL statement timeout error
+      ) {
+        console.warn(
+          "Complex SLA query timed out, using simplified fallback query",
+        );
+
+        const fallbackQuery = `
+          SELECT
+            t.*,
+            json_agg(
+              json_build_object(
+                'id', st.id,
+                'name', st.name,
+                'description', st.description,
+                'sla_hours', st.sla_hours,
+                'sla_minutes', st.sla_minutes,
+                'order_position', st.order_position,
+                'status', st.status,
+                'started_at', st.started_at,
+                'completed_at', st.completed_at,
+                'start_time', st.start_time
+              ) ORDER BY st.order_position
+            ) FILTER (WHERE st.id IS NOT NULL) as subtasks
+          FROM finops_tasks t
+          LEFT JOIN finops_subtasks st ON t.id = st.task_id
+          WHERE t.is_active = true AND t.deleted_at IS NULL
+          GROUP BY t.id
+        `;
+
+        try {
+          const fallbackResult = await pool.query(fallbackQuery);
+          const tasksWithSubtasks = fallbackResult.rows.map((row) => ({
+            ...row,
+            subtasks: row.subtasks || [],
+          }));
+          console.log("Fallback query succeeded");
+          return tasksWithSubtasks;
+        } catch (fallbackError) {
+          console.error("Fallback query also failed:", fallbackError);
+          // Return empty array to prevent the entire check from failing
+          return [];
+        }
+      }
+
+      // Re-throw if it's not a timeout error
+      throw error;
+    }
   }
 
   /**

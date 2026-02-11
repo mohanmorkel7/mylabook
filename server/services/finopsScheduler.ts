@@ -245,6 +245,7 @@ class FinOpsScheduler {
       `);
 
       // Upsert tracker rows for today's IST date for each subtask (do not mutate finops_subtasks)
+      // When a row already exists, preserve the existing status if it's not 'pending' (e.g., if already 'completed')
       for (const subtask of subtasks.rows) {
         await pool.query(
           `
@@ -254,7 +255,20 @@ class FinOpsScheduler {
             (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $1, $2, $3, $4, $5, 'pending', NULL, NULL, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $7, $8, $9, $10
           )
           ON CONFLICT (run_date, period, task_id, subtask_id)
-          DO UPDATE SET status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, scheduled_time = EXCLUDED.scheduled_time, subtask_scheduled_date = EXCLUDED.subtask_scheduled_date, description = EXCLUDED.description, sla_hours = EXCLUDED.sla_hours, sla_minutes = EXCLUDED.sla_minutes, order_position = EXCLUDED.order_position, updated_at = NOW()
+          DO UPDATE SET
+            status = CASE
+              WHEN finops_tracker.status IN ('completed', 'in_progress', 'overdue', 'delayed', 'cancelled') THEN finops_tracker.status
+              ELSE EXCLUDED.status
+            END,
+            started_at = CASE WHEN finops_tracker.started_at IS NULL THEN EXCLUDED.started_at ELSE finops_tracker.started_at END,
+            completed_at = CASE WHEN finops_tracker.completed_at IS NULL THEN EXCLUDED.completed_at ELSE finops_tracker.completed_at END,
+            scheduled_time = EXCLUDED.scheduled_time,
+            subtask_scheduled_date = EXCLUDED.subtask_scheduled_date,
+            description = EXCLUDED.description,
+            sla_hours = EXCLUDED.sla_hours,
+            sla_minutes = EXCLUDED.sla_minutes,
+            order_position = EXCLUDED.order_position,
+            updated_at = NOW()
           `,
           [
             String(period),

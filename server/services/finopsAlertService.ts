@@ -252,6 +252,12 @@ class FinOpsAlertService {
    */
   async checkDailyTaskExecution(): Promise<void> {
     try {
+      // Skip if database is not available
+      if (!(await isDatabaseAvailable())) {
+        console.log("Database not available, skipping daily task execution");
+        return;
+      }
+
       console.log("Checking for daily tasks to execute...");
 
       const today = getCurrentISTDateString();
@@ -269,7 +275,15 @@ class FinOpsAlertService {
       );
 
       for (const task of tasksToExecute.rows) {
-        await this.executeTask(task);
+        try {
+          await this.executeTask(task);
+        } catch (taskErr) {
+          console.warn(
+            `Error executing daily task ${task.id} (${task.task_name}):`,
+            (taskErr as Error).message,
+          );
+          // Continue with next task instead of failing entire execution
+        }
       }
 
       console.log(

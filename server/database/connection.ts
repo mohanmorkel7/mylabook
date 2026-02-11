@@ -10,10 +10,11 @@ const dbConfig = {
   password: process.env.PG_PASSWORD || "myl@p@y-crm$102019",
   port: Number(process.env.PG_PORT) || 2019,
   ssl: false,
-  // Increase pool size and timeouts for remote database
-  max: 20, // max number of clients in the pool
-  idleTimeoutMillis: 30000, // 30 seconds
-  connectionTimeoutMillis: 20000, // 20 seconds for connection
+  // Reduced pool size to prevent exhaustion under load
+  max: 10, // max number of clients in the pool (reduced from 20)
+  min: 2, // minimum connections to maintain
+  idleTimeoutMillis: 20000, // 20 seconds - close idle connections faster
+  connectionTimeoutMillis: 10000, // 10 seconds for connection (reduced from 20s)
   statement_timeout: 120000, // 120 seconds (2 minutes) for statement execution - remote DB is slow
 };
 
@@ -32,21 +33,55 @@ console.log("🔗 Database connection config:", {
 
 const pool = new Pool(dbConfig);
 
+// Track pool stats
+let connectionErrors = 0;
+let lastPoolDrainTime = Date.now();
+
 // Add error listeners for connection pool recovery
 pool.on("error", (error: Error, client) => {
+  connectionErrors++;
   console.error(
-    "[POOL ERROR] Connection error in idle client:",
-    error.message,
+    `[POOL ERROR] ${connectionErrors} error(s): ${error.message}`,
   );
+
+  // Drain pool if too many consecutive errors
+  if (connectionErrors > 5) {
+    console.warn("[POOL] Too many errors, draining pool...");
+    pool.drain().then(() => {
+      connectionErrors = 0;
+      console.log("[POOL] Pool drained and recovered");
+    });
+  }
 });
 
 pool.on("connect", () => {
+  connectionErrors = 0; // Reset on successful connection
   console.log("[POOL] New connection established");
 });
 
 pool.on("remove", () => {
   console.log("[POOL] Connection removed from pool");
 });
+
+// Periodically check pool health and drain if needed
+setInterval(async () => {
+  const poolSize = (pool as any).totalCount;
+  const idleCount = (pool as any).idleCount;
+  const waitingCount = (pool as any).waitingCount || 0;
+
+  console.log(
+    `[POOL STATS] Total: ${poolSize}, Idle: ${idleCount}, Waiting: ${waitingCount}`,
+  );
+
+  // If too many waiting connections, drain to reset
+  if (waitingCount > 10) {
+    console.warn(
+      `[POOL] ${waitingCount} connections waiting, draining pool...`,
+    );
+    await pool.drain();
+    connectionErrors = 0;
+  }
+}, 30000); // Check every 30 seconds
 
 // Defensive override: temporarily ignore any INSERTs into finops_activity_log
 // This prevents runtime errors while activity logging is disabled.
@@ -128,14 +163,24 @@ export async function queryWithRetry<T>(
 
 // Check if database is available with timeout
 export async function isDatabaseAvailable(): Promise<boolean> {
+  let client: any = null;
   try {
-    const client = await withTimeout(pool.connect(), 25000); // 25 seconds for connection
-    await withTimeout(client.query("SELECT 1"), 15000); // 15 seconds for query
-    client.release();
+    // Use a shorter timeout for availability check to fail fast
+    client = await withTimeout(pool.connect(), 5000); // 5 seconds for connection (reduced from 25s)
+    await withTimeout(client.query("SELECT 1"), 3000); // 3 seconds for query (reduced from 15s)
     return true;
   } catch (error) {
     console.log("Database availability check failed:", error.message);
     return false;
+  } finally {
+    // Always release the connection, even if an error occurred
+    if (client) {
+      try {
+        client.release();
+      } catch (releaseErr: any) {
+        console.warn("Error releasing connection:", releaseErr.message);
+      }
+    }
   }
 }
 

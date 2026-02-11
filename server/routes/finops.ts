@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { pool } from "../database/connection";
+import { pool, queryWithRetry } from "../database/connection";
 import finopsAlertService from "../services/finopsAlertService";
 import finopsScheduler from "../services/finopsScheduler";
 
@@ -3332,79 +3332,86 @@ router.get("/activity-log", async (req: Request, res: Response) => {
 // Get all FinOps clients
 router.get("/clients", async (req: Request, res: Response) => {
   try {
-    if (await isDatabaseAvailable()) {
-      const result = await pool.query(`
-        SELECT * FROM finops_clients
-        WHERE deleted_at IS NULL
-        ORDER BY company_name ASC
-      `);
+    // Try to fetch from database with retry logic (skip availability check to avoid pool exhaustion)
+    try {
+      const result = await queryWithRetry(
+        () => pool.query(`
+          SELECT * FROM finops_clients
+          WHERE deleted_at IS NULL
+          ORDER BY company_name ASC
+        `),
+        2, // 2 retries
+      );
       res.json(result.rows);
-    } else {
-      // Use dedicated FinOps clients data instead of mock data
-      const finOpsClients = [
-        {
-          id: 1,
-          company_name: "Global Financial Services",
-          contact_person: "Michael Chen",
-          email: "michael.chen@globalfinance.com",
-          phone: "+1 (555) 201-3456",
-          address: "100 Financial Plaza, New York, NY 10001",
-          notes:
-            "Tier 1 FinOps client - Daily clearing operations, high volume transactions",
-          created_at: "2024-01-01T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 2,
-          company_name: "Enterprise Banking Solutions",
-          contact_person: "Sarah Martinez",
-          email: "sarah.martinez@ebsolutions.com",
-          phone: "+1 (555) 202-7890",
-          address: "250 Banking Center, Chicago, IL 60601",
-          notes:
-            "Tier 1 FinOps client - Weekly reconciliation, multi-currency processing",
-          created_at: "2024-01-10T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 3,
-          company_name: "Pacific Trade Finance",
-          contact_person: "David Kim",
-          email: "david.kim@pacifictrade.com",
-          phone: "+1 (555) 203-4567",
-          address: "500 Trade Plaza, San Francisco, CA 94105",
-          notes:
-            "Tier 2 FinOps client - Bi-weekly operations, trade finance focus",
-          created_at: "2024-01-15T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 4,
-          company_name: "Regional Credit Union",
-          contact_person: "Lisa Thompson",
-          email: "lisa.thompson@regionalcu.com",
-          phone: "+1 (555) 204-8901",
-          address: "75 Community Blvd, Austin, TX 78701",
-          notes: "Tier 2 FinOps client - Monthly processing, community banking",
-          created_at: "2024-01-20T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 5,
-          company_name: "International Payment Systems",
-          contact_person: "Robert Johnson",
-          email: "robert.johnson@intpaysys.com",
-          phone: "+1 (555) 205-2345",
-          address: "300 Payment Way, Miami, FL 33101",
-          notes:
-            "Tier 1 FinOps client - Real-time processing, cross-border payments",
-          created_at: "2024-01-25T00:00:00Z",
-          created_by: 1,
-        },
-      ];
-      console.log("Database unavailable, using dedicated FinOps clients data");
-      res.json(finOpsClients);
+      return;
+    } catch (dbError: any) {
+      console.warn("Database query failed, falling back to mock data:", dbError.message);
     }
+
+    // Fallback to mock data if database is unavailable
+    const finOpsClients = [
+      {
+        id: 1,
+        company_name: "Global Financial Services",
+        contact_person: "Michael Chen",
+        email: "michael.chen@globalfinance.com",
+        phone: "+1 (555) 201-3456",
+        address: "100 Financial Plaza, New York, NY 10001",
+        notes:
+          "Tier 1 FinOps client - Daily clearing operations, high volume transactions",
+        created_at: "2024-01-01T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 2,
+        company_name: "Enterprise Banking Solutions",
+        contact_person: "Sarah Martinez",
+        email: "sarah.martinez@ebsolutions.com",
+        phone: "+1 (555) 202-7890",
+        address: "250 Banking Center, Chicago, IL 60601",
+        notes:
+          "Tier 1 FinOps client - Weekly reconciliation, multi-currency processing",
+        created_at: "2024-01-10T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 3,
+        company_name: "Pacific Trade Finance",
+        contact_person: "David Kim",
+        email: "david.kim@pacifictrade.com",
+        phone: "+1 (555) 203-4567",
+        address: "500 Trade Plaza, San Francisco, CA 94105",
+        notes:
+          "Tier 2 FinOps client - Bi-weekly operations, trade finance focus",
+        created_at: "2024-01-15T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 4,
+        company_name: "Regional Credit Union",
+        contact_person: "Lisa Thompson",
+        email: "lisa.thompson@regionalcu.com",
+        phone: "+1 (555) 204-8901",
+        address: "75 Community Blvd, Austin, TX 78701",
+        notes: "Tier 2 FinOps client - Monthly processing, community banking",
+        created_at: "2024-01-20T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 5,
+        company_name: "International Payment Systems",
+        contact_person: "Robert Johnson",
+        email: "robert.johnson@intpaysys.com",
+        phone: "+1 (555) 205-2345",
+        address: "300 Payment Way, Miami, FL 33101",
+        notes:
+          "Tier 1 FinOps client - Real-time processing, cross-border payments",
+        created_at: "2024-01-25T00:00:00Z",
+        created_by: 1,
+      },
+    ];
+    console.log("Using fallback FinOps clients mock data");
+    res.json(finOpsClients);
   } catch (error) {
     console.error("Error fetching FinOps clients:", error);
     res.status(500).json({ error: "Failed to fetch FinOps clients" });

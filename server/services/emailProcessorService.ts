@@ -1732,7 +1732,8 @@ export async function getTodayEmails(
     while (nextLink) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        // Increased timeout from 10s to 30s for pagination (large email batches need more time)
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         let res;
         try {

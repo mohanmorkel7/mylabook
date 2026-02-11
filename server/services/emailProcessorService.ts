@@ -1206,7 +1206,8 @@ async function fetchAttachmentData(
     );
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    // Increased timeout from 20s to 30s for downloading attachment bytes
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     let bytesRes;
     try {

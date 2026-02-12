@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, Building2, CheckCircle } from "lucide-react";
+import * as Recharts from "recharts";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 
 export default function FinOpsUserStats() {
   const [period, setPeriod] = React.useState<"daily" | "weekly" | "monthly">("monthly");
@@ -106,14 +108,31 @@ export default function FinOpsUserStats() {
           </CardHeader>
           <CardContent>
             {clientSummary ? (
-              <div className="space-y-2">
-                {Object.entries(clientSummary).map(([client, val]: any) => (
-                  <div key={client} className="flex items-center justify-between">
-                    <div className="text-sm">{client}</div>
-                    <div className="text-sm font-medium">{String(val.total_tasks ?? val.tasks ?? val)}</div>
+              (() => {
+                const data = Object.entries(clientSummary).map(([client, val]: any) => ({
+                  name: client,
+                  tasks: Number(val.total_tasks ?? val.tasks ?? val || 0),
+                }));
+                // sort desc and limit to top 8 for readability
+                data.sort((a, b) => b.tasks - a.tasks);
+                const top = data.slice(0, 8).reverse(); // reverse for horizontal bars
+                return (
+                  <div className="h-48">
+                    <ChartContainer
+                      id="client-summary"
+                      config={{ tasks: { color: "#6366F1", label: "Tasks" } }}
+                    >
+                      <Recharts.BarChart data={top} layout="vertical" margin={{ left: 10 }}>
+                        <Recharts.CartesianGrid strokeDasharray="3 3" />
+                        <Recharts.XAxis type="number" />
+                        <Recharts.YAxis dataKey="name" type="category" />
+                        <ChartTooltipContent />
+                        <Recharts.Bar dataKey="tasks" fill="var(--color-tasks)" />
+                      </Recharts.BarChart>
+                    </ChartContainer>
                   </div>
-                ))}
-              </div>
+                );
+              })()
             ) : (
               <div className="text-sm text-gray-500">No client summary available for the selected period.</div>
             )}
@@ -128,14 +147,30 @@ export default function FinOpsUserStats() {
           </CardHeader>
           <CardContent>
             {userSummary ? (
-              <div className="space-y-2">
-                {Object.entries(userSummary).map(([user, val]: any) => (
-                  <div key={user} className="flex items-center justify-between">
-                    <div className="text-sm">{user}</div>
-                    <div className="text-sm font-medium">{String(val.total_tasks ?? val.tasks ?? val)}</div>
+              (() => {
+                const data = Object.entries(userSummary).map(([user, val]: any) => ({
+                  name: user,
+                  tasks: Number(val.total_tasks ?? val.tasks ?? val || 0),
+                }));
+                data.sort((a, b) => b.tasks - a.tasks);
+                const top = data.slice(0, 8).reverse();
+                return (
+                  <div className="h-48">
+                    <ChartContainer
+                      id="user-summary"
+                      config={{ tasks: { color: "#10B981", label: "Tasks" } }}
+                    >
+                      <Recharts.BarChart data={top} layout="vertical" margin={{ left: 10 }}>
+                        <Recharts.CartesianGrid strokeDasharray="3 3" />
+                        <Recharts.XAxis type="number" />
+                        <Recharts.YAxis dataKey="name" type="category" />
+                        <ChartTooltipContent />
+                        <Recharts.Bar dataKey="tasks" fill="var(--color-tasks)" />
+                      </Recharts.BarChart>
+                    </ChartContainer>
                   </div>
-                ))}
-              </div>
+                );
+              })()
             ) : (
               <div className="text-sm text-gray-500">No user summary available for the selected period.</div>
             )}

@@ -40,8 +40,9 @@ import {
 import { format } from "date-fns";
 import ClientBasedFinOpsTaskManager from "@/components/ClientBasedFinOpsTaskManager";
 import FinOpsNotifications from "@/components/FinOpsNotifications";
-import FinOpsActivityLog from "@/components/FinOpsActivityLog";
+import FinOpsUserStats from "@/components/FinOpsUserStats";
 import FinOpsCumulativeData from "@/components/FinOpsCumulativeData";
+// Note: Activity Log tab replaced by User Stats (Daily/Weekly/Monthly metrics)
 
 interface AutomationTask {
   id: number;
@@ -365,7 +366,7 @@ export default function FinOpsAutomation() {
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="task-management">Task Management</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="activity-log">Activity Log</TabsTrigger>
+          <TabsTrigger value="activity-log">User Stats</TabsTrigger>
           <TabsTrigger value="cumulative-data">Cumulative Data</TabsTrigger>
         </TabsList>
 
@@ -379,9 +380,9 @@ export default function FinOpsAutomation() {
           <FinOpsNotifications />
         </TabsContent>
 
-        {/* Activity Log Tab */}
+        {/* User Stats Tab (replaces Activity Log) */}
         <TabsContent value="activity-log" className="space-y-6">
-          <FinOpsActivityLog />
+          <FinOpsUserStats />
         </TabsContent>
 
         {/* Cumulative Data Tab */}

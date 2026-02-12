@@ -1101,6 +1101,46 @@ export default function ClientBasedFinOpsTaskManager() {
   // Show more/less states for subtasks
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
 
+  // Handle deep-links via hash like #finops-<taskId>-<subtaskId>
+  useEffect(() => {
+    const handleHash = () => {
+      try {
+        const raw = window.location.hash || "";
+        const h = raw.replace(/^#/, "");
+        if (!h.startsWith("finops-")) return;
+        const parts = h.split("-");
+        if (parts.length < 3) return;
+        const taskId = Number(parts[1]);
+        const subtaskId = Number(parts[2]);
+        if (isNaN(taskId) || isNaN(subtaskId)) return;
+
+        // Expand the task so subtasks are visible
+        setExpandedTasks((prev) => {
+          const ns = new Set(prev);
+          ns.add(taskId);
+          return ns;
+        });
+
+        // Attempt to scroll to element after UI has rendered
+        setTimeout(() => {
+          const el = document.getElementById(`finops-${taskId}-${subtaskId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add("ring", "ring-2", "ring-blue-400");
+            setTimeout(() => el.classList.remove("ring", "ring-2", "ring-blue-400"), 4000);
+          }
+        }, 250);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    // Run once on mount to handle an initial hash
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   // Selected client from summary
   const [selectedClientFromSummary, setSelectedClientFromSummary] = useState<
     string | null
@@ -1231,6 +1271,9 @@ export default function ClientBasedFinOpsTaskManager() {
     taskName: string,
     subtaskName: string,
     minutesRemaining: number,
+    taskId?: number,
+    subtaskId?: number,
+    clientName?: string,
   ) => {
     try {
       // Check if notifications are supported by the browser
@@ -1259,18 +1302,52 @@ export default function ClientBasedFinOpsTaskManager() {
         console.log(
           `[SLA Notification] Creating notification for ${subtaskName}`,
         );
-        const notification = new Notification("SLA Warning", {
-          body: `Task: ${taskName}\nSubtask: ${subtaskName}\nTime Remaining: ${minutesRemaining} minutes`,
-          tag: `sla-warning-${taskName}-${subtaskName}`, // Prevents duplicate notifications
-          requireInteraction: true, // Keeps notification visible until user interacts
+
+        const title = `SLA Warning - ${minutesRemaining}m`;
+        const bodyLines = [
+          clientName ? `Client: ${clientName}` : undefined,
+          `Task: ${taskName}`,
+          `Subtask: ${subtaskName}`,
+          `Time Remaining: ${minutesRemaining} minutes`,
+        ].filter(Boolean);
+
+        const notification = new Notification(title, {
+          body: bodyLines.join("\n"),
+          tag: `sla-warning-${taskId || taskName}-${subtaskId || subtaskName}`,
+          requireInteraction: true,
         });
 
         console.log("[SLA Notification] Notification created successfully");
 
-        // Handle notification click
+        // Handle notification click - navigate/scroll to the specific subtask
         notification.onclick = () => {
-          window.focus();
-          // Scroll to the task/subtask (optional)
+          try {
+            window.focus();
+            if (typeof taskId === "number" && typeof subtaskId === "number") {
+              const hash = `#finops-${taskId}-${subtaskId}`;
+              if (window.location.pathname !== "/finops") {
+                // Navigate to finops route with hash
+                window.location.href = `/finops${hash}`;
+              } else {
+                // Set hash to trigger scroll effect in the component
+                window.location.hash = hash;
+                // Also attempt immediate scroll if element exists
+                setTimeout(() => {
+                  const el = document.getElementById(`finops-${taskId}-${subtaskId}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    el.classList.add("ring", "ring-2", "ring-blue-400");
+                    setTimeout(() => el.classList.remove("ring", "ring-2", "ring-blue-400"), 4000);
+                  }
+                }, 200);
+              }
+            } else {
+              // Just focus the window if we don't have ids
+              window.focus();
+            }
+          } catch (err) {
+            console.warn("Notification click handler failed:", err);
+          }
         };
       } else {
         console.warn(
@@ -1901,11 +1978,14 @@ export default function ClientBasedFinOpsTaskManager() {
                 `[SLA Monitor] Triggering notification - Task: ${task.task_name}, Subtask: ${subtask.name}, Minutes: ${minutesRemaining}`,
               );
 
-              // Show the system notification
+              // Show the system notification (include task/subtask ids and client name)
               showSLANotification(
                 task.task_name,
                 subtask.name,
                 minutesRemaining,
+                task.id,
+                subtask.id,
+                task.client_name,
               );
             }
           }
@@ -3611,7 +3691,7 @@ export default function ClientBasedFinOpsTaskManager() {
                               subtask.status,
                             );
                             return (
-                              <div key={subtask.id}>
+                              <div key={subtask.id} id={`finops-${task.id}-${subtask.id}`} tabIndex={-1}>
                                 <SortableSubTaskItem
                                   subtask={subtask}
                                   task={task}

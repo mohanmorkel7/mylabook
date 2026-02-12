@@ -1266,6 +1266,50 @@ export default function ClientBasedFinOpsTaskManager() {
   // Track which subtasks have already been notified for SLA warnings (to avoid duplicate notifications)
   const notifiedSLAWarnings = useRef<Set<string>>(new Set());
 
+  // Audio helpers: initialize AudioContext on user gesture and play a short beep
+  const audioCtxRef = useRef<any>(null);
+  const initAudioContext = () => {
+    try {
+      if (audioCtxRef.current) return;
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      audioCtxRef.current = new AudioCtx();
+      // Create a silent buffer to unlock audio on some browsers (not always required)
+      try {
+        const buffer = audioCtxRef.current.createBuffer(1, 1, 22050);
+        const source = audioCtxRef.current.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtxRef.current.destination);
+        source.start(0);
+      } catch (e) {
+        // ignore unlock errors
+      }
+    } catch (e) {
+      console.warn("AudioContext init failed:", e);
+    }
+  };
+
+  const playNotificationSound = () => {
+    try {
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(880, now);
+      g.gain.setValueAtTime(0.0001, now);
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      o.start(now);
+      o.stop(now + 0.23);
+    } catch (e) {
+      console.warn("playNotificationSound failed:", e);
+    }
+  };
+
   // Function to show Windows system notification for SLA warnings
   const showSLANotification = async (
     taskName: string,
@@ -1318,6 +1362,13 @@ export default function ClientBasedFinOpsTaskManager() {
         });
 
         console.log("[SLA Notification] Notification created successfully");
+
+        try {
+          // Play a short notification sound (if audio unlocked/initialized)
+          playNotificationSound();
+        } catch (e) {
+          // ignore
+        }
 
         // Handle notification click - navigate/scroll to the specific subtask
         notification.onclick = () => {
@@ -2720,10 +2771,19 @@ export default function ClientBasedFinOpsTaskManager() {
                       );
                       if (permission === "granted") {
                         alert("Notifications enabled! You'll receive SLA warnings.");
+                        // Initialize audio context on user gesture so sounds can play later
+                        try {
+                          initAudioContext();
+                          // Play a short test sound to unlock audio
+                          playNotificationSound();
+                        } catch (e) {}
+
                         // Show a test notification
-                        new Notification("Notifications Enabled", {
-                          body: "You will now receive SLA warning notifications",
-                        });
+                        try {
+                          new Notification("Notifications Enabled", {
+                            body: "You will now receive SLA warning notifications",
+                          });
+                        } catch (e) {}
                       } else {
                         alert(
                           "Notification permission denied. Please enable notifications in browser settings.",

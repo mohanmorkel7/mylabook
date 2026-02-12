@@ -4121,7 +4121,7 @@ router.get("/metrics", async (req: Request, res: Response) => {
       [startDate, endDate],
     );
     const activeClientsRes = await q(
-      `SELECT COUNT(DISTINCT COALESCE(client_id, ''))::int AS cnt FROM finops_tasks WHERE is_active = true AND deleted_at IS NULL`,
+      `SELECT COUNT(DISTINCT client_id)::int AS cnt FROM finops_tasks WHERE is_active = true AND deleted_at IS NULL`,
     );
 
     // Client-wise summary

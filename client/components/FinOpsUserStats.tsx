@@ -126,8 +126,8 @@ export default function FinOpsUserStats() {
                       <Recharts.BarChart data={top} layout="vertical" margin={{ left: 8, right: 20 }}>
                         <Recharts.CartesianGrid strokeDasharray="3 3" />
                         <Recharts.XAxis type="number" tick={{ fontSize: 12 }} />
-                        <Recharts.YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12 }} />
-                        <ChartTooltipContent />
+                        <Recharts.YAxis dataKey="name" type="category" width={180} tick={{ fontSize: 12 }} />
+                        <Recharts.Tooltip content={<ChartTooltipContent />} />
                         <Recharts.Bar dataKey="tasks" fill="var(--color-tasks)" barSize={14}>
                           <Recharts.LabelList dataKey="tasks" position="right" formatter={(v: any) => String(v)} />
                         </Recharts.Bar>
@@ -167,8 +167,8 @@ export default function FinOpsUserStats() {
                       <Recharts.BarChart data={top} layout="vertical" margin={{ left: 8, right: 20 }}>
                         <Recharts.CartesianGrid strokeDasharray="3 3" />
                         <Recharts.XAxis type="number" tick={{ fontSize: 12 }} />
-                        <Recharts.YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 12 }} />
-                        <ChartTooltipContent />
+                        <Recharts.YAxis dataKey="name" type="category" width={180} tick={{ fontSize: 12 }} />
+                        <Recharts.Tooltip content={<ChartTooltipContent />} />
                         <Recharts.Bar dataKey="tasks" fill="var(--color-tasks)" barSize={14}>
                           <Recharts.LabelList dataKey="tasks" position="right" formatter={(v: any) => String(v)} />
                         </Recharts.Bar>
@@ -194,18 +194,19 @@ export default function FinOpsUserStats() {
           <CardContent>
             {metrics?.overdue_by_client ? (
               (() => {
-                const data = Object.entries(metrics.overdue_by_client).map(([c, v]: any) => ({ name: c, value: Number(v || 0) }));
+                const data = Object.entries(metrics.overdue_by_client).map(([c, v]: any) => ({ name: (c && String(c).trim()) || "Unknown", value: Number(v || 0) }));
                 data.sort((a, b) => b.value - a.value);
                 const top = data.slice(0, 8);
+                if (!top.length) return <div className="text-sm text-gray-500">No overdue data available for the selected period.</div>;
                 const chartHeight = Math.min(320, Math.max(160, top.length * 36));
                 return (
                   <div style={{ height: chartHeight }}>
                     <ChartContainer id="overdue-by-client" config={{ value: { color: "#F59E0B", label: "Overdues" } }}>
-                      <Recharts.BarChart data={top} margin={{ top: 8, right: 16, left: 0, bottom: 24 }}>
+                      <Recharts.BarChart data={top} margin={{ top: 8, right: 16, left: 0, bottom: 48 }}>
                         <Recharts.CartesianGrid strokeDasharray="3 3" />
-                        <Recharts.XAxis dataKey="name" type="category" hide={false} tick={{ fontSize: 12 }} />
+                        <Recharts.XAxis dataKey="name" type="category" tick={{ fontSize: 12, angle: -35, textAnchor: 'end' }} interval={0} />
                         <Recharts.YAxis type="number" tick={{ fontSize: 12 }} />
-                        <ChartTooltipContent />
+                        <Recharts.Tooltip content={<ChartTooltipContent />} />
                         <Recharts.Bar dataKey="value" fill="var(--color-value)">
                           <Recharts.LabelList dataKey="value" position="top" formatter={(v: any) => String(v)} />
                         </Recharts.Bar>
@@ -229,18 +230,19 @@ export default function FinOpsUserStats() {
           <CardContent>
             {metrics?.ontime_by_client ? (
               (() => {
-                const data = Object.entries(metrics.ontime_by_client).map(([c, v]: any) => ({ name: c, value: Number(v || 0) }));
+                const data = Object.entries(metrics.ontime_by_client).map(([c, v]: any) => ({ name: (c && String(c).trim()) || "Unknown", value: Number(v || 0) }));
                 data.sort((a, b) => b.value - a.value);
                 const top = data.slice(0, 8);
+                if (!top.length) return <div className="text-sm text-gray-500">No on-time data available for the selected period.</div>;
                 const chartHeight = Math.min(320, Math.max(160, top.length * 36));
                 return (
                   <div style={{ height: chartHeight }}>
                     <ChartContainer id="ontime-by-client" config={{ value: { color: "#06B6D4", label: "On-time" } }}>
-                      <Recharts.BarChart data={top} margin={{ top: 8, right: 16, left: 0, bottom: 24 }}>
+                      <Recharts.BarChart data={top} margin={{ top: 8, right: 16, left: 0, bottom: 48 }}>
                         <Recharts.CartesianGrid strokeDasharray="3 3" />
-                        <Recharts.XAxis dataKey="name" type="category" tick={{ fontSize: 12 }} />
+                        <Recharts.XAxis dataKey="name" type="category" tick={{ fontSize: 12, angle: -35, textAnchor: 'end' }} interval={0} />
                         <Recharts.YAxis type="number" tick={{ fontSize: 12 }} />
-                        <ChartTooltipContent />
+                        <Recharts.Tooltip content={<ChartTooltipContent />} />
                         <Recharts.Bar dataKey="value" fill="var(--color-value)">
                           <Recharts.LabelList dataKey="value" position="top" formatter={(v: any) => String(v)} />
                         </Recharts.Bar>

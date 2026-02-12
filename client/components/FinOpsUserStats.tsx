@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useState } from "react";
+import React from "react";
+import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, Building2, CheckCircle } from "lucide-react";
 
 export default function FinOpsUserStats() {
-  const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
+  const [period, setPeriod] = React.useState<"daily" | "weekly" | "monthly">("monthly");
 
   const { data: metrics, isLoading, error, refetch } = useQuery({
     queryKey: ["finops-metrics", period],

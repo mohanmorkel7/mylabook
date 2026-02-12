@@ -4141,15 +4141,15 @@ router.get("/metrics", async (req: Request, res: Response) => {
 
     // User-wise summary (assigned_to is stored as JSONB array)
     const userSummaryRes = await q(
-      `SELECT LOWER(TRIM(a.value)) AS user_name,
+      `SELECT COALESCE(NULLIF(LOWER(TRIM(a.value)), ''), 'unassigned') AS user_name,
               COUNT(DISTINCT t.id)::int AS total_tasks,
               COUNT(ft.subtask_id)::int AS total_subtasks,
               SUM(CASE WHEN ft.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_subtasks
-        FROM finops_tasks t,
-             LATERAL jsonb_array_elements_text(COALESCE(t.assigned_to, '[]'::jsonb)) AS a(value)
+        FROM finops_tasks t
+        LEFT JOIN LATERAL jsonb_array_elements_text(COALESCE(t.assigned_to, '[]'::jsonb)) AS a(value) ON true
         LEFT JOIN finops_tracker ft ON t.id = ft.task_id AND ft.run_date BETWEEN $1 AND $2
         WHERE t.deleted_at IS NULL
-        GROUP BY LOWER(TRIM(a.value))
+        GROUP BY COALESCE(NULLIF(LOWER(TRIM(a.value)), ''), 'unassigned')
         ORDER BY total_tasks DESC
       `,
       [startDate, endDate],

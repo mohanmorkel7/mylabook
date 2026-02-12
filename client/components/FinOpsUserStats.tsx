@@ -111,7 +111,7 @@ export default function FinOpsUserStats() {
               (() => {
                 const data = Object.entries(clientSummary).map(([client, val]: any) => ({
                   name: client,
-                  tasks: Number(val.total_tasks ?? val.tasks ?? val || 0),
+                  tasks: Number((val as any)?.total_tasks ?? (val as any)?.tasks ?? 0),
                 }));
                 // sort desc and limit to top 8 for readability
                 data.sort((a, b) => b.tasks - a.tasks);
@@ -150,7 +150,7 @@ export default function FinOpsUserStats() {
               (() => {
                 const data = Object.entries(userSummary).map(([user, val]: any) => ({
                   name: user,
-                  tasks: Number(val.total_tasks ?? val.tasks ?? val || 0),
+                  tasks: Number((val as any)?.total_tasks ?? (val as any)?.tasks ?? 0),
                 }));
                 data.sort((a, b) => b.tasks - a.tasks);
                 const top = data.slice(0, 8).reverse();

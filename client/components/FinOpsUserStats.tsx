@@ -116,7 +116,7 @@ export default function FinOpsUserStats() {
                 // sort desc and limit to top 8 for readability
                 data.sort((a, b) => b.tasks - a.tasks);
                 const top = data.slice(0, 8).reverse(); // reverse for horizontal bars
-                const chartHeight = Math.min(320, Math.max(160, top.length * 28));
+                const chartHeight = Math.min(440, Math.max(220, top.length * 36));
                 return (
                   <div style={{ height: chartHeight }}>
                     <ChartContainer
@@ -157,7 +157,7 @@ export default function FinOpsUserStats() {
                 }));
                 data.sort((a, b) => b.tasks - a.tasks);
                 const top = data.slice(0, 8).reverse();
-                const chartHeight = Math.min(320, Math.max(160, top.length * 28));
+                const chartHeight = Math.min(440, Math.max(220, top.length * 36));
                 return (
                   <div style={{ height: chartHeight }}>
                     <ChartContainer

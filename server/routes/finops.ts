@@ -3829,21 +3829,6 @@ router.get("/dashboard", async (req: Request, res: Response) => {
   }
 });
 
-// Metrics endpoint
-router.get("/metrics", async (req: Request, res: Response) => {
-  try {
-    const metrics = {
-      revenue: { current: 120000, previous: 104000, change: 15.4 },
-      costs: { current: 45000, previous: 49000, change: -8.2 },
-      profit: { current: 75000, previous: 55000, change: 36.4 },
-      transactions: { current: 1250, previous: 1100, change: 13.6 },
-    };
-    res.json(metrics);
-  } catch (error) {
-    console.error("Error fetching metrics:", error);
-    res.status(500).json({ error: "Failed to fetch metrics" });
-  }
-});
 
 // Transactions endpoint
 router.get("/transactions", async (req: Request, res: Response) => {

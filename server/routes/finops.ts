@@ -4062,6 +4062,203 @@ router.get("/test", (req: Request, res: Response) => {
   });
 });
 
+// FinOps metrics endpoint - returns aggregated stats for the selected period (daily|weekly|monthly)
+router.get("/metrics", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    const period = String(req.query.period || "monthly").toLowerCase();
+
+    // Compute IST-aware date range for the period
+    const now = new Date();
+    const istNow = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+    );
+
+    let startDate: string;
+    let endDate: string = istNow.toISOString().slice(0, 10);
+
+    if (period === "daily") {
+      startDate = endDate;
+    } else if (period === "weekly") {
+      // last 7 days including today
+      const start = new Date(istNow.getTime() - 6 * 24 * 60 * 60 * 1000);
+      startDate = start.toISOString().slice(0, 10);
+    } else {
+      // monthly - start at first of current month
+      const start = new Date(
+        istNow.getFullYear(),
+        istNow.getMonth(),
+        1,
+      );
+      startDate = start.toISOString().slice(0, 10);
+    }
+
+    // If DB unavailable, return conservative mock structure
+    if (!(await isDatabaseAvailable())) {
+      console.warn("/finops/metrics - database not available, returning mock metrics");
+      return res.json({
+        period,
+        start_date: startDate,
+        end_date: endDate,
+        total_tasks: 0,
+        total_subtasks: 0,
+        completed_subtasks: 0,
+        active_clients: 0,
+        client_summary: {},
+        user_summary: {},
+        overdue_by_client: {},
+        ontime_by_client: {},
+      });
+    }
+
+    // Helper to run queries with retry
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // Basic counts
+    const totalTasksRes = await q(
+      `SELECT COUNT(*)::int AS cnt FROM finops_tasks WHERE deleted_at IS NULL`,
+    );
+    const totalSubtasksRes = await q(
+      `SELECT COUNT(s.id)::int AS cnt FROM finops_subtasks s JOIN finops_tasks t ON s.task_id = t.id WHERE t.deleted_at IS NULL`,
+    );
+    const completedSubtasksRes = await q(
+      `SELECT COUNT(*)::int AS cnt FROM finops_tracker WHERE status = 'completed' AND run_date BETWEEN $1 AND $2`,
+      [startDate, endDate],
+    );
+    const activeClientsRes = await q(
+      `SELECT COUNT(DISTINCT COALESCE(client_id, ''))::int AS cnt FROM finops_tasks WHERE is_active = true AND deleted_at IS NULL`,
+    );
+
+    // Client-wise summary
+    const clientSummaryRes = await q(
+      `SELECT COALESCE(t.client_name, 'Unknown') AS client_name,
+              COUNT(DISTINCT t.id)::int AS total_tasks,
+              COUNT(ft.subtask_id)::int AS total_subtasks,
+              SUM(CASE WHEN ft.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_subtasks
+        FROM finops_tasks t
+        LEFT JOIN finops_tracker ft ON t.id = ft.task_id AND ft.run_date BETWEEN $1 AND $2
+        WHERE t.deleted_at IS NULL
+        GROUP BY COALESCE(t.client_name, 'Unknown')
+        ORDER BY total_tasks DESC
+      `,
+      [startDate, endDate],
+    );
+
+    // User-wise summary (assigned_to is stored as JSONB array)
+    const userSummaryRes = await q(
+      `SELECT LOWER(TRIM(a.value)) AS user_name,
+              COUNT(DISTINCT t.id)::int AS total_tasks,
+              COUNT(ft.subtask_id)::int AS total_subtasks,
+              SUM(CASE WHEN ft.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_subtasks
+        FROM finops_tasks t,
+             LATERAL jsonb_array_elements_text(COALESCE(t.assigned_to, '[]'::jsonb)) AS a(value)
+        LEFT JOIN finops_tracker ft ON t.id = ft.task_id AND ft.run_date BETWEEN $1 AND $2
+        WHERE t.deleted_at IS NULL
+        GROUP BY LOWER(TRIM(a.value))
+        ORDER BY total_tasks DESC
+      `,
+      [startDate, endDate],
+    );
+
+    // Overdue / On-time by client based on completed_at vs scheduled + sla
+    const overdueRes = await q(
+      `SELECT COALESCE(t.client_name, 'Unknown') AS client_name,
+              COUNT(*)::int AS overdue_count
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON ft.task_id = t.id
+        WHERE ft.run_date BETWEEN $1 AND $2
+          AND ft.status = 'completed'
+          AND ft.completed_at IS NOT NULL
+          AND ft.completed_at > (
+            COALESCE(ft.subtask_scheduled_date, ft.run_date)::timestamp
+            + COALESCE(ft.sla_hours, 0) * INTERVAL '1 hour'
+            + COALESCE(ft.sla_minutes, 0) * INTERVAL '1 minute'
+          )
+        GROUP BY COALESCE(t.client_name, 'Unknown')
+        ORDER BY overdue_count DESC
+      `,
+      [startDate, endDate],
+    );
+
+    const ontimeRes = await q(
+      `SELECT COALESCE(t.client_name, 'Unknown') AS client_name,
+              COUNT(*)::int AS ontime_count
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON ft.task_id = t.id
+        WHERE ft.run_date BETWEEN $1 AND $2
+          AND ft.status = 'completed'
+          AND ft.completed_at IS NOT NULL
+          AND ft.completed_at <= (
+            COALESCE(ft.subtask_scheduled_date, ft.run_date)::timestamp
+            + COALESCE(ft.sla_hours, 0) * INTERVAL '1 hour'
+            + COALESCE(ft.sla_minutes, 0) * INTERVAL '1 minute'
+          )
+        GROUP BY COALESCE(t.client_name, 'Unknown')
+        ORDER BY ontime_count DESC
+      `,
+      [startDate, endDate],
+    );
+
+    // Transform results into convenient objects
+    const clientSummary: any = {};
+    for (const r of clientSummaryRes.rows) {
+      clientSummary[r.client_name] = {
+        total_tasks: Number(r.total_tasks || 0),
+        total_subtasks: Number(r.total_subtasks || 0),
+        completed_subtasks: Number(r.completed_subtasks || 0),
+      };
+    }
+
+    const userSummary: any = {};
+    for (const r of userSummaryRes.rows) {
+      const name = r.user_name || 'unassigned';
+      userSummary[name] = {
+        total_tasks: Number(r.total_tasks || 0),
+        total_subtasks: Number(r.total_subtasks || 0),
+        completed_subtasks: Number(r.completed_subtasks || 0),
+      };
+    }
+
+    const overdueByClient: any = {};
+    for (const r of overdueRes.rows) {
+      overdueByClient[r.client_name] = Number(r.overdue_count || 0);
+    }
+
+    const ontimeByClient: any = {};
+    for (const r of ontimeRes.rows) {
+      ontimeByClient[r.client_name] = Number(r.ontime_count || 0);
+    }
+
+    res.json({
+      period,
+      start_date: startDate,
+      end_date: endDate,
+      total_tasks: Number(totalTasksRes.rows[0].cnt || 0),
+      total_subtasks: Number(totalSubtasksRes.rows[0].cnt || 0),
+      completed_subtasks: Number(completedSubtasksRes.rows[0].cnt || 0),
+      active_clients: Number(activeClientsRes.rows[0].cnt || 0),
+      client_summary: clientSummary,
+      user_summary: userSummary,
+      overdue_by_client: overdueByClient,
+      ontime_by_client: ontimeByClient,
+    });
+  } catch (error: any) {
+    console.error("/finops/metrics error:", error);
+    // Fallback to empty metrics to avoid crashing UI
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all external alert next_call timestamps
 router.get("/next-calls", async (req: Request, res: Response) => {
   try {

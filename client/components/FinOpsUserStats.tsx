@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,9 @@ export default function FinOpsUserStats() {
       }
     },
     staleTime: 60_000,
+    // Poll the server for near-real-time updates
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   // Safe getters with fallbacks

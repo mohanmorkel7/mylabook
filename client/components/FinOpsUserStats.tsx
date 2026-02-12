@@ -11,6 +11,8 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 export default function FinOpsUserStats() {
   const [period, setPeriod] = React.useState<"daily" | "weekly" | "monthly">("monthly");
 
+  const humanPeriod = period === "daily" ? "Today" : period === "weekly" ? "Last 7 days" : "This month";
+
   const { data: metrics, isLoading, error, refetch } = useQuery({
     queryKey: ["finops-metrics", period],
     queryFn: async () => {
@@ -43,7 +45,7 @@ export default function FinOpsUserStats() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">User Stats</h2>
-          <p className="text-gray-600 mt-1">FinOps user & client metrics ({period})</p>
+          <p className="text-gray-600 mt-1">FinOps user & client metrics — {humanPeriod}{metrics?.start_date ? ` (${metrics.start_date}${metrics.end_date && metrics.end_date !== metrics.start_date ? ` to ${metrics.end_date}` : ""})` : ""}</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
@@ -51,9 +53,9 @@ export default function FinOpsUserStats() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="daily">Daily</SelectItem>
-              <SelectItem value="weekly">Weekly</SelectItem>
-              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="daily">Today</SelectItem>
+              <SelectItem value="weekly">Last 7 days</SelectItem>
+              <SelectItem value="monthly">This month</SelectItem>
             </SelectContent>
           </Select>
         </div>

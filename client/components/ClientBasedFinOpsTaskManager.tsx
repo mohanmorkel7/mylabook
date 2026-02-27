@@ -220,72 +220,7 @@ const PendingApprovalTimer = ({
   const [isReady, setIsReady] = useState(false);
   const [lastAlertTime, setLastAlertTime] = useState<number>(0);
 
-  // Trigger API call when countdown reaches 00m 00s
-  useEffect(() => {
-    if (!completedAt) return;
-
-    const completedTime = new Date(completedAt).getTime();
-    const now = new Date().getTime();
-    const diffMs = now - completedTime;
-    const fifteenMinutesMs = 15 * 60 * 1000;
-
-    // Calculate which 15-minute cycle we're in
-    const cycleNumber = Math.floor(diffMs / fifteenMinutesMs);
-    const timeInCurrentCycle = diffMs % fifteenMinutesMs;
-    const remainingInCycle = fifteenMinutesMs - timeInCurrentCycle;
-    const remainingSeconds = Math.ceil(remainingInCycle / 1000);
-    const minutes = Math.floor(remainingSeconds / 60);
-    const seconds = remainingSeconds % 60;
-
-    // Trigger API call when countdown reaches 00m 00s (only once per cycle)
-    if (
-      cycleNumber > 0 &&
-      minutes === 0 &&
-      seconds === 0 &&
-      lastAlertTime !== cycleNumber
-    ) {
-      setLastAlertTime(cycleNumber);
-
-      // Call the pulse alerts API
-      const triggerPulseAlert = async () => {
-        try {
-          const response = await fetch(
-            "https://pulsealerts.mylapay.com/direct-call",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                subtask_id: subtaskId,
-                alert_type: "approval_timeout",
-                timestamp: new Date().toISOString(),
-                cycle_number: cycleNumber,
-              }),
-            },
-          );
-
-          if (!response.ok) {
-            console.warn(
-              `Pulse alert API returned status ${response.status} for subtask ${subtaskId}`,
-            );
-          } else {
-            console.log(
-              `✅ Pulse alert triggered for subtask ${subtaskId} at cycle ${cycleNumber}`,
-            );
-          }
-        } catch (error) {
-          console.error(
-            `❌ Failed to trigger pulse alert for subtask ${subtaskId}:`,
-            error,
-          );
-        }
-      };
-
-      triggerPulseAlert();
-    }
-  }, [completedAt, subtaskId, lastAlertTime]);
-
+  // Combined effect: Update timer display AND trigger API when countdown reaches 00m 00s
   useEffect(() => {
     const updateTimer = () => {
       if (!completedAt) return;
@@ -303,7 +238,61 @@ const PendingApprovalTimer = ({
       const minutes = Math.floor(remainingSeconds / 60);
       const seconds = remainingSeconds % 60;
 
-      // If we're ready for alerts (past first 15 minutes)
+      // Trigger API call when countdown reaches 00m 00s (only once per cycle)
+      if (
+        cycleNumber > 0 &&
+        minutes === 0 &&
+        seconds === 0 &&
+        lastAlertTime !== cycleNumber
+      ) {
+        console.log(
+          `🔔 Countdown reached 00m 00s for subtask ${subtaskId} - triggering Pulse alert`,
+        );
+        setLastAlertTime(cycleNumber);
+
+        // Call the pulse alerts API
+        const triggerPulseAlert = async () => {
+          try {
+            console.log(
+              `📤 Sending Pulse alert request for subtask ${subtaskId}...`,
+            );
+            const response = await fetch(
+              "https://pulsealerts.mylapay.com/direct-call",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  subtask_id: subtaskId,
+                  alert_type: "approval_timeout",
+                  timestamp: new Date().toISOString(),
+                  cycle_number: cycleNumber,
+                }),
+              },
+            );
+
+            if (!response.ok) {
+              console.warn(
+                `⚠️ Pulse alert API returned status ${response.status} for subtask ${subtaskId}`,
+              );
+            } else {
+              console.log(
+                `✅ Pulse alert triggered for subtask ${subtaskId} at cycle ${cycleNumber}`,
+              );
+            }
+          } catch (error) {
+            console.error(
+              `❌ Failed to trigger pulse alert for subtask ${subtaskId}:`,
+              error,
+            );
+          }
+        };
+
+        triggerPulseAlert();
+      }
+
+      // Update the display
       if (cycleNumber > 0) {
         setIsReady(true);
 
@@ -324,7 +313,7 @@ const PendingApprovalTimer = ({
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [completedAt, subtaskId]);
+  }, [completedAt, subtaskId, lastAlertTime]);
 
   if (!timeLeft) return null;
 

@@ -729,15 +729,27 @@ function SortableSubTaskItem({
 
                         const isAdmin = currentUser?.role === "admin";
 
+                        // Safely parse managers arrays
+                        const parseManagersArray = (managers: any): string[] => {
+                          if (Array.isArray(managers)) return managers;
+                          if (typeof managers === "string") {
+                            try {
+                              const parsed = JSON.parse(managers);
+                              return Array.isArray(parsed) ? parsed : [];
+                            } catch {
+                              return [];
+                            }
+                          }
+                          return [];
+                        };
+
                         const isReporting =
-                          Array.isArray(task?.reporting_managers) &&
-                          task.reporting_managers
+                          parseManagersArray(task?.reporting_managers)
                             .map(normalize)
                             .includes(normalizedUserName);
 
                         const isEscalation =
-                          Array.isArray(task?.escalation_managers) &&
-                          task.escalation_managers
+                          parseManagersArray(task?.escalation_managers)
                             .map(normalize)
                             .includes(normalizedUserName);
 
@@ -1040,9 +1052,34 @@ export default function ClientBasedFinOpsTaskManager() {
     // Admin can edit everything
     if (user.role === "admin") return true;
 
+    // Safely parse managers in case they come as strings (defensive programming)
+    const reportingManagers = Array.isArray(task.reporting_managers)
+      ? task.reporting_managers
+      : typeof task.reporting_managers === "string"
+        ? (() => {
+            try {
+              return JSON.parse(task.reporting_managers);
+            } catch {
+              return [];
+            }
+          })()
+        : [];
+
+    const escalationManagers = Array.isArray(task.escalation_managers)
+      ? task.escalation_managers
+      : typeof task.escalation_managers === "string"
+        ? (() => {
+            try {
+              return JSON.parse(task.escalation_managers);
+            } catch {
+              return [];
+            }
+          })()
+        : [];
+
     // Check if user is in reporting managers
     if (
-      task.reporting_managers.some(
+      reportingManagers.some(
         (manager) =>
           extractNameFromValue(manager) === user.name ||
           manager.includes(user.email || ""),
@@ -1052,7 +1089,7 @@ export default function ClientBasedFinOpsTaskManager() {
 
     // Check if user is in escalation managers
     if (
-      task.escalation_managers.some(
+      escalationManagers.some(
         (manager) =>
           extractNameFromValue(manager) === user.name ||
           manager.includes(user.email || ""),
@@ -2143,9 +2180,20 @@ export default function ClientBasedFinOpsTaskManager() {
       }
     }
 
-    // Reporting managers can edit
-    if (Array.isArray(task.reporting_managers)) {
-      const isReportingManager = task.reporting_managers.some(
+    // Reporting managers can edit - safely handle both arrays and strings
+    const reportingManagers = Array.isArray(task.reporting_managers)
+      ? task.reporting_managers
+      : typeof task.reporting_managers === "string"
+        ? (() => {
+            try {
+              return JSON.parse(task.reporting_managers);
+            } catch {
+              return [];
+            }
+          })()
+        : [];
+    if (reportingManagers.length > 0) {
+      const isReportingManager = reportingManagers.some(
         (manager) =>
           extractNameFromValue(manager) === userName ||
           manager.includes(userEmail || ""),
@@ -2153,9 +2201,20 @@ export default function ClientBasedFinOpsTaskManager() {
       if (isReportingManager) return true;
     }
 
-    // Escalation managers can edit
-    if (Array.isArray(task.escalation_managers)) {
-      const isEscalationManager = task.escalation_managers.some(
+    // Escalation managers can edit - safely handle both arrays and strings
+    const escalationManagers = Array.isArray(task.escalation_managers)
+      ? task.escalation_managers
+      : typeof task.escalation_managers === "string"
+        ? (() => {
+            try {
+              return JSON.parse(task.escalation_managers);
+            } catch {
+              return [];
+            }
+          })()
+        : [];
+    if (escalationManagers.length > 0) {
+      const isEscalationManager = escalationManagers.some(
         (manager) =>
           extractNameFromValue(manager) === userName ||
           manager.includes(userEmail || ""),
@@ -2174,13 +2233,27 @@ export default function ClientBasedFinOpsTaskManager() {
     const userName = `${user?.first_name} ${user?.last_name}`;
     const userEmail = user?.email;
 
+    // Safely parse managers arrays
+    const parseManagersArray = (managers: any): string[] => {
+      if (Array.isArray(managers)) return managers;
+      if (typeof managers === "string") {
+        try {
+          const parsed = JSON.parse(managers);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+
     // Check if user is mentioned anywhere in the task
     const allInvolvedUsers = [
       ...(Array.isArray(task.assigned_to)
         ? task.assigned_to
         : [task.assigned_to].filter(Boolean)),
-      ...task.reporting_managers,
-      ...task.escalation_managers,
+      ...parseManagersArray(task.reporting_managers),
+      ...parseManagersArray(task.escalation_managers),
     ];
 
     const isInvolved = allInvolvedUsers.some(
@@ -2422,16 +2495,26 @@ export default function ClientBasedFinOpsTaskManager() {
   // Role-based visibility: non-admins see only tasks where they are assigned_to, reporting manager, or escalation manager
   if (!isAdmin) {
     filteredTasks = filteredTasks.filter((task: ClientBasedFinOpsTask) => {
+      // Safely parse managers arrays
+      const parseManagersArray = (managers: any): string[] => {
+        if (Array.isArray(managers)) return managers;
+        if (typeof managers === "string") {
+          try {
+            const parsed = JSON.parse(managers);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        }
+        return [];
+      };
+
       const allInvolvedUsers = [
         ...(Array.isArray(task.assigned_to)
           ? task.assigned_to
           : [task.assigned_to].filter(Boolean)),
-        ...(Array.isArray(task.reporting_managers)
-          ? task.reporting_managers
-          : []),
-        ...(Array.isArray(task.escalation_managers)
-          ? task.escalation_managers
-          : []),
+        ...parseManagersArray(task.reporting_managers),
+        ...parseManagersArray(task.escalation_managers),
       ];
       return allInvolvedUsers.some((person) => {
         if (!person) return false;
@@ -2446,16 +2529,29 @@ export default function ClientBasedFinOpsTaskManager() {
   }
 
   // <-- Add this here, after filteredTasks is available -->
+  const parseManagersForTask = (managers: any): string[] => {
+    if (Array.isArray(managers)) return managers;
+    if (typeof managers === "string") {
+      try {
+        const parsed = JSON.parse(managers);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
   const canCreateTask =
     isAdmin ||
     filteredTasks.some(
       (task) =>
-        (Array.isArray(task.reporting_managers) &&
-          task.reporting_managers
-            .map(normalize)
-            .includes(normalizedUserName)) ||
-        (Array.isArray(task.escalation_managers) &&
-          task.escalation_managers.map(normalize).includes(normalizedUserName)),
+        parseManagersForTask(task.reporting_managers)
+          .map(normalize)
+          .includes(normalizedUserName) ||
+        parseManagersForTask(task.escalation_managers)
+          .map(normalize)
+          .includes(normalizedUserName),
     );
 
   if (typeof window !== "undefined" && (window as any).__APP_DEBUG)

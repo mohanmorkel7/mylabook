@@ -5,41 +5,149 @@ import finopsScheduler from "../services/finopsScheduler";
 
 const router = Router();
 
-// FinOps settings storage (single-row settings table)
-async function ensureFinOpsSettings() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS finops_settings (
-      id SERIAL PRIMARY KEY,
-      initial_overdue_call_delay_minutes INTEGER DEFAULT 0,
-      repeat_overdue_call_interval_minutes INTEGER DEFAULT 15,
-      only_repeat_when_single_overdue BOOLEAN DEFAULT false,
-      pulse_alerts_enabled BOOLEAN DEFAULT true,
-      updated_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  // Add column if it doesn't exist (for existing installations)
-  await pool.query(`
-    ALTER TABLE finops_settings
-    ADD COLUMN IF NOT EXISTS pulse_alerts_enabled BOOLEAN DEFAULT true
-  `);
-  const row = await pool.query(
-    `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
-  );
-  if (row.rows.length === 0) {
-    await pool.query(
-      `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue, pulse_alerts_enabled)
-       VALUES ($1, $2, $3, $4)`,
-      [0, 15, false, true],
+// Cache for finops settings to avoid repeated database queries
+let cachedFinOpsSettings: any = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_DURATION = 60000; // 60 seconds
+
+// Initialize all FinOps schemas once at startup
+export async function initializeFinOpsSchema() {
+  try {
+    console.log("Initializing FinOps schema...");
+
+    // Create finops_settings table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_settings (
+        id SERIAL PRIMARY KEY,
+        initial_overdue_call_delay_minutes INTEGER DEFAULT 0,
+        repeat_overdue_call_interval_minutes INTEGER DEFAULT 15,
+        only_repeat_when_single_overdue BOOLEAN DEFAULT false,
+        pulse_alerts_enabled BOOLEAN DEFAULT true,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Add column if it doesn't exist (for existing installations)
+    await pool.query(`
+      ALTER TABLE finops_settings
+      ADD COLUMN IF NOT EXISTS pulse_alerts_enabled BOOLEAN DEFAULT true
+    `);
+
+    // Create finops_external_alerts table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_external_alerts (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL,
+        subtask_id INTEGER NOT NULL,
+        alert_group TEXT NOT NULL,
+        alert_bucket INTEGER NOT NULL DEFAULT -1,
+        title TEXT,
+        next_call_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
+      )
+    `);
+
+    // Create finops_tracker table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_tracker (
+        id SERIAL PRIMARY KEY,
+        run_date DATE NOT NULL,
+        period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
+        task_id INTEGER NOT NULL,
+        task_name TEXT,
+        subtask_id INTEGER NOT NULL DEFAULT 0,
+        subtask_name TEXT,
+        status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
+        started_at TIMESTAMP NULL,
+        completed_at TIMESTAMP NULL,
+        scheduled_time TIME NULL,
+        subtask_scheduled_date DATE NULL,
+        description TEXT,
+        sla_hours INTEGER,
+        sla_minutes INTEGER,
+        order_position INTEGER,
+        delay_reason TEXT,
+        delay_notes TEXT,
+        notification_sent_15min BOOLEAN DEFAULT false,
+        notification_sent_start BOOLEAN DEFAULT false,
+        notification_sent_escalation BOOLEAN DEFAULT false,
+        auto_notify BOOLEAN DEFAULT true,
+        assigned_to TEXT,
+        reporting_managers TEXT,
+        escalation_managers TEXT,
+        completed_by TEXT,
+        approved_at TIMESTAMP,
+        approved_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(run_date, period, task_id, subtask_id)
+      )
+    `);
+
+    // Ensure older columns exist
+    await pool.query(`
+      ALTER TABLE finops_tracker
+        ADD COLUMN IF NOT EXISTS description TEXT,
+        ADD COLUMN IF NOT EXISTS sla_hours INTEGER,
+        ADD COLUMN IF NOT EXISTS sla_minutes INTEGER,
+        ADD COLUMN IF NOT EXISTS order_position INTEGER,
+        ADD COLUMN IF NOT EXISTS delay_reason TEXT,
+        ADD COLUMN IF NOT EXISTS delay_notes TEXT,
+        ADD COLUMN IF NOT EXISTS notification_sent_15min BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS notification_sent_start BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS notification_sent_escalation BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS auto_notify BOOLEAN DEFAULT true,
+        ADD COLUMN IF NOT EXISTS assigned_to TEXT,
+        ADD COLUMN IF NOT EXISTS reporting_managers TEXT,
+        ADD COLUMN IF NOT EXISTS escalation_managers TEXT,
+        ADD COLUMN IF NOT EXISTS completed_by TEXT,
+        ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS approved_by TEXT
+    `);
+
+    // Ensure finops_settings has at least one row
+    const row = await pool.query(
+      `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
     );
+    if (row.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue, pulse_alerts_enabled)
+         VALUES ($1, $2, $3, $4)`,
+        [0, 15, false, true],
+      );
+    }
+
+    console.log("✅ FinOps schema initialized successfully");
+  } catch (error) {
+    console.warn(
+      "⚠️ FinOps schema initialization deferred (database may not be available yet):",
+      (error as Error).message,
+    );
+    // Don't throw - let server continue, database may come online later
   }
 }
 
+function invalidateSettingsCache() {
+  cachedFinOpsSettings = null;
+  settingsCacheTime = 0;
+}
+
 async function getFinOpsSettings() {
-  await ensureFinOpsSettings();
+  const now = Date.now();
+
+  // Return cached settings if still fresh
+  if (cachedFinOpsSettings && (now - settingsCacheTime) < SETTINGS_CACHE_DURATION) {
+    return cachedFinOpsSettings;
+  }
+
   const res = await pool.query(
     `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
   );
-  return res.rows[0];
+
+  cachedFinOpsSettings = res.rows[0];
+  settingsCacheTime = now;
+  return cachedFinOpsSettings;
 }
 
 // Ensure finops_tasks has recurrence columns for weekly/monthly scheduling
@@ -93,6 +201,9 @@ router.put("/settings/pulse-alerts", async (req, res) => {
         .status(500)
         .json({ error: "Failed to update pulse alerts setting" });
     }
+
+    // Invalidate cache so next request fetches updated value
+    invalidateSettingsCache();
 
     res.json({
       success: true,
@@ -1824,65 +1935,7 @@ router.patch(
       const updateDateObj = new Date(`${updateDate}T${nowTime}`);
 
       if (await isDatabaseAvailable()) {
-        // Ensure tracker table exists
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_tracker (
-            id SERIAL PRIMARY KEY,
-            run_date DATE NOT NULL,
-            period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-            task_id INTEGER NOT NULL,
-            task_name TEXT,
-            subtask_id INTEGER NOT NULL DEFAULT 0,
-            subtask_name TEXT,
-            status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-            started_at TIMESTAMP NULL,
-            completed_at TIMESTAMP NULL,
-            scheduled_time TIME NULL,
-            subtask_scheduled_date DATE NULL,
-            description TEXT,
-            sla_hours INTEGER,
-            sla_minutes INTEGER,
-            order_position INTEGER,
-            delay_reason TEXT,
-            delay_notes TEXT,
-            notification_sent_15min BOOLEAN DEFAULT false,
-            notification_sent_start BOOLEAN DEFAULT false,
-            notification_sent_escalation BOOLEAN DEFAULT false,
-            auto_notify BOOLEAN DEFAULT true,
-            assigned_to TEXT,
-            reporting_managers TEXT,
-            escalation_managers TEXT,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(run_date, period, task_id, subtask_id)
-          );
-        `);
-
-        // Ensure older columns exist
-        await pool.query(`
-          ALTER TABLE finops_tracker
-            ADD COLUMN IF NOT EXISTS description TEXT,
-            ADD COLUMN IF NOT EXISTS sla_hours INTEGER,
-            ADD COLUMN IF NOT EXISTS sla_minutes INTEGER,
-            ADD COLUMN IF NOT EXISTS order_position INTEGER,
-            ADD COLUMN IF NOT EXISTS delay_reason TEXT,
-            ADD COLUMN IF NOT EXISTS delay_notes TEXT,
-            ADD COLUMN IF NOT EXISTS notification_sent_15min BOOLEAN DEFAULT false,
-            ADD COLUMN IF NOT EXISTS notification_sent_start BOOLEAN DEFAULT false,
-            ADD COLUMN IF NOT EXISTS notification_sent_escalation BOOLEAN DEFAULT false,
-            ADD COLUMN IF NOT EXISTS auto_notify BOOLEAN DEFAULT true,
-            ADD COLUMN IF NOT EXISTS assigned_to TEXT,
-            ADD COLUMN IF NOT EXISTS reporting_managers TEXT,
-            ADD COLUMN IF NOT EXISTS escalation_managers TEXT;
-        `);
-
-        // Ensure approval/completion columns exist
-        await pool.query(`
-          ALTER TABLE finops_tracker
-            ADD COLUMN IF NOT EXISTS completed_by TEXT,
-            ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
-            ADD COLUMN IF NOT EXISTS approved_by TEXT;
-        `);
+        // finops_tracker table is created at server startup via initializeFinOpsSchema()
 
         // Fetch existing tracker row
         let trackerRes = await pool.query(
@@ -2429,20 +2482,7 @@ async function handleStatusChangeNotifications(
 
       // Schedule pending-approval alert for reporting managers after 30 minutes
       try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_external_alerts (
-            id SERIAL PRIMARY KEY,
-            task_id INTEGER NOT NULL,
-            subtask_id INTEGER NOT NULL,
-            alert_group TEXT NOT NULL,
-            alert_bucket INTEGER NOT NULL DEFAULT -1,
-            title TEXT,
-            next_call_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
-          )
-        `);
-
+        // finops_external_alerts table is created at server startup via initializeFinOpsSchema()
         const title = `Please review and approve the subtask \"${subtaskData.subtask_name || subtaskData.name}\" under the task \"${subtaskData.task_name}\" for the client \"${subtaskData.client_name || "Unknown Client"}\" at your earliest convenience.`;
 
         await pool.query(
@@ -2726,26 +2766,7 @@ router.post("/tracker/seed", async (req: Request, res: Response) => {
       .slice(0, 10);
 
     if (await isDatabaseAvailable()) {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS finops_tracker (
-          id SERIAL PRIMARY KEY,
-          run_date DATE NOT NULL,
-          period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-          task_id INTEGER NOT NULL,
-          task_name TEXT,
-          subtask_id INTEGER NOT NULL DEFAULT 0,
-          subtask_name TEXT,
-          status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-          started_at TIMESTAMP NULL,
-          completed_at TIMESTAMP NULL,
-          scheduled_time TIME NULL,
-          subtask_scheduled_date DATE NULL,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(run_date, period, task_id, subtask_id)
-        );
-      `);
-
+      // finops_tracker table is created at server startup via initializeFinOpsSchema()
       const tasksRes = await pool.query(
         `
         SELECT t.*, st.id as subtask_id, st.name as subtask_name, st.start_time
@@ -2855,26 +2876,7 @@ router.get("/tracker", async (req: Request, res: Response) => {
       ? parseInt(req.query.task_id as string)
       : null;
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS finops_tracker (
-        id SERIAL PRIMARY KEY,
-        run_date DATE NOT NULL,
-        period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-        task_id INTEGER NOT NULL,
-        task_name TEXT,
-        subtask_id INTEGER NOT NULL DEFAULT 0,
-        subtask_name TEXT,
-        status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-        started_at TIMESTAMP NULL,
-        completed_at TIMESTAMP NULL,
-        scheduled_time TIME NULL,
-        subtask_scheduled_date DATE NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(run_date, period, task_id, subtask_id)
-      );
-    `);
-
+    // finops_tracker table is created at server startup via initializeFinOpsSchema()
     const params: any[] = [];
     let where = "WHERE 1=1";
     if (dateParam) {
@@ -3128,20 +3130,7 @@ router.post(
         );
 
         // Enqueue external direct-call via finops_external_alerts; processed by netlify/functions/pulse-sync.ts
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_external_alerts (
-            id SERIAL PRIMARY KEY,
-            task_id INTEGER NOT NULL,
-            subtask_id INTEGER NOT NULL,
-            alert_group TEXT NOT NULL,
-            alert_bucket INTEGER NOT NULL DEFAULT -1,
-            title TEXT,
-            next_call_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
-          )
-        `);
-
+        // finops_external_alerts table is created at server startup via initializeFinOpsSchema()
         const fallbackTitle = `Kindly take prompt action on the overdue subtask ${taskData.subtask_name} from the task ${taskData.task_name}.`;
         const title =
           typeof message === "string" && message.trim().length
@@ -3318,20 +3307,7 @@ router.post(
           new Set([...reportingManagers, ...escalationManagers]),
         );
 
-        // Enqueue external direct-call via finops_external_alerts
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_external_alerts (
-            id SERIAL PRIMARY KEY,
-            task_id INTEGER NOT NULL,
-            subtask_id INTEGER NOT NULL,
-            alert_group TEXT NOT NULL,
-            alert_bucket INTEGER NOT NULL DEFAULT -1,
-            title TEXT,
-            next_call_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
-          )
-        `);
+        // Enqueue external direct-call via finops_external_alerts (table created at startup)
 
         const title = `Approval pending for subtask "${taskData.subtask_name}" from task "${taskData.task_name}" - Action required`;
 

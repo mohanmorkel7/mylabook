@@ -23,7 +23,7 @@ import vcRouter from "./routes/vc";
 import followUpsRouter from "./routes/follow-ups";
 import filesRouter from "./routes/files";
 import ticketsRouter from "./routes/tickets";
-import finopsRouter from "./routes/finops";
+import finopsRouter, { initializeFinOpsSchema } from "./routes/finops";
 import workflowRouter from "./routes/workflow";
 import databaseStatusRouter from "./routes/database-status";
 import databaseFixRouter from "./routes/database-fix";
@@ -60,11 +60,23 @@ export function createServer() {
     });
   }, 1000); // Delay initialization to prevent blocking server startup
 
+  // Initialize FinOps schema tables (idempotent, runs once at startup)
+  try {
+    setTimeout(async () => {
+      await initializeFinOpsSchema();
+    }, 1500); // After database initialization
+  } catch (e) {
+    console.error(
+      "Failed to initialize FinOps schema:",
+      (e as any)?.message,
+    );
+  }
+
   // Start FinOps Scheduler for local/dev runtime (idempotent)
   try {
     setTimeout(() => {
       finopsScheduler.initialize();
-    }, 500);
+    }, 2000); // After schema initialization
   } catch (e) {
     console.error(
       "Failed to initialize FinOps Scheduler:",

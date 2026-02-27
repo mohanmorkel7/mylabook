@@ -427,7 +427,7 @@ export default function TicketDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => navigate("/tickets")}>
+          <Button variant="ghost" onClick={() => navigate(-1)}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Tickets
           </Button>
           <Button

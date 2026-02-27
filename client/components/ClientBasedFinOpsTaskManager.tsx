@@ -2281,11 +2281,13 @@ export default function ClientBasedFinOpsTaskManager() {
 
   // Check if user can edit a task (full edit permissions)
   const canEditTask = (task: ClientBasedFinOpsTask): boolean => {
+    if (!user || !user.name) return false;
+
     // Admin can edit any task
     if (user?.role === "admin") {
       return true;
     }
-    console.log("USER ROLE", user.name);
+
     // Creator can edit their own task
     if (
       task.created_by === user?.id?.toString() ||
@@ -2294,68 +2296,78 @@ export default function ClientBasedFinOpsTaskManager() {
       return true;
     }
 
-    // Assigned users can edit the task
-    const userName = user.name;
-    const userEmail = user?.email;
+    // Use the same robust parsing and matching as canEditFinOpsTasks
+    const parseManagersArray = (managers: any): string[] => {
+      if (!managers) return [];
+
+      if (Array.isArray(managers)) {
+        return managers.filter(Boolean).map(m => String(m).trim());
+      }
+
+      if (typeof managers === "string") {
+        const trimmed = managers.trim();
+        if (!trimmed) return [];
+
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(Boolean).map(m => String(m).trim());
+          }
+        } catch {}
+
+        return [trimmed];
+      }
+
+      return [];
+    };
+
+    // Helper to check if user matches a manager entry
+    const userMatchesManager = (manager: string): boolean => {
+      if (!manager || !user.name) return false;
+
+      const managerName = extractNameFromValue(manager);
+      const userNameLower = user.name.toLowerCase().trim();
+
+      // Check name match (case-insensitive and trim)
+      if (managerName) {
+        const managerNameLower = managerName.toLowerCase().trim();
+        if (managerNameLower === userNameLower) {
+          return true;
+        }
+        // Also check if manager name contains user name
+        if (managerNameLower.includes(userNameLower)) {
+          return true;
+        }
+      }
+
+      // Check email match (case-insensitive)
+      if (user.email) {
+        const managerStr = manager.toLowerCase();
+        const userEmailLower = user.email.toLowerCase();
+        if (managerStr.includes(userEmailLower)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
 
     // Check assigned users
-    if (Array.isArray(task.assigned_to)) {
-      const isAssigned = task.assigned_to.some(
-        (assignee) =>
-          extractNameFromValue(assignee) === userName ||
-          assignee.includes(userEmail || ""),
-      );
-      if (isAssigned) return true;
-    } else if (task.assigned_to) {
-      const assignedName = extractNameFromValue(task.assigned_to);
-      if (
-        assignedName === userName ||
-        task.assigned_to.includes(userEmail || "")
-      ) {
-        return true;
-      }
+    const assignedTo = parseManagersArray(task.assigned_to);
+    if (assignedTo.some(userMatchesManager)) {
+      return true;
     }
 
-    // Reporting managers can edit - safely handle both arrays and strings
-    const reportingManagers = Array.isArray(task.reporting_managers)
-      ? task.reporting_managers
-      : typeof task.reporting_managers === "string"
-        ? (() => {
-            try {
-              return JSON.parse(task.reporting_managers);
-            } catch {
-              return [];
-            }
-          })()
-        : [];
-    if (reportingManagers.length > 0) {
-      const isReportingManager = reportingManagers.some(
-        (manager) =>
-          extractNameFromValue(manager) === userName ||
-          manager.includes(userEmail || ""),
-      );
-      if (isReportingManager) return true;
+    // Check reporting managers
+    const reportingManagers = parseManagersArray(task.reporting_managers);
+    if (reportingManagers.some(userMatchesManager)) {
+      return true;
     }
 
-    // Escalation managers can edit - safely handle both arrays and strings
-    const escalationManagers = Array.isArray(task.escalation_managers)
-      ? task.escalation_managers
-      : typeof task.escalation_managers === "string"
-        ? (() => {
-            try {
-              return JSON.parse(task.escalation_managers);
-            } catch {
-              return [];
-            }
-          })()
-        : [];
-    if (escalationManagers.length > 0) {
-      const isEscalationManager = escalationManagers.some(
-        (manager) =>
-          extractNameFromValue(manager) === userName ||
-          manager.includes(userEmail || ""),
-      );
-      if (isEscalationManager) return true;
+    // Check escalation managers
+    const escalationManagers = parseManagersArray(task.escalation_managers);
+    if (escalationManagers.some(userMatchesManager)) {
+      return true;
     }
 
     return false;

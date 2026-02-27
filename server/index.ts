@@ -47,7 +47,7 @@ import templatesProductionRouter from "./routes/templates-production";
 import activityProductionRouter from "./routes/activity-production";
 import notificationsProductionRouter from "./routes/notifications-production";
 import adminProductionRouter from "./routes/admin-production";
-import finopsProductionRouter from "./routes/finops-production";
+import finopsProductionRouter, { ensureFinOpsProductionSchema } from "./routes/finops-production";
 
 export function createServer() {
   const app = express();
@@ -64,6 +64,7 @@ export function createServer() {
   try {
     setTimeout(async () => {
       await initializeFinOpsSchema();
+      await ensureFinOpsProductionSchema();
     }, 1500); // After database initialization
   } catch (e) {
     console.error(

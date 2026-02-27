@@ -5,29 +5,40 @@ import finopsScheduler from "../services/finopsScheduler";
 
 const router = Router();
 
-// Ensure finops_external_alerts table and required columns exist
-async function ensureExternalAlertsSchema(): Promise<void> {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS finops_external_alerts (
-      id SERIAL PRIMARY KEY,
-      task_id INTEGER NOT NULL,
-      subtask_id INTEGER NOT NULL,
-      alert_group TEXT NOT NULL,
-      alert_bucket INTEGER NOT NULL DEFAULT -1,
-      title TEXT,
-      next_call_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  await pool.query(
-    `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_group TEXT`,
-  );
-  await pool.query(
-    `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_bucket INTEGER DEFAULT -1`,
-  );
-  await pool.query(
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_fea_unique ON finops_external_alerts(task_id, subtask_id, alert_group, alert_bucket)`,
-  );
+// Flag to track if schema has been initialized (avoids repeated checks)
+let schemaInitialized = false;
+
+// Ensure finops_external_alerts table and required columns exist (called once at startup)
+export async function ensureFinOpsProductionSchema(): Promise<void> {
+  if (schemaInitialized) return;
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_external_alerts (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL,
+        subtask_id INTEGER NOT NULL,
+        alert_group TEXT NOT NULL,
+        alert_bucket INTEGER NOT NULL DEFAULT -1,
+        title TEXT,
+        next_call_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(
+      `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_group TEXT`,
+    );
+    await pool.query(
+      `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_bucket INTEGER DEFAULT -1`,
+    );
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_fea_unique ON finops_external_alerts(task_id, subtask_id, alert_group, alert_bucket)`,
+    );
+    schemaInitialized = true;
+    console.log("✅ FinOps production schema initialized");
+  } catch (e) {
+    console.warn("FinOps production schema initialization deferred:", (e as Error).message);
+  }
 }
 
 // Endpoint to fetch external alert next_call_at for a given task/subtask
@@ -252,7 +263,7 @@ async function sendReplicaDownAlertOnce(
 router.get("/tasks", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
-    await ensureExternalAlertsSchema();
+    // Schema is initialized at server startup via ensureFinOpsProductionSchema()
 
     const dateParam = (req.query.date as string) || null;
     const userNameRaw = (req.query.user_name as string) || null;

@@ -210,10 +210,12 @@ const convertNameToValueFormat = (name: string, users: any[]): string => {
 
 // Component to show pending approval countdown timer
 const PendingApprovalTimer = ({
+  taskId,
   subtaskId,
   completedAt,
 }: {
-  subtaskId: number;
+  taskId: number;
+  subtaskId: string | number;
   completedAt: string;
 }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
@@ -254,54 +256,43 @@ const PendingApprovalTimer = ({
           );
           alertTriggeredRef.current.add(cycleNumber);
 
-          // Call the pulse alerts API
-          const triggerPulseAlert = async () => {
+          // Call the backend approval alert endpoint
+          const triggerApprovalAlert = async () => {
             try {
               console.log(
-                `📤 Sending Pulse alert request for subtask ${subtaskId} (Cycle ${cycleNumber})...`,
+                `📤 Sending approval alert request to backend for subtask ${subtaskId} (Cycle ${cycleNumber})...`,
               );
 
-              // Prepare the alert payload
-              const title = `Approval pending for subtask ${subtaskId} - Action required`;
-              const user_ids = []; // Will be sent as empty array to notify the CRM_Switch receiver
-
-              await fetch(
-                "https://pulsealerts.mylapay.com/direct-call",
+              const response = await fetch(
+                `/api/finops/tasks/${taskId}/subtasks/${subtaskId}/approval-alert`,
                 {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                   },
-                  body: JSON.stringify({
-                    receiver: "CRM_Switch",
-                    title: title,
-                    user_ids: user_ids,
-                  }),
+                  body: JSON.stringify({}),
                 },
-              ).then((response) => {
-                if (!response.ok) {
-                  console.warn(
-                    `⚠️ Pulse alert API returned status ${response.status} for subtask ${subtaskId}`,
-                  );
-                } else {
-                  console.log(
-                    `✅ Pulse alert triggered for subtask ${subtaskId} at cycle ${cycleNumber}`,
-                  );
-                }
-              }).catch((err) => {
-                console.error(
-                  `❌ Failed to trigger pulse alert for subtask ${subtaskId}: ${(err as Error).message}`,
+              );
+
+              if (!response.ok) {
+                console.warn(
+                  `⚠️ Approval alert API returned status ${response.status} for subtask ${subtaskId}`,
                 );
-              });
+              } else {
+                const data = await response.json();
+                console.log(
+                  `✅ Approval alert triggered for subtask ${subtaskId} at cycle ${cycleNumber}`,
+                  data,
+                );
+              }
             } catch (error) {
               console.error(
-                `❌ Error preparing pulse alert for subtask ${subtaskId}:`,
-                error,
+                `❌ Failed to trigger approval alert for subtask ${subtaskId}: ${(error as Error).message}`,
               );
             }
           };
 
-          triggerPulseAlert();
+          triggerApprovalAlert();
         }
       }
 
@@ -326,7 +317,7 @@ const PendingApprovalTimer = ({
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [completedAt, subtaskId]);
+  }, [completedAt, subtaskId, taskId]);
 
   if (!timeLeft) return null;
 
@@ -894,6 +885,7 @@ function SortableSubTaskItem({
                   !(subtask as any).approved_by && (
                     <div className="mt-2">
                       <PendingApprovalTimer
+                        taskId={task.id}
                         subtaskId={subtask.id}
                         completedAt={subtask.completed_at}
                       />

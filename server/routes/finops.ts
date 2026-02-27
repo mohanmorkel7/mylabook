@@ -3232,6 +3232,195 @@ router.post(
   },
 );
 
+// Send approval timeout alert to reporting and escalation managers only
+router.post(
+  "/tasks/:taskId/subtasks/:subtaskId/approval-alert",
+  async (req: Request, res: Response) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      const subtaskId = req.params.subtaskId;
+
+      if (await isDatabaseAvailable()) {
+        // Get task and subtask information
+        const taskQuery = `
+        SELECT
+          t.task_name, t.reporting_managers, t.escalation_managers,
+          st.name as subtask_name, st.status
+        FROM finops_tasks t
+        JOIN finops_subtasks st ON t.id = st.task_id
+        WHERE t.id = $1 AND st.id = $2
+      `;
+
+        const result = await pool.query(taskQuery, [taskId, subtaskId]);
+
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: "Task or subtask not found" });
+        }
+
+        const taskData = result.rows[0];
+
+        // Log approval alert
+        await logActivity(
+          taskId,
+          subtaskId,
+          "approval_alert_sent",
+          "System",
+          `Approval timeout alert sent to reporting and escalation managers`,
+        );
+
+        const parseManagers = (val: any): string[] => {
+          if (!val) return [];
+          if (Array.isArray(val))
+            return val
+              .map(String)
+              .map((s) => s.trim())
+              .filter(Boolean);
+          if (typeof val === "string") {
+            let s = val.trim();
+            if (s.startsWith("{") && s.endsWith("}")) {
+              s = s.slice(1, -1);
+              return s
+                .split(",")
+                .map((x) => x.trim())
+                .map((x) => x.replace(/^\"|\"$/g, ""))
+                .filter(Boolean);
+            }
+            try {
+              const parsed = JSON.parse(s);
+              if (Array.isArray(parsed))
+                return parsed
+                  .map(String)
+                  .map((x) => x.trim())
+                  .filter(Boolean);
+            } catch {}
+            return s
+              .split(",")
+              .map((x) => x.trim())
+              .filter(Boolean);
+          }
+          try {
+            const parsed = JSON.parse(val);
+            return Array.isArray(parsed)
+              ? parsed
+                  .map(String)
+                  .map((x) => x.trim())
+                  .filter(Boolean)
+              : [];
+          } catch {
+            return [] as string[];
+          }
+        };
+
+        // For approval alerts, ONLY send to reporting and escalation managers (NOT assigned_to)
+        const reportingManagers = parseManagers(taskData.reporting_managers);
+        const escalationManagers = parseManagers(taskData.escalation_managers);
+        const recipients = Array.from(
+          new Set([...reportingManagers, ...escalationManagers]),
+        );
+
+        // Enqueue external direct-call via finops_external_alerts
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS finops_external_alerts (
+            id SERIAL PRIMARY KEY,
+            task_id INTEGER NOT NULL,
+            subtask_id INTEGER NOT NULL,
+            alert_group TEXT NOT NULL,
+            alert_bucket INTEGER NOT NULL DEFAULT -1,
+            title TEXT,
+            next_call_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
+          )
+        `);
+
+        const title = `Approval pending for subtask "${taskData.subtask_name}" from task "${taskData.task_name}" - Action required`;
+
+        const reserve = await pool.query(
+          `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+           VALUES ($1, $2, 'approval_timeout', -1, $3, NOW())
+           ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING
+           RETURNING id`,
+          [taskId, Number(subtaskId), title],
+        );
+        const external_enqueued = reserve.rows.length > 0;
+
+        // Immediately trigger Pulse direct-call (best-effort)
+        try {
+          const normalized = recipients
+            .map((n) => (n || "").toLowerCase().replace(/\s+/g, " ").trim())
+            .filter(Boolean);
+          const collapsed = normalized.map((n) => n.replace(/\s+/g, ""));
+          const usersRes = await pool.query(
+            `SELECT azure_object_id, sso_id, first_name, last_name, email
+             FROM users
+             WHERE (
+               LOWER(CONCAT(first_name,' ',last_name)) = ANY($1)
+               OR REPLACE(LOWER(CONCAT(first_name,' ',last_name)),' ','') = ANY($2)
+               OR LOWER(CONCAT(first_name,' ',LEFT(COALESCE(last_name,''),1))) = ANY($1)
+               OR REPLACE(LOWER(CONCAT(first_name,' ',LEFT(COALESCE(last_name,''),1))),' ','') = ANY($2)
+               OR LOWER(SPLIT_PART(COALESCE(email,''),'@',1)) = ANY($1)
+               OR REPLACE(LOWER(SPLIT_PART(COALESCE(email,''),'@',1)),'.','') = ANY($2)
+             )`,
+            [normalized, collapsed],
+          );
+          const user_ids = Array.from(
+            new Set(
+              usersRes.rows
+                .map((r: any) => r.azure_object_id || r.sso_id)
+                .filter((id: string | null) => !!id),
+            ),
+          );
+          console.log("APPROVAL ALERT USER IDS:", user_ids);
+
+          // Check if Pulse alerts are enabled
+          const settingsRes = await pool.query(
+            `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+          );
+          const pulseAlertsEnabled =
+            settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
+
+          if (pulseAlertsEnabled && user_ids.length) {
+            fetch("https://pulsealerts.mylapay.com/direct-call", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                receiver: "CRM_Switch",
+                title: title,
+                user_ids: user_ids,
+              }),
+            }).catch((err) => {
+              console.warn(
+                "Approval alert direct-call error:",
+                (err as Error).message,
+              );
+            });
+          } else if (!pulseAlertsEnabled) {
+            console.log("Pulse alerts disabled, skipping approval alert");
+          }
+        } catch (e) {
+          console.warn(
+            "Approval alert user resolution failed:",
+            (e as Error).message,
+          );
+        }
+
+        res.json({
+          message: "Approval alert sent successfully",
+          recipients,
+          external_enqueued,
+        });
+      } else {
+        res.json({
+          message: "Approval alert sent successfully (mock)",
+        });
+      }
+    } catch (error) {
+      console.error("Error sending approval alert:", error);
+      res.status(500).json({ error: "Failed to send approval alert" });
+    }
+  },
+);
+
 // Helper function to calculate SLA status
 function calculateSLAStatus(subtasks: any[]) {
   const now = new Date();

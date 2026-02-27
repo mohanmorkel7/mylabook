@@ -1099,6 +1099,18 @@ export default function ClientBasedFinOpsTaskManager() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // Debug: Log user info on first render
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).__FINOPS_DEBUG_PERMS) {
+      console.log("👤 Current User:", {
+        id: user?.id,
+        name: user?.name,
+        email: user?.email,
+        role: user?.role,
+      });
+    }
+  }, [user?.id]);
+
   const getUserDisplayName = (u: any) => {
     if (!u) return undefined;
     if (typeof u.name === "string" && u.name.trim()) return u.name.trim();
@@ -1108,67 +1120,90 @@ export default function ClientBasedFinOpsTaskManager() {
 
   // Check if user can edit FinOps tasks
   const canEditFinOpsTasks = (task: ClientBasedFinOpsTask): boolean => {
-    if (!user) return false;
+    if (!user || !user.name) return false;
     // Admin can edit everything
     if (user.role === "admin") return true;
 
-    // Safely parse managers in case they come as strings (defensive programming)
-    const reportingManagers = Array.isArray(task.reporting_managers)
-      ? task.reporting_managers
-      : typeof task.reporting_managers === "string"
-        ? (() => {
-            try {
-              return JSON.parse(task.reporting_managers);
-            } catch {
-              return [];
-            }
-          })()
-        : [];
+    // Safely parse managers in case they come as strings or null/undefined
+    const parseManagersArray = (managers: any): string[] => {
+      if (!managers) return [];
 
-    const escalationManagers = Array.isArray(task.escalation_managers)
-      ? task.escalation_managers
-      : typeof task.escalation_managers === "string"
-        ? (() => {
-            try {
-              return JSON.parse(task.escalation_managers);
-            } catch {
-              return [];
-            }
-          })()
-        : [];
+      // Already an array
+      if (Array.isArray(managers)) {
+        return managers.filter(Boolean).map(m => String(m).trim());
+      }
+
+      // String that might be JSON
+      if (typeof managers === "string") {
+        const trimmed = managers.trim();
+        if (!trimmed) return [];
+
+        // Try to parse as JSON array
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(Boolean).map(m => String(m).trim());
+          }
+        } catch {}
+
+        // Might be a single name or "name (email)" format
+        return [trimmed];
+      }
+
+      return [];
+    };
+
+    const reportingManagers = parseManagersArray(task.reporting_managers);
+    const escalationManagers = parseManagersArray(task.escalation_managers);
+    const allManagers = [...reportingManagers, ...escalationManagers];
 
     // Helper to check if user matches a manager entry
-    const userMatchesManager = (manager: any): boolean => {
+    const userMatchesManager = (manager: string): boolean => {
+      if (!manager || !user.name) return false;
+
       const managerName = extractNameFromValue(manager);
-      const managerStr = typeof manager === "string" ? manager : "";
+      const userNameLower = user.name.toLowerCase().trim();
 
       // Check name match (case-insensitive and trim)
-      if (
-        managerName &&
-        user.name &&
-        managerName.toLowerCase().trim() === user.name.toLowerCase().trim()
-      ) {
-        return true;
+      if (managerName) {
+        const managerNameLower = managerName.toLowerCase().trim();
+        if (managerNameLower === userNameLower) {
+          return true;
+        }
+        // Also check if manager name contains user name (for partial matches)
+        if (managerNameLower.includes(userNameLower)) {
+          return true;
+        }
       }
 
       // Check email match (case-insensitive)
-      if (
-        user.email &&
-        managerStr.toLowerCase().includes(user.email.toLowerCase())
-      ) {
-        return true;
+      if (user.email) {
+        const managerStr = manager.toLowerCase();
+        const userEmailLower = user.email.toLowerCase();
+        if (managerStr.includes(userEmailLower)) {
+          return true;
+        }
       }
 
       return false;
     };
 
-    // Check if user is in reporting managers
-    if (reportingManagers.some(userMatchesManager)) return true;
+    // Check if user is in reporting or escalation managers
+    const isManager = allManagers.some(userMatchesManager);
 
-    // Check if user is in escalation managers
-    if (escalationManagers.some(userMatchesManager)) return true;
+    if (typeof window !== "undefined" && (window as any).__FINOPS_DEBUG_PERMS) {
+      console.log("🔍 Permission Check:", {
+        taskId: task.id,
+        taskName: task.task_name,
+        userName: user.name,
+        userEmail: user.email,
+        reportingManagers,
+        escalationManagers,
+        isManager,
+      });
+    }
 
-    return false;
+    return isManager;
   };
 
   // Check if user can only change status (view-only users)

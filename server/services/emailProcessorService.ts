@@ -1206,7 +1206,8 @@ async function fetchAttachmentData(
     );
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    // Increased timeout from 20s to 30s for downloading attachment bytes
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     let bytesRes;
     try {
@@ -1682,9 +1683,9 @@ export async function getTodayEmails(
 
       console.log("getTodayEmails: requesting app token from Azure AD");
 
-      // Add 10-second timeout to token acquisition
+      // Add 15-second timeout to token acquisition (Azure AD can be slow)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       let res;
       try {
@@ -1732,7 +1733,8 @@ export async function getTodayEmails(
     while (nextLink) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        // Increased timeout from 10s to 30s for pagination (large email batches need more time)
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         let res;
         try {
@@ -2449,7 +2451,8 @@ export async function getTodayEmails(
     )}/mailFolders`;
 
     const controller2 = new AbortController();
-    const timeoutId2 = setTimeout(() => controller2.abort(), 10000);
+    // Increased timeout from 10s to 20s for fetching mail folders
+    const timeoutId2 = setTimeout(() => controller2.abort(), 20000);
 
     let foldersRes;
     try {

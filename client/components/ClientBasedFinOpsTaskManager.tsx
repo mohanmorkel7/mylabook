@@ -76,6 +76,7 @@ import {
   TrendingDown,
   BarChart3,
   RefreshCw,
+  Clock8,
 } from "lucide-react";
 import {
   format,
@@ -205,6 +206,78 @@ const convertNameToValueFormat = (name: string, users: any[]): string => {
   }
   const user = users.find((u) => `${u.first_name} ${u.last_name}` === name);
   return user ? `${name} (${user.email || "no-email"})` : `${name} (no-email)`;
+};
+
+// Component to show pending approval countdown timer
+const PendingApprovalTimer = ({
+  subtaskId,
+  completedAt,
+}: {
+  subtaskId: number;
+  completedAt: string;
+}) => {
+  const [timeLeft, setTimeLeft] = useState<string>("");
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!completedAt) return;
+
+      const completedTime = new Date(completedAt).getTime();
+      const now = new Date().getTime();
+      const diffMs = now - completedTime;
+      const fifteenMinutesMs = 15 * 60 * 1000;
+
+      // Calculate which 15-minute cycle we're in
+      const cycleNumber = Math.floor(diffMs / fifteenMinutesMs);
+      const timeInCurrentCycle = diffMs % fifteenMinutesMs;
+      const remainingInCycle = fifteenMinutesMs - timeInCurrentCycle;
+      const remainingSeconds = Math.ceil(remainingInCycle / 1000);
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+
+      // If we're ready for alerts (past first 15 minutes)
+      if (cycleNumber > 0) {
+        setIsReady(true);
+
+        // Show countdown in current cycle
+        // Alert is triggered by backend cron every 1 minute (no need for client-side trigger)
+        if (minutes === 0 && seconds === 0) {
+          setTimeLeft(`0m 0s (Alert will be sent by system every 15 minutes)`);
+        } else {
+          setTimeLeft(`${minutes}m ${seconds}s (Cycle ${cycleNumber})`);
+        }
+      } else {
+        // Before first 15 minutes
+        setIsReady(false);
+        setTimeLeft(`${minutes}m ${seconds}s`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [completedAt, subtaskId]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-2 rounded border ${
+        isReady ? "border-red-300 bg-red-50" : "border-yellow-300 bg-yellow-50"
+      }`}
+    >
+      <Clock8
+        className={`h-4 w-4 ${isReady ? "text-red-600" : "text-yellow-600"}`}
+      />
+      <span
+        className={`text-sm font-medium ${isReady ? "text-red-700" : "text-yellow-700"}`}
+      >
+        {isReady ? "⏰ " : "⏳ "} Approval alert countdown: {timeLeft}
+      </span>
+    </div>
+  );
 };
 
 // Format ISO timestamp to "YYYY-MM-DD h:mm:ss AM/PM"
@@ -515,10 +588,56 @@ function SortableSubTaskItem({
                             : subtask.start_time;
                         })()}
                       </span>
+
                       {subtask.started_at && (
                         <span>
-                          Started:{" "}
+                          In progress:{" "}
                           {new Date(subtask.started_at).toLocaleTimeString(
+                            "en-US",
+                            {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                              timeZone: "Asia/Kolkata",
+                            },
+                          )}
+                        </span>
+                      )}
+
+                      {subtask.delayed_at && (
+                        <span className="text-yellow-700">
+                          Delayed:{" "}
+                          {new Date(subtask.delayed_at).toLocaleTimeString(
+                            "en-US",
+                            {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                              timeZone: "Asia/Kolkata",
+                            },
+                          )}
+                        </span>
+                      )}
+
+                      {subtask.overdue_at && (
+                        <span className="text-red-700">
+                          Overdue:{" "}
+                          {new Date(subtask.overdue_at).toLocaleTimeString(
+                            "en-US",
+                            {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                              timeZone: "Asia/Kolkata",
+                            },
+                          )}
+                        </span>
+                      )}
+
+                      {subtask.completed_at && (
+                        <span className="text-green-700">
+                          Completed:{" "}
+                          {new Date(subtask.completed_at).toLocaleTimeString(
                             "en-US",
                             {
                               hour: "numeric",
@@ -532,21 +651,67 @@ function SortableSubTaskItem({
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-3">
-                    <Select
-                      value={subtask.status}
-                      onValueChange={handleStatusChange}
-                    >
-                      <SelectTrigger className="w-32 h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="delayed">Delayed</SelectItem>
-                        <SelectItem value="overdue">Overdue</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {/* Disable status changes for pending subtasks until 30 minutes before scheduled IST start time */}
+                    {(() => {
+                      let isEditable = true;
+                      try {
+                        if (
+                          subtask.start_time &&
+                          subtask.status === "pending"
+                        ) {
+                          const istNow = new Date(
+                            new Date().toLocaleString("en-US", {
+                              timeZone: "Asia/Kolkata",
+                            }),
+                          );
+                          const [hh, mm] = (subtask.start_time || "")
+                            .split(":")
+                            .map(Number);
+                          const scheduled = new Date(
+                            istNow.getFullYear(),
+                            istNow.getMonth(),
+                            istNow.getDate(),
+                            hh || 0,
+                            mm || 0,
+                          );
+                          const scheduledMinus30 = new Date(
+                            scheduled.getTime() - 30 * 60000,
+                          );
+                          if (istNow.getTime() < scheduledMinus30.getTime())
+                            isEditable = false;
+                        }
+                      } catch (e) {
+                        // on parse errors, leave editable
+                      }
+
+                      return (
+                        <Select
+                          value={subtask.status}
+                          onValueChange={handleStatusChange}
+                          disabled={!isEditable}
+                        >
+                          <SelectTrigger
+                            className="w-32 h-8"
+                            title={
+                              isEditable
+                                ? undefined
+                                : "Locked until 30 minutes before Start time (IST)"
+                            }
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="in_progress">
+                              In Progress
+                            </SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="delayed">Delayed</SelectItem>
+                            <SelectItem value="overdue">Overdue</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      );
+                    })()}
                     {/* Approve button: visible to admin, reporting managers, or escalation managers when subtask completed */}
                     {(() => {
                       try {
@@ -644,6 +809,17 @@ function SortableSubTaskItem({
                   </div>
                 </div>
 
+                {/* Show pending approval timer if completed but not approved */}
+                {subtask.status === "completed" &&
+                  !(subtask as any).approved_by && (
+                    <div className="mt-2">
+                      <PendingApprovalTimer
+                        subtaskId={subtask.id}
+                        completedAt={subtask.completed_at}
+                      />
+                    </div>
+                  )}
+
                 {/* Show approval info if present */}
                 {subtask.status === "completed" &&
                   (subtask as any).approved_by && (
@@ -715,21 +891,60 @@ function SortableSubTaskItem({
 
                 <div>
                   <Label>Status</Label>
-                  <Select
-                    value={subtask.status}
-                    onValueChange={handleStatusChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="delayed">Delayed</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {(() => {
+                    let isEditable = true;
+                    try {
+                      if (subtask.start_time && subtask.status === "pending") {
+                        const istNow = new Date(
+                          new Date().toLocaleString("en-US", {
+                            timeZone: "Asia/Kolkata",
+                          }),
+                        );
+                        const [hh, mm] = (subtask.start_time || "")
+                          .split(":")
+                          .map(Number);
+                        const scheduled = new Date(
+                          istNow.getFullYear(),
+                          istNow.getMonth(),
+                          istNow.getDate(),
+                          hh || 0,
+                          mm || 0,
+                        );
+                        const scheduledMinus30 = new Date(
+                          scheduled.getTime() - 30 * 60000,
+                        );
+                        if (istNow.getTime() < scheduledMinus30.getTime())
+                          isEditable = false;
+                      }
+                    } catch (e) {}
+
+                    return (
+                      <Select
+                        value={subtask.status}
+                        onValueChange={handleStatusChange}
+                        disabled={!isEditable}
+                      >
+                        <SelectTrigger
+                          title={
+                            isEditable
+                              ? undefined
+                              : "Locked until 30 minutes before Start time (IST)"
+                          }
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="in_progress">
+                            In Progress
+                          </SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="delayed">Delayed</SelectItem>
+                          <SelectItem value="overdue">Overdue</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -886,6 +1101,46 @@ export default function ClientBasedFinOpsTaskManager() {
   // Show more/less states for subtasks
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
 
+  // Handle deep-links via hash like #finops-<taskId>-<subtaskId>
+  useEffect(() => {
+    const handleHash = () => {
+      try {
+        const raw = window.location.hash || "";
+        const h = raw.replace(/^#/, "");
+        if (!h.startsWith("finops-")) return;
+        const parts = h.split("-");
+        if (parts.length < 3) return;
+        const taskId = Number(parts[1]);
+        const subtaskId = Number(parts[2]);
+        if (isNaN(taskId) || isNaN(subtaskId)) return;
+
+        // Expand the task so subtasks are visible
+        setExpandedTasks((prev) => {
+          const ns = new Set(prev);
+          ns.add(taskId);
+          return ns;
+        });
+
+        // Attempt to scroll to element after UI has rendered
+        setTimeout(() => {
+          const el = document.getElementById(`finops-${taskId}-${subtaskId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add("ring", "ring-2", "ring-blue-400");
+            setTimeout(() => el.classList.remove("ring", "ring-2", "ring-blue-400"), 4000);
+          }
+        }, 250);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    // Run once on mount to handle an initial hash
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   // Selected client from summary
   const [selectedClientFromSummary, setSelectedClientFromSummary] = useState<
     string | null
@@ -1007,6 +1262,170 @@ export default function ClientBasedFinOpsTaskManager() {
   // Track recent manual updates to avoid client-side race causing immediate auto-overdue
   const recentManualUpdates = useRef<Record<string, number>>({});
   const UPDATE_BLOCK_WINDOW = 60 * 1000; // 1 minute
+
+  // Track which subtasks have already been notified for SLA warnings (to avoid duplicate notifications)
+  const notifiedSLAWarnings = useRef<Set<string>>(new Set());
+
+  // Audio helpers: initialize AudioContext on user gesture and play a short beep
+  const audioCtxRef = useRef<any>(null);
+  const initAudioContext = () => {
+    try {
+      if (audioCtxRef.current) return;
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      audioCtxRef.current = new AudioCtx();
+      // Create a silent buffer to unlock audio on some browsers (not always required)
+      try {
+        const buffer = audioCtxRef.current.createBuffer(1, 1, 22050);
+        const source = audioCtxRef.current.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtxRef.current.destination);
+        source.start(0);
+      } catch (e) {
+        // ignore unlock errors
+      }
+    } catch (e) {
+      console.warn("AudioContext init failed:", e);
+    }
+  };
+
+  const playNotificationSound = () => {
+    try {
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(880, now);
+      g.gain.setValueAtTime(0.0001, now);
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      o.start(now);
+      o.stop(now + 0.23);
+    } catch (e) {
+      console.warn("playNotificationSound failed:", e);
+    }
+  };
+
+  // Function to show Windows system notification for SLA warnings
+  const showSLANotification = async (
+    taskName: string,
+    subtaskName: string,
+    minutesRemaining: number,
+    taskId?: number,
+    subtaskId?: number,
+    clientName?: string,
+  ) => {
+    try {
+      // Check if notifications are supported by the browser
+      if (!("Notification" in window)) {
+        console.log("Notifications API not supported by this browser");
+        return;
+      }
+
+      console.log(
+        `[SLA Notification] Current permission: ${Notification.permission}`,
+      );
+
+      // Request permission if not already granted
+      if (Notification.permission === "default") {
+        console.log("[SLA Notification] Requesting permission...");
+        const permission = await Notification.requestPermission();
+        console.log(`[SLA Notification] Permission result: ${permission}`);
+        if (permission !== "granted") {
+          console.log("Notification permission denied by user");
+          return;
+        }
+      }
+
+      // Only show notification if permission is granted
+      if (Notification.permission === "granted") {
+        console.log(
+          `[SLA Notification] Creating notification for ${subtaskName}`,
+        );
+
+        const title = `SLA Warning - ${minutesRemaining}m`;
+        const bodyLines = [
+          clientName ? `Client: ${clientName}` : undefined,
+          `Task: ${taskName}`,
+          `Subtask: ${subtaskName}`,
+          `Time Remaining: ${minutesRemaining} minutes`,
+        ].filter(Boolean);
+
+        const notification = new Notification(title, {
+          body: bodyLines.join("\n"),
+          tag: `sla-warning-${taskId || taskName}-${subtaskId || subtaskName}`,
+          requireInteraction: true,
+        });
+
+        console.log("[SLA Notification] Notification created successfully");
+
+        try {
+          // Play a short notification sound (if audio unlocked/initialized)
+          playNotificationSound();
+        } catch (e) {
+          // ignore
+        }
+
+        // Handle notification click - navigate/scroll to the specific subtask
+        notification.onclick = () => {
+          try {
+            window.focus();
+            if (typeof taskId === "number" && typeof subtaskId === "number") {
+              const hash = `#finops-${taskId}-${subtaskId}`;
+              if (window.location.pathname !== "/finops") {
+                // Navigate to finops route with hash
+                window.location.href = `/finops${hash}`;
+              } else {
+                // Set hash to trigger scroll effect in the component
+                window.location.hash = hash;
+                // Also attempt immediate scroll if element exists
+                setTimeout(() => {
+                  const el = document.getElementById(`finops-${taskId}-${subtaskId}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    el.classList.add("ring", "ring-2", "ring-blue-400");
+                    setTimeout(() => el.classList.remove("ring", "ring-2", "ring-blue-400"), 4000);
+                  }
+                }, 200);
+              }
+            } else {
+              // Just focus the window if we don't have ids
+              window.focus();
+            }
+          } catch (err) {
+            console.warn("Notification click handler failed:", err);
+          }
+        };
+      } else {
+        console.warn(
+          `[SLA Notification] Permission not granted. Current: ${Notification.permission}`,
+        );
+      }
+    } catch (error) {
+      console.error("Error showing SLA notification:", error);
+    }
+  };
+
+  // Request notification permission on component mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      console.log("[SLA Setup] Checking notification permission...");
+      if (Notification.permission === "default") {
+        console.log("[SLA Setup] Requesting notification permission...");
+        Notification.requestPermission().then((permission) => {
+          console.log(`[SLA Setup] Notification permission: ${permission}`);
+        });
+      } else {
+        console.log(
+          `[SLA Setup] Notification permission already set to: ${Notification.permission}`,
+        );
+      }
+    }
+  }, []);
 
   // Wrapper to mark manual updates and call mutation
   const performSubtaskUpdate = (args: {
@@ -1570,6 +1989,61 @@ export default function ClientBasedFinOpsTaskManager() {
 
     return null;
   };
+
+  // Monitor for new SLA warnings and show system notifications
+  useEffect(() => {
+    if (!finopsTasks || finopsTasks.length === 0) return;
+
+    console.log(
+      `[SLA Monitor] Checking ${finopsTasks.length} tasks for SLA warnings`,
+    );
+
+    finopsTasks.forEach((task) => {
+      if (!task.subtasks) return;
+
+      task.subtasks.forEach((subtask) => {
+        if (subtask.status === "pending" && subtask.start_time) {
+          const slaWarning = getSLAWarning(subtask.start_time, subtask.status);
+
+          // Only notify for warning type (not overdue), and only once per subtask
+          if (slaWarning && slaWarning.type === "warning") {
+            const notificationKey = `${task.id}-${subtask.id}`;
+
+            // Check if we've already notified for this subtask
+            if (!notifiedSLAWarnings.current.has(notificationKey)) {
+              console.log(
+                `[SLA Monitor] New SLA warning detected for: ${subtask.name}`,
+              );
+
+              // Mark as notified to prevent duplicate notifications
+              notifiedSLAWarnings.current.add(notificationKey);
+
+              // Extract minutes remaining from the message (e.g., "SLA Warning - 7 min remaining" -> 7)
+              const minutesMatch =
+                slaWarning.message.match(/(\d+) min remaining/);
+              const minutesRemaining = minutesMatch
+                ? parseInt(minutesMatch[1], 10)
+                : 0;
+
+              console.log(
+                `[SLA Monitor] Triggering notification - Task: ${task.task_name}, Subtask: ${subtask.name}, Minutes: ${minutesRemaining}`,
+              );
+
+              // Show the system notification (include task/subtask ids and client name)
+              showSLANotification(
+                task.task_name,
+                subtask.name,
+                minutesRemaining,
+                task.id,
+                subtask.id,
+                task.client_name,
+              );
+            }
+          }
+        }
+      });
+    });
+  }, [finopsTasks]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -2282,6 +2756,45 @@ export default function ClientBasedFinOpsTaskManager() {
 
           {/* 🎯 Right: Action buttons (normal size, outside the box) */}
           <div className="flex gap-2 ml-4 items-center">
+            {/* Enable Notifications Button */}
+            {typeof window !== "undefined" &&
+              "Notification" in window &&
+              Notification.permission !== "granted" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (Notification.permission === "default") {
+                      const permission = await Notification.requestPermission();
+                      console.log(
+                        `[Notification] Permission requested: ${permission}`,
+                      );
+                      if (permission === "granted") {
+                        alert("Notifications enabled! You'll receive SLA warnings.");
+                        // Initialize audio context on user gesture so sounds can play later
+                        try {
+                          initAudioContext();
+                          // Play a short test sound to unlock audio
+                          playNotificationSound();
+                        } catch (e) {}
+
+                        // Show a test notification
+                        try {
+                          new Notification("Notifications Enabled", {
+                            body: "You will now receive SLA warning notifications",
+                          });
+                        } catch (e) {}
+                      } else {
+                        alert(
+                          "Notification permission denied. Please enable notifications in browser settings.",
+                        );
+                      }
+                    }
+                  }}
+                >
+                  🔔 Enable Notifications
+                </Button>
+              )}
             <Button
               variant="outline"
               onClick={async () => {
@@ -3238,7 +3751,7 @@ export default function ClientBasedFinOpsTaskManager() {
                               subtask.status,
                             );
                             return (
-                              <div key={subtask.id}>
+                              <div key={subtask.id} id={`finops-${task.id}-${subtask.id}`} tabIndex={-1}>
                                 <SortableSubTaskItem
                                   subtask={subtask}
                                   task={task}

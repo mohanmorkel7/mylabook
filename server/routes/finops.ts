@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { pool } from "../database/connection";
+import { pool, queryWithRetry } from "../database/connection";
 import finopsAlertService from "../services/finopsAlertService";
 import finopsScheduler from "../services/finopsScheduler";
 
@@ -1917,7 +1917,7 @@ router.patch(
 
           const st = stRes.rows[0];
 
-          const startedAt = status === "in_progress" ? updateDateObj : null;
+          const startedAt = status === "in_progress" ? updateDateObj : (status === "completed" ? updateDateObj : null);
           const completedAt = status === "completed" ? updateDateObj : null;
 
           const insertRes = await pool.query(
@@ -2041,7 +2041,7 @@ router.patch(
             `
             UPDATE finops_subtasks
             SET status = $1,
-                started_at = CASE WHEN $2 THEN COALESCE(started_at, $4) ELSE started_at END,
+                started_at = CASE WHEN ($2 OR $3) THEN COALESCE(started_at, $4) ELSE started_at END,
                 completed_at = CASE WHEN $3 THEN $4 ELSE NULL END,
                 updated_at = CURRENT_TIMESTAMP
             WHERE task_id = $5 AND id = $6
@@ -2060,6 +2060,37 @@ router.patch(
             "Failed to persist status to finops_subtasks:",
             err?.message || err,
           );
+        }
+
+        // Ensure delayed/overdue timestamp columns exist and persist them
+        try {
+          await pool.query(`
+            ALTER TABLE finops_subtasks
+              ADD COLUMN IF NOT EXISTS delayed_at TIMESTAMP NULL,
+              ADD COLUMN IF NOT EXISTS overdue_at TIMESTAMP NULL
+          `);
+
+          if (status === "delayed") {
+            await pool.query(
+              `UPDATE finops_subtasks SET delayed_at = COALESCE(delayed_at, $1) WHERE task_id = $2 AND id = $3`,
+              [updateDateObj, taskId, subtaskId],
+            );
+            await pool.query(
+              `UPDATE finops_tracker SET delayed_at = COALESCE(delayed_at, $1) WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+              [updateDateObj, updateDate, taskId, subtaskId],
+            );
+          } else if (status === "overdue") {
+            await pool.query(
+              `UPDATE finops_subtasks SET overdue_at = COALESCE(overdue_at, $1) WHERE task_id = $2 AND id = $3`,
+              [updateDateObj, taskId, subtaskId],
+            );
+            await pool.query(
+              `UPDATE finops_tracker SET overdue_at = COALESCE(overdue_at, $1) WHERE run_date = $2::date AND task_id = $3 AND subtask_id = $4`,
+              [updateDateObj, updateDate, taskId, subtaskId],
+            );
+          }
+        } catch (e) {
+          console.warn("Failed to persist delayed/overdue timestamps:", e?.message || e);
         }
 
         // Fetch updated row for logging/notifications
@@ -2165,6 +2196,10 @@ router.patch(
         if (status === "delayed") {
           (subtask as any).delay_reason = delay_reason;
           (subtask as any).delay_notes = delay_notes;
+          (subtask as any).delayed_at = updateDateObj.toISOString();
+        }
+        if (status === "overdue") {
+          (subtask as any).overdue_at = updateDateObj.toISOString();
         }
 
         res.json({
@@ -3297,79 +3332,86 @@ router.get("/activity-log", async (req: Request, res: Response) => {
 // Get all FinOps clients
 router.get("/clients", async (req: Request, res: Response) => {
   try {
-    if (await isDatabaseAvailable()) {
-      const result = await pool.query(`
-        SELECT * FROM finops_clients
-        WHERE deleted_at IS NULL
-        ORDER BY company_name ASC
-      `);
+    // Try to fetch from database with retry logic (skip availability check to avoid pool exhaustion)
+    try {
+      const result = await queryWithRetry(
+        () => pool.query(`
+          SELECT * FROM finops_clients
+          WHERE deleted_at IS NULL
+          ORDER BY company_name ASC
+        `),
+        2, // 2 retries
+      );
       res.json(result.rows);
-    } else {
-      // Use dedicated FinOps clients data instead of mock data
-      const finOpsClients = [
-        {
-          id: 1,
-          company_name: "Global Financial Services",
-          contact_person: "Michael Chen",
-          email: "michael.chen@globalfinance.com",
-          phone: "+1 (555) 201-3456",
-          address: "100 Financial Plaza, New York, NY 10001",
-          notes:
-            "Tier 1 FinOps client - Daily clearing operations, high volume transactions",
-          created_at: "2024-01-01T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 2,
-          company_name: "Enterprise Banking Solutions",
-          contact_person: "Sarah Martinez",
-          email: "sarah.martinez@ebsolutions.com",
-          phone: "+1 (555) 202-7890",
-          address: "250 Banking Center, Chicago, IL 60601",
-          notes:
-            "Tier 1 FinOps client - Weekly reconciliation, multi-currency processing",
-          created_at: "2024-01-10T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 3,
-          company_name: "Pacific Trade Finance",
-          contact_person: "David Kim",
-          email: "david.kim@pacifictrade.com",
-          phone: "+1 (555) 203-4567",
-          address: "500 Trade Plaza, San Francisco, CA 94105",
-          notes:
-            "Tier 2 FinOps client - Bi-weekly operations, trade finance focus",
-          created_at: "2024-01-15T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 4,
-          company_name: "Regional Credit Union",
-          contact_person: "Lisa Thompson",
-          email: "lisa.thompson@regionalcu.com",
-          phone: "+1 (555) 204-8901",
-          address: "75 Community Blvd, Austin, TX 78701",
-          notes: "Tier 2 FinOps client - Monthly processing, community banking",
-          created_at: "2024-01-20T00:00:00Z",
-          created_by: 1,
-        },
-        {
-          id: 5,
-          company_name: "International Payment Systems",
-          contact_person: "Robert Johnson",
-          email: "robert.johnson@intpaysys.com",
-          phone: "+1 (555) 205-2345",
-          address: "300 Payment Way, Miami, FL 33101",
-          notes:
-            "Tier 1 FinOps client - Real-time processing, cross-border payments",
-          created_at: "2024-01-25T00:00:00Z",
-          created_by: 1,
-        },
-      ];
-      console.log("Database unavailable, using dedicated FinOps clients data");
-      res.json(finOpsClients);
+      return;
+    } catch (dbError: any) {
+      console.warn("Database query failed, falling back to mock data:", dbError.message);
     }
+
+    // Fallback to mock data if database is unavailable
+    const finOpsClients = [
+      {
+        id: 1,
+        company_name: "Global Financial Services",
+        contact_person: "Michael Chen",
+        email: "michael.chen@globalfinance.com",
+        phone: "+1 (555) 201-3456",
+        address: "100 Financial Plaza, New York, NY 10001",
+        notes:
+          "Tier 1 FinOps client - Daily clearing operations, high volume transactions",
+        created_at: "2024-01-01T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 2,
+        company_name: "Enterprise Banking Solutions",
+        contact_person: "Sarah Martinez",
+        email: "sarah.martinez@ebsolutions.com",
+        phone: "+1 (555) 202-7890",
+        address: "250 Banking Center, Chicago, IL 60601",
+        notes:
+          "Tier 1 FinOps client - Weekly reconciliation, multi-currency processing",
+        created_at: "2024-01-10T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 3,
+        company_name: "Pacific Trade Finance",
+        contact_person: "David Kim",
+        email: "david.kim@pacifictrade.com",
+        phone: "+1 (555) 203-4567",
+        address: "500 Trade Plaza, San Francisco, CA 94105",
+        notes:
+          "Tier 2 FinOps client - Bi-weekly operations, trade finance focus",
+        created_at: "2024-01-15T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 4,
+        company_name: "Regional Credit Union",
+        contact_person: "Lisa Thompson",
+        email: "lisa.thompson@regionalcu.com",
+        phone: "+1 (555) 204-8901",
+        address: "75 Community Blvd, Austin, TX 78701",
+        notes: "Tier 2 FinOps client - Monthly processing, community banking",
+        created_at: "2024-01-20T00:00:00Z",
+        created_by: 1,
+      },
+      {
+        id: 5,
+        company_name: "International Payment Systems",
+        contact_person: "Robert Johnson",
+        email: "robert.johnson@intpaysys.com",
+        phone: "+1 (555) 205-2345",
+        address: "300 Payment Way, Miami, FL 33101",
+        notes:
+          "Tier 1 FinOps client - Real-time processing, cross-border payments",
+        created_at: "2024-01-25T00:00:00Z",
+        created_by: 1,
+      },
+    ];
+    console.log("Using fallback FinOps clients mock data");
+    res.json(finOpsClients);
   } catch (error) {
     console.error("Error fetching FinOps clients:", error);
     res.status(500).json({ error: "Failed to fetch FinOps clients" });
@@ -3787,21 +3829,6 @@ router.get("/dashboard", async (req: Request, res: Response) => {
   }
 });
 
-// Metrics endpoint
-router.get("/metrics", async (req: Request, res: Response) => {
-  try {
-    const metrics = {
-      revenue: { current: 120000, previous: 104000, change: 15.4 },
-      costs: { current: 45000, previous: 49000, change: -8.2 },
-      profit: { current: 75000, previous: 55000, change: 36.4 },
-      transactions: { current: 1250, previous: 1100, change: 13.6 },
-    };
-    res.json(metrics);
-  } catch (error) {
-    console.error("Error fetching metrics:", error);
-    res.status(500).json({ error: "Failed to fetch metrics" });
-  }
-});
 
 // Transactions endpoint
 router.get("/transactions", async (req: Request, res: Response) => {
@@ -4018,6 +4045,203 @@ router.get("/test", (req: Request, res: Response) => {
       test: "/api/finops/test",
     },
   });
+});
+
+// FinOps metrics endpoint - returns aggregated stats for the selected period (daily|weekly|monthly)
+router.get("/metrics", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    const period = String(req.query.period || "monthly").toLowerCase();
+
+    // Compute IST-aware date range for the period
+    const now = new Date();
+    const istNow = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+    );
+
+    let startDate: string;
+    let endDate: string = istNow.toISOString().slice(0, 10);
+
+    if (period === "daily") {
+      startDate = endDate;
+    } else if (period === "weekly") {
+      // last 7 days including today
+      const start = new Date(istNow.getTime() - 6 * 24 * 60 * 60 * 1000);
+      startDate = start.toISOString().slice(0, 10);
+    } else {
+      // monthly - start at first of current month
+      const start = new Date(
+        istNow.getFullYear(),
+        istNow.getMonth(),
+        1,
+      );
+      startDate = start.toISOString().slice(0, 10);
+    }
+
+    // If DB unavailable, return conservative mock structure
+    if (!(await isDatabaseAvailable())) {
+      console.warn("/finops/metrics - database not available, returning mock metrics");
+      return res.json({
+        period,
+        start_date: startDate,
+        end_date: endDate,
+        total_tasks: 0,
+        total_subtasks: 0,
+        completed_subtasks: 0,
+        active_clients: 0,
+        client_summary: {},
+        user_summary: {},
+        overdue_by_client: {},
+        ontime_by_client: {},
+      });
+    }
+
+    // Helper to run queries with retry
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // Basic counts
+    const totalTasksRes = await q(
+      `SELECT COUNT(*)::int AS cnt FROM finops_tasks WHERE deleted_at IS NULL`,
+    );
+    const totalSubtasksRes = await q(
+      `SELECT COUNT(s.id)::int AS cnt FROM finops_subtasks s JOIN finops_tasks t ON s.task_id = t.id WHERE t.deleted_at IS NULL`,
+    );
+    const completedSubtasksRes = await q(
+      `SELECT COUNT(*)::int AS cnt FROM finops_tracker WHERE status = 'completed' AND run_date BETWEEN $1 AND $2`,
+      [startDate, endDate],
+    );
+    const activeClientsRes = await q(
+      `SELECT COUNT(DISTINCT client_id)::int AS cnt FROM finops_tasks WHERE is_active = true AND deleted_at IS NULL`,
+    );
+
+    // Client-wise summary
+    const clientSummaryRes = await q(
+      `SELECT COALESCE(t.client_name, 'Unknown') AS client_name,
+              COUNT(DISTINCT t.id)::int AS total_tasks,
+              COUNT(ft.subtask_id)::int AS total_subtasks,
+              SUM(CASE WHEN ft.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_subtasks
+        FROM finops_tasks t
+        LEFT JOIN finops_tracker ft ON t.id = ft.task_id AND ft.run_date BETWEEN $1 AND $2
+        WHERE t.deleted_at IS NULL
+        GROUP BY COALESCE(t.client_name, 'Unknown')
+        ORDER BY total_tasks DESC
+      `,
+      [startDate, endDate],
+    );
+
+    // User-wise summary (assigned_to is stored as JSONB array)
+    const userSummaryRes = await q(
+      `SELECT COALESCE(NULLIF(LOWER(TRIM(a.value)), ''), 'unassigned') AS user_name,
+              COUNT(DISTINCT t.id)::int AS total_tasks,
+              COUNT(ft.subtask_id)::int AS total_subtasks,
+              SUM(CASE WHEN ft.status = 'completed' THEN 1 ELSE 0 END)::int AS completed_subtasks
+        FROM finops_tasks t
+        LEFT JOIN LATERAL jsonb_array_elements_text(COALESCE(t.assigned_to, '[]'::jsonb)) AS a(value) ON true
+        LEFT JOIN finops_tracker ft ON t.id = ft.task_id AND ft.run_date BETWEEN $1 AND $2
+        WHERE t.deleted_at IS NULL
+        GROUP BY COALESCE(NULLIF(LOWER(TRIM(a.value)), ''), 'unassigned')
+        ORDER BY total_tasks DESC
+      `,
+      [startDate, endDate],
+    );
+
+    // Overdue / On-time by client based on completed_at vs scheduled + sla
+    const overdueRes = await q(
+      `SELECT COALESCE(t.client_name, 'Unknown') AS client_name,
+              COUNT(*)::int AS overdue_count
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON ft.task_id = t.id
+        WHERE ft.run_date BETWEEN $1 AND $2
+          AND ft.status = 'completed'
+          AND ft.completed_at IS NOT NULL
+          AND ft.completed_at > (
+            COALESCE(ft.subtask_scheduled_date, ft.run_date)::timestamp
+            + COALESCE(ft.sla_hours, 0) * INTERVAL '1 hour'
+            + COALESCE(ft.sla_minutes, 0) * INTERVAL '1 minute'
+          )
+        GROUP BY COALESCE(t.client_name, 'Unknown')
+        ORDER BY overdue_count DESC
+      `,
+      [startDate, endDate],
+    );
+
+    const ontimeRes = await q(
+      `SELECT COALESCE(t.client_name, 'Unknown') AS client_name,
+              COUNT(*)::int AS ontime_count
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON ft.task_id = t.id
+        WHERE ft.run_date BETWEEN $1 AND $2
+          AND ft.status = 'completed'
+          AND ft.completed_at IS NOT NULL
+          AND ft.completed_at <= (
+            COALESCE(ft.subtask_scheduled_date, ft.run_date)::timestamp
+            + COALESCE(ft.sla_hours, 0) * INTERVAL '1 hour'
+            + COALESCE(ft.sla_minutes, 0) * INTERVAL '1 minute'
+          )
+        GROUP BY COALESCE(t.client_name, 'Unknown')
+        ORDER BY ontime_count DESC
+      `,
+      [startDate, endDate],
+    );
+
+    // Transform results into convenient objects
+    const clientSummary: any = {};
+    for (const r of clientSummaryRes.rows) {
+      clientSummary[r.client_name] = {
+        total_tasks: Number(r.total_tasks || 0),
+        total_subtasks: Number(r.total_subtasks || 0),
+        completed_subtasks: Number(r.completed_subtasks || 0),
+      };
+    }
+
+    const userSummary: any = {};
+    for (const r of userSummaryRes.rows) {
+      const name = r.user_name || 'unassigned';
+      userSummary[name] = {
+        total_tasks: Number(r.total_tasks || 0),
+        total_subtasks: Number(r.total_subtasks || 0),
+        completed_subtasks: Number(r.completed_subtasks || 0),
+      };
+    }
+
+    const overdueByClient: any = {};
+    for (const r of overdueRes.rows) {
+      overdueByClient[r.client_name] = Number(r.overdue_count || 0);
+    }
+
+    const ontimeByClient: any = {};
+    for (const r of ontimeRes.rows) {
+      ontimeByClient[r.client_name] = Number(r.ontime_count || 0);
+    }
+
+    res.json({
+      period,
+      start_date: startDate,
+      end_date: endDate,
+      total_tasks: Number(totalTasksRes.rows[0].cnt || 0),
+      total_subtasks: Number(totalSubtasksRes.rows[0].cnt || 0),
+      completed_subtasks: Number(completedSubtasksRes.rows[0].cnt || 0),
+      active_clients: Number(activeClientsRes.rows[0].cnt || 0),
+      client_summary: clientSummary,
+      user_summary: userSummary,
+      overdue_by_client: overdueByClient,
+      ontime_by_client: ontimeByClient,
+    });
+  } catch (error: any) {
+    console.error("/finops/metrics error:", error);
+    // Fallback to empty metrics to avoid crashing UI
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Get all external alert next_call timestamps

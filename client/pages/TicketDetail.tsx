@@ -43,6 +43,7 @@ import {
 import { ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
+import { formatToISTDateTime } from "@/lib/dateUtils";
 
 // Inline styles for email content rendering
 const emailBodyStyles = `
@@ -268,7 +269,7 @@ export default function TicketDetailPage() {
         watcher_user_ids: t.watchers || [],
       });
       const c = await apiClient.getTicketComments(parseInt(id));
-      setComments(c);
+      setComments(Array.isArray(c) ? c : []);
     } catch (e) {
       console.error(e);
     }
@@ -418,11 +419,9 @@ export default function TicketDetailPage() {
                 {ticket.priority.name}
               </Badge>
             )}
-            <span>Created {new Date(ticket.created_at).toLocaleString()}</span>
+            <span>Created {formatToISTDateTime(ticket.created_at)}</span>
             {ticket.updated_at && (
-              <span>
-                • Updated {new Date(ticket.updated_at).toLocaleString()}
-              </span>
+              <span>• Updated {formatToISTDateTime(ticket.updated_at)}</span>
             )}
           </div>
         </div>
@@ -625,13 +624,13 @@ export default function TicketDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {comments.map((c) => (
+                {(comments || []).map((c) => (
                   <div key={c.id} className="p-4 border rounded-lg bg-white">
                     <div className="flex items-center justify-between text-sm text-gray-600">
                       <div className="font-medium">
                         {c.user?.name || "User"}
                       </div>
-                      <div>{new Date(c.created_at).toLocaleString()}</div>
+                      <div>{formatToISTDateTime(c.created_at)}</div>
                     </div>
                     <div
                       className="mt-2 text-gray-900"
@@ -1007,7 +1006,7 @@ export default function TicketDetailPage() {
                 <div>
                   <div className="text-gray-500">Created</div>
                   <div className="font-medium">
-                    {new Date(ticket.created_at).toLocaleString()}
+                    {formatToISTDateTime(ticket.created_at)}
                   </div>
                 </div>
 
@@ -1015,7 +1014,7 @@ export default function TicketDetailPage() {
                   <div>
                     <div className="text-gray-500">Last Updated</div>
                     <div className="font-medium">
-                      {new Date(ticket.updated_at).toLocaleString()}
+                      {formatToISTDateTime(ticket.updated_at)}
                     </div>
                   </div>
                 )}

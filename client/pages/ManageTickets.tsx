@@ -557,6 +557,8 @@ export default function ManageTickets() {
   const fetchTickets = async (page: number = 1) => {
     try {
       setIsLoading(true);
+      // Clear any server-provided overdue counts while loading fresh data to avoid stale summaries
+      setServerOverdueCounts(null);
 
       // Build server-side filters
       const serverFilters: any = {};
@@ -836,15 +838,9 @@ export default function ManageTickets() {
       ).length;
       setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
       // Use filtered count if any client-side filters are active, otherwise use server total
-      const hasClientSideFilters = Boolean(
-        filters.searchText ||
-          filters.priority ||
-          filters.status ||
-          filters.assignedTo ||
-          filters.source ||
-          filters.dateFrom ||
-          filters.dateTo,
-      );
+      // Note: dateFrom/dateTo, searchText, priority, status, assignedTo are all SERVER-SIDE filters
+      // Only 'source' is client-side (based on description analysis)
+      const hasClientSideFilters = Boolean(filters.source);
       // Derive total tickets from multiple possible response shapes
       let serverTotal = undefined as number | undefined;
       if (data != null) {
@@ -888,6 +884,15 @@ export default function ManageTickets() {
       const finalTotal = hasClientSideFilters
         ? filtered.length
         : (serverTotal ?? normalized.length);
+
+      console.log("[ManageTickets] Setting total:", {
+        hasClientSideFilters,
+        serverTotal,
+        normalizedLength: normalized.length,
+        finalTotal,
+        dataTotal: data?.total,
+        raw_data: data,
+      });
 
       setTotalTickets(finalTotal);
 
@@ -1750,7 +1755,9 @@ export default function ManageTickets() {
           ? clientNowMs - serverTimeOffsetRef.current
           : clientNowMs;
 
-      // If server provided a precomputed remaining ms, adjust it based on elapsed time since that computation
+      // If server provided a precomputed remaining ms, prefer using it and adjust
+      // for elapsed time since server computed it. This uses the server's authoritative
+      // SLA calculation and avoids mismatches due to server/client timezone handling.
       if (
         ticket.sla_remaining_ms !== undefined &&
         ticket.sla_remaining_ms !== null
@@ -1762,12 +1769,39 @@ export default function ManageTickets() {
         return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
       }
 
-      // If SLA timestamp is available, compute remaining relative to serverNowMs
+      // Fallback to using sla_time timestamp if available. Interpret the incoming
+      // sla_time as IST wall time when it lacks an explicit timezone (DB TIMESTAMP without tz).
       if (ticket.sla_time) {
-        const parsed = parseTimestampAsUTC(ticket.sla_time);
-        const ts = parsed ? parsed.getTime() : NaN;
-        if (isNaN(ts)) return null;
-        return ts - serverNowMs;
+        try {
+          const s = String(ticket.sla_time || "").trim();
+          // If timestamp contains timezone info or a trailing 'Z', treat it as UTC
+          if (/[Tt].*Z$/.test(s) || /[+\-]\d{2}:?\d{2}$/.test(s)) {
+            const parsed = new Date(s);
+            if (isNaN(parsed.getTime())) return null;
+            return parsed.getTime() - serverNowMs;
+          }
+
+          // Otherwise treat as IST wall time (YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS)
+          const tsPart = s.includes("T")
+            ? s.split("T")[0] + "T" + s.split("T")[1]
+            : s;
+          const match = tsPart.match(
+            /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/,
+          );
+          if (!match) return null;
+          const y = Number(match[1]);
+          const m = Number(match[2]);
+          const d = Number(match[3]);
+          const hh = Number(match[4] || 0);
+          const mm = Number(match[5] || 0);
+          const ss = Number(match[6] || 0);
+          const IST_OFFSET_MS = 5.5 * 3600 * 1000;
+          // Compute UTC epoch for the IST wall-time by subtracting IST offset
+          const dueUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss) - IST_OFFSET_MS;
+          return dueUtcMs - serverNowMs;
+        } catch (e) {
+          return null;
+        }
       }
 
       // Fallback mapping (use priority IDs that the UI uses)
@@ -1936,10 +1970,28 @@ export default function ManageTickets() {
       );
       // Recompute activeOpen from openToShow minus overdue
       overdueOpenToShow = overdueOpenFromServer;
+      // Clamp overdue to not exceed openToShow
+      if (overdueOpenToShow > openToShow) overdueOpenToShow = openToShow;
       activeOpenToShow = Math.max(0, openToShow - overdueOpenToShow);
       // Recompute closed on-time
       onTimeClosedToShow = Math.max(0, displayedClosed - overdueClosedToShow);
     }
+  }
+
+  // Ensure breakdown doesn't show non-zero values when openToShow is zero
+  if (!openToShow || Number(openToShow) <= 0) {
+    overdueOpenToShow = 0;
+    activeOpenToShow = 0;
+  } else {
+    // Also defensively clamp overdue/active to not exceed openToShow
+    overdueOpenToShow = Math.max(
+      0,
+      Math.min(Number(overdueOpenToShow || 0), Number(openToShow)),
+    );
+    activeOpenToShow = Math.max(
+      0,
+      Number(openToShow) - Number(overdueOpenToShow || 0),
+    );
   }
 
   return (
@@ -2127,10 +2179,6 @@ export default function ManageTickets() {
               {openToShow}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
-            <div className="mt-2 text-xs text-gray-600 flex gap-3">
-              <span className="text-red-600">Overdue: {overdueOpenToShow}</span>
-              <span className="text-green-600">Active: {activeOpenToShow}</span>
-            </div>
           </CardContent>
         </Card>
 
@@ -2325,14 +2373,14 @@ export default function ManageTickets() {
       <div>
         {activeTab === "all" && (
           <div>
-            {console.log(
+            {/* {console.log(
               "[ManageTickets RENDER] activeTab=all, isLoading=" +
                 isLoading +
                 ", paginatedTickets.length=" +
                 paginatedTickets.length +
                 ", filteredTickets.length=" +
                 filteredTickets.length,
-            ) || null}
+            ) || null} */}
             {isLoading ? (
               <div className="text-center py-8">Loading tickets...</div>
             ) : paginatedTickets.length === 0 ? (
@@ -2343,7 +2391,11 @@ export default function ManageTickets() {
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);
                   const slaText =
-                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                    slaMs === null
+                      ? "No SLA"
+                      : slaMs <= 0
+                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                        : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -2424,6 +2476,11 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Show Slack badge if description starts with "Slack from" */}
+                          {t.description && String(t.description).trim().toLowerCase().startsWith("slack from") && (
+                            <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
+                          )}
 
                           {/* Render tag badges (e.g., Slack) when present */}
                           {(() => {
@@ -2631,7 +2688,11 @@ export default function ManageTickets() {
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);
                   const slaText =
-                    slaMs === null ? "No SLA" : formatRemaining(slaMs);
+                    slaMs === null
+                      ? "No SLA"
+                      : slaMs <= 0
+                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                        : formatRemaining(slaMs);
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -2713,6 +2774,11 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Show Slack badge if description starts with "Slack from" */}
+                          {t.description && String(t.description).trim().toLowerCase().startsWith("slack from") && (
+                            <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
+                          )}
 
                           {/* Render tag badges (e.g., Slack) when present */}
                           {(() => {

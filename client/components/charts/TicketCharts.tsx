@@ -110,6 +110,16 @@ export default function TicketCharts({
             : range === "all"
               ? undefined
               : computedTo;
+        console.log("[TicketCharts] Date filter logic:", {
+          dateFrom,
+          dateTo,
+          range,
+          "dateFrom && String(dateFrom).trim()":
+            dateFrom && String(dateFrom).trim(),
+          "dateTo && String(dateTo).trim()": dateTo && String(dateTo).trim(),
+          useFrom,
+          useTo,
+        });
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
         const query = params.toString() ? `?${params.toString()}` : "";
@@ -128,11 +138,54 @@ export default function TicketCharts({
 
         // Fetch user-status summary in parallel
         try {
+          console.log(
+            "[TicketCharts] Fetching user-status from:",
+            `/tickets/summary/user-status${query}`,
+          );
           const resp2 = await api.get(`/tickets/summary/user-status${query}`);
+          console.log("[TicketCharts] user-status raw response:", resp2);
           const p2 = resp2?.data ?? resp2;
-          if (mounted) setUserStatus(p2?.users || []);
+          console.log("[TicketCharts] user-status p2:", p2);
+          // p2 could be {data: [...]} or [...] depending on how api client unwraps response
+          const rawData = Array.isArray(p2) ? p2 : p2?.data || [];
+          console.log(
+            "[TicketCharts] user-status rawData:",
+            rawData,
+            "length:",
+            rawData.length,
+          );
+
+          // Transform flat data to grouped format: { user_id, name, counts: { statusName: count } }
+          const grouped: Record<
+            number,
+            { user_id: number; name: string; counts: Record<string, number> }
+          > = {};
+          rawData.forEach((row: any) => {
+            const userId = row.user_id || 0;
+            if (!grouped[userId]) {
+              grouped[userId] = {
+                user_id: userId,
+                name: row.user_name || "Unknown",
+                counts: {},
+              };
+            }
+            const statusName = row.status_name || "Unknown";
+            grouped[userId].counts[statusName] = row.count || 0;
+          });
+
+          const transformedData = Object.values(grouped);
+          console.log(
+            "[TicketCharts] user-status transformed data:",
+            transformedData,
+            "length:",
+            transformedData.length,
+          );
+          if (mounted) setUserStatus(transformedData);
         } catch (e2) {
-          console.warn("TicketCharts: failed to fetch user-status summary", e2);
+          console.error(
+            "TicketCharts: failed to fetch user-status summary",
+            e2,
+          );
         }
 
         // Fetch tag-status summary (fallback to client-side classification if server data is unreliable)

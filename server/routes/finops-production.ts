@@ -62,12 +62,21 @@ router.get("/external-alerts", async (req: Request, res: Response) => {
   }
 });
 
-// Production database availability check - fail fast if no database
+// Production database availability check - with timeout
 async function requireDatabase() {
   try {
-    await pool.query("SELECT 1");
+    // Set 5 second timeout for database connectivity check (fail fast if database is unavailable)
+    await Promise.race([
+      pool.query("SELECT 1"),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Database connectivity check timeout (5s)")),
+          5000,
+        ),
+      ),
+    ]);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Database connection failed: ${error.message}`);
   }
 }
@@ -424,10 +433,33 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
       `;
 
-      result =
-        normalizedUser && !callerIsManager && !callerIsAdmin
-          ? await pool.query(trackerQuery, [dateParam, normalizedUser])
-          : await pool.query(trackerQuery, [dateParam]);
+      try {
+        result =
+          normalizedUser && !callerIsManager && !callerIsAdmin
+            ? await pool.query(trackerQuery, [dateParam, normalizedUser])
+            : await pool.query(trackerQuery, [dateParam]);
+      } catch (trackerError: any) {
+        // If the complex tracker query times out, fall back to simple subtasks only
+        if (
+          trackerError.message?.includes("timeout") ||
+          trackerError.code === "57014"
+        ) {
+          console.warn("Tracker query timed out, falling back to simple query");
+          const simpleFallback = `
+            SELECT t.* , '[]'::json as subtasks
+            FROM finops_tasks t
+            WHERE t.deleted_at IS NULL
+            ${filterDateClause}
+            ORDER BY t.task_name
+          `;
+          result =
+            normalizedUser && !callerIsManager && !callerIsAdmin
+              ? await pool.query(simpleFallback, [dateParam, normalizedUser])
+              : await pool.query(simpleFallback, [dateParam]);
+        } else {
+          throw trackerError;
+        }
+      }
     } else {
       // Today's view
       const trackerTodayQuery = `
@@ -478,10 +510,33 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
       `;
 
-      result =
-        normalizedUser && !callerIsManager && !callerIsAdmin
-          ? await pool.query(trackerTodayQuery, [normalizedUser])
-          : await pool.query(trackerTodayQuery);
+      try {
+        result =
+          normalizedUser && !callerIsManager && !callerIsAdmin
+            ? await pool.query(trackerTodayQuery, [normalizedUser])
+            : await pool.query(trackerTodayQuery);
+      } catch (todayError: any) {
+        // If the complex tracker query times out, fall back to simple subtasks only
+        if (
+          todayError.message?.includes("timeout") ||
+          todayError.code === "57014"
+        ) {
+          console.warn("Today's query timed out, falling back to simple query");
+          const simpleTodayFallback = `
+            SELECT t.*, '[]'::json as subtasks
+            FROM finops_tasks t
+            WHERE t.deleted_at IS NULL
+            ${filterTodayClause}
+            ORDER BY t.task_name
+          `;
+          result =
+            normalizedUser && !callerIsManager && !callerIsAdmin
+              ? await pool.query(simpleTodayFallback, [normalizedUser])
+              : await pool.query(simpleTodayFallback);
+        } else {
+          throw todayError;
+        }
+      }
     }
 
     const tasks = result.rows.map((row) => ({
@@ -870,6 +925,61 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
         );
       }
 
+      // Schedule 15-minute delayed approval alert when status changes to completed
+      if (status === "completed") {
+        try {
+          console.log(
+            `[Subtask Update] Status changed to completed for task_id=${updated.task_id}, subtask_id=${subtaskId}`,
+          );
+
+          // Ensure finops_external_alerts table exists
+          await ensureExternalAlertsSchema();
+
+          // Fetch task metadata for alert title
+          const meta = await client.query(
+            `SELECT task_name, client_name FROM finops_tasks WHERE id = $1 LIMIT 1`,
+            [updated.task_id],
+          );
+          const row = meta.rows[0] || {};
+          const taskName = row.task_name || "Unknown Task";
+          const clientName = row.client_name || "Unknown Client";
+          const subtaskName = updated.subtask_name || "Unknown Subtask";
+          const title = `You need to approve the subtask "${subtaskName}" under the task "${taskName}" for the client "${clientName}".`;
+
+          console.log(
+            `[Subtask Update] Scheduling pending approval alert: "${title}"`,
+          );
+          console.log(
+            `[Subtask Update] Alert will be sent 15 minutes after completion if not approved`,
+          );
+          console.log(
+            `[Subtask Update] Additional checks run every 1 minute via finops-approval-check cron`,
+          );
+
+          // Schedule alert for 15 minutes from now (only to reporting and escalation managers)
+          // alert_group = 'pending_approval_reporting' ensures only reporting managers are notified
+          // NOTE: A cron job also runs every 1 minute to check for unapproved completed subtasks
+          const alertResult = await client.query(
+            `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+           VALUES ($1, $2, 'pending_approval_reporting', -1, $3, NOW() + INTERVAL '15 minutes')
+           ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO UPDATE
+           SET title = EXCLUDED.title, next_call_at = EXCLUDED.next_call_at
+           RETURNING id, next_call_at`,
+            [updated.task_id, subtaskId, title],
+          );
+
+          console.log(
+            `[Subtask Update] Alert scheduled successfully for ${alertResult.rows[0]?.next_call_at}`,
+          );
+        } catch (alertError) {
+          console.error(
+            `[Subtask Update] Failed to schedule approval alert:`,
+            alertError,
+          );
+          // Don't fail the entire transaction if alert scheduling fails
+        }
+      }
+
       await client.query("COMMIT");
       res.json(updated);
     } catch (error) {
@@ -997,12 +1107,32 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
       .map((n) => n.toLowerCase().replace(/\s+/g, " ").trim())
       .includes(normalizedApprover);
 
+    console.log(`[Approve] Checking authorization for "${approver_name}"`);
+    console.log(`[Approve] Is Admin: ${isAdmin}`);
+    console.log(`[Approve] Is Reporter: ${isReporter}`);
+    console.log(`[Approve] Is Escalator: ${isEscalator}`);
+    console.log(`[Approve] Reporting managers: ${JSON.stringify(reporters)}`);
+    console.log(`[Approve] Escalation managers: ${JSON.stringify(escalators)}`);
+
     if (!isAdmin && !isReporter && !isEscalator) {
+      console.warn(
+        `[Approve] UNAUTHORIZED: ${approver_name} cannot approve. Not admin/reporter/escalator`,
+      );
       return res.status(403).json({
         error:
           "Only admin, reporting managers, or escalation managers can approve",
+        details: {
+          approver_name,
+          isAdmin,
+          isReporter,
+          isEscalator,
+          reporters,
+          escalators,
+        },
       });
     }
+
+    console.log(`[Approve] AUTHORIZED: ${approver_name} can approve`);
 
     // Ensure finops_approvals table exists and has correct schema (outside transaction)
     try {
@@ -1056,9 +1186,14 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
       }
 
       // Insert approval record
-      await client.query(
+      console.log(
+        `[Approve] Inserting approval: task_id=${row.task_id}, subtask_id=${subtaskId}, tracker_id=${tracker_id}, approved_by=${approver_name}`,
+      );
+
+      const approvalRes = await client.query(
         `INSERT INTO finops_approvals (task_id, subtask_id, tracker_id, approved_by, note)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, approved_at`,
         [
           row.task_id,
           subtaskId,
@@ -1068,15 +1203,36 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
         ],
       );
 
+      console.log(`[Approve] Approval record created:`, approvalRes.rows[0]);
+
       // Update finops_tracker to set approved_by/approved_at for today's tracker row
       try {
-        await client.query(
-          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`,
+        const trackerUpdateRes = await client.query(
+          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+           RETURNING id, approved_by, approved_at`,
           [approver_name, row.task_id, subtaskId],
+        );
+        console.log(`[Approve] Tracker updated:`, trackerUpdateRes.rows[0]);
+      } catch (e) {
+        console.warn(
+          "[Approve] Failed to update finops_tracker approval fields:",
+          (e as Error).message,
+        );
+      }
+
+      // Clean up pending approval alerts for this subtask
+      try {
+        const deleteRes = await client.query(
+          `DELETE FROM finops_external_alerts WHERE task_id = $1 AND subtask_id = $2 AND alert_group = 'pending_approval_reporting'
+           RETURNING id`,
+          [row.task_id, subtaskId],
+        );
+        console.log(
+          `[Approve] Cleaned up ${deleteRes.rows.length} pending approval alerts`,
         );
       } catch (e) {
         console.warn(
-          "Failed to update finops_tracker approval fields:",
+          "[Approve] Failed to clean up alerts:",
           (e as Error).message,
         );
       }
@@ -1808,5 +1964,807 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
     });
   }
 });
+
+// Manual trigger for approval check (for testing)
+router.post("/trigger-approval-check", async (req: Request, res: Response) => {
+  try {
+    console.log("[Manual Trigger] Approval check triggered manually");
+
+    // Import and call the approval check handler
+    const { handler } = await import(
+      "../../netlify/functions/finops-approval-check"
+    );
+    const result = await handler({} as any, {} as any);
+
+    console.log("[Manual Trigger] Approval check completed:", result);
+
+    if (result.statusCode === 200) {
+      const body = JSON.parse(result.body);
+      res.json(body);
+    } else {
+      res.status(result.statusCode).json(JSON.parse(result.body));
+    }
+  } catch (error: any) {
+    console.error("[Manual Trigger] Error:", error);
+    res.status(500).json({
+      error: "Failed to trigger approval check",
+      message: error.message,
+    });
+  }
+});
+
+// Debug: Manually send pending approval alerts that are ready
+router.post(
+  "/debug/send-pending-alerts",
+  async (req: Request, res: Response) => {
+    try {
+      await requireDatabase();
+
+      console.log("[Debug] Manually sending pending approval alerts");
+
+      // Get all pending approval alerts that are ready to send
+      const alertsQuery = `
+        SELECT id, task_id, subtask_id, title, next_call_at
+        FROM finops_external_alerts
+        WHERE alert_group = 'pending_approval_reporting'
+          AND next_call_at <= NOW()
+        LIMIT 20
+      `;
+
+      const alertsRes = await pool.query(alertsQuery);
+
+      console.log(
+        `[Debug] Found ${alertsRes.rows.length} alerts ready to send`,
+      );
+
+      let sent = 0;
+      const results = [];
+
+      const parseManagers = (val: any): string[] => {
+        if (!val) return [];
+        if (Array.isArray(val))
+          return val
+            .map(String)
+            .map((s) => s.trim())
+            .filter(Boolean);
+        if (typeof val === "string") {
+          let s = val.trim();
+          if (s.startsWith("{") && s.endsWith("}")) {
+            s = s.slice(1, -1);
+            return s
+              .split(",")
+              .map((x) => x.trim())
+              .map((x) => x.replace(/^"|"$/g, ""))
+              .filter(Boolean);
+          }
+          try {
+            const p = JSON.parse(s);
+            if (Array.isArray(p))
+              return p
+                .map(String)
+                .map((x) => x.trim())
+                .filter(Boolean);
+          } catch {}
+          return s
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
+        }
+        return [];
+      };
+
+      for (const alert of alertsRes.rows) {
+        try {
+          // Get managers for this task
+          const taskRes = await pool.query(
+            `SELECT reporting_managers, escalation_managers FROM finops_tasks WHERE id = $1`,
+            [alert.task_id],
+          );
+
+          const task = taskRes.rows[0] || {};
+          const managers = Array.from(
+            new Set([
+              ...parseManagers(task.reporting_managers),
+              ...parseManagers(task.escalation_managers),
+            ]),
+          );
+
+          // Resolve user IDs
+          const usersRes = await pool.query(
+            `SELECT azure_object_id FROM users WHERE LOWER(CONCAT(first_name, ' ', last_name)) = ANY($1)`,
+            [managers.map((m) => m.toLowerCase())],
+          );
+
+          const userIds = usersRes.rows
+            .map((u: any) => u.azure_object_id)
+            .filter((id: any) => !!id);
+
+          if (userIds.length === 0) {
+            results.push({
+              alert_id: alert.id,
+              status: "skipped",
+              reason: "no_users_resolved",
+            });
+            continue;
+          }
+
+          console.log(
+            `[Debug] Sending alert ${alert.id} to ${userIds.length} users`,
+          );
+
+          // Send alert
+          const response = await fetch(
+            "https://pulsealerts.mylapay.com/direct-call",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                receiver: "CRM_Switch",
+                title: alert.title,
+                user_ids: userIds,
+              }),
+            },
+          );
+
+          console.log(
+            `[Debug] Alert ${alert.id} - Response status: ${response.status}`,
+          );
+
+          if (response.ok) {
+            // Reschedule for 15 minutes later
+            await pool.query(
+              `UPDATE finops_external_alerts SET next_call_at = NOW() + INTERVAL '15 minutes' WHERE id = $1`,
+              [alert.id],
+            );
+
+            sent++;
+            results.push({
+              alert_id: alert.id,
+              subtask_id: alert.subtask_id,
+              status: "sent",
+              user_count: userIds.length,
+            });
+          } else {
+            results.push({
+              alert_id: alert.id,
+              status: "failed",
+              response_status: response.status,
+            });
+          }
+        } catch (e: any) {
+          results.push({
+            alert_id: alert.id,
+            status: "error",
+            error: e.message,
+          });
+        }
+      }
+
+      res.json({
+        total_alerts_ready: alertsRes.rows.length,
+        alerts_sent: sent,
+        results,
+      });
+    } catch (error: any) {
+      console.error("[Debug] Error sending alerts:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
+// Debug: Comprehensive alert troubleshooting endpoint
+router.get("/debug/alert-troubleshoot", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+
+    console.log("[Debug] Starting alert troubleshooting");
+
+    // 1. Check completed subtasks that should trigger alerts
+    const completedQuery = `
+        SELECT
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.completed_at,
+          ft.approved_at,
+          EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer as seconds_since_completion,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers,
+          t.is_active,
+          t.deleted_at
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND ft.completed_at < NOW() - INTERVAL '15 minutes'
+          AND ft.approved_at IS NULL
+        ORDER BY ft.completed_at ASC
+        LIMIT 10
+      `;
+
+    const completedRes = await pool.query(completedQuery);
+
+    // 2. Check all pending approval alerts
+    const alertsQuery = `
+        SELECT
+          id,
+          task_id,
+          subtask_id,
+          alert_group,
+          title,
+          next_call_at,
+          created_at,
+          CASE
+            WHEN next_call_at <= NOW() THEN 'READY_TO_SEND'
+            ELSE 'WAITING'
+          END as status
+        FROM finops_external_alerts
+        WHERE alert_group = 'pending_approval_reporting'
+        ORDER BY next_call_at ASC
+        LIMIT 20
+      `;
+
+    const alertsRes = await pool.query(alertsQuery);
+
+    // 3. Check if pulse alerts are enabled
+    const settingsRes = await pool.query(
+      `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+    );
+    const pulseEnabled = settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
+
+    // 4. Parse managers and resolve user IDs for first few completed subtasks
+    const parseManagers = (val: any): string[] => {
+      if (!val) return [];
+      if (Array.isArray(val))
+        return val
+          .map(String)
+          .map((s) => s.trim())
+          .filter(Boolean);
+      if (typeof val === "string") {
+        let s = val.trim();
+        if (s.startsWith("{") && s.endsWith("}")) {
+          s = s.slice(1, -1);
+          return s
+            .split(",")
+            .map((x) => x.trim())
+            .map((x) => x.replace(/^"|"$/g, ""))
+            .filter(Boolean);
+        }
+        try {
+          const p = JSON.parse(s);
+          if (Array.isArray(p))
+            return p
+              .map(String)
+              .map((x) => x.trim())
+              .filter(Boolean);
+        } catch {}
+        return s
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean);
+      }
+      return [];
+    };
+
+    const managerResololution: any[] = [];
+    for (const row of completedRes.rows.slice(0, 3)) {
+      const reporting = parseManagers(row.reporting_managers);
+      const escalation = parseManagers(row.escalation_managers);
+      const allManagers = Array.from(new Set([...reporting, ...escalation]));
+
+      const usersRes = await pool.query(
+        `SELECT azure_object_id, CONCAT(first_name, ' ', last_name) as full_name FROM users WHERE LOWER(CONCAT(first_name, ' ', last_name)) = ANY($1)`,
+        [allManagers.map((n) => n.toLowerCase())],
+      );
+
+      managerResololution.push({
+        subtask_id: row.subtask_id,
+        subtask_name: row.subtask_name,
+        reporting_managers: reporting,
+        escalation_managers: escalation,
+        resolved_users: usersRes.rows,
+        resolved_user_count: usersRes.rows.length,
+      });
+    }
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      pulse_alerts_enabled: pulseEnabled,
+      completed_subtasks_eligible: completedRes.rows.length,
+      pending_approval_alerts: alertsRes.rows.length,
+      alerts_ready_to_send: alertsRes.rows.filter(
+        (r: any) => r.status === "READY_TO_SEND",
+      ).length,
+      completed_subtasks: completedRes.rows.map((row: any) => ({
+        subtask_id: row.subtask_id,
+        subtask_name: row.subtask_name,
+        task_name: row.task_name,
+        client_name: row.client_name,
+        completed_at: row.completed_at,
+        seconds_since_completion: row.seconds_since_completion,
+        minutes_since_completion: Math.round(row.seconds_since_completion / 60),
+        approved: !!row.approved_at,
+        is_active: row.is_active,
+        deleted: !!row.deleted_at,
+      })),
+      pending_alerts: alertsRes.rows,
+      manager_resolution_sample: managerResololution,
+      summary: {
+        total_eligible_subtasks: completedRes.rows.length,
+        total_pending_alerts: alertsRes.rows.length,
+        alerts_ready_now: alertsRes.rows.filter(
+          (r: any) => r.status === "READY_TO_SEND",
+        ).length,
+        pulse_enabled: pulseEnabled,
+      },
+    });
+  } catch (error: any) {
+    console.error("[Debug] Troubleshooting error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Public endpoint to check today's pending approvals (no auth required)
+router.get(
+  "/public/today-pending-approvals",
+  async (req: Request, res: Response) => {
+    try {
+      await requireDatabase();
+
+      console.log("[Public] Checking today's pending approvals");
+
+      const query = `
+        SELECT
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.status,
+          ft.completed_at,
+          ft.approved_at,
+          ft.approved_by,
+          EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer as seconds_since_completion,
+          ROUND((EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::numeric / 60), 1) as minutes_since_completion,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND ft.approved_at IS NULL
+          AND t.is_active = true
+          AND t.deleted_at IS NULL
+        ORDER BY ft.completed_at ASC
+      `;
+
+      const result = await pool.query(query);
+
+      console.log(
+        `[Public] Found ${result.rows.length} subtasks pending approval today`,
+      );
+
+      res.json({
+        timestamp: new Date().toISOString(),
+        today: new Date().toISOString().split("T")[0],
+        pending_approvals_count: result.rows.length,
+        pending_approvals: result.rows.map((row) => ({
+          subtask_id: row.subtask_id,
+          subtask_name: row.subtask_name,
+          task_name: row.task_name,
+          client_name: row.client_name,
+          completed_at: row.completed_at,
+          minutes_since_completion: row.minutes_since_completion,
+          seconds_since_completion: row.seconds_since_completion,
+          ready_for_alert: row.seconds_since_completion > 900 ? "YES" : "NO",
+          waiting_for_alert:
+            row.seconds_since_completion > 900
+              ? null
+              : 900 - row.seconds_since_completion + " seconds",
+          reporting_managers: row.reporting_managers,
+          escalation_managers: row.escalation_managers,
+        })),
+      });
+    } catch (error: any) {
+      console.error("[Public] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
+// Get today's pending approvals only (completed but not approved)
+router.get(
+  "/debug/today-pending-approvals",
+  async (req: Request, res: Response) => {
+    try {
+      await requireDatabase();
+
+      console.log("[Debug] Checking today's pending approvals");
+
+      const query = `
+        SELECT
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.status,
+          ft.completed_at,
+          ft.approved_at,
+          ft.approved_by,
+          EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer as seconds_since_completion,
+          ROUND((EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::numeric / 60), 1) as minutes_since_completion,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND ft.approved_at IS NULL
+          AND t.is_active = true
+          AND t.deleted_at IS NULL
+        ORDER BY ft.completed_at ASC
+      `;
+
+      const result = await pool.query(query);
+
+      console.log(
+        `[Debug] Found ${result.rows.length} subtasks pending approval today`,
+      );
+
+      res.json({
+        timestamp: new Date().toISOString(),
+        today: new Date().toISOString().split("T")[0],
+        pending_approvals_count: result.rows.length,
+        pending_approvals: result.rows.map((row) => ({
+          subtask_id: row.subtask_id,
+          subtask_name: row.subtask_name,
+          task_name: row.task_name,
+          client_name: row.client_name,
+          completed_at: row.completed_at,
+          minutes_since_completion: row.minutes_since_completion,
+          seconds_since_completion: row.seconds_since_completion,
+          ready_for_alert: row.seconds_since_completion > 900 ? "YES" : "NO",
+          waiting_for_alert:
+            row.seconds_since_completion > 900
+              ? null
+              : 900 - row.seconds_since_completion + " seconds",
+          reporting_managers: row.reporting_managers,
+          escalation_managers: row.escalation_managers,
+        })),
+      });
+    } catch (error: any) {
+      console.error("[Debug] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
+// Debug: Check all completed subtasks and approval status
+router.get("/debug/completed-subtasks", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+
+    console.log("[Debug] Checking all completed subtasks");
+
+    // Get all completed subtasks from today
+    const completedQuery = `
+        SELECT
+          ft.id as tracker_id,
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.status,
+          ft.completed_at,
+          ft.approved_at,
+          ft.approved_by,
+          ft.run_date,
+          EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer as seconds_since_completion,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers,
+          CASE
+            WHEN ft.completed_at < NOW() - INTERVAL '15 minutes' THEN 'YES - Ready for alert'
+            ELSE 'NO - Wait ' || (900 - EXTRACT(EPOCH FROM (NOW() - ft.completed_at))::integer) || ' more seconds'
+          END as ready_for_alert
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND t.is_active = true
+        ORDER BY ft.completed_at DESC
+        LIMIT 50
+      `;
+
+    const completedResult = await pool.query(completedQuery);
+
+    // Get all finops_approvals
+    const approvalsQuery = `
+        SELECT
+          fa.id,
+          fa.task_id,
+          fa.subtask_id,
+          fa.tracker_id,
+          fa.approved_by,
+          fa.approved_at,
+          fa.note
+        FROM finops_approvals fa
+        ORDER BY fa.approved_at DESC
+        LIMIT 100
+      `;
+
+    const approvalsResult = await pool.query(approvalsQuery);
+
+    // Get all pending approval alerts
+    const alertsQuery = `
+        SELECT
+          id,
+          task_id,
+          subtask_id,
+          alert_group,
+          title,
+          next_call_at,
+          created_at,
+          NOW() as current_time,
+          CASE
+            WHEN next_call_at <= NOW() THEN 'READY TO SEND'
+            ELSE 'WAITING - ' || (EXTRACT(EPOCH FROM (next_call_at - NOW()))::integer) || ' seconds left'
+          END as alert_status
+        FROM finops_external_alerts
+        WHERE alert_group = 'pending_approval_reporting'
+        ORDER BY next_call_at ASC
+        LIMIT 50
+      `;
+
+    const alertsResult = await pool.query(alertsQuery);
+
+    console.log(
+      `[Debug] Completed subtasks: ${completedResult.rows.length}, Approvals: ${approvalsResult.rows.length}, Pending alerts: ${alertsResult.rows.length}`,
+    );
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      database_time: new Date().toISOString(),
+      completed_subtasks_today: completedResult.rows,
+      approvals_on_record: approvalsResult.rows,
+      pending_approval_alerts: alertsResult.rows,
+      summary: {
+        total_completed_today: completedResult.rows.length,
+        total_approved: approvalsResult.rows.length,
+        total_pending_alerts: alertsResult.rows.length,
+        completed_without_approval: completedResult.rows.filter(
+          (row) => !row.approved_at,
+        ).length,
+        ready_for_alerts_count: completedResult.rows.filter((row) =>
+          row.ready_for_alert.includes("Ready"),
+        ).length,
+      },
+    });
+  } catch (error: any) {
+    console.error("[Debug] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug endpoint: Check pending approval alerts and manually process them
+router.get(
+  "/debug/pending-approval-alerts",
+  async (req: Request, res: Response) => {
+    console.log(
+      "[Debug] Pending approval alerts endpoint called with query:",
+      req.query,
+    );
+    try {
+      await requireDatabase();
+      const processNow = req.query.process === "true";
+      console.log(
+        `[Debug] Process now: ${processNow}, Database connected: true`,
+      );
+
+      // Get all pending approval alerts
+      const alerts = await pool.query(
+        `SELECT id, task_id, subtask_id, alert_group, title, next_call_at, created_at
+       FROM finops_external_alerts
+       WHERE alert_group = 'pending_approval_reporting'
+       ORDER BY next_call_at ASC`,
+      );
+
+      // Get completed subtasks without approval
+      const completedWithoutApproval = await pool.query(
+        `SELECT
+          ft.task_id,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.completed_at,
+          ft.approved_at,
+          t.task_name,
+          t.client_name,
+          t.reporting_managers,
+          t.escalation_managers
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ft.status = 'completed'
+          AND ft.run_date = CURRENT_DATE
+          AND ft.approved_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM finops_approvals fa
+            WHERE fa.task_id = ft.task_id
+            AND fa.subtask_id = ft.subtask_id
+          )
+        ORDER BY ft.completed_at DESC`,
+      );
+
+      let processedCount = 0;
+      const results: any[] = [];
+
+      if (processNow && alerts.rows.length > 0) {
+        const parseManagers = (val: any): string[] => {
+          if (!val) return [];
+          if (Array.isArray(val))
+            return val
+              .map(String)
+              .map((s) => s.trim())
+              .filter(Boolean);
+          try {
+            const p = JSON.parse(val);
+            return Array.isArray(p)
+              ? p
+                  .map(String)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              : [];
+          } catch {}
+          return String(val)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        };
+
+        // Process alerts whose time has arrived
+        for (const alertRow of alerts.rows) {
+          const nextCallAt = alertRow.next_call_at
+            ? new Date(alertRow.next_call_at)
+            : null;
+          if (!nextCallAt || nextCallAt > new Date()) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "not_ready",
+              message: `Scheduled for ${nextCallAt}`,
+            });
+            continue;
+          }
+
+          // Check if already approved
+          const approvalCheck = await pool.query(
+            `SELECT 1 FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 LIMIT 1`,
+            [alertRow.task_id, alertRow.subtask_id],
+          );
+
+          if (approvalCheck.rows.length > 0) {
+            await pool.query(
+              `DELETE FROM finops_external_alerts WHERE id = $1`,
+              [alertRow.id],
+            );
+            results.push({
+              alert_id: alertRow.id,
+              status: "deleted",
+              message: "Already approved",
+            });
+            continue;
+          }
+
+          // Get task metadata
+          const taskMeta = await pool.query(
+            `SELECT reporting_managers, escalation_managers FROM finops_tasks WHERE id = $1 LIMIT 1`,
+            [alertRow.task_id],
+          );
+
+          const meta = taskMeta.rows[0] || {};
+          const names = Array.from(
+            new Set([
+              ...parseManagers(meta.reporting_managers),
+              ...parseManagers(meta.escalation_managers),
+            ]),
+          );
+
+          if (!names.length) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "no_recipients",
+              message: "No managers found",
+            });
+            continue;
+          }
+
+          // Get user IDs
+          const lowered = names.map((n) => n.toLowerCase());
+          const users = await pool.query(
+            `SELECT azure_object_id FROM users WHERE LOWER(CONCAT(first_name,' ',last_name)) = ANY($1)`,
+            [lowered],
+          );
+          const user_ids = users.rows
+            .map((r) => r.azure_object_id)
+            .filter((id) => !!id);
+
+          if (!user_ids.length) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "no_user_ids",
+              message: "No user IDs resolved",
+              managers: names,
+            });
+            continue;
+          }
+
+          // Send alert
+          try {
+            const resp = await fetch(
+              "https://pulsealerts.mylapay.com/direct-call",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  receiver: "CRM_Switch",
+                  title: alertRow.title,
+                  user_ids,
+                }),
+              },
+            );
+
+            if (resp.ok) {
+              // Schedule next check in 15 minutes
+              await pool.query(
+                `UPDATE finops_external_alerts SET next_call_at = NOW() + INTERVAL '15 minutes' WHERE id = $1`,
+                [alertRow.id],
+              );
+              processedCount++;
+              results.push({
+                alert_id: alertRow.id,
+                status: "sent",
+                message: "Alert sent successfully",
+                recipients: user_ids.length,
+                next_call_at: "NOW + 15 minutes",
+              });
+            } else {
+              results.push({
+                alert_id: alertRow.id,
+                status: "failed",
+                message: `Pulse call failed: ${resp.status}`,
+              });
+            }
+          } catch (err) {
+            results.push({
+              alert_id: alertRow.id,
+              status: "error",
+              message: (err as Error).message,
+            });
+          }
+        }
+      }
+
+      const response = {
+        scheduled_alerts: alerts.rows,
+        completed_without_approval: completedWithoutApproval.rows,
+        processed: processNow,
+        processed_count: processedCount,
+        results: processNow ? results : undefined,
+        info: processNow
+          ? "Alerts processed"
+          : "Add ?process=true to manually process alerts",
+      };
+
+      console.log(
+        `[Debug] Returning response: ${alerts.rows.length} scheduled alerts, ${completedWithoutApproval.rows.length} completed without approval`,
+      );
+      res.json(response);
+    } catch (error: any) {
+      console.error("Error in debug endpoint:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
 
 export default router;

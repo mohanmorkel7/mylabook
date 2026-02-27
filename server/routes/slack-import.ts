@@ -102,6 +102,7 @@ router.post("/import-slack", async (req: Request, res: Response) => {
                 bucket_id: 5,
                 demand: 1,
                 tags: ["Slack"],
+                assigned_to: 76, // Default assign Slack tickets to user 76
                 // mail_config_id: null,
               };
 

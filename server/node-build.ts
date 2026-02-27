@@ -3,6 +3,7 @@ import express from "express";
 import finopsScheduler from "./services/finopsScheduler"; // Assuming this handles your scheduler logic
 import { fileURLToPath } from "url";
 import { createServer } from "./index"; // Assuming createServer is in the same folder
+import { startPoolMonitoring } from "./database/connection";
 
 // Create the server instance
 const app = createServer();
@@ -41,6 +42,9 @@ app.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
   console.log(`📱 Frontend: http://localhost:${port}`);
   console.log(`🔧 API: http://localhost:${port}/api`);
+
+  // Start database pool monitoring
+  startPoolMonitoring();
 
   // Initialize FinOps scheduler for automated task execution and SLA monitoring
   try {

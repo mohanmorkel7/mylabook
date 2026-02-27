@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import finopsAlertService from "./finopsAlertService";
-import { pool, isDatabaseAvailable } from "../database/connection";
+import { pool, isDatabaseAvailable, queryWithRetry } from "../database/connection";
 
 class FinOpsScheduler {
   private isInitialized = false;
@@ -18,11 +18,11 @@ class FinOpsScheduler {
 
     console.log("Initializing FinOps Scheduler...");
 
-    // Daily task execution at 5:00 AM
+    // Daily task execution at 12:00 AM (midnight) IST - resets subtasks to pending for the new day
     cron.schedule(
-      "0 5 * * *",
+      "0 0 * * *",
       async () => {
-        console.log("Running daily task execution...");
+        console.log("Running daily task execution at midnight IST...");
         await finopsAlertService.checkDailyTaskExecution();
       },
       {
@@ -68,11 +68,11 @@ class FinOpsScheduler {
       },
     );
 
-    // Weekly task execution on Mondays at 5:00 AM
+    // Weekly task execution on Mondays at 12:00 AM (midnight) IST
     cron.schedule(
-      "0 5 * * 1",
+      "0 0 * * 1",
       async () => {
-        console.log("Running weekly task execution...");
+        console.log("Running weekly task execution at midnight IST...");
         await this.executeWeeklyTasks();
       },
       {
@@ -80,11 +80,11 @@ class FinOpsScheduler {
       },
     );
 
-    // Monthly task execution on the 1st of each month at 5:00 AM
+    // Monthly task execution on the 1st of each month at 12:00 AM (midnight) IST
     cron.schedule(
-      "0 5 1 * *",
+      "0 0 1 * *",
       async () => {
-        console.log("Running monthly task execution...");
+        console.log("Running monthly task execution at midnight IST...");
         await this.executeMonthlyTasks();
       },
       {
@@ -245,6 +245,7 @@ class FinOpsScheduler {
       `);
 
       // Upsert tracker rows for today's IST date for each subtask (do not mutate finops_subtasks)
+      // When a row already exists, preserve the existing status if it's not 'pending' (e.g., if already 'completed')
       for (const subtask of subtasks.rows) {
         await pool.query(
           `
@@ -254,7 +255,20 @@ class FinOpsScheduler {
             (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $1, $2, $3, $4, $5, 'pending', NULL, NULL, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $7, $8, $9, $10
           )
           ON CONFLICT (run_date, period, task_id, subtask_id)
-          DO UPDATE SET status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, scheduled_time = EXCLUDED.scheduled_time, subtask_scheduled_date = EXCLUDED.subtask_scheduled_date, description = EXCLUDED.description, sla_hours = EXCLUDED.sla_hours, sla_minutes = EXCLUDED.sla_minutes, order_position = EXCLUDED.order_position, updated_at = NOW()
+          DO UPDATE SET
+            status = CASE
+              WHEN finops_tracker.status IN ('completed', 'in_progress', 'overdue', 'delayed', 'cancelled') THEN finops_tracker.status
+              ELSE EXCLUDED.status
+            END,
+            started_at = CASE WHEN finops_tracker.started_at IS NULL THEN EXCLUDED.started_at ELSE finops_tracker.started_at END,
+            completed_at = CASE WHEN finops_tracker.completed_at IS NULL THEN EXCLUDED.completed_at ELSE finops_tracker.completed_at END,
+            scheduled_time = EXCLUDED.scheduled_time,
+            subtask_scheduled_date = EXCLUDED.subtask_scheduled_date,
+            description = EXCLUDED.description,
+            sla_hours = EXCLUDED.sla_hours,
+            sla_minutes = EXCLUDED.sla_minutes,
+            order_position = EXCLUDED.order_position,
+            updated_at = NOW()
           `,
           [
             String(period),
@@ -313,6 +327,12 @@ class FinOpsScheduler {
    */
   private async syncTaskStatuses(): Promise<void> {
     try {
+      // Skip if database is not available
+      if (!(await isDatabaseAvailable())) {
+        console.log("Database not available, skipping task status sync");
+        return;
+      }
+
       // Compute current IST time to make decisions based on user's local day boundary
       const istNow = new Date(
         new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
@@ -322,71 +342,97 @@ class FinOpsScheduler {
       // Prefer finops_tracker for today's task status calculations (IST date). Fallback to finops_subtasks when tracker rows missing.
       const todayExpr = `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date`;
 
-      const tasksRes = await pool.query(`
-        SELECT t.id, t.task_name
-        FROM finops_tasks t
-        WHERE t.is_active = true AND t.deleted_at IS NULL
-      `);
+      const tasksRes = await queryWithRetry(
+        () => pool.query(`
+          SELECT t.id, t.task_name
+          FROM finops_tasks t
+          WHERE t.is_active = true AND t.deleted_at IS NULL
+        `),
+        2,
+      );
 
       for (const t of tasksRes.rows) {
-        // Try tracker counts for today
-        const trackerCounts = await pool.query(
-          `
-          SELECT
-            COUNT(*) as total_subtasks,
-            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_subtasks,
-            COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_subtasks,
-            COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_subtasks
-          FROM finops_tracker
-          WHERE task_id = $1 AND run_date = ${todayExpr}
-        `,
-          [t.id],
-        );
-
-        let total = parseInt(trackerCounts.rows[0].total_subtasks, 10);
-        let completed = parseInt(trackerCounts.rows[0].completed_subtasks, 10);
-        let overdue = parseInt(trackerCounts.rows[0].overdue_subtasks, 10);
-        let inProgress = parseInt(
-          trackerCounts.rows[0].in_progress_subtasks,
-          10,
-        );
-
-        // Fallback to finops_subtasks when no tracker rows for today
-        if (total === 0) {
-          const subtasks = await pool.query(
-            `SELECT status FROM finops_subtasks WHERE task_id = $1`,
-            [t.id],
+        try {
+          // Try tracker counts for today with retry
+          const trackerCounts = await queryWithRetry(
+            () =>
+              pool.query(
+                `
+              SELECT
+                COUNT(*) as total_subtasks,
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_subtasks,
+                COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_subtasks,
+                COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_subtasks
+              FROM finops_tracker
+              WHERE task_id = $1 AND run_date = ${todayExpr}
+            `,
+                [t.id],
+              ),
+            2,
           );
-          total = subtasks.rows.length;
-          completed = subtasks.rows.filter(
-            (st) => st.status === "completed",
-          ).length;
-          overdue = subtasks.rows.filter(
-            (st) => st.status === "overdue",
-          ).length;
-          inProgress = subtasks.rows.filter(
-            (st) => st.status === "in_progress",
-          ).length;
-        }
 
-        let newStatus = "active";
-        if (overdue > 0) {
-          newStatus = "overdue";
-        } else if (completed === total && total > 0) {
-          newStatus = "completed";
-        } else if (inProgress > 0) {
-          newStatus = "in_progress";
-        }
+          let total = parseInt(trackerCounts.rows[0].total_subtasks, 10);
+          let completed = parseInt(
+            trackerCounts.rows[0].completed_subtasks,
+            10,
+          );
+          let overdue = parseInt(trackerCounts.rows[0].overdue_subtasks, 10);
+          let inProgress = parseInt(
+            trackerCounts.rows[0].in_progress_subtasks,
+            10,
+          );
 
-        // Update task status if it has changed
-        await pool.query(
-          `
-          UPDATE finops_tasks
-          SET status = $1, updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2 AND status != $1
-        `,
-          [newStatus, t.id],
-        );
+          // Fallback to finops_subtasks when no tracker rows for today
+          if (total === 0) {
+            const subtasks = await queryWithRetry(
+              () =>
+                pool.query(
+                  `SELECT status FROM finops_subtasks WHERE task_id = $1`,
+                  [t.id],
+                ),
+              2,
+            );
+            total = subtasks.rows.length;
+            completed = subtasks.rows.filter(
+              (st) => st.status === "completed",
+            ).length;
+            overdue = subtasks.rows.filter(
+              (st) => st.status === "overdue",
+            ).length;
+            inProgress = subtasks.rows.filter(
+              (st) => st.status === "in_progress",
+            ).length;
+          }
+
+          let newStatus = "active";
+          if (overdue > 0) {
+            newStatus = "overdue";
+          } else if (completed === total && total > 0) {
+            newStatus = "completed";
+          } else if (inProgress > 0) {
+            newStatus = "in_progress";
+          }
+
+          // Update task status if it has changed with retry
+          await queryWithRetry(
+            () =>
+              pool.query(
+                `
+              UPDATE finops_tasks
+              SET status = $1, updated_at = CURRENT_TIMESTAMP
+              WHERE id = $2 AND status != $1
+            `,
+                [newStatus, t.id],
+              ),
+            2,
+          );
+        } catch (taskErr) {
+          console.warn(
+            `Error syncing status for task ${t.id} (${t.task_name}):`,
+            (taskErr as Error).message,
+          );
+          // Continue with next task instead of failing entire sync
+        }
       }
 
       // After syncing statuses, rollover fully completed daily tasks to the next day.
@@ -428,55 +474,63 @@ class FinOpsScheduler {
 
       for (const row of rolloverRes.rows) {
         const taskId = row.task_id;
-        // Insert next day's tracker entries for this task's subtasks, respecting task effective_from
-        await pool.query(
-          `
-          WITH next_date AS (SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date + INTERVAL '1 day' AS d)
-          INSERT INTO finops_tracker (
-            run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position
-          )
-          SELECT
-            nd.d::date,
-            'daily',
-            t.id,
-            t.task_name,
-            st.id,
-            st.name,
-            'pending',
-            NULL,
-            NULL,
-            st.start_time,
-            nd.d::date,
-            st.description,
-            st.sla_hours,
-            st.sla_minutes,
-            st.order_position
-          FROM next_date nd
-          JOIN finops_tasks t ON t.id = $1 AND t.effective_from <= nd.d::date AND t.is_active = true AND t.deleted_at IS NULL
-          JOIN finops_subtasks st ON st.task_id = t.id
-          ON CONFLICT (run_date, period, task_id, subtask_id) DO UPDATE SET status = EXCLUDED.status, description = EXCLUDED.description, sla_hours = EXCLUDED.sla_hours, sla_minutes = EXCLUDED.sla_minutes, order_position = EXCLUDED.order_position, updated_at = NOW()
-        `,
-          [taskId],
-        );
+        try {
+          // Insert next day's tracker entries for this task's subtasks, respecting task effective_from
+          await pool.query(
+            `
+            WITH next_date AS (SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date + INTERVAL '1 day' AS d)
+            INSERT INTO finops_tracker (
+              run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position
+            )
+            SELECT
+              nd.d::date,
+              'daily',
+              t.id,
+              t.task_name,
+              st.id,
+              st.name,
+              'pending',
+              NULL,
+              NULL,
+              st.start_time,
+              nd.d::date,
+              st.description,
+              st.sla_hours,
+              st.sla_minutes,
+              st.order_position
+            FROM next_date nd
+            JOIN finops_tasks t ON t.id = $1 AND t.effective_from <= nd.d::date AND t.is_active = true AND t.deleted_at IS NULL
+            JOIN finops_subtasks st ON st.task_id = t.id
+            ON CONFLICT (run_date, period, task_id, subtask_id) DO UPDATE SET status = EXCLUDED.status, description = EXCLUDED.description, sla_hours = EXCLUDED.sla_hours, sla_minutes = EXCLUDED.sla_minutes, order_position = EXCLUDED.order_position, updated_at = NOW()
+          `,
+            [taskId],
+          );
 
-        // Update task next_run_at to reflect rollover
-        await pool.query(
-          `
-          UPDATE finops_tasks
-          SET next_run_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date + INTERVAL '1 day'
-          WHERE id = $1
-        `,
-          [taskId],
-        );
+          // Update task next_run_at to reflect rollover
+          await pool.query(
+            `
+            UPDATE finops_tasks
+            SET next_run_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date + INTERVAL '1 day'
+            WHERE id = $1
+          `,
+            [taskId],
+          );
 
-        // Log activity
-        await this.logActivity(
-          taskId,
-          null,
-          "rollover",
-          "System",
-          "Rolled over completed daily subtasks to next day",
-        );
+          // Log activity
+          await this.logActivity(
+            taskId,
+            null,
+            "rollover",
+            "System",
+            "Rolled over completed daily subtasks to next day",
+          );
+        } catch (rolloverErr) {
+          console.warn(
+            `Error rolling over task ${taskId}:`,
+            (rolloverErr as Error).message,
+          );
+          // Continue with next task instead of failing entire rollover
+        }
       }
     } catch (error) {
       console.error("Error rolling over completed daily tasks:", error);
@@ -574,11 +628,11 @@ class FinOpsScheduler {
    */
   public getStatus(): { initialized: boolean; activeJobs: string[] } {
     const activeJobs = [
-      "Daily Task Execution (5:00 AM)",
-      "SLA Monitoring (Every minute)",
+      "Daily Task Execution (Midnight IST)",
+      "SLA Monitoring (Every 30 seconds)",
       "Incomplete Subtask Check (Every 30 minutes)",
-      "Weekly Task Execution (Mondays 5:00 AM)",
-      "Monthly Task Execution (1st of month 5:00 AM)",
+      "Weekly Task Execution (Mondays Midnight IST)",
+      "Monthly Task Execution (1st of month Midnight IST)",
       "Task Status Sync (Every minute)",
       "Database Cleanup (Sundays 2:00 AM)",
     ];

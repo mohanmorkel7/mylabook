@@ -763,6 +763,15 @@ export class ApiClient {
       };
     }
 
+    // Tickets endpoints fallbacks
+    if (endpoint.includes("/tickets")) {
+      return {
+        tickets: [],
+        total: 0,
+        pages: 0,
+      };
+    }
+
     // VC endpoints fallbacks
     if (endpoint.includes("/vc/stats")) {
       return { total: 0, in_progress: 0, won: 0, lost: 0 };
@@ -1526,6 +1535,10 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify({ approver_name, note, tracker_id }),
     });
+  }
+
+  async getTodaysPendingApprovals() {
+    return this.request("/finops-production/public/today-pending-approvals");
   }
 
   // FinOps Clients Management methods

@@ -126,8 +126,13 @@ export const handler: Handler = async () => {
         const group = String(alertRow.alert_group || "").toLowerCase();
 
         if (group.startsWith("pending_approval")) {
-          // Only notify reporting managers for pending approval alerts
-          names = Array.from(new Set(parseManagers(meta.reporting_managers)));
+          // Notify both reporting managers AND escalation managers for pending approval alerts
+          names = Array.from(
+            new Set([
+              ...parseManagers(meta.reporting_managers),
+              ...parseManagers(meta.escalation_managers),
+            ]),
+          );
         } else {
           // Determine whether this is the initial immediate call (Assigned + Reporting only)
           const createdAt = alertRow.created_at

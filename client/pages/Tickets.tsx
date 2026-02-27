@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import apiClient from "@/lib/api";
+import { formatToISTDateTime } from "@/lib/dateUtils";
 
 export default function TicketsPage() {
   const [filters, setFilters] = useState<any>({});
@@ -15,112 +16,146 @@ export default function TicketsPage() {
     pages: 0,
   });
   const [loading, setLoading] = useState(false);
+  const [fallbackInfo, setFallbackInfo] = useState<{
+    mode?: string;
+    status?: string;
+    message?: string;
+  } | null>(null);
   const [tab, setTab] = useState<"assignedToMe" | "assignedByMe" | "all">(
     "assignedToMe",
   );
   const [search, setSearch] = useState("");
 
   const fetchTickets = async () => {
-  setLoading(true);
+    setLoading(true);
 
-  console.log("working...");
+    console.log("working...");
 
-  try {
-    const localFilters: any = { ...filters };
-
-    // ✅ Get current user from localStorage
-    let currentUser: any = null;
     try {
-      const raw = localStorage.getItem("banani_user");
-      if (raw) currentUser = JSON.parse(raw);
-    } catch (e) {
-      console.warn("Failed to parse user data:", e);
-    }
+      const localFilters: any = { ...filters };
 
-    // ✅ Check admin role
-    const isAdmin = currentUser?.role?.toLowerCase?.() === "admin";
-
-    
-
-    // ✅ Apply filters based on role & tab
-    if (!isAdmin) {
-      if (tab === "assignedToMe" && currentUser?.id) {
-        localFilters.assigned_to = currentUser.id;
-      } else if (tab === "assignedByMe" && currentUser?.id) {
-        localFilters.created_by = currentUser.id;
+      // ✅ Get current user from localStorage
+      let currentUser: any = null;
+      try {
+        const raw = localStorage.getItem("banani_user");
+        if (raw) currentUser = JSON.parse(raw);
+      } catch (e) {
+        console.warn("Failed to parse user data:", e);
       }
-      // 🔹 Non-admin "all" tab could show everything they created or assigned
-      else if (tab === "all" && currentUser?.id) {
-        localFilters.created_or_assigned_to = currentUser.id;
-      }
-    } else {
-      // ✅ Admin — no filters (see ALL tickets)
-      if (tab === "all") {
-        Object.keys(localFilters).forEach((key) => delete localFilters[key]);
-      }
-    }
 
-    // ✅ Apply search
-    if (search) localFilters.search = search;
+      // ✅ Check admin role
+      const isAdmin = currentUser?.role?.toLowerCase?.() === "admin";
 
-    console.log("[TicketsPage] Filters applied:", localFilters);
-
-    // ✅ Fetch tickets from backend
-    const resp = await apiClient.getTickets(localFilters, page, limit);
-    console.log("[TicketsPage] API response:", resp);
-    setTicketsResp(resp);
-  } catch (err) {
-    console.error("Failed to load tickets:", err);
-  } finally {
-    setLoading(false);
-  }
-};
-
-// 1️⃣ Run once on mount: set admin tab (if needed) and then fetch tickets
-useEffect(() => {
-
-  
-
-  const init = async () => {
-    try {
-      const raw = localStorage.getItem("banani_user");
-      let defaultTab: "assignedToMe" | "assignedByMe" | "all" = "assignedToMe";
-
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && String(parsed.role).toLowerCase() === "admin") {
-          defaultTab = "all";
+      // ✅ Apply filters based on role & tab
+      if (!isAdmin) {
+        if (tab === "assignedToMe" && currentUser?.id) {
+          localFilters.assigned_to = currentUser.id;
+        } else if (tab === "assignedByMe" && currentUser?.id) {
+          localFilters.created_by = currentUser.id;
+        }
+        // 🔹 Non-admin "all" tab could show everything they created or assigned
+        else if (tab === "all" && currentUser?.id) {
+          localFilters.created_or_assigned_to = currentUser.id;
+        }
+      } else {
+        // ✅ Admin — no filters (see ALL tickets)
+        if (tab === "all") {
+          Object.keys(localFilters).forEach((key) => delete localFilters[key]);
         }
       }
 
-      setTab(defaultTab); // this triggers re-render
-      // wait until tab state updates before fetching
-      await new Promise((r) => setTimeout(r, 0)); 
-      fetchTickets(); // ✅ guaranteed to run once on mount
-    } catch (e) {
-      console.warn("Error reading user from localStorage:", e);
-      fetchTickets(); // still call if user not found
+      // ✅ Apply search
+      if (search) localFilters.search = search;
+
+      console.log("[TicketsPage] Filters applied:", localFilters);
+
+      // ✅ Fetch tickets from backend
+      // Request a lightweight/simple listing to avoid heavy joins and SLA calculations
+      localFilters.simple = "1";
+      const resp = await apiClient.getTickets(localFilters, page, limit);
+      console.log("[TicketsPage] API response:", resp);
+      setTicketsResp(resp);
+      // Capture fallback/mode info if server indicates it's returning fallback/mock data
+      try {
+        const status = resp?.status || resp?.mode || null;
+        const message = resp?.message || resp?.msg || null;
+        if (
+          status === "fallback" ||
+          status === "mock" ||
+          resp?.status === "fallback"
+        ) {
+          setFallbackInfo({ mode: resp?.mode, status: resp?.status, message });
+        } else {
+          setFallbackInfo(null);
+        }
+      } catch (e) {
+        setFallbackInfo(null);
+      }
+    } catch (err: any) {
+      console.error("Failed to load tickets:", err);
+      // Surface fallback info if available
+      try {
+        const m = err?.message || String(err || "Unknown error");
+        setFallbackInfo({ message: m, status: "error" });
+      } catch (e) {
+        setFallbackInfo({ message: "Failed to load tickets", status: "error" });
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  init();
-}, []);
+  // 1️⃣ Run once on mount: set admin tab (if needed) and then fetch tickets
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const raw = localStorage.getItem("banani_user");
+        let defaultTab: "assignedToMe" | "assignedByMe" | "all" =
+          "assignedToMe";
 
-// 2️⃣ Re-fetch when filters, page, limit, tab, or search change
-useEffect(() => {
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && String(parsed.role).toLowerCase() === "admin") {
+            defaultTab = "all";
+          }
+        }
 
-  console.log("🔥 First useEffect running");
-  
-  if (!loading) {
-    console.log("[TicketsPage] auto refetch due to state change");
-    fetchTickets();
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [filters, page, limit, tab, search]);
+        setTab(defaultTab); // this triggers re-render
+        // wait until tab state updates before fetching
+        await new Promise((r) => setTimeout(r, 0));
+        fetchTickets(); // ✅ guaranteed to run once on mount
+      } catch (e) {
+        console.warn("Error reading user from localStorage:", e);
+        fetchTickets(); // still call if user not found
+      }
+    };
 
+    init();
+  }, []);
+
+  // 2️⃣ Re-fetch when filters, page, limit, tab, or search change
+  useEffect(() => {
+    console.log("🔥 First useEffect running");
+
+    if (!loading) {
+      console.log("[TicketsPage] auto refetch due to state change");
+      fetchTickets();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, page, limit, tab, search]);
 
   return (
     <div className="p-4">
+      {fallbackInfo && (
+        <div className="mb-4 p-3 rounded bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
+          <strong>Notice:</strong>{" "}
+          {fallbackInfo.message ||
+            "Showing fallback/mock tickets because the server or database is unavailable."}
+          {fallbackInfo.mode && (
+            <span className="ml-2">(mode: {fallbackInfo.mode})</span>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Tickets</h1>
         <div className="flex items-center gap-2">
@@ -236,9 +271,7 @@ useEffect(() => {
                   <td className="p-2">{t.status?.name}</td>
                   <td className="p-2">{t.assignee?.name || "-"}</td>
                   <td className="p-2">
-                    {t.created_at
-                      ? new Date(t.created_at).toLocaleString()
-                      : "-"}
+                    {t.created_at ? formatToISTDateTime(t.created_at) : "-"}
                   </td>
                   <td className="p-2">
                     <Link

@@ -1,13 +1,19 @@
-import { pool } from "../database/connection";
+import { pool, isDatabaseAvailable } from "../database/connection";
 import * as nodemailer from "nodemailer";
 
 // IST timezone helper functions
 const IST_TIMEZONE = "Asia/Kolkata";
 
+// Return the current instant (server time) as a Date object. Use this for epoch comparisons.
 const getCurrentISTTime = (): Date => {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: IST_TIMEZONE }),
-  );
+  return new Date();
+};
+
+// Get current IST date string 'YYYY-MM-DD' — safe and used for DB queries that rely on IST day boundary
+const getCurrentISTDateString = (): string => {
+  const parts = new Date().toLocaleString("en-CA", { timeZone: IST_TIMEZONE });
+  // en-CA formats as YYYY-MM-DD, hh:mm:ss
+  return parts.split(" ")[0];
 };
 
 const convertToIST = (date: Date | string): Date => {
@@ -213,8 +219,11 @@ class FinOpsAlertService {
       //   return;
       // }
 
-      const { isDatabaseAvailable } = await import("../database/connection");
-      if (!(await isDatabaseAvailable())) return;
+      // Check if database is available before proceeding
+      if (!(await isDatabaseAvailable())) {
+        console.log("Database not available, skipping SLA alert check");
+        return;
+      }
       console.log("Starting SLA alert check...");
 
       // Get all active tasks with their subtasks
@@ -246,14 +255,20 @@ class FinOpsAlertService {
    */
   async checkDailyTaskExecution(): Promise<void> {
     try {
+      // Skip if database is not available
+      if (!(await isDatabaseAvailable())) {
+        console.log("Database not available, skipping daily task execution");
+        return;
+      }
+
       console.log("Checking for daily tasks to execute...");
 
-      const today = getCurrentISTTime().toISOString().split("T")[0];
+      const today = getCurrentISTDateString();
 
       const tasksToExecute = await pool.query(
         `
-        SELECT * FROM finops_tasks 
-        WHERE is_active = true 
+        SELECT * FROM finops_tasks
+        WHERE is_active = true
         AND duration = 'daily'
         AND effective_from <= $1
         AND (last_run_at IS NULL OR DATE(last_run_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') < $1)
@@ -263,7 +278,15 @@ class FinOpsAlertService {
       );
 
       for (const task of tasksToExecute.rows) {
-        await this.executeTask(task);
+        try {
+          await this.executeTask(task);
+        } catch (taskErr) {
+          console.warn(
+            `Error executing daily task ${task.id} (${task.task_name}):`,
+            (taskErr as Error).message,
+          );
+          // Continue with next task instead of failing entire execution
+        }
       }
 
       console.log(
@@ -289,11 +312,8 @@ class FinOpsAlertService {
    * Check SLA for individual subtask and send alerts if needed
    */
   private async checkSubtaskSLA(task: any, subtask: any): Promise<void> {
-    const now = getCurrentISTTime();
-
-    // console.log(
-    //   `Checking SLA for subtask ${subtask.id} (${subtask.name}): status=${subtask.status}`,
-    // );
+    // Use server 'now' for accurate epoch comparisons, but derive the IST date components explicitly
+    const now = new Date();
 
     // Only check pending tasks for overdue status
     if (subtask.status !== "pending") {
@@ -303,22 +323,29 @@ class FinOpsAlertService {
       return;
     }
 
-    // Calculate due time based on task schedule (start_time)
+    // Calculate due time based on task schedule (start_time) using explicit IST timezone parsing
     // For pending tasks, we check against their scheduled start time
     let dueTime: Date;
 
     if (subtask.start_time) {
       // Parse start_time (format: "HH:MM:SS" or "HH:MM")
-      const today = getCurrentISTTime();
+      // Get IST date components (year/month/day) using a safe extraction from an IST-localized Date instance
+      const istNowForParts = new Date(
+        new Date().toLocaleString("en-US", { timeZone: IST_TIMEZONE }),
+      );
+      const year = istNowForParts.getFullYear();
+      const month = istNowForParts.getMonth() + 1; // 1-based month
+      const day = istNowForParts.getDate();
+
       const [hours, minutes] = subtask.start_time.split(":").map(Number);
 
-      dueTime = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate(),
-        hours,
-        minutes || 0,
-      );
+      // Build a timezone-aware ISO string for IST (+05:30) so Date parsing yields the correct UTC epoch for that IST wall time
+      const two = (n: number) => String(n).padStart(2, "0");
+      const iso = `${year}-${two(month)}-${two(day)}T${two(
+        hours || 0,
+      )}:${two(minutes || 0)}:00+05:30`;
+
+      dueTime = new Date(iso);
 
       // If the scheduled time has passed today, the task is overdue
       // Treat equality/near-equality as overdue (minutes >= 0)
@@ -642,7 +669,7 @@ class FinOpsAlertService {
       ON finops_external_alerts(task_id, subtask_id, alert_group, alert_bucket);
     `);
 
-      const now = getCurrentISTTime();
+      const now = new Date();
       for (const row of result.rows) {
         const since = row.overdue_since ? new Date(row.overdue_since) : null;
         if (!since) continue;
@@ -746,7 +773,7 @@ class FinOpsAlertService {
         })),
       ];
 
-      const currentTimeIST = formatISTDateTime(getCurrentISTTime());
+      const currentTimeIST = formatISTDateTime(new Date());
       const subject = `⚠️ SLA Warning: ${task.task_name} - ${subtask.name}`;
       const message = `
         <h2>SLA Warning Alert</h2>
@@ -820,7 +847,7 @@ class FinOpsAlertService {
         })),
       ];
 
-      const currentTimeIST = formatISTDateTime(getCurrentISTTime());
+      const currentTimeIST = formatISTDateTime(new Date());
       const subject = `🚨 SLA OVERDUE: ${task.task_name} - ${subtask.name}`;
       const message = `
         <h2 style="color: #dc2626;">SLA OVERDUE ALERT</h2>
@@ -992,64 +1019,87 @@ class FinOpsAlertService {
 
       // Upsert tracker rows for today's IST date for each subtask (do not mutate finops_subtasks)
       for (const subtask of subtasks.rows) {
-        // Ensure tracking table exists with expanded columns (no-op if already created)
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_tracker (
-            id SERIAL PRIMARY KEY,
-            run_date DATE NOT NULL,
-            period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-            task_id INTEGER NOT NULL,
-            task_name TEXT,
-            subtask_id INTEGER NOT NULL DEFAULT 0,
-            subtask_name TEXT,
-            status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-            started_at TIMESTAMP NULL,
-            completed_at TIMESTAMP NULL,
-            scheduled_time TIME NULL,
-            subtask_scheduled_date DATE NULL,
-            description TEXT,
-            sla_hours INTEGER,
-            sla_minutes INTEGER,
-            order_position INTEGER,
-            delay_reason TEXT,
-            delay_notes TEXT,
-            notification_sent_15min BOOLEAN DEFAULT false,
-            notification_sent_start BOOLEAN DEFAULT false,
-            notification_sent_escalation BOOLEAN DEFAULT false,
-            auto_notify BOOLEAN DEFAULT true,
-            assigned_to TEXT,
-            reporting_managers TEXT,
-            escalation_managers TEXT,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(run_date, period, task_id, subtask_id)
-          );
-        `);
+        try {
+          // Ensure tracking table exists with expanded columns (no-op if already created)
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS finops_tracker (
+              id SERIAL PRIMARY KEY,
+              run_date DATE NOT NULL,
+              period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
+              task_id INTEGER NOT NULL,
+              task_name TEXT,
+              subtask_id INTEGER NOT NULL DEFAULT 0,
+              subtask_name TEXT,
+              status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
+              started_at TIMESTAMP NULL,
+              completed_at TIMESTAMP NULL,
+              scheduled_time TIME NULL,
+              subtask_scheduled_date DATE NULL,
+              description TEXT,
+              sla_hours INTEGER,
+              sla_minutes INTEGER,
+              order_position INTEGER,
+              delay_reason TEXT,
+              delay_notes TEXT,
+              notification_sent_15min BOOLEAN DEFAULT false,
+              notification_sent_start BOOLEAN DEFAULT false,
+              notification_sent_escalation BOOLEAN DEFAULT false,
+              auto_notify BOOLEAN DEFAULT true,
+              assigned_to TEXT,
+              reporting_managers TEXT,
+              escalation_managers TEXT,
+              created_at TIMESTAMP DEFAULT NOW(),
+              updated_at TIMESTAMP DEFAULT NOW(),
+              UNIQUE(run_date, period, task_id, subtask_id)
+            );
+          `);
 
-        // Upsert into finops_tracker for datewise tracking (do not touch finops_subtasks table)
-        await pool.query(
-          `
-          INSERT INTO finops_tracker (
-            run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position
-          ) VALUES (
-            (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $1, $2, $3, $4, $5, 'pending', NULL, NULL, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $7, $8, $9, $10
-          )
-          ON CONFLICT (run_date, period, task_id, subtask_id)
-          DO UPDATE SET status = EXCLUDED.status, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at, scheduled_time = EXCLUDED.scheduled_time, subtask_scheduled_date = EXCLUDED.subtask_scheduled_date, description = EXCLUDED.description, sla_hours = EXCLUDED.sla_hours, sla_minutes = EXCLUDED.sla_minutes, order_position = EXCLUDED.order_position, updated_at = NOW()
-          `,
-          [
-            String(task.duration || "daily"),
-            task.id,
-            task.task_name || "",
-            subtask.id,
-            subtask.name || "",
-            subtask.start_time || null,
-            subtask.description || null,
-            subtask.sla_hours || null,
-            subtask.sla_minutes || null,
-            subtask.order_position || null,
-          ],
-        );
+          // Upsert into finops_tracker for datewise tracking (do not touch finops_subtasks table)
+          // When a row already exists, preserve the existing status if it's not 'pending' (e.g., if already 'completed')
+          // Only update metadata fields like description, sla_hours, sla_minutes, and order_position
+          await pool.query(
+            `
+            INSERT INTO finops_tracker (
+              run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, subtask_scheduled_date, description, sla_hours, sla_minutes, order_position
+            ) VALUES (
+              (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $1, $2, $3, $4, $5, 'pending', NULL, NULL, $6, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date, $7, $8, $9, $10
+            )
+            ON CONFLICT (run_date, period, task_id, subtask_id)
+            DO UPDATE SET
+              status = CASE
+                WHEN finops_tracker.status IN ('completed', 'in_progress', 'overdue', 'delayed', 'cancelled') THEN finops_tracker.status
+                ELSE EXCLUDED.status
+              END,
+              started_at = CASE WHEN finops_tracker.started_at IS NULL THEN EXCLUDED.started_at ELSE finops_tracker.started_at END,
+              completed_at = CASE WHEN finops_tracker.completed_at IS NULL THEN EXCLUDED.completed_at ELSE finops_tracker.completed_at END,
+              scheduled_time = EXCLUDED.scheduled_time,
+              subtask_scheduled_date = EXCLUDED.subtask_scheduled_date,
+              description = EXCLUDED.description,
+              sla_hours = EXCLUDED.sla_hours,
+              sla_minutes = EXCLUDED.sla_minutes,
+              order_position = EXCLUDED.order_position,
+              updated_at = NOW()
+            `,
+            [
+              String(task.duration || "daily"),
+              task.id,
+              task.task_name || "",
+              subtask.id,
+              subtask.name || "",
+              subtask.start_time || null,
+              subtask.description || null,
+              subtask.sla_hours || null,
+              subtask.sla_minutes || null,
+              subtask.order_position || null,
+            ],
+          );
+        } catch (subtaskErr) {
+          console.warn(
+            `Error upserting subtask tracker ${subtask.id} for task ${task.id}:`,
+            (subtaskErr as Error).message,
+          );
+          // Continue with next subtask instead of failing entire task execution
+        }
       }
 
       // Update task last run time
@@ -1137,22 +1187,74 @@ class FinOpsAlertService {
       GROUP BY t.id
     `;
 
-    const result = await pool.query(query);
-    const tasksWithSubtasks = result.rows.map((row) => ({
-      ...row,
-      subtasks: row.subtasks || [],
-    }));
+    try {
+      const result = await pool.query(query);
+      const tasksWithSubtasks = result.rows.map((row) => ({
+        ...row,
+        subtasks: row.subtasks || [],
+      }));
 
-    // Debug: log subtask statuses from finops_tracker
-    // for (const task of tasksWithSubtasks) {
-    //   for (const subtask of task.subtasks) {
-    //     console.log(
-    //       `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
-    //     );
-    //   }
-    // }
+      // Debug: log subtask statuses from finops_tracker
+      // for (const task of tasksWithSubtasks) {
+      //   for (const subtask of task.subtasks) {
+      //     console.log(
+      //       `Task ${task.task_name} -> Subtask ${subtask.name}: status=${subtask.status}`,
+      //     );
+      //   }
+      // }
 
-    return tasksWithSubtasks;
+      return tasksWithSubtasks;
+    } catch (error: any) {
+      // If the complex query times out, use a simpler fallback query that doesn't join finops_tracker
+      if (
+        error.message?.includes("timeout") ||
+        error.code === "57014" // PostgreSQL statement timeout error
+      ) {
+        console.warn(
+          "Complex SLA query timed out, using simplified fallback query",
+        );
+
+        const fallbackQuery = `
+          SELECT
+            t.*,
+            json_agg(
+              json_build_object(
+                'id', st.id,
+                'name', st.name,
+                'description', st.description,
+                'sla_hours', st.sla_hours,
+                'sla_minutes', st.sla_minutes,
+                'order_position', st.order_position,
+                'status', st.status,
+                'started_at', st.started_at,
+                'completed_at', st.completed_at,
+                'start_time', st.start_time
+              ) ORDER BY st.order_position
+            ) FILTER (WHERE st.id IS NOT NULL) as subtasks
+          FROM finops_tasks t
+          LEFT JOIN finops_subtasks st ON t.id = st.task_id
+          WHERE t.is_active = true AND t.deleted_at IS NULL
+          GROUP BY t.id
+        `;
+
+        try {
+          const fallbackResult = await pool.query(fallbackQuery);
+          const tasksWithSubtasks = fallbackResult.rows.map((row) => ({
+            ...row,
+            subtasks: row.subtasks || [],
+          }));
+          console.log("Fallback query succeeded");
+          return tasksWithSubtasks;
+        } catch (fallbackError) {
+          console.error("Fallback query also failed:", fallbackError);
+          // Return empty array to prevent the entire check from failing
+          return [];
+        }
+      }
+
+      // Re-throw if it's not a timeout error
+      throw error;
+    }
   }
 
   /**
@@ -1234,147 +1336,6 @@ class FinOpsAlertService {
       );
     } catch (error) {
       console.error("Error logging alert:", error);
-    }
-  }
-
-  /**
-   * Update subtask status
-   */
-  private async updateSubtaskStatus(
-    taskId: number,
-    subtaskId: string,
-    status: string,
-  ): Promise<void> {
-    try {
-      // Read current subtask status and name from finops_tracker for today's date (fallback to finops_subtasks)
-      const trackerCurrent = await pool.query(
-        `
-        SELECT status, subtask_name as name FROM finops_tracker WHERE task_id = $1 AND subtask_id = $2 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
-      `,
-        [taskId, subtaskId],
-      );
-
-      let currentRow = trackerCurrent.rows[0];
-
-      if (!currentRow) {
-        const fallback = await pool.query(
-          `SELECT status, name FROM finops_subtasks WHERE task_id = $1 AND id = $2 LIMIT 1`,
-          [taskId, subtaskId],
-        );
-        currentRow = fallback.rows[0] || { status: null, name: "" };
-      }
-
-      const previousStatus = currentRow?.status || "unknown";
-      const subtaskName = currentRow?.name || String(subtaskId);
-
-      // Do not overwrite active/terminal statuses to overdue automatically
-      if (
-        status === "overdue" &&
-        ["in_progress", "completed", "delayed"].includes(String(previousStatus))
-      ) {
-        if (typeof console !== "undefined")
-          console.log(
-            `Skipping automatic transition to 'overdue' for subtask ${subtaskId} because current status is '${previousStatus}'`,
-          );
-        return;
-      }
-
-      // Fetch original subtask metadata (start_time, description) from finops_subtasks to preserve UI fields
-      const subtaskMetaRes = await pool.query(
-        `SELECT start_time, description FROM finops_subtasks WHERE task_id = $1 AND id = $2 LIMIT 1`,
-        [taskId, subtaskId],
-      );
-      const scheduled_time_val = subtaskMetaRes.rows[0]?.start_time || null;
-      const description_val = subtaskMetaRes.rows[0]?.description || null;
-
-      // Determine period for this task (daily/weekly/monthly) to correctly upsert tracker rows
-      const durationRes = await pool.query(
-        `SELECT COALESCE(duration,'daily') as duration FROM finops_tasks WHERE id = $1 LIMIT 1`,
-        [taskId],
-      );
-      const periodVal = durationRes.rows[0]?.duration || "daily";
-
-      // Upsert into finops_tracker for today's date (include scheduled_time and description)
-      await pool.query(
-        `
-        INSERT INTO finops_tracker (run_date, period, task_id, task_name, subtask_id, subtask_name, status, started_at, completed_at, scheduled_time, description, subtask_scheduled_date)
-        VALUES (
-          (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date,
-          $7,
-          $2,
-          (SELECT task_name FROM finops_tasks WHERE id = $2 LIMIT 1),
-          $3::integer,
-          $4,
-          $1::text,
-          CASE WHEN $1::text = 'in_progress'::text THEN CURRENT_TIMESTAMP ELSE NULL END,
-          CASE WHEN $1::text = 'completed'::text THEN CURRENT_TIMESTAMP ELSE NULL END,
-          $5,
-          $6,
-          (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
-        )
-        ON CONFLICT (run_date, period, task_id, subtask_id)
-        DO UPDATE SET status = EXCLUDED.status, started_at = COALESCE(finops_tracker.started_at, EXCLUDED.started_at), completed_at = COALESCE(finops_tracker.completed_at, EXCLUDED.completed_at), description = COALESCE(finops_tracker.description, EXCLUDED.description), scheduled_time = COALESCE(finops_tracker.scheduled_time, EXCLUDED.scheduled_time), updated_at = NOW(), subtask_scheduled_date = EXCLUDED.subtask_scheduled_date
-      `,
-        [
-          status,
-          taskId,
-          subtaskId,
-          subtaskName,
-          scheduled_time_val,
-          description_val,
-          periodVal,
-        ],
-      );
-
-      // Fetch task and client details for richer message
-      const taskMeta = await pool.query(
-        `SELECT task_name, client_name FROM finops_tasks WHERE id = $1 LIMIT 1`,
-        [taskId],
-      );
-      const taskName = taskMeta.rows[0]?.task_name || "Unknown Task";
-      const clientName = taskMeta.rows[0]?.client_name || "Unknown Client";
-
-      // Build human-readable status change message (special phrasing for overdue)
-      const statusChangeMessage =
-        status === "overdue"
-          ? `Kindly take prompt action on the overdue subtask ${subtaskName} from the task ${taskName} for the client ${clientName}.`
-          : `Subtask "${subtaskName}" status changed from "${previousStatus}" to "${status}"`;
-
-      await this.logActivity(
-        taskId,
-        subtaskId,
-        "status_changed",
-        "System",
-        statusChangeMessage,
-      );
-
-      // When a subtask is marked completed, schedule a pending-approval alert for reporting managers after 30 minutes
-      if (status === "completed") {
-        try {
-          const approvalTitle = `Please review and approve the subtask "${subtaskName}" under the task "${taskName}" for the client "${clientName}" at your earliest convenience.`;
-          await pool.query(
-            `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
-             VALUES ($1, $2, $3, -1, $4, NOW() + INTERVAL '30 minutes')
-             ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING`,
-            [taskId, subtaskId, "pending_approval_reporting", approvalTitle],
-          );
-          console.log(
-            `Scheduled pending-approval alert for task ${taskId} subtask ${subtaskId}`,
-          );
-        } catch (e) {
-          console.warn(
-            "Failed to schedule pending-approval alert:",
-            (e as Error).message,
-          );
-        }
-      }
-
-      // Trigger external alert only for overdue transitions
-      if (status === "overdue") {
-        await this.sendReplicaDownAlert(taskId, subtaskId, statusChangeMessage);
-      }
-    } catch (error) {
-      console.error("Error updating subtask status:", error);
     }
   }
 
@@ -1496,23 +1457,38 @@ class FinOpsAlertService {
    */
   async checkIncompleteSubtasks(): Promise<void> {
     try {
+      // Skip if database is not available
+      if (!(await isDatabaseAvailable())) {
+        console.log(
+          "Database not available, skipping incomplete subtask check",
+        );
+        return;
+      }
+
       console.log("Checking for incomplete subtasks...");
 
       const incompleteSubtasks = await pool.query(`
-        SELECT t.*, st.*, 
+        SELECT t.*, st.*,
                t.task_name, t.assigned_to, t.reporting_managers, t.escalation_managers
         FROM finops_subtasks st
         JOIN finops_tasks t ON st.task_id = t.id
       `);
 
       for (const subtask of incompleteSubtasks.rows) {
-        await this.logActivity(
-          subtask.task_id,
-          String(subtask.id),
-          "incomplete_check",
-          "System",
-          `Subtask ${subtask.name} remains incomplete`,
-        );
+        try {
+          await this.logActivity(
+            subtask.task_id,
+            String(subtask.id),
+            "incomplete_check",
+            "System",
+            `Subtask ${subtask.name} remains incomplete`,
+          );
+        } catch (logErr) {
+          console.warn(
+            `Error logging incomplete subtask ${subtask.id}:`,
+            (logErr as Error).message,
+          );
+        }
       }
 
       console.log("Incomplete subtask check completed");

@@ -16,6 +16,10 @@
 [functions."pulse-sync"]
   schedule = "*/5 * * * *"
 
+# Check for unapproved completed subtasks every 1 minute
+[functions."finops-approval-check"]
+  schedule = "*/1 * * * *"
+
 [[headers]]
   for = "/api/*"
   [headers.values]

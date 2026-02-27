@@ -574,12 +574,33 @@ export class TicketRepository {
 
     if (filters.date_from) {
       whereConditions.push(`t.created_at >= $${paramIndex++}`);
-      queryParams.push(filters.date_from);
+      // Convert IST date to UTC for direct comparison (allows index usage)
+      // If already ISO timestamp with 'T', use as-is; otherwise treat as IST date and convert to UTC
+      let dateFromValue: string;
+      if (filters.date_from.includes("T")) {
+        dateFromValue = filters.date_from;
+      } else {
+        // Parse IST date (YYYY-MM-DD) and convert to UTC
+        // IST is UTC+5:30, so IST 00:00:00 = UTC 18:30:00 previous day
+        const parts = filters.date_from.split("-");
+        const date = new Date(`${filters.date_from}T00:00:00+05:30`);
+        dateFromValue = date.toISOString();
+      }
+      queryParams.push(dateFromValue);
     }
 
     if (filters.date_to) {
       whereConditions.push(`t.created_at <= $${paramIndex++}`);
-      queryParams.push(filters.date_to);
+      // Convert IST date to UTC for direct comparison
+      let dateToValue: string;
+      if (filters.date_to.includes("T")) {
+        dateToValue = filters.date_to;
+      } else {
+        // Parse IST date and set to end of day (23:59:59)
+        const date = new Date(`${filters.date_to}T23:59:59+05:30`);
+        dateToValue = date.toISOString();
+      }
+      queryParams.push(dateToValue);
     }
 
     // Support 'unassigned' (tickets with no assignee)
@@ -621,6 +642,14 @@ export class TicketRepository {
         ${whereClause}
       `;
 
+      if (debug) {
+        console.log("[TicketRepository.getAll] countQuery:", countQuery);
+        console.log(
+          "[TicketRepository.getAll] countQuery params:",
+          queryParams,
+        );
+      }
+
       // Run COUNT(*) but timeout if takes too long (fast path preferred). This avoids long-running COUNT on very large tables.
       const COUNT_TIMEOUT_MS = 2000; // 2s
       const countPromise = pool.query(countQuery, queryParams);
@@ -635,6 +664,9 @@ export class TicketRepository {
       try {
         countResult = await Promise.race([countPromise, timeoutPromise]);
         total = parseInt(countResult.rows[0].count);
+        if (debug) {
+          console.log("[TicketRepository.getAll] COUNT result:", total);
+        }
       } catch (countErr) {
         // COUNT timed out or failed; fall back to an estimate
         console.warn(
@@ -648,6 +680,12 @@ export class TicketRepository {
           estRes2.rows[0] && estRes2.rows[0].estimate
             ? Number(estRes2.rows[0].estimate)
             : 0;
+        if (debug) {
+          console.log(
+            "[TicketRepository.getAll] COUNT fallback estimate:",
+            total,
+          );
+        }
       }
     } catch (outerErr) {
       console.warn(
@@ -657,44 +695,34 @@ export class TicketRepository {
       total = 0;
     }
 
-    // Get status counts (without filters to show total counts per status)
-    // This can be expensive on large datasets. Use a short in-memory cache to avoid
-    // running the aggregation on every request (TTL: 15s).
+    // Get status counts (with filters to show counts matching the current query)
     if (debug)
       console.log(
-        "[TicketRepository.getAll] computing status counts (cachePresent=",
-        !!(global as any)._ticketStatusCountsCache,
-        ")",
+        "[TicketRepository.getAll] computing status counts with filters",
       );
-    const cacheAny: any = (global as any)._ticketStatusCountsCache || {};
-    const CACHE_TTL_MS = 15 * 1000; // 15 seconds
     let status_counts: Record<string, number> = {};
     try {
-      if (
-        cacheAny._status_counts &&
-        cacheAny._status_counts_ts &&
-        Date.now() - cacheAny._status_counts_ts < CACHE_TTL_MS
-      ) {
-        status_counts = cacheAny._status_counts;
-      } else {
-        const statusCountsQuery = `
-          SELECT ts.name, COUNT(*) as count
-          FROM tickets t
-          LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
-          GROUP BY ts.name
-          ORDER BY ts.name
-        `;
-        const statusCountsResult = await pool.query(statusCountsQuery, []);
-        status_counts = {};
-        statusCountsResult.rows.forEach((row: any) => {
-          status_counts[row.name || "Unknown"] = parseInt(row.count);
-        });
-        cacheAny._status_counts = status_counts;
-        cacheAny._status_counts_ts = Date.now();
-        (global as any)._ticketStatusCountsCache = cacheAny;
+      const statusCountsQuery = `
+        SELECT COALESCE(ts.name, 'Unknown') as status_name, COUNT(DISTINCT t.id) as count
+        FROM tickets t
+        LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+        ${whereClause}
+        GROUP BY ts.name
+        ORDER BY ts.name
+      `;
+      const statusCountsResult = await pool.query(
+        statusCountsQuery,
+        queryParams,
+      );
+      status_counts = {};
+      statusCountsResult.rows.forEach((row: any) => {
+        status_counts[row.status_name] = parseInt(row.count);
+      });
+      if (debug) {
+        console.log("[TicketRepository.getAll] status_counts:", status_counts);
       }
     } catch (e) {
-      console.warn("Failed to compute status counts cache:", e?.message || e);
+      console.warn("Failed to compute status counts:", e?.message || e);
       status_counts = {};
     }
 
@@ -722,7 +750,60 @@ export class TicketRepository {
       t.mail_config_id,
       t.created_at,
       t.updated_at,
-      (EXTRACT(EPOCH FROM (t.sla_time - NOW())) * 1000)::BIGINT AS sla_remaining_ms,
+      to_char((
+        CASE
+          WHEN t.sla_time IS NOT NULL THEN t.sla_time
+          WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'UTC') + ((t.demand * 5) * INTERVAL '1 hour')
+          ELSE (
+            (t.created_at AT TIME ZONE 'UTC') + (
+              CASE COALESCE(t.priority_id, 0)
+                WHEN 0 THEN INTERVAL '2 hours'
+                WHEN 1 THEN INTERVAL '2 hours'
+                WHEN 2 THEN INTERVAL '5 hours'
+                WHEN 3 THEN INTERVAL '8 hours'
+                WHEN 4 THEN INTERVAL '24 hours'
+                WHEN 5 THEN INTERVAL '48 hours'
+                ELSE INTERVAL '5 hours'
+              END
+            )
+          )
+        END
+      ), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
+      (EXTRACT(EPOCH FROM (
+        (
+          CASE
+            WHEN t.sla_time IS NOT NULL THEN t.sla_time
+            WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'UTC') + ((t.demand * 5) * INTERVAL '1 hour')
+            ELSE (
+              (t.created_at AT TIME ZONE 'UTC') + (
+                CASE COALESCE(t.priority_id, 0)
+                  WHEN 0 THEN INTERVAL '2 hours'
+                  WHEN 1 THEN INTERVAL '2 hours'
+                  WHEN 2 THEN INTERVAL '5 hours'
+                  WHEN 3 THEN INTERVAL '8 hours'
+                  WHEN 4 THEN INTERVAL '24 hours'
+                  WHEN 5 THEN INTERVAL '48 hours'
+                  ELSE INTERVAL '5 hours'
+                END
+              )
+            )
+          END
+          - NOW()
+        )
+      )) * 1000)::BIGINT AS sla_remaining_ms,
+      to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') as debug_now_utc,
+      to_char(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_now_ist,
+      to_char(TIMEZONE('Asia/Kolkata', NOW()), 'YYYY-MM-DD HH24:MI:SS') as debug_now_ist2,
+      to_char((
+        CASE
+          WHEN t.sla_time IS NOT NULL THEN t.sla_time
+          WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'UTC') + ((t.demand * 5) * INTERVAL '1 hour')
+          ELSE (t.created_at AT TIME ZONE 'UTC') + INTERVAL '5 hours'
+        END
+      ) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_sla_deadline_raw,
+      to_char((t.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS') as debug_created_at,
+      EXTRACT(EPOCH FROM ((t.created_at AT TIME ZONE 'UTC') + ((t.demand * 5) * INTERVAL '1 hour'))) as debug_sla_epoch,
+      EXTRACT(EPOCH FROM NOW()) as debug_now_epoch,
       tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
       ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
       tc.name as category_name, tc.color as category_color,
@@ -935,6 +1016,32 @@ export class TicketRepository {
         `[TicketRepository.getAll] finished - tickets=${tickets.length} total=${total} pages=${pages} elapsed=${Date.now() - startTs}ms`,
       );
 
+    // Log first ticket's SLA debug info
+    if (tickets.length > 0 && ticketsResult.rows.length > 0) {
+      const firstRow = ticketsResult.rows[0];
+      console.log(`[TicketRepository.getAll] First ticket SLA debug:`, {
+        id: firstRow.id,
+        track_id: firstRow.track_id,
+        demand: firstRow.demand,
+        created_at: firstRow.debug_created_at,
+        sla_deadline: firstRow.debug_sla_deadline_raw,
+        now_utc: firstRow.debug_now_utc,
+        now_ist: firstRow.debug_now_ist,
+        now_ist2: firstRow.debug_now_ist2,
+        sla_epoch: firstRow.debug_sla_epoch,
+        now_epoch: firstRow.debug_now_epoch,
+        epoch_diff: firstRow.debug_sla_epoch - firstRow.debug_now_epoch,
+        epoch_diff_hours: (
+          (firstRow.debug_sla_epoch - firstRow.debug_now_epoch) /
+          3600
+        ).toFixed(2),
+        sla_remaining_ms: firstRow.sla_remaining_ms,
+        sla_remaining_hours: firstRow.sla_remaining_ms
+          ? (firstRow.sla_remaining_ms / (1000 * 60 * 60)).toFixed(2)
+          : null,
+      });
+    }
+
     return {
       tickets,
       total,
@@ -947,8 +1054,27 @@ export class TicketRepository {
   // Get ticket by ID
   static async getById(id: number): Promise<Ticket> {
     const result = await pool.query(
-      `SELECT 
+      `SELECT
         t.*,
+        to_char((
+          CASE
+            WHEN t.sla_time IS NOT NULL THEN t.sla_time
+            WHEN t.demand IS NOT NULL THEN (t.created_at AT TIME ZONE 'UTC') + ((t.demand * 5) * INTERVAL '1 hour')
+            ELSE (
+              (t.created_at AT TIME ZONE 'UTC') + (
+                CASE COALESCE(t.priority_id, 0)
+                  WHEN 0 THEN INTERVAL '2 hours'
+                  WHEN 1 THEN INTERVAL '2 hours'
+                  WHEN 2 THEN INTERVAL '5 hours'
+                  WHEN 3 THEN INTERVAL '8 hours'
+                  WHEN 4 THEN INTERVAL '24 hours'
+                  WHEN 5 THEN INTERVAL '48 hours'
+                  ELSE INTERVAL '5 hours'
+                END
+              )
+            )
+          END
+        ), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time,
         tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
         ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
         tc.name as category_name, tc.color as category_color,

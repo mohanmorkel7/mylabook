@@ -91,6 +91,8 @@ interface EnhancedFinOpsSubTask {
   assigned_to?: string;
   started_at?: string;
   completed_at?: string;
+  delayed_at?: string;
+  overdue_at?: string;
   due_at?: string;
   delay_reason?: string;
   delay_notes?: string;
@@ -267,21 +269,58 @@ function SortableSubTaskItem({
 
               <div>
                 <Label>Status</Label>
-                <Select
-                  value={subtask.status}
-                  onValueChange={handleStatusChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="delayed">Delayed</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  let isEditable = true;
+                  try {
+                    if (subtask.start_time && subtask.status === "pending") {
+                      const istNow = new Date(
+                        new Date().toLocaleString("en-US", {
+                          timeZone: "Asia/Kolkata",
+                        }),
+                      );
+                      const [hh, mm] = (subtask.start_time || "")
+                        .split(":")
+                        .map(Number);
+                      const scheduled = new Date(
+                        istNow.getFullYear(),
+                        istNow.getMonth(),
+                        istNow.getDate(),
+                        hh || 0,
+                        mm || 0,
+                      );
+                      const scheduledMinus30 = new Date(
+                        scheduled.getTime() - 30 * 60000,
+                      );
+                      if (istNow.getTime() < scheduledMinus30.getTime())
+                        isEditable = false;
+                    }
+                  } catch (e) {}
+
+                  return (
+                    <Select
+                      value={subtask.status}
+                      onValueChange={handleStatusChange}
+                      disabled={!isEditable}
+                    >
+                      <SelectTrigger
+                        title={
+                          isEditable
+                            ? undefined
+                            : "Locked until 30 minutes before Start time (IST)"
+                        }
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="delayed">Delayed</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  );
+                })()}
               </div>
             </div>
 
@@ -888,6 +927,42 @@ export default function EnhancedFinOpsTaskManager() {
                                   </div>
                                   <div className="text-xs text-gray-500 flex items-center gap-3">
                                     <span>Start: {subtask.start_time}</span>
+                                    {subtask.started_at && (
+                                      <span>
+                                        Started:{" "}
+                                        {format(
+                                          new Date(subtask.started_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
+                                    )}
+                                    {subtask.completed_at && (
+                                      <span>
+                                        Completed:{" "}
+                                        {format(
+                                          new Date(subtask.completed_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
+                                    )}
+                                    {subtask.delayed_at && (
+                                      <span className="text-yellow-700">
+                                        Delayed:{" "}
+                                        {format(
+                                          new Date(subtask.delayed_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
+                                    )}
+                                    {subtask.overdue_at && (
+                                      <span className="text-red-700">
+                                        Overdue:{" "}
+                                        {format(
+                                          new Date(subtask.overdue_at),
+                                          "h:mm a",
+                                        )}
+                                      </span>
+                                    )}
                                     <span>
                                       SLA: {subtask.sla_hours}h{" "}
                                       {subtask.sla_minutes}m

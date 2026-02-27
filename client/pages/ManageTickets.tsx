@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { formatDistanceToNowStrict } from "date-fns";
 
 // Safe wrapper: formats distance to now strictly, returns 'Unknown' on invalid dates
@@ -129,6 +129,8 @@ const STATUS_OPTIONS = [
 
 export default function ManageTickets() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [totalTickets, setTotalTickets] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -457,6 +459,7 @@ export default function ManageTickets() {
     dateFrom: "",
     dateTo: "",
   });
+  const [filtersInitialized, setFiltersInitialized] = useState(false);
 
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const { toast } = useToast();
@@ -465,6 +468,26 @@ export default function ManageTickets() {
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const filtersRef = useRef<HTMLDivElement | null>(null);
   const [pageSize, setPageSize] = useState<number>(50);
+
+  // Initialize filters from URL on mount and when URL changes (e.g., going back in history)
+  useEffect(() => {
+    const restored = {
+      searchText: searchParams.get("searchText") ?? "",
+      priority: searchParams.get("priority") ?? "",
+      status: searchParams.get("status") ?? "",
+      assignedTo: searchParams.get("assignedTo") ?? "",
+      source: searchParams.get("source") ?? "",
+      dateFrom: searchParams.get("dateFrom") ?? "",
+      dateTo: searchParams.get("dateTo") ?? "",
+    };
+    // Only update if there are actually URL params or if first init
+    const hasUrlParams = searchParams.toString().length > 0;
+    if (hasUrlParams || !filtersInitialized) {
+      console.log("[ManageTickets] Restored filters from URL:", restored);
+      setFilters(restored);
+      setFiltersInitialized(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchTickets(currentPage);
@@ -494,6 +517,35 @@ export default function ManageTickets() {
     setCurrentPage(1);
     fetchTickets(1);
   }, [filters]);
+
+  // Keep URL search params in sync with filters so state survives refresh and navigation
+  useEffect(() => {
+    // Skip syncing if we just initialized from URL (within same render cycle)
+    if (!filtersInitialized) return;
+
+    try {
+      const params = new URLSearchParams();
+      if (filters.searchText) params.set("searchText", filters.searchText);
+      if (filters.priority) params.set("priority", String(filters.priority));
+      if (filters.status) params.set("status", String(filters.status));
+      if (filters.assignedTo) params.set("assignedTo", String(filters.assignedTo));
+      if (filters.source) params.set("source", String(filters.source));
+      if (filters.dateFrom) params.set("dateFrom", String(filters.dateFrom));
+      if (filters.dateTo) params.set("dateTo", String(filters.dateTo));
+
+      // Check if params are different from current URL to avoid unnecessary updates
+      const currentParams = new URLSearchParams(location.search);
+      const newParamsStr = params.toString();
+      const currentParamsStr = currentParams.toString();
+
+      if (newParamsStr !== currentParamsStr) {
+        console.log("[ManageTickets] Syncing filters to URL:", newParamsStr);
+        setSearchParams(params, { replace: true });
+      }
+    } catch (e) {
+      console.warn("Failed to sync filters to URL", e);
+    }
+  }, [filters, filtersInitialized, setSearchParams, location.search]);
 
   // Extract tags from tickets and update dropdown (must run before applyFilters)
   useEffect(() => {
@@ -2419,14 +2471,14 @@ export default function ManageTickets() {
                     <Card
                       key={t.id}
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
-                      onClick={() => navigate(`/tickets/${t.id}`)}
+                      onClick={() => navigate(`/tickets/${t.id}${location.search}`)}
                     >
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
                             <CardTitle className="text-sm font-semibold mb-1 truncate">
                               <Link
-                                to={`/tickets/${t.id}`}
+                                to={`/tickets/${t.id}${location.search}` }
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -2547,7 +2599,7 @@ export default function ManageTickets() {
                           </div>
 
                           <div className="flex gap-2 items-center">
-                            <Link to={`/tickets/${t.id}/edit`}>
+                            <Link to={`/tickets/${t.id}/edit${location.search}` }>
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -2716,14 +2768,14 @@ export default function ManageTickets() {
                     <Card
                       key={ct.id}
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
-                      onClick={() => navigate(`/tickets/${t.id}`)}
+                      onClick={() => navigate(`/tickets/${t.id}${location.search}`)}
                     >
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
                             <CardTitle className="text-sm font-semibold mb-1 truncate">
                               <Link
-                                to={`/tickets/${t.id}`}
+                                to={`/tickets/${t.id}${location.search}` }
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -2845,7 +2897,7 @@ export default function ManageTickets() {
                           </div>
 
                           <div className="flex gap-2 items-center">
-                            <Link to={`/tickets/${t.id}/edit`}>
+                            <Link to={`/tickets/${t.id}/edit${location.search}` }>
                               <Button
                                 size="sm"
                                 variant="ghost"

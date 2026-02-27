@@ -776,47 +776,77 @@ function SortableSubTaskItem({
                       try {
                         const currentUser = (useAuth() as any)?.user || null;
 
-                        const normalize = (value: string) =>
-                          (value || "")
-                            .toLowerCase()
-                            .replace(/\s+/g, " ")
-                            .trim();
-
-                        const normalizedUserName = normalize(
-                          currentUser?.name || currentUser?.email || "",
-                        );
+                        if (!currentUser || !currentUser.name) return null;
 
                         const isAdmin = currentUser?.role === "admin";
 
-                        // Safely parse managers arrays
+                        // Use the same robust parsing as canEditFinOpsTasks
                         const parseManagersArray = (managers: any): string[] => {
-                          if (Array.isArray(managers)) return managers;
-                          if (typeof managers === "string") {
-                            try {
-                              const parsed = JSON.parse(managers);
-                              return Array.isArray(parsed) ? parsed : [];
-                            } catch {
-                              return [];
-                            }
+                          if (!managers) return [];
+
+                          // Already an array
+                          if (Array.isArray(managers)) {
+                            return managers.filter(Boolean).map(m => String(m).trim());
                           }
+
+                          // String that might be JSON
+                          if (typeof managers === "string") {
+                            const trimmed = managers.trim();
+                            if (!trimmed) return [];
+
+                            // Try to parse as JSON array
+                            try {
+                              const parsed = JSON.parse(trimmed);
+                              if (Array.isArray(parsed)) {
+                                return parsed.filter(Boolean).map(m => String(m).trim());
+                              }
+                            } catch {}
+
+                            // Might be a single name or "name (email)" format
+                            return [trimmed];
+                          }
+
                           return [];
                         };
 
-                        const isReporting =
-                          parseManagersArray(task?.reporting_managers)
-                            .map(normalize)
-                            .includes(normalizedUserName);
+                        // Helper to check if user matches a manager entry
+                        const userMatchesManager = (manager: string): boolean => {
+                          if (!manager || !currentUser.name) return false;
 
-                        const isEscalation =
-                          parseManagersArray(task?.escalation_managers)
-                            .map(normalize)
-                            .includes(normalizedUserName);
+                          const managerName = extractNameFromValue(manager);
+                          const userNameLower = currentUser.name.toLowerCase().trim();
 
-                        const isAssigned =
-                          Array.isArray(task?.assigned_to) &&
-                          task.assigned_to
-                            .map(normalize)
-                            .includes(normalizedUserName);
+                          // Check name match (case-insensitive and trim)
+                          if (managerName) {
+                            const managerNameLower = managerName.toLowerCase().trim();
+                            if (managerNameLower === userNameLower) {
+                              return true;
+                            }
+                            // Also check if manager name contains user name (for partial matches)
+                            if (managerNameLower.includes(userNameLower)) {
+                              return true;
+                            }
+                          }
+
+                          // Check email match (case-insensitive)
+                          if (currentUser.email) {
+                            const managerStr = manager.toLowerCase();
+                            const userEmailLower = currentUser.email.toLowerCase();
+                            if (managerStr.includes(userEmailLower)) {
+                              return true;
+                            }
+                          }
+
+                          return false;
+                        };
+
+                        const reportingManagers = parseManagersArray(task?.reporting_managers);
+                        const escalationManagers = parseManagersArray(task?.escalation_managers);
+                        const assignedTo = parseManagersArray(task?.assigned_to);
+
+                        const isReporting = reportingManagers.some(userMatchesManager);
+                        const isEscalation = escalationManagers.some(userMatchesManager);
+                        const isAssigned = assignedTo.some(userMatchesManager);
 
                         const isApproved = Boolean(
                           (subtask as any)?.approved_by,

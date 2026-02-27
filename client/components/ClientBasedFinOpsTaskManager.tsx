@@ -260,7 +260,12 @@ const PendingApprovalTimer = ({
               console.log(
                 `📤 Sending Pulse alert request for subtask ${subtaskId} (Cycle ${cycleNumber})...`,
               );
-              const response = await fetch(
+
+              // Prepare the alert payload
+              const title = `Approval pending for subtask ${subtaskId} - Action required`;
+              const user_ids = []; // Will be sent as empty array to notify the CRM_Switch receiver
+
+              await fetch(
                 "https://pulsealerts.mylapay.com/direct-call",
                 {
                   method: "POST",
@@ -268,26 +273,29 @@ const PendingApprovalTimer = ({
                     "Content-Type": "application/json",
                   },
                   body: JSON.stringify({
-                    subtask_id: subtaskId,
-                    alert_type: "approval_timeout",
-                    timestamp: new Date().toISOString(),
-                    cycle_number: cycleNumber,
+                    receiver: "CRM_Switch",
+                    title: title,
+                    user_ids: user_ids,
                   }),
                 },
-              );
-
-              if (!response.ok) {
-                console.warn(
-                  `⚠️ Pulse alert API returned status ${response.status} for subtask ${subtaskId}`,
+              ).then((response) => {
+                if (!response.ok) {
+                  console.warn(
+                    `⚠️ Pulse alert API returned status ${response.status} for subtask ${subtaskId}`,
+                  );
+                } else {
+                  console.log(
+                    `✅ Pulse alert triggered for subtask ${subtaskId} at cycle ${cycleNumber}`,
+                  );
+                }
+              }).catch((err) => {
+                console.error(
+                  `❌ Failed to trigger pulse alert for subtask ${subtaskId}: ${(err as Error).message}`,
                 );
-              } else {
-                console.log(
-                  `✅ Pulse alert triggered for subtask ${subtaskId} at cycle ${cycleNumber}`,
-                );
-              }
+              });
             } catch (error) {
               console.error(
-                `❌ Failed to trigger pulse alert for subtask ${subtaskId}:`,
+                `❌ Error preparing pulse alert for subtask ${subtaskId}:`,
                 error,
               );
             }

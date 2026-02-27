@@ -1137,25 +1137,36 @@ export default function ClientBasedFinOpsTaskManager() {
           })()
         : [];
 
+    // Helper to check if user matches a manager entry
+    const userMatchesManager = (manager: any): boolean => {
+      const managerName = extractNameFromValue(manager);
+      const managerStr = typeof manager === "string" ? manager : "";
+
+      // Check name match (case-insensitive and trim)
+      if (
+        managerName &&
+        user.name &&
+        managerName.toLowerCase().trim() === user.name.toLowerCase().trim()
+      ) {
+        return true;
+      }
+
+      // Check email match (case-insensitive)
+      if (
+        user.email &&
+        managerStr.toLowerCase().includes(user.email.toLowerCase())
+      ) {
+        return true;
+      }
+
+      return false;
+    };
+
     // Check if user is in reporting managers
-    if (
-      reportingManagers.some(
-        (manager) =>
-          extractNameFromValue(manager) === user.name ||
-          manager.includes(user.email || ""),
-      )
-    )
-      return true;
+    if (reportingManagers.some(userMatchesManager)) return true;
 
     // Check if user is in escalation managers
-    if (
-      escalationManagers.some(
-        (manager) =>
-          extractNameFromValue(manager) === user.name ||
-          manager.includes(user.email || ""),
-      )
-    )
-      return true;
+    if (escalationManagers.some(userMatchesManager)) return true;
 
     return false;
   };

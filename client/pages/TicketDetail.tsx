@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useLayoutEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -188,6 +188,7 @@ interface TicketStatus {
 export default function TicketDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const location = useLocation();
   const { toast } = useToast();
   const [ticket, setTicket] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
@@ -427,7 +428,15 @@ export default function TicketDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => navigate(-1)}>
+          <Button variant="ghost" onClick={() => {
+            // Prefer returning to the originating tickets list path stored in location.state.from
+            const from = (location && (location.state as any)?.from) || null;
+            if (from) {
+              navigate(from);
+            } else {
+              navigate(-1);
+            }
+          }}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Tickets
           </Button>
           <Button

@@ -372,8 +372,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
               ft.notification_sent_start,
               ft.notification_sent_escalation,
               ft.assigned_to::jsonb AS assigned_to,
-              COALESCE(ft.reporting_managers, '[]'::jsonb) AS reporting_managers,
-              COALESCE(ft.escalation_managers, '[]'::jsonb) AS escalation_managers,
+              COALESCE(t.reporting_managers::jsonb, '[]'::jsonb) AS reporting_managers,
+              COALESCE(t.escalation_managers::jsonb, '[]'::jsonb) AS escalation_managers,
               (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_by,
               (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_at
             FROM finops_tracker ft
@@ -408,8 +408,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
               COALESCE(st.notification_sent_start, false) AS notification_sent_start,
               COALESCE(st.notification_sent_escalation, false) AS notification_sent_escalation,
               COALESCE(st.assigned_to::jsonb, t.assigned_to::jsonb, '[]'::jsonb) AS assigned_to,
-              COALESCE(st.reporting_managers, t.reporting_managers, '[]'::jsonb) AS reporting_managers,
-              COALESCE(st.escalation_managers, t.escalation_managers, '[]'::jsonb) AS escalation_managers,
+              COALESCE(t.reporting_managers::jsonb, '[]'::jsonb) AS reporting_managers,
+              COALESCE(t.escalation_managers::jsonb, '[]'::jsonb) AS escalation_managers,
               (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = st.id LIMIT 1) AS approved_by,
               (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = st.id LIMIT 1) AS approved_at
             FROM finops_subtasks st

@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "@/components/ui/use-toast";
-import { formatToISTDateTime, convertToIST } from "@/lib/dateUtils";
+import { formatToISTDateTime, formatToISTTime } from "@/lib/dateUtils";
 import {
   DndContext,
   closestCenter,
@@ -343,9 +343,7 @@ const PendingApprovalTimer = ({
 const formatDateTime = (iso?: string | null) => {
   if (!iso) return "";
   try {
-    const d = convertToIST(iso);
-    if (isNaN(d.getTime())) return "";
-    return format(d, "h:mm:ss a");
+    return formatToISTTime(iso);
   } catch (e) {
     return "";
   }

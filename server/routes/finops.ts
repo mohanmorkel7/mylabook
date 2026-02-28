@@ -2629,6 +2629,7 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
               'completed_at', COALESCE(ft.completed_at, st.completed_at),
               'completed_by', ft.completed_by,
               'approved_by', ft.approved_by,
+              'approved_at', COALESCE(ft.approved_at, st.approved_at),
               'delay_reason', COALESCE(ft.delay_reason, st.delay_reason),
               'delay_notes', COALESCE(ft.delay_notes, st.delay_notes)
             ) ORDER BY st.order_position

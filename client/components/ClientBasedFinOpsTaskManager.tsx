@@ -3138,6 +3138,7 @@ export default function ClientBasedFinOpsTaskManager() {
                       "status",
                       "completed_by",
                       "approved_by",
+                      "approved_at",
                       "assigned_to",
                       "Reporting manager",
                       "Escalation manager",
@@ -3170,6 +3171,9 @@ export default function ClientBasedFinOpsTaskManager() {
                           extractNameFromValue(
                             st.approved_by || st.approvedBy || "",
                           ),
+                          st.approved_at
+                            ? formatToISTDateTime(st.approved_at)
+                            : "",
                           Array.isArray(task.assigned_to)
                             ? task.assigned_to.join(", ")
                             : task.assigned_to || "",

@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "@/components/ui/use-toast";
-import { formatToISTDateTime, formatToISTTime } from "@/lib/dateUtils";
+import { formatToISTDateTime } from "@/lib/dateUtils";
 import {
   DndContext,
   closestCenter,
@@ -343,7 +343,15 @@ const PendingApprovalTimer = ({
 const formatDateTime = (iso?: string | null) => {
   if (!iso) return "";
   try {
-    return formatToISTTime(iso);
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    });
   } catch (e) {
     return "";
   }

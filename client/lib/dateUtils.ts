@@ -21,30 +21,6 @@ const parseToDateUTC = (date: string | Date): Date => {
   return new Date(trimmed);
 };
 
-const formatToISTTimeOnly = (
-  date: string | Date,
-  options: Intl.DateTimeFormatOptions = {},
-) => {
-  const dateObj = parseToDateUTC(date);
-  if (isNaN(dateObj.getTime())) return "";
-
-  const fmt: Intl.DateTimeFormatOptions = {
-    timeZone: IST_TIMEZONE,
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-    ...options,
-  };
-
-  return new Intl.DateTimeFormat("en-IN", fmt).format(dateObj);
-};
-
-export const formatToISTTime = (
-  date: string | Date,
-  options: Intl.DateTimeFormatOptions = {},
-): string => formatToISTTimeOnly(date, options);
-
 export const formatToIST = (
   date: string | Date,
   options: Intl.DateTimeFormatOptions = {},

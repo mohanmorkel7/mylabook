@@ -345,7 +345,7 @@ const formatDateTime = (iso?: string | null) => {
   try {
     const d = convertToIST(iso);
     if (isNaN(d.getTime())) return "";
-    return format(d, "yyyy-MM-dd h:mm:ss a");
+    return format(d, "h:mm:ss a");
   } catch (e) {
     return "";
   }

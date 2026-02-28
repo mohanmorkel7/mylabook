@@ -745,7 +745,7 @@ function SortableSubTaskItem({
 
                       return (
                         <Select
-                          value={subtask.status}
+                          value={subtask.status || "pending"}
                           onValueChange={handleStatusChange}
                           disabled={!isEditable}
                         >
@@ -757,7 +757,7 @@ function SortableSubTaskItem({
                                 : "Locked until 30 minutes before Start time (IST)"
                             }
                           >
-                            <SelectValue />
+                            <SelectValue placeholder="Pending" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="pending">Pending</SelectItem>
@@ -1022,7 +1022,7 @@ function SortableSubTaskItem({
 
                     return (
                       <Select
-                        value={subtask.status}
+                        value={subtask.status || "pending"}
                         onValueChange={handleStatusChange}
                         disabled={!isEditable}
                       >
@@ -1033,7 +1033,7 @@ function SortableSubTaskItem({
                               : "Locked until 30 minutes before Start time (IST)"
                           }
                         >
-                          <SelectValue />
+                          <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pending</SelectItem>

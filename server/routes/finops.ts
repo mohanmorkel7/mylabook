@@ -5,6 +5,47 @@ import finopsScheduler from "../services/finopsScheduler";
 
 const router = Router();
 
+const IST_TIMEZONE = "Asia/Kolkata";
+const padTime = (value: number) => String(value).padStart(2, "0");
+
+const getISTNow = () =>
+  new Date(
+    new Date().toLocaleString("en-US", {
+      timeZone: IST_TIMEZONE,
+    }),
+  );
+
+const buildISTDateTime = (dateStr: string, timeStr: string): Date | null => {
+  if (!dateStr || !timeStr) return null;
+  const parts = timeStr.split(":").map((segment) => Number(segment));
+  if (parts.length < 2) return null;
+  const [hours, minutes, seconds = 0] = parts;
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    Number.isNaN(seconds)
+  ) {
+    return null;
+  }
+  const normalizedTime = `${padTime(hours)}:${padTime(minutes)}:${padTime(
+    seconds,
+  )}`;
+  return new Date(`${dateStr}T${normalizedTime}+05:30`);
+};
+
+const isStatusChangeLocked = (
+  status: string,
+  startTime: string | null | undefined,
+  updateDate: string,
+) => {
+  if (!startTime || !updateDate) return false;
+  if (status === "pending") return false;
+  const scheduled = buildISTDateTime(updateDate, startTime);
+  if (!scheduled) return false;
+  const lockUntil = new Date(scheduled.getTime() - 30 * 60 * 1000);
+  return getISTNow().getTime() < lockUntil.getTime();
+};
+
 // Cache for finops settings to avoid repeated database queries
 let cachedFinOpsSettings: any = null;
 let settingsCacheTime = 0;
@@ -1937,6 +1978,12 @@ router.patch(
       if (await isDatabaseAvailable()) {
         // finops_tracker table is created at server startup via initializeFinOpsSchema()
 
+        const startTimeResult = await pool.query(
+          `SELECT start_time FROM finops_subtasks WHERE task_id = $1 AND id = $2 LIMIT 1`,
+          [taskId, subtaskId],
+        );
+        const fallbackStartTime = startTimeResult.rows[0]?.start_time ?? null;
+
         // Fetch existing tracker row
         let trackerRes = await pool.query(
           `
@@ -1950,6 +1997,14 @@ router.patch(
         );
 
         let trackerRow: any = trackerRes.rows[0];
+        const resolvedStartTime =
+          trackerRow?.scheduled_time ?? trackerRow?.start_time ?? fallbackStartTime;
+        if (isStatusChangeLocked(status, resolvedStartTime, updateDate)) {
+          return res.status(403).json({
+            error:
+              "Status changes are locked until 30 minutes before the scheduled start time (IST).",
+          });
+        }
 
         if (!trackerRow) {
           // Fetch subtask metadata to create tracker row

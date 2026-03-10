@@ -369,10 +369,15 @@ export default function TicketDetailPage() {
   const postComment = async () => {
     if (!id || !commentText) return;
     try {
+      const storedUser = JSON.parse(localStorage.getItem("banani_user") || "{}") || {};
+      const userId = Number(storedUser.id);
+      if (Number.isNaN(userId)) {
+        throw new Error("Missing user id");
+      }
       const payload = {
         content: commentText,
         is_internal: false,
-        user_id: JSON.parse(localStorage.getItem("banani_user") || "{}").id,
+        created_by: userId,
       };
       const res = await apiClient.addTicketComment(parseInt(id), payload);
       setComments((s) => [...s, res]);
@@ -382,7 +387,7 @@ export default function TicketDetailPage() {
           parseInt(id),
           file,
           res.id,
-          payload.user_id,
+          userId.toString(),
         );
         setFile(null);
         load();

@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import { formatDistanceToNowStrict } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 
 // Safe wrapper: formats distance to now strictly, returns 'Unknown' on invalid dates
 const safeFormatDistanceToNow = (d?: string | number | Date | null): string => {
@@ -29,6 +29,19 @@ const safeFormatDistanceToNow = (d?: string | number | Date | null): string => {
     return "Unknown";
   }
 };
+
+const formatStatusTimestamp = (value?: string): string | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return format(parsed, "hh:mm:aa");
+};
+
+const STATUS_HISTORY_DISPLAY: { key: StatusHistoryKey; label: string }[] = [
+  { key: "in_progress", label: "In Progress" },
+  { key: "completed", label: "Completed" },
+  { key: "closed", label: "Closed" },
+];
 import { useAuth } from "@/lib/auth-context";
 import TicketCharts from "@/components/charts/TicketCharts";
 
@@ -88,6 +101,17 @@ interface Ticket {
   updated_at: string;
   __server_time_ms?: number;
   __fetched_at_ms?: number;
+  status_change_history?: Record<StatusHistoryKey, StatusHistoryEntry>;
+}
+
+type StatusHistoryKey = "in_progress" | "completed" | "closed";
+
+interface StatusHistoryEntry {
+  status_key: StatusHistoryKey;
+  status_name: string;
+  user_id: number | null;
+  user_name: string;
+  changed_at: string;
 }
 
 interface User {
@@ -2467,6 +2491,26 @@ export default function ManageTickets() {
 
                   const assignedLabel =
                     t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+                  const statusHistory = t.status_change_history || {};
+                  const historyRows = STATUS_HISTORY_DISPLAY.map(({ key, label }) => {
+                    const entry = statusHistory[key];
+                    if (!entry) return null;
+                    const timeLabel = formatStatusTimestamp(entry.changed_at);
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center gap-1 text-[11px] text-gray-500"
+                      >
+                        <span className="font-semibold text-gray-700">
+                          {label}:
+                        </span>
+                        <span>
+                          {entry.user_name}
+                          {timeLabel ? ` · ${timeLabel}` : ""}
+                        </span>
+                      </div>
+                    );
+                  }).filter(Boolean);
                   const stripHtml = (s: any) => {
                     try {
                       if (!s) return "";
@@ -2606,6 +2650,11 @@ export default function ManageTickets() {
                             </div>
                           ) : null}
                         </div>
+                        {historyRows.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            {historyRows}
+                          </div>
+                        )}
 
                         <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">
@@ -2778,6 +2827,26 @@ export default function ManageTickets() {
 
                   const assignedLabel =
                     t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+                  const statusHistory = t.status_change_history || {};
+                  const historyRows = STATUS_HISTORY_DISPLAY.map(({ key, label }) => {
+                    const entry = statusHistory[key];
+                    if (!entry) return null;
+                    const timeLabel = formatStatusTimestamp(entry.changed_at);
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center gap-1 text-[11px] text-gray-500"
+                      >
+                        <span className="font-semibold text-gray-700">
+                          {label}:
+                        </span>
+                        <span>
+                          {entry.user_name}
+                          {timeLabel ? ` · ${timeLabel}` : ""}
+                        </span>
+                      </div>
+                    );
+                  }).filter(Boolean);
                   const stripHtml = (s: any) => {
                     try {
                       if (!s) return "";
@@ -2918,6 +2987,11 @@ export default function ManageTickets() {
                             </div>
                           ) : null}
                         </div>
+                        {historyRows.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            {historyRows}
+                          </div>
+                        )}
 
                         <div className="mt-2 flex items-center justify-between">
                           <div className="text-xs text-gray-500">

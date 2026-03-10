@@ -61,6 +61,17 @@ export interface Ticket {
   creator?: { id: number; name: string; email: string };
   assignee?: { id: number; name: string; email: string };
   watchers?: number[]; // Array of user IDs watching this ticket
+  status_change_history?: Record<StatusHistoryKey, StatusHistoryEntry>;
+}
+
+export type StatusHistoryKey = "in_progress" | "completed" | "closed";
+
+export interface StatusHistoryEntry {
+  status_key: StatusHistoryKey;
+  status_name: string;
+  user_id: number | null;
+  user_name: string;
+  changed_at: string;
 }
 
 export interface TicketComment {
@@ -208,6 +219,16 @@ export class TicketRepository {
       return istTimestampStr.replace(" ", "T") + "Z";
     }
   }
+
+  private static STATUS_HISTORY_TEMPLATES: {
+    key: StatusHistoryKey;
+    label: string;
+    match: RegExp;
+  }[] = [
+    { key: "in_progress", label: "In Progress", match: /in progress/i },
+    { key: "completed", label: "Completed", match: /completed/i },
+    { key: "closed", label: "Closed", match: /closed/i },
+  ];
 
   // Get all priorities
   static async getPriorities(): Promise<TicketPriority[]> {
@@ -507,6 +528,70 @@ export class TicketRepository {
   }
 
   // Get tickets with filters and pagination
+  private static async getStatusChangeHistory(
+    ticketIds: number[],
+  ): Promise<Record<number, Record<StatusHistoryKey, StatusHistoryEntry>>> {
+    if (!ticketIds || ticketIds.length === 0) return {};
+    const normalizedIds = ticketIds;
+
+    const rows = await pool.query(
+      `SELECT
+        ta.ticket_id,
+        ta.user_id,
+        ta.new_value,
+        ts.name as status_name,
+        ta.created_at,
+        u.first_name,
+        u.last_name,
+        u.name as full_name,
+        u.email as user_email
+       FROM ticket_activities ta
+       LEFT JOIN ticket_statuses ts ON ts.id = NULLIF(ta.new_value, '')::int
+       LEFT JOIN users u ON u.id = ta.user_id
+       WHERE ta.ticket_id = ANY($1)
+         AND ta.field_name = 'status_id'
+         AND ta.new_value IS NOT NULL
+       ORDER BY ta.ticket_id, ta.created_at DESC`,
+      [normalizedIds],
+    );
+
+    const history: Record<number, Record<StatusHistoryKey, StatusHistoryEntry>> = {};
+    for (const row of rows.rows) {
+      const ticketId: number = row.ticket_id;
+      const statusName = String(row.status_name || "");
+      const template = TicketRepository.STATUS_HISTORY_TEMPLATES.find((t) =>
+        t.match.test(statusName),
+      );
+      if (!template) continue;
+
+      if (!history[ticketId]) history[ticketId] = {};
+      if (history[ticketId][template.key]) continue;
+
+      const actorNameParts = [row.first_name, row.last_name]
+        .filter(Boolean)
+        .map((v: string) => v.trim());
+      const actorName =
+        actorNameParts.length > 0
+          ? actorNameParts.join(" ")
+          : row.full_name || row.user_email || "User";
+      const createdAt = row.created_at;
+      const changedAt =
+        createdAt instanceof Date
+          ? createdAt.toISOString()
+          : String(createdAt || new Date().toISOString());
+
+      history[ticketId][template.key] = {
+        status_key: template.key,
+        status_name: statusName || template.label,
+        user_id: row.user_id ?? null,
+        user_name: actorName,
+        changed_at: changedAt,
+      };
+    }
+
+    return history;
+  }
+
   static async getAll(
     filters: TicketFilters = {},
     page: number = 1,
@@ -1042,8 +1127,16 @@ export class TicketRepository {
       });
     }
 
+    const statusHistoryMap = await this.getStatusChangeHistory(
+      tickets.map((ticket) => ticket.id),
+    );
+    const ticketsWithHistory = tickets.map((ticket) => ({
+      ...ticket,
+      status_change_history: statusHistoryMap[ticket.id] || {},
+    }));
+
     return {
-      tickets,
+      tickets: ticketsWithHistory,
       total,
       pages,
       status_counts,

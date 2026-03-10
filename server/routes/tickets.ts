@@ -935,12 +935,23 @@ router.post("/:ticketId/comments", async (req: Request, res: Response) => {
   try {
     if (await isDatabaseAvailable()) {
       const ticketId = parseInt(req.params.ticketId);
-      const { content, created_by } = req.body;
+      const { content } = req.body;
+      const createdByHeader = req.headers["x-user-id"] as string;
+      const { created_by } = req.body;
+      const userId = Number.isInteger(created_by)
+        ? created_by
+        : createdByHeader
+          ? parseInt(createdByHeader)
+          : undefined;
+
+      if (!userId || Number.isNaN(userId)) {
+        return res.status(400).json({ error: "Missing or invalid user id" });
+      }
 
       const comment = await TicketRepository.addComment(
         ticketId,
+        userId,
         content,
-        created_by,
       );
       res.status(201).json(comment);
     } else {

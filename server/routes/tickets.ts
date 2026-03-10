@@ -857,11 +857,21 @@ router.put("/:id", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const updateData: UpdateTicketRequest = req.body;
-    const updatedBy = req.body.updated_by || 1;
+    const headerUserIdRaw = req.headers["x-user-id"];
+    const headerUserIdValue = Array.isArray(headerUserIdRaw)
+      ? headerUserIdRaw[0]
+      : headerUserIdRaw;
+    const normalizedHeaderUserId = headerUserIdValue
+      ? normalizeUserId(headerUserIdValue)
+      : undefined;
+    const updatedByFromBody =
+      typeof req.body.updated_by !== "undefined"
+        ? normalizeUserId(req.body.updated_by)
+        : undefined;
+    const userId =
+      normalizedHeaderUserId ?? updatedByFromBody ?? normalizeUserId(1);
 
     if (await isDatabaseAvailable()) {
-      const userId = (req as any).userId || updatedBy;
-
       const updated = await TicketRepository.update(id, updateData, userId);
       if (updated) {
         res.json(updated);

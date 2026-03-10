@@ -90,10 +90,19 @@ export function initialize() {
               // Track the maximum receivedDateTime across all fetched emails (even if not matched)
               let fetchedMaxDate: Date | null = null;
 
-              // Fetch emails for all sources concurrently and process them afterwards.
-              const mailboxResults = await Promise.allSettled(
-                emailSources.map((mailbox) =>
-                  (async () => {
+              // Fetch emails for all sources with a small concurrency cap to avoid OOMs.
+              const mailboxQueue = [...emailSources];
+              const mailboxResults: Array<
+                | { mailbox: string; emails?: any[] }
+                | { mailbox: string; error: any }
+              > = [];
+              const MAX_MAILBOX_CONCURRENCY = 3;
+
+              const worker = async () => {
+                while (mailboxQueue.length > 0) {
+                  const mailbox = mailboxQueue.shift();
+                  if (!mailbox) break;
+                  try {
                     console.log(
                       `Fetching emails for config ${config.id} from mailbox ${mailbox}`,
                     );
@@ -121,28 +130,29 @@ export function initialize() {
                         }
                       }
                     }
+                    mailboxResults.push({ mailbox, emails });
+                  } catch (error) {
+                    mailboxResults.push({ mailbox, error });
+                  }
+                }
+              };
 
-                    return { mailbox, emails };
-                  })().catch((error) => {
-                    throw { mailbox, error };
-                  }),
-                ),
+              const workers = Array.from(
+                { length: Math.min(MAX_MAILBOX_CONCURRENCY, emailSources.length) },
+                () => worker(),
               );
+              await Promise.all(workers);
 
               for (const result of mailboxResults) {
-                if (result.status === "rejected") {
-                  const { mailbox, error } = result.reason as {
-                    mailbox: string;
-                    error: any;
-                  };
+                if ("error" in result) {
                   console.error(
-                    `Error fetching/processing emails from mailbox ${mailbox} for config ${config.id}:`,
-                    error?.message || error,
+                    `Error fetching/processing emails from mailbox ${result.mailbox} for config ${config.id}:`,
+                    result.error?.message || result.error,
                   );
                   continue;
                 }
 
-                const { mailbox, emails } = result.value;
+                const { mailbox, emails } = result;
 
                 anyFetchSucceeded = true;
 

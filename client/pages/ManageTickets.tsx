@@ -2442,12 +2442,24 @@ export default function ManageTickets() {
                 {paginatedTickets.map((t) => {
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);
-                  const slaText =
+                  const normalizedStatusName = String(
+                    t.status?.name || t.status || "",
+                  )
+                    .trim()
+                    .toLowerCase();
+                  const baseSlaText =
                     slaMs === null
                       ? "No SLA"
                       : slaMs <= 0
-                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                        ? `Overdue ${formatRemaining(
+                            Math.abs(slaMs),
+                          )}`
                         : formatRemaining(slaMs);
+                  const hideOverdueTimer =
+                    slaMs !== null &&
+                    slaMs <= 0 &&
+                    normalizedStatusName !== "open";
+                  const slaText = hideOverdueTimer ? "" : baseSlaText;
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -2588,9 +2600,11 @@ export default function ManageTickets() {
                             <Badge variant="outline">{provider}</Badge>
                           )}
 
-                          <div className="ml-auto text-right text-xs text-gray-500">
-                            <div className={`text-gray-600`}>{slaText}</div>
-                          </div>
+                          {slaText ? (
+                            <div className="ml-auto text-right text-xs text-gray-500">
+                              <div className="text-gray-600">{slaText}</div>
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="mt-2 flex items-center justify-between">
@@ -2739,12 +2753,24 @@ export default function ManageTickets() {
 
                   const pr = getPriorityBadge(t.priority_id || 0);
                   const slaMs = computeSlaMsForTicket(t);
-                  const slaText =
+                  const normalizedStatusName = String(
+                    t.status?.name || t.status || "",
+                  )
+                    .trim()
+                    .toLowerCase();
+                  const baseSlaText =
                     slaMs === null
                       ? "No SLA"
                       : slaMs <= 0
-                        ? `Overdue ${formatRemaining(Math.abs(slaMs))}`
+                        ? `Overdue ${formatRemaining(
+                            Math.abs(slaMs),
+                          )}`
                         : formatRemaining(slaMs);
+                  const hideOverdueTimer =
+                    slaMs !== null &&
+                    slaMs <= 0 &&
+                    normalizedStatusName !== "open";
+                  const slaText = hideOverdueTimer ? "" : baseSlaText;
                   const provider = getMailConfigProviderName(
                     t.mail_config_sources || t.mail_config_sources,
                     t.description,
@@ -2886,9 +2912,11 @@ export default function ManageTickets() {
                             <Badge variant="outline">{provider}</Badge>
                           )}
 
-                          <div className="ml-auto text-right text-xs text-gray-500">
-                            <div className={`text-gray-600`}>{slaText}</div>
-                          </div>
+                          {slaText ? (
+                            <div className="ml-auto text-right text-xs text-gray-500">
+                              <div className="text-gray-600">{slaText}</div>
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="mt-2 flex items-center justify-between">

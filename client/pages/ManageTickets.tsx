@@ -2488,7 +2488,7 @@ export default function ManageTickets() {
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
-                            <CardTitle className="text-sm font-semibold mb-1 truncate">
+                            <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
                                 to={`/tickets/${t.id}${location.search}` }
                                 className="hover:underline"
@@ -2799,7 +2799,7 @@ export default function ManageTickets() {
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
-                            <CardTitle className="text-sm font-semibold mb-1 truncate">
+                            <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
                                 to={`/tickets/${t.id}${location.search}` }
                                 className="hover:underline"

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useLayoutEffect } from "react";
+import React, { useEffect, useState, useLayoutEffect, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -195,6 +195,13 @@ export default function TicketDetailPage() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const clearFileSelection = () => {
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editData, setEditData] = useState({
     status_id: null,
@@ -394,9 +401,9 @@ export default function TicketDetailPage() {
           res.id,
           userId.toString(),
         );
-        setFile(null);
-        load();
+        await load();
       }
+      clearFileSelection();
     } catch (e) {
       console.error(e);
       alert("Failed to post comment");
@@ -684,6 +691,7 @@ export default function TicketDetailPage() {
                   />
                   <div className="flex items-center gap-3 mt-2">
                     <input
+                      ref={fileInputRef}
                       type="file"
                       onChange={(e) =>
                         setFile(e.target.files ? e.target.files[0] : null)

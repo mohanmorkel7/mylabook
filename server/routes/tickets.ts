@@ -1004,9 +1004,22 @@ router.put(
 
 // Helper to normalize uploaded file response
 const handleTicketFileUpload = async (req: Request, res: Response) => {
+  const cleanupTempFile = () => {
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.warn("Failed to cleanup uploaded file:", cleanupError);
+      }
+    }
+  };
+
+  let attachmentInserted = false;
+
   try {
     const ticketId = parseInt(req.params.ticketId, 10);
     if (Number.isNaN(ticketId)) {
+      cleanupTempFile();
       return res.status(400).json({ error: "Invalid ticket ID" });
     }
 
@@ -1021,29 +1034,64 @@ const handleTicketFileUpload = async (req: Request, res: Response) => {
         ? parseInt(commentIdRaw as string, 10)
         : undefined;
     const userId =
-      userIdRaw !== undefined
-        ? parseInt(userIdRaw as string, 10)
-        : undefined;
+      userIdRaw !== undefined ? parseInt(userIdRaw as string, 10) : undefined;
 
+    const commentIdValue =
+      typeof commentId === "number" && !Number.isNaN(commentId)
+        ? commentId
+        : null;
+    const userIdValue =
+      typeof userId === "number" && !Number.isNaN(userId) ? userId : null;
+
+    const filePath = `/uploads/tickets/${req.file.filename}`;
     const fileInfo: any = {
       ticket_id: ticketId,
       filename: req.file.filename,
       originalName: req.file.originalname,
+      original_filename: req.file.originalname,
+      file_path: filePath,
+      path: filePath,
       size: req.file.size,
+      file_size: req.file.size,
       mimetype: req.file.mimetype,
-      path: `/uploads/tickets/${req.file.filename}`,
+      mime_type: req.file.mimetype,
     };
 
-    if (commentId && !Number.isNaN(commentId)) {
-      fileInfo.comment_id = commentId;
+    if (commentIdValue !== null) {
+      fileInfo.comment_id = commentIdValue;
     }
-    if (userId && !Number.isNaN(userId)) {
-      fileInfo.user_id = userId;
+    if (userIdValue !== null) {
+      fileInfo.user_id = userIdValue;
     }
+
+    const insertResult = await pool.query(
+      `INSERT INTO ticket_attachments
+        (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, uploaded_at`,
+      [
+        ticketId,
+        commentIdValue,
+        userIdValue,
+        req.file.filename,
+        req.file.originalname,
+        filePath,
+        req.file.size,
+        req.file.mimetype,
+      ],
+    );
+
+    attachmentInserted = true;
+    const insertedAttachment = insertResult.rows[0];
+    fileInfo.id = insertedAttachment.id;
+    fileInfo.uploaded_at = insertedAttachment.uploaded_at;
 
     res.json(fileInfo);
   } catch (error) {
     console.error("Error uploading file:", error);
+    if (!attachmentInserted) {
+      cleanupTempFile();
+    }
     res.status(500).json({ error: "Failed to upload file" });
   }
 };

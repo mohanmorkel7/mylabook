@@ -1046,6 +1046,7 @@ const handleTicketFileUpload = async (req: Request, res: Response) => {
     const filePath = `/uploads/tickets/${req.file.filename}`;
     const fileInfo: any = {
       ticket_id: ticketId,
+      file_name: req.file.filename,
       filename: req.file.filename,
       originalName: req.file.originalname,
       original_filename: req.file.originalname,
@@ -1066,13 +1067,14 @@ const handleTicketFileUpload = async (req: Request, res: Response) => {
 
     const insertResult = await pool.query(
       `INSERT INTO ticket_attachments
-        (ticket_id, comment_id, user_id, filename, original_filename, file_path, file_size, mime_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        (ticket_id, comment_id, user_id, file_name, filename, original_filename, file_path, file_size, mime_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, uploaded_at`,
       [
         ticketId,
         commentIdValue,
         userIdValue,
+        req.file.filename,
         req.file.filename,
         req.file.originalname,
         filePath,

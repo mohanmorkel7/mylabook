@@ -270,7 +270,12 @@ export default function TicketDetailPage() {
         watcher_user_ids: t.watchers || [],
       });
       const c = await apiClient.getTicketComments(parseInt(id));
-      setComments(Array.isArray(c) ? c : []);
+      const normalizedComments = Array.isArray(c)
+        ? c
+        : Array.isArray((c as any)?.comments)
+          ? (c as any).comments
+          : [];
+      setComments(normalizedComments);
     } catch (e) {
       console.error(e);
     }

@@ -1002,30 +1002,64 @@ router.put(
   },
 );
 
+// Helper to normalize uploaded file response
+const handleTicketFileUpload = async (req: Request, res: Response) => {
+  try {
+    const ticketId = parseInt(req.params.ticketId, 10);
+    if (Number.isNaN(ticketId)) {
+      return res.status(400).json({ error: "Invalid ticket ID" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const commentIdRaw = req.body?.comment_id;
+    const userIdRaw = req.body?.user_id;
+    const commentId =
+      commentIdRaw !== undefined
+        ? parseInt(commentIdRaw as string, 10)
+        : undefined;
+    const userId =
+      userIdRaw !== undefined
+        ? parseInt(userIdRaw as string, 10)
+        : undefined;
+
+    const fileInfo: any = {
+      ticket_id: ticketId,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      path: `/uploads/tickets/${req.file.filename}`,
+    };
+
+    if (commentId && !Number.isNaN(commentId)) {
+      fileInfo.comment_id = commentId;
+    }
+    if (userId && !Number.isNaN(userId)) {
+      fileInfo.user_id = userId;
+    }
+
+    res.json(fileInfo);
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    res.status(500).json({ error: "Failed to upload file" });
+  }
+};
+
 // Upload file for a ticket
 router.post(
   "/:ticketId/upload",
   upload.single("file"),
-  async (req: Request, res: Response) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
+  handleTicketFileUpload,
+);
 
-      const fileInfo = {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-        path: `/uploads/tickets/${req.file.filename}`,
-      };
-
-      res.json(fileInfo);
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      res.status(500).json({ error: "Failed to upload file" });
-    }
-  },
+// Upload attachments for a ticket (current UI expectation)
+router.post(
+  "/:ticketId/attachments",
+  upload.single("file"),
+  handleTicketFileUpload,
 );
 
 // Get assigned options

@@ -5,41 +5,190 @@ import finopsScheduler from "../services/finopsScheduler";
 
 const router = Router();
 
-// FinOps settings storage (single-row settings table)
-async function ensureFinOpsSettings() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS finops_settings (
-      id SERIAL PRIMARY KEY,
-      initial_overdue_call_delay_minutes INTEGER DEFAULT 0,
-      repeat_overdue_call_interval_minutes INTEGER DEFAULT 15,
-      only_repeat_when_single_overdue BOOLEAN DEFAULT false,
-      pulse_alerts_enabled BOOLEAN DEFAULT true,
-      updated_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  // Add column if it doesn't exist (for existing installations)
-  await pool.query(`
-    ALTER TABLE finops_settings
-    ADD COLUMN IF NOT EXISTS pulse_alerts_enabled BOOLEAN DEFAULT true
-  `);
-  const row = await pool.query(
-    `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
+const IST_TIMEZONE = "Asia/Kolkata";
+const padTime = (value: number) => String(value).padStart(2, "0");
+
+const getISTNow = () =>
+  new Date(
+    new Date().toLocaleString("en-US", {
+      timeZone: IST_TIMEZONE,
+    }),
   );
-  if (row.rows.length === 0) {
-    await pool.query(
-      `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue, pulse_alerts_enabled)
-       VALUES ($1, $2, $3, $4)`,
-      [0, 15, false, true],
+
+const buildISTDateTime = (dateStr: string, timeStr: string): Date | null => {
+  if (!dateStr || !timeStr) return null;
+  const parts = timeStr.split(":").map((segment) => Number(segment));
+  if (parts.length < 2) return null;
+  const [hours, minutes, seconds = 0] = parts;
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    Number.isNaN(seconds)
+  ) {
+    return null;
+  }
+  const normalizedTime = `${padTime(hours)}:${padTime(minutes)}:${padTime(
+    seconds,
+  )}`;
+  return new Date(`${dateStr}T${normalizedTime}+05:30`);
+};
+
+const isStatusChangeLocked = (
+  status: string,
+  startTime: string | null | undefined,
+  updateDate: string,
+) => {
+  if (!startTime || !updateDate) return false;
+  if (status === "pending") return false;
+  const scheduled = buildISTDateTime(updateDate, startTime);
+  if (!scheduled) return false;
+  const lockUntil = new Date(scheduled.getTime() - 30 * 60 * 1000);
+  return getISTNow().getTime() < lockUntil.getTime();
+};
+
+// Cache for finops settings to avoid repeated database queries
+let cachedFinOpsSettings: any = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_DURATION = 60000; // 60 seconds
+
+// Initialize all FinOps schemas once at startup
+export async function initializeFinOpsSchema() {
+  try {
+    console.log("Initializing FinOps schema...");
+
+    // Create finops_settings table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_settings (
+        id SERIAL PRIMARY KEY,
+        initial_overdue_call_delay_minutes INTEGER DEFAULT 0,
+        repeat_overdue_call_interval_minutes INTEGER DEFAULT 15,
+        only_repeat_when_single_overdue BOOLEAN DEFAULT false,
+        pulse_alerts_enabled BOOLEAN DEFAULT true,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Add column if it doesn't exist (for existing installations)
+    await pool.query(`
+      ALTER TABLE finops_settings
+      ADD COLUMN IF NOT EXISTS pulse_alerts_enabled BOOLEAN DEFAULT true
+    `);
+
+    // Create finops_external_alerts table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_external_alerts (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL,
+        subtask_id INTEGER NOT NULL,
+        alert_group TEXT NOT NULL,
+        alert_bucket INTEGER NOT NULL DEFAULT -1,
+        title TEXT,
+        next_call_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
+      )
+    `);
+
+    // Create finops_tracker table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_tracker (
+        id SERIAL PRIMARY KEY,
+        run_date DATE NOT NULL,
+        period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
+        task_id INTEGER NOT NULL,
+        task_name TEXT,
+        subtask_id INTEGER NOT NULL DEFAULT 0,
+        subtask_name TEXT,
+        status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
+        started_at TIMESTAMP NULL,
+        completed_at TIMESTAMP NULL,
+        scheduled_time TIME NULL,
+        subtask_scheduled_date DATE NULL,
+        description TEXT,
+        sla_hours INTEGER,
+        sla_minutes INTEGER,
+        order_position INTEGER,
+        delay_reason TEXT,
+        delay_notes TEXT,
+        notification_sent_15min BOOLEAN DEFAULT false,
+        notification_sent_start BOOLEAN DEFAULT false,
+        notification_sent_escalation BOOLEAN DEFAULT false,
+        auto_notify BOOLEAN DEFAULT true,
+        assigned_to TEXT,
+        reporting_managers TEXT,
+        escalation_managers TEXT,
+        completed_by TEXT,
+        approved_at TIMESTAMP,
+        approved_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(run_date, period, task_id, subtask_id)
+      )
+    `);
+
+    // Ensure older columns exist
+    await pool.query(`
+      ALTER TABLE finops_tracker
+        ADD COLUMN IF NOT EXISTS description TEXT,
+        ADD COLUMN IF NOT EXISTS sla_hours INTEGER,
+        ADD COLUMN IF NOT EXISTS sla_minutes INTEGER,
+        ADD COLUMN IF NOT EXISTS order_position INTEGER,
+        ADD COLUMN IF NOT EXISTS delay_reason TEXT,
+        ADD COLUMN IF NOT EXISTS delay_notes TEXT,
+        ADD COLUMN IF NOT EXISTS notification_sent_15min BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS notification_sent_start BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS notification_sent_escalation BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS auto_notify BOOLEAN DEFAULT true,
+        ADD COLUMN IF NOT EXISTS assigned_to TEXT,
+        ADD COLUMN IF NOT EXISTS reporting_managers TEXT,
+        ADD COLUMN IF NOT EXISTS escalation_managers TEXT,
+        ADD COLUMN IF NOT EXISTS completed_by TEXT,
+        ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS approved_by TEXT
+    `);
+
+    // Ensure finops_settings has at least one row
+    const row = await pool.query(
+      `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
     );
+    if (row.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO finops_settings (initial_overdue_call_delay_minutes, repeat_overdue_call_interval_minutes, only_repeat_when_single_overdue, pulse_alerts_enabled)
+         VALUES ($1, $2, $3, $4)`,
+        [0, 15, false, true],
+      );
+    }
+
+    console.log("✅ FinOps schema initialized successfully");
+  } catch (error) {
+    console.warn(
+      "⚠️ FinOps schema initialization deferred (database may not be available yet):",
+      (error as Error).message,
+    );
+    // Don't throw - let server continue, database may come online later
   }
 }
 
+function invalidateSettingsCache() {
+  cachedFinOpsSettings = null;
+  settingsCacheTime = 0;
+}
+
 async function getFinOpsSettings() {
-  await ensureFinOpsSettings();
+  const now = Date.now();
+
+  // Return cached settings if still fresh
+  if (cachedFinOpsSettings && (now - settingsCacheTime) < SETTINGS_CACHE_DURATION) {
+    return cachedFinOpsSettings;
+  }
+
   const res = await pool.query(
     `SELECT * FROM finops_settings ORDER BY id ASC LIMIT 1`,
   );
-  return res.rows[0];
+
+  cachedFinOpsSettings = res.rows[0];
+  settingsCacheTime = now;
+  return cachedFinOpsSettings;
 }
 
 // Ensure finops_tasks has recurrence columns for weekly/monthly scheduling
@@ -93,6 +242,9 @@ router.put("/settings/pulse-alerts", async (req, res) => {
         .status(500)
         .json({ error: "Failed to update pulse alerts setting" });
     }
+
+    // Invalidate cache so next request fetches updated value
+    invalidateSettingsCache();
 
     res.json({
       success: true,
@@ -1824,65 +1976,13 @@ router.patch(
       const updateDateObj = new Date(`${updateDate}T${nowTime}`);
 
       if (await isDatabaseAvailable()) {
-        // Ensure tracker table exists
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_tracker (
-            id SERIAL PRIMARY KEY,
-            run_date DATE NOT NULL,
-            period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-            task_id INTEGER NOT NULL,
-            task_name TEXT,
-            subtask_id INTEGER NOT NULL DEFAULT 0,
-            subtask_name TEXT,
-            status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-            started_at TIMESTAMP NULL,
-            completed_at TIMESTAMP NULL,
-            scheduled_time TIME NULL,
-            subtask_scheduled_date DATE NULL,
-            description TEXT,
-            sla_hours INTEGER,
-            sla_minutes INTEGER,
-            order_position INTEGER,
-            delay_reason TEXT,
-            delay_notes TEXT,
-            notification_sent_15min BOOLEAN DEFAULT false,
-            notification_sent_start BOOLEAN DEFAULT false,
-            notification_sent_escalation BOOLEAN DEFAULT false,
-            auto_notify BOOLEAN DEFAULT true,
-            assigned_to TEXT,
-            reporting_managers TEXT,
-            escalation_managers TEXT,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(run_date, period, task_id, subtask_id)
-          );
-        `);
+        // finops_tracker table is created at server startup via initializeFinOpsSchema()
 
-        // Ensure older columns exist
-        await pool.query(`
-          ALTER TABLE finops_tracker
-            ADD COLUMN IF NOT EXISTS description TEXT,
-            ADD COLUMN IF NOT EXISTS sla_hours INTEGER,
-            ADD COLUMN IF NOT EXISTS sla_minutes INTEGER,
-            ADD COLUMN IF NOT EXISTS order_position INTEGER,
-            ADD COLUMN IF NOT EXISTS delay_reason TEXT,
-            ADD COLUMN IF NOT EXISTS delay_notes TEXT,
-            ADD COLUMN IF NOT EXISTS notification_sent_15min BOOLEAN DEFAULT false,
-            ADD COLUMN IF NOT EXISTS notification_sent_start BOOLEAN DEFAULT false,
-            ADD COLUMN IF NOT EXISTS notification_sent_escalation BOOLEAN DEFAULT false,
-            ADD COLUMN IF NOT EXISTS auto_notify BOOLEAN DEFAULT true,
-            ADD COLUMN IF NOT EXISTS assigned_to TEXT,
-            ADD COLUMN IF NOT EXISTS reporting_managers TEXT,
-            ADD COLUMN IF NOT EXISTS escalation_managers TEXT;
-        `);
-
-        // Ensure approval/completion columns exist
-        await pool.query(`
-          ALTER TABLE finops_tracker
-            ADD COLUMN IF NOT EXISTS completed_by TEXT,
-            ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
-            ADD COLUMN IF NOT EXISTS approved_by TEXT;
-        `);
+        const startTimeResult = await pool.query(
+          `SELECT start_time FROM finops_subtasks WHERE task_id = $1 AND id = $2 LIMIT 1`,
+          [taskId, subtaskId],
+        );
+        const fallbackStartTime = startTimeResult.rows[0]?.start_time ?? null;
 
         // Fetch existing tracker row
         let trackerRes = await pool.query(
@@ -1897,6 +1997,14 @@ router.patch(
         );
 
         let trackerRow: any = trackerRes.rows[0];
+        const resolvedStartTime =
+          trackerRow?.scheduled_time ?? trackerRow?.start_time ?? fallbackStartTime;
+        if (isStatusChangeLocked(status, resolvedStartTime, updateDate)) {
+          return res.status(403).json({
+            error:
+              "Status changes are locked until 30 minutes before the scheduled start time (IST).",
+          });
+        }
 
         if (!trackerRow) {
           // Fetch subtask metadata to create tracker row
@@ -2429,20 +2537,7 @@ async function handleStatusChangeNotifications(
 
       // Schedule pending-approval alert for reporting managers after 30 minutes
       try {
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_external_alerts (
-            id SERIAL PRIMARY KEY,
-            task_id INTEGER NOT NULL,
-            subtask_id INTEGER NOT NULL,
-            alert_group TEXT NOT NULL,
-            alert_bucket INTEGER NOT NULL DEFAULT -1,
-            title TEXT,
-            next_call_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
-          )
-        `);
-
+        // finops_external_alerts table is created at server startup via initializeFinOpsSchema()
         const title = `Please review and approve the subtask \"${subtaskData.subtask_name || subtaskData.name}\" under the task \"${subtaskData.task_name}\" for the client \"${subtaskData.client_name || "Unknown Client"}\" at your earliest convenience.`;
 
         await pool.query(
@@ -2589,6 +2684,7 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
               'completed_at', COALESCE(ft.completed_at, st.completed_at),
               'completed_by', ft.completed_by,
               'approved_by', ft.approved_by,
+              'approved_at', COALESCE(ft.approved_at, st.approved_at),
               'delay_reason', COALESCE(ft.delay_reason, st.delay_reason),
               'delay_notes', COALESCE(ft.delay_notes, st.delay_notes)
             ) ORDER BY st.order_position
@@ -2726,26 +2822,7 @@ router.post("/tracker/seed", async (req: Request, res: Response) => {
       .slice(0, 10);
 
     if (await isDatabaseAvailable()) {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS finops_tracker (
-          id SERIAL PRIMARY KEY,
-          run_date DATE NOT NULL,
-          period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-          task_id INTEGER NOT NULL,
-          task_name TEXT,
-          subtask_id INTEGER NOT NULL DEFAULT 0,
-          subtask_name TEXT,
-          status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-          started_at TIMESTAMP NULL,
-          completed_at TIMESTAMP NULL,
-          scheduled_time TIME NULL,
-          subtask_scheduled_date DATE NULL,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(run_date, period, task_id, subtask_id)
-        );
-      `);
-
+      // finops_tracker table is created at server startup via initializeFinOpsSchema()
       const tasksRes = await pool.query(
         `
         SELECT t.*, st.id as subtask_id, st.name as subtask_name, st.start_time
@@ -2855,26 +2932,7 @@ router.get("/tracker", async (req: Request, res: Response) => {
       ? parseInt(req.query.task_id as string)
       : null;
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS finops_tracker (
-        id SERIAL PRIMARY KEY,
-        run_date DATE NOT NULL,
-        period VARCHAR(20) NOT NULL CHECK (period IN ('daily','weekly','monthly')),
-        task_id INTEGER NOT NULL,
-        task_name TEXT,
-        subtask_id INTEGER NOT NULL DEFAULT 0,
-        subtask_name TEXT,
-        status VARCHAR(20) NOT NULL CHECK (status IN ('pending','in_progress','completed','overdue','delayed','cancelled')),
-        started_at TIMESTAMP NULL,
-        completed_at TIMESTAMP NULL,
-        scheduled_time TIME NULL,
-        subtask_scheduled_date DATE NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(run_date, period, task_id, subtask_id)
-      );
-    `);
-
+    // finops_tracker table is created at server startup via initializeFinOpsSchema()
     const params: any[] = [];
     let where = "WHERE 1=1";
     if (dateParam) {
@@ -3128,20 +3186,7 @@ router.post(
         );
 
         // Enqueue external direct-call via finops_external_alerts; processed by netlify/functions/pulse-sync.ts
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS finops_external_alerts (
-            id SERIAL PRIMARY KEY,
-            task_id INTEGER NOT NULL,
-            subtask_id INTEGER NOT NULL,
-            alert_group TEXT NOT NULL,
-            alert_bucket INTEGER NOT NULL DEFAULT -1,
-            title TEXT,
-            next_call_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW(),
-            UNIQUE(task_id, subtask_id, alert_group, alert_bucket)
-          )
-        `);
-
+        // finops_external_alerts table is created at server startup via initializeFinOpsSchema()
         const fallbackTitle = `Kindly take prompt action on the overdue subtask ${taskData.subtask_name} from the task ${taskData.task_name}.`;
         const title =
           typeof message === "string" && message.trim().length
@@ -3228,6 +3273,182 @@ router.post(
     } catch (error) {
       console.error("Error sending manual alert:", error);
       res.status(500).json({ error: "Failed to send manual alert" });
+    }
+  },
+);
+
+// Send approval timeout alert to reporting and escalation managers only
+router.post(
+  "/tasks/:taskId/subtasks/:subtaskId/approval-alert",
+  async (req: Request, res: Response) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      const subtaskId = req.params.subtaskId;
+
+      if (await isDatabaseAvailable()) {
+        // Get task and subtask information
+        const taskQuery = `
+        SELECT
+          t.task_name, t.reporting_managers, t.escalation_managers,
+          st.name as subtask_name, st.status
+        FROM finops_tasks t
+        JOIN finops_subtasks st ON t.id = st.task_id
+        WHERE t.id = $1 AND st.id = $2
+      `;
+
+        const result = await pool.query(taskQuery, [taskId, subtaskId]);
+
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: "Task or subtask not found" });
+        }
+
+        const taskData = result.rows[0];
+
+        // Log approval alert
+        await logActivity(
+          taskId,
+          subtaskId,
+          "approval_alert_sent",
+          "System",
+          `Approval timeout alert sent to reporting and escalation managers`,
+        );
+
+        const parseManagers = (val: any): string[] => {
+          if (!val) return [];
+          if (Array.isArray(val))
+            return val
+              .map(String)
+              .map((s) => s.trim())
+              .filter(Boolean);
+          if (typeof val === "string") {
+            let s = val.trim();
+            if (s.startsWith("{") && s.endsWith("}")) {
+              s = s.slice(1, -1);
+              return s
+                .split(",")
+                .map((x) => x.trim())
+                .map((x) => x.replace(/^\"|\"$/g, ""))
+                .filter(Boolean);
+            }
+            try {
+              const parsed = JSON.parse(s);
+              if (Array.isArray(parsed))
+                return parsed
+                  .map(String)
+                  .map((x) => x.trim())
+                  .filter(Boolean);
+            } catch {}
+            return s
+              .split(",")
+              .map((x) => x.trim())
+              .filter(Boolean);
+          }
+          try {
+            const parsed = JSON.parse(val);
+            return Array.isArray(parsed)
+              ? parsed
+                  .map(String)
+                  .map((x) => x.trim())
+                  .filter(Boolean)
+              : [];
+          } catch {
+            return [] as string[];
+          }
+        };
+
+        // For approval alerts, ONLY send to reporting and escalation managers (NOT assigned_to)
+        const reportingManagers = parseManagers(taskData.reporting_managers);
+        const escalationManagers = parseManagers(taskData.escalation_managers);
+        const recipients = Array.from(
+          new Set([...reportingManagers, ...escalationManagers]),
+        );
+
+        // Enqueue external direct-call via finops_external_alerts (table created at startup)
+
+        const title = `Approval pending for subtask "${taskData.subtask_name}" from task "${taskData.task_name}" - Action required`;
+
+        const reserve = await pool.query(
+          `INSERT INTO finops_external_alerts (task_id, subtask_id, alert_group, alert_bucket, title, next_call_at)
+           VALUES ($1, $2, 'approval_timeout', -1, $3, NOW())
+           ON CONFLICT (task_id, subtask_id, alert_group, alert_bucket) DO NOTHING
+           RETURNING id`,
+          [taskId, Number(subtaskId), title],
+        );
+        const external_enqueued = reserve.rows.length > 0;
+
+        // Immediately trigger Pulse direct-call (best-effort)
+        try {
+          const normalized = recipients
+            .map((n) => (n || "").toLowerCase().replace(/\s+/g, " ").trim())
+            .filter(Boolean);
+          const collapsed = normalized.map((n) => n.replace(/\s+/g, ""));
+          const usersRes = await pool.query(
+            `SELECT azure_object_id, sso_id, first_name, last_name, email
+             FROM users
+             WHERE (
+               LOWER(CONCAT(first_name,' ',last_name)) = ANY($1)
+               OR REPLACE(LOWER(CONCAT(first_name,' ',last_name)),' ','') = ANY($2)
+               OR LOWER(CONCAT(first_name,' ',LEFT(COALESCE(last_name,''),1))) = ANY($1)
+               OR REPLACE(LOWER(CONCAT(first_name,' ',LEFT(COALESCE(last_name,''),1))),' ','') = ANY($2)
+               OR LOWER(SPLIT_PART(COALESCE(email,''),'@',1)) = ANY($1)
+               OR REPLACE(LOWER(SPLIT_PART(COALESCE(email,''),'@',1)),'.','') = ANY($2)
+             )`,
+            [normalized, collapsed],
+          );
+          const user_ids = Array.from(
+            new Set(
+              usersRes.rows
+                .map((r: any) => r.azure_object_id || r.sso_id)
+                .filter((id: string | null) => !!id),
+            ),
+          );
+          console.log("APPROVAL ALERT USER IDS:", user_ids);
+
+          // Check if Pulse alerts are enabled
+          const settingsRes = await pool.query(
+            `SELECT pulse_alerts_enabled FROM finops_settings LIMIT 1`,
+          );
+          const pulseAlertsEnabled =
+            settingsRes.rows[0]?.pulse_alerts_enabled ?? true;
+
+          if (pulseAlertsEnabled && user_ids.length) {
+            fetch("https://pulsealerts.mylapay.com/direct-call", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                receiver: "CRM_Switch",
+                title: title,
+                user_ids: user_ids,
+              }),
+            }).catch((err) => {
+              console.warn(
+                "Approval alert direct-call error:",
+                (err as Error).message,
+              );
+            });
+          } else if (!pulseAlertsEnabled) {
+            console.log("Pulse alerts disabled, skipping approval alert");
+          }
+        } catch (e) {
+          console.warn(
+            "Approval alert user resolution failed:",
+            (e as Error).message,
+          );
+        }
+
+        res.json({
+          message: "Approval alert sent successfully",
+          recipients,
+          external_enqueued,
+        });
+      } else {
+        res.json({
+          message: "Approval alert sent successfully (mock)",
+        });
+      }
+    } catch (error) {
+      console.error("Error sending approval alert:", error);
+      res.status(500).json({ error: "Failed to send approval alert" });
     }
   },
 );

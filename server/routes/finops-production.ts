@@ -5,29 +5,56 @@ import finopsScheduler from "../services/finopsScheduler";
 
 const router = Router();
 
-// Ensure finops_external_alerts table and required columns exist
-async function ensureExternalAlertsSchema(): Promise<void> {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS finops_external_alerts (
-      id SERIAL PRIMARY KEY,
-      task_id INTEGER NOT NULL,
-      subtask_id INTEGER NOT NULL,
-      alert_group TEXT NOT NULL,
-      alert_bucket INTEGER NOT NULL DEFAULT -1,
-      title TEXT,
-      next_call_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  await pool.query(
-    `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_group TEXT`,
-  );
-  await pool.query(
-    `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_bucket INTEGER DEFAULT -1`,
-  );
-  await pool.query(
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_fea_unique ON finops_external_alerts(task_id, subtask_id, alert_group, alert_bucket)`,
-  );
+// Flag to track if schema has been initialized (avoids repeated checks)
+let schemaInitialized = false;
+
+// Ensure finops_external_alerts and finops_approvals tables exist (called once at startup)
+export async function ensureFinOpsProductionSchema(): Promise<void> {
+  if (schemaInitialized) return;
+
+  try {
+    // Create finops_external_alerts table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_external_alerts (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL,
+        subtask_id INTEGER NOT NULL,
+        alert_group TEXT NOT NULL,
+        alert_bucket INTEGER NOT NULL DEFAULT -1,
+        title TEXT,
+        next_call_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(
+      `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_group TEXT`,
+    );
+    await pool.query(
+      `ALTER TABLE finops_external_alerts ADD COLUMN IF NOT EXISTS alert_bucket INTEGER DEFAULT -1`,
+    );
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_fea_unique ON finops_external_alerts(task_id, subtask_id, alert_group, alert_bucket)`,
+    );
+
+    // Create finops_approvals table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS finops_approvals (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL,
+        subtask_id INTEGER NOT NULL,
+        tracker_id INTEGER,
+        approved_by TEXT NOT NULL,
+        note TEXT,
+        approved_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(task_id, subtask_id, tracker_id)
+      )
+    `);
+
+    schemaInitialized = true;
+    console.log("✅ FinOps production schema initialized");
+  } catch (e) {
+    console.warn("FinOps production schema initialization deferred:", (e as Error).message);
+  }
 }
 
 // Endpoint to fetch external alert next_call_at for a given task/subtask
@@ -252,7 +279,7 @@ async function sendReplicaDownAlertOnce(
 router.get("/tasks", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
-    await ensureExternalAlertsSchema();
+    // Schema is initialized at server startup via ensureFinOpsProductionSchema()
 
     const dateParam = (req.query.date as string) || null;
     const userNameRaw = (req.query.user_name as string) || null;
@@ -372,8 +399,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
               ft.notification_sent_start,
               ft.notification_sent_escalation,
               ft.assigned_to::jsonb AS assigned_to,
-              ft.reporting_managers AS reporting_managers,
-              ft.escalation_managers AS escalation_managers,
+              COALESCE(t.reporting_managers::jsonb, '[]'::jsonb) AS reporting_managers,
+              COALESCE(t.escalation_managers::jsonb, '[]'::jsonb) AS escalation_managers,
               (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_by,
               (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_at
             FROM finops_tracker ft
@@ -408,8 +435,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
               COALESCE(st.notification_sent_start, false) AS notification_sent_start,
               COALESCE(st.notification_sent_escalation, false) AS notification_sent_escalation,
               COALESCE(st.assigned_to::jsonb, t.assigned_to::jsonb, '[]'::jsonb) AS assigned_to,
-              t.reporting_managers::text AS reporting_managers,
-              t.escalation_managers::text AS escalation_managers,
+              COALESCE(t.reporting_managers::jsonb, '[]'::jsonb) AS reporting_managers,
+              COALESCE(t.escalation_managers::jsonb, '[]'::jsonb) AS escalation_managers,
               (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = st.id LIMIT 1) AS approved_by,
               (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = st.id LIMIT 1) AS approved_at
             FROM finops_subtasks st
@@ -1099,13 +1126,42 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     const reporters = parseManagers(row.reporting_managers);
     const escalators = parseManagers(row.escalation_managers);
 
-    const isReporter = reporters
-      .map((n) => n.toLowerCase().replace(/\s+/g, " ").trim())
-      .includes(normalizedApprover);
+    // Helper to check if approver matches a manager name (flexible matching)
+    const matchesManager = (approverStr: string, managerStr: string): boolean => {
+      const appLower = approverStr.toLowerCase().replace(/\s+/g, " ").trim();
+      const mgLower = managerStr.toLowerCase().replace(/\s+/g, " ").trim();
 
-    const isEscalator = escalators
-      .map((n) => n.toLowerCase().replace(/\s+/g, " ").trim())
-      .includes(normalizedApprover);
+      // Exact match
+      if (appLower === mgLower) return true;
+
+      // Partial match - manager name contains approver name or vice versa
+      // This handles "Sarumathi M" matching "Sarumathi Manickam"
+      if (mgLower.includes(appLower) || appLower.includes(mgLower)) return true;
+
+      // Check first + last name parts
+      const appParts = appLower.split(/\s+/);
+      const mgParts = mgLower.split(/\s+/);
+
+      // If approver has 2+ parts and all parts are in manager name
+      if (appParts.length >= 2) {
+        if (appParts.every(part => mgParts.includes(part))) return true;
+      }
+
+      // If manager has 2+ parts and all parts are in approver name
+      if (mgParts.length >= 2) {
+        if (mgParts.every(part => appParts.includes(part))) return true;
+      }
+
+      return false;
+    };
+
+    const isReporter = reporters.some(
+      (managerName) => matchesManager(normalizedApprover, managerName)
+    );
+
+    const isEscalator = escalators.some(
+      (managerName) => matchesManager(normalizedApprover, managerName)
+    );
 
     console.log(`[Approve] Checking authorization for "${approver_name}"`);
     console.log(`[Approve] Is Admin: ${isAdmin}`);
@@ -1134,40 +1190,7 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
 
     console.log(`[Approve] AUTHORIZED: ${approver_name} can approve`);
 
-    // Ensure finops_approvals table exists and has correct schema (outside transaction)
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS finops_approvals (
-          id SERIAL PRIMARY KEY,
-          task_id INTEGER NOT NULL,
-          subtask_id INTEGER NOT NULL,
-          tracker_id INTEGER,
-          approved_by TEXT NOT NULL,
-          note TEXT,
-          approved_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(task_id, subtask_id, tracker_id)
-        )
-      `);
-
-      // Add tracker_id column if it doesn't exist (migration)
-      await pool.query(`
-        ALTER TABLE finops_approvals ADD COLUMN IF NOT EXISTS tracker_id INTEGER
-      `);
-
-      // Drop old UNIQUE constraint if it exists
-      await pool.query(`
-        ALTER TABLE finops_approvals DROP CONSTRAINT IF EXISTS finops_approvals_task_id_subtask_id_key
-      `);
-
-      // Ensure new UNIQUE constraint exists with tracker_id
-      await pool.query(`
-        ALTER TABLE finops_approvals ADD CONSTRAINT finops_approvals_unique_tracker
-        UNIQUE(task_id, subtask_id, tracker_id)
-      `);
-    } catch (e) {
-      // Schema setup errors are non-critical, log and continue
-      console.warn("Finops approvals schema setup:", (e as Error).message);
-    }
+    // finops_approvals table and schema is set up at server startup via ensureFinOpsProductionSchema()
 
     const client = await pool.connect();
     try {

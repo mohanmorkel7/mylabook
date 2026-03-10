@@ -210,15 +210,19 @@ const convertNameToValueFormat = (name: string, users: any[]): string => {
 
 // Component to show pending approval countdown timer
 const PendingApprovalTimer = ({
+  taskId,
   subtaskId,
   completedAt,
 }: {
-  subtaskId: number;
+  taskId: number;
+  subtaskId: string | number;
   completedAt: string;
 }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
   const [isReady, setIsReady] = useState(false);
+  const alertTriggeredRef = useRef<Set<number>>(new Set());
 
+  // Combined effect: Update timer display AND trigger API when countdown reaches 00m 00s
   useEffect(() => {
     const updateTimer = () => {
       if (!completedAt) return;
@@ -236,14 +240,69 @@ const PendingApprovalTimer = ({
       const minutes = Math.floor(remainingSeconds / 60);
       const seconds = remainingSeconds % 60;
 
-      // If we're ready for alerts (past first 15 minutes)
+      // Debug: Log the timer state every second
+      if (cycleNumber > 0) {
+        console.log(
+          `⏱️ Subtask ${subtaskId} - Cycle ${cycleNumber}: ${minutes}m ${seconds}s remaining`,
+        );
+      }
+
+      // Trigger API call when countdown reaches 00m 00s or 00m 01s (only once per cycle)
+      // Use a wider window to catch the moment
+      if (cycleNumber > 0 && minutes === 0 && seconds <= 1) {
+        if (!alertTriggeredRef.current.has(cycleNumber)) {
+          console.log(
+            `🔔 Countdown reached near 00m 00s (${minutes}m ${seconds}s) for subtask ${subtaskId} - triggering Pulse alert`,
+          );
+          alertTriggeredRef.current.add(cycleNumber);
+
+          // Call the backend approval alert endpoint
+          const triggerApprovalAlert = async () => {
+            try {
+              console.log(
+                `📤 Sending approval alert request to backend for subtask ${subtaskId} (Cycle ${cycleNumber})...`,
+              );
+
+              const response = await fetch(
+                `/api/finops/tasks/${taskId}/subtasks/${subtaskId}/approval-alert`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({}),
+                },
+              );
+
+              if (!response.ok) {
+                console.warn(
+                  `⚠️ Approval alert API returned status ${response.status} for subtask ${subtaskId}`,
+                );
+              } else {
+                const data = await response.json();
+                console.log(
+                  `✅ Approval alert triggered for subtask ${subtaskId} at cycle ${cycleNumber}`,
+                  data,
+                );
+              }
+            } catch (error) {
+              console.error(
+                `❌ Failed to trigger approval alert for subtask ${subtaskId}: ${(error as Error).message}`,
+              );
+            }
+          };
+
+          triggerApprovalAlert();
+        }
+      }
+
+      // Update the display
       if (cycleNumber > 0) {
         setIsReady(true);
 
         // Show countdown in current cycle
-        // Alert is triggered by backend cron every 1 minute (no need for client-side trigger)
         if (minutes === 0 && seconds === 0) {
-          setTimeLeft(`0m 0s (Alert will be sent by system every 15 minutes)`);
+          setTimeLeft(`0m 0s (Alert sent to Pulse)`);
         } else {
           setTimeLeft(`${minutes}m ${seconds}s (Cycle ${cycleNumber})`);
         }
@@ -258,7 +317,7 @@ const PendingApprovalTimer = ({
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [completedAt, subtaskId]);
+  }, [completedAt, subtaskId, taskId]);
 
   if (!timeLeft) return null;
 
@@ -284,9 +343,15 @@ const PendingApprovalTimer = ({
 const formatDateTime = (iso?: string | null) => {
   if (!iso) return "";
   try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return "";
-    return format(d, "yyyy-MM-dd h:mm:ss a");
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    });
   } catch (e) {
     return "";
   }
@@ -686,7 +751,7 @@ function SortableSubTaskItem({
 
                       return (
                         <Select
-                          value={subtask.status}
+                          value={subtask.status || "pending"}
                           onValueChange={handleStatusChange}
                           disabled={!isEditable}
                         >
@@ -698,7 +763,7 @@ function SortableSubTaskItem({
                                 : "Locked until 30 minutes before Start time (IST)"
                             }
                           >
-                            <SelectValue />
+                            <SelectValue placeholder="Pending" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="pending">Pending</SelectItem>
@@ -717,35 +782,77 @@ function SortableSubTaskItem({
                       try {
                         const currentUser = (useAuth() as any)?.user || null;
 
-                        const normalize = (value: string) =>
-                          (value || "")
-                            .toLowerCase()
-                            .replace(/\s+/g, " ")
-                            .trim();
-
-                        const normalizedUserName = normalize(
-                          currentUser?.name || currentUser?.email || "",
-                        );
+                        if (!currentUser || !currentUser.name) return null;
 
                         const isAdmin = currentUser?.role === "admin";
 
-                        const isReporting =
-                          Array.isArray(task?.reporting_managers) &&
-                          task.reporting_managers
-                            .map(normalize)
-                            .includes(normalizedUserName);
+                        // Use the same robust parsing as canEditFinOpsTasks
+                        const parseManagersArray = (managers: any): string[] => {
+                          if (!managers) return [];
 
-                        const isEscalation =
-                          Array.isArray(task?.escalation_managers) &&
-                          task.escalation_managers
-                            .map(normalize)
-                            .includes(normalizedUserName);
+                          // Already an array
+                          if (Array.isArray(managers)) {
+                            return managers.filter(Boolean).map(m => String(m).trim());
+                          }
 
-                        const isAssigned =
-                          Array.isArray(task?.assigned_to) &&
-                          task.assigned_to
-                            .map(normalize)
-                            .includes(normalizedUserName);
+                          // String that might be JSON
+                          if (typeof managers === "string") {
+                            const trimmed = managers.trim();
+                            if (!trimmed) return [];
+
+                            // Try to parse as JSON array
+                            try {
+                              const parsed = JSON.parse(trimmed);
+                              if (Array.isArray(parsed)) {
+                                return parsed.filter(Boolean).map(m => String(m).trim());
+                              }
+                            } catch {}
+
+                            // Might be a single name or "name (email)" format
+                            return [trimmed];
+                          }
+
+                          return [];
+                        };
+
+                        // Helper to check if user matches a manager entry
+                        const userMatchesManager = (manager: string): boolean => {
+                          if (!manager || !currentUser.name) return false;
+
+                          const managerName = extractNameFromValue(manager);
+                          const userNameLower = currentUser.name.toLowerCase().trim();
+
+                          // Check name match (case-insensitive and trim)
+                          if (managerName) {
+                            const managerNameLower = managerName.toLowerCase().trim();
+                            if (managerNameLower === userNameLower) {
+                              return true;
+                            }
+                            // Also check if manager name contains user name (for partial matches)
+                            if (managerNameLower.includes(userNameLower)) {
+                              return true;
+                            }
+                          }
+
+                          // Check email match (case-insensitive)
+                          if (currentUser.email) {
+                            const managerStr = manager.toLowerCase();
+                            const userEmailLower = currentUser.email.toLowerCase();
+                            if (managerStr.includes(userEmailLower)) {
+                              return true;
+                            }
+                          }
+
+                          return false;
+                        };
+
+                        const reportingManagers = parseManagersArray(task?.reporting_managers);
+                        const escalationManagers = parseManagersArray(task?.escalation_managers);
+                        const assignedTo = parseManagersArray(task?.assigned_to);
+
+                        const isReporting = reportingManagers.some(userMatchesManager);
+                        const isEscalation = escalationManagers.some(userMatchesManager);
+                        const isAssigned = assignedTo.some(userMatchesManager);
 
                         const isApproved = Boolean(
                           (subtask as any)?.approved_by,
@@ -814,6 +921,7 @@ function SortableSubTaskItem({
                   !(subtask as any).approved_by && (
                     <div className="mt-2">
                       <PendingApprovalTimer
+                        taskId={task.id}
                         subtaskId={subtask.id}
                         completedAt={subtask.completed_at}
                       />
@@ -920,7 +1028,7 @@ function SortableSubTaskItem({
 
                     return (
                       <Select
-                        value={subtask.status}
+                        value={subtask.status || "pending"}
                         onValueChange={handleStatusChange}
                         disabled={!isEditable}
                       >
@@ -931,7 +1039,7 @@ function SortableSubTaskItem({
                               : "Locked until 30 minutes before Start time (IST)"
                           }
                         >
-                          <SelectValue />
+                          <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pending</SelectItem>
@@ -1027,6 +1135,18 @@ export default function ClientBasedFinOpsTaskManager() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // Debug: Log user info on first render
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).__FINOPS_DEBUG_PERMS) {
+      console.log("👤 Current User:", {
+        id: user?.id,
+        name: user?.name,
+        email: user?.email,
+        role: user?.role,
+      });
+    }
+  }, [user?.id]);
+
   const getUserDisplayName = (u: any) => {
     if (!u) return undefined;
     if (typeof u.name === "string" && u.name.trim()) return u.name.trim();
@@ -1036,31 +1156,90 @@ export default function ClientBasedFinOpsTaskManager() {
 
   // Check if user can edit FinOps tasks
   const canEditFinOpsTasks = (task: ClientBasedFinOpsTask): boolean => {
-    if (!user) return false;
+    if (!user || !user.name) return false;
     // Admin can edit everything
     if (user.role === "admin") return true;
 
-    // Check if user is in reporting managers
-    if (
-      task.reporting_managers.some(
-        (manager) =>
-          extractNameFromValue(manager) === user.name ||
-          manager.includes(user.email || ""),
-      )
-    )
-      return true;
+    // Safely parse managers in case they come as strings or null/undefined
+    const parseManagersArray = (managers: any): string[] => {
+      if (!managers) return [];
 
-    // Check if user is in escalation managers
-    if (
-      task.escalation_managers.some(
-        (manager) =>
-          extractNameFromValue(manager) === user.name ||
-          manager.includes(user.email || ""),
-      )
-    )
-      return true;
+      // Already an array
+      if (Array.isArray(managers)) {
+        return managers.filter(Boolean).map(m => String(m).trim());
+      }
 
-    return false;
+      // String that might be JSON
+      if (typeof managers === "string") {
+        const trimmed = managers.trim();
+        if (!trimmed) return [];
+
+        // Try to parse as JSON array
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(Boolean).map(m => String(m).trim());
+          }
+        } catch {}
+
+        // Might be a single name or "name (email)" format
+        return [trimmed];
+      }
+
+      return [];
+    };
+
+    const reportingManagers = parseManagersArray(task.reporting_managers);
+    const escalationManagers = parseManagersArray(task.escalation_managers);
+    const allManagers = [...reportingManagers, ...escalationManagers];
+
+    // Helper to check if user matches a manager entry
+    const userMatchesManager = (manager: string): boolean => {
+      if (!manager || !user.name) return false;
+
+      const managerName = extractNameFromValue(manager);
+      const userNameLower = user.name.toLowerCase().trim();
+
+      // Check name match (case-insensitive and trim)
+      if (managerName) {
+        const managerNameLower = managerName.toLowerCase().trim();
+        if (managerNameLower === userNameLower) {
+          return true;
+        }
+        // Also check if manager name contains user name (for partial matches)
+        if (managerNameLower.includes(userNameLower)) {
+          return true;
+        }
+      }
+
+      // Check email match (case-insensitive)
+      if (user.email) {
+        const managerStr = manager.toLowerCase();
+        const userEmailLower = user.email.toLowerCase();
+        if (managerStr.includes(userEmailLower)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    // Check if user is in reporting or escalation managers
+    const isManager = allManagers.some(userMatchesManager);
+
+    if (typeof window !== "undefined" && (window as any).__FINOPS_DEBUG_PERMS) {
+      console.log("🔍 Permission Check:", {
+        taskId: task.id,
+        taskName: task.task_name,
+        userName: user.name,
+        userEmail: user.email,
+        reportingManagers,
+        escalationManagers,
+        isManager,
+      });
+    }
+
+    return isManager;
   };
 
   // Check if user can only change status (view-only users)
@@ -2108,11 +2287,13 @@ export default function ClientBasedFinOpsTaskManager() {
 
   // Check if user can edit a task (full edit permissions)
   const canEditTask = (task: ClientBasedFinOpsTask): boolean => {
+    if (!user || !user.name) return false;
+
     // Admin can edit any task
     if (user?.role === "admin") {
       return true;
     }
-    console.log("USER ROLE", user.name);
+
     // Creator can edit their own task
     if (
       task.created_by === user?.id?.toString() ||
@@ -2121,46 +2302,78 @@ export default function ClientBasedFinOpsTaskManager() {
       return true;
     }
 
-    // Assigned users can edit the task
-    const userName = user.name;
-    const userEmail = user?.email;
+    // Use the same robust parsing and matching as canEditFinOpsTasks
+    const parseManagersArray = (managers: any): string[] => {
+      if (!managers) return [];
+
+      if (Array.isArray(managers)) {
+        return managers.filter(Boolean).map(m => String(m).trim());
+      }
+
+      if (typeof managers === "string") {
+        const trimmed = managers.trim();
+        if (!trimmed) return [];
+
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(Boolean).map(m => String(m).trim());
+          }
+        } catch {}
+
+        return [trimmed];
+      }
+
+      return [];
+    };
+
+    // Helper to check if user matches a manager entry
+    const userMatchesManager = (manager: string): boolean => {
+      if (!manager || !user.name) return false;
+
+      const managerName = extractNameFromValue(manager);
+      const userNameLower = user.name.toLowerCase().trim();
+
+      // Check name match (case-insensitive and trim)
+      if (managerName) {
+        const managerNameLower = managerName.toLowerCase().trim();
+        if (managerNameLower === userNameLower) {
+          return true;
+        }
+        // Also check if manager name contains user name
+        if (managerNameLower.includes(userNameLower)) {
+          return true;
+        }
+      }
+
+      // Check email match (case-insensitive)
+      if (user.email) {
+        const managerStr = manager.toLowerCase();
+        const userEmailLower = user.email.toLowerCase();
+        if (managerStr.includes(userEmailLower)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
 
     // Check assigned users
-    if (Array.isArray(task.assigned_to)) {
-      const isAssigned = task.assigned_to.some(
-        (assignee) =>
-          extractNameFromValue(assignee) === userName ||
-          assignee.includes(userEmail || ""),
-      );
-      if (isAssigned) return true;
-    } else if (task.assigned_to) {
-      const assignedName = extractNameFromValue(task.assigned_to);
-      if (
-        assignedName === userName ||
-        task.assigned_to.includes(userEmail || "")
-      ) {
-        return true;
-      }
+    const assignedTo = parseManagersArray(task.assigned_to);
+    if (assignedTo.some(userMatchesManager)) {
+      return true;
     }
 
-    // Reporting managers can edit
-    if (Array.isArray(task.reporting_managers)) {
-      const isReportingManager = task.reporting_managers.some(
-        (manager) =>
-          extractNameFromValue(manager) === userName ||
-          manager.includes(userEmail || ""),
-      );
-      if (isReportingManager) return true;
+    // Check reporting managers
+    const reportingManagers = parseManagersArray(task.reporting_managers);
+    if (reportingManagers.some(userMatchesManager)) {
+      return true;
     }
 
-    // Escalation managers can edit
-    if (Array.isArray(task.escalation_managers)) {
-      const isEscalationManager = task.escalation_managers.some(
-        (manager) =>
-          extractNameFromValue(manager) === userName ||
-          manager.includes(userEmail || ""),
-      );
-      if (isEscalationManager) return true;
+    // Check escalation managers
+    const escalationManagers = parseManagersArray(task.escalation_managers);
+    if (escalationManagers.some(userMatchesManager)) {
+      return true;
     }
 
     return false;
@@ -2174,13 +2387,27 @@ export default function ClientBasedFinOpsTaskManager() {
     const userName = `${user?.first_name} ${user?.last_name}`;
     const userEmail = user?.email;
 
+    // Safely parse managers arrays
+    const parseManagersArray = (managers: any): string[] => {
+      if (Array.isArray(managers)) return managers;
+      if (typeof managers === "string") {
+        try {
+          const parsed = JSON.parse(managers);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+
     // Check if user is mentioned anywhere in the task
     const allInvolvedUsers = [
       ...(Array.isArray(task.assigned_to)
         ? task.assigned_to
         : [task.assigned_to].filter(Boolean)),
-      ...task.reporting_managers,
-      ...task.escalation_managers,
+      ...parseManagersArray(task.reporting_managers),
+      ...parseManagersArray(task.escalation_managers),
     ];
 
     const isInvolved = allInvolvedUsers.some(
@@ -2422,16 +2649,26 @@ export default function ClientBasedFinOpsTaskManager() {
   // Role-based visibility: non-admins see only tasks where they are assigned_to, reporting manager, or escalation manager
   if (!isAdmin) {
     filteredTasks = filteredTasks.filter((task: ClientBasedFinOpsTask) => {
+      // Safely parse managers arrays
+      const parseManagersArray = (managers: any): string[] => {
+        if (Array.isArray(managers)) return managers;
+        if (typeof managers === "string") {
+          try {
+            const parsed = JSON.parse(managers);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        }
+        return [];
+      };
+
       const allInvolvedUsers = [
         ...(Array.isArray(task.assigned_to)
           ? task.assigned_to
           : [task.assigned_to].filter(Boolean)),
-        ...(Array.isArray(task.reporting_managers)
-          ? task.reporting_managers
-          : []),
-        ...(Array.isArray(task.escalation_managers)
-          ? task.escalation_managers
-          : []),
+        ...parseManagersArray(task.reporting_managers),
+        ...parseManagersArray(task.escalation_managers),
       ];
       return allInvolvedUsers.some((person) => {
         if (!person) return false;
@@ -2446,16 +2683,29 @@ export default function ClientBasedFinOpsTaskManager() {
   }
 
   // <-- Add this here, after filteredTasks is available -->
+  const parseManagersForTask = (managers: any): string[] => {
+    if (Array.isArray(managers)) return managers;
+    if (typeof managers === "string") {
+      try {
+        const parsed = JSON.parse(managers);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
   const canCreateTask =
     isAdmin ||
     filteredTasks.some(
       (task) =>
-        (Array.isArray(task.reporting_managers) &&
-          task.reporting_managers
-            .map(normalize)
-            .includes(normalizedUserName)) ||
-        (Array.isArray(task.escalation_managers) &&
-          task.escalation_managers.map(normalize).includes(normalizedUserName)),
+        parseManagersForTask(task.reporting_managers)
+          .map(normalize)
+          .includes(normalizedUserName) ||
+        parseManagersForTask(task.escalation_managers)
+          .map(normalize)
+          .includes(normalizedUserName),
     );
 
   if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
@@ -2888,6 +3138,7 @@ export default function ClientBasedFinOpsTaskManager() {
                       "status",
                       "completed_by",
                       "approved_by",
+                      "approved_at",
                       "assigned_to",
                       "Reporting manager",
                       "Escalation manager",
@@ -2920,6 +3171,9 @@ export default function ClientBasedFinOpsTaskManager() {
                           extractNameFromValue(
                             st.approved_by || st.approvedBy || "",
                           ),
+                          st.approved_at
+                            ? formatToISTDateTime(st.approved_at)
+                            : "",
                           Array.isArray(task.assigned_to)
                             ? task.assigned_to.join(", ")
                             : task.assigned_to || "",

@@ -62,6 +62,9 @@ export interface Ticket {
   assignee?: { id: number; name: string; email: string };
   watchers?: number[]; // Array of user IDs watching this ticket
   status_change_history?: Record<StatusHistoryKey, StatusHistoryEntry>;
+  in_progress_at?: string | null;
+  in_progress_by?: number | null;
+  closed_by?: number | null;
 }
 
 export type StatusHistoryKey = "in_progress" | "completed" | "closed";
@@ -968,6 +971,7 @@ export class TicketRepository {
       demand: row.demand,
       created_by: row.created_by,
       assigned_to: row.assigned_to,
+      updated_by: row.updated_by,
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
       mail_config_id: row.mail_config_id || null,
@@ -1130,10 +1134,19 @@ export class TicketRepository {
     const statusHistoryMap = await this.getStatusChangeHistory(
       tickets.map((ticket) => ticket.id),
     );
-    const ticketsWithHistory = tickets.map((ticket) => ({
-      ...ticket,
-      status_change_history: statusHistoryMap[ticket.id] || {},
-    }));
+    const ticketsWithHistory = tickets.map((ticket) => {
+      const history = statusHistoryMap[ticket.id] || {};
+      const inProgressEntry = history.in_progress;
+      const closedEntry = history.closed;
+
+      return {
+        ...ticket,
+        status_change_history: history,
+        in_progress_at: inProgressEntry?.changed_at ?? null,
+        in_progress_by: inProgressEntry?.user_id ?? null,
+        closed_by: closedEntry?.user_id ?? null,
+      };
+    });
 
     return {
       tickets: ticketsWithHistory,
@@ -1207,7 +1220,7 @@ export class TicketRepository {
       console.warn("Failed to fetch ticket watchers:", e);
     }
 
-    return {
+    const ticket: Ticket = {
       id: row.id,
       track_id: row.track_id,
       subject: row.subject,
@@ -1220,6 +1233,7 @@ export class TicketRepository {
       demand: row.demand,
       created_by: row.created_by,
       assigned_to: row.assigned_to,
+      updated_by: row.updated_by,
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
       mail_config_id: row.mail_config_id || null,
@@ -1326,6 +1340,17 @@ export class TicketRepository {
           }
         : undefined,
       watchers,
+    };
+
+    const statusHistoryMap = await this.getStatusChangeHistory([id]);
+    const history = statusHistoryMap[id] || {};
+
+    return {
+      ...ticket,
+      status_change_history: history,
+      in_progress_at: history.in_progress?.changed_at ?? null,
+      in_progress_by: history.in_progress?.user_id ?? null,
+      closed_by: history.closed?.user_id ?? null,
     };
   }
 

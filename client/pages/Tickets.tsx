@@ -144,6 +144,29 @@ export default function TicketsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, page, limit, tab, search]);
 
+  const renderStatusMetaCell = (
+    entry: any,
+    dateFallback?: string,
+    actorFallback?: string,
+  ) => {
+    if (!entry && !dateFallback && !actorFallback) {
+      return "-";
+    }
+    const timestamp = entry?.changed_at
+      ? formatToISTDateTime(entry.changed_at)
+      : dateFallback || "-";
+    const actor =
+      entry?.user_name ||
+      (entry?.user_id ? `User #${entry.user_id}` : actorFallback || "-");
+
+    return (
+      <>
+        <div>{timestamp}</div>
+        <div className="text-xs text-gray-500">{actor}</div>
+      </>
+    );
+  };
+
   return (
     <div className="p-4">
       {fallbackInfo && (
@@ -254,38 +277,85 @@ export default function TicketsPage() {
               <th className="p-2 text-left">Status</th>
               <th className="p-2 text-left">Assigned To</th>
               <th className="p-2 text-left">Created At</th>
+              <th className="p-2 text-left">Updated</th>
+              <th className="p-2 text-left">In Progress</th>
+              <th className="p-2 text-left">Closed</th>
               <th className="p-2 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
             {ticketsResp.tickets && ticketsResp.tickets.length > 0 ? (
-              ticketsResp.tickets.map((t: any) => (
-                <tr key={t.id} className="border-t">
-                  <td className="p-2">{t.track_id}</td>
-                  <td className="p-2">
-                    <Link to={`/tickets/${t.id}`} className="text-blue-600">
-                      {t.subject}
-                    </Link>
-                  </td>
-                  <td className="p-2">{t.priority?.name}</td>
-                  <td className="p-2">{t.status?.name}</td>
-                  <td className="p-2">{t.assignee?.name || "-"}</td>
-                  <td className="p-2">
-                    {t.created_at ? formatToISTDateTime(t.created_at) : "-"}
-                  </td>
-                  <td className="p-2">
-                    <Link
-                      to={`/tickets/${t.id}`}
-                      className="mr-2 text-sm text-blue-600"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))
+              ticketsResp.tickets.map((t: any) => {
+                const history = t.status_change_history || {};
+                const inProgressEntry = history.in_progress;
+                const closedEntry = history.closed;
+                const inProgressFallbackDate = t.in_progress_at
+                  ? formatToISTDateTime(t.in_progress_at)
+                  : undefined;
+                const closedFallbackDate = t.closed_at
+                  ? formatToISTDateTime(t.closed_at)
+                  : undefined;
+                const inProgressActorFallback = t.in_progress_by
+                  ? `User #${t.in_progress_by}`
+                  : undefined;
+                const closedActorFallback = t.closed_by
+                  ? `User #${t.closed_by}`
+                  : undefined;
+                const updatedAtLabel = t.updated_at
+                  ? formatToISTDateTime(t.updated_at)
+                  : "-";
+                const updatedByLabel = t.updated_by
+                  ? `User #${t.updated_by}`
+                  : "-";
+
+                return (
+                  <tr key={t.id} className="border-t">
+                    <td className="p-2">{t.track_id}</td>
+                    <td className="p-2">
+                      <Link to={`/tickets/${t.id}`} className="text-blue-600">
+                        {t.subject}
+                      </Link>
+                    </td>
+                    <td className="p-2">{t.priority?.name}</td>
+                    <td className="p-2">{t.status?.name}</td>
+                    <td className="p-2">{t.assignee?.name || "-"}</td>
+                    <td className="p-2">
+                      {t.created_at ? formatToISTDateTime(t.created_at) : "-"}
+                    </td>
+                    <td className="p-2">
+                      <div>{updatedAtLabel}</div>
+                      <div className="text-xs text-gray-500">
+                        {updatedByLabel}
+                      </div>
+                    </td>
+                    <td className="p-2">
+                      {renderStatusMetaCell(
+                        inProgressEntry,
+                        inProgressFallbackDate,
+                        inProgressActorFallback,
+                      )}
+                    </td>
+                    <td className="p-2">
+                      {renderStatusMetaCell(
+                        closedEntry,
+                        closedFallbackDate,
+                        closedActorFallback,
+                      )}
+                    </td>
+                    <td className="p-2">
+                      <Link
+                        to={`/tickets/${t.id}`}
+                        className="mr-2 text-sm text-blue-600"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
-                <td className="p-4 text-center" colSpan={7}>
+                <td className="p-4 text-center" colSpan={10}>
                   {loading ? "Loading tickets..." : "No tickets to display"}
                 </td>
               </tr>

@@ -55,7 +55,8 @@ export async function runMarkOverdueTickets() {
 
       // Check if current status is closed
       const isClosed = row.is_closed === true;
-      if (isClosed) {
+      const isClosedByName = currentStatusName.includes("closed") || currentStatusName.includes("complete") || currentStatusName.includes("done");
+      if (isClosed || isClosedByName) {
         // console.log(
         //   `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`,
         // );

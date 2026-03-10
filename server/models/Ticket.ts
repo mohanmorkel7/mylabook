@@ -537,14 +537,14 @@ export class TicketRepository {
     const rows = await pool.query(
       `SELECT
         ta.ticket_id,
-        ta.user_id,
-        ta.new_value,
-        ts.name as status_name,
-        ta.created_at,
-        u.first_name,
-        u.last_name,
-        u.name as full_name,
-        u.email as user_email
+      ta.user_id,
+      ta.new_value,
+      ts.name as status_name,
+      ta.created_at,
+      u.first_name,
+      u.last_name,
+      CONCAT_WS(' ', u.first_name, u.last_name) as full_name,
+      u.email as user_email
        FROM ticket_activities ta
        LEFT JOIN ticket_statuses ts ON ts.id = NULLIF(ta.new_value, '')::int
        LEFT JOIN users u ON u.id = ta.user_id

@@ -42,6 +42,11 @@ export async function runMarkOverdueTickets() {
         continue;
       }
 
+      if (currentStatusName !== "open") {
+        // Only auto-mark tickets that are currently Open
+        continue;
+      }
+
       // Skip if current status is 'In Progress' (do not auto-mark)
       if (
         currentStatusName.includes("in progress") ||

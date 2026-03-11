@@ -42,6 +42,8 @@ export interface Ticket {
   created_by: number;
   updated_by?: number;
   assigned_to?: number;
+  in_progress_by?: number | null;
+  closed_by?: number | null;
   related_lead_id?: number;
   related_client_id?: number;
   mail_config_id?: number | null; // For tickets created from email automation
@@ -1398,17 +1400,19 @@ export class TicketRepository {
       }
     });
 
-    if (updates.length > 0) {
-      values.push(id);
-      const updateQuery = `
-        UPDATE tickets
-        SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $${paramIndex}
-        RETURNING *
-      `;
+    // Always update to set updated_by and updated_at
+    updates.push(`updated_by = $${paramIndex++}`);
+    values.push(updatedBy);
 
-      await pool.query(updateQuery, values);
-    }
+    values.push(id);
+    const updateQuery = `
+      UPDATE tickets
+      SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+
+    await pool.query(updateQuery, values);
 
     // Handle watchers separately
     if (watchers && Array.isArray(watchers)) {
@@ -1481,17 +1485,34 @@ export class TicketRepository {
               "SELECT name, is_closed FROM ticket_statuses WHERE id = $1",
               [newValue],
             );
-            if (status.rows[0]?.is_closed) {
-              await pool.query(
-                "UPDATE tickets SET closed_at = CURRENT_TIMESTAMP WHERE id = $1",
-                [id],
-              );
+            const statusName = String(status.rows[0]?.name || "").toLowerCase();
+
+            // Update tracking fields based on new status
+            let updateQuery =
+              "UPDATE tickets SET updated_by = $1, updated_at = CURRENT_TIMESTAMP";
+            const queryParams: any[] = [updatedBy];
+            let paramIndex = 2;
+
+            // Track when ticket moved to In Progress
+            if (statusName.includes("in progress")) {
+              updateQuery += `, in_progress_at = CURRENT_TIMESTAMP, in_progress_by = $${paramIndex++}`;
+              queryParams.push(updatedBy);
             }
+
+            // Track when ticket was closed and who closed it
+            if (status.rows[0]?.is_closed) {
+              updateQuery += `, closed_at = CURRENT_TIMESTAMP, closed_by = $${paramIndex++}`;
+              queryParams.push(updatedBy);
+            }
+
+            updateQuery += ` WHERE id = $${paramIndex}`;
+            queryParams.push(id);
+
+            await pool.query(updateQuery, queryParams);
 
             // If status name indicates 'overdue', mark ever_overdue and overdue_at
             try {
-              const nm = String(status.rows[0]?.name || "").toLowerCase();
-              if (nm.includes("overdue")) {
+              if (statusName.includes("overdue")) {
                 await pool.query(
                   "UPDATE tickets SET ever_overdue = TRUE, overdue_at = COALESCE(overdue_at, NOW()) WHERE id = $1",
                   [id],

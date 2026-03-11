@@ -310,6 +310,27 @@ export async function initializeDatabase() {
           activityIpMigrationError.message,
         );
       }
+
+      // Run ticket status tracking columns migration
+      try {
+        const ticketTrackingMigrationPath = path.join(
+          __dirname,
+          "migration-add-ticket-status-tracking.sql",
+        );
+        if (fs.existsSync(ticketTrackingMigrationPath)) {
+          const ticketTrackingMigration = fs.readFileSync(
+            ticketTrackingMigrationPath,
+            "utf8",
+          );
+          await client.query(ticketTrackingMigration);
+          console.log("Ticket status tracking migration applied successfully");
+        }
+      } catch (ticketTrackingError) {
+        console.log(
+          "Ticket status tracking migration already applied or error:",
+          ticketTrackingError.message,
+        );
+      }
     } else {
       console.log("Database schema already exists");
 

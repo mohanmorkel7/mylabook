@@ -1,5 +1,4 @@
-import React from "react";
-import React from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +10,7 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import HourlyTaskStatusTimeline from "@/components/HourlyTaskStatusTimeline";
 
 export default function FinOpsUserStats() {
-  const [period, setPeriod] = React.useState<"daily" | "weekly" | "monthly">("monthly");
+  const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
 
   const humanPeriod = period === "daily" ? "Today" : period === "weekly" ? "Last 7 days" : "This month";
 

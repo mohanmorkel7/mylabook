@@ -4551,14 +4551,20 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
         [startDate],
       );
 
-      timelineData = hourlyRes.rows.map((r: any) => ({
-        hour: `${String(r.hour).padStart(2, "0")}:00`,
-        pending: Number(r.pending || 0),
-        inprogress: Number(r.inprogress || 0),
-        completed: Number(r.completed || 0),
-        overdue: Number(r.overdue || 0),
-        delayed: Number(r.delayed || 0),
-      }));
+      timelineData = hourlyRes.rows.map((r: any) => {
+        const hour = Number(r.hour);
+        const period = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return {
+          hour: `${displayHour}:00 ${period}`,
+          timeValue: hour, // Keep numeric value for sorting
+          pending: Number(r.pending || 0),
+          inprogress: Number(r.inprogress || 0),
+          completed: Number(r.completed || 0),
+          overdue: Number(r.overdue || 0),
+          delayed: Number(r.delayed || 0),
+        };
+      });
     } else {
       // Daily breakdown for weekly/monthly
       const dailyRes = await q(

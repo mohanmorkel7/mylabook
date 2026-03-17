@@ -4481,14 +4481,14 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
     const period = String(req.query.period || "daily").toLowerCase();
 
     const now = new Date();
-    const istNow = new Date(
-      now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
-    );
+    // IST is UTC+5:30, so add 5.5 hours to UTC time
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffsetMs);
 
     // Get the correct IST date in YYYY-MM-DD format
-    const istYear = istNow.getFullYear();
-    const istMonth = String(istNow.getMonth() + 1).padStart(2, "0");
-    const istDay = String(istNow.getDate()).padStart(2, "0");
+    const istYear = istNow.getUTCFullYear();
+    const istMonth = String(istNow.getUTCMonth() + 1).padStart(2, "0");
+    const istDay = String(istNow.getUTCDate()).padStart(2, "0");
     const endDate = `${istYear}-${istMonth}-${istDay}`;
 
     let startDate: string;
@@ -4496,16 +4496,13 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
       startDate = endDate;
     } else if (period === "weekly") {
       const start = new Date(istNow.getTime() - 6 * 24 * 60 * 60 * 1000);
-      const startYear = start.getFullYear();
-      const startMonth = String(start.getMonth() + 1).padStart(2, "0");
-      const startDay = String(start.getDate()).padStart(2, "0");
+      const startYear = start.getUTCFullYear();
+      const startMonth = String(start.getUTCMonth() + 1).padStart(2, "0");
+      const startDay = String(start.getUTCDate()).padStart(2, "0");
       startDate = `${startYear}-${startMonth}-${startDay}`;
     } else {
-      const start = new Date(istYear, istNow.getMonth(), 1);
-      const startYear = start.getFullYear();
-      const startMonth = String(start.getMonth() + 1).padStart(2, "0");
-      const startDay = String(start.getDate()).padStart(2, "0");
-      startDate = `${startYear}-${startMonth}-${startDay}`;
+      // First day of current IST month
+      startDate = `${istYear}-${istMonth}-01`;
     }
 
     if (!(await isDatabaseAvailable())) {

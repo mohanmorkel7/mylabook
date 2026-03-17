@@ -4485,29 +4485,38 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
       now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
     );
 
-    let startDate: string;
-    let endDate: string = istNow.toISOString().slice(0, 10);
+    // Get the correct IST date in YYYY-MM-DD format
+    const istYear = istNow.getFullYear();
+    const istMonth = String(istNow.getMonth() + 1).padStart(2, "0");
+    const istDay = String(istNow.getDate()).padStart(2, "0");
+    const endDate = `${istYear}-${istMonth}-${istDay}`;
 
+    let startDate: string;
     if (period === "daily") {
       startDate = endDate;
     } else if (period === "weekly") {
       const start = new Date(istNow.getTime() - 6 * 24 * 60 * 60 * 1000);
-      startDate = start.toISOString().slice(0, 10);
+      const startYear = start.getFullYear();
+      const startMonth = String(start.getMonth() + 1).padStart(2, "0");
+      const startDay = String(start.getDate()).padStart(2, "0");
+      startDate = `${startYear}-${startMonth}-${startDay}`;
     } else {
-      const start = new Date(
-        istNow.getFullYear(),
-        istNow.getMonth(),
-        1,
-      );
-      startDate = start.toISOString().slice(0, 10);
+      const start = new Date(istYear, istNow.getMonth(), 1);
+      const startYear = start.getFullYear();
+      const startMonth = String(start.getMonth() + 1).padStart(2, "0");
+      const startDay = String(start.getDate()).padStart(2, "0");
+      startDate = `${startYear}-${startMonth}-${startDay}`;
     }
 
     if (!(await isDatabaseAvailable())) {
       // Return mock hourly timeline for daily view
       const mockData = [];
       for (let hour = 0; hour < 24; hour++) {
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
         mockData.push({
-          hour: `${String(hour).padStart(2, "0")}:00`,
+          hour: `${displayHour}:00 ${ampm}`,
+          timeValue: hour,
           pending: Math.floor(Math.random() * 10),
           inprogress: Math.floor(Math.random() * 8),
           completed: Math.floor(Math.random() * 12),
@@ -4544,8 +4553,8 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
         FROM hours h
         LEFT JOIN finops_tracker ft ON
-          DATE(ft.run_date) = $1
-          AND EXTRACT(HOUR FROM ft.run_date::timestamp AT TIME ZONE 'Asia/Kolkata') = h.hour
+          DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') = $1::date
+          AND EXTRACT(HOUR FROM ft.run_date AT TIME ZONE 'Asia/Kolkata') = h.hour
         GROUP BY h.hour
         ORDER BY h.hour`,
         [startDate],
@@ -4578,7 +4587,7 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
                COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
         FROM daterange d
-        LEFT JOIN finops_tracker ft ON DATE(ft.run_date) = d.run_date
+        LEFT JOIN finops_tracker ft ON DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') = d.run_date
         GROUP BY d.run_date
         ORDER BY d.run_date`,
         [startDate, endDate],

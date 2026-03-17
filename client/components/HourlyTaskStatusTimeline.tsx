@@ -105,6 +105,26 @@ export default function HourlyTaskStatusTimeline({
 function DailyTimeline({ data }: { data: any[] }) {
   const [expandedHour, setExpandedHour] = useState<number | null>(null);
 
+  // Get current hour in IST
+  const getCurrentHourIST = () => {
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(new Date().getTime() + istOffsetMs);
+    return istNow.getUTCHours();
+  };
+  const currentHour = getCurrentHourIST();
+
+  // Get current time in IST
+  const getCurrentTimeIST = () => {
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(new Date().getTime() + istOffsetMs);
+    return istNow.toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit', 
+      hour12: true 
+    }).replace(/^0/, '');
+  };
+
   // Calculate summary statistics
   const summary = {
     pending: data.reduce((sum, item) => sum + (item.pending || 0), 0),
@@ -166,6 +186,24 @@ function DailyTimeline({ data }: { data: any[] }) {
                     wrapperStyle={{ paddingTop: "16px" }}
                     formatter={(value) => STATUS_LABELS[value] || value}
                   />
+
+                  {/* Reference line for current hour */}
+                  {data.some((item) => item.timeValue === currentHour) && (
+                    <Recharts.ReferenceLine
+                      x={data.find((item) => item.timeValue === currentHour)?.hour}
+                      stroke="#2563EB"
+                      strokeWidth={3}
+                      strokeDasharray="5 5"
+                      label={{
+                        value: "NOW",
+                        position: "top",
+                        fill: "#2563EB",
+                        fontSize: 12,
+                        fontWeight: "bold",
+                        offset: 10,
+                      }}
+                    />
+                  )}
 
                   {/* Grouped bars for each status */}
                   <Recharts.Bar dataKey="pending" fill={STATUS_COLORS.pending} />
@@ -233,16 +271,24 @@ function DailyTimeline({ data }: { data: any[] }) {
                 {data.map((item, idx) => {
                   const total = (item.pending || 0) + (item.inprogress || 0) + (item.completed || 0) + (item.overdue || 0) + (item.delayed || 0);
                   const hasActivity = total > 0;
+                  const isCurrentHour = item.timeValue === currentHour;
                   return (
                     <tr
                       key={idx}
                       className={`border-b transition-colors ${
-                        hasActivity ? "hover:bg-gray-50" : "bg-gray-50 opacity-60"
+                        isCurrentHour ? "bg-blue-100 border-l-4 border-l-blue-600" : hasActivity ? "hover:bg-gray-50" : "bg-gray-50 opacity-60"
                       } ${expandedHour === idx ? "bg-blue-50" : ""}`}
                       onClick={() => setExpandedHour(expandedHour === idx ? null : idx)}
                       style={{ cursor: "pointer" }}
                     >
-                      <td className="py-3 px-4 font-semibold text-gray-900">{item.hour}</td>
+                      <td className="py-3 px-4 font-semibold text-gray-900 flex items-center gap-2">
+                        {item.hour}
+                        {isCurrentHour && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-white bg-blue-600 rounded-full">
+                            <span>●</span> NOW
+                          </span>
+                        )}
+                      </td>
                       <td className="text-right py-3 px-4 font-medium" style={{ color: STATUS_COLORS.pending }}>
                         {item.pending || 0}
                       </td>
@@ -266,8 +312,18 @@ function DailyTimeline({ data }: { data: any[] }) {
             </table>
           </div>
 
+          {/* Current hour indicator */}
+          <div className="mt-4 p-3 bg-blue-50 border-l-4 border-l-blue-600 rounded-lg">
+            <p className="text-sm font-semibold text-blue-900">
+              Current Hour: <span className="text-blue-600">{getCurrentTimeIST()}</span> IST
+            </p>
+            <p className="text-xs text-blue-800 mt-1">
+              The highlighted row shows the current hour. Hours after the current time have not yet occurred and will show data as tasks are created/updated.
+            </p>
+          </div>
+
           {/* Information note */}
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+          <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700">
             <strong>About this view:</strong> This chart displays all 24 hours from 12:00 AM to 11:59 PM. Tasks appearing in multiple hours indicate that they spanned multiple hours. For example, a task "in progress" at 10:00 AM but not completed by 12:00 PM will appear in both hours.
           </div>
         </CardContent>

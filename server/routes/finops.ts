@@ -4465,6 +4465,144 @@ router.get("/metrics", async (req: Request, res: Response) => {
   }
 });
 
+// Get hourly task status timeline
+router.get("/hourly-timeline", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    const period = String(req.query.period || "daily").toLowerCase();
+
+    const now = new Date();
+    const istNow = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+    );
+
+    let startDate: string;
+    let endDate: string = istNow.toISOString().slice(0, 10);
+
+    if (period === "daily") {
+      startDate = endDate;
+    } else if (period === "weekly") {
+      const start = new Date(istNow.getTime() - 6 * 24 * 60 * 60 * 1000);
+      startDate = start.toISOString().slice(0, 10);
+    } else {
+      const start = new Date(
+        istNow.getFullYear(),
+        istNow.getMonth(),
+        1,
+      );
+      startDate = start.toISOString().slice(0, 10);
+    }
+
+    if (!(await isDatabaseAvailable())) {
+      // Return mock hourly timeline for daily view
+      const mockData = [];
+      for (let hour = 0; hour < 24; hour++) {
+        mockData.push({
+          hour: `${String(hour).padStart(2, "0")}:00`,
+          pending: Math.floor(Math.random() * 10),
+          inprogress: Math.floor(Math.random() * 8),
+          completed: Math.floor(Math.random() * 12),
+          overdue: Math.floor(Math.random() * 3),
+          delayed: Math.floor(Math.random() * 2),
+        });
+      }
+      return res.json({
+        period,
+        start_date: startDate,
+        end_date: endDate,
+        data: mockData,
+      });
+    }
+
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // For daily view: aggregate by hour of day
+    // For weekly/monthly: aggregate by day
+    let timelineData: any[] = [];
+
+    if (period === "daily") {
+      // Hourly breakdown for a single day
+      const hourlyRes = await q(
+        `WITH hours AS (
+          SELECT generate_series(0, 23) AS hour
+        )
+        SELECT h.hour,
+               COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int AS pending,
+               COUNT(CASE WHEN ft.status = 'inprogress' THEN 1 END)::int AS inprogress,
+               COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int AS completed,
+               COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
+               COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
+        FROM hours h
+        LEFT JOIN finops_tracker ft ON
+          DATE(ft.run_date) = $1
+          AND EXTRACT(HOUR FROM ft.run_date::timestamp AT TIME ZONE 'Asia/Kolkata') = h.hour
+        GROUP BY h.hour
+        ORDER BY h.hour`,
+        [startDate],
+      );
+
+      timelineData = hourlyRes.rows.map((r: any) => ({
+        hour: `${String(r.hour).padStart(2, "0")}:00`,
+        pending: Number(r.pending || 0),
+        inprogress: Number(r.inprogress || 0),
+        completed: Number(r.completed || 0),
+        overdue: Number(r.overdue || 0),
+        delayed: Number(r.delayed || 0),
+      }));
+    } else {
+      // Daily breakdown for weekly/monthly
+      const dailyRes = await q(
+        `WITH daterange AS (
+          SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS run_date
+        )
+        SELECT d.run_date,
+               COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int AS pending,
+               COUNT(CASE WHEN ft.status = 'inprogress' THEN 1 END)::int AS inprogress,
+               COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int AS completed,
+               COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
+               COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
+        FROM daterange d
+        LEFT JOIN finops_tracker ft ON DATE(ft.run_date) = d.run_date
+        GROUP BY d.run_date
+        ORDER BY d.run_date`,
+        [startDate, endDate],
+      );
+
+      timelineData = dailyRes.rows.map((r: any) => ({
+        timeLabel: new Date(r.run_date).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        pending: Number(r.pending || 0),
+        inprogress: Number(r.inprogress || 0),
+        completed: Number(r.completed || 0),
+        overdue: Number(r.overdue || 0),
+        delayed: Number(r.delayed || 0),
+      }));
+    }
+
+    res.json({
+      period,
+      start_date: startDate,
+      end_date: endDate,
+      data: timelineData,
+    });
+  } catch (error: any) {
+    console.error("/finops/hourly-timeline error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all external alert next_call timestamps
 router.get("/next-calls", async (req: Request, res: Response) => {
   try {

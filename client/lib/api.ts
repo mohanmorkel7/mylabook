@@ -2220,6 +2220,16 @@ export class ApiClient {
     return this.request(`/finops/metrics${query ? `?${query}` : ""}`);
   }
 
+  async getHourlyTaskStatusTimeline(period?: string) {
+    const params = new URLSearchParams();
+    if (period) params.append("period", period);
+
+    const query = params.toString();
+    return this.request(
+      `/finops/hourly-timeline${query ? `?${query}` : ""}`,
+    );
+  }
+
   async getFinOpsAccounts() {
     return this.request("/finops/accounts");
   }

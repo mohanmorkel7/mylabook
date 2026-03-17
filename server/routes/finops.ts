@@ -4545,7 +4545,7 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
         )
         SELECT h.hour,
                COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int AS pending,
-               COUNT(CASE WHEN ft.status = 'inprogress' THEN 1 END)::int AS inprogress,
+               COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress,
                COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int AS completed,
                COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
@@ -4581,7 +4581,7 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
         )
         SELECT d.run_date,
                COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int AS pending,
-               COUNT(CASE WHEN ft.status = 'inprogress' THEN 1 END)::int AS inprogress,
+               COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress,
                COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int AS completed,
                COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed

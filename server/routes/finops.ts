@@ -4550,8 +4550,8 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
         FROM hours h
         LEFT JOIN finops_tracker ft ON
-          DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') = $1::date
-          AND EXTRACT(HOUR FROM ft.run_date AT TIME ZONE 'Asia/Kolkata') = h.hour
+          (ft.run_date::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = $1::date
+          AND EXTRACT(HOUR FROM (ft.run_date::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')) = h.hour
         GROUP BY h.hour
         ORDER BY h.hour`,
         [startDate],
@@ -4584,7 +4584,7 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
                COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
         FROM daterange d
-        LEFT JOIN finops_tracker ft ON DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') = d.run_date
+        LEFT JOIN finops_tracker ft ON (ft.run_date::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = d.run_date
         GROUP BY d.run_date
         ORDER BY d.run_date`,
         [startDate, endDate],

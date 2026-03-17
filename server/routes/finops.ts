@@ -4538,6 +4538,7 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
 
     if (period === "daily") {
       // Hourly breakdown for a single day
+      // Note: run_date is already stored in IST, so we extract hour directly without timezone conversion
       const hourlyRes = await q(
         `WITH hours AS (
           SELECT generate_series(0, 23) AS hour
@@ -4550,8 +4551,8 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
         FROM hours h
         LEFT JOIN finops_tracker ft ON
-          (ft.run_date::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = $1::date
-          AND EXTRACT(HOUR FROM (ft.run_date::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')) = h.hour
+          ft.run_date::date = $1::date
+          AND EXTRACT(HOUR FROM ft.run_date::timestamp) = h.hour
         GROUP BY h.hour
         ORDER BY h.hour`,
         [startDate],
@@ -4573,6 +4574,7 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
       });
     } else {
       // Daily breakdown for weekly/monthly
+      // Note: run_date is already stored in IST, so we extract date directly without timezone conversion
       const dailyRes = await q(
         `WITH daterange AS (
           SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS run_date
@@ -4584,7 +4586,7 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
                COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
                COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
         FROM daterange d
-        LEFT JOIN finops_tracker ft ON (ft.run_date::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = d.run_date
+        LEFT JOIN finops_tracker ft ON ft.run_date::date = d.run_date
         GROUP BY d.run_date
         ORDER BY d.run_date`,
         [startDate, endDate],

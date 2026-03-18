@@ -4671,48 +4671,85 @@ router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
     const q = (sql: string, params: any[] = []) =>
       queryWithRetry(() => pool.query(sql, params), 2, 500);
 
-    // Fetch hourly timeline data for the specified date
-    const result = await q(
-      `SELECT
-        date::text as date,
-        hour,
-        hour_label,
-        pending_count,
-        inprogress_count,
-        completed_count,
-        overdue_count,
-        delayed_count,
-        total_count
-      FROM finops_hourly_timeline
-      WHERE date = $1::date
-      ORDER BY hour ASC`,
-      [queryDate],
-    );
+    // Get today's date in IST
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(new Date().getTime() + istOffsetMs);
+    const todayIST = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth() + 1).padStart(2, "0")}-${String(istNow.getUTCDate()).padStart(2, "0")}`;
+    const isToday = queryDate === todayIST;
 
-    // If no data exists for this date, ensure we return all 24 hours with zeros
-    let data = result.rows.map((row: any) => {
-      // Ensure date is a clean string (YYYY-MM-DD)
-      let cleanDate = queryDate;
-      if (row.date) {
-        // Handle if date comes as string with timestamp
-        if (typeof row.date === 'string') {
-          cleanDate = row.date.split('T')[0];
-        } else if (row.date instanceof Date) {
-          cleanDate = row.date.toISOString().split('T')[0];
-        }
-      }
-      return {
-        date: cleanDate,
-        hour: row.hour,
-        hour_label: row.hour_label?.trim() || `${row.hour}:00`, // Remove any extra spaces
-        pending_count: row.pending_count || 0,
-        inprogress_count: row.inprogress_count || 0,
-        completed_count: row.completed_count || 0,
-        overdue_count: row.overdue_count || 0,
-        delayed_count: row.delayed_count || 0,
-        total_count: row.total_count || 0,
-      };
-    });
+    let rows: any[] = [];
+
+    if (isToday) {
+      // For today: query finops_tracker DIRECTLY for real-time accuracy
+      // Group by scheduled_time hour so counts always reflect current task status
+      console.log(`[hourly-timeline-stored] Real-time query for today (${queryDate})`);
+      const liveResult = await q(
+        `WITH hours AS (
+          SELECT generate_series(0, 23) AS hour
+        ),
+        hourly_data AS (
+          SELECT
+            h.hour,
+            COUNT(CASE WHEN ft.status = 'pending'     THEN 1 END)::int AS pending_count,
+            COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress_count,
+            COUNT(CASE WHEN ft.status = 'completed'   THEN 1 END)::int AS completed_count,
+            COUNT(CASE WHEN ft.status = 'overdue'     THEN 1 END)::int AS overdue_count,
+            COUNT(CASE WHEN ft.status = 'delayed'     THEN 1 END)::int AS delayed_count
+          FROM hours h
+          LEFT JOIN finops_tracker ft
+            ON  ft.run_date = $1::date
+            AND ft.scheduled_time IS NOT NULL
+            AND EXTRACT(HOUR FROM ft.scheduled_time::time)::int = h.hour
+          GROUP BY h.hour
+        )
+        SELECT
+          h.hour,
+          CASE
+            WHEN h.hour = 0  THEN '12:00 AM'
+            WHEN h.hour < 12 THEN h.hour::text || ':00 AM'
+            WHEN h.hour = 12 THEN '12:00 PM'
+            ELSE (h.hour - 12)::text || ':00 PM'
+          END AS hour_label,
+          COALESCE(hd.pending_count, 0)    AS pending_count,
+          COALESCE(hd.inprogress_count, 0) AS inprogress_count,
+          COALESCE(hd.completed_count, 0)  AS completed_count,
+          COALESCE(hd.overdue_count, 0)    AS overdue_count,
+          COALESCE(hd.delayed_count, 0)    AS delayed_count,
+          COALESCE(hd.pending_count, 0) + COALESCE(hd.inprogress_count, 0) +
+          COALESCE(hd.completed_count, 0) + COALESCE(hd.overdue_count, 0) +
+          COALESCE(hd.delayed_count, 0) AS total_count
+        FROM hours h
+        LEFT JOIN hourly_data hd ON hd.hour = h.hour
+        ORDER BY h.hour ASC`,
+        [queryDate]
+      );
+      rows = liveResult.rows;
+    } else {
+      // For past dates: use stored finops_hourly_timeline table
+      console.log(`[hourly-timeline-stored] Stored query for past date (${queryDate})`);
+      const storedResult = await q(
+        `SELECT hour, hour_label, pending_count, inprogress_count,
+                completed_count, overdue_count, delayed_count, total_count
+         FROM finops_hourly_timeline
+         WHERE date = $1::date
+         ORDER BY hour ASC`,
+        [queryDate]
+      );
+      rows = storedResult.rows;
+    }
+
+    // Normalise rows to clean response format
+    let data = rows.map((row: any) => ({
+      date: queryDate,
+      hour: row.hour,
+      hour_label: (row.hour_label || '').trim(),
+      pending_count: row.pending_count || 0,
+      inprogress_count: row.inprogress_count || 0,
+      completed_count: row.completed_count || 0,
+      overdue_count: row.overdue_count || 0,
+      delayed_count: row.delayed_count || 0,
+      total_count: row.total_count || 0,
+    }));
 
     if (data.length === 0) {
       data = [];

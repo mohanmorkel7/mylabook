@@ -121,11 +121,23 @@ export async function aggregateFullDay(date?: string) {
 
     const result = await pool.query(query, [targetDate]);
     console.log(`[aggregateFullDay] Successfully backfilled ${result.rowCount} hours for ${targetDate}`);
-    
+
+    // Log the actual data for debugging
+    const debugQuery = `SELECT * FROM finops_hourly_timeline WHERE date = $1 ORDER BY hour`;
+    const debugResult = await pool.query(debugQuery, [targetDate]);
+    console.log(`[aggregateFullDay] Populated data:`, JSON.stringify(debugResult.rows, null, 2));
+
+    // Also check source data
+    const sourceQuery = `SELECT COUNT(*) as total, status FROM finops_tracker WHERE created_at::date = $1::date GROUP BY status`;
+    const sourceResult = await pool.query(sourceQuery, [targetDate]);
+    console.log(`[aggregateFullDay] Source data counts:`, JSON.stringify(sourceResult.rows, null, 2));
+
     return {
       success: true,
       date: targetDate,
-      hoursCreated: result.rowCount
+      hoursCreated: result.rowCount,
+      populatedData: debugResult.rows,
+      sourceData: sourceResult.rows
     };
   } catch (error: any) {
     console.error("[aggregateFullDay] Error:", error);

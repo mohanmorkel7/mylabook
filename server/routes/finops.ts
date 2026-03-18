@@ -4680,17 +4680,19 @@ router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
     let rows: any[] = [];
 
     if (isToday) {
-      // For today: CUMULATIVE SNAPSHOT - real-time from finops_tracker
-      // For each hour H, show the status of ALL tasks as they were at H:59:59 IST
-      // - If task was last updated AFTER hour H → it was "pending" at hour H (not yet acted on)
-      // - If task was last updated AT or BEFORE hour H → use its current status
-      // Total is always = total tasks for the day (every hour shows full 171 tasks)
+      // For today: CUMULATIVE SNAPSHOT - real-time from finops_tracker (daily tasks only)
+      // Rules:
+      //  - Only period = 'daily' tasks (exclude weekly/monthly)
+      //  - Hours < current IST hour → actual cumulative snapshot counts
+      //  - Hours >= current IST hour → all zeros (upcoming, no data yet)
       console.log(`[hourly-timeline-stored] Real-time cumulative snapshot for today (${queryDate})`);
       const liveResult = await q(
         `WITH hours AS (
           SELECT generate_series(0, 23) AS hour
         ),
-        -- For each task × hour, determine what status the task had at that hour
+        current_ist_hour AS (
+          SELECT EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Asia/Kolkata')::int AS cur_hour
+        ),
         hourly_snapshot AS (
           SELECT
             h.hour,
@@ -4703,24 +4705,37 @@ router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
           FROM hours h
           CROSS JOIN finops_tracker ft
           WHERE ft.run_date = $1::date
+            AND ft.period = 'daily'
+        ),
+        aggregated AS (
+          SELECT
+            hour,
+            COUNT(CASE WHEN status_at_hour = 'pending'     THEN 1 END)::int AS pending_count,
+            COUNT(CASE WHEN status_at_hour = 'in_progress' THEN 1 END)::int AS inprogress_count,
+            COUNT(CASE WHEN status_at_hour = 'completed'   THEN 1 END)::int AS completed_count,
+            COUNT(CASE WHEN status_at_hour = 'delayed'     THEN 1 END)::int AS delayed_count,
+            COUNT(CASE WHEN status_at_hour = 'overdue'     THEN 1 END)::int AS overdue_count,
+            COUNT(*)::int AS total_count
+          FROM hourly_snapshot
+          GROUP BY hour
         )
         SELECT
-          hs.hour,
+          a.hour,
           CASE
-            WHEN hs.hour = 0  THEN '12:00 AM'
-            WHEN hs.hour < 12 THEN hs.hour::text || ':00 AM'
-            WHEN hs.hour = 12 THEN '12:00 PM'
-            ELSE (hs.hour - 12)::text || ':00 PM'
+            WHEN a.hour = 0  THEN '12:00 AM'
+            WHEN a.hour < 12 THEN a.hour::text || ':00 AM'
+            WHEN a.hour = 12 THEN '12:00 PM'
+            ELSE (a.hour - 12)::text || ':00 PM'
           END AS hour_label,
-          COUNT(CASE WHEN status_at_hour = 'pending'     THEN 1 END)::int AS pending_count,
-          COUNT(CASE WHEN status_at_hour = 'in_progress' THEN 1 END)::int AS inprogress_count,
-          COUNT(CASE WHEN status_at_hour = 'completed'   THEN 1 END)::int AS completed_count,
-          COUNT(CASE WHEN status_at_hour = 'delayed'     THEN 1 END)::int AS delayed_count,
-          COUNT(CASE WHEN status_at_hour = 'overdue'     THEN 1 END)::int AS overdue_count,
-          COUNT(*)::int AS total_count
-        FROM hourly_snapshot hs
-        GROUP BY hs.hour
-        ORDER BY hs.hour ASC`,
+          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.pending_count    END AS pending_count,
+          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.inprogress_count END AS inprogress_count,
+          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.completed_count  END AS completed_count,
+          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.delayed_count    END AS delayed_count,
+          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.overdue_count    END AS overdue_count,
+          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.total_count      END AS total_count
+        FROM aggregated a
+        CROSS JOIN current_ist_hour c
+        ORDER BY a.hour ASC`,
         [queryDate]
       );
       rows = liveResult.rows;

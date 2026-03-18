@@ -32,6 +32,7 @@ const SNAPSHOT_QUERY = `
     FROM hours h
     CROSS JOIN finops_tracker ft
     WHERE ft.run_date = $1::date
+      AND ft.period = 'daily'
   )
   SELECT
     hs.hour,

@@ -3,23 +3,17 @@ import { pool } from "../database/connection";
 /**
  * Aggregates finops_tracker data into hourly timeline records.
  *
- * Key timezone logic:
- *  - updated_at is stored in UTC → convert to IST (AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
- *  - completed_at is stored in IST local time (no conversion needed)
- *  - We use updated_at (→ IST) as the primary timestamp because it reflects
- *    when the status was last changed for ALL statuses.
+ * Hourly bucketing logic:
+ *  - Each task is placed in the hour matching its SCHEDULED TIME (scheduled_time column)
+ *  - e.g., a task with scheduled_time = '05:30:00' appears in the 5:00 AM hour
+ *  - The STATUS shown is the CURRENT status of that task (pending/in_progress/completed/overdue/delayed)
+ *  - This shows: "for each scheduled hour, how many tasks are in each status right now?"
  *
- * Hourly bucketing:
- *  - Each task is placed in the IST hour matching its updated_at (converted to IST)
- *  - Tasks are counted by their current status within that hour bucket
+ * Why scheduled_time (not updated_at or created_at):
+ *  - created_at is always midnight (batch creation time)
+ *  - updated_at is UTC and doesn't represent the scheduled work time
+ *  - scheduled_time directly represents when the task is expected to run
  */
-
-function buildHourLabel(hour: number): string {
-  if (hour === 0) return "12:00 AM";
-  if (hour < 12) return `${hour}:00 AM`;
-  if (hour === 12) return "12:00 PM";
-  return `${hour - 12}:00 PM`;
-}
 
 export async function aggregateHourlyTimeline(date?: string) {
   try {
@@ -32,7 +26,7 @@ export async function aggregateHourlyTimeline(date?: string) {
       WITH hourly_data AS (
         SELECT
           $1::date AS date,
-          EXTRACT(HOUR FROM (ft.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'))::int AS hour,
+          EXTRACT(HOUR FROM scheduled_time::time)::int AS hour,
           COUNT(CASE WHEN ft.status = 'pending'     THEN 1 END)::int AS pending_count,
           COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress_count,
           COUNT(CASE WHEN ft.status = 'completed'   THEN 1 END)::int AS completed_count,
@@ -40,7 +34,8 @@ export async function aggregateHourlyTimeline(date?: string) {
           COUNT(CASE WHEN ft.status = 'delayed'     THEN 1 END)::int AS delayed_count
         FROM finops_tracker ft
         WHERE ft.run_date = $1::date
-        GROUP BY EXTRACT(HOUR FROM (ft.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'))
+          AND ft.scheduled_time IS NOT NULL
+        GROUP BY EXTRACT(HOUR FROM scheduled_time::time)
       )
       INSERT INTO finops_hourly_timeline
         (date, hour, hour_label, pending_count, inprogress_count, completed_count,
@@ -75,7 +70,7 @@ export async function aggregateHourlyTimeline(date?: string) {
 
     const result = await pool.query(query, [targetDate]);
     console.log(
-      `[aggregateHourlyTimeline] Done for ${targetDate}. Rows: ${result.rowCount}`
+      `[aggregateHourlyTimeline] Done for ${targetDate}. Rows affected: ${result.rowCount}`
     );
 
     return { success: true, date: targetDate, recordsUpdated: result.rowCount };
@@ -86,8 +81,12 @@ export async function aggregateHourlyTimeline(date?: string) {
 }
 
 /**
- * Full-day backfill: deletes existing rows for the date and re-inserts
- * all 24 hour slots using updated_at (UTC → IST) as the time dimension.
+ * Full-day backfill:
+ *  - Deletes existing rows for the date
+ *  - Re-inserts all 24 hour slots
+ *  - Tasks with no scheduled_time are excluded
+ *  - Tasks are grouped by the HOUR of their scheduled_time
+ *  - Status counts reflect current status in finops_tracker
  */
 export async function aggregateFullDay(date?: string) {
   try {
@@ -102,7 +101,7 @@ export async function aggregateFullDay(date?: string) {
       [targetDate]
     );
 
-    // Re-aggregate using updated_at converted to IST
+    // Aggregate by scheduled_time hour, keeping all 24 hours (LEFT JOIN ensures zeros)
     const query = `
       WITH hours AS (
         SELECT generate_series(0, 23) AS hour
@@ -118,7 +117,8 @@ export async function aggregateFullDay(date?: string) {
         FROM hours h
         LEFT JOIN finops_tracker ft
           ON  ft.run_date = $1::date
-          AND EXTRACT(HOUR FROM (ft.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'))::int = h.hour
+          AND ft.scheduled_time IS NOT NULL
+          AND EXTRACT(HOUR FROM ft.scheduled_time::time)::int = h.hour
         GROUP BY h.hour
       )
       INSERT INTO finops_hourly_timeline
@@ -150,14 +150,15 @@ export async function aggregateFullDay(date?: string) {
       `[aggregateFullDay] Inserted ${result.rowCount} hour rows for ${targetDate}`
     );
 
-    // Summary log (lightweight – no full JSON dumps)
+    // Lightweight summary log
     const summaryResult = await pool.query(
       `SELECT
          SUM(pending_count)    AS total_pending,
          SUM(inprogress_count) AS total_inprogress,
          SUM(completed_count)  AS total_completed,
          SUM(overdue_count)    AS total_overdue,
-         SUM(delayed_count)    AS total_delayed
+         SUM(delayed_count)    AS total_delayed,
+         SUM(total_count)      AS grand_total
        FROM finops_hourly_timeline
        WHERE date = $1`,
       [targetDate]
@@ -170,6 +171,7 @@ export async function aggregateFullDay(date?: string) {
         completed: s.total_completed,
         overdue: s.total_overdue,
         delayed: s.total_delayed,
+        grand_total: s.grand_total,
       });
     }
 

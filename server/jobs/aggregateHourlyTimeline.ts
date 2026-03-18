@@ -128,49 +128,32 @@ export async function aggregateFullDay(date?: string) {
     const result = await pool.query(query, [targetDate]);
     console.log(`[aggregateFullDay] Successfully backfilled ${result.rowCount} hours for ${targetDate}`);
 
-    // Log the actual data for debugging
-    const debugQuery = `SELECT * FROM finops_hourly_timeline WHERE date = $1 ORDER BY hour`;
-    const debugResult = await pool.query(debugQuery, [targetDate]);
-    console.log(`[aggregateFullDay] Populated data:`, JSON.stringify(debugResult.rows, null, 2));
-
-    // Also check source data
-    const sourceQuery = `SELECT COUNT(*) as total, status FROM finops_tracker WHERE created_at::date = $1::date GROUP BY status`;
-    const sourceResult = await pool.query(sourceQuery, [targetDate]);
-    console.log(`[aggregateFullDay] Source data counts:`, JSON.stringify(sourceResult.rows, null, 2));
-
-    // Check actual created_at values and hour distribution
-    const sampleQuery = `
+    // Log simple summary stats (not full data to avoid memory issues)
+    const summaryQuery = `
       SELECT
-        created_at,
-        EXTRACT(HOUR FROM created_at::timestamp) as extracted_hour,
-        created_at::date as extracted_date,
-        status
-      FROM finops_tracker
-      WHERE created_at::date = $1::date
-      LIMIT 10
+        SUM(pending_count) as total_pending,
+        SUM(inprogress_count) as total_inprogress,
+        SUM(completed_count) as total_completed,
+        SUM(overdue_count) as total_overdue,
+        SUM(delayed_count) as total_delayed
+      FROM finops_hourly_timeline
+      WHERE date = $1
     `;
-    const sampleResult = await pool.query(sampleQuery, [targetDate]);
-    console.log(`[aggregateFullDay] Sample created_at values:`, JSON.stringify(sampleResult.rows, null, 2));
-
-    // Check hour distribution
-    const hourDistQuery = `
-      SELECT
-        EXTRACT(HOUR FROM created_at::timestamp) as hour,
-        COUNT(*) as count
-      FROM finops_tracker
-      WHERE created_at::date = $1::date
-      GROUP BY EXTRACT(HOUR FROM created_at::timestamp)
-      ORDER BY hour
-    `;
-    const hourDistResult = await pool.query(hourDistQuery, [targetDate]);
-    console.log(`[aggregateFullDay] Hour distribution:`, JSON.stringify(hourDistResult.rows, null, 2));
+    const summaryResult = await pool.query(summaryQuery, [targetDate]);
+    if (summaryResult.rows[0]) {
+      console.log(`[aggregateFullDay] Aggregation summary for ${targetDate}:`, {
+        pending: summaryResult.rows[0].total_pending,
+        inprogress: summaryResult.rows[0].total_inprogress,
+        completed: summaryResult.rows[0].total_completed,
+        overdue: summaryResult.rows[0].total_overdue,
+        delayed: summaryResult.rows[0].total_delayed,
+      });
+    }
 
     return {
       success: true,
       date: targetDate,
-      hoursCreated: result.rowCount,
-      populatedData: debugResult.rows,
-      sourceData: sourceResult.rows
+      hoursCreated: result.rowCount
     };
   } catch (error: any) {
     console.error("[aggregateFullDay] Error:", error);

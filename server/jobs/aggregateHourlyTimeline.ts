@@ -11,19 +11,22 @@ export async function aggregateHourlyTimeline(date?: string) {
     console.log(`[aggregateHourlyTimeline] Starting aggregation for date: ${targetDate}`);
 
     // Query to aggregate hourly data from finops_tracker
+    // Use completed_at for hourly distribution (when work was actually completed)
+    // Fall back to started_at if completed_at is null
+    // Fall back to created_at if both are null
     const query = `
       WITH hourly_data AS (
         SELECT
           $1::date as date,
-          EXTRACT(HOUR FROM ft.created_at::timestamp) as hour,
+          EXTRACT(HOUR FROM COALESCE(ft.completed_at, ft.started_at, ft.created_at)::timestamp) as hour,
           COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int as pending_count,
           COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as inprogress_count,
           COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int as completed_count,
           COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int as overdue_count,
           COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int as delayed_count
         FROM finops_tracker ft
-        WHERE ft.created_at::date = $1::date
-        GROUP BY EXTRACT(HOUR FROM ft.created_at::timestamp)
+        WHERE ft.run_date = $1::date OR ft.created_at::date = $1::date
+        GROUP BY EXTRACT(HOUR FROM COALESCE(ft.completed_at, ft.started_at, ft.created_at)::timestamp)
       )
       INSERT INTO finops_hourly_timeline (date, hour, hour_label, pending_count, inprogress_count, completed_count, overdue_count, delayed_count, total_count, updated_at)
       SELECT
@@ -80,6 +83,9 @@ export async function aggregateFullDay(date?: string) {
     await pool.query('DELETE FROM finops_hourly_timeline WHERE date = $1', [targetDate]);
 
     // Then aggregate all hours
+    // Use completed_at for hourly distribution (when work was actually completed)
+    // Fall back to started_at if completed_at is null
+    // Fall back to created_at if both are null
     const query = `
       WITH hours AS (
         SELECT generate_series(0, 23) as hour
@@ -94,8 +100,8 @@ export async function aggregateFullDay(date?: string) {
           COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int as delayed_count
         FROM hours h
         LEFT JOIN finops_tracker ft ON
-          ft.created_at::date = $1::date
-          AND EXTRACT(HOUR FROM ft.created_at::timestamp) = h.hour
+          (ft.run_date = $1::date OR ft.created_at::date = $1::date)
+          AND EXTRACT(HOUR FROM COALESCE(ft.completed_at, ft.started_at, ft.created_at)::timestamp) = h.hour
         GROUP BY h.hour
       )
       INSERT INTO finops_hourly_timeline (date, hour, hour_label, pending_count, inprogress_count, completed_count, overdue_count, delayed_count, total_count, created_at, updated_at)

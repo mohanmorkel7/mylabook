@@ -31,9 +31,9 @@ export async function aggregateHourlyTimeline(date?: string) {
         hd.hour,
         CASE
           WHEN hd.hour = 0 THEN '12:00 AM'
-          WHEN hd.hour < 12 THEN TO_CHAR(hd.hour, '00') || ':00 AM'
+          WHEN hd.hour < 12 THEN hd.hour::text || ':00 AM'
           WHEN hd.hour = 12 THEN '12:00 PM'
-          ELSE TO_CHAR(hd.hour - 12, '00') || ':00 PM'
+          ELSE (hd.hour - 12)::text || ':00 PM'
         END as hour_label,
         hd.pending_count,
         hd.inprogress_count,
@@ -104,9 +104,9 @@ export async function aggregateFullDay(date?: string) {
         hd.hour,
         CASE
           WHEN hd.hour = 0 THEN '12:00 AM'
-          WHEN hd.hour < 12 THEN TO_CHAR(hd.hour, '00') || ':00 AM'
+          WHEN hd.hour < 12 THEN hd.hour::text || ':00 AM'
           WHEN hd.hour = 12 THEN '12:00 PM'
-          ELSE TO_CHAR(hd.hour - 12, '00') || ':00 PM'
+          ELSE (hd.hour - 12)::text || ':00 PM'
         END as hour_label,
         hd.pending_count,
         hd.inprogress_count,
@@ -131,6 +131,33 @@ export async function aggregateFullDay(date?: string) {
     const sourceQuery = `SELECT COUNT(*) as total, status FROM finops_tracker WHERE created_at::date = $1::date GROUP BY status`;
     const sourceResult = await pool.query(sourceQuery, [targetDate]);
     console.log(`[aggregateFullDay] Source data counts:`, JSON.stringify(sourceResult.rows, null, 2));
+
+    // Check actual created_at values and hour distribution
+    const sampleQuery = `
+      SELECT
+        created_at,
+        EXTRACT(HOUR FROM created_at::timestamp) as extracted_hour,
+        created_at::date as extracted_date,
+        status
+      FROM finops_tracker
+      WHERE created_at::date = $1::date
+      LIMIT 10
+    `;
+    const sampleResult = await pool.query(sampleQuery, [targetDate]);
+    console.log(`[aggregateFullDay] Sample created_at values:`, JSON.stringify(sampleResult.rows, null, 2));
+
+    // Check hour distribution
+    const hourDistQuery = `
+      SELECT
+        EXTRACT(HOUR FROM created_at::timestamp) as hour,
+        COUNT(*) as count
+      FROM finops_tracker
+      WHERE created_at::date = $1::date
+      GROUP BY EXTRACT(HOUR FROM created_at::timestamp)
+      ORDER BY hour
+    `;
+    const hourDistResult = await pool.query(hourDistQuery, [targetDate]);
+    console.log(`[aggregateFullDay] Hour distribution:`, JSON.stringify(hourDistResult.rows, null, 2));
 
     return {
       success: true,

@@ -4674,7 +4674,7 @@ router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
     // Fetch hourly timeline data for the specified date
     const result = await q(
       `SELECT
-        date,
+        date::text as date,
         hour,
         hour_label,
         pending_count,
@@ -4690,7 +4690,18 @@ router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
     );
 
     // If no data exists for this date, ensure we return all 24 hours with zeros
-    let data = result.rows;
+    let data = result.rows.map((row: any) => ({
+      date: queryDate, // Override with clean date string
+      hour: row.hour,
+      hour_label: row.hour_label.trim(), // Remove any extra spaces
+      pending_count: row.pending_count,
+      inprogress_count: row.inprogress_count,
+      completed_count: row.completed_count,
+      overdue_count: row.overdue_count,
+      delayed_count: row.delayed_count,
+      total_count: row.total_count,
+    }));
+
     if (data.length === 0) {
       data = [];
       for (let hour = 0; hour < 24; hour++) {

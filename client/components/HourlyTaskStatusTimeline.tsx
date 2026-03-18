@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 
 interface HourlyTimelineData {
   date: string;
@@ -35,6 +35,43 @@ export default function HourlyTaskStatusTimeline() {
   };
 
   const [selectedDate, setSelectedDate] = useState(getTodayIST());
+  const [isAggregating, setIsAggregating] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleAggregateData = async () => {
+    try {
+      setIsAggregating(true);
+      console.log(`Aggregating data for ${selectedDate}...`);
+
+      const response = await fetch(
+        "http://localhost:8080/api/finops/aggregate-hourly-timeline",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: selectedDate }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Aggregation failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log("Aggregation result:", result);
+
+      // Refresh the query to fetch updated data
+      await queryClient.invalidateQueries({
+        queryKey: ["finops-hourly-timeline-stored", selectedDate],
+      });
+
+      alert(`Data aggregated successfully for ${selectedDate}`);
+    } catch (error) {
+      console.error("Aggregation error:", error);
+      alert(`Failed to aggregate data: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setIsAggregating(false);
+    }
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["finops-hourly-timeline-stored", selectedDate],
@@ -159,6 +196,15 @@ export default function HourlyTaskStatusTimeline() {
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
             >
               Today
+            </button>
+            <button
+              onClick={handleAggregateData}
+              disabled={isAggregating}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Refresh hourly data from database"
+            >
+              <RefreshCw className={`w-4 h-4 ${isAggregating ? "animate-spin" : ""}`} />
+              {isAggregating ? "Aggregating..." : "Refresh Data"}
             </button>
           </div>
 

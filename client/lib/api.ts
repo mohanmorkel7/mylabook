@@ -2230,6 +2230,16 @@ export class ApiClient {
     );
   }
 
+  async getHourlyTimelineStored(date?: string) {
+    const params = new URLSearchParams();
+    if (date) params.append("date", date);
+
+    const query = params.toString();
+    return this.request(
+      `/finops/hourly-timeline-stored${query ? `?${query}` : ""}`,
+    );
+  }
+
   async getFinOpsAccounts() {
     return this.request("/finops/accounts");
   }

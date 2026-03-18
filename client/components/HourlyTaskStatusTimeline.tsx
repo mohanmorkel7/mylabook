@@ -2,15 +2,20 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import * as Recharts from "recharts";
-import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
-import { Clock } from "lucide-react";
+import { Clock, ChevronLeft, ChevronRight } from "lucide-react";
 
-interface HourlyTaskStatusTimelineProps {
-  period: "daily" | "weekly" | "monthly";
+interface HourlyTimelineData {
+  date: string;
+  hour_label: string;
+  pending_count: number;
+  inprogress_count: number;
+  completed_count: number;
+  overdue_count: number;
+  delayed_count: number;
+  total_count: number;
 }
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS = {
   pending: "#F59E0B",    // Amber
   inprogress: "#3B82F6", // Blue
   completed: "#10B981",  // Green
@@ -18,26 +23,28 @@ const STATUS_COLORS: Record<string, string> = {
   delayed: "#8B5CF6",    // Purple
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  inprogress: "In Progress",
-  completed: "Completed",
-  overdue: "Overdue",
-  delayed: "Delayed",
-};
+export default function HourlyTaskStatusTimeline() {
+  // Get today's date in IST
+  const getTodayIST = () => {
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(new Date().getTime() + istOffsetMs);
+    const istYear = istNow.getUTCFullYear();
+    const istMonth = String(istNow.getUTCMonth() + 1).padStart(2, "0");
+    const istDay = String(istNow.getUTCDate()).padStart(2, "0");
+    return `${istYear}-${istMonth}-${istDay}`;
+  };
 
-export default function HourlyTaskStatusTimeline({
-  period,
-}: HourlyTaskStatusTimelineProps) {
+  const [selectedDate, setSelectedDate] = useState(getTodayIST());
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["finops-hourly-timeline", period],
+    queryKey: ["finops-hourly-timeline-stored", selectedDate],
     queryFn: async () => {
       try {
-        const resp = await apiClient.getHourlyTaskStatusTimeline(period);
-        return resp || { data: [] };
+        const resp = await apiClient.getHourlyTimelineStored(selectedDate);
+        return resp || { date: selectedDate, data: [] };
       } catch (e) {
         console.error("Failed to fetch hourly timeline:", e);
-        return { data: [] };
+        return { date: selectedDate, data: [] };
       }
     },
     staleTime: 60_000,
@@ -45,12 +52,54 @@ export default function HourlyTaskStatusTimeline({
     refetchOnWindowFocus: true,
   });
 
+  const timelineData: HourlyTimelineData[] = data?.data || [];
+
+  // Date navigation helpers
+  const handlePreviousDay = () => {
+    const date = new Date(selectedDate + "T00:00:00");
+    date.setDate(date.getDate() - 1);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    setSelectedDate(`${year}-${month}-${day}`);
+  };
+
+  const handleNextDay = () => {
+    const date = new Date(selectedDate + "T00:00:00");
+    date.setDate(date.getDate() + 1);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    setSelectedDate(`${year}-${month}-${day}`);
+  };
+
+  const handleToday = () => {
+    setSelectedDate(getTodayIST());
+  };
+
+  // Calculate totals
+  const totals = {
+    pending: timelineData.reduce((sum, item) => sum + (item.pending_count || 0), 0),
+    inprogress: timelineData.reduce((sum, item) => sum + (item.inprogress_count || 0), 0),
+    completed: timelineData.reduce((sum, item) => sum + (item.completed_count || 0), 0),
+    overdue: timelineData.reduce((sum, item) => sum + (item.overdue_count || 0), 0),
+    delayed: timelineData.reduce((sum, item) => sum + (item.delayed_count || 0), 0),
+  };
+
+  const grandTotal = Object.values(totals).reduce((sum, val) => sum + val, 0);
+
+  // Format date for display
+  const formatDateDisplay = (dateStr: string) => {
+    const date = new Date(dateStr + "T00:00:00");
+    return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  };
+
   if (isLoading) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="w-4 h-4" /> Task Status Timeline
+            <Clock className="w-4 h-4" /> Task Status Timeline - Hourly Breakdown
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -65,7 +114,7 @@ export default function HourlyTaskStatusTimeline({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="w-4 h-4" /> Task Status Timeline
+            <Clock className="w-4 h-4" /> Task Status Timeline - Hourly Breakdown
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -75,341 +124,140 @@ export default function HourlyTaskStatusTimeline({
     );
   }
 
-  const timelineData = data?.data || [];
-
-  if (!timelineData.length) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="w-4 h-4" /> Task Status Timeline
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm text-gray-500">
-            No task status data available for the selected period.
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Render different layouts for daily vs weekly/monthly
-  if (period === "daily") {
-    return <DailyTimeline data={timelineData} />;
-  }
-
-  return <WeeklyMonthlyTimeline data={timelineData} />;
-}
-
-function DailyTimeline({ data }: { data: any[] }) {
-  const [expandedHour, setExpandedHour] = useState<number | null>(null);
-
-  // Get current hour in IST
-  const getCurrentHourIST = () => {
-    const istOffsetMs = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(new Date().getTime() + istOffsetMs);
-    return istNow.getUTCHours();
-  };
-  const currentHour = getCurrentHourIST();
-
-  // Get current time in IST
-  const getCurrentTimeIST = () => {
-    const istOffsetMs = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(new Date().getTime() + istOffsetMs);
-    return istNow.toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit', 
-      hour12: true 
-    }).replace(/^0/, '');
-  };
-
-  // Calculate summary statistics
-  const summary = {
-    pending: data.reduce((sum, item) => sum + (item.pending || 0), 0),
-    inprogress: data.reduce((sum, item) => sum + (item.inprogress || 0), 0),
-    completed: data.reduce((sum, item) => sum + (item.completed || 0), 0),
-    overdue: data.reduce((sum, item) => sum + (item.overdue || 0), 0),
-    delayed: data.reduce((sum, item) => sum + (item.delayed || 0), 0),
-  };
-
-  return (
-    <>
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Clock className="w-5 h-5" /> Task Status Timeline - Hourly Breakdown
-          </CardTitle>
-          <p className="text-sm text-gray-500 mt-2">
-            Detailed hourly breakdown of task statuses from 12:00 AM to 11:59 PM
-          </p>
-        </CardHeader>
-        <CardContent>
-          {/* Hourly bar chart */}
-          <div style={{ height: 500, overflowX: "auto" }} className="mb-6">
-            <ChartContainer
-              id="hourly-timeline-daily"
-              config={{
-                pending: { color: STATUS_COLORS.pending, label: STATUS_LABELS.pending },
-                inprogress: { color: STATUS_COLORS.inprogress, label: STATUS_LABELS.inprogress },
-                completed: { color: STATUS_COLORS.completed, label: STATUS_LABELS.completed },
-                overdue: { color: STATUS_COLORS.overdue, label: STATUS_LABELS.overdue },
-                delayed: { color: STATUS_COLORS.delayed, label: STATUS_LABELS.delayed },
-              }}
-            >
-              <Recharts.ResponsiveContainer width="100%" height={450}>
-                <Recharts.BarChart
-                  data={data}
-                  margin={{ top: 8, right: 16, left: 0, bottom: 80 }}
-                >
-                  <Recharts.CartesianGrid strokeDasharray="3 3" />
-                  <Recharts.XAxis
-                    dataKey="hour"
-                    type="category"
-                    tick={{ fontSize: 11, angle: -45, textAnchor: "end" }}
-                    height={100}
-                    interval={0}
-                  />
-                  <Recharts.YAxis 
-                    type="number" 
-                    tick={{ fontSize: 12 }} 
-                    label={{ value: "Task Count", angle: -90, position: "insideLeft" }} 
-                  />
-                  <Recharts.Tooltip 
-                    content={<ChartTooltipContent />}
-                    contentStyle={{ fontSize: "12px" }}
-                    formatter={(value) => String(value)}
-                    labelFormatter={(label) => `${label}`}
-                  />
-                  <Recharts.Legend
-                    wrapperStyle={{ paddingTop: "16px" }}
-                    formatter={(value) => STATUS_LABELS[value] || value}
-                  />
-
-                  {/* Reference line for current hour */}
-                  {data.some((item) => item.timeValue === currentHour) && (
-                    <Recharts.ReferenceLine
-                      x={data.find((item) => item.timeValue === currentHour)?.hour}
-                      stroke="#2563EB"
-                      strokeWidth={3}
-                      strokeDasharray="5 5"
-                      label={{
-                        value: "NOW",
-                        position: "top",
-                        fill: "#2563EB",
-                        fontSize: 12,
-                        fontWeight: "bold",
-                        offset: 10,
-                      }}
-                    />
-                  )}
-
-                  {/* Grouped bars for each status */}
-                  <Recharts.Bar dataKey="pending" fill={STATUS_COLORS.pending} />
-                  <Recharts.Bar dataKey="inprogress" fill={STATUS_COLORS.inprogress} />
-                  <Recharts.Bar dataKey="completed" fill={STATUS_COLORS.completed} />
-                  <Recharts.Bar dataKey="overdue" fill={STATUS_COLORS.overdue} />
-                  <Recharts.Bar dataKey="delayed" fill={STATUS_COLORS.delayed} />
-                </Recharts.BarChart>
-              </Recharts.ResponsiveContainer>
-            </ChartContainer>
-          </div>
-
-          {/* Summary statistics cards */}
-          <div className="grid grid-cols-5 gap-3 mb-6">
-            {Object.entries(STATUS_LABELS).map(([key, label]) => (
-              <div
-                key={key}
-                className="p-4 bg-gradient-to-br rounded-lg border"
-                style={{
-                  borderColor: STATUS_COLORS[key],
-                  backgroundColor: `${STATUS_COLORS[key]}15`,
-                }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: STATUS_COLORS[key] }}
-                  />
-                  <span className="text-xs font-semibold text-gray-700">
-                    {label}
-                  </span>
-                </div>
-                <div className="text-2xl font-bold" style={{ color: STATUS_COLORS[key] }}>
-                  {summary[key as keyof typeof summary] || 0}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Detailed hourly table */}
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Hour</th>
-                  <th className="text-right py-3 px-4 font-semibold" style={{ color: STATUS_COLORS.pending }}>
-                    Pending
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold" style={{ color: STATUS_COLORS.inprogress }}>
-                    In Progress
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold" style={{ color: STATUS_COLORS.completed }}>
-                    Completed
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold" style={{ color: STATUS_COLORS.overdue }}>
-                    Overdue
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold" style={{ color: STATUS_COLORS.delayed }}>
-                    Delayed
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((item, idx) => {
-                  const total = (item.pending || 0) + (item.inprogress || 0) + (item.completed || 0) + (item.overdue || 0) + (item.delayed || 0);
-                  const hasActivity = total > 0;
-                  const isCurrentHour = item.timeValue === currentHour;
-                  return (
-                    <tr
-                      key={idx}
-                      className={`border-b transition-colors ${
-                        isCurrentHour ? "bg-blue-100 border-l-4 border-l-blue-600" : hasActivity ? "hover:bg-gray-50" : "bg-gray-50 opacity-60"
-                      } ${expandedHour === idx ? "bg-blue-50" : ""}`}
-                      onClick={() => setExpandedHour(expandedHour === idx ? null : idx)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <td className="py-3 px-4 font-semibold text-gray-900 flex items-center gap-2">
-                        {item.hour}
-                        {isCurrentHour && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-white bg-blue-600 rounded-full">
-                            <span>●</span> NOW
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-right py-3 px-4 font-medium" style={{ color: STATUS_COLORS.pending }}>
-                        {item.pending || 0}
-                      </td>
-                      <td className="text-right py-3 px-4 font-medium" style={{ color: STATUS_COLORS.inprogress }}>
-                        {item.inprogress || 0}
-                      </td>
-                      <td className="text-right py-3 px-4 font-medium" style={{ color: STATUS_COLORS.completed }}>
-                        {item.completed || 0}
-                      </td>
-                      <td className="text-right py-3 px-4 font-medium" style={{ color: STATUS_COLORS.overdue }}>
-                        {item.overdue || 0}
-                      </td>
-                      <td className="text-right py-3 px-4 font-medium" style={{ color: STATUS_COLORS.delayed }}>
-                        {item.delayed || 0}
-                      </td>
-                      <td className="text-right py-3 px-4 font-semibold text-gray-900">{total}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Current hour indicator */}
-          <div className="mt-4 p-3 bg-blue-50 border-l-4 border-l-blue-600 rounded-lg">
-            <p className="text-sm font-semibold text-blue-900">
-              Current Hour: <span className="text-blue-600">{getCurrentTimeIST()}</span> IST
-            </p>
-            <p className="text-xs text-blue-800 mt-1">
-              The highlighted row shows the current hour. Hours after the current time have not yet occurred and will show data as tasks are created/updated.
-            </p>
-          </div>
-
-          {/* Information note */}
-          <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700">
-            <strong>About this view:</strong> This chart displays all 24 hours from 12:00 AM to 11:59 PM. Tasks appearing in multiple hours indicate that they spanned multiple hours. For example, a task "in progress" at 10:00 AM but not completed by 12:00 PM will appear in both hours.
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
-}
-
-function WeeklyMonthlyTimeline({ data }: { data: any[] }) {
-  const summary = {
-    pending: data.reduce((sum, item) => sum + (item.pending || 0), 0),
-    inprogress: data.reduce((sum, item) => sum + (item.inprogress || 0), 0),
-    completed: data.reduce((sum, item) => sum + (item.completed || 0), 0),
-    overdue: data.reduce((sum, item) => sum + (item.overdue || 0), 0),
-    delayed: data.reduce((sum, item) => sum + (item.delayed || 0), 0),
-  };
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Clock className="w-4 h-4" /> Task Status Timeline
-        </CardTitle>
-        <p className="text-xs text-gray-500 mt-1">Daily task status distribution</p>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <Clock className="w-5 h-5" /> Task Status Timeline - Hourly Breakdown
+          </CardTitle>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">
+          Hourly task status distribution from 12:00 AM to 11:59 PM
+        </p>
       </CardHeader>
       <CardContent>
-        <div style={{ height: 350 }}>
-          <ChartContainer
-            id="timeline-weekly-monthly"
-            config={{
-              pending: { color: STATUS_COLORS.pending, label: STATUS_LABELS.pending },
-              inprogress: { color: STATUS_COLORS.inprogress, label: STATUS_LABELS.inprogress },
-              completed: { color: STATUS_COLORS.completed, label: STATUS_LABELS.completed },
-              overdue: { color: STATUS_COLORS.overdue, label: STATUS_LABELS.overdue },
-              delayed: { color: STATUS_COLORS.delayed, label: STATUS_LABELS.delayed },
-            }}
+        {/* Date Navigation */}
+        <div className="mb-6 flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+          <button
+            onClick={handlePreviousDay}
+            className="p-2 hover:bg-gray-200 rounded transition"
+            title="Previous day"
           >
-            <Recharts.ResponsiveContainer width="100%" height={300}>
-              <Recharts.BarChart
-                data={data}
-                margin={{ top: 8, right: 16, left: 0, bottom: 20 }}
-              >
-                <Recharts.CartesianGrid strokeDasharray="3 3" />
-                <Recharts.XAxis
-                  dataKey="timeLabel"
-                  type="category"
-                  tick={{ fontSize: 12 }}
-                  height={40}
-                />
-                <Recharts.YAxis type="number" tick={{ fontSize: 12 }} label={{ value: "Count", angle: -90, position: "insideLeft" }} />
-                <Recharts.Tooltip content={<ChartTooltipContent />} />
-                <Recharts.Legend
-                  wrapperStyle={{ paddingTop: "16px" }}
-                  formatter={(value) => STATUS_LABELS[value] || value}
-                />
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          
+          <div className="flex items-center gap-4">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleToday}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+            >
+              Today
+            </button>
+          </div>
 
-                {/* Grouped bars for each status */}
-                <Recharts.Bar dataKey="pending" fill={STATUS_COLORS.pending} />
-                <Recharts.Bar dataKey="inprogress" fill={STATUS_COLORS.inprogress} />
-                <Recharts.Bar dataKey="completed" fill={STATUS_COLORS.completed} />
-                <Recharts.Bar dataKey="overdue" fill={STATUS_COLORS.overdue} />
-                <Recharts.Bar dataKey="delayed" fill={STATUS_COLORS.delayed} />
-              </Recharts.BarChart>
-            </Recharts.ResponsiveContainer>
-          </ChartContainer>
+          <button
+            onClick={handleNextDay}
+            className="p-2 hover:bg-gray-200 rounded transition"
+            title="Next day"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Summary stats */}
-        <div className="mt-6 grid grid-cols-5 gap-2">
-          {Object.entries(STATUS_LABELS).map(([key, label]) => (
-            <div
-              key={key}
-              className="p-3 bg-gray-50 rounded border border-gray-200"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <div
-                  className="w-3 h-3 rounded"
-                  style={{ backgroundColor: STATUS_COLORS[key] }}
-                />
-                <span className="text-xs font-medium text-gray-700">
-                  {label}
-                </span>
-              </div>
-              <div className="text-lg font-bold text-gray-900">{summary[key as keyof typeof summary] || 0}</div>
-            </div>
-          ))}
+        {/* Summary Statistics */}
+        <div className="mb-6 grid grid-cols-5 gap-3">
+          <div className="p-4 bg-gradient-to-br rounded-lg border border-amber-200 bg-amber-50">
+            <div className="text-xs font-semibold text-gray-700 mb-1">Pending</div>
+            <div className="text-2xl font-bold text-amber-600">{totals.pending}</div>
+          </div>
+          <div className="p-4 bg-gradient-to-br rounded-lg border border-blue-200 bg-blue-50">
+            <div className="text-xs font-semibold text-gray-700 mb-1">In Progress</div>
+            <div className="text-2xl font-bold text-blue-600">{totals.inprogress}</div>
+          </div>
+          <div className="p-4 bg-gradient-to-br rounded-lg border border-green-200 bg-green-50">
+            <div className="text-xs font-semibold text-gray-700 mb-1">Completed</div>
+            <div className="text-2xl font-bold text-green-600">{totals.completed}</div>
+          </div>
+          <div className="p-4 bg-gradient-to-br rounded-lg border border-red-200 bg-red-50">
+            <div className="text-xs font-semibold text-gray-700 mb-1">Overdue</div>
+            <div className="text-2xl font-bold text-red-600">{totals.overdue}</div>
+          </div>
+          <div className="p-4 bg-gradient-to-br rounded-lg border border-purple-200 bg-purple-50">
+            <div className="text-xs font-semibold text-gray-700 mb-1">Delayed</div>
+            <div className="text-2xl font-bold text-purple-600">{totals.delayed}</div>
+          </div>
+        </div>
+
+        {/* Hourly Breakdown Table */}
+        <div className="overflow-x-auto border rounded-lg">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b">
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">Hour</th>
+                <th className="text-right py-3 px-4 font-semibold text-amber-600">Pending</th>
+                <th className="text-right py-3 px-4 font-semibold text-blue-600">In Progress</th>
+                <th className="text-right py-3 px-4 font-semibold text-green-600">Completed</th>
+                <th className="text-right py-3 px-4 font-semibold text-red-600">Overdue</th>
+                <th className="text-right py-3 px-4 font-semibold text-purple-600">Delayed</th>
+                <th className="text-right py-3 px-4 font-semibold text-gray-900">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {timelineData.map((item, idx) => {
+                const hasActivity = item.total_count > 0;
+                return (
+                  <tr
+                    key={idx}
+                    className={`border-b transition-colors ${
+                      hasActivity ? "hover:bg-gray-50" : "bg-gray-50 opacity-60"
+                    }`}
+                  >
+                    <td className="py-3 px-4 font-semibold text-gray-900">
+                      {item.hour_label}
+                    </td>
+                    <td className="text-right py-3 px-4 font-medium text-amber-600">
+                      {item.pending_count}
+                    </td>
+                    <td className="text-right py-3 px-4 font-medium text-blue-600">
+                      {item.inprogress_count}
+                    </td>
+                    <td className="text-right py-3 px-4 font-medium text-green-600">
+                      {item.completed_count}
+                    </td>
+                    <td className="text-right py-3 px-4 font-medium text-red-600">
+                      {item.overdue_count}
+                    </td>
+                    <td className="text-right py-3 px-4 font-medium text-purple-600">
+                      {item.delayed_count}
+                    </td>
+                    <td className="text-right py-3 px-4 font-semibold text-gray-900">
+                      {item.total_count}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Grand Total */}
+        <div className="mt-4 p-4 bg-gradient-to-r from-gray-100 to-gray-50 rounded-lg border border-gray-200">
+          <div className="flex justify-between items-center">
+            <span className="text-lg font-semibold text-gray-900">Grand Total ({formatDateDisplay(selectedDate)})</span>
+            <span className="text-2xl font-bold text-gray-900">{grandTotal} tasks</span>
+          </div>
+        </div>
+
+        {/* Info Note */}
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+          <strong>About this view:</strong> Shows the number of tasks created during each hour. Use the date picker above to view data for different dates. Default shows today's data.
         </div>
       </CardContent>
     </Card>

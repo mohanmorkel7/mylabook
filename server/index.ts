@@ -41,6 +41,7 @@ import slackImportRouter from "./routes/slack-import";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
 import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
 import { initialize as initializeSlackProcessingJob } from "./jobs/slackProcessingJob";
+import { aggregateFullDay } from "./jobs/aggregateHourlyTimeline";
 
 // Production routes (database-only, no mock fallback)
 import templatesProductionRouter from "./routes/templates-production";
@@ -137,6 +138,48 @@ export function createServer() {
     }
   } catch (e) {
     console.error("Failed to start Overdue Ticket Job:", (e as any)?.message);
+  }
+
+  // Schedule hourly timeline aggregation job
+  try {
+    if (process.env.ENABLE_OVERDUE_JOB !== "false") {
+      setTimeout(() => {
+        // Schedule to run daily at 11:55 PM IST (to aggregate the full day before midnight)
+        const scheduleNextRun = () => {
+          const now = new Date();
+          const istOffsetMs = 5.5 * 60 * 60 * 1000;
+          const istNow = new Date(now.getTime() + istOffsetMs);
+
+          // Target time: 23:55 (11:55 PM)
+          const tomorrow = new Date(istNow);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(23, 55, 0, 0);
+
+          const targetTime = new Date(tomorrow.getTime() - istOffsetMs);
+          const timeUntilNext = targetTime.getTime() - now.getTime();
+
+          console.log(`[aggregateHourlyTimeline] Next run scheduled in ${Math.floor(timeUntilNext / 1000)} seconds`);
+
+          setTimeout(() => {
+            const istYear = istNow.getUTCFullYear();
+            const istMonth = String(istNow.getUTCMonth() + 1).padStart(2, "0");
+            const istDay = String(istNow.getUTCDate()).padStart(2, "0");
+            const dateToAggregate = `${istYear}-${istMonth}-${istDay}`;
+
+            aggregateFullDay(dateToAggregate).catch((err) =>
+              console.error("Scheduled run of aggregateHourlyTimeline failed:", err),
+            );
+
+            // Schedule next run
+            scheduleNextRun();
+          }, timeUntilNext);
+        };
+
+        scheduleNextRun();
+      }, 1200);
+    }
+  } catch (e) {
+    console.error("Failed to start Hourly Timeline Aggregation Job:", (e as any)?.message);
   }
 
   // Middleware

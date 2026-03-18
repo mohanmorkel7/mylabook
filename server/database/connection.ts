@@ -331,6 +331,27 @@ export async function initializeDatabase() {
           ticketTrackingError.message,
         );
       }
+
+      // Run finops hourly timeline migration
+      try {
+        const hourlyTimelineMigrationPath = path.join(
+          __dirname,
+          "migration-finops-hourly-timeline.sql",
+        );
+        if (fs.existsSync(hourlyTimelineMigrationPath)) {
+          const hourlyTimelineMigration = fs.readFileSync(
+            hourlyTimelineMigrationPath,
+            "utf8",
+          );
+          await client.query(hourlyTimelineMigration);
+          console.log("FinOps hourly timeline migration applied successfully");
+        }
+      } catch (hourlyTimelineError) {
+        console.log(
+          "FinOps hourly timeline migration already applied or error:",
+          hourlyTimelineError.message,
+        );
+      }
     } else {
       console.log("Database schema already exists");
 

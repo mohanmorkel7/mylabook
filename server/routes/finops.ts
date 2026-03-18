@@ -4617,6 +4617,108 @@ router.get("/hourly-timeline", async (req: Request, res: Response) => {
   }
 });
 
+// Get stored hourly timeline data by date
+router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    // Get date from query params, default to today in IST
+    let queryDate = String(req.query.date || "").trim();
+
+    if (!queryDate) {
+      // Get today's date in IST
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const istNow = new Date(new Date().getTime() + istOffsetMs);
+      const istYear = istNow.getUTCFullYear();
+      const istMonth = String(istNow.getUTCMonth() + 1).padStart(2, "0");
+      const istDay = String(istNow.getUTCDate()).padStart(2, "0");
+      queryDate = `${istYear}-${istMonth}-${istDay}`;
+    }
+
+    if (!(await isDatabaseAvailable())) {
+      // Return mock data for today if database unavailable
+      const mockData = [];
+      for (let hour = 0; hour < 24; hour++) {
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        mockData.push({
+          date: queryDate,
+          hour,
+          hour_label: `${displayHour}:00 ${ampm}`,
+          pending_count: Math.floor(Math.random() * 5),
+          inprogress_count: Math.floor(Math.random() * 3),
+          completed_count: Math.floor(Math.random() * 8),
+          overdue_count: 0,
+          delayed_count: 0,
+          total_count: 0,
+        });
+      }
+      return res.json({
+        date: queryDate,
+        data: mockData,
+      });
+    }
+
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // Fetch hourly timeline data for the specified date
+    const result = await q(
+      `SELECT
+        date,
+        hour,
+        hour_label,
+        pending_count,
+        inprogress_count,
+        completed_count,
+        overdue_count,
+        delayed_count,
+        total_count
+      FROM finops_hourly_timeline
+      WHERE date = $1::date
+      ORDER BY hour ASC`,
+      [queryDate],
+    );
+
+    // If no data exists for this date, ensure we return all 24 hours with zeros
+    let data = result.rows;
+    if (data.length === 0) {
+      data = [];
+      for (let hour = 0; hour < 24; hour++) {
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        data.push({
+          date: queryDate,
+          hour,
+          hour_label: `${displayHour}:00 ${ampm}`,
+          pending_count: 0,
+          inprogress_count: 0,
+          completed_count: 0,
+          overdue_count: 0,
+          delayed_count: 0,
+          total_count: 0,
+        });
+      }
+    }
+
+    res.json({
+      date: queryDate,
+      data,
+    });
+  } catch (error: any) {
+    console.error("/finops/hourly-timeline-stored error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all external alert next_call timestamps
 router.get("/next-calls", async (req: Request, res: Response) => {
   try {

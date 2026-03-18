@@ -1,181 +1,159 @@
 import { pool } from "../database/connection";
 
 /**
- * Aggregates finops_tracker data into hourly timeline records.
+ * Cumulative snapshot aggregation for finops_hourly_timeline.
  *
- * Hourly bucketing logic:
- *  - Each task is placed in the hour matching its SCHEDULED TIME (scheduled_time column)
- *  - e.g., a task with scheduled_time = '05:30:00' appears in the 5:00 AM hour
- *  - The STATUS shown is the CURRENT status of that task (pending/in_progress/completed/overdue/delayed)
- *  - This shows: "for each scheduled hour, how many tasks are in each status right now?"
+ * For each hour H of the day:
+ *   - Shows the status of ALL tasks as they were at H:59:59 IST
+ *   - If a task was last updated (updated_at UTC→IST) AFTER hour H → count as "pending"
+ *     (it hadn't been acted on yet at that point in time)
+ *   - If last updated AT or BEFORE hour H → use its current status
  *
- * Why scheduled_time (not updated_at or created_at):
- *  - created_at is always midnight (batch creation time)
- *  - updated_at is UTC and doesn't represent the scheduled work time
- *  - scheduled_time directly represents when the task is expected to run
+ * Result: every hour row has total_count = total tasks for the day (e.g. 171)
+ *
+ * Example:
+ *   2:00 PM → pending:52  in_progress:12  completed:107  delayed:0  overdue:0  total:171
+ *   3:00 PM → pending:49  in_progress:13  completed:108  delayed:1  overdue:0  total:171
  */
+
+const SNAPSHOT_QUERY = `
+  WITH hours AS (
+    SELECT generate_series(0, 23) AS hour
+  ),
+  hourly_snapshot AS (
+    SELECT
+      h.hour,
+      CASE
+        WHEN (ft.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') >
+             ($1::date + (h.hour * INTERVAL '1 hour') + INTERVAL '59 minutes 59 seconds')
+        THEN 'pending'
+        ELSE ft.status
+      END AS status_at_hour
+    FROM hours h
+    CROSS JOIN finops_tracker ft
+    WHERE ft.run_date = $1::date
+  )
+  SELECT
+    hs.hour,
+    CASE
+      WHEN hs.hour = 0  THEN '12:00 AM'
+      WHEN hs.hour < 12 THEN hs.hour::text || ':00 AM'
+      WHEN hs.hour = 12 THEN '12:00 PM'
+      ELSE (hs.hour - 12)::text || ':00 PM'
+    END AS hour_label,
+    COUNT(CASE WHEN status_at_hour = 'pending'     THEN 1 END)::int AS pending_count,
+    COUNT(CASE WHEN status_at_hour = 'in_progress' THEN 1 END)::int AS inprogress_count,
+    COUNT(CASE WHEN status_at_hour = 'completed'   THEN 1 END)::int AS completed_count,
+    COUNT(CASE WHEN status_at_hour = 'delayed'     THEN 1 END)::int AS delayed_count,
+    COUNT(CASE WHEN status_at_hour = 'overdue'     THEN 1 END)::int AS overdue_count,
+    COUNT(*)::int AS total_count
+  FROM hourly_snapshot hs
+  GROUP BY hs.hour
+  ORDER BY hs.hour ASC
+`;
 
 export async function aggregateHourlyTimeline(date?: string) {
   try {
     const targetDate = date || new Date().toISOString().split("T")[0];
-    console.log(
-      `[aggregateHourlyTimeline] Starting aggregation for date: ${targetDate}`
-    );
+    console.log(`[aggregateHourlyTimeline] Aggregating for ${targetDate}`);
 
-    const query = `
-      WITH hourly_data AS (
-        SELECT
-          $1::date AS date,
-          EXTRACT(HOUR FROM scheduled_time::time)::int AS hour,
-          COUNT(CASE WHEN ft.status = 'pending'     THEN 1 END)::int AS pending_count,
-          COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress_count,
-          COUNT(CASE WHEN ft.status = 'completed'   THEN 1 END)::int AS completed_count,
-          COUNT(CASE WHEN ft.status = 'overdue'     THEN 1 END)::int AS overdue_count,
-          COUNT(CASE WHEN ft.status = 'delayed'     THEN 1 END)::int AS delayed_count
-        FROM finops_tracker ft
-        WHERE ft.run_date = $1::date
-          AND ft.scheduled_time IS NOT NULL
-        GROUP BY EXTRACT(HOUR FROM scheduled_time::time)
-      )
-      INSERT INTO finops_hourly_timeline
-        (date, hour, hour_label, pending_count, inprogress_count, completed_count,
-         overdue_count, delayed_count, total_count, updated_at)
-      SELECT
-        hd.date,
-        hd.hour,
-        CASE
-          WHEN hd.hour = 0  THEN '12:00 AM'
-          WHEN hd.hour < 12 THEN hd.hour::text || ':00 AM'
-          WHEN hd.hour = 12 THEN '12:00 PM'
-          ELSE (hd.hour - 12)::text || ':00 PM'
-        END AS hour_label,
-        hd.pending_count,
-        hd.inprogress_count,
-        hd.completed_count,
-        hd.overdue_count,
-        hd.delayed_count,
-        (hd.pending_count + hd.inprogress_count + hd.completed_count
-         + hd.overdue_count + hd.delayed_count) AS total_count,
-        NOW()
-      FROM hourly_data hd
-      ON CONFLICT (date, hour) DO UPDATE SET
-        pending_count    = EXCLUDED.pending_count,
-        inprogress_count = EXCLUDED.inprogress_count,
-        completed_count  = EXCLUDED.completed_count,
-        overdue_count    = EXCLUDED.overdue_count,
-        delayed_count    = EXCLUDED.delayed_count,
-        total_count      = EXCLUDED.total_count,
-        updated_at       = NOW();
-    `;
+    const snapshotResult = await pool.query(SNAPSHOT_QUERY, [targetDate]);
 
-    const result = await pool.query(query, [targetDate]);
-    console.log(
-      `[aggregateHourlyTimeline] Done for ${targetDate}. Rows affected: ${result.rowCount}`
-    );
+    if (snapshotResult.rows.length === 0) {
+      console.log(`[aggregateHourlyTimeline] No tasks found for ${targetDate}`);
+      return { success: true, date: targetDate, recordsUpdated: 0 };
+    }
 
-    return { success: true, date: targetDate, recordsUpdated: result.rowCount };
+    // Upsert each hour row into finops_hourly_timeline
+    for (const row of snapshotResult.rows) {
+      await pool.query(
+        `INSERT INTO finops_hourly_timeline
+           (date, hour, hour_label, pending_count, inprogress_count, completed_count,
+            overdue_count, delayed_count, total_count, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+         ON CONFLICT (date, hour) DO UPDATE SET
+           pending_count    = EXCLUDED.pending_count,
+           inprogress_count = EXCLUDED.inprogress_count,
+           completed_count  = EXCLUDED.completed_count,
+           overdue_count    = EXCLUDED.overdue_count,
+           delayed_count    = EXCLUDED.delayed_count,
+           total_count      = EXCLUDED.total_count,
+           updated_at       = NOW()`,
+        [
+          targetDate,
+          row.hour,
+          row.hour_label,
+          row.pending_count,
+          row.inprogress_count,
+          row.completed_count,
+          row.overdue_count,
+          row.delayed_count,
+          row.total_count,
+        ]
+      );
+    }
+
+    console.log(`[aggregateHourlyTimeline] Done for ${targetDate}. Rows: ${snapshotResult.rows.length}`);
+    return { success: true, date: targetDate, recordsUpdated: snapshotResult.rows.length };
   } catch (error: any) {
     console.error("[aggregateHourlyTimeline] Error:", error);
     throw error;
   }
 }
 
-/**
- * Full-day backfill:
- *  - Deletes existing rows for the date
- *  - Re-inserts all 24 hour slots
- *  - Tasks with no scheduled_time are excluded
- *  - Tasks are grouped by the HOUR of their scheduled_time
- *  - Status counts reflect current status in finops_tracker
- */
 export async function aggregateFullDay(date?: string) {
   try {
     const targetDate = date || new Date().toISOString().split("T")[0];
-    console.log(
-      `[aggregateFullDay] Backfilling all hours for date: ${targetDate}`
-    );
+    console.log(`[aggregateFullDay] Full backfill for ${targetDate}`);
 
-    // Remove stale data for this date
-    await pool.query(
-      "DELETE FROM finops_hourly_timeline WHERE date = $1",
-      [targetDate]
-    );
+    // Delete existing data for this date
+    await pool.query("DELETE FROM finops_hourly_timeline WHERE date = $1", [targetDate]);
 
-    // Aggregate by scheduled_time hour, keeping all 24 hours (LEFT JOIN ensures zeros)
-    const query = `
-      WITH hours AS (
-        SELECT generate_series(0, 23) AS hour
-      ),
-      hourly_data AS (
-        SELECT
-          h.hour,
-          COUNT(CASE WHEN ft.status = 'pending'     THEN 1 END)::int AS pending_count,
-          COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress_count,
-          COUNT(CASE WHEN ft.status = 'completed'   THEN 1 END)::int AS completed_count,
-          COUNT(CASE WHEN ft.status = 'overdue'     THEN 1 END)::int AS overdue_count,
-          COUNT(CASE WHEN ft.status = 'delayed'     THEN 1 END)::int AS delayed_count
-        FROM hours h
-        LEFT JOIN finops_tracker ft
-          ON  ft.run_date = $1::date
-          AND ft.scheduled_time IS NOT NULL
-          AND EXTRACT(HOUR FROM ft.scheduled_time::time)::int = h.hour
-        GROUP BY h.hour
-      )
-      INSERT INTO finops_hourly_timeline
-        (date, hour, hour_label, pending_count, inprogress_count, completed_count,
-         overdue_count, delayed_count, total_count, created_at, updated_at)
-      SELECT
-        $1::date AS date,
-        hd.hour,
-        CASE
-          WHEN hd.hour = 0  THEN '12:00 AM'
-          WHEN hd.hour < 12 THEN hd.hour::text || ':00 AM'
-          WHEN hd.hour = 12 THEN '12:00 PM'
-          ELSE (hd.hour - 12)::text || ':00 PM'
-        END AS hour_label,
-        hd.pending_count,
-        hd.inprogress_count,
-        hd.completed_count,
-        hd.overdue_count,
-        hd.delayed_count,
-        (hd.pending_count + hd.inprogress_count + hd.completed_count
-         + hd.overdue_count + hd.delayed_count) AS total_count,
-        NOW(),
-        NOW()
-      FROM hourly_data hd;
-    `;
+    // Build cumulative snapshot for all 24 hours
+    const snapshotResult = await pool.query(SNAPSHOT_QUERY, [targetDate]);
 
-    const result = await pool.query(query, [targetDate]);
-    console.log(
-      `[aggregateFullDay] Inserted ${result.rowCount} hour rows for ${targetDate}`
-    );
+    if (snapshotResult.rows.length === 0) {
+      console.log(`[aggregateFullDay] No tasks found for ${targetDate}`);
+      return { success: true, date: targetDate, hoursCreated: 0 };
+    }
 
-    // Lightweight summary log
-    const summaryResult = await pool.query(
-      `SELECT
-         SUM(pending_count)    AS total_pending,
-         SUM(inprogress_count) AS total_inprogress,
-         SUM(completed_count)  AS total_completed,
-         SUM(overdue_count)    AS total_overdue,
-         SUM(delayed_count)    AS total_delayed,
-         SUM(total_count)      AS grand_total
-       FROM finops_hourly_timeline
-       WHERE date = $1`,
-      [targetDate]
-    );
-    if (summaryResult.rows[0]) {
-      const s = summaryResult.rows[0];
-      console.log(`[aggregateFullDay] Summary for ${targetDate}:`, {
-        pending: s.total_pending,
-        inprogress: s.total_inprogress,
-        completed: s.total_completed,
-        overdue: s.total_overdue,
-        delayed: s.total_delayed,
-        grand_total: s.grand_total,
+    // Insert all 24 hour rows
+    for (const row of snapshotResult.rows) {
+      await pool.query(
+        `INSERT INTO finops_hourly_timeline
+           (date, hour, hour_label, pending_count, inprogress_count, completed_count,
+            overdue_count, delayed_count, total_count, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+        [
+          targetDate,
+          row.hour,
+          row.hour_label,
+          row.pending_count,
+          row.inprogress_count,
+          row.completed_count,
+          row.overdue_count,
+          row.delayed_count,
+          row.total_count,
+        ]
+      );
+    }
+
+    // Summary log
+    const totalTasks = snapshotResult.rows[0]?.total_count || 0;
+    const lastHour = snapshotResult.rows[snapshotResult.rows.length - 1];
+    console.log(`[aggregateFullDay] Done for ${targetDate}. Hours: ${snapshotResult.rows.length}. Total tasks/hour: ${totalTasks}`);
+    if (lastHour) {
+      console.log(`[aggregateFullDay] End-of-day snapshot:`, {
+        pending: lastHour.pending_count,
+        inprogress: lastHour.inprogress_count,
+        completed: lastHour.completed_count,
+        delayed: lastHour.delayed_count,
+        overdue: lastHour.overdue_count,
+        total: lastHour.total_count,
       });
     }
 
-    return { success: true, date: targetDate, hoursCreated: result.rowCount };
+    return { success: true, date: targetDate, hoursCreated: snapshotResult.rows.length };
   } catch (error: any) {
     console.error("[aggregateFullDay] Error:", error);
     throw error;

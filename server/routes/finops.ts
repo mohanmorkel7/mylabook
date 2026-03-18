@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { pool, queryWithRetry } from "../database/connection";
 import finopsAlertService from "../services/finopsAlertService";
 import finopsScheduler from "../services/finopsScheduler";
+import { aggregateFullDay } from "../jobs/aggregateHourlyTimeline";
 
 const router = Router();
 
@@ -4750,6 +4751,40 @@ router.get("/next-calls", async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("Error fetching next calls:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual endpoint to trigger hourly timeline aggregation (for testing/backfilling)
+router.post("/aggregate-hourly-timeline", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    const { date } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ error: "Date parameter is required (YYYY-MM-DD format)" });
+    }
+
+    console.log(`[POST /aggregate-hourly-timeline] Triggering aggregation for ${date}`);
+
+    const result = await aggregateFullDay(date);
+
+    res.json({
+      success: true,
+      message: `Successfully aggregated hourly timeline for ${date}`,
+      ...result,
+    });
+  } catch (error: any) {
+    console.error("/finops/aggregate-hourly-timeline error:", error);
     res.status(500).json({ error: error.message });
   }
 });

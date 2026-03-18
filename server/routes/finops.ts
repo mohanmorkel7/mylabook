@@ -4690,17 +4690,29 @@ router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
     );
 
     // If no data exists for this date, ensure we return all 24 hours with zeros
-    let data = result.rows.map((row: any) => ({
-      date: queryDate, // Override with clean date string
-      hour: row.hour,
-      hour_label: row.hour_label.trim(), // Remove any extra spaces
-      pending_count: row.pending_count,
-      inprogress_count: row.inprogress_count,
-      completed_count: row.completed_count,
-      overdue_count: row.overdue_count,
-      delayed_count: row.delayed_count,
-      total_count: row.total_count,
-    }));
+    let data = result.rows.map((row: any) => {
+      // Ensure date is a clean string (YYYY-MM-DD)
+      let cleanDate = queryDate;
+      if (row.date) {
+        // Handle if date comes as string with timestamp
+        if (typeof row.date === 'string') {
+          cleanDate = row.date.split('T')[0];
+        } else if (row.date instanceof Date) {
+          cleanDate = row.date.toISOString().split('T')[0];
+        }
+      }
+      return {
+        date: cleanDate,
+        hour: row.hour,
+        hour_label: row.hour_label?.trim() || `${row.hour}:00`, // Remove any extra spaces
+        pending_count: row.pending_count || 0,
+        inprogress_count: row.inprogress_count || 0,
+        completed_count: row.completed_count || 0,
+        overdue_count: row.overdue_count || 0,
+        delayed_count: row.delayed_count || 0,
+        total_count: row.total_count || 0,
+      };
+    });
 
     if (data.length === 0) {
       data = [];

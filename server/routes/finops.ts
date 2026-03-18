@@ -4727,12 +4727,12 @@ router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
             WHEN a.hour = 12 THEN '12:00 PM'
             ELSE (a.hour - 12)::text || ':00 PM'
           END AS hour_label,
-          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.pending_count    END AS pending_count,
-          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.inprogress_count END AS inprogress_count,
-          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.completed_count  END AS completed_count,
-          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.delayed_count    END AS delayed_count,
-          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.overdue_count    END AS overdue_count,
-          CASE WHEN a.hour >= c.cur_hour THEN 0 ELSE a.total_count      END AS total_count
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.pending_count    END AS pending_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.inprogress_count END AS inprogress_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.completed_count  END AS completed_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.delayed_count    END AS delayed_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.overdue_count    END AS overdue_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.total_count      END AS total_count
         FROM aggregated a
         CROSS JOIN current_ist_hour c
         ORDER BY a.hour ASC`,

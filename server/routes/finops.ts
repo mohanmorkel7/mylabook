@@ -4864,4 +4864,113 @@ router.post("/aggregate-hourly-timeline", async (req: Request, res: Response) =>
   }
 });
 
+// Task Timeframe Hourly - line chart data showing active tasks per hour
+router.get("/task-timeframe-hourly", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id");
+
+    let queryDate = String(req.query.date || "").trim();
+    if (!queryDate) {
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const istNow = new Date(new Date().getTime() + istOffsetMs);
+      queryDate = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth() + 1).padStart(2, "0")}-${String(istNow.getUTCDate()).padStart(2, "0")}`;
+    }
+
+    if (!(await isDatabaseAvailable())) {
+      return res.json({ date: queryDate, data: [] });
+    }
+
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // For each hour H, find tasks that are "active":
+    //   scheduled_time hour <= H  AND  (completed_at hour >= H  OR  completed_at IS NULL)
+    // completed_at is stored in IST local time; scheduled_time is IST time string
+    const result = await q(
+      `WITH hours AS (
+        SELECT generate_series(0, 23) AS hour
+      ),
+      tasks AS (
+        SELECT
+          ft.id,
+          ft.task_id,
+          ft.task_name,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.scheduled_time,
+          ft.completed_at,
+          ft.status,
+          EXTRACT(HOUR FROM ft.scheduled_time::time)::int             AS sched_hour,
+          EXTRACT(HOUR FROM ft.completed_at::timestamp)::int          AS compl_hour
+        FROM finops_tracker ft
+        WHERE ft.run_date = $1::date
+          AND ft.period   = 'daily'
+          AND ft.scheduled_time IS NOT NULL
+      ),
+      active_per_hour AS (
+        SELECT
+          h.hour,
+          t.task_id,
+          t.task_name,
+          t.subtask_id,
+          t.subtask_name,
+          t.scheduled_time::text   AS scheduled_time,
+          t.completed_at::text     AS completed_at,
+          t.status,
+          t.sched_hour,
+          t.compl_hour
+        FROM hours h
+        JOIN tasks t
+          ON t.sched_hour <= h.hour
+         AND (t.compl_hour IS NULL OR t.compl_hour >= h.hour)
+      )
+      SELECT
+        h.hour,
+        CASE
+          WHEN h.hour = 0  THEN '12:00 AM'
+          WHEN h.hour < 12 THEN h.hour::text || ':00 AM'
+          WHEN h.hour = 12 THEN '12:00 PM'
+          ELSE (h.hour - 12)::text || ':00 PM'
+        END AS hour_label,
+        COUNT(DISTINCT a.task_id)  AS active_tasks,
+        COUNT(a.subtask_id)        AS active_subtasks,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'task_id',        a.task_id,
+              'task_name',      a.task_name,
+              'subtask_id',     a.subtask_id,
+              'subtask_name',   a.subtask_name,
+              'scheduled_time', a.scheduled_time,
+              'completed_at',   a.completed_at,
+              'status',         a.status
+            )
+            ORDER BY a.task_id, a.subtask_id
+          ) FILTER (WHERE a.subtask_id IS NOT NULL),
+          '[]'::json
+        ) AS task_list
+      FROM hours h
+      LEFT JOIN active_per_hour a ON a.hour = h.hour
+      GROUP BY h.hour
+      ORDER BY h.hour`,
+      [queryDate]
+    );
+
+    const data = result.rows.map((row: any) => ({
+      hour: row.hour,
+      hour_label: row.hour_label,
+      active_tasks: Number(row.active_tasks) || 0,
+      active_subtasks: Number(row.active_subtasks) || 0,
+      task_list: row.task_list || [],
+    }));
+
+    res.json({ date: queryDate, data });
+  } catch (error: any) {
+    console.error("/finops/task-timeframe-hourly error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

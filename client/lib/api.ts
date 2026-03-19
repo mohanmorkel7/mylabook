@@ -2240,6 +2240,15 @@ export class ApiClient {
     );
   }
 
+  async getTaskTimeframeHourly(date?: string) {
+    const params = new URLSearchParams();
+    if (date) params.append("date", date);
+    const query = params.toString();
+    return this.request(
+      `/finops/task-timeframe-hourly${query ? `?${query}` : ""}`,
+    );
+  }
+
   async getFinOpsAccounts() {
     return this.request("/finops/accounts");
   }

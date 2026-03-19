@@ -8,6 +8,7 @@ import { BarChart3, Users, Building2, CheckCircle } from "lucide-react";
 import * as Recharts from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import HourlyTaskStatusTimeline from "@/components/HourlyTaskStatusTimeline";
+import TaskTimeframeChart from "@/components/TaskTimeframeChart";
 
 export default function FinOpsUserStats() {
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
@@ -225,6 +226,11 @@ export default function FinOpsUserStats() {
         </Card>
 
         <HourlyTaskStatusTimeline />
+      </div>
+
+      {/* Task Timeframe Hourly Line Chart */}
+      <div className="grid grid-cols-2 gap-6">
+        <TaskTimeframeChart />
       </div>
     </div>
   );

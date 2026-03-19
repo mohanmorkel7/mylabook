@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -277,8 +277,8 @@ function UserMultiSelect({
 }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
-  const triggerRef = React.useRef<HTMLDivElement>(null);
+  const [dropStyle, setDropStyle] = useState<CSSProperties>({});
+  const triggerRef = useRef<HTMLDivElement>(null);
 
   const filtered = users
     .filter((u: any, i: number, arr: any[]) => arr.findIndex((x) => x.id === u.id) === i)

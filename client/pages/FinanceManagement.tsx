@@ -903,6 +903,9 @@ function ActivityTab({
   const [filterDuration, setFilterDuration] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  // Overdue reason modal
+  const [overdueTarget, setOverdueTarget] = useState<{ id: number } | null>(null);
+  const [overdueReason, setOverdueReason] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["finance-activities", category],
@@ -911,8 +914,8 @@ function ActivityTab({
   });
 
   const statusPatchMut = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    mutationFn: ({ id, status, reason }: { id: number; status: string; reason?: string }) =>
+      apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, reason_non_completion: reason }) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-activities", category] });
       qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
@@ -1122,11 +1125,74 @@ function ActivityTab({
                 userEmail={userEmail}
                 onEdit={() => { setEditActivity(act); setModalOpen(true); }}
                 onDelete={() => setDeleteId(act.id)}
-                onStatusChange={(id, status) => statusPatchMut.mutate({ id, status })}
+                onStatusChange={(id, status) => {
+                  if (status === "overdue") {
+                    setOverdueTarget({ id });
+                    setOverdueReason("");
+                  } else {
+                    statusPatchMut.mutate({ id, status });
+                  }
+                }}
                 onApprove={(id) => approveMut.mutate({ id, by: userEmail })}
               />
             );
           })}
+        </div>
+      )}
+
+      {/* Overdue Reason Modal */}
+      {overdueTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-red-100">
+            <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-t-2xl px-6 py-5 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">Reason for Overdue</h3>
+                  <p className="text-red-100 text-sm">Please provide a detailed reason before marking as overdue</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Detailed Reason *</label>
+              <textarea
+                autoFocus
+                rows={4}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent resize-none"
+                placeholder="Describe why this activity is overdue (e.g. resource unavailability, dependency delay, external factor…)"
+                value={overdueReason}
+                onChange={(e) => setOverdueReason(e.target.value)}
+              />
+              {overdueReason.trim().length > 0 && (
+                <p className="text-xs text-gray-400 mt-1 text-right">{overdueReason.trim().length} characters</p>
+              )}
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                type="button"
+                onClick={() => setOverdueTarget(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!overdueReason.trim() || statusPatchMut.isPending}
+                onClick={() => {
+                  statusPatchMut.mutate(
+                    { id: overdueTarget.id, status: "overdue", reason: overdueReason.trim() },
+                    { onSuccess: () => setOverdueTarget(null) },
+                  );
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <AlertCircle className="w-4 h-4" />
+                Mark as Overdue
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

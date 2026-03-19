@@ -1691,9 +1691,46 @@ export default function FinanceManagement() {
     staleTime: 5 * 60_000,
   });
 
-  // Auto-overdue on mount
+  const qcMain = useQueryClient();
+
+  // Auto-overdue: trigger at 5:00 PM IST (Asia/Kolkata) and re-check every minute after
   useEffect(() => {
-    apiFetch("/auto-overdue", { method: "POST" }).catch(() => {});
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const runAutoOverdue = () => {
+      apiFetch("/auto-overdue", { method: "POST" })
+        .then(() => {
+          qcMain.invalidateQueries({ queryKey: ["finance-activities"] });
+          qcMain.invalidateQueries({ queryKey: ["finance-dashboard"] });
+        })
+        .catch(() => {});
+    };
+
+    const startPolling = () => {
+      runAutoOverdue();
+      intervalId = setInterval(runAutoOverdue, 60_000);
+    };
+
+    const ist = getISTNow();
+    const istHour = ist.getHours();
+    const istMin = ist.getMinutes();
+
+    if (istHour > 17 || (istHour === 17 && istMin >= 0)) {
+      // Already at or past 5:00 PM IST — start immediately
+      startPolling();
+    } else {
+      // Schedule to fire exactly at 17:00:00 IST
+      const target = new Date(ist);
+      target.setHours(17, 0, 0, 0);
+      const msUntil5PM = target.getTime() - ist.getTime();
+      timeoutId = setTimeout(startPolling, msUntil5PM);
+    }
+
+    return () => {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      if (intervalId !== null) clearInterval(intervalId);
+    };
   }, []);
 
   const activityCategories = ["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "agreement_summary"];

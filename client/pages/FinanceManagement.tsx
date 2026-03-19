@@ -973,7 +973,7 @@ function ActivityTab({
       )}
 
       {/* Status cards */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-4 lg:grid-cols-7 gap-3">
         {STATUSES.map((s) => {
           const Icon = s.icon;
           const isActive = filterStatus === s.value;
@@ -1424,7 +1424,7 @@ function DashboardTab({ userEmail, canEditAll }: { userEmail: string; canEditAll
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-4 lg:grid-cols-7 gap-4">
         {STATUSES.map((s) => {
           const Icon = s.icon;
           const found = statusTotals.find((r) => r.status === s.value);

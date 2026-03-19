@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -276,6 +277,8 @@ function UserMultiSelect({
 }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
+  const triggerRef = React.useRef<HTMLDivElement>(null);
 
   const filtered = users
     .filter((u: any, i: number, arr: any[]) => arr.findIndex((x) => x.id === u.id) === i)
@@ -292,15 +295,29 @@ function UserMultiSelect({
     setSearch("");
   };
 
+  const openDropdown = () => {
+    if (!triggerRef.current) { setOpen(true); return; }
+    const rect = triggerRef.current.getBoundingClientRect();
+    const dropH = 280; // approx max dropdown height
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward = spaceBelow < dropH && rect.top > dropH;
+    setDropStyle(
+      openUpward
+        ? { position: "fixed", bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, zIndex: 9999 }
+        : { position: "fixed", top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 },
+    );
+    setOpen(true);
+  };
+
   return (
     <div>
       <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">
         {icon} {label}
       </label>
-      <div className="relative">
+      <div className="relative" ref={triggerRef}>
         <div
           className="w-full min-h-[38px] px-3 py-2 border border-gray-300 rounded-lg text-sm cursor-pointer bg-white hover:border-blue-400 transition-colors"
-          onClick={() => setOpen(true)}
+          onClick={openDropdown}
         >
           <div className="flex flex-wrap gap-1">
             {selected.map((val) => (
@@ -315,10 +332,10 @@ function UserMultiSelect({
             {!selected.length && <span className="text-gray-400 text-sm">Click to select…</span>}
           </div>
         </div>
-        {open && (
+        {open && createPortal(
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden">
+            <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
+            <div style={{ ...dropStyle, backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", overflow: "hidden" }}>
               <div className="p-2 border-b bg-gray-50">
                 <Input autoFocus placeholder="Search by name or email…" value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -343,7 +360,8 @@ function UserMultiSelect({
                 ))}
               </div>
             </div>
-          </>
+          </>,
+          document.body,
         )}
       </div>
     </div>

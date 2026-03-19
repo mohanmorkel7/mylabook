@@ -43,7 +43,7 @@ const STATUS_COLOR: Record<string, string> = {
 interface TooltipPanelProps {
   hourData: HourData;
   viewType: "task" | "subtask";
-  pos: { x: number; y: number };
+  pos: { x: number; y: number; flipLeft: boolean; flipRight: number };
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }
@@ -63,16 +63,17 @@ function TooltipPanel({ hourData, viewType, pos, onMouseEnter, onMouseLeave }: T
       onMouseLeave={onMouseLeave}
       style={{
         position: "absolute",
-        left: pos.x + 16,
-        top: pos.y - 20,
+        // Flip to left if tooltip would overflow right edge of the container
+        ...(pos.flipLeft
+          ? { right: pos.flipRight, top: pos.y - 20 }
+          : { left: pos.x + 16, top: pos.y - 20 }),
         zIndex: 50,
         pointerEvents: "all",
       }}
       className="bg-white border border-gray-200 rounded-lg shadow-2xl p-3"
-      // Prevent scroll from bubbling up and triggering chart events
       onWheel={(e) => e.stopPropagation()}
     >
-      <div style={{ width: 320, maxHeight: 300, overflowY: "auto" }}>
+      <div style={{ width: 320, maxHeight: 300, overflowY: "auto", overflowX: "hidden" }}>
         <p className="font-semibold text-gray-900 mb-2 sticky top-0 bg-white pb-1 border-b border-gray-100">
           {hourData.hour_label} —{" "}
           <span className="text-blue-600">{count}</span> active{" "}
@@ -127,7 +128,7 @@ export default function TaskTimeframeChart() {
 
   // Sticky tooltip state
   const [tooltipData, setTooltipData] = useState<HourData | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0, flipLeft: false, flipRight: 0 });
   const isOverTooltip = useRef(false);
   const isOverChart = useRef(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,7 +140,7 @@ export default function TaskTimeframeChart() {
       if (!isOverTooltip.current && !isOverChart.current) {
         setTooltipData(null);
       }
-    }, 120);
+    }, 400);
   }, []);
 
   const handleChartMouseMove = useCallback(
@@ -151,9 +152,15 @@ export default function TaskTimeframeChart() {
         const hourData: HourData = state.activePayload[0].payload;
         const rect = containerRef.current?.getBoundingClientRect();
         if (rect) {
+          const cursorX = event.clientX - rect.left;
+          const cursorY = event.clientY - rect.top;
+          const tooltipWidth = 340; // panel width + padding
+          const willOverflowRight = cursorX + 16 + tooltipWidth > rect.width;
           setTooltipPos({
-            x: event.clientX - rect.left,
-            y: event.clientY - rect.top,
+            x: cursorX,
+            y: cursorY,
+            flipLeft: willOverflowRight,
+            flipRight: rect.width - cursorX + 8,
           });
         }
         setTooltipData(hourData);

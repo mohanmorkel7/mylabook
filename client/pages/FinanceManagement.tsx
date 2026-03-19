@@ -1,17 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-// Note: BarChart above is the recharts chart component. BarChart3 from lucide is used as icon.
 import {
   Plus, Pencil, Trash2, X, CheckCircle2, Clock, AlertTriangle,
-  AlertCircle, ShieldCheck, Briefcase, TrendingUp, Users, FileText, BarChart3,
+  AlertCircle, ShieldCheck, Briefcase, TrendingUp, Users, FileText,
+  BarChart3, Sun, UserCheck,
 } from "lucide-react";
+import { apiClient } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Activity {
@@ -24,6 +28,8 @@ interface Activity {
   status: string;
   reason_non_completion: string;
   due_date: string | null;
+  assigned_to: string[];
+  approval_users: string[];
   created_at: string;
   updated_at: string;
 }
@@ -62,13 +68,17 @@ const STATUSES = [
 ];
 
 const DURATIONS = [
-  { value: "D", label: "Daily (D)" },
-  { value: "W", label: "Weekly (W)" },
-  { value: "M", label: "Monthly (M)" },
-  { value: "Q", label: "Quarterly (Q)" },
-  { value: "H", label: "Half-yearly (H)" },
-  { value: "Y", label: "Yearly (Y)" },
+  { value: "D", label: "Daily" },
+  { value: "W", label: "Weekly" },
+  { value: "M", label: "Monthly" },
+  { value: "Q", label: "Quarterly" },
+  { value: "H", label: "Half-yearly" },
+  { value: "Y", label: "Yearly" },
 ];
+
+const DURATION_LABEL: Record<string, string> = Object.fromEntries(
+  DURATIONS.map((d) => [d.value, d.label])
+);
 
 const STATUS_MAP = Object.fromEntries(STATUSES.map((s) => [s.value, s]));
 const STATUS_COLORS = Object.fromEntries(STATUSES.map((s) => [s.value, s.color]));
@@ -95,6 +105,114 @@ async function apiFetch(path: string, opts?: RequestInit) {
   return res.json();
 }
 
+function extractName(value: string) {
+  // "First Last (email)" → "First Last"
+  return value.split(" (")[0] || value;
+}
+
+// ─── User multi-select component ─────────────────────────────────────────────
+interface UserMultiSelectProps {
+  label: string;
+  selected: string[];
+  onChange: (vals: string[]) => void;
+  users: any[];
+}
+
+function UserMultiSelect({ label, selected, onChange, users }: UserMultiSelectProps) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const filtered = users
+    .filter((u: any, i: number, arr: any[]) => arr.findIndex((x) => x.id === u.id) === i)
+    .filter((u: any) => {
+      const fullName = `${u.first_name} ${u.last_name}`.toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      const val = `${u.first_name} ${u.last_name} (${u.email || "no-email"})`;
+      return !selected.includes(val) && (fullName.includes(search.toLowerCase()) || email.includes(search.toLowerCase()));
+    });
+
+  const addUser = (u: any) => {
+    const val = `${u.first_name} ${u.last_name} (${u.email || "no-email"})`;
+    if (!selected.includes(val)) onChange([...selected, val]);
+    setSearch("");
+  };
+
+  const removeUser = (val: string) => onChange(selected.filter((v) => v !== val));
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div className="relative">
+        <div
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 bg-white min-h-[38px]"
+          onClick={() => setOpen(true)}
+        >
+          <div className="flex flex-wrap gap-1">
+            {selected.map((val) => (
+              <span
+                key={val}
+                className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded"
+              >
+                {extractName(val)}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeUser(val); }}
+                  className="hover:text-red-600"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            {selected.length === 0 && (
+              <span className="text-gray-400">Click to select…</span>
+            )}
+          </div>
+        </div>
+
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl">
+              <div className="p-2 border-b">
+                <Input
+                  autoFocus
+                  placeholder="Search users…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                {filtered.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-3">No users found</p>
+                ) : (
+                  filtered.map((u: any) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => { addUser(u); setOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 text-blue-700 font-medium text-xs">
+                        {(u.first_name?.[0] || "?").toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">{u.first_name} {u.last_name}</p>
+                        <p className="text-xs text-gray-500">{u.email || "no-email"}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Activity Modal ──────────────────────────────────────────────────────────
 interface ActivityModalProps {
   open: boolean;
@@ -102,17 +220,15 @@ interface ActivityModalProps {
   category: string;
   activity?: Activity | null;
   onSuccess: () => void;
+  users: any[];
 }
 
-function ActivityModal({ open, onClose, category, activity, onSuccess }: ActivityModalProps) {
-  const [form, setForm] = useState({
-    activity_name: "",
-    description: "",
-    duration: "M",
-    status: "in_progress",
-    reason_non_completion: "",
-    due_date: "",
-  });
+function ActivityModal({ open, onClose, category, activity, onSuccess, users }: ActivityModalProps) {
+  const blank = {
+    activity_name: "", description: "", duration: "M", status: "in_progress",
+    reason_non_completion: "", due_date: "", assigned_to: [] as string[], approval_users: [] as string[],
+  };
+  const [form, setForm] = useState(blank);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -125,14 +241,18 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
         status: activity.status || "in_progress",
         reason_non_completion: activity.reason_non_completion || "",
         due_date: activity.due_date ? activity.due_date.slice(0, 10) : "",
+        assigned_to: activity.assigned_to || [],
+        approval_users: activity.approval_users || [],
       });
     } else {
-      setForm({ activity_name: "", description: "", duration: "M", status: "in_progress", reason_non_completion: "", due_date: "" });
+      setForm(blank);
     }
     setError("");
   }, [activity, open]);
 
   if (!open) return null;
+
+  const needsReason = ["delayed", "overdue"].includes(form.status);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,30 +273,18 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
     }
   };
 
-  const needsReason = ["delayed", "overdue"].includes(form.status);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b">
           <h2 className="text-lg font-bold text-gray-900">
-            {activity ? "Edit Activity" : "Create Activity"}
+            {activity ? "Edit Activity" : "Create Activity"} — {CAT_LABEL[category] || category}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Category (display only) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
-              {CAT_LABEL[category] || category}
-            </div>
-          </div>
-
-          {/* Activity ID (auto-gen) */}
+          {/* Activity ID */}
           {activity && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Activity ID</label>
@@ -186,7 +294,7 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
             </div>
           )}
 
-          {/* Activity name */}
+          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Activity Name *</label>
             <input
@@ -209,7 +317,7 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
             />
           </div>
 
-          {/* Duration + Status row */}
+          {/* Duration + Status */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Duration *</label>
@@ -219,7 +327,7 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
                 onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
               >
                 {DURATIONS.map((d) => (
-                  <option key={d.value} value={d.value}>{d.label}</option>
+                  <option key={d.value} value={d.value}>{d.label} ({d.value})</option>
                 ))}
               </select>
             </div>
@@ -248,12 +356,10 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
             />
           </div>
 
-          {/* Reason for non-completion (conditional) */}
+          {/* Reason (conditional) */}
           {needsReason && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason for Non-Completion
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Non-Completion</label>
               <textarea
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 rows={2}
@@ -263,6 +369,22 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
               />
             </div>
           )}
+
+          {/* Assign To */}
+          <UserMultiSelect
+            label="Assign To"
+            selected={form.assigned_to}
+            onChange={(vals) => setForm((f) => ({ ...f, assigned_to: vals }))}
+            users={users}
+          />
+
+          {/* Approval Users */}
+          <UserMultiSelect
+            label="Approval Users"
+            selected={form.approval_users}
+            onChange={(vals) => setForm((f) => ({ ...f, approval_users: vals }))}
+            users={users}
+          />
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -278,18 +400,108 @@ function ActivityModal({ open, onClose, category, activity, onSuccess }: Activit
   );
 }
 
+// ─── Inline status dropdown ──────────────────────────────────────────────────
+interface InlineStatusProps {
+  activity: Activity;
+  onStatusChange: (id: number, status: string) => void;
+}
+
+function InlineStatus({ activity, onStatusChange }: InlineStatusProps) {
+  const st = STATUS_MAP[activity.status] ?? { color: "#9CA3AF", label: activity.status };
+  return (
+    <select
+      value={activity.status}
+      onChange={(e) => onStatusChange(activity.id, e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      className="text-xs font-semibold rounded-full px-2 py-1 border-0 outline-none cursor-pointer appearance-none pr-4"
+      style={{
+        backgroundColor: st.color + "20",
+        color: st.color,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24'%3E%3Cpath fill='%236B7280' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 4px center",
+      }}
+    >
+      {STATUSES.map((s) => (
+        <option key={s.value} value={s.value}>{s.label}</option>
+      ))}
+    </select>
+  );
+}
+
+// ─── Today's Daily Activities panel ─────────────────────────────────────────
+function TodayActivitiesPanel({ activities }: { activities: Activity[] }) {
+  const daily = activities.filter((a) => a.duration === "D" && !["completed", "verified"].includes(a.status));
+  if (daily.length === 0) return null;
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Sun className="w-4 h-4 text-amber-600" />
+        <h3 className="font-semibold text-amber-800 text-sm">
+          Today's Daily Activities — {daily.length} pending
+        </h3>
+        <span className="text-xs text-amber-600 ml-auto">Auto-overdue after 5:00 PM IST</span>
+      </div>
+      <div className="space-y-2">
+        {daily.map((a) => {
+          const st = STATUS_MAP[a.status];
+          return (
+            <div key={a.id} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 text-sm border border-amber-100">
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: st?.color ?? "#9CA3AF" }}
+              />
+              <span className="font-medium text-gray-800 flex-1 truncate">{a.activity_name}</span>
+              <span
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: (st?.color ?? "#9CA3AF") + "20", color: st?.color ?? "#9CA3AF" }}
+              >
+                {st?.label ?? a.status}
+              </span>
+              {a.assigned_to.length > 0 && (
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <UserCheck className="w-3 h-3" /> {a.assigned_to.map(extractName).join(", ")}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Activity Tab ────────────────────────────────────────────────────────────
-function ActivityTab({ category }: { category: string }) {
+function ActivityTab({
+  category,
+  canCreate,
+  users,
+}: {
+  category: string;
+  canCreate: boolean;
+  users: any[];
+}) {
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editActivity, setEditActivity] = useState<Activity | null>(null);
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterDuration, setFilterDuration] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["finance-activities", category],
     queryFn: () => apiFetch(`/activities?category=${category}`),
     staleTime: 30_000,
+  });
+
+  const statusPatchMut = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["finance-activities", category] });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+    },
   });
 
   const deleteMut = useMutation({
@@ -307,7 +519,9 @@ function ActivityTab({ category }: { category: string }) {
   const counts = Object.fromEntries(STATUSES.map((s) => [s.value, 0]));
   activities.forEach((a) => { if (a.status in counts) counts[a.status]++; });
 
-  const filtered = filterStatus ? activities.filter((a) => a.status === filterStatus) : activities;
+  // Filtered list
+  let filtered = filterStatus ? activities.filter((a) => a.status === filterStatus) : activities;
+  if (filterDuration) filtered = filtered.filter((a) => a.duration === filterDuration);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["finance-activities", category] });
@@ -316,6 +530,9 @@ function ActivityTab({ category }: { category: string }) {
 
   return (
     <div className="space-y-5">
+      {/* Today's daily activities panel */}
+      <TodayActivitiesPanel activities={activities} />
+
       {/* Status cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {STATUSES.map((s) => {
@@ -340,30 +557,46 @@ function ActivityTab({ category }: { category: string }) {
         })}
       </div>
 
-      {/* Header with create button */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-gray-900">
-            {CAT_LABEL[category]} Activities
-          </h3>
-          <p className="text-sm text-gray-500">
-            {filtered.length} {filterStatus ? `${STATUS_MAP[filterStatus]?.label} ` : ""}activities
-            {filterStatus && (
+      {/* Filters + create */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Duration filter */}
+          <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs">
+            <button
+              onClick={() => setFilterDuration("")}
+              className={`px-2 py-1.5 font-medium transition-colors ${!filterDuration ? "bg-gray-800 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              All
+            </button>
+            {DURATIONS.map((d) => (
               <button
-                onClick={() => setFilterStatus("")}
-                className="ml-2 text-blue-600 underline text-xs"
+                key={d.value}
+                onClick={() => setFilterDuration(filterDuration === d.value ? "" : d.value)}
+                className={`px-2 py-1.5 font-medium transition-colors border-l border-gray-200 ${filterDuration === d.value ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                title={d.label}
               >
-                Clear filter
+                {d.value}
               </button>
-            )}
-          </p>
+            ))}
+          </div>
+          {(filterStatus || filterDuration) && (
+            <button
+              onClick={() => { setFilterStatus(""); setFilterDuration(""); }}
+              className="text-xs text-blue-600 underline"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
-        <Button
-          onClick={() => { setEditActivity(null); setModalOpen(true); }}
-          className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
-        >
-          <Plus className="w-4 h-4" /> Add Activity
-        </Button>
+
+        {canCreate && (
+          <Button
+            onClick={() => { setEditActivity(null); setModalOpen(true); }}
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+          >
+            <Plus className="w-4 h-4" /> Add Activity
+          </Button>
+        )}
       </div>
 
       {/* Activity list */}
@@ -372,7 +605,7 @@ function ActivityTab({ category }: { category: string }) {
       ) : filtered.length === 0 ? (
         <div className="h-40 flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
           <FileText className="w-8 h-8 opacity-30" />
-          <p>No activities yet. Click "Add Activity" to create one.</p>
+          <p>No activities{filterDuration ? ` for ${DURATION_LABEL[filterDuration]}` : ""}. {canCreate ? 'Click "Add Activity" to create one.' : ""}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -394,22 +627,25 @@ function ActivityTab({ category }: { category: string }) {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-gray-900">{act.activity_name}</span>
                           <span className="text-xs font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
                             {act.activity_id}
                           </span>
-                          <Badge
-                            className="text-[10px] px-1.5"
-                            style={{ backgroundColor: (st?.color ?? "#9CA3AF") + "20", color: st?.color ?? "#9CA3AF", border: "none" }}
-                          >
-                            {st?.label ?? act.status}
-                          </Badge>
-                          <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
-                            {act.duration}
+
+                          {/* Inline status dropdown — always visible */}
+                          <InlineStatus
+                            activity={act}
+                            onStatusChange={(id, status) => statusPatchMut.mutate({ id, status })}
+                          />
+
+                          {/* Duration badge */}
+                          <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-semibold">
+                            {DURATION_LABEL[act.duration] || act.duration}
                           </span>
                         </div>
+
                         {act.description && (
                           <p className="text-sm text-gray-500 mt-1 line-clamp-2">{act.description}</p>
                         )}
@@ -418,26 +654,47 @@ function ActivityTab({ category }: { category: string }) {
                             Reason: {act.reason_non_completion}
                           </p>
                         )}
+
+                        {/* Assigned to + Approval users */}
+                        <div className="flex flex-wrap gap-3 mt-1.5">
+                          {act.assigned_to.length > 0 && (
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <UserCheck className="w-3 h-3 text-blue-500" />
+                              <span>Assigned: {act.assigned_to.map(extractName).join(", ")}</span>
+                            </div>
+                          )}
+                          {act.approval_users.length > 0 && (
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <ShieldCheck className="w-3 h-3 text-purple-500" />
+                              <span>Approval: {act.approval_users.map(extractName).join(", ")}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Action buttons */}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => { setEditActivity(act); setModalOpen(true); }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(act.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canCreate && (
+                          <>
+                            <button
+                              onClick={() => { setEditActivity(act); setModalOpen(true); }}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteId(act.id)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {/* Due date */}
                     {act.due_date && (
                       <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
@@ -460,11 +717,8 @@ function ActivityTab({ category }: { category: string }) {
             <p className="text-sm text-gray-500 mb-5">This action cannot be undone.</p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setDeleteId(null)} className="flex-1">Cancel</Button>
-              <Button
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                onClick={() => deleteMut.mutate(deleteId!)}
-                disabled={deleteMut.isPending}
-              >
+              <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => deleteMut.mutate(deleteId!)} disabled={deleteMut.isPending}>
                 {deleteMut.isPending ? "Deleting…" : "Delete"}
               </Button>
             </div>
@@ -478,6 +732,7 @@ function ActivityTab({ category }: { category: string }) {
         category={category}
         activity={editActivity}
         onSuccess={refresh}
+        users={users}
       />
     </div>
   );
@@ -503,15 +758,11 @@ function RecruitmentModal({ open, onClose, position, onSuccess }: RecruitmentMod
         position_name: position.position_name,
         date_open: position.date_open ? position.date_open.slice(0, 10) : "",
         date_close: position.date_close ? position.date_close.slice(0, 10) : "",
-        cvs_applied: position.cvs_applied,
-        cvs_shortlist: position.cvs_shortlist,
-        cvs_interviewed: position.cvs_interviewed,
-        cvs_on_hold: position.cvs_on_hold,
+        cvs_applied: position.cvs_applied, cvs_shortlist: position.cvs_shortlist,
+        cvs_interviewed: position.cvs_interviewed, cvs_on_hold: position.cvs_on_hold,
         selected: position.selected,
       });
-    } else {
-      setForm(blank);
-    }
+    } else { setForm(blank); }
     setError("");
   }, [position, open]);
 
@@ -532,25 +783,17 @@ function RecruitmentModal({ open, onClose, position, onSuccess }: RecruitmentMod
       }
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err: any) { setError(err.message); }
+    finally { setSaving(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b">
-          <h2 className="text-lg font-bold text-gray-900">
-            {position ? "Edit Position" : "Add Position"}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
+          <h2 className="text-lg font-bold text-gray-900">{position ? "Edit Position" : "Add Position"}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
-
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Position Name *</label>
@@ -561,7 +804,6 @@ function RecruitmentModal({ open, onClose, position, onSuccess }: RecruitmentMod
               placeholder="e.g. Senior Software Engineer"
             />
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date Opened</label>
@@ -574,27 +816,18 @@ function RecruitmentModal({ open, onClose, position, onSuccess }: RecruitmentMod
                 value={form.date_close} onChange={(e) => setForm((f) => ({ ...f, date_close: e.target.value }))} />
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
-            {([
-              ["cvs_applied", "CVs Applied"],
-              ["cvs_shortlist", "CVs Shortlisted"],
-              ["cvs_interviewed", "CVs Interviewed"],
-              ["cvs_on_hold", "CVs On Hold"],
-              ["selected", "Selected"],
-            ] as [keyof typeof blank, string][]).map(([field, label]) => (
+            {(["cvs_applied", "cvs_shortlist", "cvs_interviewed", "cvs_on_hold", "selected"] as const).map((field) => (
               <div key={field}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                <input
-                  type="number" min="0"
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {field.replace("cvs_", "CVs ").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                </label>
+                <input type="number" min="0"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={form[field] as number}
-                  onChange={num(field)}
-                />
+                  value={form[field] as number} onChange={num(field)} />
               </div>
             ))}
           </div>
-
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-3 pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
@@ -608,7 +841,7 @@ function RecruitmentModal({ open, onClose, position, onSuccess }: RecruitmentMod
   );
 }
 
-function RecruitmentTab() {
+function RecruitmentTab({ canCreate }: { canCreate: boolean }) {
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editPos, setEditPos] = useState<RecruitmentPosition | null>(null);
@@ -622,33 +855,19 @@ function RecruitmentTab() {
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => apiFetch(`/recruitment/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["finance-recruitment"] });
-      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
-      setDeleteId(null);
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-recruitment"] }); setDeleteId(null); },
   });
 
   const positions: RecruitmentPosition[] = data?.positions ?? [];
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["finance-recruitment"] });
-    qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
-  };
-
-  // Summary cards
-  const totals = positions.reduce(
-    (acc, p) => ({
-      applied: acc.applied + p.cvs_applied,
-      shortlisted: acc.shortlisted + p.cvs_shortlist,
-      interviewed: acc.interviewed + p.cvs_interviewed,
-      on_hold: acc.on_hold + p.cvs_on_hold,
-      selected: acc.selected + p.selected,
-    }),
-    { applied: 0, shortlisted: 0, interviewed: 0, on_hold: 0, selected: 0 },
-  );
-
-  const fmt = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["finance-recruitment"] }); qc.invalidateQueries({ queryKey: ["finance-dashboard"] }); };
+  const totals = positions.reduce((acc, p) => ({
+    applied: acc.applied + p.cvs_applied,
+    shortlisted: acc.shortlisted + p.cvs_shortlist,
+    interviewed: acc.interviewed + p.cvs_interviewed,
+    on_hold: acc.on_hold + p.cvs_on_hold,
+    selected: acc.selected + p.selected,
+  }), { applied: 0, shortlisted: 0, interviewed: 0, on_hold: 0, selected: 0 });
+  const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
 
   return (
     <div className="space-y-5">
@@ -669,21 +888,21 @@ function RecruitmentTab() {
         ))}
       </div>
 
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-900">Open Positions ({positions.length})</h3>
-        <Button onClick={() => { setEditPos(null); setModalOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
-          <Plus className="w-4 h-4" /> Add Position
-        </Button>
+        {canCreate && (
+          <Button onClick={() => { setEditPos(null); setModalOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+            <Plus className="w-4 h-4" /> Add Position
+          </Button>
+        )}
       </div>
 
-      {/* Table */}
       {isLoading ? (
         <div className="h-40 flex items-center justify-center text-gray-400 text-sm">Loading…</div>
       ) : positions.length === 0 ? (
         <div className="h-40 flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
           <Users className="w-8 h-8 opacity-30" />
-          <p>No positions yet. Click "Add Position" to add one.</p>
+          <p>No positions yet.{canCreate ? ' Click "Add Position" to add one.' : ""}</p>
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -691,13 +910,9 @@ function RecruitmentTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {["Position", "Date Open", "Date Close", "Applied", "Shortlisted", "Interviewed", "On Hold", "Selected", ""].map(
-                    (h) => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">
-                        {h}
-                      </th>
-                    ),
-                  )}
+                  {["Position", "Date Open", "Date Close", "Applied", "Shortlisted", "Interviewed", "On Hold", "Selected", ""].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -712,16 +927,18 @@ function RecruitmentTab() {
                     <td className="px-4 py-3 text-center font-medium text-orange-600">{p.cvs_on_hold}</td>
                     <td className="px-4 py-3 text-center font-bold text-green-600">{p.selected}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => { setEditPos(p); setModalOpen(true); }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setDeleteId(p.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {canCreate && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => { setEditPos(p); setModalOpen(true); }}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setDeleteId(p.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -731,7 +948,6 @@ function RecruitmentTab() {
         </div>
       )}
 
-      {/* Delete confirm */}
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
@@ -747,7 +963,6 @@ function RecruitmentTab() {
           </div>
         </div>
       )}
-
       <RecruitmentModal open={modalOpen} onClose={() => setModalOpen(false)} position={editPos} onSuccess={refresh} />
     </div>
   );
@@ -764,21 +979,16 @@ function DashboardTab() {
     refetchInterval: 60_000,
   });
 
-  if (isLoading) {
-    return <div className="h-64 flex items-center justify-center text-gray-400 text-sm">Loading dashboard…</div>;
-  }
+  if (isLoading) return <div className="h-64 flex items-center justify-center text-gray-400 text-sm">Loading dashboard…</div>;
 
   const statusTotals: { status: string; count: number }[] = data?.status_totals ?? [];
   const categoryCounts: { category: string; count: number }[] = data?.category_counts ?? [];
   const recruitment = data?.recruitment ?? {};
   const recentActivities = data?.recent_activities ?? [];
-
+  const todayDaily: Activity[] = data?.today_daily ?? [];
+  const activityStats: { category: string; status: string; count: number }[] = data?.activity_stats ?? [];
   const totalActivities = statusTotals.reduce((s, r) => s + Number(r.count), 0);
 
-  // Aggregate per-category status breakdown
-  const activityStats: { category: string; status: string; count: number }[] = data?.activity_stats ?? [];
-
-  // Build stacked bar data per category
   const barData = Object.entries(CAT_LABEL).map(([key, label]) => {
     const row: any = { category: label.split(" ")[0] };
     STATUSES.forEach((s) => {
@@ -788,24 +998,45 @@ function DashboardTab() {
     return row;
   });
 
-  // Pie data
   const pieData = statusTotals.map((r) => ({
     name: STATUS_MAP[r.status]?.label ?? r.status,
     value: Number(r.count),
     color: STATUS_COLORS[r.status] ?? "#9CA3AF",
   }));
 
-  // Recruitment funnel
   const funnelData = [
-    { name: "Applied",      value: Number(recruitment.total_applied ?? 0) },
-    { name: "Shortlisted",  value: Number(recruitment.total_shortlisted ?? 0) },
-    { name: "Interviewed",  value: Number(recruitment.total_interviewed ?? 0) },
-    { name: "On Hold",      value: Number(recruitment.total_on_hold ?? 0) },
-    { name: "Selected",     value: Number(recruitment.total_selected ?? 0) },
+    { name: "Applied",     value: Number(recruitment.total_applied ?? 0) },
+    { name: "Shortlisted", value: Number(recruitment.total_shortlisted ?? 0) },
+    { name: "Interviewed", value: Number(recruitment.total_interviewed ?? 0) },
+    { name: "On Hold",     value: Number(recruitment.total_on_hold ?? 0) },
+    { name: "Selected",    value: Number(recruitment.total_selected ?? 0) },
   ];
 
   return (
     <div className="space-y-6">
+      {/* Today's daily pending - dashboard */}
+      {todayDaily.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Sun className="w-4 h-4 text-amber-600" />
+            <h3 className="font-semibold text-amber-800">Today's Daily Activities — {todayDaily.length} pending</h3>
+            <span className="text-xs text-amber-600 ml-auto">Auto-overdue after 5:00 PM IST</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {todayDaily.map((a) => {
+              const st = STATUS_MAP[a.status];
+              return (
+                <div key={a.id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 text-sm border border-amber-100">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: st?.color ?? "#9CA3AF" }} />
+                  <span className="font-medium text-gray-800 truncate flex-1">{a.activity_name}</span>
+                  <span className="text-[10px] text-gray-400">{CAT_LABEL[a.category]?.split(" ")[0]}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {STATUSES.map((s) => {
@@ -829,9 +1060,8 @@ function DashboardTab() {
         })}
       </div>
 
-      {/* Charts row */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Stacked bar by category */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -854,7 +1084,6 @@ function DashboardTab() {
           </CardContent>
         </Card>
 
-        {/* Status pie */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -867,10 +1096,9 @@ function DashboardTab() {
             ) : (
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
-                    {pieData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
+                  <Pie data={pieData} cx="50%" cy="50%" outerRadius={90} dataKey="value"
+                    label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
                   <Tooltip />
                   <Legend />
@@ -881,9 +1109,7 @@ function DashboardTab() {
         </Card>
       </div>
 
-      {/* Recruitment funnel + recent activities */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recruitment funnel */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -906,10 +1132,8 @@ function DashboardTab() {
                       <span className="font-semibold text-gray-800">{f.value}</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${pct}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
-                      />
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
                     </div>
                   </div>
                 );
@@ -918,7 +1142,6 @@ function DashboardTab() {
           </CardContent>
         </Card>
 
-        {/* Recent activities */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -934,18 +1157,13 @@ function DashboardTab() {
                   const st = STATUS_MAP[a.status];
                   return (
                     <div key={a.id} className="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-0">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: st?.color ?? "#9CA3AF" }}
-                      />
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: st?.color ?? "#9CA3AF" }} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{a.activity_name}</p>
                         <p className="text-xs text-gray-400">{CAT_LABEL[a.category] ?? a.category}</p>
                       </div>
-                      <span
-                        className="text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: (st?.color ?? "#9CA3AF") + "20", color: st?.color ?? "#9CA3AF" }}
-                      >
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: (st?.color ?? "#9CA3AF") + "20", color: st?.color ?? "#9CA3AF" }}>
                         {st?.label ?? a.status}
                       </span>
                     </div>
@@ -963,19 +1181,45 @@ function DashboardTab() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function FinanceManagement() {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const { user } = useAuth();
+
+  // Role gate: finance+admin can create/edit/delete
+  const role = (user as any)?.role ?? "";
+  const canCreate = role === "admin" || role === "finance";
+
+  // Fetch users for assignment dropdowns
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      try { return await apiClient.getUsers(); } catch { return []; }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Auto-overdue: call on mount once
+  useEffect(() => {
+    apiFetch("/auto-overdue", { method: "POST" }).catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Page header */}
       <div className="bg-white border-b border-gray-200 px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center">
-            <Briefcase className="w-5 h-5 text-green-600" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center">
+              <Briefcase className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Finance Management</h1>
+              <p className="text-sm text-gray-500">All data stored encrypted at rest · Auto-overdue daily tasks at 5:00 PM IST</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Finance Management</h1>
-            <p className="text-sm text-gray-500">All data is stored encrypted — secure at rest</p>
-          </div>
+          {!canCreate && (
+            <span className="text-xs bg-gray-100 text-gray-500 px-3 py-1.5 rounded-full">
+              View only — finance/admin role required to create
+            </span>
+          )}
         </div>
       </div>
 
@@ -1001,9 +1245,9 @@ export default function FinanceManagement() {
       {/* Tab content */}
       <div className="p-6">
         {activeTab === "dashboard" && <DashboardTab />}
-        {activeTab === "recruitment" && <RecruitmentTab />}
+        {activeTab === "recruitment" && <RecruitmentTab canCreate={canCreate} />}
         {["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "agreement_summary"].includes(activeTab) && (
-          <ActivityTab key={activeTab} category={activeTab} />
+          <ActivityTab key={activeTab} category={activeTab} canCreate={canCreate} users={users} />
         )}
       </div>
     </div>

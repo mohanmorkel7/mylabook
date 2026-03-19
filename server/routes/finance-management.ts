@@ -5,7 +5,6 @@ import crypto from "crypto";
 const router = Router();
 
 // ── AES-256-CBC encryption ─────────────────────────────────────────────────
-// All sensitive text is encrypted at rest; the DB only holds unreadable ciphertext.
 const RAW_KEY = process.env.FINANCE_ENCRYPTION_KEY ?? "finance-management-aes-key-secure!";
 const ENC_KEY = Buffer.from(RAW_KEY.padEnd(32, "0").slice(0, 32));
 
@@ -46,6 +45,8 @@ export async function initializeFinanceSchema() {
         status       VARCHAR(20) NOT NULL DEFAULT 'in_progress',
         reason_non_completion TEXT,
         due_date     DATE,
+        assigned_to  JSONB NOT NULL DEFAULT '[]',
+        approval_users JSONB NOT NULL DEFAULT '[]',
         created_at   TIMESTAMPTZ DEFAULT NOW(),
         updated_at   TIMESTAMPTZ DEFAULT NOW()
       );
@@ -64,6 +65,14 @@ export async function initializeFinanceSchema() {
         updated_at      TIMESTAMPTZ DEFAULT NOW()
       );
     `);
+
+    // Migrate: add new columns to existing tables if they don't exist
+    await pool.query(`
+      ALTER TABLE finance_activities
+        ADD COLUMN IF NOT EXISTS assigned_to JSONB NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS approval_users JSONB NOT NULL DEFAULT '[]';
+    `).catch(() => {}); // Ignore if columns already exist
+
     console.log("[FinanceManagement] Schema ready");
   } catch (err: any) {
     console.warn("[FinanceManagement] Schema init deferred (DB not ready):", err.message);
@@ -80,6 +89,14 @@ const CAT_CODE: Record<string, string> = {
   agreement_summary: "AS",
 };
 
+function safeJsonArray(val: any): string[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try { return JSON.parse(val); } catch { return []; }
+  }
+  return [];
+}
+
 function decryptActivity(row: any) {
   return {
     id: row.id,
@@ -91,6 +108,8 @@ function decryptActivity(row: any) {
     status: row.status,
     reason_non_completion: decrypt(row.reason_non_completion),
     due_date: row.due_date,
+    assigned_to: safeJsonArray(row.assigned_to),
+    approval_users: safeJsonArray(row.approval_users),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -112,16 +131,17 @@ function decryptRecruitment(row: any) {
   };
 }
 
-// ── Activities ─────────────────────────────────────────────────────────────
+// ── Activities CRUD ────────────────────────────────────────────────────────
 
 router.get("/activities", async (req: Request, res: Response) => {
   try {
-    const { category, status } = req.query as Record<string, string>;
+    const { category, status, duration } = req.query as Record<string, string>;
     const conditions: string[] = [];
     const params: any[] = [];
 
     if (category) { params.push(category); conditions.push(`category = $${params.length}`); }
     if (status)   { params.push(status);   conditions.push(`status = $${params.length}`); }
+    if (duration) { params.push(duration); conditions.push(`duration = $${params.length}`); }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const result = await pool.query(
@@ -137,7 +157,10 @@ router.get("/activities", async (req: Request, res: Response) => {
 
 router.post("/activities", async (req: Request, res: Response) => {
   try {
-    const { category, activity_name, description, duration, status, reason_non_completion, due_date } = req.body;
+    const {
+      category, activity_name, description, duration, status,
+      reason_non_completion, due_date, assigned_to, approval_users,
+    } = req.body;
 
     if (!category || !activity_name || !duration || !status) {
       return res.status(400).json({ error: "category, activity_name, duration and status are required" });
@@ -154,14 +177,17 @@ router.post("/activities", async (req: Request, res: Response) => {
 
     const result = await pool.query(
       `INSERT INTO finance_activities
-         (activity_id, category, activity_name, description, duration, status, reason_non_completion, due_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+         (activity_id, category, activity_name, description, duration, status,
+          reason_non_completion, due_date, assigned_to, approval_users)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [
         activityId, category,
         encrypt(activity_name), encrypt(description ?? ""),
         duration, status,
         encrypt(reason_non_completion ?? ""),
         due_date || null,
+        JSON.stringify(Array.isArray(assigned_to) ? assigned_to : []),
+        JSON.stringify(Array.isArray(approval_users) ? approval_users : []),
       ],
     );
     res.status(201).json({ activity: decryptActivity(result.rows[0]) });
@@ -174,17 +200,24 @@ router.post("/activities", async (req: Request, res: Response) => {
 router.put("/activities/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { activity_name, description, duration, status, reason_non_completion, due_date } = req.body;
+    const {
+      activity_name, description, duration, status,
+      reason_non_completion, due_date, assigned_to, approval_users,
+    } = req.body;
 
     const result = await pool.query(
       `UPDATE finance_activities
        SET activity_name=$1, description=$2, duration=$3, status=$4,
-           reason_non_completion=$5, due_date=$6, updated_at=NOW()
-       WHERE id=$7 RETURNING *`,
+           reason_non_completion=$5, due_date=$6, assigned_to=$7, approval_users=$8,
+           updated_at=NOW()
+       WHERE id=$9 RETURNING *`,
       [
         encrypt(activity_name), encrypt(description ?? ""),
         duration, status, encrypt(reason_non_completion ?? ""),
-        due_date || null, id,
+        due_date || null,
+        JSON.stringify(Array.isArray(assigned_to) ? assigned_to : []),
+        JSON.stringify(Array.isArray(approval_users) ? approval_users : []),
+        id,
       ],
     );
     if (!result.rows.length) return res.status(404).json({ error: "Activity not found" });
@@ -192,6 +225,28 @@ router.put("/activities/:id", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("PUT /finance/activities:", err.message);
     res.status(500).json({ error: "Failed to update activity" });
+  }
+});
+
+// PATCH: quick status update (for inline dropdown)
+router.patch("/activities/:id/status", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, reason_non_completion } = req.body;
+
+    if (!status) return res.status(400).json({ error: "status is required" });
+
+    const result = await pool.query(
+      `UPDATE finance_activities
+       SET status=$1, reason_non_completion=COALESCE($2, reason_non_completion), updated_at=NOW()
+       WHERE id=$3 RETURNING *`,
+      [status, reason_non_completion ? encrypt(reason_non_completion) : null, id],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "Activity not found" });
+    res.json({ activity: decryptActivity(result.rows[0]) });
+  } catch (err: any) {
+    console.error("PATCH /finance/activities/status:", err.message);
+    res.status(500).json({ error: "Failed to update status" });
   }
 });
 
@@ -205,7 +260,39 @@ router.delete("/activities/:id", async (req: Request, res: Response) => {
   }
 });
 
-// ── Recruitment ────────────────────────────────────────────────────────────
+// ── Auto-overdue: mark daily tasks past 5PM IST as overdue ─────────────────
+router.post("/auto-overdue", async (_req: Request, res: Response) => {
+  try {
+    // Get current IST time
+    const istQuery = await pool.query(
+      `SELECT EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Asia/Kolkata') AS ist_hour,
+              EXTRACT(MINUTE FROM NOW() AT TIME ZONE 'Asia/Kolkata') AS ist_minute`
+    );
+    const { ist_hour, ist_minute } = istQuery.rows[0];
+    const istMinutes = Number(ist_hour) * 60 + Number(ist_minute);
+    const threshold = 17 * 60; // 5:00 PM = 17:00 = 1020 minutes
+
+    if (istMinutes < threshold) {
+      return res.json({ updated: 0, message: "Before 5PM IST — no auto-overdue applied" });
+    }
+
+    // Mark daily activities that are not completed/verified as overdue
+    const result = await pool.query(
+      `UPDATE finance_activities
+       SET status = 'overdue', updated_at = NOW()
+       WHERE duration = 'D'
+         AND status NOT IN ('completed', 'verified', 'overdue')
+       RETURNING id`
+    );
+
+    res.json({ updated: result.rowCount, message: `${result.rowCount} daily activities marked overdue` });
+  } catch (err: any) {
+    console.error("POST /finance/auto-overdue:", err.message);
+    res.status(500).json({ error: "Failed to run auto-overdue" });
+  }
+});
+
+// ── Recruitment CRUD ────────────────────────────────────────────────────────
 
 router.get("/recruitment", async (_req: Request, res: Response) => {
   try {
@@ -280,7 +367,7 @@ router.delete("/recruitment/:id", async (req: Request, res: Response) => {
 
 router.get("/dashboard", async (_req: Request, res: Response) => {
   try {
-    const [activityStats, statusTotals, categoryCounts, recruitmentStats, recentActivities] =
+    const [activityStats, statusTotals, categoryCounts, recruitmentStats, recentActivities, todayDaily] =
       await Promise.all([
         pool.query(`
           SELECT category, status, COUNT(*)::int AS count
@@ -313,6 +400,20 @@ router.get("/dashboard", async (_req: Request, res: Response) => {
           FROM finance_activities
           ORDER BY created_at DESC LIMIT 10
         `),
+        // Today's daily activities that are pending
+        pool.query(`
+          SELECT id, activity_id, category, activity_name, status, assigned_to
+          FROM finance_activities
+          WHERE duration = 'D' AND status NOT IN ('completed', 'verified')
+          ORDER BY
+            CASE status
+              WHEN 'overdue' THEN 0
+              WHEN 'delayed' THEN 1
+              WHEN 'in_progress' THEN 2
+              ELSE 3
+            END,
+            created_at DESC
+        `),
       ]);
 
     res.json({
@@ -323,6 +424,11 @@ router.get("/dashboard", async (_req: Request, res: Response) => {
       recent_activities: recentActivities.rows.map((r) => ({
         ...r,
         activity_name: decrypt(r.activity_name),
+      })),
+      today_daily: todayDaily.rows.map((r) => ({
+        ...r,
+        activity_name: decrypt(r.activity_name),
+        assigned_to: safeJsonArray(r.assigned_to),
       })),
     });
   } catch (err: any) {

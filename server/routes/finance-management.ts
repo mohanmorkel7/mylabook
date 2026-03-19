@@ -9,7 +9,7 @@ const RAW_KEY = process.env.FINANCE_ENCRYPTION_KEY ?? "finance-management-aes-ke
 const ENC_KEY = Buffer.from(RAW_KEY.padEnd(32, "0").slice(0, 32));
 
 function encrypt(text: string | null | undefined): string {
-  if (!text) return "";
+  if (text === null || text === undefined || text === "") return "";
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv("aes-256-cbc", ENC_KEY, iv);
   const enc = Buffer.concat([cipher.update(String(text), "utf8"), cipher.final()]);
@@ -19,7 +19,7 @@ function encrypt(text: string | null | undefined): string {
 function decrypt(text: string | null | undefined): string {
   if (!text) return "";
   const s = String(text);
-  if (!s.startsWith("enc:")) return s;
+  if (!s.startsWith("enc:")) return s; // backward-compat: return plain if not encrypted
   try {
     const parts = s.split(":");
     const iv = Buffer.from(parts[1], "hex");
@@ -29,77 +29,130 @@ function decrypt(text: string | null | undefined): string {
   } catch { return ""; }
 }
 
-function safeJsonArray(val: any): string[] {
-  if (Array.isArray(val)) return val;
-  if (typeof val === "string") { try { return JSON.parse(val); } catch { return []; } }
-  return [];
+// Encrypt a JS array → JSON string → encrypted TEXT
+function encryptArr(arr: any[]): string {
+  return encrypt(JSON.stringify(arr));
 }
 
-function safeJsonIntArray(val: any): number[] {
-  if (Array.isArray(val)) return val.map(Number);
-  if (typeof val === "string") { try { return JSON.parse(val).map(Number); } catch { return []; } }
-  return [];
+// Decrypt TEXT → JSON string → JS array
+function decryptArr(val: string | null | undefined): any[] {
+  const s = decrypt(val ?? "");
+  if (!s) return [];
+  try { return JSON.parse(s); } catch { return []; }
+}
+
+// Encrypt a number (stored as TEXT)
+function encryptNum(n: number | null | undefined): string {
+  if (n == null) return "";
+  return encrypt(String(n));
+}
+
+// Decrypt TEXT → number
+function decryptNum(val: string | null | undefined): number | null {
+  const s = decrypt(val ?? "");
+  if (!s) return null;
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+}
+
+// Encrypt boolean → TEXT
+function encryptBool(b: boolean): string {
+  return encrypt(b ? "true" : "false");
+}
+
+// Decrypt TEXT → boolean
+function decryptBool(val: string | null | undefined): boolean {
+  return decrypt(val ?? "") === "true";
 }
 
 // ── Schema ────────────────────────────────────────────────────────────────
 export async function initializeFinanceSchema() {
   try {
+    // Create tables with all TEXT columns (new installs)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS finance_activities (
-        id                    SERIAL PRIMARY KEY,
-        activity_id           VARCHAR(30) UNIQUE NOT NULL,
-        category              VARCHAR(30) NOT NULL,
-        activity_name         TEXT NOT NULL,
-        description           TEXT,
-        duration              VARCHAR(5) NOT NULL DEFAULT 'M',
-        status                VARCHAR(25) NOT NULL DEFAULT 'in_progress',
+        id              SERIAL PRIMARY KEY,
+        activity_id     TEXT NOT NULL,
+        category        TEXT NOT NULL,
+        activity_name   TEXT NOT NULL,
+        description     TEXT,
+        duration        TEXT NOT NULL,
+        status          TEXT NOT NULL,
         reason_non_completion TEXT,
-        due_date              DATE,
-        assigned_to           JSONB NOT NULL DEFAULT '[]',
-        approval_users        JSONB NOT NULL DEFAULT '[]',
-        -- Scheduling fields
-        scheduled_day         INTEGER,           -- day-of-month (1-31) for M/Q/H
-        scheduled_weekdays    JSONB DEFAULT '[]',-- weekday numbers 0=Sun..6=Sat for W
-        scheduled_start_date  DATE,              -- anchor date for Q/H/Y
-        -- Approval fields
-        pending_approval      BOOLEAN NOT NULL DEFAULT FALSE,
-        approved_at           TIMESTAMPTZ,
-        approved_by           TEXT,
-        created_at            TIMESTAMPTZ DEFAULT NOW(),
-        updated_at            TIMESTAMPTZ DEFAULT NOW()
+        due_date        TEXT,
+        assigned_to     TEXT NOT NULL DEFAULT '',
+        approval_users  TEXT NOT NULL DEFAULT '',
+        scheduled_day   TEXT,
+        scheduled_weekdays TEXT DEFAULT '',
+        scheduled_start_date TEXT,
+        pending_approval TEXT NOT NULL DEFAULT '',
+        approved_at     TEXT,
+        approved_by     TEXT,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
       );
 
       CREATE TABLE IF NOT EXISTS finance_recruitment (
         id              SERIAL PRIMARY KEY,
         position_name   TEXT NOT NULL,
-        date_open       DATE,
-        date_close      DATE,
-        cvs_applied     INTEGER NOT NULL DEFAULT 0,
-        cvs_shortlist   INTEGER NOT NULL DEFAULT 0,
-        cvs_interviewed INTEGER NOT NULL DEFAULT 0,
-        cvs_on_hold     INTEGER NOT NULL DEFAULT 0,
-        selected        INTEGER NOT NULL DEFAULT 0,
+        date_open       TEXT,
+        date_close      TEXT,
+        cvs_applied     TEXT NOT NULL DEFAULT '',
+        cvs_shortlist   TEXT NOT NULL DEFAULT '',
+        cvs_interviewed TEXT NOT NULL DEFAULT '',
+        cvs_on_hold     TEXT NOT NULL DEFAULT '',
+        selected        TEXT NOT NULL DEFAULT '',
         created_at      TIMESTAMPTZ DEFAULT NOW(),
         updated_at      TIMESTAMPTZ DEFAULT NOW()
       );
     `);
 
-    // Idempotent migrations for existing tables
+    // ── Migrations: convert existing typed columns to TEXT ────────────────
     const migrations = [
-      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS assigned_to JSONB NOT NULL DEFAULT '[]'`,
-      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS approval_users JSONB NOT NULL DEFAULT '[]'`,
-      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS scheduled_day INTEGER`,
-      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS scheduled_weekdays JSONB DEFAULT '[]'`,
-      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS scheduled_start_date DATE`,
-      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS pending_approval BOOLEAN NOT NULL DEFAULT FALSE`,
-      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
+      // Drop UNIQUE on activity_id (encrypted values can't have meaningful unique constraint)
+      `ALTER TABLE finance_activities DROP CONSTRAINT IF EXISTS finance_activities_activity_id_key`,
+
+      // Convert finance_activities columns to TEXT (idempotent via try/catch per item)
+      `ALTER TABLE finance_activities ALTER COLUMN activity_id TYPE TEXT USING activity_id::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN category TYPE TEXT USING category::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN duration TYPE TEXT USING duration::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN status TYPE TEXT USING status::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN due_date TYPE TEXT USING due_date::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN assigned_to TYPE TEXT USING assigned_to::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN approval_users TYPE TEXT USING approval_users::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN scheduled_day TYPE TEXT USING scheduled_day::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN scheduled_weekdays TYPE TEXT USING scheduled_weekdays::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN scheduled_start_date TYPE TEXT USING scheduled_start_date::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN pending_approval TYPE TEXT USING pending_approval::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN approved_at TYPE TEXT USING approved_at::TEXT`,
+      `ALTER TABLE finance_activities ALTER COLUMN approved_by TYPE TEXT USING approved_by::TEXT`,
+
+      // Add any missing columns
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS assigned_to TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS approval_users TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS scheduled_day TEXT`,
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS scheduled_weekdays TEXT DEFAULT ''`,
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS scheduled_start_date TEXT`,
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS pending_approval TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS approved_at TEXT`,
       `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS approved_by TEXT`,
+      `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS due_date TEXT`,
+
+      // Convert finance_recruitment columns to TEXT
+      `ALTER TABLE finance_recruitment ALTER COLUMN date_open TYPE TEXT USING date_open::TEXT`,
+      `ALTER TABLE finance_recruitment ALTER COLUMN date_close TYPE TEXT USING date_close::TEXT`,
+      `ALTER TABLE finance_recruitment ALTER COLUMN cvs_applied TYPE TEXT USING cvs_applied::TEXT`,
+      `ALTER TABLE finance_recruitment ALTER COLUMN cvs_shortlist TYPE TEXT USING cvs_shortlist::TEXT`,
+      `ALTER TABLE finance_recruitment ALTER COLUMN cvs_interviewed TYPE TEXT USING cvs_interviewed::TEXT`,
+      `ALTER TABLE finance_recruitment ALTER COLUMN cvs_on_hold TYPE TEXT USING cvs_on_hold::TEXT`,
+      `ALTER TABLE finance_recruitment ALTER COLUMN selected TYPE TEXT USING selected::TEXT`,
     ];
+
     for (const m of migrations) {
       await pool.query(m).catch(() => {});
     }
 
-    console.log("[FinanceManagement] Schema ready");
+    console.log("[FinanceManagement] Schema ready (full encryption)");
   } catch (err: any) {
     console.warn("[FinanceManagement] Schema init deferred:", err.message);
   }
@@ -117,71 +170,72 @@ const CAT_CODE: Record<string, string> = {
 
 function decryptActivity(row: any) {
   return {
-    id: row.id,
-    activity_id: row.activity_id,
-    category: row.category,
-    activity_name: decrypt(row.activity_name),
-    description: decrypt(row.description),
-    duration: row.duration,
-    status: row.status,
+    id:                   row.id,
+    activity_id:          decrypt(row.activity_id),
+    category:             decrypt(row.category),
+    activity_name:        decrypt(row.activity_name),
+    description:          decrypt(row.description),
+    duration:             decrypt(row.duration),
+    status:               decrypt(row.status),
     reason_non_completion: decrypt(row.reason_non_completion),
-    due_date: row.due_date,
-    assigned_to: safeJsonArray(row.assigned_to),
-    approval_users: safeJsonArray(row.approval_users),
-    scheduled_day: row.scheduled_day,
-    scheduled_weekdays: safeJsonIntArray(row.scheduled_weekdays),
-    scheduled_start_date: row.scheduled_start_date,
-    pending_approval: row.pending_approval ?? false,
-    approved_at: row.approved_at,
-    approved_by: row.approved_by,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    due_date:             decrypt(row.due_date) || null,
+    assigned_to:          decryptArr(row.assigned_to),
+    approval_users:       decryptArr(row.approval_users),
+    scheduled_day:        decryptNum(row.scheduled_day),
+    scheduled_weekdays:   decryptArr(row.scheduled_weekdays).map(Number),
+    scheduled_start_date: decrypt(row.scheduled_start_date) || null,
+    pending_approval:     decryptBool(row.pending_approval),
+    approved_at:          decrypt(row.approved_at) || null,
+    approved_by:          decrypt(row.approved_by) || null,
+    created_at:           row.created_at,
+    updated_at:           row.updated_at,
   };
 }
 
 function decryptRecruitment(row: any) {
   return {
-    id: row.id,
-    position_name: decrypt(row.position_name),
-    date_open: row.date_open,
-    date_close: row.date_close,
-    cvs_applied: row.cvs_applied,
-    cvs_shortlist: row.cvs_shortlist,
-    cvs_interviewed: row.cvs_interviewed,
-    cvs_on_hold: row.cvs_on_hold,
-    selected: row.selected,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    id:              row.id,
+    position_name:   decrypt(row.position_name),
+    date_open:       decrypt(row.date_open) || null,
+    date_close:      decrypt(row.date_close) || null,
+    cvs_applied:     decryptNum(row.cvs_applied) ?? 0,
+    cvs_shortlist:   decryptNum(row.cvs_shortlist) ?? 0,
+    cvs_interviewed: decryptNum(row.cvs_interviewed) ?? 0,
+    cvs_on_hold:     decryptNum(row.cvs_on_hold) ?? 0,
+    selected:        decryptNum(row.selected) ?? 0,
+    created_at:      row.created_at,
+    updated_at:      row.updated_at,
   };
+}
+
+const STATUS_ORDER: Record<string, number> = {
+  overdue: 0, pending_approval: 1, delayed: 2,
+  in_progress: 3, pending: 4, verified: 5, completed: 6,
+};
+
+function sortActivities(list: ReturnType<typeof decryptActivity>[]) {
+  return list.sort((a, b) => {
+    const oa = STATUS_ORDER[a.status] ?? 99;
+    const ob = STATUS_ORDER[b.status] ?? 99;
+    if (oa !== ob) return oa - ob;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 }
 
 // ── Activities CRUD ───────────────────────────────────────────────────────
 
+// GET all activities (fetch all, filter in JS — required since all fields encrypted)
 router.get("/activities", async (req: Request, res: Response) => {
   try {
     const { category, status, duration } = req.query as Record<string, string>;
-    const conditions: string[] = [];
-    const params: any[] = [];
+    const result = await pool.query(`SELECT * FROM finance_activities ORDER BY created_at DESC`);
+    let activities = result.rows.map(decryptActivity);
 
-    if (category) { params.push(category); conditions.push(`category = $${params.length}`); }
-    if (status)   { params.push(status);   conditions.push(`status = $${params.length}`); }
-    if (duration) { params.push(duration); conditions.push(`duration = $${params.length}`); }
+    if (category) activities = activities.filter((a) => a.category === category);
+    if (status)   activities = activities.filter((a) => a.status === status);
+    if (duration) activities = activities.filter((a) => a.duration === duration);
 
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const result = await pool.query(
-      `SELECT * FROM finance_activities ${where} ORDER BY
-         CASE status
-           WHEN 'overdue'          THEN 0
-           WHEN 'pending_approval' THEN 1
-           WHEN 'delayed'          THEN 2
-           WHEN 'in_progress'      THEN 3
-           WHEN 'verified'         THEN 4
-           WHEN 'completed'        THEN 5
-           ELSE 6
-         END, created_at DESC`,
-      params,
-    );
-    res.json({ activities: result.rows.map(decryptActivity) });
+    res.json({ activities: sortActivities(activities) });
   } catch (err: any) {
     console.error("GET /finance/activities:", err.message);
     res.status(500).json({ error: "Failed to fetch activities" });
@@ -200,32 +254,38 @@ router.post("/activities", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "category, activity_name, duration and status are required" });
     }
 
+    // Generate activity ID — count all activities this year for seq
     const year = new Date().getFullYear();
-    const code = CAT_CODE[category] ?? "ACT";
     const countRes = await pool.query(
-      `SELECT COUNT(*) FROM finance_activities WHERE category = $1 AND EXTRACT(YEAR FROM created_at) = $2`,
-      [category, year],
+      `SELECT COUNT(*) FROM finance_activities WHERE EXTRACT(YEAR FROM created_at) = $1`,
+      [year],
     );
     const seq = parseInt(countRes.rows[0].count) + 1;
+    const code = CAT_CODE[category] ?? "ACT";
     const activityId = `${code}-${year}-${String(seq).padStart(4, "0")}`;
 
     const result = await pool.query(
       `INSERT INTO finance_activities
          (activity_id, category, activity_name, description, duration, status,
           reason_non_completion, due_date, assigned_to, approval_users,
-          scheduled_day, scheduled_weekdays, scheduled_start_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+          scheduled_day, scheduled_weekdays, scheduled_start_date,
+          pending_approval)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
       [
-        activityId, category,
-        encrypt(activity_name), encrypt(description ?? ""),
-        duration, status,
+        encrypt(activityId),
+        encrypt(category),
+        encrypt(activity_name),
+        encrypt(description ?? ""),
+        encrypt(duration),
+        encrypt(status),
         encrypt(reason_non_completion ?? ""),
-        due_date || null,
-        JSON.stringify(Array.isArray(assigned_to) ? assigned_to : []),
-        JSON.stringify(Array.isArray(approval_users) ? approval_users : []),
-        scheduled_day || null,
-        JSON.stringify(Array.isArray(scheduled_weekdays) ? scheduled_weekdays : []),
-        scheduled_start_date || null,
+        encrypt(due_date ?? ""),
+        encryptArr(Array.isArray(assigned_to) ? assigned_to : []),
+        encryptArr(Array.isArray(approval_users) ? approval_users : []),
+        encryptNum(scheduled_day ?? null),
+        encryptArr(Array.isArray(scheduled_weekdays) ? scheduled_weekdays : []),
+        encrypt(scheduled_start_date ?? ""),
+        encryptBool(false),
       ],
     );
     res.status(201).json({ activity: decryptActivity(result.rows[0]) });
@@ -244,7 +304,6 @@ router.put("/activities/:id", async (req: Request, res: Response) => {
       scheduled_day, scheduled_weekdays, scheduled_start_date,
     } = req.body;
 
-    // When marking completed → set pending_approval = true
     const isPendingApproval = status === "pending_approval";
 
     const result = await pool.query(
@@ -255,15 +314,18 @@ router.put("/activities/:id", async (req: Request, res: Response) => {
            pending_approval=$12, updated_at=NOW()
        WHERE id=$13 RETURNING *`,
       [
-        encrypt(activity_name), encrypt(description ?? ""),
-        duration, status, encrypt(reason_non_completion ?? ""),
-        due_date || null,
-        JSON.stringify(Array.isArray(assigned_to) ? assigned_to : []),
-        JSON.stringify(Array.isArray(approval_users) ? approval_users : []),
-        scheduled_day || null,
-        JSON.stringify(Array.isArray(scheduled_weekdays) ? scheduled_weekdays : []),
-        scheduled_start_date || null,
-        isPendingApproval,
+        encrypt(activity_name),
+        encrypt(description ?? ""),
+        encrypt(duration),
+        encrypt(status),
+        encrypt(reason_non_completion ?? ""),
+        encrypt(due_date ?? ""),
+        encryptArr(Array.isArray(assigned_to) ? assigned_to : []),
+        encryptArr(Array.isArray(approval_users) ? approval_users : []),
+        encryptNum(scheduled_day ?? null),
+        encryptArr(Array.isArray(scheduled_weekdays) ? scheduled_weekdays : []),
+        encrypt(scheduled_start_date ?? ""),
+        encryptBool(isPendingApproval),
         id,
       ],
     );
@@ -282,23 +344,34 @@ router.patch("/activities/:id/status", async (req: Request, res: Response) => {
     const { status, reason_non_completion } = req.body;
     if (!status) return res.status(400).json({ error: "status is required" });
 
-    // "completed" → pending_approval (awaits approval)
-    // Any other status or "pending_approval" → store as-is, clear pending flag
+    // "completed" → pending_approval; anything else clears pending flag
     const effectiveStatus = status === "completed" ? "pending_approval" : status;
-    const isPendingApproval = effectiveStatus === "pending_approval";
-    // If user explicitly selects a status other than completed → revert clears pending
+    const newPendingApproval = effectiveStatus === "pending_approval";
     const clearPending = status !== "completed" && status !== "pending_approval";
 
+    // Build query dynamically: conditionally clear approved_at/approved_by
+    const params: any[] = [
+      encrypt(effectiveStatus),
+      encryptBool(newPendingApproval),
+      reason_non_completion ? encrypt(reason_non_completion) : null,
+    ];
+
+    let approvalClause = "";
+    if (clearPending) {
+      params.push(encrypt(""), encrypt(""));
+      approvalClause = `, approved_at=$${params.length - 1}, approved_by=$${params.length}`;
+    }
+
+    params.push(id);
     const result = await pool.query(
       `UPDATE finance_activities
        SET status=$1,
-           pending_approval = CASE WHEN $5 THEN FALSE ELSE $2 END,
-           reason_non_completion=COALESCE($3, reason_non_completion),
-           approved_at = CASE WHEN $5 THEN NULL ELSE approved_at END,
-           approved_by = CASE WHEN $5 THEN NULL ELSE approved_by END,
+           pending_approval=$2,
+           reason_non_completion=COALESCE($3, reason_non_completion)
+           ${approvalClause},
            updated_at=NOW()
-       WHERE id=$4 RETURNING *`,
-      [effectiveStatus, isPendingApproval, reason_non_completion ? encrypt(reason_non_completion) : null, id, clearPending],
+       WHERE id=$${params.length} RETURNING *`,
+      params,
     );
     if (!result.rows.length) return res.status(404).json({ error: "Activity not found" });
     res.json({ activity: decryptActivity(result.rows[0]) });
@@ -308,7 +381,7 @@ router.patch("/activities/:id/status", async (req: Request, res: Response) => {
   }
 });
 
-// POST: approve activity (Approval Users only)
+// POST: approve activity
 router.post("/activities/:id/approve", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -316,10 +389,16 @@ router.post("/activities/:id/approve", async (req: Request, res: Response) => {
 
     const result = await pool.query(
       `UPDATE finance_activities
-       SET status='completed', pending_approval=FALSE,
-           approved_at=NOW(), approved_by=$1, updated_at=NOW()
-       WHERE id=$2 RETURNING *`,
-      [approved_by || "admin", id],
+       SET status=$1, pending_approval=$2,
+           approved_at=$3, approved_by=$4, updated_at=NOW()
+       WHERE id=$5 RETURNING *`,
+      [
+        encrypt("completed"),
+        encryptBool(false),
+        encrypt(new Date().toISOString()),
+        encrypt(approved_by || "admin"),
+        id,
+      ],
     );
     if (!result.rows.length) return res.status(404).json({ error: "Activity not found" });
     res.json({ activity: decryptActivity(result.rows[0]) });
@@ -339,23 +418,34 @@ router.delete("/activities/:id", async (req: Request, res: Response) => {
   }
 });
 
-// POST: auto-overdue — daily activities past 5PM IST
+// POST: auto-overdue — fetch all, filter in JS (all fields encrypted)
 router.post("/auto-overdue", async (_req: Request, res: Response) => {
   try {
     const istQuery = await pool.query(
       `SELECT EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Asia/Kolkata') * 60 +
-              EXTRACT(MINUTE FROM NOW() AT TIME ZONE 'Asia/Kolkata') AS ist_minutes`
+              EXTRACT(MINUTE FROM NOW() AT TIME ZONE 'Asia/Kolkata') AS ist_minutes`,
     );
     const istMinutes = Number(istQuery.rows[0].ist_minutes);
     if (istMinutes < 17 * 60) {
       return res.json({ updated: 0, message: "Before 5 PM IST — no auto-overdue" });
     }
-    const result = await pool.query(
-      `UPDATE finance_activities SET status='overdue', updated_at=NOW()
-       WHERE duration='D' AND status NOT IN ('completed','verified','overdue','pending_approval')
-       RETURNING id`
-    );
-    res.json({ updated: result.rowCount });
+
+    const allRows = await pool.query(`SELECT * FROM finance_activities`);
+    const toUpdate = allRows.rows
+      .map(decryptActivity)
+      .filter(
+        (a) =>
+          a.duration === "D" &&
+          !["completed", "verified", "overdue", "pending_approval"].includes(a.status),
+      );
+
+    for (const a of toUpdate) {
+      await pool.query(
+        `UPDATE finance_activities SET status=$1, updated_at=NOW() WHERE id=$2`,
+        [encrypt("overdue"), a.id],
+      );
+    }
+    res.json({ updated: toUpdate.length });
   } catch (err: any) {
     console.error("POST /finance/auto-overdue:", err.message);
     res.status(500).json({ error: "Failed to run auto-overdue" });
@@ -377,9 +467,19 @@ router.post("/recruitment", async (req: Request, res: Response) => {
     const { position_name, date_open, date_close, cvs_applied, cvs_shortlist, cvs_interviewed, cvs_on_hold, selected } = req.body;
     if (!position_name) return res.status(400).json({ error: "position_name is required" });
     const result = await pool.query(
-      `INSERT INTO finance_recruitment (position_name,date_open,date_close,cvs_applied,cvs_shortlist,cvs_interviewed,cvs_on_hold,selected)
+      `INSERT INTO finance_recruitment
+         (position_name,date_open,date_close,cvs_applied,cvs_shortlist,cvs_interviewed,cvs_on_hold,selected)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [encrypt(position_name), date_open||null, date_close||null, cvs_applied||0, cvs_shortlist||0, cvs_interviewed||0, cvs_on_hold||0, selected||0],
+      [
+        encrypt(position_name),
+        encrypt(date_open ?? ""),
+        encrypt(date_close ?? ""),
+        encryptNum(cvs_applied ?? 0),
+        encryptNum(cvs_shortlist ?? 0),
+        encryptNum(cvs_interviewed ?? 0),
+        encryptNum(cvs_on_hold ?? 0),
+        encryptNum(selected ?? 0),
+      ],
     );
     res.status(201).json({ position: decryptRecruitment(result.rows[0]) });
   } catch (err: any) {
@@ -392,9 +492,21 @@ router.put("/recruitment/:id", async (req: Request, res: Response) => {
     const { id } = req.params;
     const { position_name, date_open, date_close, cvs_applied, cvs_shortlist, cvs_interviewed, cvs_on_hold, selected } = req.body;
     const result = await pool.query(
-      `UPDATE finance_recruitment SET position_name=$1,date_open=$2,date_close=$3,cvs_applied=$4,cvs_shortlist=$5,cvs_interviewed=$6,cvs_on_hold=$7,selected=$8,updated_at=NOW()
+      `UPDATE finance_recruitment
+       SET position_name=$1,date_open=$2,date_close=$3,cvs_applied=$4,
+           cvs_shortlist=$5,cvs_interviewed=$6,cvs_on_hold=$7,selected=$8,updated_at=NOW()
        WHERE id=$9 RETURNING *`,
-      [encrypt(position_name), date_open||null, date_close||null, cvs_applied||0, cvs_shortlist||0, cvs_interviewed||0, cvs_on_hold||0, selected||0, id],
+      [
+        encrypt(position_name),
+        encrypt(date_open ?? ""),
+        encrypt(date_close ?? ""),
+        encryptNum(cvs_applied ?? 0),
+        encryptNum(cvs_shortlist ?? 0),
+        encryptNum(cvs_interviewed ?? 0),
+        encryptNum(cvs_on_hold ?? 0),
+        encryptNum(selected ?? 0),
+        id,
+      ],
     );
     if (!result.rows.length) return res.status(404).json({ error: "Position not found" });
     res.json({ position: decryptRecruitment(result.rows[0]) });
@@ -413,30 +525,89 @@ router.delete("/recruitment/:id", async (req: Request, res: Response) => {
 });
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
+// All aggregations done in JS since all fields are encrypted
 router.get("/dashboard", async (_req: Request, res: Response) => {
   try {
-    const [activityStats, statusTotals, categoryCounts, recruitmentStats, recentActivities, todayDaily] =
-      await Promise.all([
-        pool.query(`SELECT category, status, COUNT(*)::int AS count FROM finance_activities GROUP BY category, status ORDER BY category, status`),
-        pool.query(`SELECT status, COUNT(*)::int AS count FROM finance_activities GROUP BY status`),
-        pool.query(`SELECT category, COUNT(*)::int AS count FROM finance_activities GROUP BY category`),
-        pool.query(`SELECT COUNT(*)::int AS total_positions, COALESCE(SUM(cvs_applied),0)::int AS total_applied, COALESCE(SUM(cvs_shortlist),0)::int AS total_shortlisted, COALESCE(SUM(cvs_interviewed),0)::int AS total_interviewed, COALESCE(SUM(cvs_on_hold),0)::int AS total_on_hold, COALESCE(SUM(selected),0)::int AS total_selected FROM finance_recruitment`),
-        pool.query(`SELECT id, activity_id, category, activity_name, status, due_date, created_at FROM finance_activities ORDER BY created_at DESC LIMIT 10`),
-        pool.query(`SELECT id, activity_id, category, activity_name, status, assigned_to, scheduled_day, scheduled_weekdays, scheduled_start_date, pending_approval FROM finance_activities WHERE duration='D' AND status NOT IN ('completed','verified') ORDER BY CASE status WHEN 'overdue' THEN 0 WHEN 'pending_approval' THEN 1 WHEN 'delayed' THEN 2 ELSE 3 END, created_at DESC`),
-      ]);
+    const [activitiesResult, recruitmentResult] = await Promise.all([
+      pool.query(`SELECT * FROM finance_activities ORDER BY created_at DESC`),
+      pool.query(`SELECT * FROM finance_recruitment ORDER BY created_at DESC`),
+    ]);
+
+    const allActivities = activitiesResult.rows.map(decryptActivity);
+    const allRecruitment = recruitmentResult.rows.map(decryptRecruitment);
+
+    // activity_stats: GROUP BY category + status
+    const catStatusMap: Record<string, Record<string, number>> = {};
+    for (const a of allActivities) {
+      if (!catStatusMap[a.category]) catStatusMap[a.category] = {};
+      catStatusMap[a.category][a.status] = (catStatusMap[a.category][a.status] ?? 0) + 1;
+    }
+    const activityStats = Object.entries(catStatusMap).flatMap(([category, statuses]) =>
+      Object.entries(statuses).map(([status, count]) => ({ category, status, count })),
+    );
+
+    // status_totals
+    const statusMap: Record<string, number> = {};
+    for (const a of allActivities) {
+      statusMap[a.status] = (statusMap[a.status] ?? 0) + 1;
+    }
+    const statusTotals = Object.entries(statusMap).map(([status, count]) => ({ status, count }));
+
+    // category_counts
+    const catMap: Record<string, number> = {};
+    for (const a of allActivities) {
+      catMap[a.category] = (catMap[a.category] ?? 0) + 1;
+    }
+    const categoryCounts = Object.entries(catMap).map(([category, count]) => ({ category, count }));
+
+    // recruitment summary
+    const recruitment = allRecruitment.reduce(
+      (acc, r) => ({
+        total_positions:   acc.total_positions + 1,
+        total_applied:     acc.total_applied + r.cvs_applied,
+        total_shortlisted: acc.total_shortlisted + r.cvs_shortlist,
+        total_interviewed: acc.total_interviewed + r.cvs_interviewed,
+        total_on_hold:     acc.total_on_hold + r.cvs_on_hold,
+        total_selected:    acc.total_selected + r.selected,
+      }),
+      { total_positions: 0, total_applied: 0, total_shortlisted: 0, total_interviewed: 0, total_on_hold: 0, total_selected: 0 },
+    );
+
+    // recent activities (last 10)
+    const recentActivities = allActivities.slice(0, 10).map((a) => ({
+      id: a.id,
+      activity_id: a.activity_id,
+      category: a.category,
+      activity_name: a.activity_name,
+      status: a.status,
+      due_date: a.due_date,
+      created_at: a.created_at,
+    }));
+
+    // today_daily: duration=D, non-completed
+    const todayDaily = sortActivities(
+      allActivities.filter(
+        (a) => a.duration === "D" && !["completed", "verified"].includes(a.status),
+      ),
+    ).map((a) => ({
+      id: a.id,
+      activity_id: a.activity_id,
+      category: a.category,
+      activity_name: a.activity_name,
+      status: a.status,
+      assigned_to: a.assigned_to,
+      scheduled_weekdays: a.scheduled_weekdays,
+      scheduled_start_date: a.scheduled_start_date,
+      pending_approval: a.pending_approval,
+    }));
 
     res.json({
-      activity_stats: activityStats.rows,
-      status_totals: statusTotals.rows,
-      category_counts: categoryCounts.rows,
-      recruitment: recruitmentStats.rows[0] ?? {},
-      recent_activities: recentActivities.rows.map((r) => ({ ...r, activity_name: decrypt(r.activity_name) })),
-      today_daily: todayDaily.rows.map((r) => ({
-        ...r,
-        activity_name: decrypt(r.activity_name),
-        assigned_to: safeJsonArray(r.assigned_to),
-        scheduled_weekdays: safeJsonIntArray(r.scheduled_weekdays),
-      })),
+      activity_stats: activityStats,
+      status_totals: statusTotals,
+      category_counts: categoryCounts,
+      recruitment,
+      recent_activities: recentActivities,
+      today_daily: todayDaily,
     });
   } catch (err: any) {
     console.error("GET /finance/dashboard:", err.message);

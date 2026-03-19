@@ -188,6 +188,11 @@ export default function FinOpsUserStats() {
         </Card>
       </div>
 
+      {/* Task Timeframe Hourly Line Chart */}
+      <div className="grid grid-cols-2 gap-6">
+        <TaskTimeframeChart />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -228,10 +233,6 @@ export default function FinOpsUserStats() {
         <HourlyTaskStatusTimeline />
       </div>
 
-      {/* Task Timeframe Hourly Line Chart */}
-      <div className="grid grid-cols-2 gap-6">
-        <TaskTimeframeChart />
-      </div>
     </div>
   );
 }

@@ -589,7 +589,7 @@ function AppRoutes() {
       <Route
         path="/finance-management"
         element={
-          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <FinanceManagement />
             </DashboardLayout>

@@ -184,6 +184,27 @@ function getScheduleLabel(a: Activity): string {
   }
 }
 
+function getDueLabel(a: Activity): string {
+  switch (a.duration) {
+    case "D": return "Every day — deadline 5:00 PM IST";
+    case "W": {
+      const days = (a.scheduled_weekdays ?? []).map((d) => WEEKDAYS.find((w) => w.value === d)?.short ?? d).join(", ");
+      return days ? `Every ${days}` : "Every week";
+    }
+    case "M":
+      return a.scheduled_day ? `Every ${a.scheduled_day}${ordinal(a.scheduled_day)} of the month` : "Every month";
+    case "Q":
+      return a.scheduled_start_date ? `Every quarter from ${fmtDate(a.scheduled_start_date)}` : "Every quarter";
+    case "H":
+      return a.scheduled_start_date ? `Every 6 months from ${fmtDate(a.scheduled_start_date)}` : "Every 6 months";
+    case "Y":
+      return a.scheduled_start_date
+        ? `Every year on ${new Date(a.scheduled_start_date).toLocaleDateString("en-IN", { day: "numeric", month: "long" })}`
+        : "Every year";
+    default: return a.due_date ? `Due: ${fmtDate(a.due_date)}` : "";
+  }
+}
+
 function ordinal(n: number) {
   const s = ["th","st","nd","rd"], v = n % 100;
   return s[(v-20)%10] || s[v] || s[0];
@@ -772,13 +793,11 @@ function ActivityCard({
                 )}
               </div>
 
-              {/* Due date */}
-              {act.due_date && (
-                <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1.5">
-                  <Clock className="w-3 h-3" />
-                  Due: {fmtDate(act.due_date)}
-                </div>
-              )}
+              {/* Due label */}
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1.5">
+                <Clock className="w-3 h-3" />
+                {getDueLabel(act)}
+              </div>
 
               {/* Approval info */}
               {act.approved_at && (

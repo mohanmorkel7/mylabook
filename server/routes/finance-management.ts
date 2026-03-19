@@ -213,6 +213,44 @@ const STATUS_ORDER: Record<string, number> = {
   in_progress: 3, pending: 4, verified: 5, completed: 6,
 };
 
+function getISTNow(): Date {
+  // Convert current UTC time to IST (UTC+5:30)
+  const now = new Date();
+  return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+}
+
+function isActivityDueTodayIST(a: ReturnType<typeof decryptActivity>): boolean {
+  const ist = getISTNow();
+  const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+  // If a specific due_date override is set, only match that exact date
+  if (a.due_date) return a.due_date.slice(0, 10) === todayStr;
+  switch (a.duration) {
+    case "D": return true;
+    case "W": return (a.scheduled_weekdays ?? []).includes(ist.getDay());
+    case "M": return ist.getDate() === (a.scheduled_day ?? 1);
+    case "Q": {
+      if (!a.scheduled_start_date) return false;
+      const start = new Date(a.scheduled_start_date);
+      if (ist.getDate() !== start.getDate()) return false;
+      const diff = (ist.getFullYear() - start.getFullYear()) * 12 + (ist.getMonth() - start.getMonth());
+      return diff >= 0 && diff % 4 === 0;
+    }
+    case "H": {
+      if (!a.scheduled_start_date) return false;
+      const start = new Date(a.scheduled_start_date);
+      if (ist.getDate() !== start.getDate()) return false;
+      const diff = (ist.getFullYear() - start.getFullYear()) * 12 + (ist.getMonth() - start.getMonth());
+      return diff >= 0 && diff % 6 === 0;
+    }
+    case "Y": {
+      if (!a.scheduled_start_date) return false;
+      const start = new Date(a.scheduled_start_date);
+      return ist.getDate() === start.getDate() && ist.getMonth() === start.getMonth();
+    }
+    default: return false;
+  }
+}
+
 function sortActivities(list: ReturnType<typeof decryptActivity>[]) {
   return list.sort((a, b) => {
     const oa = STATUS_ORDER[a.status] ?? 99;
@@ -434,9 +472,7 @@ router.post("/auto-overdue", async (_req: Request, res: Response) => {
     const toUpdate = allRows.rows
       .map(decryptActivity)
       .filter(
-        (a) =>
-          a.duration === "D" &&
-          !["completed", "verified", "overdue", "pending_approval"].includes(a.status),
+        (a) => a.status === "pending" && isActivityDueToday(a),
       );
 
     for (const a of toUpdate) {

@@ -12,7 +12,7 @@ import {
   Plus, Pencil, Trash2, X, CheckCircle2, Clock, AlertTriangle,
   AlertCircle, ShieldCheck, Briefcase, TrendingUp, Users, FileText,
   BarChart3, Sun, UserCheck, Bell, CalendarDays, CheckCheck,
-  Hourglass, Lock, ChevronRight, Calendar,
+  Hourglass, Lock, ChevronRight, Calendar, Circle,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -66,6 +66,7 @@ const TABS = [
 ];
 
 const STATUSES = [
+  { value: "pending",          label: "Pending",           color: "#6B7280", bg: "#F9FAFB", icon: Circle },
   { value: "in_progress",      label: "In Progress",       color: "#3B82F6", bg: "#EFF6FF", icon: Clock },
   { value: "pending_approval", label: "Pending Approval",  color: "#F97316", bg: "#FFF7ED", icon: Hourglass },
   { value: "verified",         label: "Verified",          color: "#8B5CF6", bg: "#F5F3FF", icon: ShieldCheck },
@@ -471,7 +472,7 @@ function ActivityModal({
   users: any[];
 }) {
   const blank = {
-    activity_name: "", description: "", duration: "D", status: "in_progress",
+    activity_name: "", description: "", duration: "D", status: "pending",
     reason_non_completion: "", due_date: "",
     assigned_to: [] as string[], approval_users: [] as string[],
     scheduled_day: null as number | null,

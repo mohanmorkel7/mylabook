@@ -472,7 +472,7 @@ router.post("/auto-overdue", async (_req: Request, res: Response) => {
     const toUpdate = allRows.rows
       .map(decryptActivity)
       .filter(
-        (a) => a.status === "pending" && isActivityDueToday(a),
+        (a) => a.status === "pending" && isActivityDueTodayIST(a),
       );
 
     for (const a of toUpdate) {
@@ -650,5 +650,33 @@ router.get("/dashboard", async (_req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to fetch dashboard data" });
   }
 });
+
+// ── Finance SLA Cron Job (server-side, no browser required) ─────────────────
+export async function runFinanceSLACheck(): Promise<void> {
+  try {
+    const ist = getISTNow();
+    const istMinutes = ist.getHours() * 60 + ist.getMinutes();
+
+    // Only run at or after 5:00 PM IST
+    if (istMinutes < 17 * 60) return;
+
+    const allRows = await pool.query(`SELECT * FROM finance_activities`);
+    const toUpdate = allRows.rows
+      .map(decryptActivity)
+      .filter((a) => a.status === "pending" && isActivityDueTodayIST(a));
+
+    if (toUpdate.length === 0) return;
+
+    for (const a of toUpdate) {
+      await pool.query(
+        `UPDATE finance_activities SET status=$1, updated_at=NOW() WHERE id=$2`,
+        [encrypt("overdue"), a.id],
+      );
+    }
+    console.log(`[FinanceSLA] Auto-overdue: marked ${toUpdate.length} activity(s) as overdue at IST ${ist.toTimeString().slice(0, 8)}`);
+  } catch (err: any) {
+    console.warn("[FinanceSLA] SLA check skipped:", err.message);
+  }
+}
 
 export default router;

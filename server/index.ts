@@ -49,7 +49,7 @@ import activityProductionRouter from "./routes/activity-production";
 import notificationsProductionRouter from "./routes/notifications-production";
 import adminProductionRouter from "./routes/admin-production";
 import finopsProductionRouter, { ensureFinOpsProductionSchema } from "./routes/finops-production";
-import financeManagementRouter, { initializeFinanceSchema } from "./routes/finance-management";
+import financeManagementRouter, { initializeFinanceSchema, runFinanceSLACheck } from "./routes/finance-management";
 
 export function createServer() {
   const app = express();
@@ -182,6 +182,22 @@ export function createServer() {
     }
   } catch (e) {
     console.error("Failed to start Hourly Timeline Aggregation Job:", (e as any)?.message);
+  }
+
+  // Finance SLA Auto-Overdue Job: runs every 30 seconds server-side
+  // Checks IST time >= 5:00 PM, marks "pending" activities due today as "overdue"
+  try {
+    setTimeout(() => {
+      // Run once immediately on startup
+      runFinanceSLACheck().catch(() => {});
+      // Then every 30 seconds
+      setInterval(() => {
+        runFinanceSLACheck().catch(() => {});
+      }, 30_000);
+      console.log("[FinanceSLA] SLA auto-overdue job started (every 30s, IST 5:00 PM threshold)");
+    }, 2000);
+  } catch (e) {
+    console.error("Failed to start Finance SLA Job:", (e as any)?.message);
   }
 
   // Middleware

@@ -121,6 +121,13 @@ const navigationItems: NavigationItem[] = [
     icon: DollarSign,
     roles: ["admin", "finance", "finops"],
   },
+  // i2) Finance Management
+  {
+    name: "Finance Management",
+    href: "/finance-management",
+    icon: Briefcase,
+    roles: ["admin", "finance", "finops"],
+  },
   // j) Product Management
   {
     name: "Product",

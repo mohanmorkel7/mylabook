@@ -155,6 +155,7 @@ import CreateConfigPage from "@/pages/CreateConfigPage";
 import AdminTemplates from "@/pages/AdminTemplates";
 import FinOpsDashboard from "@/pages/FinOpsDashboard";
 import FinOpsAutomation from "@/pages/FinOpsAutomation";
+import FinanceManagement from "@/pages/FinanceManagement";
 import UserProfile from "@/pages/UserProfile";
 import DepartmentManager from "@/pages/DepartmentManager";
 import DepartmentUploadTestPage from "@/pages/DepartmentUploadTestPage";
@@ -580,6 +581,17 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <FinOpsDashboard />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/finance-management"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+            <DashboardLayout>
+              <FinanceManagement />
             </DashboardLayout>
           </ProtectedRoute>
         }

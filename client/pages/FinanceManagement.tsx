@@ -129,6 +129,11 @@ function getISTNow() {
 
 function isActivityDueToday(a: Activity): boolean {
   const ist = getISTNow();
+  const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+  // If a specific due_date is set, only mark as "today" when it matches today's date
+  if (a.due_date) {
+    return a.due_date.slice(0, 10) === todayStr;
+  }
   switch (a.duration) {
     case "D": return true;
     case "W": {

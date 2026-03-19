@@ -904,7 +904,7 @@ function ActivityTab({
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   // Overdue reason modal
-  const [overdueTarget, setOverdueTarget] = useState<{ id: number } | null>(null);
+  const [overdueTarget, setOverdueTarget] = useState<{ id: number; newStatus: string } | null>(null);
   const [overdueReason, setOverdueReason] = useState("");
 
   const { data, isLoading } = useQuery({
@@ -1126,8 +1126,8 @@ function ActivityTab({
                 onEdit={() => { setEditActivity(act); setModalOpen(true); }}
                 onDelete={() => setDeleteId(act.id)}
                 onStatusChange={(id, status) => {
-                  if (status === "overdue") {
-                    setOverdueTarget({ id });
+                  if (act.status === "overdue" && status !== "overdue") {
+                    setOverdueTarget({ id, newStatus: status });
                     setOverdueReason("");
                   } else {
                     statusPatchMut.mutate({ id, status });
@@ -1144,14 +1144,14 @@ function ActivityTab({
       {overdueTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-red-100">
-            <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-t-2xl px-6 py-5 text-white">
+            <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-t-2xl px-6 py-5 text-white">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
                   <AlertCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg">Reason for Overdue</h3>
-                  <p className="text-red-100 text-sm">Please provide a detailed reason before marking as overdue</p>
+                  <h3 className="font-bold text-lg">Reason for Overdue Resolution</h3>
+                  <p className="text-orange-100 text-sm">Please explain why this overdue activity is being updated</p>
                 </div>
               </div>
             </div>
@@ -1160,8 +1160,8 @@ function ActivityTab({
               <textarea
                 autoFocus
                 rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent resize-none"
-                placeholder="Describe why this activity is overdue (e.g. resource unavailability, dependency delay, external factor…)"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent resize-none"
+                placeholder="Explain the reason for resolving/changing this overdue activity (e.g. issue resolved, reassigned, deadline extended…)"
                 value={overdueReason}
                 onChange={(e) => setOverdueReason(e.target.value)}
               />
@@ -1182,14 +1182,14 @@ function ActivityTab({
                 disabled={!overdueReason.trim() || statusPatchMut.isPending}
                 onClick={() => {
                   statusPatchMut.mutate(
-                    { id: overdueTarget.id, status: "overdue", reason: overdueReason.trim() },
+                    { id: overdueTarget.id, status: overdueTarget.newStatus, reason: overdueReason.trim() },
                     { onSuccess: () => setOverdueTarget(null) },
                   );
                 }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                <AlertCircle className="w-4 h-4" />
-                Mark as Overdue
+                <CheckCircle2 className="w-4 h-4" />
+                Confirm Status Change
               </button>
             </div>
           </div>

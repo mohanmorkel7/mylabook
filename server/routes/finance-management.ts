@@ -282,17 +282,23 @@ router.patch("/activities/:id/status", async (req: Request, res: Response) => {
     const { status, reason_non_completion } = req.body;
     if (!status) return res.status(400).json({ error: "status is required" });
 
-    // When user selects "completed" via inline → change to pending_approval
+    // "completed" → pending_approval (awaits approval)
+    // Any other status or "pending_approval" → store as-is, clear pending flag
     const effectiveStatus = status === "completed" ? "pending_approval" : status;
     const isPendingApproval = effectiveStatus === "pending_approval";
+    // If user explicitly selects a status other than completed → revert clears pending
+    const clearPending = status !== "completed" && status !== "pending_approval";
 
     const result = await pool.query(
       `UPDATE finance_activities
-       SET status=$1, pending_approval=$2,
+       SET status=$1,
+           pending_approval = CASE WHEN $5 THEN FALSE ELSE $2 END,
            reason_non_completion=COALESCE($3, reason_non_completion),
+           approved_at = CASE WHEN $5 THEN NULL ELSE approved_at END,
+           approved_by = CASE WHEN $5 THEN NULL ELSE approved_by END,
            updated_at=NOW()
        WHERE id=$4 RETURNING *`,
-      [effectiveStatus, isPendingApproval, reason_non_completion ? encrypt(reason_non_completion) : null, id],
+      [effectiveStatus, isPendingApproval, reason_non_completion ? encrypt(reason_non_completion) : null, id, clearPending],
     );
     if (!result.rows.length) return res.status(404).json({ error: "Activity not found" });
     res.json({ activity: decryptActivity(result.rows[0]) });

@@ -661,12 +661,14 @@ function ActivityModal({
 
 // ─── Activity Card ─────────────────────────────────────────────────────────────
 function ActivityCard({
-  act, canEdit, canDelete, canApprove, onEdit, onDelete, onStatusChange, onApprove, userEmail,
+  act, canEdit, canDelete, canApprove, isAdmin, isFinance, onEdit, onDelete, onStatusChange, onApprove, userEmail,
 }: {
   act: Activity;
   canEdit: boolean;
   canDelete: boolean;
   canApprove: boolean;
+  isAdmin: boolean;
+  isFinance: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onStatusChange: (id: number, status: string) => void;
@@ -677,7 +679,8 @@ function ActivityCard({
   const Icon = st.icon;
   const isDueToday = isActivityDueToday(act);
   const isAssignedToMe = act.assigned_to.some((v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase());
-  const isApproverForMe = act.approval_users.some((v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase());
+  // Approve: admin always, OR finance user who is assigned to this activity
+  const showApproveButton = act.pending_approval && (isAdmin || (isFinance && isAssignedToMe));
 
   return (
     <div
@@ -711,31 +714,16 @@ function ActivityCard({
                 )}
               </div>
 
-              {/* Inline status dropdown */}
+              {/* Status badge + Duration — visual only */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                {act.pending_approval ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
-                    <Hourglass className="w-3 h-3" /> Pending Approval
-                  </span>
-                ) : (
-                  <select
-                    value={act.status}
-                    onChange={(e) => onStatusChange(act.id, e.target.value)}
-                    className="text-xs font-semibold rounded-full px-2.5 py-1 border cursor-pointer outline-none appearance-none pr-5"
-                    style={{
-                      backgroundColor: st.bg,
-                      color: st.color,
-                      borderColor: st.color + "40",
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24'%3E%3Cpath fill='%236B7280' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")`,
-                      backgroundRepeat: "no-repeat",
-                      backgroundPosition: "right 4px center",
-                    }}
-                  >
-                    {STATUSES.filter((s) => s.value !== "pending_approval").map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                )}
+                {/* Status badge (read-only visual) */}
+                <span
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border"
+                  style={{ backgroundColor: st.bg, color: st.color, borderColor: st.color + "40" }}
+                >
+                  <Icon className="w-3 h-3" />
+                  {act.pending_approval ? "Pending Approval" : st.label}
+                </span>
 
                 {/* Duration badge */}
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-semibold border border-indigo-100">
@@ -796,35 +784,58 @@ function ActivityCard({
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-            {/* Approve button — for approval users when pending */}
-            {act.pending_approval && canApprove && (
+          {/* Right-side actions column */}
+          <div className="flex flex-col items-end gap-2 flex-shrink-0 min-w-[130px]">
+            {/* Standalone status dropdown — always accessible, right side */}
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1 text-right">Status</p>
+              <select
+                value={act.pending_approval ? "pending_approval" : act.status}
+                onChange={(e) => onStatusChange(act.id, e.target.value)}
+                className="text-xs font-semibold rounded-lg px-2.5 py-1.5 border-2 cursor-pointer outline-none w-full"
+                style={{
+                  backgroundColor: st.bg,
+                  color: st.color,
+                  borderColor: st.color + "60",
+                }}
+              >
+                {STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Approve button — admin always, or finance+assigned_to */}
+            {showApproveButton && (
               <button
                 onClick={() => onApprove(act.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
               >
                 <CheckCheck className="w-3.5 h-3.5" /> Approve
               </button>
             )}
-            {/* Approve waiting message */}
-            {act.pending_approval && !canApprove && (
-              <span className="text-[10px] text-orange-600 flex items-center gap-1">
+            {/* Awaiting label for others */}
+            {act.pending_approval && !showApproveButton && (
+              <span className="text-[10px] text-orange-600 flex items-center gap-1 justify-end">
                 <Lock className="w-3 h-3" /> Awaiting approval
               </span>
             )}
-            {canEdit && !act.pending_approval && (
-              <button onClick={onEdit}
-                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                <Pencil className="w-4 h-4" />
-              </button>
-            )}
-            {canDelete && !act.pending_approval && (
-              <button onClick={onDelete}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
+
+            {/* Edit / Delete */}
+            <div className="flex gap-1.5">
+              {canEdit && (
+                <button onClick={onEdit}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+              {canDelete && (
+                <button onClick={onDelete}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1052,6 +1063,9 @@ function ActivityTab({
             const isApproverForThis = act.approval_users.some(
               (v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase(),
             );
+            const isAssignedToThis = act.assigned_to.some(
+              (v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase(),
+            );
             const canEditThis = canEditAll || isApproverForThis;
             return (
               <ActivityCard
@@ -1060,6 +1074,8 @@ function ActivityTab({
                 canEdit={canEditThis}
                 canDelete={canEditThis}
                 canApprove={isApproverForThis}
+                isAdmin={canEditAll}
+                isFinance={!canEditAll}
                 userEmail={userEmail}
                 onEdit={() => { setEditActivity(act); setModalOpen(true); }}
                 onDelete={() => setDeleteId(act.id)}

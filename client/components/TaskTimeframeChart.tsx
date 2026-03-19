@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   Legend,
   ResponsiveContainer,
   ReferenceLine,
@@ -33,71 +32,84 @@ interface HourData {
   task_list: TaskItem[];
 }
 
-// Custom tooltip shown on hover
-function CustomTooltip({ active, payload, label, viewType }: any) {
-  if (!active || !payload?.length) return null;
+const STATUS_COLOR: Record<string, string> = {
+  completed: "#10B981",
+  in_progress: "#3B82F6",
+  pending: "#F59E0B",
+  delayed: "#8B5CF6",
+  overdue: "#EF4444",
+};
 
-  const hourData: HourData | undefined = payload[0]?.payload;
-  if (!hourData) return null;
+interface TooltipPanelProps {
+  hourData: HourData;
+  viewType: "task" | "subtask";
+  pos: { x: number; y: number };
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}
 
+function TooltipPanel({ hourData, viewType, pos, onMouseEnter, onMouseLeave }: TooltipPanelProps) {
   const tasks = hourData.task_list || [];
   const count = viewType === "task" ? hourData.active_tasks : hourData.active_subtasks;
 
-  // Deduplicate by subtask_id for subtask view, by task_id for task view
   const unique =
     viewType === "task"
       ? Array.from(new Map(tasks.map((t) => [t.task_id, t])).values())
       : tasks;
 
-  const statusColor: Record<string, string> = {
-    completed: "#10B981",
-    in_progress: "#3B82F6",
-    pending: "#F59E0B",
-    delayed: "#8B5CF6",
-    overdue: "#EF4444",
-  };
-
   return (
     <div
-      className="bg-white border border-gray-200 rounded-lg shadow-xl p-3"
-      style={{ maxWidth: 360, maxHeight: 320, overflowY: "auto" }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      style={{
+        position: "absolute",
+        left: pos.x + 16,
+        top: pos.y - 20,
+        zIndex: 50,
+        pointerEvents: "all",
+      }}
+      className="bg-white border border-gray-200 rounded-lg shadow-2xl p-3"
+      // Prevent scroll from bubbling up and triggering chart events
+      onWheel={(e) => e.stopPropagation()}
     >
-      <p className="font-semibold text-gray-900 mb-1">
-        {hourData.hour_label} — {count} active {viewType === "task" ? "tasks" : "subtasks"}
-      </p>
-      <div className="space-y-1 mt-2">
-        {unique.slice(0, 20).map((t, i) => (
-          <div key={i} className="flex items-start gap-2 text-xs border-b border-gray-100 pb-1">
-            <span
-              className="mt-0.5 inline-block w-2 h-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: statusColor[t.status] || "#9CA3AF" }}
-            />
-            <div className="min-w-0">
-              <span className="font-medium text-gray-800">
-                {viewType === "task" ? t.task_name : t.subtask_name}
-              </span>
-              {viewType === "subtask" && (
-                <span className="text-gray-500 ml-1">({t.task_name})</span>
-              )}
-              <div className="text-gray-500">
-                Scheduled: {t.scheduled_time?.slice(0, 5) || "—"}
-                {t.completed_at && (
-                  <> · Done: {t.completed_at.slice(11, 16)}</>
-                )}
-                {" · "}
-                <span style={{ color: statusColor[t.status] || "#9CA3AF" }}>
-                  {t.status.replace("_", " ")}
+      <div style={{ width: 320, maxHeight: 300, overflowY: "auto" }}>
+        <p className="font-semibold text-gray-900 mb-2 sticky top-0 bg-white pb-1 border-b border-gray-100">
+          {hourData.hour_label} —{" "}
+          <span className="text-blue-600">{count}</span> active{" "}
+          {viewType === "task" ? "tasks" : "subtasks"}
+        </p>
+        <div className="space-y-1 mt-1">
+          {unique.map((t, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-2 text-xs border-b border-gray-50 pb-1"
+            >
+              <span
+                className="mt-1 inline-block w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: STATUS_COLOR[t.status] || "#9CA3AF" }}
+              />
+              <div className="min-w-0">
+                <span className="font-medium text-gray-800">
+                  {viewType === "task" ? t.task_name : t.subtask_name}
                 </span>
+                {viewType === "subtask" && (
+                  <span className="text-gray-400 ml-1 text-[10px]">({t.task_name})</span>
+                )}
+                <div className="text-gray-500 text-[10px] mt-0.5">
+                  Start: {t.scheduled_time?.slice(0, 5) || "—"}
+                  {t.completed_at && <> · Done: {t.completed_at.slice(11, 16)}</>}
+                  {" · "}
+                  <span style={{ color: STATUS_COLOR[t.status] || "#9CA3AF" }}>
+                    {t.status.replace("_", " ")}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-        {unique.length > 20 && (
-          <p className="text-xs text-gray-400 pt-1">+{unique.length - 20} more…</p>
-        )}
-        {unique.length === 0 && (
-          <p className="text-xs text-gray-400">No tasks active at this hour</p>
-        )}
+          ))}
+          {unique.length === 0 && (
+            <p className="text-xs text-gray-400">No tasks active at this hour</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -112,6 +124,48 @@ export default function TaskTimeframeChart() {
 
   const [selectedDate, setSelectedDate] = useState(getTodayIST());
   const [viewType, setViewType] = useState<"task" | "subtask">("subtask");
+
+  // Sticky tooltip state
+  const [tooltipData, setTooltipData] = useState<HourData | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const isOverTooltip = useRef(false);
+  const isOverChart = useRef(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      if (!isOverTooltip.current && !isOverChart.current) {
+        setTooltipData(null);
+      }
+    }, 120);
+  }, []);
+
+  const handleChartMouseMove = useCallback(
+    (state: any, event: React.MouseEvent) => {
+      isOverChart.current = true;
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+
+      if (state?.activePayload?.length) {
+        const hourData: HourData = state.activePayload[0].payload;
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (rect) {
+          setTooltipPos({
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+          });
+        }
+        setTooltipData(hourData);
+      }
+    },
+    []
+  );
+
+  const handleChartMouseLeave = useCallback(() => {
+    isOverChart.current = false;
+    scheduleHide();
+  }, [scheduleHide]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["task-timeframe-hourly", selectedDate],
@@ -131,29 +185,12 @@ export default function TaskTimeframeChart() {
 
   const chartData: HourData[] = data?.data || [];
 
-  // Peak active count (for reference line)
   const peakCount = Math.max(
     ...chartData.map((d) =>
       viewType === "task" ? d.active_tasks : d.active_subtasks
     ),
     0
   );
-
-  const totalCount = viewType === "task"
-    ? (chartData[0]?.task_list
-        ? new Set(chartData.flatMap((d) => d.task_list.map((t) => t.task_id))).size
-        : 0)
-    : chartData[0]?.task_list
-      ? new Set(chartData.flatMap((d) => d.task_list.map((t) => t.subtask_id))).size
-      : 0;
-
-  // X-axis labels: show every 2 hours to avoid crowding
-  const xAxisTick = (value: string, index: number) => {
-    const row = chartData[index];
-    if (!row) return null;
-    if (row.hour % 2 !== 0) return null;
-    return value;
-  };
 
   return (
     <Card className="col-span-2">
@@ -206,9 +243,12 @@ export default function TaskTimeframeChart() {
         </div>
 
         <p className="text-sm text-gray-500 mt-1">
-          {viewType === "task" ? "Tasks" : "Subtasks"} active at each hour based on scheduled start → actual completion.{" "}
-          <span className="font-medium text-blue-600">High line = more tasks still running (late)</span>.
-          Hover for details.
+          {viewType === "task" ? "Tasks" : "Subtasks"} active at each hour based on scheduled
+          start → actual completion.{" "}
+          <span className="font-medium text-blue-600">
+            High line = more tasks still running (late)
+          </span>
+          . Hover a point to see the list — scroll inside the popup to browse.
         </p>
       </CardHeader>
 
@@ -223,67 +263,92 @@ export default function TaskTimeframeChart() {
           </div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={320}>
-              <LineChart
-                data={chartData}
-                margin={{ top: 10, right: 30, left: 0, bottom: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                <XAxis
-                  dataKey="hour_label"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(val, idx) => {
-                    const row = chartData[idx];
-                    return row && row.hour % 2 === 0 ? val : "";
-                  }}
-                  interval={0}
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  label={{
-                    value: viewType === "task" ? "Tasks" : "Subtasks",
-                    angle: -90,
-                    position: "insideLeft",
-                    style: { fontSize: 11 },
-                  }}
-                />
-                <Tooltip
-                  content={
-                    <CustomTooltip viewType={viewType} />
-                  }
-                />
-                <Legend />
-                {/* Peak reference line */}
-                {peakCount > 0 && (
-                  <ReferenceLine
-                    y={peakCount}
-                    stroke="#EF4444"
-                    strokeDasharray="4 4"
-                    label={{ value: `Peak: ${peakCount}`, position: "right", fontSize: 11, fill: "#EF4444" }}
+            {/* Wrapper with relative positioning so tooltip is positioned inside it */}
+            <div ref={containerRef} style={{ position: "relative" }}>
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 10 }}
+                  onMouseMove={handleChartMouseMove as any}
+                  onMouseLeave={handleChartMouseLeave}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                  <XAxis
+                    dataKey="hour_label"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(val, idx) => {
+                      const row = chartData[idx];
+                      return row && row.hour % 2 === 0 ? val : "";
+                    }}
+                    interval={0}
                   />
-                )}
-                <Line
-                  type="monotone"
-                  dataKey={viewType === "task" ? "active_tasks" : "active_subtasks"}
-                  name={viewType === "task" ? "Active Tasks" : "Active Subtasks"}
-                  stroke="#3B82F6"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#3B82F6" }}
-                  activeDot={{ r: 6, fill: "#1D4ED8", stroke: "#fff", strokeWidth: 2 }}
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    label={{
+                      value: viewType === "task" ? "Tasks" : "Subtasks",
+                      angle: -90,
+                      position: "insideLeft",
+                      style: { fontSize: 11 },
+                    }}
+                  />
+                  <Legend />
+                  {/* Peak reference line */}
+                  {peakCount > 0 && (
+                    <ReferenceLine
+                      y={peakCount}
+                      stroke="#EF4444"
+                      strokeDasharray="4 4"
+                      label={{
+                        value: `Peak: ${peakCount}`,
+                        position: "right",
+                        fontSize: 11,
+                        fill: "#EF4444",
+                      }}
+                    />
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey={viewType === "task" ? "active_tasks" : "active_subtasks"}
+                    name={viewType === "task" ? "Active Tasks" : "Active Subtasks"}
+                    stroke="#3B82F6"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#3B82F6" }}
+                    activeDot={{ r: 6, fill: "#1D4ED8", stroke: "#fff", strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+
+              {/* Sticky scrollable tooltip panel */}
+              {tooltipData && (
+                <TooltipPanel
+                  hourData={tooltipData}
+                  viewType={viewType}
+                  pos={tooltipPos}
+                  onMouseEnter={() => {
+                    isOverTooltip.current = true;
+                    if (hideTimer.current) clearTimeout(hideTimer.current);
+                  }}
+                  onMouseLeave={() => {
+                    isOverTooltip.current = false;
+                    scheduleHide();
+                  }}
                 />
-              </LineChart>
-            </ResponsiveContainer>
+              )}
+            </div>
 
             {/* Summary row */}
             <div className="mt-4 flex gap-6 text-sm text-gray-600 border-t pt-3">
               <span>
-                <span className="font-semibold text-blue-600">{peakCount}</span> peak active {viewType === "task" ? "tasks" : "subtasks"}
+                <span className="font-semibold text-blue-600">{peakCount}</span> peak active{" "}
+                {viewType === "task" ? "tasks" : "subtasks"}
               </span>
               <span>
                 <span className="font-semibold text-gray-800">
                   {viewType === "task"
                     ? new Set(chartData.flatMap((d) => d.task_list.map((t) => t.task_id))).size
-                    : chartData.flatMap((d) => d.task_list.map((t) => t.subtask_id)).filter((v, i, a) => a.indexOf(v) === i).length}
+                    : chartData
+                        .flatMap((d) => d.task_list.map((t) => t.subtask_id))
+                        .filter((v, i, a) => a.indexOf(v) === i).length}
                 </span>{" "}
                 total {viewType === "task" ? "tasks" : "subtasks"} for {selectedDate}
               </span>

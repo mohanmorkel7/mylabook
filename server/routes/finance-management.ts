@@ -909,13 +909,24 @@ router.post("/history/snapshot", async (req: Request, res: Response) => {
     const dateStr: string = req.body?.date || getISTDateStr();
     const allRows = await pool.query(`SELECT * FROM finance_activities`);
     const all = allRows.rows.map(decryptActivity);
+
+    // Only activities due on this specific date based on their schedule
+    const dueOnDate = all.filter((a) => isActivityDueOnDate(a, dateStr));
+
+    // Clear ALL existing records for this date first (removes any incorrect past snapshots)
+    await pool.query(
+      `DELETE FROM finance_activity_history WHERE TO_CHAR(history_date, 'YYYY-MM-DD') = $1`,
+      [dateStr],
+    );
+
+    // Insert correct records for due-today activities only
     let recorded = 0;
-    for (const a of all) {
+    for (const a of dueOnDate) {
       await upsertActivityHistory(a, dateStr);
       recorded++;
     }
-    console.log(`[FinanceHistory] Manual snapshot: recorded ${recorded} activities for ${dateStr}`);
-    res.json({ recorded, date: dateStr });
+    console.log(`[FinanceHistory] Snapshot for ${dateStr}: recorded ${recorded}/${all.length} activities (cleared old records first)`);
+    res.json({ recorded, total: all.length, date: dateStr });
   } catch (err: any) {
     console.error("POST /finance/history/snapshot:", err.message);
     res.status(500).json({ error: "Failed to snapshot history" });

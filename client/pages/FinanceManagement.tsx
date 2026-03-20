@@ -1695,11 +1695,11 @@ function HistoryTab() {
   const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
   const [selectedDate, setSelectedDate] = useState(todayIST);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["finance-history", selectedDate],
-    queryFn: () => apiFetch(`/history?date=${selectedDate}`),
-    staleTime: 30_000,
-    enabled: !!selectedDate,
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["finance-history", selectedDate] as [string, string],
+    queryFn: ({ queryKey }) => apiFetch(`/history?date=${queryKey[1]}`),
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
   const records: HistoryRecord[] = data?.history ?? [];

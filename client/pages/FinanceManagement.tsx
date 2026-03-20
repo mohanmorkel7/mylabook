@@ -13,7 +13,7 @@ import {
   Plus, Pencil, Trash2, X, CheckCircle2, Clock, AlertTriangle,
   AlertCircle, ShieldCheck, Briefcase, TrendingUp, Users, FileText,
   BarChart3, Sun, UserCheck, Bell, CalendarDays, CheckCheck,
-  Hourglass, Lock, ChevronRight, Calendar, Circle, History,
+  Hourglass, Lock, ChevronRight, Calendar, Circle, History, ClipboardList, Settings,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -65,6 +65,8 @@ const TABS = [
   { key: "agreement_summary", label: "Agreement Summary",  icon: CalendarDays },
   { key: "recruitment",       label: "Recruitment",        icon: UserCheck },
   { key: "history",           label: "History",            icon: History },
+  { key: "management",        label: "Management",         icon: ClipboardList },
+  { key: "admin",             label: "Admin",              icon: Settings },
 ];
 
 const STATUSES = [
@@ -104,6 +106,7 @@ const CAT_LABEL: Record<string, string> = {
   hr_compliance:     "HR Compliance",
   legal_contracts:   "Legal Contracts",
   agreement_summary: "Agreement Summary",
+  admin:             "Admin",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1444,6 +1447,234 @@ function RecruitmentTab({ canCreate }: { canCreate: boolean }) {
   );
 }
 
+// ─── Management Tab ───────────────────────────────────────────────────────────
+interface MgmtTask {
+  id: number;
+  date_initiating: string | null;
+  action_items: string;
+  open_close: string;
+  status_update: string;
+  next_action_date: string | null;
+  closed_date: string | null;
+  created_at: string;
+}
+
+const OPEN_CLOSE_OPTS = [
+  { value: "open",   label: "Open",   color: "#3B82F6" },
+  { value: "closed", label: "Closed", color: "#10B981" },
+];
+
+const blankMgmt = {
+  date_initiating: "", action_items: "", open_close: "open",
+  status_update: "", next_action_date: "", closed_date: "",
+};
+
+function ManagementTab({ canCreate }: { canCreate: boolean }) {
+  const qc = useQueryClient();
+  const [showModal, setShowModal] = useState(false);
+  const [editTask, setEditTask] = useState<MgmtTask | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [form, setForm] = useState(blankMgmt);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["finance-management-tasks"],
+    queryFn: () => apiFetch("/management-tasks"),
+    staleTime: 30_000,
+  });
+  const tasks: MgmtTask[] = data?.tasks ?? [];
+
+  const saveMut = useMutation({
+    mutationFn: (body: typeof blankMgmt) =>
+      editTask
+        ? apiFetch(`/management-tasks/${editTask.id}`, { method: "PUT", body: JSON.stringify(body) })
+        : apiFetch("/management-tasks", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["finance-management-tasks"] });
+      setShowModal(false); setEditTask(null); setForm(blankMgmt);
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/management-tasks/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["finance-management-tasks"] });
+      setDeleteId(null);
+    },
+  });
+
+  const openEdit = (t: MgmtTask) => {
+    setEditTask(t);
+    setForm({
+      date_initiating: t.date_initiating?.slice(0, 10) ?? "",
+      action_items: t.action_items,
+      open_close: t.open_close,
+      status_update: t.status_update,
+      next_action_date: t.next_action_date?.slice(0, 10) ?? "",
+      closed_date: t.closed_date?.slice(0, 10) ?? "",
+    });
+    setShowModal(true);
+  };
+
+  const fmtD = (d: string | null) => d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Management Tasks</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{tasks.length} total records</p>
+        </div>
+        {canCreate && (
+          <button onClick={() => { setEditTask(null); setForm(blankMgmt); setShowModal(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> Add Task
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                {["Sl No", "Date of Initiating", "Action Items", "Open / Close", "Status Update", "Next Action Date", "Closed Date", ""].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {isLoading ? (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400 text-sm">Loading…</td></tr>
+              ) : tasks.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-12 text-center">
+                  <ClipboardList className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">No tasks yet. Click "Add Task" to get started.</p>
+                </td></tr>
+              ) : tasks.map((t, idx) => {
+                const oc = OPEN_CLOSE_OPTS.find((o) => o.value === t.open_close) ?? OPEN_CLOSE_OPTS[0];
+                return (
+                  <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{idx + 1}</td>
+                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fmtD(t.date_initiating)}</td>
+                    <td className="px-4 py-3 text-gray-900 font-medium max-w-[220px]">
+                      <p className="line-clamp-2">{t.action_items}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+                        style={{ backgroundColor: oc.color + "18", color: oc.color }}>
+                        {oc.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[180px]">
+                      <p className="line-clamp-2">{t.status_update || "—"}</p>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fmtD(t.next_action_date)}</td>
+                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fmtD(t.closed_date)}</td>
+                    <td className="px-4 py-3">
+                      {canCreate && (
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setDeleteId(t.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-t-2xl px-6 py-4 text-white flex items-center justify-between">
+              <h3 className="font-bold text-lg">{editTask ? "Edit Task" : "Add Management Task"}</h3>
+              <button onClick={() => { setShowModal(false); setEditTask(null); }} className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); saveMut.mutate(form); }} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Date of Initiating</label>
+                  <input type="date" className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                    value={form.date_initiating} onChange={(e) => setForm((f) => ({ ...f, date_initiating: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Open / Close</label>
+                  <select className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                    value={form.open_close} onChange={(e) => setForm((f) => ({ ...f, open_close: e.target.value }))}>
+                    {OPEN_CLOSE_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Action Items *</label>
+                <textarea rows={3} required className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+                  placeholder="Describe the action items…"
+                  value={form.action_items} onChange={(e) => setForm((f) => ({ ...f, action_items: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Status Update</label>
+                <textarea rows={2} className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+                  placeholder="Current status or progress notes…"
+                  value={form.status_update} onChange={(e) => setForm((f) => ({ ...f, status_update: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Next Action Date</label>
+                  <input type="date" className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                    value={form.next_action_date} onChange={(e) => setForm((f) => ({ ...f, next_action_date: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Closed Date</label>
+                  <input type="date" className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                    value={form.closed_date} onChange={(e) => setForm((f) => ({ ...f, closed_date: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setShowModal(false); setEditTask(null); }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={saveMut.isPending}
+                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50">
+                  {saveMut.isPending ? "Saving…" : editTask ? "Update" : "Add Task"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="font-bold text-gray-900 text-center mb-1">Delete Task?</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteId(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => deleteMut.mutate(deleteId)} disabled={deleteMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── History Tab ──────────────────────────────────────────────────────────────
 interface HistoryRecord {
   id: number;
@@ -1901,7 +2132,7 @@ export default function FinanceManagement() {
     };
   }, []);
 
-  const activityCategories = ["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "agreement_summary"];
+  const activityCategories = ["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "agreement_summary", "admin"];
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -1938,7 +2169,7 @@ export default function FinanceManagement() {
 
         {/* Tabs */}
         <div className="px-6">
-          <div className="flex gap-0 overflow-x-auto">
+          <div className="flex gap-0 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -1965,6 +2196,7 @@ export default function FinanceManagement() {
         {activeTab === "dashboard" && <DashboardTab userEmail={userEmail} canEditAll={canEditAll} />}
         {activeTab === "recruitment" && <RecruitmentTab canCreate={canCreate} />}
         {activeTab === "history" && <HistoryTab />}
+        {activeTab === "management" && <ManagementTab canCreate={canCreate} />}
         {activityCategories.includes(activeTab) && (
           <ActivityTab
             key={activeTab}

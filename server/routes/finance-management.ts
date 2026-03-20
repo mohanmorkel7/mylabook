@@ -107,6 +107,18 @@ export async function initializeFinanceSchema() {
         UNIQUE(activity_ref_id, history_date)
       );
 
+      CREATE TABLE IF NOT EXISTS finance_management_tasks (
+        id              SERIAL PRIMARY KEY,
+        date_initiating TEXT,
+        action_items    TEXT NOT NULL,
+        open_close      TEXT NOT NULL DEFAULT '',
+        status_update   TEXT,
+        next_action_date TEXT,
+        closed_date     TEXT,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS finance_recruitment (
         id              SERIAL PRIMARY KEY,
         position_name   TEXT NOT NULL,
@@ -252,6 +264,7 @@ const CAT_CODE: Record<string, string> = {
   hr_compliance:     "HR",
   legal_contracts:   "LC",
   agreement_summary: "AS",
+  admin:             "AD",
 };
 
 function decryptActivity(row: any) {
@@ -576,6 +589,88 @@ router.post("/auto-overdue", async (_req: Request, res: Response) => {
   } catch (err: any) {
     console.error("POST /finance/auto-overdue:", err.message);
     res.status(500).json({ error: "Failed to run auto-overdue" });
+  }
+});
+
+// ── Management Tasks CRUD ──────────────────────────────────────────────────
+function decryptMgmtTask(row: any) {
+  return {
+    id:               row.id,
+    date_initiating:  decrypt(row.date_initiating) || null,
+    action_items:     decrypt(row.action_items),
+    open_close:       decrypt(row.open_close) || "open",
+    status_update:    decrypt(row.status_update) || "",
+    next_action_date: decrypt(row.next_action_date) || null,
+    closed_date:      decrypt(row.closed_date) || null,
+    created_at:       row.created_at,
+    updated_at:       row.updated_at,
+  };
+}
+
+router.get("/management-tasks", async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`SELECT * FROM finance_management_tasks ORDER BY created_at DESC`);
+    res.json({ tasks: result.rows.map(decryptMgmtTask) });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch management tasks" });
+  }
+});
+
+router.post("/management-tasks", async (req: Request, res: Response) => {
+  try {
+    const { date_initiating, action_items, open_close, status_update, next_action_date, closed_date } = req.body;
+    if (!action_items) return res.status(400).json({ error: "action_items is required" });
+    const result = await pool.query(
+      `INSERT INTO finance_management_tasks
+         (date_initiating, action_items, open_close, status_update, next_action_date, closed_date)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [
+        encrypt(date_initiating || ""),
+        encrypt(action_items),
+        encrypt(open_close || "open"),
+        encrypt(status_update || ""),
+        encrypt(next_action_date || ""),
+        encrypt(closed_date || ""),
+      ],
+    );
+    res.status(201).json({ task: decryptMgmtTask(result.rows[0]) });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to create management task" });
+  }
+});
+
+router.put("/management-tasks/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { date_initiating, action_items, open_close, status_update, next_action_date, closed_date } = req.body;
+    const result = await pool.query(
+      `UPDATE finance_management_tasks
+       SET date_initiating=$1, action_items=$2, open_close=$3, status_update=$4,
+           next_action_date=$5, closed_date=$6, updated_at=NOW()
+       WHERE id=$7 RETURNING *`,
+      [
+        encrypt(date_initiating || ""),
+        encrypt(action_items || ""),
+        encrypt(open_close || "open"),
+        encrypt(status_update || ""),
+        encrypt(next_action_date || ""),
+        encrypt(closed_date || ""),
+        id,
+      ],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "Task not found" });
+    res.json({ task: decryptMgmtTask(result.rows[0]) });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to update management task" });
+  }
+});
+
+router.delete("/management-tasks/:id", async (req: Request, res: Response) => {
+  try {
+    await pool.query("DELETE FROM finance_management_tasks WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to delete management task" });
   }
 });
 

@@ -13,7 +13,7 @@ import {
   Plus, Pencil, Trash2, X, CheckCircle2, Clock, AlertTriangle,
   AlertCircle, ShieldCheck, Briefcase, TrendingUp, Users, FileText,
   BarChart3, Sun, UserCheck, Bell, CalendarDays, CheckCheck,
-  Hourglass, Lock, ChevronRight, Calendar, Circle,
+  Hourglass, Lock, ChevronRight, Calendar, Circle, History,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -64,6 +64,7 @@ const TABS = [
   { key: "legal_contracts",   label: "Legal Contracts",    icon: ShieldCheck },
   { key: "agreement_summary", label: "Agreement Summary",  icon: CalendarDays },
   { key: "recruitment",       label: "Recruitment",        icon: UserCheck },
+  { key: "history",           label: "History",            icon: History },
 ];
 
 const STATUSES = [
@@ -1443,6 +1444,173 @@ function RecruitmentTab({ canCreate }: { canCreate: boolean }) {
   );
 }
 
+// ─── History Tab ──────────────────────────────────────────────────────────────
+interface HistoryRecord {
+  id: number;
+  activity_ref_id: number;
+  history_date: string;
+  activity_id: string;
+  category: string;
+  activity_name: string;
+  duration: string;
+  status: string;
+  reason_non_completion: string;
+  assigned_to: string[];
+  recorded_at: string;
+}
+
+function HistoryTab() {
+  const ist = getISTNow();
+  const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+  const [selectedDate, setSelectedDate] = useState(todayIST);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["finance-history", selectedDate],
+    queryFn: () => apiFetch(`/history?date=${selectedDate}`),
+    staleTime: 30_000,
+    enabled: !!selectedDate,
+  });
+
+  const records: HistoryRecord[] = data?.history ?? [];
+
+  // Group by category
+  const grouped = records.reduce<Record<string, HistoryRecord[]>>((acc, r) => {
+    if (!acc[r.category]) acc[r.category] = [];
+    acc[r.category].push(r);
+    return acc;
+  }, {});
+
+  const totalByStatus = STATUSES.reduce<Record<string, number>>((acc, s) => {
+    acc[s.value] = records.filter((r) => r.status === s.value).length;
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-5">
+      {/* Header + Date Picker */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <History className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="font-bold text-gray-900 text-lg">Activity History</h2>
+              <p className="text-xs text-gray-500">End-of-day status snapshots per activity</p>
+            </div>
+          </div>
+          <div className="sm:ml-auto flex items-center gap-3">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              max={todayIST}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+            />
+          </div>
+        </div>
+
+        {/* Summary badges */}
+        {records.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+            <span className="text-xs font-semibold text-gray-500 self-center">Summary:</span>
+            {STATUSES.filter((s) => totalByStatus[s.value] > 0).map((s) => {
+              const Icon = s.icon;
+              return (
+                <span key={s.value} className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{ backgroundColor: s.bg, color: s.color }}>
+                  <Icon className="w-3 h-3" />
+                  {s.label}: {totalByStatus[s.value]}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Records */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : records.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
+          <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">No history for this date</p>
+          <p className="text-xs text-gray-400 mt-1">Status snapshots are recorded when activities are updated or at midnight IST reset</p>
+        </div>
+      ) : (
+        Object.entries(grouped).map(([category, recs]) => (
+          <div key={category} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            {/* Category header */}
+            <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-gray-500" />
+                <h3 className="font-bold text-gray-800 text-sm">{CAT_LABEL[category] || category}</h3>
+              </div>
+              <span className="text-xs text-gray-500 font-medium">{recs.length} activit{recs.length === 1 ? "y" : "ies"}</span>
+            </div>
+
+            {/* Activity rows */}
+            <div className="divide-y divide-gray-50">
+              {recs.map((r) => {
+                const st = STATUS_MAP[r.status] ?? { label: r.status, color: "#6B7280", bg: "#F9FAFB", icon: Circle };
+                const Icon = st.icon;
+                const dur = DURATIONS.find((d) => d.value === r.duration);
+                return (
+                  <div key={r.id} className="flex items-start gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                    {/* Status dot */}
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                      style={{ backgroundColor: st.bg }}>
+                      <Icon className="w-4 h-4" style={{ color: st.color }} />
+                    </div>
+
+                    {/* Main info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-gray-900 text-sm">{r.activity_name}</p>
+                        <span className="text-[10px] text-gray-400 font-mono">{r.activity_id}</span>
+                        {dur && (
+                          <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-semibold border border-indigo-100">
+                            {dur.label}
+                          </span>
+                        )}
+                      </div>
+                      {r.reason_non_completion && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <AlertTriangle className="w-3 h-3 text-orange-500 flex-shrink-0" />
+                          <p className="text-xs text-orange-700 line-clamp-1">{r.reason_non_completion}</p>
+                        </div>
+                      )}
+                      {r.assigned_to.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <UserCheck className="w-3 h-3 text-blue-400" />
+                          <p className="text-xs text-gray-500">{r.assigned_to.map(extractName).join(", ")}</p>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Recorded: {new Date(r.recorded_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })} IST
+                      </p>
+                    </div>
+
+                    {/* Status badge */}
+                    <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: st.bg, color: st.color }}>
+                      <Icon className="w-3 h-3" />
+                      {st.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 // ─── Dashboard Tab ────────────────────────────────────────────────────────────
 function DashboardTab({ userEmail, canEditAll }: { userEmail: string; canEditAll: boolean }) {
   const { data, isLoading } = useQuery({
@@ -1796,6 +1964,7 @@ export default function FinanceManagement() {
       <div className="p-6">
         {activeTab === "dashboard" && <DashboardTab userEmail={userEmail} canEditAll={canEditAll} />}
         {activeTab === "recruitment" && <RecruitmentTab canCreate={canCreate} />}
+        {activeTab === "history" && <HistoryTab />}
         {activityCategories.includes(activeTab) && (
           <ActivityTab
             key={activeTab}

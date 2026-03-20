@@ -92,6 +92,21 @@ export async function initializeFinanceSchema() {
         updated_at      TIMESTAMPTZ DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS finance_activity_history (
+        id              SERIAL PRIMARY KEY,
+        activity_ref_id INTEGER NOT NULL,
+        history_date    DATE NOT NULL,
+        activity_id     TEXT NOT NULL,
+        category        TEXT NOT NULL,
+        activity_name   TEXT NOT NULL,
+        duration        TEXT NOT NULL,
+        status          TEXT NOT NULL,
+        reason_non_completion TEXT,
+        assigned_to     TEXT,
+        recorded_at     TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(activity_ref_id, history_date)
+      );
+
       CREATE TABLE IF NOT EXISTS finance_recruitment (
         id              SERIAL PRIMARY KEY,
         position_name   TEXT NOT NULL,
@@ -156,6 +171,77 @@ export async function initializeFinanceSchema() {
   } catch (err: any) {
     console.warn("[FinanceManagement] Schema init deferred:", err.message);
   }
+}
+
+// ── Date helpers ─────────────────────────────────────────────────────────
+function getISTDateStr(): string {
+  const ist = getISTNow();
+  return `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+}
+
+function getISTYesterdayStr(): string {
+  const ist = getISTNow();
+  const y = new Date(ist);
+  y.setDate(y.getDate() - 1);
+  return `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+}
+
+// Check if an activity is due on a specific IST date string (YYYY-MM-DD)
+function isActivityDueOnDate(a: ReturnType<typeof decryptActivity>, dateStr: string): boolean {
+  if (a.due_date) return a.due_date.slice(0, 10) === dateStr;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dowIST = new Date(`${dateStr}T00:00:00+05:30`).getDay();
+  switch (a.duration) {
+    case "D": return true;
+    case "W": return (a.scheduled_weekdays ?? []).includes(dowIST);
+    case "M": return d === (a.scheduled_day ?? 1);
+    case "Q": {
+      if (!a.scheduled_start_date) return false;
+      const start = new Date(a.scheduled_start_date);
+      if (d !== start.getDate()) return false;
+      const diff = (y - start.getFullYear()) * 12 + ((m - 1) - start.getMonth());
+      return diff >= 0 && diff % 4 === 0;
+    }
+    case "H": {
+      if (!a.scheduled_start_date) return false;
+      const start = new Date(a.scheduled_start_date);
+      if (d !== start.getDate()) return false;
+      const diff = (y - start.getFullYear()) * 12 + ((m - 1) - start.getMonth());
+      return diff >= 0 && diff % 6 === 0;
+    }
+    case "Y": {
+      if (!a.scheduled_start_date) return false;
+      const start = new Date(a.scheduled_start_date);
+      return d === start.getDate() && (m - 1) === start.getMonth();
+    }
+    default: return false;
+  }
+}
+
+// Upsert (insert or update) a history record for an activity on a specific date
+async function upsertActivityHistory(
+  a: ReturnType<typeof decryptActivity>,
+  dateStr: string,
+): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO finance_activity_history
+         (activity_ref_id, history_date, activity_id, category, activity_name, duration, status, reason_non_completion, assigned_to)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (activity_ref_id, history_date)
+       DO UPDATE SET
+         status = EXCLUDED.status,
+         reason_non_completion = EXCLUDED.reason_non_completion,
+         recorded_at = NOW()`,
+      [
+        a.id, dateStr,
+        encrypt(a.activity_id), encrypt(a.category), encrypt(a.activity_name),
+        encrypt(a.duration), encrypt(a.status),
+        encrypt(a.reason_non_completion || ""),
+        encryptArr(a.assigned_to),
+      ],
+    );
+  } catch { /* history is non-critical */ }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -412,7 +498,10 @@ router.patch("/activities/:id/status", async (req: Request, res: Response) => {
       params,
     );
     if (!result.rows.length) return res.status(404).json({ error: "Activity not found" });
-    res.json({ activity: decryptActivity(result.rows[0]) });
+    const updated = decryptActivity(result.rows[0]);
+    // Record this status change in history for today
+    upsertActivityHistory(updated, getISTDateStr()).catch(() => {});
+    res.json({ activity: updated });
   } catch (err: any) {
     console.error("PATCH /finance/activities/status:", err.message);
     res.status(500).json({ error: "Failed to update status" });
@@ -439,7 +528,9 @@ router.post("/activities/:id/approve", async (req: Request, res: Response) => {
       ],
     );
     if (!result.rows.length) return res.status(404).json({ error: "Activity not found" });
-    res.json({ activity: decryptActivity(result.rows[0]) });
+    const approved = decryptActivity(result.rows[0]);
+    upsertActivityHistory(approved, getISTDateStr()).catch(() => {});
+    res.json({ activity: approved });
   } catch (err: any) {
     console.error("POST /finance/activities/approve:", err.message);
     res.status(500).json({ error: "Failed to approve activity" });
@@ -651,6 +742,38 @@ router.get("/dashboard", async (_req: Request, res: Response) => {
   }
 });
 
+// ── History endpoint ─────────────────────────────────────────────────────────
+router.get("/history", async (req: Request, res: Response) => {
+  try {
+    const { date } = req.query as { date?: string };
+    if (!date) return res.status(400).json({ error: "date required (YYYY-MM-DD)" });
+
+    const result = await pool.query(
+      `SELECT * FROM finance_activity_history WHERE history_date = $1 ORDER BY recorded_at DESC`,
+      [date],
+    );
+
+    const history = result.rows.map((row) => ({
+      id: row.id,
+      activity_ref_id: row.activity_ref_id,
+      history_date: row.history_date,
+      activity_id: decrypt(row.activity_id),
+      category: decrypt(row.category),
+      activity_name: decrypt(row.activity_name),
+      duration: decrypt(row.duration),
+      status: decrypt(row.status),
+      reason_non_completion: decrypt(row.reason_non_completion),
+      assigned_to: decryptArr(row.assigned_to),
+      recorded_at: row.recorded_at,
+    }));
+
+    res.json({ history });
+  } catch (err: any) {
+    console.error("GET /finance/history:", err.message);
+    res.status(500).json({ error: "Failed to fetch history" });
+  }
+});
+
 // ── Finance SLA Cron Job (server-side, no browser required) ─────────────────
 export async function runFinanceSLACheck(): Promise<void> {
   try {
@@ -696,31 +819,30 @@ function getMsUntilNextISTMidnight(): number {
 async function runFinanceMidnightReset(): Promise<void> {
   try {
     const allRows = await pool.query(`SELECT * FROM finance_activities`);
-    const toReset = allRows.rows
-      .map(decryptActivity)
-      .filter((a) => isActivityDueTodayIST(a));
+    const all = allRows.rows.map(decryptActivity);
+    const yesterdayStr = getISTYesterdayStr();
+    const todayStr = getISTDateStr();
 
-    if (toReset.length === 0) return;
+    // 1. Snapshot yesterday's final status into history
+    const dueYesterday = all.filter((a) => isActivityDueOnDate(a, yesterdayStr));
+    for (const a of dueYesterday) {
+      await upsertActivityHistory(a, yesterdayStr);
+    }
 
-    for (const a of toReset) {
+    // 2. Reset activities due TODAY back to pending
+    const dueToday = all.filter((a) => isActivityDueOnDate(a, todayStr));
+    for (const a of dueToday) {
       await pool.query(
         `UPDATE finance_activities
          SET status=$1, pending_approval=$2, approved_at=$3, approved_by=$4,
              reason_non_completion=$5, updated_at=NOW()
          WHERE id=$6`,
-        [
-          encrypt("pending"),
-          encryptBool(false),
-          encrypt(""),
-          encrypt(""),
-          encrypt(""),
-          a.id,
-        ],
+        [encrypt("pending"), encryptBool(false), encrypt(""), encrypt(""), encrypt(""), a.id],
       );
     }
-    const ist = getISTNow();
+
     console.log(
-      `[FinanceMidnight] Reset ${toReset.length} activity(s) to "pending" for ${ist.toDateString()} IST`,
+      `[FinanceMidnight] Snapshotted ${dueYesterday.length} history records for ${yesterdayStr}; reset ${dueToday.length} activities to pending for ${todayStr}`,
     );
   } catch (err: any) {
     console.warn("[FinanceMidnight] Reset skipped:", err.message);

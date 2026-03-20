@@ -1762,7 +1762,8 @@ export async function getTodayEmails(
         }
 
         if (!res.ok) {
-          console.warn(`Graph fetch failed: ${res.status} ${res.statusText}`);
+          const errText = await res.text().catch(() => "");
+          console.warn(`Graph fetch failed: ${res.status} ${res.statusText} — ${errText.substring(0, 500)}`);
           break;
         }
 
@@ -2361,28 +2362,28 @@ export async function getTodayEmails(
   try {
     // Try 1: Direct access to shared mailbox with pagination
     console.log(
-      `getTodayEmails: attempting direct access to shared mailbox ${reconopsEmail}`,
+      `getTodayEmails: attempting direct access to shared mailbox ${reconopsEmail} (window: ${startISO} → ${endISO})`,
     );
 
     const sharedMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       reconopsEmail,
-    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
+    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$filter=${graphFilter}&$orderby=receivedDateTime desc&$top=200`;
 
     const sharedEmails = await fetchAllEmailsFromUrl(sharedMailboxUrl, token);
     console.log(
       `getTodayEmails: direct shared mailbox returned ${sharedEmails.length} total messages`,
     );
 
-    // If debugging for a specific config, log raw fetched items (first 20)
-    if (debugForConfigId === 30) {
+    // Log raw fetched items when DEBUG_EMAIL_MATCHING is enabled
+    if (process.env.DEBUG_EMAIL_MATCHING === "true" || debugForConfigId) {
       try {
         console.log(
-          `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from shared mailbox ${reconopsEmail}:`,
+          `getTodayEmails: [DEBUG config=${debugForConfigId}] shared mailbox ${reconopsEmail} returned ${sharedEmails.length} raw items:`,
         );
         for (let i = 0; i < Math.min(20, sharedEmails.length); i++) {
           const it = sharedEmails[i];
           console.log(
-            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
+            `  [RAW] idx=${i} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
           );
         }
       } catch (e) {
@@ -2479,7 +2480,7 @@ export async function getTodayEmails(
           userAzureId,
         )}/mailFolders/${encodeURIComponent(
           reconopsFolder.id,
-        )}/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
+        )}/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$filter=${graphFilter}&$orderby=receivedDateTime desc&$top=200`;
 
         const folderEmails = await fetchAllEmailsFromUrl(
           sharedFolderUrl,
@@ -2489,10 +2490,10 @@ export async function getTodayEmails(
           `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
         );
 
-        if (debugForConfigId === 30) {
+        if (process.env.DEBUG_EMAIL_MATCHING === "true" || debugForConfigId) {
           try {
             console.log(
-              `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`,
+              `getTodayEmails: [DEBUG config=${debugForConfigId}] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`,
             );
             for (let i = 0; i < Math.min(20, folderEmails.length); i++) {
               const it = folderEmails[i];
@@ -2547,22 +2548,22 @@ export async function getTodayEmails(
 
     const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       userAzureId,
-    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
+    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$filter=${graphFilter}&$orderby=receivedDateTime desc&$top=200`;
 
     const userEmails = await fetchAllEmailsFromUrl(userMailboxUrl, token);
     console.log(
       `getTodayEmails: user main inbox returned ${userEmails.length} total messages`,
     );
 
-    if (debugForConfigId === 30) {
+    if (process.env.DEBUG_EMAIL_MATCHING === "true" || debugForConfigId) {
       try {
         console.log(
-          `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from user inbox:`,
+          `getTodayEmails: [DEBUG config=${debugForConfigId}] user inbox returned ${userEmails.length} raw items:`,
         );
         for (let i = 0; i < Math.min(20, userEmails.length); i++) {
           const it = userEmails[i];
           console.log(
-            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
+            `  [RAW] idx=${i} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
           );
         }
       } catch (e) {

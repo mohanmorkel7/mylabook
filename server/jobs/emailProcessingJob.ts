@@ -8,6 +8,14 @@ import {
 import { matchEmailAgainstConfig } from "../services/emailMatchingService";
 import { MailConfigRepository } from "../models/MailConfig";
 
+// Concurrency guard stored on globalThis so it survives hot-reload restarts in dev
+// and prevents multiple simultaneous runs across all module instances
+const g = globalThis as any;
+if (g.__emailJobRunning === undefined) g.__emailJobRunning = false;
+
+function isJobRunning(): boolean { return g.__emailJobRunning === true; }
+function setJobRunning(v: boolean) { g.__emailJobRunning = v; }
+
 export function initialize() {
   try {
     // Gate the email processing job behind an environment variable to avoid
@@ -24,6 +32,11 @@ export function initialize() {
     cron.schedule(
       "*/30 * * * * *",
       async () => {
+        if (isJobRunning()) {
+          console.log(`[${new Date().toISOString()}] Email processing job skipped (previous run still in progress)`);
+          return;
+        }
+        setJobRunning(true);
         console.log(
           `[${new Date().toISOString()}] Running email processing job`,
         );
@@ -396,6 +409,8 @@ export function initialize() {
             "Error running email processing job:",
             (err as any)?.message || err,
           );
+        } finally {
+          setJobRunning(false);
         }
       },
       {

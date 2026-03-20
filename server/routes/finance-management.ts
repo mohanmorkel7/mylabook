@@ -679,4 +679,67 @@ export async function runFinanceSLACheck(): Promise<void> {
   }
 }
 
+// ── Finance Midnight Reset Job ────────────────────────────────────────────────
+// At 12:00 AM IST, reset all activities due TODAY back to "pending"
+// so every recurring activity starts fresh each scheduled occurrence
+
+function getMsUntilNextISTMidnight(): number {
+  const now = Date.now();
+  const istOffsetMs = 5.5 * 60 * 60 * 1000; // UTC+5:30
+  const istNow = now + istOffsetMs;
+  // Next IST midnight in UTC-ms
+  const istMidnightTomorrow =
+    (Math.floor(istNow / (24 * 60 * 60 * 1000)) + 1) * 24 * 60 * 60 * 1000;
+  return istMidnightTomorrow - istOffsetMs - now;
+}
+
+async function runFinanceMidnightReset(): Promise<void> {
+  try {
+    const allRows = await pool.query(`SELECT * FROM finance_activities`);
+    const toReset = allRows.rows
+      .map(decryptActivity)
+      .filter((a) => isActivityDueTodayIST(a));
+
+    if (toReset.length === 0) return;
+
+    for (const a of toReset) {
+      await pool.query(
+        `UPDATE finance_activities
+         SET status=$1, pending_approval=$2, approved_at=$3, approved_by=$4,
+             reason_non_completion=$5, updated_at=NOW()
+         WHERE id=$6`,
+        [
+          encrypt("pending"),
+          encryptBool(false),
+          encrypt(""),
+          encrypt(""),
+          encrypt(""),
+          a.id,
+        ],
+      );
+    }
+    const ist = getISTNow();
+    console.log(
+      `[FinanceMidnight] Reset ${toReset.length} activity(s) to "pending" for ${ist.toDateString()} IST`,
+    );
+  } catch (err: any) {
+    console.warn("[FinanceMidnight] Reset skipped:", err.message);
+  }
+}
+
+export function startFinanceMidnightReset(): void {
+  const scheduleNext = () => {
+    const msUntil = getMsUntilNextISTMidnight();
+    const minUntil = Math.floor(msUntil / 60_000);
+    console.log(
+      `[FinanceMidnight] Next activity reset scheduled in ${minUntil} min (IST midnight)`,
+    );
+    setTimeout(async () => {
+      await runFinanceMidnightReset();
+      scheduleNext(); // Re-schedule for the following midnight
+    }, msUntil);
+  };
+  scheduleNext();
+}
+
 export default router;

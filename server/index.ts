@@ -49,7 +49,7 @@ import activityProductionRouter from "./routes/activity-production";
 import notificationsProductionRouter from "./routes/notifications-production";
 import adminProductionRouter from "./routes/admin-production";
 import finopsProductionRouter, { ensureFinOpsProductionSchema } from "./routes/finops-production";
-import financeManagementRouter, { initializeFinanceSchema, runFinanceSLACheck } from "./routes/finance-management";
+import financeManagementRouter, { initializeFinanceSchema, runFinanceSLACheck, startFinanceMidnightReset } from "./routes/finance-management";
 
 export function createServer() {
   const app = express();
@@ -198,6 +198,15 @@ export function createServer() {
     }, 2000);
   } catch (e) {
     console.error("Failed to start Finance SLA Job:", (e as any)?.message);
+  }
+
+  // Finance Midnight Reset Job: resets due-today activities to "pending" at 12:00 AM IST
+  try {
+    setTimeout(() => {
+      startFinanceMidnightReset();
+    }, 3000);
+  } catch (e) {
+    console.error("Failed to start Finance Midnight Reset Job:", (e as any)?.message);
   }
 
   // Middleware

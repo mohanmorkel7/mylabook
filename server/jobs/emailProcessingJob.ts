@@ -20,9 +20,9 @@ export function initialize() {
       return;
     }
 
-    // Schedule job to run every minute
+    // Schedule job to run every 30 seconds
     cron.schedule(
-      "*/1 * * * *",
+      "*/30 * * * * *",
       async () => {
         console.log(
           `[${new Date().toISOString()}] Running email processing job`,
@@ -41,9 +41,9 @@ export function initialize() {
                 ? new Date(config.last_processed_at)
                 : undefined;
 
-              // Add a small overlap buffer (30s) to avoid missing messages due to clock skew
+              // Add a small overlap buffer (10s) to avoid missing messages due to clock skew
               const since = rawSince
-                ? new Date(rawSince.getTime() - 30 * 1000)
+                ? new Date(rawSince.getTime() - 10 * 1000)
                 : undefined;
 
               console.log(
@@ -403,7 +403,7 @@ export function initialize() {
       },
     );
 
-    console.log("Email processing job scheduled (every minute)");
+    console.log("Email processing job scheduled (every 30 seconds)");
   } catch (error) {
     console.error(
       "Failed to initialize email processing job:",

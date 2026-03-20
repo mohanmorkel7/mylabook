@@ -1591,6 +1591,10 @@ function replaceCidReferences(
   return modified;
 }
 
+// Module-level Azure AD token cache — avoids re-acquiring token on every 30-second poll
+let _cachedAppToken: string | null = null;
+let _cachedAppTokenExpiry: number = 0; // epoch ms
+
 export async function getTodayEmails(
   since?: Date,
   mailbox?: string,
@@ -1671,8 +1675,12 @@ export async function getTodayEmails(
     return [];
   }
 
-  // Acquire app token
+  // Acquire app token — uses module-level cache to avoid hitting Azure AD on every 30s poll
   async function getAppToken(): Promise<string | null> {
+    // Return cached token if still valid (with 2-min safety buffer before expiry)
+    if (_cachedAppToken && Date.now() < _cachedAppTokenExpiry - 2 * 60 * 1000) {
+      return _cachedAppToken;
+    }
     try {
       const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
       const body = new URLSearchParams();
@@ -1714,8 +1722,12 @@ export async function getTodayEmails(
         console.error("Azure AD token response missing access_token:", data);
         return null;
       }
-      console.log("getTodayEmails: acquired Azure AD app token (masked)");
-      return data.access_token as string;
+      // Cache the token; expires_in is in seconds (default 3600)
+      const expiresIn: number = (data.expires_in as number) || 3600;
+      _cachedAppToken = data.access_token as string;
+      _cachedAppTokenExpiry = Date.now() + expiresIn * 1000;
+      console.log(`getTodayEmails: acquired Azure AD app token (masked) — cached for ${Math.floor(expiresIn / 60)} min`);
+      return _cachedAppToken;
     } catch (error) {
       console.error("Error fetching app token:", error);
       return null;
@@ -1796,37 +1808,7 @@ export async function getTodayEmails(
     return [];
   }
 
-  // Resolve reconops mailbox variable early so diagnostics can use it
   const reconopsEmail = mailbox || "reconops@mylapay.com";
-
-  // Diagnostic: verify we can resolve the target mailbox and log its displayName (helps detect permission issues)
-  try {
-    const diagUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(reconopsEmail)}`;
-    const diagRes = await fetch(diagUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!diagRes.ok) {
-      const diagText = await diagRes
-        .text()
-        .catch(() => "<failed-to-read-body>");
-      console.warn(
-        `getTodayEmails: diagnostic user lookup failed: ${diagRes.status} ${diagRes.statusText} - ${diagText.substring(0, 1000)}`,
-      );
-    } else {
-      const diagJson = await diagRes.json().catch(() => null);
-      console.log(
-        `getTodayEmails: diagnostic user lookup succeeded for ${reconopsEmail}: displayName=${diagJson?.displayName || "(unknown)"}`,
-      );
-    }
-  } catch (diagErr) {
-    console.warn(
-      "getTodayEmails: diagnostic user lookup threw error:",
-      diagErr,
-    );
-  }
 
   // Determine start and end for filtering
   // If 'since' is provided, include any earlier messages from the start of the current IST day.

@@ -165,6 +165,33 @@ export async function initializeFinanceSchema() {
       `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS approved_by TEXT`,
       `ALTER TABLE finance_activities ADD COLUMN IF NOT EXISTS due_date TEXT`,
 
+      // Ensure newer tables exist (idempotent — added after initial schema)
+      `CREATE TABLE IF NOT EXISTS finance_activity_history (
+        id              SERIAL PRIMARY KEY,
+        activity_ref_id INTEGER NOT NULL,
+        history_date    DATE NOT NULL,
+        activity_id     TEXT NOT NULL,
+        category        TEXT NOT NULL,
+        activity_name   TEXT NOT NULL,
+        duration        TEXT NOT NULL,
+        status          TEXT NOT NULL,
+        reason_non_completion TEXT,
+        assigned_to     TEXT,
+        recorded_at     TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(activity_ref_id, history_date)
+      )`,
+      `CREATE TABLE IF NOT EXISTS finance_management_tasks (
+        id              SERIAL PRIMARY KEY,
+        date_initiating TEXT,
+        action_items    TEXT NOT NULL,
+        open_close      TEXT NOT NULL DEFAULT '',
+        status_update   TEXT,
+        next_action_date TEXT,
+        closed_date     TEXT,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )`,
+
       // Convert finance_recruitment columns to TEXT
       `ALTER TABLE finance_recruitment ALTER COLUMN date_open TYPE TEXT USING date_open::TEXT`,
       `ALTER TABLE finance_recruitment ALTER COLUMN date_close TYPE TEXT USING date_close::TEXT`,
@@ -253,7 +280,9 @@ async function upsertActivityHistory(
         encryptArr(a.assigned_to),
       ],
     );
-  } catch { /* history is non-critical */ }
+  } catch (err: any) {
+    console.error(`[FinanceHistory] upsertActivityHistory failed for id=${a.id} date=${dateStr}:`, err.message);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -843,10 +872,15 @@ router.get("/history", async (req: Request, res: Response) => {
     const { date } = req.query as { date?: string };
     if (!date) return res.status(400).json({ error: "date required (YYYY-MM-DD)" });
 
+    // Use TO_CHAR to avoid any DATE/timezone type mismatch issues
     const result = await pool.query(
-      `SELECT * FROM finance_activity_history WHERE history_date = $1 ORDER BY recorded_at DESC`,
+      `SELECT * FROM finance_activity_history
+       WHERE TO_CHAR(history_date, 'YYYY-MM-DD') = $1
+       ORDER BY recorded_at DESC`,
       [date],
     );
+
+    console.log(`[FinanceHistory] GET /history?date=${date} → ${result.rows.length} rows`);
 
     const history = result.rows.map((row) => ({
       id: row.id,
@@ -866,6 +900,25 @@ router.get("/history", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("GET /finance/history:", err.message);
     res.status(500).json({ error: "Failed to fetch history" });
+  }
+});
+
+// POST: manual history snapshot — records current status of all activities for a given date
+router.post("/history/snapshot", async (req: Request, res: Response) => {
+  try {
+    const dateStr: string = req.body?.date || getISTDateStr();
+    const allRows = await pool.query(`SELECT * FROM finance_activities`);
+    const all = allRows.rows.map(decryptActivity);
+    let recorded = 0;
+    for (const a of all) {
+      await upsertActivityHistory(a, dateStr);
+      recorded++;
+    }
+    console.log(`[FinanceHistory] Manual snapshot: recorded ${recorded} activities for ${dateStr}`);
+    res.json({ recorded, date: dateStr });
+  } catch (err: any) {
+    console.error("POST /finance/history/snapshot:", err.message);
+    res.status(500).json({ error: "Failed to snapshot history" });
   }
 });
 

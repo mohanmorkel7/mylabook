@@ -1691,9 +1691,11 @@ interface HistoryRecord {
 }
 
 function HistoryTab() {
+  const qc = useQueryClient();
   const ist = getISTNow();
   const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
   const [selectedDate, setSelectedDate] = useState(todayIST);
+  const [snapping, setSnapping] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["finance-history", selectedDate] as [string, string],
@@ -1701,6 +1703,19 @@ function HistoryTab() {
     staleTime: 0,
     refetchOnMount: true,
   });
+
+  const takeSnapshot = async () => {
+    setSnapping(true);
+    try {
+      await apiFetch("/history/snapshot", {
+        method: "POST",
+        body: JSON.stringify({ date: selectedDate }),
+      });
+      qc.invalidateQueries({ queryKey: ["finance-history", selectedDate] });
+    } catch { /* ignore */ } finally {
+      setSnapping(false);
+    }
+  };
 
   const records: HistoryRecord[] = data?.history ?? [];
 
@@ -1730,7 +1745,7 @@ function HistoryTab() {
               <p className="text-xs text-gray-500">End-of-day status snapshots per activity</p>
             </div>
           </div>
-          <div className="sm:ml-auto flex items-center gap-3">
+          <div className="sm:ml-auto flex items-center gap-3 flex-wrap">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Date</label>
             <input
               type="date"
@@ -1739,6 +1754,19 @@ function HistoryTab() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
             />
+            <button
+              onClick={takeSnapshot}
+              disabled={snapping}
+              title="Record current status of all activities for this date"
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {snapping ? (
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <History className="w-3.5 h-3.5" />
+              )}
+              Snapshot Now
+            </button>
           </div>
         </div>
 

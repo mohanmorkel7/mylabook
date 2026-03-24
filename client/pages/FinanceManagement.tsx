@@ -2027,6 +2027,7 @@ function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
   // Column widths: Sno=48px, Category=160px, dynamic cols=180px
   const SNO_W = 48;
   const CAT_W = 160;
+  const COL_W = 180; // first dynamic col — frozen as 3rd column
 
   return (
     <div className="space-y-5">
@@ -2098,9 +2099,12 @@ function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
                     className="px-3 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wide border-b-2 border-r border-gray-200">
                     Category
                   </th>
-                  {/* Dynamic column headers */}
-                  {cols.map((col) => (
-                    <th key={col.id} style={{ background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }}
+                  {/* Dynamic column headers — first one is also frozen (3rd column) */}
+                  {cols.map((col, colIdx) => (
+                    <th key={col.id}
+                      style={colIdx === 0
+                        ? { background: "#F1F5F9", position: "sticky", left: SNO_W + CAT_W, top: 0, zIndex: 5, width: COL_W, minWidth: COL_W }
+                        : { background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }}
                       className="px-3 py-3 text-left border-b-2 border-r border-gray-200 group">
                       {editingColId === col.id ? (
                         <input autoFocus
@@ -2159,13 +2163,16 @@ function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
                         </span>
                       )}
                     </td>
-                    {/* Dynamic cells */}
-                    {cols.map((col) => {
+                    {/* Dynamic cells — first one also frozen as 3rd column */}
+                    {cols.map((col, colIdx) => {
                       const colKey = String(col.id);
                       const val = row.extra_data[colKey] ?? "";
                       const isEditing = editingCell?.rowId === row.id && editingCell?.colKey === colKey;
+                      const isThirdFrozen = colIdx === 0;
                       return (
-                        <td key={col.id} className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text" onClick={() => startEdit(row.id, colKey, val)}>
+                        <td key={col.id}
+                          style={isThirdFrozen ? { position: "sticky", left: SNO_W + CAT_W, zIndex: 2, background: "white", width: COL_W, minWidth: COL_W } : {}}
+                          className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text" onClick={() => startEdit(row.id, colKey, val)}>
                           {isEditing ? (
                             <input autoFocus
                               className="w-full px-1.5 py-0.5 text-sm text-gray-700 bg-white border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"

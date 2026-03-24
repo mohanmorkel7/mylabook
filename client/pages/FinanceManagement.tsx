@@ -1726,13 +1726,23 @@ function ManagementTab({ canCreate }: { canCreate: boolean }) {
 
   const fmtD = (d: string | null) => d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
+  const [filter, setFilter] = useState<"all" | "open" | "closed">("all");
+  const openCount = tasks.filter((t) => t.open_close === "open").length;
+  const closedCount = tasks.filter((t) => t.open_close === "closed").length;
+  const filtered = tasks.filter((t) => filter === "all" ? true : t.open_close === filter);
+
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">Management Tasks</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{tasks.length} total records</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
+            <ClipboardList className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Management Tasks</h2>
+            <p className="text-xs text-gray-500">{openCount} open · {closedCount} closed</p>
+          </div>
         </div>
         {canCreate && (
           <button onClick={() => { setEditTask(null); setForm(blankMgmt); setShowModal(true); }}
@@ -1742,48 +1752,72 @@ function ManagementTab({ canCreate }: { canCreate: boolean }) {
         )}
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                {["Sl No", "Date of Initiating", "Action Items", "Open / Close", "Status Update", "Next Action Date", "Closed Date", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {isLoading ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400 text-sm">Loading…</td></tr>
-              ) : tasks.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center">
-                  <ClipboardList className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-                  <p className="text-gray-400 text-sm">No tasks yet. Click "Add Task" to get started.</p>
-                </td></tr>
-              ) : tasks.map((t, idx) => {
-                const oc = OPEN_CLOSE_OPTS.find((o) => o.value === t.open_close) ?? OPEN_CLOSE_OPTS[0];
-                return (
-                  <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{idx + 1}</td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fmtD(t.date_initiating)}</td>
-                    <td className="px-4 py-3 text-gray-900 font-medium max-w-[220px]">
-                      <p className="line-clamp-2">{t.action_items}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
-                        style={{ backgroundColor: oc.color + "18", color: oc.color }}>
-                        {oc.label}
+      {/* Filter tabs */}
+      <div className="flex items-center gap-2">
+        {([["all", "All", tasks.length], ["open", "Open", openCount], ["closed", "Closed", closedCount]] as const).map(([key, label, count]) => (
+          <button key={key} onClick={() => setFilter(key)}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
+              filter === key
+                ? key === "closed" ? "bg-green-600 text-white border-green-600" : key === "open" ? "bg-blue-600 text-white border-blue-600" : "bg-gray-800 text-white border-gray-800"
+                : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+            }`}>
+            {label}
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${filter === key ? "bg-white/20" : "bg-gray-100"}`}>{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Todo list */}
+      <div className="space-y-2.5">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-14 flex flex-col items-center gap-3">
+            <ClipboardList className="w-10 h-10 text-gray-200" />
+            <p className="text-gray-400 text-sm font-medium">
+              {filter === "all" ? 'No tasks yet. Click "Add Task" to get started.' : `No ${filter} tasks.`}
+            </p>
+          </div>
+        ) : filtered.map((t, idx) => {
+          const isClosed = t.open_close === "closed";
+          return (
+            <div key={t.id} className={`group bg-white rounded-2xl border transition-all shadow-sm hover:shadow-md ${isClosed ? "border-gray-100 opacity-75" : "border-gray-200"}`}>
+              <div className="flex items-start gap-4 p-4">
+                {/* Toggle circle */}
+                {canCreate ? (
+                  <button
+                    onClick={() => {
+                      const updated = { date_initiating: t.date_initiating?.slice(0, 10) ?? "", action_items: t.action_items, open_close: isClosed ? "open" : "closed", status_update: t.status_update, next_action_date: t.next_action_date?.slice(0, 10) ?? "", closed_date: t.closed_date?.slice(0, 10) ?? "" };
+                      apiFetch(`/management-tasks/${t.id}`, { method: "PUT", body: JSON.stringify(updated) }).then(() => qc.invalidateQueries({ queryKey: ["finance-management-tasks"] }));
+                    }}
+                    className={`mt-0.5 w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${isClosed ? "bg-green-500 border-green-500 text-white" : "border-gray-300 hover:border-green-400"}`}
+                    title={isClosed ? "Mark as Open" : "Mark as Closed"}
+                  >
+                    {isClosed && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  </button>
+                ) : (
+                  <div className={`mt-0.5 w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${isClosed ? "bg-green-500 border-green-500 text-white" : "border-gray-300"}`}>
+                    {isClosed && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  </div>
+                )}
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-gray-300 font-mono">#{idx + 1}</span>
+                      <p className={`text-sm font-semibold text-gray-900 leading-snug ${isClosed ? "line-through text-gray-400" : ""}`}>
+                        {t.action_items}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isClosed ? "bg-green-50 text-green-700" : "bg-blue-50 text-blue-700"}`}>
+                        {isClosed ? "Closed" : "Open"}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 max-w-[180px]">
-                      <p className="line-clamp-2">{t.status_update || "—"}</p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fmtD(t.next_action_date)}</td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{fmtD(t.closed_date)}</td>
-                    <td className="px-4 py-3">
                       {canCreate && (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => openEdit(t)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -1792,13 +1826,36 @@ function ManagementTab({ canCreate }: { canCreate: boolean }) {
                           </button>
                         </div>
                       )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+
+                  {t.status_update && (
+                    <p className="mt-1 text-xs text-gray-500 leading-relaxed">{t.status_update}</p>
+                  )}
+
+                  {/* Date chips */}
+                  <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                    {t.date_initiating && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-lg">
+                        <Calendar className="w-3 h-3 text-gray-400" /> Initiated: {fmtD(t.date_initiating)}
+                      </span>
+                    )}
+                    {t.next_action_date && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-lg">
+                        <Clock className="w-3 h-3" /> Next: {fmtD(t.next_action_date)}
+                      </span>
+                    )}
+                    {t.closed_date && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 border border-green-100 px-2 py-0.5 rounded-lg">
+                        <CheckCheck className="w-3 h-3" /> Closed: {fmtD(t.closed_date)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Add/Edit Modal */}

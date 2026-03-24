@@ -950,6 +950,9 @@ export async function initializeDatabase() {
           assigned_to TEXT,
           reporting_managers TEXT,
           escalation_managers TEXT,
+          overdue_at TIMESTAMP NULL,
+          delayed_at TIMESTAMP NULL,
+          completed_by TEXT,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW(),
           UNIQUE(run_date, period, task_id, subtask_id)
@@ -971,7 +974,10 @@ export async function initializeDatabase() {
           ADD COLUMN IF NOT EXISTS auto_notify BOOLEAN DEFAULT true,
           ADD COLUMN IF NOT EXISTS assigned_to TEXT,
           ADD COLUMN IF NOT EXISTS reporting_managers TEXT,
-          ADD COLUMN IF NOT EXISTS escalation_managers TEXT;
+          ADD COLUMN IF NOT EXISTS escalation_managers TEXT,
+          ADD COLUMN IF NOT EXISTS overdue_at TIMESTAMP NULL,
+          ADD COLUMN IF NOT EXISTS delayed_at TIMESTAMP NULL,
+          ADD COLUMN IF NOT EXISTS completed_by TEXT;
       `);
 
       console.log("finops_tracker table ensured");

@@ -119,6 +119,22 @@ export async function initializeFinanceSchema() {
         updated_at      TIMESTAMPTZ DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS finance_agreement_cols (
+        id        SERIAL PRIMARY KEY,
+        label     TEXT NOT NULL,
+        position  INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS finance_agreement_rows (
+        id         SERIAL PRIMARY KEY,
+        category   TEXT NOT NULL DEFAULT '',
+        extra_data TEXT NOT NULL DEFAULT '{}',
+        position   INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS finance_recruitment (
         id              SERIAL PRIMARY KEY,
         position_name   TEXT NOT NULL,
@@ -190,6 +206,20 @@ export async function initializeFinanceSchema() {
         closed_date     TEXT,
         created_at      TIMESTAMPTZ DEFAULT NOW(),
         updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS finance_agreement_cols (
+        id        SERIAL PRIMARY KEY,
+        label     TEXT NOT NULL,
+        position  INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS finance_agreement_rows (
+        id         SERIAL PRIMARY KEY,
+        category   TEXT NOT NULL DEFAULT '',
+        extra_data TEXT NOT NULL DEFAULT '{}',
+        position   INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
       )`,
 
       // Convert finance_recruitment columns to TEXT
@@ -931,6 +961,75 @@ router.post("/history/snapshot", async (req: Request, res: Response) => {
     console.error("POST /finance/history/snapshot:", err.message);
     res.status(500).json({ error: "Failed to snapshot history" });
   }
+});
+
+// ── Agreement Summary CRUD ────────────────────────────────────────────────────
+function decryptAgreementCol(row: any) {
+  return { id: row.id, label: decrypt(row.label), position: row.position, created_at: row.created_at };
+}
+function decryptAgreementRow(row: any) {
+  const raw = decrypt(row.extra_data || "") || "{}";
+  let extra: Record<string, string> = {};
+  try { extra = JSON.parse(raw); } catch {}
+  return { id: row.id, category: decrypt(row.category) || "", extra_data: extra, position: row.position, created_at: row.created_at, updated_at: row.updated_at };
+}
+
+router.get("/agreement-summary", async (_req: Request, res: Response) => {
+  try {
+    const [colsRes, rowsRes] = await Promise.all([
+      pool.query("SELECT * FROM finance_agreement_cols ORDER BY position, id"),
+      pool.query("SELECT * FROM finance_agreement_rows ORDER BY position, id"),
+    ]);
+    res.json({ cols: colsRes.rows.map(decryptAgreementCol), rows: rowsRes.rows.map(decryptAgreementRow) });
+  } catch { res.status(500).json({ error: "Failed to fetch agreement summary" }); }
+});
+
+router.post("/agreement-cols", async (req: Request, res: Response) => {
+  try {
+    const { label } = req.body;
+    if (!label) return res.status(400).json({ error: "label required" });
+    const pos = await pool.query("SELECT COALESCE(MAX(position),0)+1 AS next FROM finance_agreement_cols");
+    const result = await pool.query("INSERT INTO finance_agreement_cols (label,position) VALUES ($1,$2) RETURNING *", [encrypt(label), pos.rows[0].next]);
+    res.status(201).json({ col: decryptAgreementCol(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to create column" }); }
+});
+
+router.patch("/agreement-cols/:id", async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query("UPDATE finance_agreement_cols SET label=$1 WHERE id=$2 RETURNING *", [encrypt(req.body.label || ""), req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: "Column not found" });
+    res.json({ col: decryptAgreementCol(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to update column" }); }
+});
+
+router.delete("/agreement-cols/:id", async (req: Request, res: Response) => {
+  try { await pool.query("DELETE FROM finance_agreement_cols WHERE id=$1", [req.params.id]); res.json({ success: true }); }
+  catch { res.status(500).json({ error: "Failed to delete column" }); }
+});
+
+router.post("/agreement-rows", async (req: Request, res: Response) => {
+  try {
+    const { category = "", extra_data = {} } = req.body;
+    const pos = await pool.query("SELECT COALESCE(MAX(position),0)+1 AS next FROM finance_agreement_rows");
+    const result = await pool.query("INSERT INTO finance_agreement_rows (category,extra_data,position) VALUES ($1,$2,$3) RETURNING *",
+      [encrypt(category), encrypt(JSON.stringify(extra_data)), pos.rows[0].next]);
+    res.status(201).json({ row: decryptAgreementRow(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to create row" }); }
+});
+
+router.patch("/agreement-rows/:id", async (req: Request, res: Response) => {
+  try {
+    const { category = "", extra_data = {} } = req.body;
+    const result = await pool.query("UPDATE finance_agreement_rows SET category=$1,extra_data=$2,updated_at=NOW() WHERE id=$3 RETURNING *",
+      [encrypt(category), encrypt(JSON.stringify(extra_data)), req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: "Row not found" });
+    res.json({ row: decryptAgreementRow(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to update row" }); }
+});
+
+router.delete("/agreement-rows/:id", async (req: Request, res: Response) => {
+  try { await pool.query("DELETE FROM finance_agreement_rows WHERE id=$1", [req.params.id]); res.json({ success: true }); }
+  catch { res.status(500).json({ error: "Failed to delete row" }); }
 });
 
 // ── Finance SLA Cron Job (server-side, no browser required) ─────────────────

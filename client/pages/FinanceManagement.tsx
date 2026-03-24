@@ -1960,6 +1960,279 @@ function ManagementTab({ canCreate }: { canCreate: boolean }) {
   );
 }
 
+// ─── Agreement Summary Tab ──────────────────────────────────────────────────────
+interface AgreementCol { id: number; label: string; position: number; }
+interface AgreementRow { id: number; category: string; extra_data: Record<string, string>; position: number; }
+
+function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
+  const qc = useQueryClient();
+  const [editingCell, setEditingCell] = useState<{ rowId: number; colKey: string } | null>(null);
+  const [editingColId, setEditingColId] = useState<number | null>(null);
+  const [deleteColId, setDeleteColId] = useState<number | null>(null);
+  const [deleteRowId, setDeleteRowId] = useState<number | null>(null);
+  const [newColName, setNewColName] = useState("");
+  const [showAddCol, setShowAddCol] = useState(false);
+  const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["finance-agreement"],
+    queryFn: () => apiFetch("/agreement-summary"),
+    staleTime: 30_000,
+  });
+  const cols: AgreementCol[] = data?.cols ?? [];
+  const rows: AgreementRow[] = data?.rows ?? [];
+
+  const addColMut = useMutation({
+    mutationFn: (label: string) => apiFetch("/agreement-cols", { method: "POST", body: JSON.stringify({ label }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-agreement"] }); setNewColName(""); setShowAddCol(false); },
+  });
+  const renameColMut = useMutation({
+    mutationFn: ({ id, label }: { id: number; label: string }) => apiFetch(`/agreement-cols/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-agreement"] }); setEditingColId(null); },
+  });
+  const deleteColMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/agreement-cols/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-agreement"] }); setDeleteColId(null); },
+  });
+  const addRowMut = useMutation({
+    mutationFn: () => apiFetch("/agreement-rows", { method: "POST", body: JSON.stringify({ category: "", extra_data: {} }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-agreement"] }),
+  });
+  const updateRowMut = useMutation({
+    mutationFn: ({ id, category, extra_data }: { id: number; category: string; extra_data: Record<string, string> }) =>
+      apiFetch(`/agreement-rows/${id}`, { method: "PATCH", body: JSON.stringify({ category, extra_data }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-agreement"] }),
+  });
+  const deleteRowMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/agreement-rows/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-agreement"] }); setDeleteRowId(null); },
+  });
+
+  const cellKey = (rowId: number, colKey: string) => `${rowId}::${colKey}`;
+
+  const startEdit = (rowId: number, colKey: string, cur: string) => {
+    if (!canCreate) return;
+    setLocalEdits((p) => ({ ...p, [cellKey(rowId, colKey)]: cur }));
+    setEditingCell({ rowId, colKey });
+  };
+
+  const commitEdit = (row: AgreementRow, colKey: string) => {
+    const val = localEdits[cellKey(row.id, colKey)] ?? "";
+    const newCat = colKey === "category" ? val : row.category;
+    const newExtra = colKey === "category" ? row.extra_data : { ...row.extra_data, [colKey]: val };
+    updateRowMut.mutate({ id: row.id, category: newCat, extra_data: newExtra });
+    setEditingCell(null);
+  };
+
+  // Column widths: Sno=48px, Category=160px, dynamic cols=180px
+  const SNO_W = 48;
+  const CAT_W = 160;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+            <CalendarDays className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Agreement Summary</h2>
+            <p className="text-xs text-gray-500">{rows.length} rows · {cols.length + 2} columns (Sno + Category + {cols.length} custom)</p>
+          </div>
+        </div>
+        {canCreate && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => addRowMut.mutate()} disabled={addRowMut.isPending}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition shadow-sm">
+              <Plus className="w-4 h-4" /> Add Row
+            </button>
+            <button onClick={() => setShowAddCol(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">
+              <Plus className="w-4 h-4" /> Add Column
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Add column modal */}
+      {showAddCol && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+            <h3 className="font-bold text-gray-900 mb-4">New Column Title</h3>
+            <input autoFocus type="text" placeholder="e.g. Topic, Value, Notes…" value={newColName}
+              onChange={(e) => setNewColName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && newColName.trim()) addColMut.mutate(newColName.trim()); if (e.key === "Escape") setShowAddCol(false); }}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setShowAddCol(false); setNewColName(""); }} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => newColName.trim() && addColMut.mutate(newColName.trim())} disabled={!newColName.trim() || addColMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-white">
+        {isLoading ? (
+          <div className="h-40 flex items-center justify-center text-gray-400 text-sm">Loading…</div>
+        ) : (
+          <div style={{ overflowX: "auto", maxHeight: "65vh", overflowY: "auto" }}>
+            <table className="text-sm" style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed", minWidth: SNO_W + CAT_W + cols.length * 180 + (canCreate ? 52 : 0) }}>
+              <colgroup>
+                <col style={{ width: SNO_W }} />
+                <col style={{ width: CAT_W }} />
+                {cols.map((c) => <col key={c.id} style={{ width: 180 }} />)}
+                {canCreate && <col style={{ width: 52 }} />}
+              </colgroup>
+              <thead>
+                <tr style={{ position: "sticky", top: 0, zIndex: 4 }}>
+                  {/* Sno - double-frozen */}
+                  <th style={{ position: "sticky", left: 0, top: 0, zIndex: 5, background: "#F1F5F9", width: SNO_W, minWidth: SNO_W }}
+                    className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide border-b-2 border-r border-gray-200">
+                    Sno
+                  </th>
+                  {/* Category - double-frozen */}
+                  <th style={{ position: "sticky", left: SNO_W, top: 0, zIndex: 5, background: "#F1F5F9", width: CAT_W, minWidth: CAT_W }}
+                    className="px-3 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wide border-b-2 border-r border-gray-200">
+                    Category
+                  </th>
+                  {/* Dynamic column headers */}
+                  {cols.map((col) => (
+                    <th key={col.id} style={{ background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }}
+                      className="px-3 py-3 text-left border-b-2 border-r border-gray-200 group">
+                      {editingColId === col.id ? (
+                        <input autoFocus
+                          className="w-full text-xs font-bold text-gray-700 uppercase tracking-wide bg-white border border-indigo-300 rounded px-1 py-0.5 focus:outline-none"
+                          defaultValue={col.label}
+                          onBlur={(e) => renameColMut.mutate({ id: col.id, label: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") renameColMut.mutate({ id: col.id, label: (e.target as HTMLInputElement).value });
+                            if (e.key === "Escape") setEditingColId(null);
+                          }} />
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide flex-1 truncate">{col.label}</span>
+                          {canCreate && (
+                            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
+                              <button onClick={() => setEditingColId(col.id)} className="p-0.5 text-gray-400 hover:text-blue-600 rounded"><Pencil className="w-3 h-3" /></button>
+                              <button onClick={() => setDeleteColId(col.id)} className="p-0.5 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </th>
+                  ))}
+                  {canCreate && <th style={{ background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }} className="border-b-2 border-gray-200" />}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={cols.length + 3} className="px-4 py-16 text-center text-gray-400 text-sm">
+                      <CalendarDays className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                      No rows yet. Click "Add Row" to start.
+                    </td>
+                  </tr>
+                ) : rows.map((row, idx) => (
+                  <tr key={row.id} className="group/row hover:bg-indigo-50/30 transition-colors">
+                    {/* Sno - frozen */}
+                    <td style={{ position: "sticky", left: 0, zIndex: 2, background: "#F8FAFC", width: SNO_W, minWidth: SNO_W }}
+                      className="px-3 py-2 text-gray-400 font-mono text-xs border-r border-b border-gray-100 text-center">
+                      {idx + 1}
+                    </td>
+                    {/* Category - frozen */}
+                    <td style={{ position: "sticky", left: SNO_W, zIndex: 2, background: "white", width: CAT_W, minWidth: CAT_W }}
+                      className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text"
+                      onClick={() => startEdit(row.id, "category", row.category)}>
+                      {editingCell?.rowId === row.id && editingCell?.colKey === "category" ? (
+                        <input autoFocus
+                          className="w-full px-1.5 py-0.5 text-sm font-medium text-gray-800 bg-white border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          value={localEdits[cellKey(row.id, "category")] ?? ""}
+                          onChange={(e) => setLocalEdits((p) => ({ ...p, [cellKey(row.id, "category")]: e.target.value }))}
+                          onBlur={() => commitEdit(row, "category")}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commitEdit(row, "category"); } if (e.key === "Escape") setEditingCell(null); }} />
+                      ) : (
+                        <span className={`block px-1.5 py-0.5 text-sm font-medium min-h-[26px] rounded hover:bg-indigo-50 ${row.category ? "text-gray-800" : "text-gray-300 italic"}`}>
+                          {row.category || (canCreate ? "Click to edit" : "—")}
+                        </span>
+                      )}
+                    </td>
+                    {/* Dynamic cells */}
+                    {cols.map((col) => {
+                      const colKey = String(col.id);
+                      const val = row.extra_data[colKey] ?? "";
+                      const isEditing = editingCell?.rowId === row.id && editingCell?.colKey === colKey;
+                      return (
+                        <td key={col.id} className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text" onClick={() => startEdit(row.id, colKey, val)}>
+                          {isEditing ? (
+                            <input autoFocus
+                              className="w-full px-1.5 py-0.5 text-sm text-gray-700 bg-white border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                              value={localEdits[cellKey(row.id, colKey)] ?? ""}
+                              onChange={(e) => setLocalEdits((p) => ({ ...p, [cellKey(row.id, colKey)]: e.target.value }))}
+                              onBlur={() => commitEdit(row, colKey)}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commitEdit(row, colKey); } if (e.key === "Escape") setEditingCell(null); }} />
+                          ) : (
+                            <span className={`block px-1.5 py-0.5 text-sm min-h-[26px] rounded hover:bg-indigo-50 ${val ? "text-gray-700" : "text-gray-200"}`}>
+                              {val}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    {/* Delete row button */}
+                    {canCreate && (
+                      <td className="px-2 py-1.5 border-b border-gray-100 text-center">
+                        <button onClick={() => setDeleteRowId(row.id)}
+                          className="opacity-0 group-hover/row:opacity-100 p-1 text-gray-300 hover:text-red-500 rounded transition-all">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Delete column confirm */}
+      {deleteColId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 className="w-6 h-6 text-red-600" /></div>
+            <h3 className="font-bold text-gray-900 text-center mb-1">Delete Column?</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">All cell data in this column will be lost.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteColId(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => deleteColMut.mutate(deleteColId)} disabled={deleteColMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete row confirm */}
+      {deleteRowId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 className="w-6 h-6 text-red-600" /></div>
+            <h3 className="font-bold text-gray-900 text-center mb-1">Delete Row?</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteRowId(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => deleteRowMut.mutate(deleteRowId)} disabled={deleteRowMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── History Tab ──────────────────────────────────────────────────────────────
 interface HistoryRecord {
   id: number;
@@ -2445,7 +2718,7 @@ export default function FinanceManagement() {
     };
   }, []);
 
-  const activityCategories = ["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "agreement_summary", "admin"];
+  const activityCategories = ["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "admin"];
 
   // ── Per-user draggable tab order ──────────────────────────────────────────
   const lsKey = userEmail ? `fm_tab_order_${userEmail}` : null;
@@ -2560,6 +2833,7 @@ export default function FinanceManagement() {
         {activeTab === "recruitment" && <RecruitmentTab canCreate={canCreate} />}
         {activeTab === "history" && <HistoryTab />}
         {activeTab === "management" && <ManagementTab canCreate={canCreate} />}
+        {activeTab === "agreement_summary" && <AgreementSummaryTab canCreate={canCreate} />}
         {activityCategories.includes(activeTab) && (
           <ActivityTab
             key={activeTab}

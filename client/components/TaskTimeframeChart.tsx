@@ -5,12 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
+  Tooltip,
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  Cell,
 } from "recharts";
 import { TrendingUp, AlertTriangle, Download } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -393,6 +397,166 @@ function exportToExcel(chartData: HourData[], selectedDate: string) {
   saveAs(new Blob([wbout], { type: "application/octet-stream" }), `finops-hourly-${selectedDate}.xlsx`);
 }
 
+// ─── Client bar chart ─────────────────────────────────────────────────────────
+function ClientBarChart({ chartData }: { chartData: HourData[] }) {
+  const [activeStatus, setActiveStatus] = useState<string | null>(null);
+
+  // Deduplicate tasks across all hours
+  const seen = new Set<string>();
+  const uniqueTasks: TaskItem[] = [];
+  for (const h of chartData) {
+    for (const t of h.task_list) {
+      const k = `${t.task_id}-${t.subtask_id}`;
+      if (!seen.has(k)) { seen.add(k); uniqueTasks.push(t); }
+    }
+  }
+
+  // Group by client name
+  const clientMap: Record<string, Record<string, number>> = {};
+  for (const t of uniqueTasks) {
+    const cn = t.client_name || "Unknown";
+    if (!clientMap[cn]) clientMap[cn] = { completed: 0, in_progress: 0, pending: 0, delayed: 0, overdue: 0 };
+    clientMap[cn][t.status] = (clientMap[cn][t.status] || 0) + 1;
+  }
+
+  const barData = Object.entries(clientMap)
+    .map(([client, counts]) => ({
+      client,
+      completed:   counts.completed   || 0,
+      in_progress: counts.in_progress || 0,
+      pending:     counts.pending     || 0,
+      delayed:     counts.delayed     || 0,
+      overdue:     counts.overdue     || 0,
+      total: Object.values(counts).reduce((a, b) => a + b, 0),
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  if (barData.length === 0) return null;
+
+  const BARS: { key: string; label: string; color: string }[] = [
+    { key: "completed",   label: "Completed",   color: "#10B981" },
+    { key: "in_progress", label: "In Progress", color: "#3B82F6" },
+    { key: "pending",     label: "Pending",     color: "#F59E0B" },
+    { key: "delayed",     label: "Delayed",     color: "#8B5CF6" },
+    { key: "overdue",     label: "Overdue",     color: "#EF4444" },
+  ];
+
+  const CustomTooltipContent = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const total = payload.reduce((s: number, p: any) => s + (p.value || 0), 0);
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-3 text-xs min-w-[160px]">
+        <p className="font-bold text-gray-900 mb-2 text-sm">{label}</p>
+        {payload.map((p: any) => (
+          p.value > 0 && (
+            <div key={p.dataKey} className="flex items-center justify-between gap-4 mb-1">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: p.fill }} />
+                <span className="text-gray-600">{p.name}</span>
+              </span>
+              <span className="font-bold" style={{ color: p.fill }}>{p.value}</span>
+            </div>
+          )
+        ))}
+        <div className="border-t border-gray-100 mt-1.5 pt-1.5 flex justify-between">
+          <span className="text-gray-500">Total</span>
+          <span className="font-bold text-gray-900">{total}</span>
+        </div>
+      </div>
+    );
+  };
+
+  // Label to shorten long client names on x-axis
+  const tickFormatter = (val: string) => val.length > 14 ? val.slice(0, 13) + "…" : val;
+
+  return (
+    <div className="mt-6 pt-5 border-t border-gray-100">
+      {/* Section header */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+          <h3 className="text-sm font-bold text-gray-800">Client Task Breakdown</h3>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{barData.length} clients</span>
+        </div>
+        {/* Status filter pills */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-gray-400 mr-1">Filter:</span>
+          <button
+            onClick={() => setActiveStatus(null)}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all ${
+              activeStatus === null ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+            }`}
+          >All</button>
+          {BARS.map((b) => (
+            <button
+              key={b.key}
+              onClick={() => setActiveStatus(activeStatus === b.key ? null : b.key)}
+              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all ${
+                activeStatus === b.key ? "text-white border-transparent" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+              }`}
+              style={activeStatus === b.key ? { backgroundColor: b.color, borderColor: b.color } : {}}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={barData.length > 6 ? 260 : 220}>
+        <BarChart
+          data={barData}
+          margin={{ top: 4, right: 16, left: 0, bottom: barData.length > 5 ? 70 : 45 }}
+          barCategoryGap="28%"
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+          <XAxis
+            dataKey="client"
+            tick={{ fontSize: 11, fill: "#6B7280" }}
+            tickFormatter={tickFormatter}
+            angle={barData.length > 5 ? -40 : 0}
+            textAnchor={barData.length > 5 ? "end" : "middle"}
+            interval={0}
+          />
+          <YAxis tick={{ fontSize: 11, fill: "#6B7280" }} allowDecimals={false} />
+          <Tooltip content={<CustomTooltipContent />} cursor={{ fill: "#F9FAFB" }} />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+          />
+          {BARS.filter((b) => !activeStatus || b.key === activeStatus).map((b) => (
+            <Bar key={b.key} dataKey={b.key} name={b.label} stackId="a" fill={b.color} radius={b.key === "overdue" ? [3, 3, 0, 0] : [0, 0, 0, 0]} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+
+      {/* Client summary pills */}
+      <div className="flex flex-wrap gap-2 mt-3">
+        {barData.map((d) => {
+          const pct = d.total > 0 ? Math.round((d.completed / d.total) * 100) : 0;
+          return (
+            <div key={d.client} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-1.5">
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-gray-800 leading-tight">{d.client}</span>
+                <span className="text-[10px] text-gray-400">{d.total} tasks</span>
+              </div>
+              <div className="flex items-center gap-1 ml-1">
+                <div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-[10px] font-bold text-green-600">{pct}%</span>
+              </div>
+              {d.overdue > 0 && (
+                <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full">{d.overdue} overdue</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main chart component ──────────────────────────────────────────────────────
 export default function TaskTimeframeChart() {
   const getTodayIST = () => {
@@ -646,6 +810,9 @@ export default function TaskTimeframeChart() {
                 {new Set(chartData.flatMap((d) => d.task_list.map((t) => t.client_name).filter(Boolean))).size} clients
               </span>
             </div>
+
+            {/* Client-based breakdown chart */}
+            <ClientBarChart chartData={chartData} />
           </>
         )}
       </CardContent>

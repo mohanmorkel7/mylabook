@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
-import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -2406,14 +2406,14 @@ export default function FinanceManagement() {
 
         {/* Tabs */}
         <div className="px-6">
-          <div className="flex gap-0 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <div className="flex flex-wrap gap-0 border-b border-gray-200">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-all whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 -mb-px transition-all whitespace-nowrap ${
                     activeTab === tab.key
                       ? "border-green-600 text-green-700 bg-green-50/50"
                       : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"

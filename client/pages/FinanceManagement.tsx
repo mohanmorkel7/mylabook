@@ -1029,12 +1029,30 @@ function ActivityTab({
   const allActivities: Activity[] = data?.activities ?? [];
 
   // For live view: role-based filter
-  const activities = canEditAll
+  const activitiesBase = canEditAll
     ? allActivities
     : allActivities.filter((a) =>
         a.assigned_to.some((v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase()) ||
         a.approval_users.some((v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase()),
       );
+
+  // Today view: only show activities that are actually due today,
+  // and if the status was last recorded on a PREVIOUS day (midnight cron may have missed),
+  // treat it as "pending" so stale statuses never carry over to the next day.
+  const activities = isToday
+    ? activitiesBase
+        .filter((a) => isActivityDueOnDate(a, todayStr))
+        .map((a) => {
+          const updatedIST = a.updated_at
+            ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+            : null;
+          if (updatedIST && updatedIST < todayStr) {
+            // Status is stale from a previous day — show fresh pending for today
+            return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
+          }
+          return a;
+        })
+    : activitiesBase;
 
   // For history view: filter snapshot records by category
   const histRecords: any[] = (histData?.history ?? []).filter(

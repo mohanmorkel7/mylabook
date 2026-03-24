@@ -809,7 +809,7 @@ export default function TicketCharts({
             ) : (
               <div>
                 <DonutChart
-                  items={statuses}
+                  items={statuses.filter((s) => s.status?.toLowerCase() !== "closed")}
                   labelKey="status"
                   valueKey="count"
                 />

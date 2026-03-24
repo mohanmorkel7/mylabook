@@ -57,6 +57,7 @@ interface RecruitmentPosition {
 // ─── Constants ───────────────────────────────────────────────────────────────
 const TABS = [
   { key: "dashboard",         label: "Dashboard",          icon: BarChart3 },
+  { key: "management",        label: "Management",         icon: ClipboardList },
   { key: "finance_accounts",  label: "Finance & Accounts", icon: Briefcase },
   { key: "taxation",          label: "Taxation",           icon: FileText },
   { key: "secretarial",       label: "Secretarial",        icon: CheckCircle2 },
@@ -65,7 +66,6 @@ const TABS = [
   { key: "agreement_summary", label: "Agreement Summary",  icon: CalendarDays },
   { key: "recruitment",       label: "Recruitment",        icon: UserCheck },
   { key: "history",           label: "History",            icon: History },
-  { key: "management",        label: "Management",         icon: ClipboardList },
   { key: "admin",             label: "Admin",              icon: Settings },
 ];
 

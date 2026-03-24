@@ -14,6 +14,7 @@ import {
   AlertCircle, ShieldCheck, Briefcase, TrendingUp, Users, FileText,
   BarChart3, Sun, UserCheck, Bell, CalendarDays, CheckCheck,
   Hourglass, Lock, ChevronRight, Calendar, Circle, History, ClipboardList, Settings,
+  GripVertical,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -2446,6 +2447,49 @@ export default function FinanceManagement() {
 
   const activityCategories = ["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "agreement_summary", "admin"];
 
+  // ── Per-user draggable tab order ──────────────────────────────────────────
+  const lsKey = userEmail ? `fm_tab_order_${userEmail}` : null;
+  const [tabOrder, setTabOrder] = useState<string[]>(() => TABS.map((t) => t.key));
+  const dragIdx = useRef<number | null>(null);
+
+  // Load saved order for this user once email is known
+  useEffect(() => {
+    if (!lsKey) return;
+    try {
+      const saved = localStorage.getItem(lsKey);
+      if (saved) {
+        const parsed: string[] = JSON.parse(saved);
+        // Keep saved order; append any new tabs that aren't in saved yet
+        const merged = [
+          ...parsed.filter((k) => TABS.some((t) => t.key === k)),
+          ...TABS.filter((t) => !parsed.includes(t.key)).map((t) => t.key),
+        ];
+        setTabOrder(merged);
+      }
+    } catch { /* ignore corrupt storage */ }
+  }, [lsKey]);
+
+  const orderedTabs = tabOrder
+    .map((key) => TABS.find((t) => t.key === key))
+    .filter(Boolean) as typeof TABS;
+
+  const handleDragStart = (idx: number) => { dragIdx.current = idx; };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    if (dragIdx.current === null || dragIdx.current === idx) return;
+    const next = [...tabOrder];
+    const [moved] = next.splice(dragIdx.current, 1);
+    next.splice(idx, 0, moved);
+    dragIdx.current = idx;
+    setTabOrder(next);
+  };
+
+  const handleDragEnd = () => {
+    dragIdx.current = null;
+    if (lsKey) localStorage.setItem(lsKey, JSON.stringify(tabOrder));
+  };
+
   return (
     <div className="min-h-screen bg-gray-50/50">
       {/* Header */}
@@ -2479,21 +2523,28 @@ export default function FinanceManagement() {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — draggable, per-user order saved to localStorage */}
         <div className="px-6">
           <div className="flex flex-wrap gap-0 border-b border-gray-200">
-            {TABS.map((tab) => {
+            {orderedTabs.map((tab, idx) => {
               const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
               return (
                 <button
                   key={tab.key}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragEnd={handleDragEnd}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 -mb-px transition-all whitespace-nowrap ${
-                    activeTab === tab.key
+                  title="Drag to reorder"
+                  className={`group flex items-center gap-1.5 px-4 py-3 text-sm font-semibold border-b-2 -mb-px transition-all whitespace-nowrap cursor-grab active:cursor-grabbing select-none ${
+                    isActive
                       ? "border-green-600 text-green-700 bg-green-50/50"
                       : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"
                   }`}
                 >
+                  <GripVertical className="w-3 h-3 opacity-0 group-hover:opacity-30 transition-opacity flex-shrink-0" />
                   <Icon className="w-4 h-4" />
                   {tab.label}
                 </button>

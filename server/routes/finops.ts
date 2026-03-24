@@ -4901,10 +4901,19 @@ router.get("/task-timeframe-hourly", async (req: Request, res: Response) => {
           ft.subtask_name,
           ft.scheduled_time,
           ft.completed_at,
+          ft.started_at,
+          ft.overdue_at,
+          ft.delayed_at,
+          ft.delay_reason,
+          ft.delay_notes,
+          ft.completed_by,
+          ft.assigned_to,
           ft.status,
+          COALESCE(tk.client_name, ft.task_name) AS client_name,
           EXTRACT(HOUR FROM ft.scheduled_time::time)::int             AS sched_hour,
           EXTRACT(HOUR FROM ft.completed_at::timestamp)::int          AS compl_hour
         FROM finops_tracker ft
+        LEFT JOIN finops_tasks tk ON tk.id = ft.task_id
         WHERE ft.run_date = $1::date
           AND ft.period   = 'daily'
           AND ft.scheduled_time IS NOT NULL
@@ -4918,6 +4927,14 @@ router.get("/task-timeframe-hourly", async (req: Request, res: Response) => {
           t.subtask_name,
           t.scheduled_time::text   AS scheduled_time,
           t.completed_at::text     AS completed_at,
+          t.started_at::text       AS started_at,
+          t.overdue_at::text       AS overdue_at,
+          t.delayed_at::text       AS delayed_at,
+          t.delay_reason,
+          t.delay_notes,
+          t.completed_by,
+          t.assigned_to,
+          t.client_name,
           t.status,
           t.sched_hour,
           t.compl_hour
@@ -4945,6 +4962,14 @@ router.get("/task-timeframe-hourly", async (req: Request, res: Response) => {
               'subtask_name',   a.subtask_name,
               'scheduled_time', a.scheduled_time,
               'completed_at',   a.completed_at,
+              'started_at',     a.started_at,
+              'overdue_at',     a.overdue_at,
+              'delayed_at',     a.delayed_at,
+              'delay_reason',   a.delay_reason,
+              'delay_notes',    a.delay_notes,
+              'completed_by',   a.completed_by,
+              'assigned_to',    a.assigned_to,
+              'client_name',    a.client_name,
               'status',         a.status
             )
             ORDER BY a.task_id, a.subtask_id

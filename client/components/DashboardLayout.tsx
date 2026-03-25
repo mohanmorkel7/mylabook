@@ -375,6 +375,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Determine allowed navigation items, with special handling for Settings -> Mail Config
   const allowedNavItems = navigationItems
     .map((item) => {
+      const userDepartment = (user as any).department;
+      const isFinanceDepartment =
+        typeof userDepartment === "string" &&
+        userDepartment.toLowerCase() === "finance";
+
+      if (isFinanceDepartment && item.name !== "Finance Management") {
+        return null;
+      }
+
       // If item has submenu, filter submenu entries by access and also include Mail Config
       if (item.submenu && item.submenu.length > 0) {
         const filteredSubmenu = item.submenu.filter((sub) => {

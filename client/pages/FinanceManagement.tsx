@@ -16,6 +16,7 @@ import {
   Hourglass, Lock, ChevronRight, Calendar, Circle, History, ClipboardList, Settings,
   GripVertical,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -109,6 +110,15 @@ const CAT_LABEL: Record<string, string> = {
   agreement_summary: "Agreement Summary",
   admin:             "Admin",
 };
+
+const ACTIVITY_CATEGORIES = [
+  "finance_accounts",
+  "taxation",
+  "secretarial",
+  "hr_compliance",
+  "legal_contracts",
+  "admin",
+] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 async function apiFetch(path: string, opts?: RequestInit) {
@@ -218,6 +228,178 @@ function ordinal(n: number) {
 function fmtDate(d: string | null) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function exportWorkbook(sheets: { name: string; rows: Record<string, any>[] }[], filename: string) {
+  const workbook = XLSX.utils.book_new();
+
+  sheets.forEach(({ name, rows }) => {
+    const safeRows = rows.length > 0 ? rows : [{ "No records": "No data available" }];
+    const worksheet = XLSX.utils.json_to_sheet(safeRows);
+    worksheet["!cols"] = Object.keys(safeRows[0] || {}).map((key) => ({
+      wch: Math.min(Math.max(key.length + 2, 14), 40),
+    }));
+    XLSX.utils.book_append_sheet(workbook, worksheet, name.slice(0, 31));
+  });
+
+  XLSX.writeFile(workbook, filename);
+}
+
+function exportSingleSheet(filename: string, sheetName: string, rows: Record<string, any>[]) {
+  exportWorkbook([{ name: sheetName, rows }], filename);
+}
+
+function joinExcelList(values: string[] | undefined) {
+  return (values ?? []).map((v) => extractName(v)).join(", ");
+}
+
+function activityRowToExcel(a: Activity) {
+  return {
+    ID: a.id,
+    "Activity ID": a.activity_id,
+    Category: CAT_LABEL[a.category] ?? a.category,
+    "Activity Name": a.activity_name,
+    Description: a.description || "",
+    Duration: a.duration,
+    Status: a.status,
+    "Reason Not Completed": a.reason_non_completion || "",
+    "Due Date": a.due_date ? fmtDate(a.due_date) : "",
+    "Assigned To": joinExcelList(a.assigned_to),
+    "Approval Users": joinExcelList(a.approval_users),
+    "Scheduled Day": a.scheduled_day ?? "",
+    "Scheduled Weekdays": (a.scheduled_weekdays ?? []).map((d) => WEEKDAYS.find((w) => w.value === d)?.short ?? String(d)).join(", "),
+    "Scheduled Start Date": a.scheduled_start_date ? fmtDate(a.scheduled_start_date) : "",
+    "Pending Approval": a.pending_approval ? "Yes" : "No",
+    "Approved At": a.approved_at ? fmtDate(a.approved_at) : "",
+    "Approved By": a.approved_by || "",
+    "Created At": a.created_at ? fmtDate(a.created_at) : "",
+    "Updated At": a.updated_at ? fmtDate(a.updated_at) : "",
+  };
+}
+
+function recruitmentRowToExcel(p: RecruitmentPosition) {
+  return {
+    ID: p.id,
+    "Position Name": p.position_name,
+    "Date Open": p.date_open ? fmtDate(p.date_open) : "",
+    "Date Close": p.date_close ? fmtDate(p.date_close) : "",
+    Applied: p.cvs_applied,
+    Shortlisted: p.cvs_shortlist,
+    Interviewed: p.cvs_interviewed,
+    "On Hold": p.cvs_on_hold,
+    Selected: p.selected,
+    "Created At": p.created_at ? fmtDate(p.created_at) : "",
+  };
+}
+
+function managementRowToExcel(t: MgmtTask) {
+  return {
+    ID: t.id,
+    "Date Initiating": t.date_initiating ? fmtDate(t.date_initiating) : "",
+    "Action Items": t.action_items,
+    "Open / Close": t.open_close,
+    "Status Update": t.status_update,
+    "Next Action Date": t.next_action_date ? fmtDate(t.next_action_date) : "",
+    "Closed Date": t.closed_date ? fmtDate(t.closed_date) : "",
+    "Created At": t.created_at ? fmtDate(t.created_at) : "",
+  };
+}
+
+function agreementRowToExcel(row: AgreementRow, cols: AgreementCol[], index: number) {
+  const mapped: Record<string, any> = {
+    Sno: index + 1,
+    Category: row.category,
+  };
+  cols.forEach((col) => {
+    mapped[col.label] = row.extra_data[String(col.id)] ?? "";
+  });
+  return mapped;
+}
+
+function historyRowToExcel(r: HistoryRecord) {
+  return {
+    ID: r.id,
+    "Activity Ref ID": r.activity_ref_id,
+    "History Date": r.history_date,
+    "Activity ID": r.activity_id,
+    Category: CAT_LABEL[r.category] ?? r.category,
+    "Activity Name": r.activity_name,
+    Duration: r.duration,
+    Status: r.status,
+    "Reason Not Completed": r.reason_non_completion || "",
+    "Assigned To": joinExcelList(r.assigned_to),
+    "Recorded At": r.recorded_at ? fmtDate(r.recorded_at) : "",
+  };
+}
+
+function dashboardSummaryRows(data: any) {
+  const statusTotals: { status: string; count: number }[] = data?.status_totals ?? [];
+  const recruitment = data?.recruitment ?? {};
+  const recentActivities = data?.recent_activities ?? [];
+  const todayDaily: Activity[] = (data?.today_daily ?? []) as Activity[];
+
+  const rows: Record<string, any>[] = [];
+  statusTotals.forEach((item) => {
+    rows.push({ Section: "Status Totals", Metric: STATUS_MAP[item.status]?.label ?? item.status, Value: Number(item.count) });
+  });
+
+  rows.push({ Section: "Recruitment", Metric: "Total Positions", Value: Number(recruitment.total_positions ?? 0) });
+  rows.push({ Section: "Recruitment", Metric: "Applied", Value: Number(recruitment.total_applied ?? 0) });
+  rows.push({ Section: "Recruitment", Metric: "Shortlisted", Value: Number(recruitment.total_shortlisted ?? 0) });
+  rows.push({ Section: "Recruitment", Metric: "Interviewed", Value: Number(recruitment.total_interviewed ?? 0) });
+  rows.push({ Section: "Recruitment", Metric: "On Hold", Value: Number(recruitment.total_on_hold ?? 0) });
+  rows.push({ Section: "Recruitment", Metric: "Selected", Value: Number(recruitment.total_selected ?? 0) });
+
+  rows.push({ Section: "Today Daily", Metric: "Pending Count", Value: todayDaily.length });
+  todayDaily.forEach((a) => {
+    rows.push({ Section: "Today Daily", Metric: a.activity_name, Value: `${CAT_LABEL[a.category] ?? a.category} · ${a.status}` });
+  });
+
+  recentActivities.forEach((a: any) => {
+    rows.push({ Section: "Recent Activities", Metric: a.activity_name, Value: `${CAT_LABEL[a.category] ?? a.category} · ${a.status}` });
+  });
+
+  return rows;
+}
+
+async function exportAllFinanceTabsToExcel() {
+  const today = getISTDateStr();
+  const activityCategories = [...ACTIVITY_CATEGORIES];
+
+  const [dashboard, recruitment, agreement, history, management, ...activityResponses] = await Promise.all([
+    apiFetch("/dashboard"),
+    apiFetch("/recruitment"),
+    apiFetch("/agreement-summary"),
+    apiFetch(`/history?date=${today}`),
+    apiFetch("/management-tasks"),
+    ...activityCategories.map((category) => apiFetch(`/activities?category=${category}`)),
+  ]);
+
+  const sheets = [
+    { name: "Dashboard", rows: dashboardSummaryRows(dashboard) },
+    ...activityResponses.map((response, index) => ({
+      name: CAT_LABEL[activityCategories[index]] ?? activityCategories[index],
+      rows: (response?.activities ?? []).map((a: Activity) => activityRowToExcel(a)),
+    })),
+    {
+      name: "Management",
+      rows: (management?.tasks ?? []).map((t: MgmtTask) => managementRowToExcel(t)),
+    },
+    {
+      name: "Recruitment",
+      rows: (recruitment?.positions ?? []).map((p: RecruitmentPosition) => recruitmentRowToExcel(p)),
+    },
+    {
+      name: "Agreement Summary",
+      rows: ((agreement?.rows ?? []) as AgreementRow[]).map((row, index) => agreementRowToExcel(row, agreement?.cols ?? [], index)),
+    },
+    {
+      name: "History",
+      rows: ((history?.history ?? []) as HistoryRecord[]).map((row) => historyRowToExcel(row)),
+    },
+  ];
+
+  exportWorkbook(sheets, `finance-management-all-tabs-${today}.xlsx`);
 }
 
 // ─── isActivityDueOnDate (client-side, mirrors server logic) ─────────────────
@@ -1107,8 +1289,37 @@ function ActivityTab({
     if (!isToday) qc.invalidateQueries({ queryKey: ["finance-history", selectedDate, category] });
   };
 
+  const handleExport = () => {
+    const label = CAT_LABEL[category] ?? category;
+    if (isToday) {
+      exportSingleSheet(
+        `finance-${category}-${selectedDate}.xlsx`,
+        label,
+        filtered.map(activityRowToExcel),
+      );
+      return;
+    }
+
+    exportSingleSheet(
+      `finance-${category}-history-${selectedDate}.xlsx`,
+      `${label} History`,
+      filteredHist.map(historyRowToExcel),
+    );
+  };
+
   return (
     <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">{CAT_LABEL[category] ?? category}</h2>
+          <p className="text-xs text-gray-500">{isToday ? `${filtered.length} visible ${filtered.length === 1 ? "activity" : "activities"}` : `${filteredHist.length} historical ${filteredHist.length === 1 ? "record" : "records"}`}</p>
+        </div>
+        <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
+          <FileText className="w-4 h-4" /> Export to Excel
+        </Button>
+      </div>
+
       {/* Date picker bar */}
       <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
         <CalendarDays className="w-4 h-4 text-blue-500 flex-shrink-0" />
@@ -1485,6 +1696,10 @@ function RecruitmentTab({ canCreate }: { canCreate: boolean }) {
 
   const conversionRate = totals.applied > 0 ? Math.round((totals.selected / totals.applied) * 100) : 0;
 
+  const handleExport = () => {
+    exportSingleSheet("finance-recruitment.xlsx", "Recruitment", positions.map(recruitmentRowToExcel));
+  };
+
   // Recruitment modal embedded
   const blank = { position_name: "", date_open: "", date_close: "", cvs_applied: 0, cvs_shortlist: 0, cvs_interviewed: 0, cvs_on_hold: 0, selected: 0 };
   const [form, setForm] = useState(blank);
@@ -1541,17 +1756,22 @@ function RecruitmentTab({ canCreate }: { canCreate: boolean }) {
         ))}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h3 className="font-bold text-gray-900">Open Positions</h3>
           <p className="text-sm text-gray-500">{positions.length} position{positions.length !== 1 ? "s" : ""} tracked</p>
         </div>
-        {canCreate && (
-          <Button onClick={() => { setEditPos(null); setModalOpen(true); }}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl gap-1.5">
-            <Plus className="w-4 h-4" /> Add Position
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
+            <FileText className="w-4 h-4" /> Export to Excel
           </Button>
-        )}
+          {canCreate && (
+            <Button onClick={() => { setEditPos(null); setModalOpen(true); }}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl gap-1.5">
+              <Plus className="w-4 h-4" /> Add Position
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -1750,6 +1970,10 @@ function ManagementTab({ canCreate }: { canCreate: boolean }) {
   const closedCount = tasks.filter((t) => t.open_close === "closed").length;
   const filtered = tasks.filter((t) => filter === "all" ? true : t.open_close === filter);
 
+  const handleExport = () => {
+    exportSingleSheet("finance-management-tasks.xlsx", "Management Tasks", filtered.map(managementRowToExcel));
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -1763,12 +1987,17 @@ function ManagementTab({ canCreate }: { canCreate: boolean }) {
             <p className="text-xs text-gray-500">{openCount} open · {closedCount} closed</p>
           </div>
         </div>
-        {canCreate && (
-          <button onClick={() => { setEditTask(null); setForm(blankMgmt); setShowModal(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm">
-            <Plus className="w-4 h-4" /> Add Task
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
+            <FileText className="w-4 h-4" /> Export to Excel
+          </Button>
+          {canCreate && (
+            <button onClick={() => { setEditTask(null); setForm(blankMgmt); setShowModal(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm">
+              <Plus className="w-4 h-4" /> Add Task
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter tabs */}
@@ -2029,6 +2258,10 @@ function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
   const CAT_W = 160;
   const COL_W = 180; // first dynamic col — frozen as 3rd column
 
+  const handleExport = () => {
+    exportSingleSheet("finance-agreement-summary.xlsx", "Agreement Summary", rows.map((row, index) => agreementRowToExcel(row, cols, index)));
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -2042,18 +2275,23 @@ function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
             <p className="text-xs text-gray-500">{rows.length} rows · {cols.length + 2} columns (Sno + Category + {cols.length} custom)</p>
           </div>
         </div>
-        {canCreate && (
-          <div className="flex items-center gap-2">
-            <button onClick={() => addRowMut.mutate()} disabled={addRowMut.isPending}
-              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition shadow-sm">
-              <Plus className="w-4 h-4" /> Add Row
-            </button>
-            <button onClick={() => setShowAddCol(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">
-              <Plus className="w-4 h-4" /> Add Column
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
+            <FileText className="w-4 h-4" /> Export to Excel
+          </Button>
+          {canCreate && (
+            <>
+              <button onClick={() => addRowMut.mutate()} disabled={addRowMut.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition shadow-sm">
+                <Plus className="w-4 h-4" /> Add Row
+              </button>
+              <button onClick={() => setShowAddCol(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">
+                <Plus className="w-4 h-4" /> Add Column
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Add column modal */}
@@ -2296,6 +2534,10 @@ function HistoryTab() {
     return acc;
   }, {});
 
+  const handleExport = () => {
+    exportSingleSheet(`finance-history-${selectedDate}.xlsx`, `History ${selectedDate}`, records.map(historyRowToExcel));
+  };
+
   return (
     <div className="space-y-5">
       {/* Header + Date Picker */}
@@ -2311,6 +2553,9 @@ function HistoryTab() {
             </div>
           </div>
           <div className="sm:ml-auto flex items-center gap-3 flex-wrap">
+            <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
+              <FileText className="w-4 h-4" /> Export to Excel
+            </Button>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Date</label>
             <input
               type="date"
@@ -2437,12 +2682,22 @@ function HistoryTab() {
 
 // ─── Dashboard Tab ────────────────────────────────────────────────────────────
 function DashboardTab({ userEmail, canEditAll }: { userEmail: string; canEditAll: boolean }) {
+  const [exporting, setExporting] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["finance-dashboard"],
     queryFn: () => apiFetch("/dashboard"),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      await exportAllFinanceTabsToExcel();
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -2489,6 +2744,21 @@ function DashboardTab({ userEmail, canEditAll }: { userEmail: string; canEditAll
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Dashboard Overview</h2>
+          <p className="text-xs text-gray-500">Summary of all finance tabs and current activity status</p>
+        </div>
+        <Button variant="outline" onClick={handleExport} disabled={exporting} className="rounded-xl gap-2">
+          {exporting ? (
+            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <FileText className="w-4 h-4" />
+          )}
+          Export to Excel
+        </Button>
+      </div>
+
       {/* Today's daily pending */}
       {todayDaily.length > 0 && (
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5">
@@ -2725,8 +2995,6 @@ export default function FinanceManagement() {
     };
   }, []);
 
-  const activityCategories = ["finance_accounts", "taxation", "secretarial", "hr_compliance", "legal_contracts", "admin"];
-
   // ── Per-user draggable tab order ──────────────────────────────────────────
   const lsKey = userEmail ? `fm_tab_order_${userEmail}` : null;
   const [tabOrder, setTabOrder] = useState<string[]>(() => TABS.map((t) => t.key));
@@ -2841,7 +3109,7 @@ export default function FinanceManagement() {
         {activeTab === "history" && <HistoryTab />}
         {activeTab === "management" && <ManagementTab canCreate={canCreate} />}
         {activeTab === "agreement_summary" && <AgreementSummaryTab canCreate={canCreate} />}
-        {activityCategories.includes(activeTab) && (
+        {ACTIVITY_CATEGORIES.includes(activeTab as (typeof ACTIVITY_CATEGORIES)[number]) && (
           <ActivityTab
             key={activeTab}
             category={activeTab}

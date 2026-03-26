@@ -1185,6 +1185,47 @@ export async function processEmailsForConfigs(
 /**
  * Fetch attachments from Microsoft Graph API and convert image attachments to base64 data URLs
  */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string,
+  timeoutMs: number = 30000,
+  retries: number = 2,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+    } catch (error: any) {
+      const message = error?.message || String(error);
+      const isRetryable =
+        message.includes("ECONNRESET") ||
+        message.includes("fetch failed") ||
+        message.includes("network") ||
+        error?.name === "AbortError";
+
+      if (!isRetryable || attempt === retries) {
+        throw error;
+      }
+
+      const delayMs = 500 * Math.pow(2, attempt);
+      console.warn(
+        `[${label}] Attempt ${attempt + 1} failed: ${message}. Retrying in ${delayMs}ms...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw new Error(`${label} failed after retries`);
+}
+
 async function fetchAttachmentData(
   token: string,
   emailId: string,
@@ -1205,21 +1246,17 @@ async function fetchAttachmentData(
       `[FetchAttachmentData] Fetching bytes from: ${bytesUrl.substring(0, 80)}...`,
     );
 
-    const controller = new AbortController();
-    // Increased timeout from 20s to 30s for downloading attachment bytes
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    let bytesRes;
-    try {
-      bytesRes = await fetch(bytesUrl, {
+    const bytesRes = await fetchWithRetry(
+      bytesUrl,
+      {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+      },
+      "FetchAttachmentData",
+      30000,
+      2,
+    );
 
     if (!bytesRes.ok) {
       console.warn(
@@ -1489,7 +1526,7 @@ export async function fetchEmailAttachments(
 
   try {
     // Fetch raw MIME content of the email
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages/${messageId}/$value`,
       {
         method: "GET",
@@ -1497,6 +1534,9 @@ export async function fetchEmailAttachments(
           Authorization: `Bearer ${graphToken}`,
         },
       },
+      "EmailInlineImages",
+      30000,
+      2,
     );
 
     if (!response.ok) {
@@ -2310,11 +2350,17 @@ export async function getTodayEmails(
 
     const url = `https://graph.microsoft.com/v1.0/users/${sharedMailbox}/messages/${messageId}/attachments/${attachmentId}/$value`;
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${graphToken}`,
+    const response = await fetchWithRetry(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${graphToken}`,
+        },
       },
-    });
+      "EmailInlineImages",
+      30000,
+      2,
+    );
 
     if (!response.ok) {
       console.error(

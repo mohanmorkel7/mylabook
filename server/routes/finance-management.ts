@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { pool } from "../database/connection";
+import { pool, queryWithRetry } from "../database/connection";
 import crypto from "crypto";
 
 const router = Router();
@@ -622,16 +622,25 @@ router.delete("/activities/:id", async (req: Request, res: Response) => {
 // POST: auto-overdue — fetch all, filter in JS (all fields encrypted)
 router.post("/auto-overdue", async (_req: Request, res: Response) => {
   try {
-    const istQuery = await pool.query(
-      `SELECT EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Asia/Kolkata') * 60 +
+    const istQuery = await queryWithRetry(
+      () =>
+        pool.query(
+          `SELECT EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Asia/Kolkata') * 60 +
               EXTRACT(MINUTE FROM NOW() AT TIME ZONE 'Asia/Kolkata') AS ist_minutes`,
+        ),
+      2,
+      500,
     );
     const istMinutes = Number(istQuery.rows[0].ist_minutes);
     if (istMinutes < 17 * 60) {
       return res.json({ updated: 0, message: "Before 5 PM IST — no auto-overdue" });
     }
 
-    const allRows = await pool.query(`SELECT * FROM finance_activities`);
+    const allRows = await queryWithRetry(
+      () => pool.query(`SELECT * FROM finance_activities`),
+      2,
+      500,
+    );
     const toUpdate = allRows.rows
       .map(decryptActivity)
       .filter(
@@ -639,9 +648,14 @@ router.post("/auto-overdue", async (_req: Request, res: Response) => {
       );
 
     for (const a of toUpdate) {
-      await pool.query(
-        `UPDATE finance_activities SET status=$1, updated_at=NOW() WHERE id=$2`,
-        [encrypt("overdue"), a.id],
+      await queryWithRetry(
+        () =>
+          pool.query(
+            `UPDATE finance_activities SET status=$1, updated_at=NOW() WHERE id=$2`,
+            [encrypt("overdue"), a.id],
+          ),
+        2,
+        500,
       );
     }
     res.json({ updated: toUpdate.length });

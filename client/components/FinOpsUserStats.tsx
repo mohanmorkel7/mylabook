@@ -157,6 +157,22 @@ export default function FinOpsUserStats() {
       .slice(0, 10); // Top 10 clients
   }, [productivityData]);
 
+  // Helper: Format date only (YYYY-MM-DD)
+  const formatDate = (dateString: string | null): string => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("en-CA"); // YYYY-MM-DD format
+  };
+
+  // Helper: Format time only (HH:MM:SS)
+  const formatTime = (dateString: string | null): string => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString("en-US", { hour12: false });
+  };
+
   // Helper: Export productivity data to Excel
   const exportProductivityToExcel = () => {
     if (!Array.isArray(productivityData) || productivityData.length === 0) {
@@ -171,8 +187,10 @@ export default function FinOpsUserStats() {
         "Sub Task Name": row.subtask_name || "",
         "Client Name": row.client_name || "",
         "Period": row.period || "",
-        "Start Time": row.started_at ? new Date(row.started_at).toLocaleString() : "",
-        "Completed Time": row.completed_at ? new Date(row.completed_at).toLocaleString() : "",
+        "Start Date": formatDate(row.started_at),
+        "Start Time": formatTime(row.started_at),
+        "Completed Date": formatDate(row.completed_at),
+        "Completed Time": formatTime(row.completed_at),
         "Duration": formatDuration(duration),
         "Status": row.status || "",
         "Completed By": row.completed_by || "",
@@ -195,8 +213,10 @@ export default function FinOpsUserStats() {
       { wch: 20 }, // Sub Task Name
       { wch: 20 }, // Client Name
       { wch: 12 }, // Period
-      { wch: 20 }, // Start Time
-      { wch: 20 }, // Completed Time
+      { wch: 12 }, // Start Date
+      { wch: 12 }, // Start Time
+      { wch: 12 }, // Completed Date
+      { wch: 12 }, // Completed Time
       { wch: 12 }, // Duration
       { wch: 12 }, // Status
       { wch: 15 }, // Completed By
@@ -436,14 +456,16 @@ export default function FinOpsUserStats() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Task</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Sub Task</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Client</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Start Time</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Completed Time</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Duration</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Completed By</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Task</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Sub Task</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Client</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Start Date</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Start Time</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Completed Date</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Completed Time</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Duration</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Status</th>
+                    <th className="px-3 py-3 text-left font-semibold text-gray-700">Completed By</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -451,23 +473,29 @@ export default function FinOpsUserStats() {
                     const duration = calculateDuration(row.started_at, row.completed_at);
                     return (
                       <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 text-gray-900 max-w-xs truncate" title={row.task_name}>
+                        <td className="px-3 py-3 text-gray-900 max-w-xs truncate text-xs" title={row.task_name}>
                           {row.task_name}
                         </td>
-                        <td className="px-4 py-3 text-gray-700 max-w-xs truncate" title={row.subtask_name}>
+                        <td className="px-3 py-3 text-gray-700 max-w-xs truncate text-xs" title={row.subtask_name}>
                           {row.subtask_name}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{row.client_name}</td>
-                        <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
-                          {row.started_at ? new Date(row.started_at).toLocaleString() : "-"}
+                        <td className="px-3 py-3 text-gray-600 text-xs">{row.client_name}</td>
+                        <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
+                          {formatDate(row.started_at) || "-"}
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
-                          {row.completed_at ? new Date(row.completed_at).toLocaleString() : "-"}
+                        <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
+                          {formatTime(row.started_at) || "-"}
                         </td>
-                        <td className="px-4 py-3 text-gray-700 font-medium">{formatDuration(duration)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
+                          {formatDate(row.completed_at) || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
+                          {formatTime(row.completed_at) || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-gray-700 font-medium text-xs">{formatDuration(duration)}</td>
+                        <td className="px-3 py-3">
                           <Badge
-                            className={
+                            className={`text-xs ${
                               row.status === "completed"
                                 ? "bg-green-100 text-green-800"
                                 : row.status === "overdue"
@@ -475,12 +503,12 @@ export default function FinOpsUserStats() {
                                 : row.status === "in_progress"
                                 ? "bg-blue-100 text-blue-800"
                                 : "bg-gray-100 text-gray-800"
-                            }
+                            }`}
                           >
                             {row.status}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{row.completed_by || "-"}</td>
+                        <td className="px-3 py-3 text-gray-700 text-xs">{row.completed_by || "-"}</td>
                       </tr>
                     );
                   })}

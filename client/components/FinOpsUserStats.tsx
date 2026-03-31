@@ -590,11 +590,32 @@ export default function FinOpsUserStats() {
           </div>
         )}
 
+        {/* Data Quality Alert */}
+        {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (() => {
+          const longDurationTasks = validProductivityData.filter((row: TrackerRow) => {
+            const duration = calculateDuration(row.started_at, row.completed_at);
+            return duration && duration > 24;
+          });
+          return longDurationTasks.length > 0 ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+              <p className="text-amber-900 text-sm font-semibold flex items-center gap-2">
+                ⚠️ Data Quality Note
+              </p>
+              <p className="text-amber-800 text-xs mt-2">
+                {longDurationTasks.length} task(s) have durations spanning more than 24 hours. This includes tasks that started on one date but completed on another.
+                <strong className="ml-1">Total Duration includes all actual hours worked.</strong>
+              </p>
+            </div>
+          ) : null;
+        })()}
+
         {/* Detailed Data Table */}
         {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (
           <Card className="border border-gray-200 shadow-sm">
             <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-              <CardTitle className="text-base font-semibold text-gray-800">Detailed Task Breakdown</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-800">
+                Detailed Task Breakdown ({validProductivityData.length} records)
+              </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 overflow-x-auto">
               <table className="w-full text-sm">

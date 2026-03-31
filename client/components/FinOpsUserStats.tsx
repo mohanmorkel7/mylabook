@@ -478,109 +478,123 @@ export default function FinOpsUserStats() {
         {/* Summary Cards */}
         {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-600 font-medium">Total Subtasks</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{validProductivityData.length}</p>
-                  </div>
-                  <div className="bg-blue-100 rounded-full p-3">
-                    <BarChart3 className="w-6 h-6 text-blue-600" />
-                  </div>
+            {/* Total Subtasks Card */}
+            <div className="group relative bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-default overflow-hidden">
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-blue-400 opacity-10 rounded-full -mr-10 -mt-10"></div>
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Total Subtasks</p>
+                  <p className="text-4xl font-bold text-white mt-2">{validProductivityData.length}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg p-3">
+                  <BarChart3 className="w-7 h-7 text-white" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center text-blue-100 text-xs">
+                <div className="flex-1 h-1 bg-blue-400 opacity-30 rounded-full"></div>
+              </div>
+            </div>
 
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-600 font-medium">Completed</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
-                      {validProductivityData.filter((r: TrackerRow) => r.status === "completed").length}
-                    </p>
-                  </div>
-                  <div className="bg-green-100 rounded-full p-3">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                  </div>
+            {/* Completed Card */}
+            <div className="group relative bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-default overflow-hidden">
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-green-400 opacity-10 rounded-full -mr-10 -mt-10"></div>
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-xs font-semibold uppercase tracking-wider">Completed</p>
+                  <p className="text-4xl font-bold text-white mt-2">
+                    {validProductivityData.filter((r: TrackerRow) => r.status === "completed").length}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg p-3">
+                  <CheckCircle className="w-7 h-7 text-white" />
+                </div>
+              </div>
+              <div className="mt-4 h-1 bg-green-400 opacity-30 rounded-full"></div>
+            </div>
 
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-600 font-medium">Avg Duration</p>
-                    <p className="text-2xl font-bold text-indigo-600 mt-1">
-                      {(() => {
-                        const validDurations = validProductivityData
-                          .map((r: TrackerRow) => calculateDuration(r.started_at, r.completed_at))
-                          .filter((dur: number | null): dur is number => dur !== null);
-                        if (validDurations.length === 0) return "N/A";
-                        const avgDur = validDurations.reduce((a, b) => a + b, 0) / validDurations.length;
-                        return formatDuration(avgDur);
-                      })()}
-                    </p>
-                  </div>
-                  <div className="bg-indigo-100 rounded-full p-3">
-                    <BarChart3 className="w-6 h-6 text-indigo-600" />
-                  </div>
+            {/* Avg Duration Card */}
+            <div className="group relative bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-default overflow-hidden">
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-400 opacity-10 rounded-full -mr-10 -mt-10"></div>
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-indigo-100 text-xs font-semibold uppercase tracking-wider">Avg Duration</p>
+                  <p className="text-2xl font-bold text-white mt-2">
+                    {(() => {
+                      const validDurations = validProductivityData
+                        .map((r: TrackerRow) => calculateDuration(r.started_at, r.completed_at))
+                        .filter((dur: number | null): dur is number => dur !== null);
+                      if (validDurations.length === 0) return "N/A";
+                      const avgDur = validDurations.reduce((a, b) => a + b, 0) / validDurations.length;
+                      return formatDuration(avgDur);
+                    })()}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg p-3">
+                  <BarChart3 className="w-7 h-7 text-white" />
+                </div>
+              </div>
+              <div className="mt-4 h-1 bg-indigo-400 opacity-30 rounded-full"></div>
+            </div>
 
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-600 font-medium">Total Duration</p>
-                    <p className="text-2xl font-bold text-cyan-600 mt-1">
-                      {(() => {
-                        const validDurations = validProductivityData
-                          .map((r: TrackerRow) => calculateDuration(r.started_at, r.completed_at))
-                          .filter((dur: number | null): dur is number => dur !== null);
-                        if (validDurations.length === 0) return "N/A";
-                        const totalDur = validDurations.reduce((a, b) => a + b, 0);
-                        return formatDuration(totalDur);
-                      })()}
-                    </p>
-                  </div>
-                  <div className="bg-cyan-100 rounded-full p-3">
-                    <BarChart3 className="w-6 h-6 text-cyan-600" />
-                  </div>
+            {/* Total Duration Card */}
+            <div className="group relative bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-default overflow-hidden">
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-cyan-400 opacity-10 rounded-full -mr-10 -mt-10"></div>
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-cyan-100 text-xs font-semibold uppercase tracking-wider">Total Duration</p>
+                  <p className="text-2xl font-bold text-white mt-2">
+                    {(() => {
+                      const validDurations = validProductivityData
+                        .map((r: TrackerRow) => calculateDuration(r.started_at, r.completed_at))
+                        .filter((dur: number | null): dur is number => dur !== null);
+                      if (validDurations.length === 0) return "N/A";
+                      const totalDur = validDurations.reduce((a, b) => a + b, 0);
+                      return formatDuration(totalDur);
+                    })()}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg p-3">
+                  <BarChart3 className="w-7 h-7 text-white" />
+                </div>
+              </div>
+              <div className="mt-4 h-1 bg-cyan-400 opacity-30 rounded-full"></div>
+            </div>
 
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-600 font-medium">Unique Users</p>
-                    <p className="text-2xl font-bold text-purple-600 mt-1">{getUniqueUserCount}</p>
-                  </div>
-                  <div className="bg-purple-100 rounded-full p-3">
-                    <Users className="w-6 h-6 text-purple-600" />
-                  </div>
+            {/* Unique Users Card */}
+            <div className="group relative bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-default overflow-hidden">
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-purple-400 opacity-10 rounded-full -mr-10 -mt-10"></div>
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-xs font-semibold uppercase tracking-wider">Unique Users</p>
+                  <p className="text-4xl font-bold text-white mt-2">{getUniqueUserCount}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg p-3">
+                  <Users className="w-7 h-7 text-white" />
+                </div>
+              </div>
+              <div className="mt-4 h-1 bg-purple-400 opacity-30 rounded-full"></div>
+            </div>
 
-            <Card className="border border-gray-200 shadow-sm">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-600 font-medium">Unique Clients</p>
-                    <p className="text-2xl font-bold text-orange-600 mt-1">{clientTaskCountData.length}</p>
-                  </div>
-                  <div className="bg-orange-100 rounded-full p-3">
-                    <Building2 className="w-6 h-6 text-orange-600" />
-                  </div>
+            {/* Unique Clients Card */}
+            <div className="group relative bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-default overflow-hidden">
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity"></div>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-orange-400 opacity-10 rounded-full -mr-10 -mt-10"></div>
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-orange-100 text-xs font-semibold uppercase tracking-wider">Unique Clients</p>
+                  <p className="text-4xl font-bold text-white mt-2">{clientTaskCountData.length}</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="bg-white bg-opacity-20 backdrop-blur-sm rounded-lg p-3">
+                  <Building2 className="w-7 h-7 text-white" />
+                </div>
+              </div>
+              <div className="mt-4 h-1 bg-orange-400 opacity-30 rounded-full"></div>
+            </div>
           </div>
         )}
 

@@ -37,9 +37,6 @@ interface TrackerRow {
   created_at: string;
   updated_at: string;
   client_name: string;
-  assigned_to_fallback?: string;
-  reporting_managers_fallback?: string;
-  escalation_managers_fallback?: string;
 }
 
 export default function FinOpsUserStats() {
@@ -239,9 +236,7 @@ export default function FinOpsUserStats() {
         "Completed By": row.completed_by || "",
         "Approved By": row.approved_by || "",
         "Approved At": row.approved_at ? new Date(row.approved_at).toLocaleString() : "",
-        "Assigned To": parseManagers(row.assigned_to_fallback || row.assigned_to || ""),
-        "Reporting Manager": parseManagers(row.reporting_managers_fallback || row.reporting_managers || ""),
-        "Escalation Manager": parseManagers(row.escalation_managers_fallback || row.escalation_managers || ""),
+        "Assigned To": parseManagers(row.assigned_to || ""),
         "Reason": row.delay_reason || "",
       };
     });
@@ -265,9 +260,7 @@ export default function FinOpsUserStats() {
       { wch: 15 }, // Completed By
       { wch: 15 }, // Approved By
       { wch: 20 }, // Approved At
-      { wch: 15 }, // Assigned To
-      { wch: 20 }, // Reporting Manager
-      { wch: 20 }, // Escalation Manager
+      { wch: 20 }, // Assigned To
       { wch: 20 }, // Reason
     ];
     ws["!cols"] = colWidths;

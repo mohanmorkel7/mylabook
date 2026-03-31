@@ -3011,10 +3011,10 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
         ft.subtask_id,
         ft.subtask_name,
         ft.status,
-        COALESCE(ft.started_at, fs.started_at) as started_at,
-        COALESCE(ft.completed_at, fs.completed_at) as completed_at,
+        ft.started_at,
+        ft.completed_at,
         COALESCE(ft.completed_by, '') as completed_by,
-        COALESCE(ft.assigned_to, fs.assigned_to) as assigned_to,
+        ft.assigned_to,
         ft.reporting_managers,
         ft.escalation_managers,
         ft.approved_by,
@@ -3029,7 +3029,6 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
         ft.updated_at,
         COALESCE(ft.task_name, 'Unknown') as client_name
       FROM finops_tracker ft
-      LEFT JOIN finops_subtasks fs ON ft.subtask_id = fs.id AND ft.task_id = fs.task_id
       ${where}
       ORDER BY ft.run_date DESC, ft.task_id ASC, ft.subtask_id ASC
     `;

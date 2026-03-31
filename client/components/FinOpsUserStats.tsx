@@ -130,14 +130,34 @@ export default function FinOpsUserStats() {
     return `${wholeHours}h ${minutes}m`;
   };
 
+  // Helper: Check if duration is reasonable for the period type
+  const isReasonableDuration = (row: TrackerRow): boolean => {
+    const duration = calculateDuration(row.started_at, row.completed_at);
+    if (duration === null) return false; // Exclude records without duration
+
+    const maxHours =
+      row.period === "daily" ? 48 :      // Daily tasks shouldn't take more than 2 days
+      row.period === "weekly" ? 192 :    // Weekly tasks shouldn't take more than 8 days
+      row.period === "monthly" ? 744 :   // Monthly tasks shouldn't take more than 31 days
+      Infinity;
+
+    return duration > 0 && duration <= maxHours;
+  };
+
+  // Filter productivity data to only include records with valid durations
+  const validProductivityData = useMemo(() => {
+    if (!Array.isArray(productivityData)) return [];
+    return productivityData.filter(isReasonableDuration);
+  }, [productivityData]);
+
   // Helper: Group productivity data by client
   const clientTaskCountData = useMemo(() => {
-    if (!Array.isArray(productivityData) || productivityData.length === 0) {
+    if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) {
       return [];
     }
 
     const clientMap: { [key: string]: { tasks: number; subtasks: number } } = {};
-    productivityData.forEach((row: TrackerRow) => {
+    validProductivityData.forEach((row: TrackerRow) => {
       const client = row.client_name || "Unknown";
       if (!clientMap[client]) {
         clientMap[client] = { tasks: 0, subtasks: 0 };
@@ -155,7 +175,7 @@ export default function FinOpsUserStats() {
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10); // Top 10 clients
-  }, [productivityData]);
+  }, [validProductivityData]);
 
   // Helper: Format date only (YYYY-MM-DD)
   const formatDate = (dateString: string | null): string => {
@@ -175,12 +195,12 @@ export default function FinOpsUserStats() {
 
   // Helper: Export productivity data to Excel
   const exportProductivityToExcel = () => {
-    if (!Array.isArray(productivityData) || productivityData.length === 0) {
-      alert("No data to export");
+    if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) {
+      alert("No valid data to export");
       return;
     }
 
-    const exportData = productivityData.map((row: TrackerRow) => {
+    const exportData = validProductivityData.map((row: TrackerRow) => {
       const duration = calculateDuration(row.started_at, row.completed_at);
       return {
         "Task Name": row.task_name || "",
@@ -303,7 +323,7 @@ export default function FinOpsUserStats() {
               <div className="flex items-end">
                 <button
                   onClick={exportProductivityToExcel}
-                  disabled={isLoadingProductivity || productivityData.length === 0}
+                  disabled={isLoadingProductivity || validProductivityData.length === 0}
                   className="w-full px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg text-sm font-semibold hover:from-green-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-400 flex items-center justify-center gap-2 transition-all"
                 >
                   <Download className="w-4 h-4" />
@@ -320,6 +340,12 @@ export default function FinOpsUserStats() {
             <CardTitle className="text-base font-semibold text-gray-800">Client-wise Subtask Count</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
+            {/* Show warning if data was filtered */}
+            {productivityData.length > validProductivityData.length && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                ⚠️ Filtered {productivityData.length - validProductivityData.length} record(s) with unreasonably long durations (data quality issue)
+              </div>
+            )}
             {isLoadingProductivity ? (
               <div className="text-center py-12 text-gray-500">Loading productivity data...</div>
             ) : clientTaskCountData.length > 0 ? (
@@ -377,14 +403,14 @@ export default function FinOpsUserStats() {
         </Card>
 
         {/* Summary Cards */}
-        {Array.isArray(productivityData) && productivityData.length > 0 && (
+        {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="border border-gray-200 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs text-gray-600 font-medium">Total Subtasks</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{productivityData.length}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{validProductivityData.length}</p>
                   </div>
                   <div className="bg-blue-100 rounded-full p-3">
                     <BarChart3 className="w-6 h-6 text-blue-600" />
@@ -399,7 +425,7 @@ export default function FinOpsUserStats() {
                   <div>
                     <p className="text-xs text-gray-600 font-medium">Completed</p>
                     <p className="text-2xl font-bold text-green-600 mt-1">
-                      {productivityData.filter((r: TrackerRow) => r.status === "completed").length}
+                      {validProductivityData.filter((r: TrackerRow) => r.status === "completed").length}
                     </p>
                   </div>
                   <div className="bg-green-100 rounded-full p-3">
@@ -416,7 +442,7 @@ export default function FinOpsUserStats() {
                     <p className="text-xs text-gray-600 font-medium">Avg Duration</p>
                     <p className="text-2xl font-bold text-indigo-600 mt-1">
                       {(() => {
-                        const validDurations = productivityData
+                        const validDurations = validProductivityData
                           .map((r: TrackerRow) => calculateDuration(r.started_at, r.completed_at))
                           .filter((dur: number | null): dur is number => dur !== null);
                         if (validDurations.length === 0) return "N/A";
@@ -449,7 +475,7 @@ export default function FinOpsUserStats() {
         )}
 
         {/* Detailed Data Table */}
-        {Array.isArray(productivityData) && productivityData.length > 0 && (
+        {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (
           <Card className="border border-gray-200 shadow-sm">
             <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
               <CardTitle className="text-base font-semibold text-gray-800">Detailed Task Breakdown</CardTitle>
@@ -471,7 +497,7 @@ export default function FinOpsUserStats() {
                   </tr>
                 </thead>
                 <tbody>
-                  {productivityData.slice(0, 20).map((row: TrackerRow, idx: number) => {
+                  {validProductivityData.slice(0, 20).map((row: TrackerRow, idx: number) => {
                     const duration = calculateDuration(row.started_at, row.completed_at);
                     return (
                       <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
@@ -516,9 +542,9 @@ export default function FinOpsUserStats() {
                   })}
                 </tbody>
               </table>
-              {productivityData.length > 20 && (
+              {validProductivityData.length > 20 && (
                 <p className="text-xs text-gray-500 mt-3 text-center">
-                  Showing 20 of {productivityData.length} records. Download Excel to see all data.
+                  Showing 20 of {validProductivityData.length} records. Download Excel to see all data.
                 </p>
               )}
             </CardContent>

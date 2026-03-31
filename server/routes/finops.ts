@@ -2998,7 +2998,11 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
     }
     if (completedBy) {
       params.push(completedBy);
-      where += ` AND ft.completed_by = $${params.length}`;
+      const exactIndex = params.length;
+      params.push('%' + completedBy + '%');
+      const likeIndex = params.length;
+      // Check if user completed the task OR is assigned to it (using LIKE for array matching)
+      where += ` AND (ft.completed_by = $${exactIndex} OR ft.assigned_to LIKE $${likeIndex} OR fts.assigned_to::text LIKE $${likeIndex})`;
     }
 
     const query = `

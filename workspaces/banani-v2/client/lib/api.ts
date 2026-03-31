@@ -673,6 +673,22 @@ export class ApiClient {
     return this.request(`/finops/metrics${query ? `?${query}` : ""}`);
   }
 
+  async getFinOpsUserProductivityData(
+    fromDate?: string,
+    toDate?: string,
+    completedBy?: string,
+  ) {
+    const params = new URLSearchParams();
+    if (fromDate) params.append("from_date", fromDate);
+    if (toDate) params.append("to_date", toDate);
+    if (completedBy) params.append("completed_by", completedBy);
+
+    const query = params.toString();
+    return this.request(
+      `/finops/tracker/user-productivity-data${query ? `?${query}` : ""}`,
+    );
+  }
+
   async getFinOpsAccounts() {
     return this.request("/finops/accounts");
   }

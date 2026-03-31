@@ -2978,6 +2978,73 @@ router.get("/tracker", async (req: Request, res: Response) => {
   }
 });
 
+// Get detailed tracker data for user productivity chart with date range and user filters
+router.get("/tracker/user-productivity-data", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+    const completedBy = (req.query.completed_by as string) || null;
+
+    const params: any[] = [];
+    let where = "WHERE 1=1";
+
+    if (fromDate) {
+      params.push(fromDate);
+      where += ` AND ft.run_date >= $${params.length}`;
+    }
+    if (toDate) {
+      params.push(toDate);
+      where += ` AND ft.run_date <= $${params.length}`;
+    }
+    if (completedBy) {
+      params.push(completedBy);
+      where += ` AND ft.completed_by = $${params.length}`;
+    }
+
+    const query = `
+      SELECT
+        ft.id,
+        ft.run_date,
+        ft.period,
+        ft.task_id,
+        ft.task_name,
+        ft.subtask_id,
+        ft.subtask_name,
+        ft.status,
+        ft.started_at,
+        ft.completed_at,
+        ft.completed_by,
+        ft.assigned_to,
+        ft.reporting_managers,
+        ft.escalation_managers,
+        ft.approved_by,
+        ft.approved_at,
+        ft.delay_reason,
+        ft.delay_notes,
+        ft.description,
+        ft.sla_hours,
+        ft.sla_minutes,
+        ft.order_position,
+        ft.created_at,
+        ft.updated_at,
+        -- For now, we'll use task_name as a proxy for client since there's no direct client mapping
+        -- The UI can group by this or handle it in the frontend
+        COALESCE(ft.task_name, 'Unknown') as client_name
+      FROM finops_tracker ft
+      ${where}
+      ORDER BY ft.run_date DESC, ft.task_id ASC, ft.subtask_id ASC
+    `;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching user productivity data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch user productivity data", message: e.message });
+  }
+});
+
 // Get enhanced task summary with alert information
 router.get("/tasks/:id/summary", async (req: Request, res: Response) => {
   try {

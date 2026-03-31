@@ -99,7 +99,7 @@ export default function FinOpsUserStats() {
         return [];
       }
     },
-    enabled: !!(fromDate || toDate || selectedUser),
+    enabled: !!(fromDate || toDate), // Fetch when dates are selected
     staleTime: 30_000,
   });
 

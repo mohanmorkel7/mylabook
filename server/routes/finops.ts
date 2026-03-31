@@ -2997,8 +2997,8 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
       where += ` AND ft.run_date <= $${params.length}`;
     }
     if (completedBy) {
-      params.push(completedBy);
-      where += ` AND ft.completed_by = $${params.length}`;
+      params.push(completedBy.trim());
+      where += ` AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
     }
 
     const query = `

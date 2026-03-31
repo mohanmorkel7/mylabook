@@ -193,6 +193,28 @@ export default function FinOpsUserStats() {
     return date.toLocaleTimeString("en-US", { hour12: false });
   };
 
+  // Helper: Parse managers field (handles string, JSON array, or null)
+  const parseManagers = (value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") {
+      // Try to parse if it's JSON
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(v => v).join(", ");
+        }
+        return String(value).trim();
+      } catch {
+        // Not JSON, return as is
+        return String(value).trim();
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.filter(v => v).join(", ");
+    }
+    return String(value).trim();
+  };
+
   // Helper: Export productivity data to Excel
   const exportProductivityToExcel = () => {
     if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) {
@@ -216,9 +238,9 @@ export default function FinOpsUserStats() {
         "Completed By": row.completed_by || "",
         "Approved By": row.approved_by || "",
         "Approved At": row.approved_at ? new Date(row.approved_at).toLocaleString() : "",
-        "Assigned To": row.assigned_to || "",
-        "Reporting Manager": row.reporting_managers ? (typeof row.reporting_managers === 'string' ? row.reporting_managers : JSON.stringify(row.reporting_managers)) : "",
-        "Escalation Manager": row.escalation_managers ? (typeof row.escalation_managers === 'string' ? row.escalation_managers : JSON.stringify(row.escalation_managers)) : "",
+        "Assigned To": parseManagers(row.assigned_to),
+        "Reporting Manager": parseManagers(row.reporting_managers),
+        "Escalation Manager": parseManagers(row.escalation_managers),
         "Reason": row.delay_reason || "",
       };
     });

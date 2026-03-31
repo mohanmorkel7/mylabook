@@ -3028,32 +3028,21 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
         ft.created_at,
         ft.updated_at,
         COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name,
-        -- Additional fields from finops_tasks for fallback
+        -- Fallback: Get JSONB as text string (will be parsed on frontend)
         CASE
-          WHEN ft.assigned_to IS NULL OR ft.assigned_to = '' THEN COALESCE(fts.assigned_to, '')
-          ELSE ft.assigned_to
+          WHEN ft.assigned_to IS NOT NULL AND ft.assigned_to != '' THEN ft.assigned_to
+          WHEN fts.assigned_to IS NOT NULL THEN fts.assigned_to::text
+          ELSE ''
         END as assigned_to_fallback,
         CASE
-          WHEN ft.reporting_managers IS NULL OR ft.reporting_managers = '' THEN
-            CASE
-              WHEN fts.reporting_managers IS NOT NULL THEN array_to_string(
-                array(SELECT jsonb_array_elements_text(fts.reporting_managers)),
-                ', '
-              )
-              ELSE ''
-            END
-          ELSE ft.reporting_managers
+          WHEN ft.reporting_managers IS NOT NULL AND ft.reporting_managers != '' THEN ft.reporting_managers
+          WHEN fts.reporting_managers IS NOT NULL THEN fts.reporting_managers::text
+          ELSE ''
         END as reporting_managers_fallback,
         CASE
-          WHEN ft.escalation_managers IS NULL OR ft.escalation_managers = '' THEN
-            CASE
-              WHEN fts.escalation_managers IS NOT NULL THEN array_to_string(
-                array(SELECT jsonb_array_elements_text(fts.escalation_managers)),
-                ', '
-              )
-              ELSE ''
-            END
-          ELSE ft.escalation_managers
+          WHEN ft.escalation_managers IS NOT NULL AND ft.escalation_managers != '' THEN ft.escalation_managers
+          WHEN fts.escalation_managers IS NOT NULL THEN fts.escalation_managers::text
+          ELSE ''
         END as escalation_managers_fallback
       FROM finops_tracker ft
       LEFT JOIN finops_tasks fts ON ft.task_id = fts.id

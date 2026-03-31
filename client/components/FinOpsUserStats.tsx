@@ -415,12 +415,14 @@ export default function FinOpsUserStats() {
                   <div>
                     <p className="text-xs text-gray-600 font-medium">Avg Duration</p>
                     <p className="text-2xl font-bold text-indigo-600 mt-1">
-                      {formatDuration(
-                        productivityData.reduce((sum: number, r: TrackerRow) => {
-                          const dur = calculateDuration(r.started_at, r.completed_at);
-                          return sum + (dur || 0);
-                        }, 0) / productivityData.length
-                      )}
+                      {(() => {
+                        const validDurations = productivityData
+                          .map((r: TrackerRow) => calculateDuration(r.started_at, r.completed_at))
+                          .filter((dur: number | null): dur is number => dur !== null);
+                        if (validDurations.length === 0) return "N/A";
+                        const avgDur = validDurations.reduce((a, b) => a + b, 0) / validDurations.length;
+                        return formatDuration(avgDur);
+                      })()}
                     </p>
                   </div>
                   <div className="bg-indigo-100 rounded-full p-3">

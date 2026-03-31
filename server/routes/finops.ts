@@ -3027,8 +3027,10 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
         ft.order_position,
         ft.created_at,
         ft.updated_at,
-        COALESCE(ft.task_name, 'Unknown') as client_name
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name
       FROM finops_tracker ft
+      LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
+      LEFT JOIN finops_clients fc ON fts.client_id = fc.id
       ${where}
       ORDER BY ft.run_date DESC, ft.task_id ASC, ft.subtask_id ASC
     `;

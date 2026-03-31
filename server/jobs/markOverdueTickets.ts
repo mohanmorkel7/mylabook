@@ -42,8 +42,11 @@ export async function runMarkOverdueTickets() {
         continue;
       }
 
-      if (currentStatusName !== "open") {
-        // Only auto-mark tickets that are currently Open
+      // ✅ IMPORTANT: Skip if current status is marked as closed in the database
+      if (row.is_closed === true) {
+        // console.log(
+        //   `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed (is_closed=true)`,
+        // );
         continue;
       }
 
@@ -58,13 +61,9 @@ export async function runMarkOverdueTickets() {
         continue;
       }
 
-      // Check if current status is closed
-      const isClosed = row.is_closed === true;
-      const isClosedByName = currentStatusName.includes("closed") || currentStatusName.includes("complete") || currentStatusName.includes("done");
-      if (isClosed || isClosedByName) {
-        // console.log(
-        //   `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`,
-        // );
+      // Only auto-mark tickets that are currently Open
+      if (currentStatusName !== "open") {
+        // Only auto-mark tickets that are currently Open
         continue;
       }
 

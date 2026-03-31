@@ -2983,7 +2983,8 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
   try {
     const fromDate = (req.query.from_date as string) || null;
     const toDate = (req.query.to_date as string) || null;
-    const completedBy = (req.query.completed_by as string) || null;
+    const filterUser = (req.query.filter_user as string) || null;
+    const filterType = (req.query.filter_type as string) || "completed_by";
 
     const params: any[] = [];
     let where = "WHERE 1=1";
@@ -2996,9 +2997,19 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
       params.push(toDate);
       where += ` AND ft.run_date <= $${params.length}`;
     }
-    if (completedBy) {
-      params.push(completedBy.trim());
-      where += ` AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
+
+    // Apply filter based on filter type
+    if (filterUser) {
+      params.push(filterUser.trim());
+      if (filterType === "completed_by") {
+        where += ` AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
+      } else if (filterType === "approved_by") {
+        where += ` AND TRIM(COALESCE(ft.approved_by, '')) = $${params.length}`;
+      } else if (filterType === "in_progress") {
+        where += ` AND ft.status = 'in_progress' AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
+      }
+    } else if (filterType === "in_progress") {
+      where += ` AND ft.status = 'in_progress'`;
     }
 
     const query = `

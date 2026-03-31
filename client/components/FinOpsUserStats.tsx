@@ -44,6 +44,7 @@ export default function FinOpsUserStats() {
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
   const [selectedUser, setSelectedUser] = useState<string>("");
+  const [filterType, setFilterType] = useState<"completed_by" | "approved_by" | "in_progress">("completed_by");
 
   const humanPeriod = period === "daily" ? "Today" : period === "weekly" ? "Last 7 days" : "This month";
 
@@ -83,13 +84,14 @@ export default function FinOpsUserStats() {
 
   // Fetch user productivity data based on filters
   const { data: productivityData = [], isLoading: isLoadingProductivity } = useQuery({
-    queryKey: ["finops-user-productivity", fromDate, toDate, selectedUser],
+    queryKey: ["finops-user-productivity", fromDate, toDate, selectedUser, filterType],
     queryFn: async () => {
       try {
         const resp = await apiClient.getFinOpsUserProductivityData(
           fromDate || undefined,
           toDate || undefined,
           selectedUser || undefined,
+          filterType,
         );
         return Array.isArray(resp) ? resp : resp?.data || [];
       } catch (e) {
@@ -143,6 +145,24 @@ export default function FinOpsUserStats() {
     if (!Array.isArray(productivityData)) return [];
     return productivityData.filter(isReasonableDuration);
   }, [productivityData]);
+
+  // Calculate unique user count based on filter type
+  const getUniqueUserCount = useMemo(() => {
+    if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) return 0;
+    const users = new Set<string>();
+    validProductivityData.forEach((row: TrackerRow) => {
+      let user = "";
+      if (filterType === "completed_by") {
+        user = row.completed_by?.trim() || "";
+      } else if (filterType === "approved_by") {
+        user = row.approved_by?.trim() || "";
+      } else if (filterType === "in_progress") {
+        user = row.completed_by?.trim() || "";
+      }
+      if (user) users.add(user);
+    });
+    return users.size;
+  }, [validProductivityData, filterType]);
 
   // Helper: Group productivity data by client
   const clientTaskCountData = useMemo(() => {
@@ -220,6 +240,24 @@ export default function FinOpsUserStats() {
       return;
     }
 
+    // Create summary data
+    const filterTypeLabel = {
+      "completed_by": "Completed By",
+      "approved_by": "Approved By",
+      "in_progress": "In Progress By"
+    }[filterType];
+
+    const summaryData = [
+      { "Metric": "Filter Type", "Value": filterTypeLabel },
+      { "Metric": "Selected User", "Value": selectedUser || "All Users" },
+      { "Metric": "From Date", "Value": fromDate || "N/A" },
+      { "Metric": "To Date", "Value": toDate || "N/A" },
+      { "Metric": "Total Subtasks", "Value": validProductivityData.length },
+      { "Metric": "Completed", "Value": validProductivityData.filter((r: TrackerRow) => r.status === "completed").length },
+      { "Metric": "Unique Users", "Value": getUniqueUserCount },
+      { "Metric": "Unique Clients", "Value": clientTaskCountData.length },
+    ];
+
     const exportData = validProductivityData.map((row: TrackerRow) => {
       const duration = calculateDuration(row.started_at, row.completed_at);
       return {
@@ -241,11 +279,16 @@ export default function FinOpsUserStats() {
       };
     });
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
+    // Create workbook with multiple sheets
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "User Productivity");
 
-    // Auto-size columns
+    // Summary sheet
+    const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+    summaryWs["!cols"] = [{ wch: 25 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
+
+    // Data sheet
+    const dataWs = XLSX.utils.json_to_sheet(exportData);
     const colWidths = [
       { wch: 20 }, // Task Name
       { wch: 20 }, // Sub Task Name
@@ -263,9 +306,10 @@ export default function FinOpsUserStats() {
       { wch: 20 }, // Assigned To
       { wch: 20 }, // Reason
     ];
-    ws["!cols"] = colWidths;
+    dataWs["!cols"] = colWidths;
+    XLSX.utils.book_append_sheet(wb, dataWs, "User Productivity");
 
-    const filename = `finops-user-productivity-${new Date().toISOString().split('T')[0]}.xlsx`;
+    const filename = `finops-user-productivity-${filterTypeLabel.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(wb, filename);
   };
 
@@ -301,7 +345,20 @@ export default function FinOpsUserStats() {
           </CardHeader>
           <CardContent className="pt-6">
             {/* Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <div>
+                <label className="text-sm font-semibold text-gray-700 block mb-2">Filter Type</label>
+                <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                  <SelectTrigger className="w-full rounded-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="completed_by">Completed By</SelectItem>
+                    <SelectItem value="approved_by">Approved By</SelectItem>
+                    <SelectItem value="in_progress">In Progress By</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <label className="text-sm font-semibold text-gray-700 block mb-2">From Date</label>
                 <input
@@ -420,7 +477,7 @@ export default function FinOpsUserStats() {
 
         {/* Summary Cards */}
         {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card className="border border-gray-200 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -469,6 +526,20 @@ export default function FinOpsUserStats() {
                   </div>
                   <div className="bg-indigo-100 rounded-full p-3">
                     <BarChart3 className="w-6 h-6 text-indigo-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-gray-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Unique Users</p>
+                    <p className="text-2xl font-bold text-purple-600 mt-1">{getUniqueUserCount}</p>
+                  </div>
+                  <div className="bg-purple-100 rounded-full p-3">
+                    <Users className="w-6 h-6 text-purple-600" />
                   </div>
                 </div>
               </CardContent>

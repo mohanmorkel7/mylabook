@@ -2223,12 +2223,14 @@ export class ApiClient {
   async getFinOpsUserProductivityData(
     fromDate?: string,
     toDate?: string,
-    completedBy?: string,
+    selectedUser?: string,
+    filterType: "completed_by" | "approved_by" | "in_progress" = "completed_by",
   ) {
     const params = new URLSearchParams();
     if (fromDate) params.append("from_date", fromDate);
     if (toDate) params.append("to_date", toDate);
-    if (completedBy) params.append("completed_by", completedBy);
+    if (selectedUser) params.append("filter_user", selectedUser);
+    params.append("filter_type", filterType);
 
     const query = params.toString();
     return this.request(

@@ -477,7 +477,7 @@ export default function FinOpsUserStats() {
 
         {/* Summary Cards */}
         {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <Card className="border border-gray-200 shadow-sm">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -526,6 +526,29 @@ export default function FinOpsUserStats() {
                   </div>
                   <div className="bg-indigo-100 rounded-full p-3">
                     <BarChart3 className="w-6 h-6 text-indigo-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-gray-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Total Duration</p>
+                    <p className="text-2xl font-bold text-cyan-600 mt-1">
+                      {(() => {
+                        const validDurations = validProductivityData
+                          .map((r: TrackerRow) => calculateDuration(r.started_at, r.completed_at))
+                          .filter((dur: number | null): dur is number => dur !== null);
+                        if (validDurations.length === 0) return "N/A";
+                        const totalDur = validDurations.reduce((a, b) => a + b, 0);
+                        return formatDuration(totalDur);
+                      })()}
+                    </p>
+                  </div>
+                  <div className="bg-cyan-100 rounded-full p-3">
+                    <BarChart3 className="w-6 h-6 text-cyan-600" />
                   </div>
                 </div>
               </CardContent>

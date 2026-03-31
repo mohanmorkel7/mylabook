@@ -235,122 +235,266 @@ export default function FinOpsUserStats() {
       </div>
 
       {/* User Productivity Section */}
-      <Card className="border-2 border-blue-100">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="w-5 h-5" /> User Productivity Chart
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">From Date</label>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">To Date</label>
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">User</label>
-              <Select value={selectedUser} onValueChange={setSelectedUser}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select user..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Users</SelectItem>
-                  {finopsUsers.map((user: any) => (
-                    <SelectItem key={user.id} value={user.first_name + " " + user.last_name}>
-                      {user.first_name} {user.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <button
-                onClick={exportProductivityToExcel}
-                disabled={isLoadingProductivity || productivityData.length === 0}
-                className="w-full px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:bg-gray-400 flex items-center justify-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Export to Excel
-              </button>
-            </div>
-          </div>
-
-          {/* Chart */}
-          {isLoadingProductivity ? (
-            <div className="text-center py-8 text-gray-500">Loading productivity data...</div>
-          ) : clientTaskCountData.length > 0 ? (
-            <div style={{ height: 350 }}>
-              <ChartContainer
-                id="client-productivity"
-                config={{ count: { color: "#3B82F6", label: "Subtasks" } }}
-              >
-                <Recharts.BarChart data={clientTaskCountData} margin={{ top: 8, right: 16, left: 0, bottom: 48 }}>
-                  <Recharts.CartesianGrid strokeDasharray="3 3" />
-                  <Recharts.XAxis dataKey="name" angle={-45} textAnchor="end" height={100} tick={{ fontSize: 12 }} />
-                  <Recharts.YAxis type="number" tick={{ fontSize: 12 }} />
-                  <Recharts.Tooltip content={<ChartTooltipContent />} />
-                  <Recharts.Bar dataKey="count" fill="var(--color-count)">
-                    <Recharts.LabelList dataKey="count" position="top" />
-                  </Recharts.Bar>
-                </Recharts.BarChart>
-              </ChartContainer>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              {fromDate || toDate || selectedUser ? "No data found for selected filters" : "Select date range and/or user to view chart"}
-            </div>
-          )}
-
-          {/* Data Table Summary */}
-          {Array.isArray(productivityData) && productivityData.length > 0 && (
-            <div className="mt-6 space-y-2">
-              <h3 className="text-sm font-semibold">Summary</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-gray-50 p-3 rounded-md">
-                  <div className="text-xs text-gray-600">Total Subtasks</div>
-                  <div className="text-lg font-bold">{productivityData.length}</div>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-md">
-                  <div className="text-xs text-gray-600">Completed</div>
-                  <div className="text-lg font-bold text-green-600">
-                    {productivityData.filter((r: TrackerRow) => r.status === "completed").length}
-                  </div>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-md">
-                  <div className="text-xs text-gray-600">Avg Duration</div>
-                  <div className="text-lg font-bold">
-                    {formatDuration(
-                      productivityData.reduce((sum: number, r: TrackerRow) => {
-                        const dur = calculateDuration(r.started_at, r.completed_at);
-                        return sum + (dur || 0);
-                      }, 0) / productivityData.length
-                    )}
-                  </div>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-md">
-                  <div className="text-xs text-gray-600">Unique Clients</div>
-                  <div className="text-lg font-bold">{clientTaskCountData.length}</div>
-                </div>
+      <div className="space-y-4">
+        {/* Filter Card */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2 text-gray-800">
+              <Users className="w-5 h-5 text-blue-600" /> User Productivity Analysis
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {/* Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div>
+                <label className="text-sm font-semibold text-gray-700 block mb-2">From Date</label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 block mb-2">To Date</label>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 block mb-2">User</label>
+                <Select value={selectedUser} onValueChange={setSelectedUser}>
+                  <SelectTrigger className="w-full rounded-lg">
+                    <SelectValue placeholder="Select user..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Users</SelectItem>
+                    {finopsUsers.map((user: any) => (
+                      <SelectItem key={user.id} value={user.first_name + " " + user.last_name}>
+                        {user.first_name} {user.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={exportProductivityToExcel}
+                  disabled={isLoadingProductivity || productivityData.length === 0}
+                  className="w-full px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg text-sm font-semibold hover:from-green-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-400 flex items-center justify-center gap-2 transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Excel
+                </button>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Chart Card */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+            <CardTitle className="text-base font-semibold text-gray-800">Client-wise Subtask Count</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {isLoadingProductivity ? (
+              <div className="text-center py-12 text-gray-500">Loading productivity data...</div>
+            ) : clientTaskCountData.length > 0 ? (
+              <div className="w-full overflow-auto">
+                <div style={{ minHeight: 400, width: "100%" }}>
+                  <ChartContainer
+                    id="client-productivity"
+                    config={{ count: { color: "#3B82F6", label: "Subtasks" } }}
+                  >
+                    <Recharts.ResponsiveContainer width="100%" height={400}>
+                      <Recharts.BarChart
+                        data={clientTaskCountData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                      >
+                        <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <Recharts.XAxis
+                          dataKey="name"
+                          angle={-45}
+                          textAnchor="end"
+                          height={120}
+                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                        />
+                        <Recharts.YAxis
+                          type="number"
+                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                          label={{ value: "Count", angle: -90, position: "insideLeft", offset: 5 }}
+                        />
+                        <Recharts.Tooltip
+                          content={<ChartTooltipContent />}
+                          contentStyle={{ borderRadius: "8px", border: "1px solid #e5e7eb" }}
+                        />
+                        <Recharts.Bar dataKey="count" fill="#3B82F6" radius={[8, 8, 0, 0]}>
+                          <Recharts.LabelList dataKey="count" position="top" fill="#374151" fontSize={12} />
+                        </Recharts.Bar>
+                      </Recharts.BarChart>
+                    </Recharts.ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+                {fromDate || toDate || selectedUser ? (
+                  <div>
+                    <p className="text-sm">No data found for selected filters</p>
+                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range or user selection</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm">Select date range and/or user to view chart</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Summary Cards */}
+        {Array.isArray(productivityData) && productivityData.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="border border-gray-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Total Subtasks</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{productivityData.length}</p>
+                  </div>
+                  <div className="bg-blue-100 rounded-full p-3">
+                    <BarChart3 className="w-6 h-6 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-gray-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Completed</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">
+                      {productivityData.filter((r: TrackerRow) => r.status === "completed").length}
+                    </p>
+                  </div>
+                  <div className="bg-green-100 rounded-full p-3">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-gray-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Avg Duration</p>
+                    <p className="text-2xl font-bold text-indigo-600 mt-1">
+                      {formatDuration(
+                        productivityData.reduce((sum: number, r: TrackerRow) => {
+                          const dur = calculateDuration(r.started_at, r.completed_at);
+                          return sum + (dur || 0);
+                        }, 0) / productivityData.length
+                      )}
+                    </p>
+                  </div>
+                  <div className="bg-indigo-100 rounded-full p-3">
+                    <BarChart3 className="w-6 h-6 text-indigo-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-gray-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-600 font-medium">Unique Clients</p>
+                    <p className="text-2xl font-bold text-orange-600 mt-1">{clientTaskCountData.length}</p>
+                  </div>
+                  <div className="bg-orange-100 rounded-full p-3">
+                    <Building2 className="w-6 h-6 text-orange-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Detailed Data Table */}
+        {Array.isArray(productivityData) && productivityData.length > 0 && (
+          <Card className="border border-gray-200 shadow-sm">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+              <CardTitle className="text-base font-semibold text-gray-800">Detailed Task Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Task</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Sub Task</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Client</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Start Time</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Completed Time</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Duration</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Completed By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productivityData.slice(0, 20).map((row: TrackerRow, idx: number) => {
+                    const duration = calculateDuration(row.started_at, row.completed_at);
+                    return (
+                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-gray-900 max-w-xs truncate" title={row.task_name}>
+                          {row.task_name}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 max-w-xs truncate" title={row.subtask_name}>
+                          {row.subtask_name}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{row.client_name}</td>
+                        <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
+                          {row.started_at ? new Date(row.started_at).toLocaleString() : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
+                          {row.completed_at ? new Date(row.completed_at).toLocaleString() : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 font-medium">{formatDuration(duration)}</td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            className={
+                              row.status === "completed"
+                                ? "bg-green-100 text-green-800"
+                                : row.status === "overdue"
+                                ? "bg-red-100 text-red-800"
+                                : row.status === "in_progress"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-gray-100 text-gray-800"
+                            }
+                          >
+                            {row.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">{row.completed_by || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {productivityData.length > 20 && (
+                <p className="text-xs text-gray-500 mt-3 text-center">
+                  Showing 20 of {productivityData.length} records. Download Excel to see all data.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Top cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">

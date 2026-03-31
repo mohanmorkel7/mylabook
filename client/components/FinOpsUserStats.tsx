@@ -37,6 +37,9 @@ interface TrackerRow {
   created_at: string;
   updated_at: string;
   client_name: string;
+  assigned_to_fallback?: string;
+  reporting_managers_fallback?: string;
+  escalation_managers_fallback?: string;
 }
 
 export default function FinOpsUserStats() {
@@ -196,23 +199,27 @@ export default function FinOpsUserStats() {
   // Helper: Parse managers field (handles string, JSON array, or null)
   const parseManagers = (value: any): string => {
     if (!value) return "";
-    if (typeof value === "string") {
-      // Try to parse if it's JSON
+    const strValue = String(value).trim();
+    if (!strValue || strValue === "''") return "";
+
+    // Try to parse if it looks like JSON
+    if (strValue.startsWith('[') && strValue.endsWith(']')) {
       try {
-        const parsed = JSON.parse(value);
+        const parsed = JSON.parse(strValue);
         if (Array.isArray(parsed)) {
-          return parsed.filter(v => v).join(", ");
+          return parsed.filter(v => v && v.trim()).join(", ");
         }
-        return String(value).trim();
       } catch {
-        // Not JSON, return as is
-        return String(value).trim();
+        // If JSON parse fails, try regex to extract quoted values
+        const matches = strValue.match(/"([^"]+)"/g);
+        if (matches && matches.length > 0) {
+          return matches.map(m => m.replace(/"/g, '').trim()).filter(v => v).join(", ");
+        }
       }
     }
-    if (Array.isArray(value)) {
-      return value.filter(v => v).join(", ");
-    }
-    return String(value).trim();
+
+    // Return as is if it's plain text
+    return strValue;
   };
 
   // Helper: Export productivity data to Excel
@@ -238,9 +245,9 @@ export default function FinOpsUserStats() {
         "Completed By": row.completed_by || "",
         "Approved By": row.approved_by || "",
         "Approved At": row.approved_at ? new Date(row.approved_at).toLocaleString() : "",
-        "Assigned To": parseManagers(row.assigned_to),
-        "Reporting Manager": parseManagers(row.reporting_managers),
-        "Escalation Manager": parseManagers(row.escalation_managers),
+        "Assigned To": parseManagers(row.assigned_to_fallback || row.assigned_to || ""),
+        "Reporting Manager": parseManagers(row.reporting_managers_fallback || row.reporting_managers || ""),
+        "Escalation Manager": parseManagers(row.escalation_managers_fallback || row.escalation_managers || ""),
         "Reason": row.delay_reason || "",
       };
     });

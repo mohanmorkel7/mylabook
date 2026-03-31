@@ -3027,7 +3027,34 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
         ft.order_position,
         ft.created_at,
         ft.updated_at,
-        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name,
+        -- Additional fields from finops_tasks for fallback
+        CASE
+          WHEN ft.assigned_to IS NULL OR ft.assigned_to = '' THEN COALESCE(fts.assigned_to, '')
+          ELSE ft.assigned_to
+        END as assigned_to_fallback,
+        CASE
+          WHEN ft.reporting_managers IS NULL OR ft.reporting_managers = '' THEN
+            CASE
+              WHEN fts.reporting_managers IS NOT NULL THEN array_to_string(
+                array(SELECT jsonb_array_elements_text(fts.reporting_managers)),
+                ', '
+              )
+              ELSE ''
+            END
+          ELSE ft.reporting_managers
+        END as reporting_managers_fallback,
+        CASE
+          WHEN ft.escalation_managers IS NULL OR ft.escalation_managers = '' THEN
+            CASE
+              WHEN fts.escalation_managers IS NOT NULL THEN array_to_string(
+                array(SELECT jsonb_array_elements_text(fts.escalation_managers)),
+                ', '
+              )
+              ELSE ''
+            END
+          ELSE ft.escalation_managers
+        END as escalation_managers_fallback
       FROM finops_tracker ft
       LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
       LEFT JOIN finops_clients fc ON fts.client_id = fc.id

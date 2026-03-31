@@ -2999,17 +2999,27 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
     }
 
     // Apply filter based on filter type
-    if (filterUser) {
+    // Only filter by user if a specific user is selected (not "All Users")
+    const shouldFilterByUser = filterUser && filterUser.trim() !== "" && filterUser.trim().toLowerCase() !== "all users";
+
+    if (shouldFilterByUser) {
       params.push(filterUser.trim());
       if (filterType === "completed_by") {
-        where += ` AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
+        where += ` AND ft.status = 'completed' AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
       } else if (filterType === "approved_by") {
         where += ` AND TRIM(COALESCE(ft.approved_by, '')) = $${params.length}`;
       } else if (filterType === "in_progress") {
-        where += ` AND ft.status = 'in_progress' AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
+        where += ` AND ft.status = 'in_progress'`;
       }
-    } else if (filterType === "in_progress") {
-      where += ` AND ft.status = 'in_progress'`;
+    } else {
+      // Apply filter type without user filter (for all users)
+      if (filterType === "completed_by") {
+        where += ` AND ft.status = 'completed' AND TRIM(COALESCE(ft.completed_by, '')) != ''`;
+      } else if (filterType === "approved_by") {
+        where += ` AND TRIM(COALESCE(ft.approved_by, '')) != ''`;
+      } else if (filterType === "in_progress") {
+        where += ` AND ft.status = 'in_progress'`;
+      }
     }
 
     const query = `

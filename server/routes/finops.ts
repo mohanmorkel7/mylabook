@@ -3015,8 +3015,16 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
         ft.completed_at,
         COALESCE(ft.completed_by, '') as completed_by,
         COALESCE(ft.assigned_to, fts.assigned_to, '') as assigned_to,
-        COALESCE(ft.reporting_managers, fts.reporting_managers::TEXT, '') as reporting_managers,
-        COALESCE(ft.escalation_managers, fts.escalation_managers::TEXT, '') as escalation_managers,
+        CASE
+          WHEN ft.reporting_managers IS NOT NULL AND ft.reporting_managers != '' THEN ft.reporting_managers
+          WHEN fts.reporting_managers IS NOT NULL THEN fts.reporting_managers::TEXT
+          ELSE ''
+        END as reporting_managers,
+        CASE
+          WHEN ft.escalation_managers IS NOT NULL AND ft.escalation_managers != '' THEN ft.escalation_managers
+          WHEN fts.escalation_managers IS NOT NULL THEN fts.escalation_managers::TEXT
+          ELSE ''
+        END as escalation_managers,
         COALESCE(ft.approved_by, '') as approved_by,
         ft.approved_at,
         ft.delay_reason,

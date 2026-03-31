@@ -133,18 +133,12 @@ export default function FinOpsUserStats() {
     return `${wholeHours}h ${minutes}m`;
   };
 
-  // Helper: Check if duration is reasonable for the period type
+  // Helper: Check if duration is reasonable (has valid timestamps)
   const isReasonableDuration = (row: TrackerRow): boolean => {
     const duration = calculateDuration(row.started_at, row.completed_at);
-    if (duration === null) return false; // Exclude records without duration
-
-    const maxHours =
-      row.period === "daily" ? 48 :      // Daily tasks shouldn't take more than 2 days
-      row.period === "weekly" ? 192 :    // Weekly tasks shouldn't take more than 8 days
-      row.period === "monthly" ? 744 :   // Monthly tasks shouldn't take more than 31 days
-      Infinity;
-
-    return duration > 0 && duration <= maxHours;
+    // Only filter out records with no duration (null values)
+    // Allow all positive durations regardless of period type
+    return duration !== null && duration > 0;
   };
 
   // Filter productivity data to only include records with valid durations

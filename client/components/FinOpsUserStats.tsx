@@ -295,52 +295,52 @@ export default function FinOpsUserStats() {
     }
   };
 
-  // Helper: Get hourly task status data from finops_subtasks (based on start_time)
+  // Helper: Get hourly task data from finops_subtasks (based on duration from start_time to completed_at)
   const getHourlyTaskData = useMemo(() => {
     if (!Array.isArray(hourlySubtasksData) || hourlySubtasksData.length === 0) {
       return [];
     }
 
-    // Initialize 24 hours with status categories
+    // Initialize 24 hours with duration categories
     const hourlyData = Array.from({ length: 24 }, (_, hour) => ({
       hour: `${String(hour).padStart(2, "0")}:00`,
-      "pending": 0,
-      "in_progress": 0,
-      "completed": 0,
-      "overdue": 0,
-      "delayed": 0,
+      "lessThan1h": 0,    // ≤1 hour (GREEN)
+      "1to2h": 0,         // >1h to ≤2h (AMBER)
+      "2to3h": 0,         // >2h to ≤3h (ORANGE)
+      "moreThan3h": 0,    // >3h (RED)
       total: 0,
     }));
 
-    // Group tasks by start time hour from finops_subtasks
+    // Group tasks by start time hour and categorize by duration
     hourlySubtasksData.forEach((row: any) => {
       // Extract hour from start_time (HH:MM:SS format)
       const startHour = getHourFromTimeString(row.start_time);
       if (startHour === null) return;
 
-      // Determine actual status based on timestamps and recorded status
-      let actualStatus = "pending";
+      // Only count completed tasks (tasks with both started_at and completed_at)
+      if (!row.started_at || !row.completed_at) return;
 
-      if (row.completed_at) {
-        // Task has been completed
-        actualStatus = "completed";
-      } else if (row.started_at) {
-        // Task has started but not completed
-        actualStatus = "in_progress";
-      } else if (row.status?.toLowerCase() === "delayed") {
-        // Explicitly marked as delayed
-        actualStatus = "delayed";
-      } else if (row.status?.toLowerCase() === "overdue") {
-        // Explicitly marked as overdue
-        actualStatus = "overdue";
-      }
-      // else keep as "pending"
+      // Calculate duration in hours
+      const startTime = new Date(row.started_at).getTime();
+      const endTime = new Date(row.completed_at).getTime();
 
-      // Increment the counter for this status at this hour
-      if (actualStatus === "pending" || actualStatus === "in_progress" || actualStatus === "completed" || actualStatus === "overdue" || actualStatus === "delayed") {
-        hourlyData[startHour][actualStatus]++;
-        hourlyData[startHour].total++;
+      if (isNaN(startTime) || isNaN(endTime) || startTime >= endTime) return;
+
+      const durationHours = (endTime - startTime) / (1000 * 60 * 60);
+
+      // Categorize by duration
+      let durationCategory = "lessThan1h";
+      if (durationHours > 3) {
+        durationCategory = "moreThan3h";
+      } else if (durationHours > 2) {
+        durationCategory = "2to3h";
+      } else if (durationHours > 1) {
+        durationCategory = "1to2h";
       }
+
+      // Increment the counter for this duration category at this hour
+      hourlyData[startHour][durationCategory]++;
+      hourlyData[startHour].total++;
     });
 
     return hourlyData;
@@ -653,8 +653,8 @@ export default function FinOpsUserStats() {
         {/* Hourly Task Status Timeline Chart */}
         <Card className="border border-gray-200 shadow-sm">
           <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-            <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Status (12 AM - 11:59 PM IST)</CardTitle>
-            <p className="text-xs text-gray-500 mt-2">All tasks grouped by start time - Shows status breakdown for each hour</p>
+            <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
+            <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
           </CardHeader>
           <CardContent className="pt-6">
             {isLoadingAllTasks ? (
@@ -697,12 +697,11 @@ export default function FinOpsUserStats() {
                               return (
                                 <div className="bg-white p-3 border border-gray-300 rounded shadow-lg text-sm">
                                   <p className="font-semibold text-gray-900">{hour} - {nextHour}:00 IST</p>
-                                  <p className="text-gray-600 mt-1">Total Tasks: <strong>{total}</strong></p>
-                                  {payload[0].payload.pending > 0 && <p className="text-amber-600">📋 Pending: {payload[0].payload.pending}</p>}
-                                  {payload[0].payload.in_progress > 0 && <p className="text-blue-600">⏳ In Progress: {payload[0].payload.in_progress}</p>}
-                                  {payload[0].payload.completed > 0 && <p className="text-green-600">✓ Completed: {payload[0].payload.completed}</p>}
-                                  {payload[0].payload.overdue > 0 && <p className="text-red-600">❌ Overdue: {payload[0].payload.overdue}</p>}
-                                  {payload[0].payload.delayed > 0 && <p className="text-orange-600">⚠ Delayed: {payload[0].payload.delayed}</p>}
+                                  <p className="text-gray-600 mt-1">Total Completed Tasks: <strong>{total}</strong></p>
+                                  {payload[0].payload.lessThan1h > 0 && <p className="text-green-600">🟢 {"\u2264"}1 Hour: {payload[0].payload.lessThan1h}</p>}
+                                  {payload[0].payload["1to2h"] > 0 && <p className="text-amber-600">🟡 1-2 Hours: {payload[0].payload["1to2h"]}</p>}
+                                  {payload[0].payload["2to3h"] > 0 && <p className="text-orange-600">🟠 2-3 Hours: {payload[0].payload["2to3h"]}</p>}
+                                  {payload[0].payload.moreThan3h > 0 && <p className="text-red-600">🔴 {"\u003e"}3 Hours: {payload[0].payload.moreThan3h}</p>}
                                 </div>
                               );
                             }
@@ -711,11 +710,10 @@ export default function FinOpsUserStats() {
                           contentStyle={{ borderRadius: "8px" }}
                         />
                         <Recharts.Legend />
-                        <Recharts.Bar dataKey="pending" stackId="status" fill="#FBBF24" />
-                        <Recharts.Bar dataKey="in_progress" stackId="status" fill="#60A5FA" />
-                        <Recharts.Bar dataKey="completed" stackId="status" fill="#10B981" />
-                        <Recharts.Bar dataKey="overdue" stackId="status" fill="#EF4444" />
-                        <Recharts.Bar dataKey="delayed" stackId="status" fill="#F97316" />
+                        <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />
+                        <Recharts.Bar dataKey="1to2h" name="1-2 Hours" stackId="duration" fill="#FBBF24" />
+                        <Recharts.Bar dataKey="2to3h" name="2-3 Hours" stackId="duration" fill="#F97316" />
+                        <Recharts.Bar dataKey="moreThan3h" name="More than 3h" stackId="duration" fill="#EF4444" />
                       </Recharts.BarChart>
                     </Recharts.ResponsiveContainer>
                   </ChartContainer>
@@ -853,130 +851,6 @@ export default function FinOpsUserStats() {
           </div>
         )}
 
-        {/* All Tasks Section - Show all subtasks with all statuses */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader className="bg-gradient-to-r from-pink-50 to-purple-50 border-b">
-            <CardTitle className="text-base font-semibold text-gray-800">All Tasks ({allTrackerData.length} records)</CardTitle>
-            <p className="text-xs text-gray-500 mt-1">Showing all subtasks with statuses: Pending, In Progress, Completed, Overdue, Delayed</p>
-          </CardHeader>
-          <CardContent className="pt-6">
-            {isLoadingAllTasks ? (
-              <div className="text-center py-12 text-gray-500">Loading all tasks...</div>
-            ) : Array.isArray(allTrackerData) && allTrackerData.length > 0 ? (
-              <div className="space-y-2 max-h-screen overflow-y-auto">
-                {allTrackerData.map((row: TrackerRow, idx: number) => {
-                  const duration = calculateDuration(row.started_at, row.completed_at);
-                  const statusColorMap: Record<string, string> = {
-                    "completed": "bg-green-50 border-green-200 hover:border-green-400",
-                    "in_progress": "bg-blue-50 border-blue-200 hover:border-blue-400",
-                    "pending": "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
-                    "overdue": "bg-red-50 border-red-200 hover:border-red-400",
-                    "delayed": "bg-orange-50 border-orange-200 hover:border-orange-400",
-                    "approved": "bg-indigo-50 border-indigo-200 hover:border-indigo-400",
-                  };
-                  const statusBgColor = statusColorMap[row.status] || "bg-gray-50 border-gray-200 hover:border-gray-400";
-                  const statusTextColor: Record<string, string> = {
-                    "completed": "text-green-700",
-                    "in_progress": "text-blue-700",
-                    "pending": "text-yellow-700",
-                    "overdue": "text-red-700",
-                    "delayed": "text-orange-700",
-                    "approved": "text-indigo-700",
-                  };
-                  const textColor = statusTextColor[row.status] || "text-gray-700";
-
-                  return (
-                    <div key={idx} className={`group p-4 border rounded-lg transition-all cursor-pointer hover:shadow-md ${statusBgColor}`}>
-                      {/* Main Row */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <p className={`font-bold text-sm ${textColor} uppercase px-2 py-1 rounded text-xs`}>
-                              {row.status}
-                            </p>
-                            {duration !== null && (
-                              <span style={{ backgroundColor: getDurationColor(duration).color }} className="text-white px-2 py-1 rounded text-xs font-semibold">
-                                {formatDuration(duration)}
-                              </span>
-                            )}
-                          </div>
-                          <p className="font-semibold text-sm text-gray-900 truncate">
-                            {row.subtask_name || "Unnamed Subtask"}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1 truncate">
-                            Task: {row.task_name || "N/A"}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Client: {row.client_name || "N/A"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Hover Details - Detailed Information */}
-                      <div className="mt-3 pt-3 border-t border-current border-opacity-20 space-y-2 text-xs text-gray-700">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <span className="font-semibold text-gray-800">Started:</span>
-                            <p>{formatDate(row.started_at) || "N/A"} {formatTime(row.started_at) || ""}</p>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-800">Completed:</span>
-                            <p>{formatDate(row.completed_at) || "N/A"} {formatTime(row.completed_at) || ""}</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <span className="font-semibold text-gray-800">Completed By:</span>
-                            <p>{row.completed_by || "N/A"}</p>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-800">Assigned To:</span>
-                            <p>{parseManagers(row.assigned_to) || "N/A"}</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <span className="font-semibold text-gray-800">Period:</span>
-                            <p>{row.period || "N/A"}</p>
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-800">Updated:</span>
-                            <p>{formatDate(row.updated_at)} {formatTime(row.updated_at)}</p>
-                          </div>
-                        </div>
-                        {row.delay_reason && (
-                          <div className="col-span-2 p-2 bg-red-100 rounded border border-red-300 mt-2">
-                            <span className="font-semibold text-gray-800">Delay Reason:</span>
-                            <p>{row.delay_reason}</p>
-                          </div>
-                        )}
-                        {row.reporting_managers && (
-                          <div>
-                            <span className="font-semibold text-gray-800">Reporting Managers:</span>
-                            <p>{parseManagers(row.reporting_managers)}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
-                {fromDate || toDate ? (
-                  <div>
-                    <p className="text-sm">No task data available for selected date range</p>
-                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range</p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-sm">Select date range to view all tasks</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Data Quality Alert */}
         {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (() => {

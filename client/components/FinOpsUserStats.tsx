@@ -791,12 +791,8 @@ export default function FinOpsUserStats() {
                         />
                         <Recharts.Tooltip
                           content={({ active, payload }) => {
-                            // Show tooltip if actively hovering OR if an hour is locked
-                            let dataToShow = null;
-
-                            let dataToShow = null;
-
                             // When locked, ALWAYS show locked hour and NEVER update on hover
+                            let dataToShow = null;
                             if (lockedHour !== null) {
                               dataToShow = getHourlyTaskData.find((d: any) => d.hour === lockedHour);
                               // Don't rely on active/payload when locked - always show locked data

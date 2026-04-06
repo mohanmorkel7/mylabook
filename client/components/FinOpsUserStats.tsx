@@ -329,6 +329,7 @@ export default function FinOpsUserStats() {
         completedAt: string;
         status: string;
         durationMinutes: number;
+        durationCategory: string;
       }>,
     }));
 
@@ -418,6 +419,8 @@ export default function FinOpsUserStats() {
       hourlyData[startHour].total++;
 
       // Store task details for tooltip
+      const roundedDurationMinutes = Math.round(durationMinutes);
+      const durationCat = getDurationCategoryForTask(roundedDurationMinutes);
       hourlyData[startHour].tasks.push({
         name: row.name || "N/A",
         clientName: row.client_name || "N/A",
@@ -434,7 +437,8 @@ export default function FinOpsUserStats() {
           hour12: true,
         }),
         status: row.status,
-        durationMinutes: Math.round(durationMinutes),
+        durationMinutes: roundedDurationMinutes,
+        durationCategory: durationCat.category,
       });
 
       processedCount++;
@@ -483,6 +487,24 @@ export default function FinOpsUserStats() {
     // Examples: "Thomas clinton F,Mohan Ganesan,Sedhush Kumar Vishwanathan"
     // Don't try to parse/reformat as that breaks first+last name pairs
     return strValue;
+  };
+
+  // Helper: Format duration from minutes to "X hours Y mins"
+  const formatDurationMinutes = (minutes: number): string => {
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    if (mins === 0) return `${hours}h`;
+    return `${hours}h ${mins}m`;
+  };
+
+  // Helper: Get duration category and styling for a task
+  const getDurationCategoryForTask = (durationMinutes: number): { category: string; bgColor: string; borderColor: string } => {
+    const hours = durationMinutes / 60;
+    if (hours <= 1) return { category: 'green', bgColor: 'bg-green-700', borderColor: 'border-green-900' };
+    if (hours <= 2) return { category: 'amber', bgColor: 'bg-amber-700', borderColor: 'border-amber-900' };
+    if (hours <= 3) return { category: 'orange', bgColor: 'bg-orange-700', borderColor: 'border-orange-900' };
+    return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
   };
 
   // Helper: Export productivity data to Excel
@@ -884,9 +906,19 @@ export default function FinOpsUserStats() {
                                   <div className="px-5 py-4 space-y-3">
                                     {tasks.length > 0 ? (
                                       tasks.map((task: any, idx: number) => (
-                                        <div key={idx} className="bg-white border-l-4 border-blue-500 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                                        <div key={idx} className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow border-l-4 ${
+                                          task.durationCategory === 'green' ? 'border-green-500' :
+                                          task.durationCategory === 'amber' ? 'border-amber-500' :
+                                          task.durationCategory === 'orange' ? 'border-orange-500' :
+                                          'border-red-500'
+                                        }`}>
                                           <div className="flex items-start justify-between mb-3">
-                                            <p className="font-bold text-white text-xs bg-blue-500 px-3 py-1 rounded-full">Task {idx + 1}</p>
+                                            <p className={`font-bold text-white text-xs px-3 py-1 rounded-full ${
+                                              task.durationCategory === 'green' ? 'bg-green-500' :
+                                              task.durationCategory === 'amber' ? 'bg-amber-500' :
+                                              task.durationCategory === 'orange' ? 'bg-orange-500' :
+                                              'bg-red-500'
+                                            }`}>Task {idx + 1}</p>
                                             <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
                                               task.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                                             }`}>
@@ -901,7 +933,7 @@ export default function FinOpsUserStats() {
                                             </div>
                                             <div className="bg-purple-700 p-2 rounded-lg border border-purple-900">
                                               <p className="text-purple-50 text-xs font-semibold">Duration</p>
-                                              <p className="font-bold text-white text-sm">{task.durationMinutes}m</p>
+                                              <p className="font-bold text-white text-sm">{formatDurationMinutes(task.durationMinutes)}</p>
                                             </div>
                                             <div className="bg-green-700 p-2 rounded-lg border border-green-900">
                                               <p className="text-green-50 text-xs font-semibold">Start</p>

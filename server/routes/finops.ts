@@ -3129,7 +3129,7 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
 });
 
 // Get hourly task data from finops_subtasks (for hourly status chart)
-// Filters by actual execution date (completed_at > started_at > updated_at)
+// Filters by task start date (when work actually started) NOT completion date
 router.get("/subtasks/hourly", async (req: Request, res: Response) => {
   try {
     const fromDate = (req.query.from_date as string) || null;
@@ -3140,19 +3140,25 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
     const params: any[] = [];
     let whereClause = "";
 
-    // Build WHERE clause using COALESCE for execution date
-    // Priority: completed_at > started_at > updated_at
-    const executionDateExpr = "COALESCE(DATE(st.completed_at), DATE(st.started_at), DATE(st.updated_at))";
+    // Build WHERE clause filtering by START date (when work actually began)
+    // Use started_at date if available, otherwise use updated_at
+    // This ensures we show tasks that were actually worked on during the queried date
+    const startDateExpr = "COALESCE(DATE(st.started_at), DATE(st.updated_at))";
 
     const whereParts: string[] = [];
     if (fromDate) {
       params.push(fromDate);
-      whereParts.push(`${executionDateExpr} >= $${params.length}`);
+      whereParts.push(`${startDateExpr} >= $${params.length}`);
     }
     if (toDate) {
       params.push(toDate);
-      whereParts.push(`${executionDateExpr} <= $${params.length}`);
+      whereParts.push(`${startDateExpr} <= $${params.length}`);
     }
+
+    // Also filter to only include tasks with both started_at and completed_at
+    // to ensure we have valid duration data
+    whereParts.push("st.started_at IS NOT NULL");
+    whereParts.push("st.completed_at IS NOT NULL");
 
     if (whereParts.length > 0) {
       whereClause = "WHERE " + whereParts.join(" AND ");
@@ -3181,7 +3187,7 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
       LEFT JOIN finops_tasks ft ON st.task_id = ft.id
       LEFT JOIN finops_clients fc ON ft.client_id = fc.id
       ${whereClause}
-      ORDER BY st.updated_at DESC, st.task_id ASC, st.order_position ASC
+      ORDER BY st.started_at DESC, st.task_id ASC, st.order_position ASC
     `;
 
     console.log("Subtasks/hourly query:", query);

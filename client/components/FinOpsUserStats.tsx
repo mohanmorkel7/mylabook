@@ -473,24 +473,15 @@ export default function FinOpsUserStats() {
     return strValue;
   };
 
-  // Helper: Format assigned names (convert space-separated to comma-separated)
+  // Helper: Format assigned names (keep as-is - already formatted in database)
   const formatAssignedNames = (value: any): string => {
     if (!value) return "Not Assigned";
     const strValue = String(value).trim();
     if (!strValue || strValue === "N/A" || strValue === "''") return "Not Assigned";
 
-    // If already comma-separated, return as is
-    if (strValue.includes(",")) {
-      return strValue;
-    }
-
-    // If space-separated (multiple words with capital letters indicating names)
-    // Split by spaces and rejoin with commas
-    const words = strValue.split(/\s+/).filter(word => word.length > 0);
-    if (words.length > 1) {
-      return words.join(", ");
-    }
-
+    // Return as-is - the data should already be properly formatted
+    // Examples: "Thomas clinton F,Mohan Ganesan,Sedhush Kumar Vishwanathan"
+    // Don't try to parse/reformat as that breaks first+last name pairs
     return strValue;
   };
 

@@ -134,10 +134,15 @@ export default function FinOpsUserStats() {
     queryKey: ["finops-subtasks-hourly", fromDate, toDate],
     queryFn: async () => {
       try {
-        const resp = await apiClient.request(
-          `/finops/subtasks/hourly?from_date=${fromDate || ""}&to_date=${toDate || ""}`
-        );
-        return Array.isArray(resp) ? resp : resp?.data || [];
+        const url = `/finops/subtasks/hourly?from_date=${fromDate || ""}&to_date=${toDate || ""}`;
+        console.log("Fetching hourly subtask data from:", url);
+        const resp = await apiClient.request(url);
+        const data = Array.isArray(resp) ? resp : resp?.data || [];
+        console.log("Hourly subtask response received - count:", data.length);
+        if (data.length > 0) {
+          console.log("Sample response rows:", data.slice(0, 2));
+        }
+        return data;
       } catch (e) {
         console.error("Failed to fetch hourly subtask data:", e);
         return [];
@@ -297,7 +302,11 @@ export default function FinOpsUserStats() {
 
   // Helper: Get hourly task data from finops_subtasks (based on duration from start_time to completed_at)
   const getHourlyTaskData = useMemo(() => {
+    console.log("=== getHourlyTaskData calculation started ===");
+    console.log("hourlySubtasksData length:", hourlySubtasksData?.length || 0);
+
     if (!Array.isArray(hourlySubtasksData) || hourlySubtasksData.length === 0) {
+      console.warn("No data available - returning empty array");
       return [];
     }
 
@@ -311,20 +320,44 @@ export default function FinOpsUserStats() {
       total: 0,
     }));
 
+    let processedCount = 0;
+    let skippedCount = 0;
+
     // Group tasks by start time hour and categorize by duration
     hourlySubtasksData.forEach((row: any, idx: number) => {
+      if (idx < 2) {
+        console.log(`[Data Check] Row ${idx}:`, {
+          start_time: row.start_time,
+          started_at: row.started_at,
+          completed_at: row.completed_at,
+          name: row.name,
+        });
+      }
+
       // Extract hour from start_time (HH:MM:SS format)
       const startHour = getHourFromTimeString(row.start_time);
-      if (startHour === null) return;
+      if (startHour === null) {
+        if (idx < 3) console.warn(`Row ${idx}: startHour is null, skipping`);
+        skippedCount++;
+        return;
+      }
 
       // Only count completed tasks (tasks with both started_at and completed_at)
-      if (!row.started_at || !row.completed_at) return;
+      if (!row.started_at || !row.completed_at) {
+        if (idx < 3) console.warn(`Row ${idx}: missing started_at or completed_at, skipping`);
+        skippedCount++;
+        return;
+      }
 
       // Calculate duration in hours
       const startTime = new Date(row.started_at).getTime();
       const endTime = new Date(row.completed_at).getTime();
 
-      if (isNaN(startTime) || isNaN(endTime) || startTime >= endTime) return;
+      if (isNaN(startTime) || isNaN(endTime) || startTime >= endTime) {
+        if (idx < 3) console.warn(`Row ${idx}: invalid timestamps or negative duration, skipping`);
+        skippedCount++;
+        return;
+      }
 
       const durationMs = endTime - startTime;
       const durationHours = durationMs / (1000 * 60 * 60);
@@ -337,12 +370,13 @@ export default function FinOpsUserStats() {
         if (idx < 3) {
           console.warn(`Task ${idx}: SKIPPED - Duration too long (${durationHours.toFixed(2)}h). Started=${row.started_at}, Completed=${row.completed_at}`);
         }
+        skippedCount++;
         return;
       }
 
       // Debug: Log sample tasks to verify duration calculation
       if (idx < 5) {
-        console.log(`Task ${idx}: ${row.name || row.subtask_name} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h`);
+        console.log(`Task ${idx}: ${row.name || row.subtask_name} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
       }
 
       // Categorize by duration
@@ -358,7 +392,12 @@ export default function FinOpsUserStats() {
       // Increment the counter for this duration category at this hour
       hourlyData[startHour][durationCategory]++;
       hourlyData[startHour].total++;
+      processedCount++;
     });
+
+    console.log("=== Processing complete ===");
+    console.log(`Processed: ${processedCount}, Skipped: ${skippedCount}, Total: ${hourlySubtasksData.length}`);
+    console.log("Hour with data:", hourlyData.filter(d => d.total > 0));
 
     return hourlyData;
   }, [hourlySubtasksData]);

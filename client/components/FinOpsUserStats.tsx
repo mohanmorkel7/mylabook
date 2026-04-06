@@ -318,6 +318,17 @@ export default function FinOpsUserStats() {
       "2to3h": 0,         // >2h to ≤3h (ORANGE)
       "moreThan3h": 0,    // >3h (RED)
       total: 0,
+      // Store detailed task info for tooltip
+      tasks: [] as Array<{
+        name: string;
+        clientName: string;
+        assignedTo: string;
+        completedBy: string;
+        startTime: string;
+        completedAt: string;
+        status: string;
+        durationMinutes: number;
+      }>,
     }));
 
     let processedCount = 0;
@@ -404,6 +415,27 @@ export default function FinOpsUserStats() {
       // Increment the counter for this duration category at this hour
       hourlyData[startHour][durationCategory]++;
       hourlyData[startHour].total++;
+
+      // Store task details for tooltip
+      hourlyData[startHour].tasks.push({
+        name: row.name || "N/A",
+        clientName: row.client_name || "N/A",
+        assignedTo: row.assigned_to || "N/A",
+        completedBy: row.completed_by || "N/A",
+        startTime: row.start_time,
+        completedAt: new Date(row.completed_at).toLocaleString("en-US", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        }),
+        status: row.status,
+        durationMinutes: Math.round(durationMinutes),
+      });
+
       processedCount++;
     });
 
@@ -761,15 +793,38 @@ export default function FinOpsUserStats() {
                             if (active && payload && payload.length > 0) {
                               const hour = payload[0].payload.hour;
                               const total = payload[0].payload.total;
+                              const tasks = payload[0].payload.tasks || [];
                               const nextHour = String((parseInt(hour) + 1) % 24).padStart(2, "0");
+
                               return (
-                                <div className="bg-white p-3 border border-gray-300 rounded shadow-lg text-sm">
-                                  <p className="font-semibold text-gray-900">{hour} - {nextHour}:00 IST</p>
-                                  <p className="text-gray-600 mt-1">Total Completed Tasks: <strong>{total}</strong></p>
-                                  {payload[0].payload.lessThan1h > 0 && <p className="text-green-600">🟢 {"\u2264"}1 Hour: {payload[0].payload.lessThan1h}</p>}
-                                  {payload[0].payload["1to2h"] > 0 && <p className="text-amber-600">🟡 1-2 Hours: {payload[0].payload["1to2h"]}</p>}
-                                  {payload[0].payload["2to3h"] > 0 && <p className="text-orange-600">🟠 2-3 Hours: {payload[0].payload["2to3h"]}</p>}
-                                  {payload[0].payload.moreThan3h > 0 && <p className="text-red-600">🔴 {"\u003e"}3 Hours: {payload[0].payload.moreThan3h}</p>}
+                                <div className="bg-white p-4 border border-gray-300 rounded shadow-lg text-xs max-w-md max-h-96 overflow-y-auto">
+                                  <p className="font-bold text-gray-900 text-sm border-b pb-2 mb-3">{hour} - {nextHour}:00 IST | Total Tasks: {total}</p>
+
+                                  {/* Summary by duration */}
+                                  <div className="mb-3 pb-3 border-b">
+                                    {payload[0].payload.lessThan1h > 0 && <p className="text-green-600">🟢 {"\u2264"}1 Hour: {payload[0].payload.lessThan1h}</p>}
+                                    {payload[0].payload["1to2h"] > 0 && <p className="text-amber-600">🟡 1-2 Hours: {payload[0].payload["1to2h"]}</p>}
+                                    {payload[0].payload["2to3h"] > 0 && <p className="text-orange-600">🟠 2-3 Hours: {payload[0].payload["2to3h"]}</p>}
+                                    {payload[0].payload.moreThan3h > 0 && <p className="text-red-600">🔴 {"\u003e"}3 Hours: {payload[0].payload.moreThan3h}</p>}
+                                  </div>
+
+                                  {/* Detailed task list */}
+                                  <div className="space-y-3">
+                                    {tasks.map((task: any, idx: number) => (
+                                      <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
+                                        <p className="font-semibold text-gray-900">{idx + 1}. {task.name}</p>
+                                        <div className="text-gray-700 mt-1 space-y-1">
+                                          <p><span className="font-medium">Client:</span> {task.clientName}</p>
+                                          <p><span className="font-medium">Start Time:</span> {task.startTime}</p>
+                                          <p><span className="font-medium">Completed At:</span> {task.completedAt}</p>
+                                          <p><span className="font-medium">Duration:</span> {task.durationMinutes} min</p>
+                                          <p><span className="font-medium">Assigned To:</span> {task.assignedTo}</p>
+                                          <p><span className="font-medium">Completed By:</span> {task.completedBy}</p>
+                                          <p><span className="font-medium">Status:</span> <span className="capitalize">{task.status}</span></p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               );
                             }

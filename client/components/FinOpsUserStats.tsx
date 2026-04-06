@@ -813,66 +813,115 @@ export default function FinOpsUserStats() {
 
                             return (
                               <div
-                                className={`bg-white p-4 rounded shadow-xl text-xs max-w-md max-h-96 overflow-y-auto z-50 cursor-default pointer-events-auto ${
+                                className={`rounded-lg shadow-2xl z-50 cursor-default pointer-events-auto overflow-hidden ${
                                   lockedHour === hour ? 'border-2 border-blue-500' : 'border-2 border-gray-300'
                                 }`}
+                                style={{ width: '450px', maxHeight: '550px', display: 'flex', flexDirection: 'column' }}
                                 onClick={(e: any) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  // Toggle lock on tooltip click
                                   setLockedHour(lockedHour === hour ? null : hour);
                                 }}
                                 onMouseEnter={(e: any) => e.stopPropagation()}
                                 onMouseMove={(e: any) => e.stopPropagation()}
                                 onMouseLeave={(e: any) => e.stopPropagation()}
                               >
-                                <div className="flex items-center justify-between mb-3 pb-2 border-b">
-                                  <p className="font-bold text-gray-900 text-sm">{hour} - {nextHour}:00 IST | Total: {total}</p>
+                                {/* Header */}
+                                <div className={`${lockedHour === hour ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-gray-700 to-gray-800'} px-5 py-4 text-white flex items-center justify-between`}>
+                                  <div>
+                                    <p className="font-bold text-base">{hour} - {nextHour}:00 IST</p>
+                                    <p className="text-xs opacity-90 mt-1">Total Tasks: <strong>{total}</strong></p>
+                                  </div>
                                   {lockedHour === hour && (
-                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">🔒 LOCKED</span>
+                                    <span className="text-xs bg-white text-blue-600 px-3 py-1 rounded-full font-bold">🔒 LOCKED</span>
                                   )}
                                 </div>
 
-                                {/* Summary by duration */}
-                                <div className="mb-3 pb-3 border-b">
-                                  {dataToShow.lessThan1h > 0 && <p className="text-green-600">🟢 {"\u2264"}1 Hour: {dataToShow.lessThan1h}</p>}
-                                  {dataToShow["1to2h"] > 0 && <p className="text-amber-600">🟡 1-2 Hours: {dataToShow["1to2h"]}</p>}
-                                  {dataToShow["2to3h"] > 0 && <p className="text-orange-600">🟠 2-3 Hours: {dataToShow["2to3h"]}</p>}
-                                  {dataToShow.moreThan3h > 0 && <p className="text-red-600">🔴 {"\u003e"}3 Hours: {dataToShow.moreThan3h}</p>}
-                                </div>
-
-                                {/* Detailed task list - scrollable */}
-                                <div className="space-y-3 max-h-80 overflow-y-auto">
-                                  {tasks.length > 0 ? (
-                                    tasks.map((task: any, idx: number) => (
-                                      <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
-                                        <p className="font-semibold text-gray-900">{idx + 1}. {task.name}</p>
-                                        <div className="text-gray-700 mt-1 space-y-1">
-                                          <p><span className="font-medium">Client:</span> {task.clientName}</p>
-                                          <p><span className="font-medium">Start Time:</span> {task.startTime}</p>
-                                          <p><span className="font-medium">Completed At:</span> {task.completedAt}</p>
-                                          <p><span className="font-medium">Duration:</span> {task.durationMinutes} min</p>
-                                          <p><span className="font-medium">Assigned To:</span> {task.assignedTo}</p>
-                                          <p><span className="font-medium">Completed By:</span> {task.completedBy}</p>
-                                          <p><span className="font-medium">Status:</span> <span className="capitalize">{task.status}</span></p>
-                                        </div>
+                                {/* Duration Summary Boxes */}
+                                <div className="bg-gray-50 px-5 py-3 border-b border-gray-200">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {dataToShow.lessThan1h > 0 && (
+                                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
+                                        <p className="text-xs font-semibold text-green-700">🟢 ≤1 Hour</p>
+                                        <p className="text-2xl font-bold text-green-600">{dataToShow.lessThan1h}</p>
                                       </div>
-                                    ))
-                                  ) : (
-                                    <p className="text-gray-500 italic">No tasks for this hour</p>
-                                  )}
+                                    )}
+                                    {dataToShow["1to2h"] > 0 && (
+                                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200">
+                                        <p className="text-xs font-semibold text-amber-700">🟡 1-2 Hours</p>
+                                        <p className="text-2xl font-bold text-amber-600">{dataToShow["1to2h"]}</p>
+                                      </div>
+                                    )}
+                                    {dataToShow["2to3h"] > 0 && (
+                                      <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
+                                        <p className="text-xs font-semibold text-orange-700">🟠 2-3 Hours</p>
+                                        <p className="text-2xl font-bold text-orange-600">{dataToShow["2to3h"]}</p>
+                                      </div>
+                                    )}
+                                    {dataToShow.moreThan3h > 0 && (
+                                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-3 border border-red-200">
+                                        <p className="text-xs font-semibold text-red-700">🔴 {"\u003e"}3 Hours</p>
+                                        <p className="text-2xl font-bold text-red-600">{dataToShow.moreThan3h}</p>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
 
-                                {/* Hint for locked state */}
-                                {lockedHour === hour ? (
-                                  <p className="text-xs text-blue-600 mt-3 pt-3 border-t font-semibold">
-                                    ✓ Locked! Scroll to see all tasks. Click to unlock.
-                                  </p>
-                                ) : (
-                                  <p className="text-xs text-gray-500 mt-3 pt-3 border-t italic">
-                                    💡 Click in tooltip to lock and scroll
-                                  </p>
-                                )}
+                                {/* Task list - scrollable only */}
+                                <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}>
+                                  <div className="px-5 py-4 space-y-3">
+                                    {tasks.length > 0 ? (
+                                      tasks.map((task: any, idx: number) => (
+                                        <div key={idx} className="bg-white border-l-4 border-blue-500 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                                          <div className="flex items-start justify-between mb-3">
+                                            <p className="font-bold text-white text-xs bg-blue-500 px-3 py-1 rounded-full">Task {idx + 1}</p>
+                                            <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                                              task.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                                            }`}>
+                                              {task.status}
+                                            </span>
+                                          </div>
+                                          <p className="font-semibold text-gray-900 text-sm mb-3 line-clamp-2">{task.name}</p>
+                                          <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
+                                              <p className="text-gray-600 text-xs">Client</p>
+                                              <p className="font-semibold text-blue-700 text-xs truncate">{task.clientName}</p>
+                                            </div>
+                                            <div className="bg-purple-50 p-2 rounded-lg border border-purple-100">
+                                              <p className="text-gray-600 text-xs">Duration</p>
+                                              <p className="font-semibold text-purple-700">{task.durationMinutes}m</p>
+                                            </div>
+                                            <div className="bg-green-50 p-2 rounded-lg border border-green-100">
+                                              <p className="text-gray-600 text-xs">Start</p>
+                                              <p className="font-semibold text-green-700">{task.startTime}</p>
+                                            </div>
+                                            <div className="bg-orange-50 p-2 rounded-lg border border-orange-100">
+                                              <p className="text-gray-600 text-xs">Completed</p>
+                                              <p className="font-semibold text-orange-700 text-xs truncate">{task.completedAt.split(' ')[0]}</p>
+                                            </div>
+                                            <div className="bg-indigo-50 p-2 rounded-lg border border-indigo-100 col-span-2">
+                                              <p className="text-gray-600 text-xs">Assigned To</p>
+                                              <p className="font-semibold text-indigo-700 text-xs truncate">{task.assignedTo}</p>
+                                            </div>
+                                            <div className="bg-pink-50 p-2 rounded-lg border border-pink-100 col-span-2">
+                                              <p className="text-gray-600 text-xs">Completed By</p>
+                                              <p className="font-semibold text-pink-700 text-xs truncate">{task.completedBy}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="text-center text-gray-500 italic py-8">No tasks for this hour</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Footer */}
+                                <div className={`${
+                                  lockedHour === hour ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'
+                                } px-5 py-3 border-t border-gray-200 text-xs font-semibold text-center transition-colors`}>
+                                  {lockedHour === hour ? '✓ Locked - Click to unlock' : '💡 Click to lock and scroll'}
+                                </div>
                               </div>
                             );
                           }}

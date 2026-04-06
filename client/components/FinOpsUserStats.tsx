@@ -883,29 +883,29 @@ export default function FinOpsUserStats() {
                                           </div>
                                           <p className="font-semibold text-gray-900 text-sm mb-3 line-clamp-2">{task.name}</p>
                                           <div className="grid grid-cols-2 gap-2 text-xs">
-                                            <div className="bg-blue-600 p-2 rounded-lg border border-blue-700">
-                                              <p className="text-blue-100 text-xs font-semibold">Client</p>
-                                              <p className="font-bold text-white text-sm truncate">{task.clientName}</p>
+                                            <div className="bg-blue-700 p-2 rounded-lg border border-blue-900">
+                                              <p className="text-blue-50 text-xs font-semibold">Client</p>
+                                              <p className="font-bold text-white text-sm line-clamp-2">{task.clientName}</p>
                                             </div>
-                                            <div className="bg-purple-600 p-2 rounded-lg border border-purple-700">
-                                              <p className="text-purple-100 text-xs font-semibold">Duration</p>
+                                            <div className="bg-purple-700 p-2 rounded-lg border border-purple-900">
+                                              <p className="text-purple-50 text-xs font-semibold">Duration</p>
                                               <p className="font-bold text-white text-sm">{task.durationMinutes}m</p>
                                             </div>
-                                            <div className="bg-green-600 p-2 rounded-lg border border-green-700">
-                                              <p className="text-green-100 text-xs font-semibold">Start</p>
+                                            <div className="bg-green-700 p-2 rounded-lg border border-green-900">
+                                              <p className="text-green-50 text-xs font-semibold">Start</p>
                                               <p className="font-bold text-white text-sm">{task.startTime}</p>
                                             </div>
-                                            <div className="bg-orange-600 p-2 rounded-lg border border-orange-700">
-                                              <p className="text-orange-100 text-xs font-semibold">Completed</p>
-                                              <p className="font-bold text-white text-sm truncate">{task.completedAt.split(' ')[0]}</p>
+                                            <div className="bg-orange-700 p-2 rounded-lg border border-orange-900">
+                                              <p className="text-orange-50 text-xs font-semibold">Completed</p>
+                                              <p className="font-bold text-white text-sm line-clamp-2">{task.completedAt.split(' ')[0]}</p>
                                             </div>
-                                            <div className="bg-indigo-600 p-3 rounded-lg border border-indigo-700 col-span-2">
-                                              <p className="text-indigo-100 text-xs font-semibold mb-1">Assigned To</p>
-                                              <p className="font-bold text-white text-sm truncate">{task.assignedTo || 'Not Assigned'}</p>
+                                            <div className="bg-indigo-700 p-3 rounded-lg border border-indigo-900 col-span-2">
+                                              <p className="text-indigo-50 text-xs font-semibold mb-1">Assigned To</p>
+                                              <p className="font-bold text-white text-sm line-clamp-3">{task.assignedTo || 'Not Assigned'}</p>
                                             </div>
-                                            <div className="bg-pink-600 p-3 rounded-lg border border-pink-700 col-span-2">
-                                              <p className="text-pink-100 text-xs font-semibold mb-1">Completed By</p>
-                                              <p className="font-bold text-white text-sm truncate">{task.completedBy || 'Not Specified'}</p>
+                                            <div className="bg-pink-700 p-3 rounded-lg border border-pink-900 col-span-2">
+                                              <p className="text-pink-50 text-xs font-semibold mb-1">Completed By</p>
+                                              <p className="font-bold text-white text-sm line-clamp-3">{task.completedBy || 'Not Specified'}</p>
                                             </div>
                                           </div>
                                         </div>

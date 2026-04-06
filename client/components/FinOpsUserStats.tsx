@@ -53,6 +53,7 @@ export default function FinOpsUserStats() {
   const [toDate, setToDate] = useState<string>(getTodayDate());
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [filterType, setFilterType] = useState<"completed_by" | "approved_by" | "in_progress">("completed_by");
+  const [lockedHour, setLockedHour] = useState<string | null>(null);
 
   const humanPeriod = period === "daily" ? "Today" : period === "weekly" ? "Last 7 days" : "This month";
 
@@ -776,12 +777,17 @@ export default function FinOpsUserStats() {
                       <Recharts.BarChart
                         data={getHourlyTaskData}
                         margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                        onClick={(state: any) => {
+                          if (state && state.activeLabel) {
+                            setLockedHour(state.activeLabel === lockedHour ? null : state.activeLabel);
+                          }
+                        }}
                       >
                         <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <Recharts.XAxis
                           dataKey="hour"
                           tick={{ fontSize: 11, fill: "#6b7280" }}
-                          label={{ value: "Hour (IST)", position: "insideBottomRight", offset: -10 }}
+                          label={{ value: "Hour (IST) - Click to Lock/Unlock Tooltip", position: "insideBottomRight", offset: -10 }}
                         />
                         <Recharts.YAxis
                           type="number"
@@ -789,28 +795,43 @@ export default function FinOpsUserStats() {
                           label={{ value: "Task Count", angle: -90, position: "insideLeft", offset: 5 }}
                         />
                         <Recharts.Tooltip
+                          active={lockedHour !== null}
                           content={({ active, payload }) => {
-                            if (active && payload && payload.length > 0) {
-                              const hour = payload[0].payload.hour;
-                              const total = payload[0].payload.total;
-                              const tasks = payload[0].payload.tasks || [];
-                              const nextHour = String((parseInt(hour) + 1) % 24).padStart(2, "0");
+                            // Show tooltip if actively hovering OR if an hour is locked
+                            const shouldShow = active || lockedHour !== null;
+                            const dataToShow = shouldShow ? (lockedHour !== null
+                              ? getHourlyTaskData.find((d: any) => d.hour === lockedHour)
+                              : payload?.[0]?.payload
+                            ) : null;
 
-                              return (
-                                <div className="bg-white p-4 border border-gray-300 rounded shadow-lg text-xs max-w-md max-h-96 overflow-y-auto">
-                                  <p className="font-bold text-gray-900 text-sm border-b pb-2 mb-3">{hour} - {nextHour}:00 IST | Total Tasks: {total}</p>
+                            if (!dataToShow) return null;
 
-                                  {/* Summary by duration */}
-                                  <div className="mb-3 pb-3 border-b">
-                                    {payload[0].payload.lessThan1h > 0 && <p className="text-green-600">🟢 {"\u2264"}1 Hour: {payload[0].payload.lessThan1h}</p>}
-                                    {payload[0].payload["1to2h"] > 0 && <p className="text-amber-600">🟡 1-2 Hours: {payload[0].payload["1to2h"]}</p>}
-                                    {payload[0].payload["2to3h"] > 0 && <p className="text-orange-600">🟠 2-3 Hours: {payload[0].payload["2to3h"]}</p>}
-                                    {payload[0].payload.moreThan3h > 0 && <p className="text-red-600">🔴 {"\u003e"}3 Hours: {payload[0].payload.moreThan3h}</p>}
-                                  </div>
+                            const hour = dataToShow.hour;
+                            const total = dataToShow.total;
+                            const tasks = dataToShow.tasks || [];
+                            const nextHour = String((parseInt(hour) + 1) % 24).padStart(2, "0");
 
-                                  {/* Detailed task list */}
-                                  <div className="space-y-3">
-                                    {tasks.map((task: any, idx: number) => (
+                            return (
+                              <div className="bg-white p-4 border-2 border-gray-300 rounded shadow-xl text-xs max-w-md max-h-96 overflow-y-auto z-50">
+                                <div className="flex items-center justify-between mb-3 pb-2 border-b">
+                                  <p className="font-bold text-gray-900 text-sm">{hour} - {nextHour}:00 IST | Total: {total}</p>
+                                  {lockedHour === hour && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">LOCKED</span>
+                                  )}
+                                </div>
+
+                                {/* Summary by duration */}
+                                <div className="mb-3 pb-3 border-b">
+                                  {dataToShow.lessThan1h > 0 && <p className="text-green-600">🟢 {"\u2264"}1 Hour: {dataToShow.lessThan1h}</p>}
+                                  {dataToShow["1to2h"] > 0 && <p className="text-amber-600">🟡 1-2 Hours: {dataToShow["1to2h"]}</p>}
+                                  {dataToShow["2to3h"] > 0 && <p className="text-orange-600">🟠 2-3 Hours: {dataToShow["2to3h"]}</p>}
+                                  {dataToShow.moreThan3h > 0 && <p className="text-red-600">🔴 {"\u003e"}3 Hours: {dataToShow.moreThan3h}</p>}
+                                </div>
+
+                                {/* Detailed task list - scrollable */}
+                                <div className="space-y-3 max-h-80 overflow-y-auto">
+                                  {tasks.length > 0 ? (
+                                    tasks.map((task: any, idx: number) => (
                                       <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
                                         <p className="font-semibold text-gray-900">{idx + 1}. {task.name}</p>
                                         <div className="text-gray-700 mt-1 space-y-1">
@@ -823,14 +844,23 @@ export default function FinOpsUserStats() {
                                           <p><span className="font-medium">Status:</span> <span className="capitalize">{task.status}</span></p>
                                         </div>
                                       </div>
-                                    ))}
-                                  </div>
+                                    ))
+                                  ) : (
+                                    <p className="text-gray-500 italic">No tasks for this hour</p>
+                                  )}
                                 </div>
-                              );
-                            }
-                            return null;
+
+                                {/* Hint for locked state */}
+                                {lockedHour === hour && (
+                                  <p className="text-xs text-gray-500 mt-3 pt-3 border-t italic">
+                                    💡 Click the hour bar to unlock
+                                  </p>
+                                )}
+                              </div>
+                            );
                           }}
-                          contentStyle={{ borderRadius: "8px" }}
+                          contentStyle={{ borderRadius: "8px", position: "relative", zIndex: 50 }}
+                          cursor="pointer"
                         />
                         <Recharts.Legend />
                         <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />

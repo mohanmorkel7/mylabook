@@ -3128,6 +3128,59 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
   }
 });
 
+// Get hourly task data from finops_subtasks (for hourly status chart)
+router.get("/subtasks/hourly", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+
+    const params: any[] = [];
+    let where = "WHERE 1=1";
+
+    if (fromDate) {
+      params.push(fromDate);
+      where += ` AND st.scheduled_date >= $${params.length}`;
+    }
+    if (toDate) {
+      params.push(toDate);
+      where += ` AND st.scheduled_date <= $${params.length}`;
+    }
+
+    // Query finops_subtasks directly to get hourly task data with actual status
+    const query = `
+      SELECT
+        st.id,
+        st.task_id,
+        st.name,
+        st.start_time,
+        st.scheduled_date,
+        st.status,
+        st.started_at,
+        st.completed_at,
+        st.order_position,
+        st.sla_hours,
+        st.sla_minutes,
+        st.delay_reason,
+        st.delay_notes,
+        ft.task_name,
+        fc.company_name as client_name
+      FROM finops_subtasks st
+      LEFT JOIN finops_tasks ft ON st.task_id = ft.id
+      LEFT JOIN finops_clients fc ON ft.client_id = fc.id
+      ${where}
+      ORDER BY st.scheduled_date DESC, st.task_id ASC, st.order_position ASC
+    `;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching hourly subtask data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch hourly subtask data", message: e.message });
+  }
+});
+
 // Get enhanced task summary with alert information
 router.get("/tasks/:id/summary", async (req: Request, res: Response) => {
   try {

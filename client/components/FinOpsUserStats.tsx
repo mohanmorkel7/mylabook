@@ -129,6 +129,24 @@ export default function FinOpsUserStats() {
     staleTime: 30_000,
   });
 
+  // Fetch hourly subtask data (from finops_subtasks) for hourly status chart
+  const { data: hourlySubtasksData = [] } = useQuery({
+    queryKey: ["finops-subtasks-hourly", fromDate, toDate],
+    queryFn: async () => {
+      try {
+        const resp = await apiClient.request(
+          `/finops/subtasks/hourly?from_date=${fromDate || ""}&to_date=${toDate || ""}`
+        );
+        return Array.isArray(resp) ? resp : resp?.data || [];
+      } catch (e) {
+        console.error("Failed to fetch hourly subtask data:", e);
+        return [];
+      }
+    },
+    enabled: !!(fromDate || toDate),
+    staleTime: 30_000,
+  });
+
   // Safe getters with fallbacks
   const totalTasks = metrics?.total_tasks ?? metrics?.tasks?.total ?? 0;
   const totalSubtasks = metrics?.total_subtasks ?? metrics?.subtasks?.total ?? 0;
@@ -277,9 +295,9 @@ export default function FinOpsUserStats() {
     }
   };
 
-  // Helper: Get hourly task status data (based on start_time, all statuses)
+  // Helper: Get hourly task status data from finops_subtasks (based on start_time)
   const getHourlyTaskData = useMemo(() => {
-    if (!Array.isArray(allTrackerData) || allTrackerData.length === 0) {
+    if (!Array.isArray(hourlySubtasksData) || hourlySubtasksData.length === 0) {
       return [];
     }
 
@@ -294,33 +312,39 @@ export default function FinOpsUserStats() {
       total: 0,
     }));
 
-    // Group tasks by start time hour based on started_at or scheduled_time
-    allTrackerData.forEach((row: TrackerRow) => {
-      let startHour: number | null = null;
-
-      // Priority 1: Use started_at if available (actual start time with full datetime)
-      if (row.started_at) {
-        startHour = getHourInIST(row.started_at);
-      }
-
-      // Priority 2: Fallback to scheduled_time if started_at is null
-      if (startHour === null && row.scheduled_time) {
-        startHour = getHourFromTimeString(row.scheduled_time);
-      }
-
-      // Skip if we couldn't determine the hour
+    // Group tasks by start time hour from finops_subtasks
+    hourlySubtasksData.forEach((row: any) => {
+      // Extract hour from start_time (HH:MM:SS format)
+      const startHour = getHourFromTimeString(row.start_time);
       if (startHour === null) return;
 
-      // Categorize by status
-      const status = row.status?.toLowerCase() || "pending";
-      if (status === "pending" || status === "in_progress" || status === "completed" || status === "overdue" || status === "delayed") {
-        hourlyData[startHour][status]++;
+      // Determine actual status based on timestamps and recorded status
+      let actualStatus = "pending";
+
+      if (row.completed_at) {
+        // Task has been completed
+        actualStatus = "completed";
+      } else if (row.started_at) {
+        // Task has started but not completed
+        actualStatus = "in_progress";
+      } else if (row.status?.toLowerCase() === "delayed") {
+        // Explicitly marked as delayed
+        actualStatus = "delayed";
+      } else if (row.status?.toLowerCase() === "overdue") {
+        // Explicitly marked as overdue
+        actualStatus = "overdue";
+      }
+      // else keep as "pending"
+
+      // Increment the counter for this status at this hour
+      if (actualStatus === "pending" || actualStatus === "in_progress" || actualStatus === "completed" || actualStatus === "overdue" || actualStatus === "delayed") {
+        hourlyData[startHour][actualStatus]++;
         hourlyData[startHour].total++;
       }
     });
 
     return hourlyData;
-  }, [allTrackerData]);
+  }, [hourlySubtasksData]);
 
   // Helper: Parse managers field (handles string, JSON array, or null)
   const parseManagers = (value: any): string => {

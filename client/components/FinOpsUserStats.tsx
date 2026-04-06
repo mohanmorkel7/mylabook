@@ -364,9 +364,9 @@ export default function FinOpsUserStats() {
       const durationMinutes = durationMs / (1000 * 60);
       const durationSeconds = durationMs / 1000;
 
-      // Filter out unreasonable durations (> 24 hours) - likely data quality issues
-      // Only include tasks completed within 24 hours of start
-      if (durationHours > 24) {
+      // Filter out unreasonable durations (> 72 hours/3 days) - likely data quality issues
+      // Only include tasks completed within 72 hours of start
+      if (durationHours > 72) {
         if (idx < 3) {
           console.warn(`Task ${idx}: SKIPPED - Duration too long (${durationHours.toFixed(2)}h). Started=${row.started_at}, Completed=${row.completed_at}`);
         }

@@ -207,6 +207,66 @@ export default function FinOpsUserStats() {
     return date.toLocaleTimeString("en-US", { hour12: false });
   };
 
+  // Helper: Get duration category color
+  const getDurationColor = (hours: number | null): { color: string; label: string } => {
+    if (hours === null) return { color: "#9CA3AF", label: "N/A" };
+    if (hours <= 1) return { color: "#10B981", label: "≤1h (On Time)" };
+    if (hours <= 2) return { color: "#F59E0B", label: "1-2h (Amber)" };
+    if (hours <= 5) return { color: "#F97316", label: "2-5h (Orange)" };
+    return { color: "#EF4444", label: ">5h (Red)" };
+  };
+
+  // Helper: Get hourly task completion data
+  const getHourlyTaskData = useMemo(() => {
+    if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) {
+      return [];
+    }
+
+    // Initialize 24 hours with duration categories
+    const hourlyData = Array.from({ length: 24 }, (_, hour) => ({
+      hour: `${String(hour).padStart(2, "0")}:00`,
+      "≤1h": 0,
+      "1-2h": 0,
+      "2-5h": 0,
+      ">5h": 0,
+      total: 0,
+    }));
+
+    // Group tasks by completion hour
+    const hourlyTasks: Record<number, Array<{ name: string; duration: number }>> = {};
+
+    validProductivityData.forEach((row: TrackerRow) => {
+      const duration = calculateDuration(row.started_at, row.completed_at);
+      if (!row.completed_at || duration === null) return;
+
+      const completedDate = new Date(row.completed_at);
+      const completionHour = completedDate.getHours(); // IST hour
+
+      if (!hourlyTasks[completionHour]) {
+        hourlyTasks[completionHour] = [];
+      }
+
+      // Store task details
+      const taskKey = `${row.task_name} - ${row.subtask_name}`;
+      hourlyTasks[completionHour].push({ name: taskKey, duration });
+
+      // Categorize by duration
+      if (duration <= 1) {
+        hourlyData[completionHour]["≤1h"]++;
+      } else if (duration <= 2) {
+        hourlyData[completionHour]["1-2h"]++;
+      } else if (duration <= 5) {
+        hourlyData[completionHour]["2-5h"]++;
+      } else {
+        hourlyData[completionHour][">5h"]++;
+      }
+      hourlyData[completionHour].total++;
+    });
+
+    // Store hourly tasks for hover details
+    return hourlyData;
+  }, [validProductivityData]);
+
   // Helper: Parse managers field (handles string, JSON array, or null)
   const parseManagers = (value: any): string => {
     if (!value) return "";
@@ -279,6 +339,28 @@ export default function FinOpsUserStats() {
       };
     });
 
+    // Create hourly analytics pivot table
+    const hourlyPivotData: any[] = [];
+
+    // Create header row with duration categories
+    const headerRow: any = { "Hour": "" };
+    const durationCategories = ["≤1h", "1-2h", "2-5h", ">5h"];
+    durationCategories.forEach(cat => {
+      headerRow[cat] = cat;
+    });
+    headerRow["Total"] = "Total";
+    hourlyPivotData.push(headerRow);
+
+    // Add data for each hour
+    getHourlyTaskData.forEach((hourData: any) => {
+      const row: any = { "Hour": hourData.hour };
+      durationCategories.forEach(cat => {
+        row[cat] = hourData[cat] || 0;
+      });
+      row["Total"] = hourData.total || 0;
+      hourlyPivotData.push(row);
+    });
+
     // Create workbook with multiple sheets
     const wb = XLSX.utils.book_new();
 
@@ -308,6 +390,18 @@ export default function FinOpsUserStats() {
     ];
     dataWs["!cols"] = colWidths;
     XLSX.utils.book_append_sheet(wb, dataWs, "User Productivity");
+
+    // Hourly Analytics sheet
+    const hourlyWs = XLSX.utils.json_to_sheet(hourlyPivotData);
+    hourlyWs["!cols"] = [
+      { wch: 10 }, // Hour
+      { wch: 12 }, // ≤1h
+      { wch: 12 }, // 1-2h
+      { wch: 12 }, // 2-5h
+      { wch: 12 }, // >5h
+      { wch: 12 }, // Total
+    ];
+    XLSX.utils.book_append_sheet(wb, hourlyWs, "Hourly Analytics");
 
     const filename = `finops-user-productivity-${filterTypeLabel.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(wb, filename);
@@ -468,6 +562,90 @@ export default function FinOpsUserStats() {
                 ) : (
                   <div>
                     <p className="text-sm">Select date range and/or user to view chart</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Hourly Task Completion Chart */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+            <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Completion (12 AM - 11:59 PM IST)</CardTitle>
+            <p className="text-xs text-gray-500 mt-2">Color-coded by task duration: Green (&lt;=1h) | Amber (1-2h) | Orange (2-5h) | Red (&gt;5h)</p>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {isLoadingProductivity ? (
+              <div className="text-center py-12 text-gray-500">Loading productivity data...</div>
+            ) : getHourlyTaskData.some(d => d.total > 0) ? (
+              <div className="w-full overflow-auto">
+                <div style={{ minHeight: 400, width: "100%" }}>
+                  <ChartContainer
+                    id="hourly-completion"
+                    config={{
+                      "≤1h": { color: "#10B981", label: "On Time (≤1h)" },
+                      "1-2h": { color: "#F59E0B", label: "Amber (1-2h)" },
+                      "2-5h": { color: "#F97316", label: "Orange (2-5h)" },
+                      ">5h": { color: "#EF4444", label: "Red (>5h)" },
+                    }}
+                  >
+                    <Recharts.ResponsiveContainer width="100%" height={400}>
+                      <Recharts.BarChart
+                        data={getHourlyTaskData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                      >
+                        <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <Recharts.XAxis
+                          dataKey="hour"
+                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                          label={{ value: "Hour (IST)", position: "insideBottomRight", offset: -10 }}
+                        />
+                        <Recharts.YAxis
+                          type="number"
+                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                          label={{ value: "Task Count", angle: -90, position: "insideLeft", offset: 5 }}
+                        />
+                        <Recharts.Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length > 0) {
+                              const hour = payload[0].payload.hour;
+                              const total = payload[0].payload.total;
+                              return (
+                                <div className="bg-white p-3 border border-gray-300 rounded shadow-lg text-sm">
+                                  <p className="font-semibold text-gray-900">{hour} - {String(parseInt(hour) + 1).padStart(2, "0")}:00</p>
+                                  <p className="text-gray-600 mt-1">Total Tasks: <strong>{total}</strong></p>
+                                  {payload[0].payload["≤1h"] > 0 && <p className="text-green-600">✓ On Time (&lt;=1h): {payload[0].payload["≤1h"]}</p>}
+                                  {payload[0].payload["1-2h"] > 0 && <p className="text-amber-600">⚠ Amber (1-2h): {payload[0].payload["1-2h"]}</p>}
+                                  {payload[0].payload["2-5h"] > 0 && <p className="text-orange-600">⚠ Orange (2-5h): {payload[0].payload["2-5h"]}</p>}
+                                  {payload[0].payload[">5h"] > 0 && <p className="text-red-600">✕ Red (&gt;5h): {payload[0].payload[">5h"]}</p>}
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                          contentStyle={{ borderRadius: "8px" }}
+                        />
+                        <Recharts.Legend />
+                        <Recharts.Bar dataKey="≤1h" stackId="duration" fill="#10B981" />
+                        <Recharts.Bar dataKey="1-2h" stackId="duration" fill="#F59E0B" />
+                        <Recharts.Bar dataKey="2-5h" stackId="duration" fill="#F97316" />
+                        <Recharts.Bar dataKey=">5h" stackId="duration" fill="#EF4444" />
+                      </Recharts.BarChart>
+                    </Recharts.ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+                {fromDate || toDate || selectedUser ? (
+                  <div>
+                    <p className="text-sm">No hourly task data available for selected filters</p>
+                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range or user selection</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm">Select date range and/or user to view hourly chart</p>
                   </div>
                 )}
               </div>

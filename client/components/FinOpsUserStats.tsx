@@ -89,7 +89,7 @@ export default function FinOpsUserStats() {
     refetchOnWindowFocus: true,
   });
 
-  // Fetch user productivity data based on filters
+  // Fetch user productivity data based on filters (for charts)
   const { data: productivityData = [], isLoading: isLoadingProductivity } = useQuery({
     queryKey: ["finops-user-productivity", fromDate, toDate, selectedUser, filterType],
     queryFn: async () => {
@@ -107,6 +107,24 @@ export default function FinOpsUserStats() {
       }
     },
     enabled: !!(fromDate || toDate), // Fetch when dates are selected
+    staleTime: 30_000,
+  });
+
+  // Fetch all tracker data (all statuses) based on filters (for task list)
+  const { data: allTrackerData = [], isLoading: isLoadingAllTasks } = useQuery({
+    queryKey: ["finops-tracker-all", fromDate, toDate],
+    queryFn: async () => {
+      try {
+        const resp = await apiClient.request(
+          `/finops/tracker/all?from_date=${fromDate || ""}&to_date=${toDate || ""}`
+        );
+        return Array.isArray(resp) ? resp : resp?.data || [];
+      } catch (e) {
+        console.error("Failed to fetch all tracker data:", e);
+        return [];
+      }
+    },
+    enabled: !!(fromDate || toDate),
     staleTime: 30_000,
   });
 
@@ -596,96 +614,6 @@ export default function FinOpsUserStats() {
           </CardContent>
         </Card>
 
-        {/* Subtask List with Hover Details */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b">
-            <CardTitle className="text-base font-semibold text-gray-800">Subtask List & Details</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            {isLoadingProductivity ? (
-              <div className="text-center py-12 text-gray-500">Loading subtask data...</div>
-            ) : Array.isArray(validProductivityData) && validProductivityData.length > 0 ? (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {validProductivityData.map((row: TrackerRow, idx: number) => {
-                  const duration = calculateDuration(row.started_at, row.completed_at);
-                  const durationColor = getDurationColor(duration);
-                  return (
-                    <div
-                      key={idx}
-                      className="group p-3 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 transition-all cursor-default bg-white hover:bg-blue-50"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-gray-900 truncate">
-                            {row.subtask_name || "Unnamed Subtask"}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1 truncate">
-                            Task: {row.task_name || "N/A"}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Client: {row.client_name || "N/A"}
-                          </p>
-                        </div>
-                        <div
-                          className="flex-shrink-0 px-2 py-1 rounded text-xs font-semibold text-white whitespace-nowrap"
-                          style={{ backgroundColor: durationColor.color }}
-                        >
-                          {formatDuration(duration)}
-                        </div>
-                      </div>
-
-                      {/* Hover Details - Hidden by default, shown on hover */}
-                      <div className="hidden group-hover:block mt-3 pt-3 border-t border-gray-200 text-xs text-gray-700 space-y-1">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <span className="font-semibold text-gray-800">Status:</span> {row.status || "N/A"}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-800">Period:</span> {row.period || "N/A"}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <span className="font-semibold text-gray-800">Started:</span> {formatDate(row.started_at) || "N/A"} {formatTime(row.started_at) || ""}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-800">Completed:</span> {formatDate(row.completed_at) || "N/A"} {formatTime(row.completed_at) || ""}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <span className="font-semibold text-gray-800">Completed By:</span> {row.completed_by || "N/A"}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-gray-800">Approved By:</span> {row.approved_by || "N/A"}
-                          </div>
-                        </div>
-                        {row.delay_reason && (
-                          <div className="col-span-2 p-2 bg-yellow-50 rounded border border-yellow-200">
-                            <span className="font-semibold text-gray-800">Reason:</span> {row.delay_reason}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
-                {fromDate || toDate || selectedUser ? (
-                  <div>
-                    <p className="text-sm">No subtask data available for selected filters</p>
-                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range or user selection</p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-sm">Select date range and/or user to view subtasks</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Hourly Task Completion Chart */}
         <Card className="border border-gray-200 shadow-sm">
@@ -885,6 +813,131 @@ export default function FinOpsUserStats() {
             </div>
           </div>
         )}
+
+        {/* All Tasks Section - Show all subtasks with all statuses */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="bg-gradient-to-r from-pink-50 to-purple-50 border-b">
+            <CardTitle className="text-base font-semibold text-gray-800">All Tasks ({allTrackerData.length} records)</CardTitle>
+            <p className="text-xs text-gray-500 mt-1">Showing all subtasks with statuses: Pending, In Progress, Completed, Overdue, Delayed</p>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {isLoadingAllTasks ? (
+              <div className="text-center py-12 text-gray-500">Loading all tasks...</div>
+            ) : Array.isArray(allTrackerData) && allTrackerData.length > 0 ? (
+              <div className="space-y-2 max-h-screen overflow-y-auto">
+                {allTrackerData.map((row: TrackerRow, idx: number) => {
+                  const duration = calculateDuration(row.started_at, row.completed_at);
+                  const statusColorMap: Record<string, string> = {
+                    "completed": "bg-green-50 border-green-200 hover:border-green-400",
+                    "in_progress": "bg-blue-50 border-blue-200 hover:border-blue-400",
+                    "pending": "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
+                    "overdue": "bg-red-50 border-red-200 hover:border-red-400",
+                    "delayed": "bg-orange-50 border-orange-200 hover:border-orange-400",
+                    "approved": "bg-indigo-50 border-indigo-200 hover:border-indigo-400",
+                  };
+                  const statusBgColor = statusColorMap[row.status] || "bg-gray-50 border-gray-200 hover:border-gray-400";
+                  const statusTextColor: Record<string, string> = {
+                    "completed": "text-green-700",
+                    "in_progress": "text-blue-700",
+                    "pending": "text-yellow-700",
+                    "overdue": "text-red-700",
+                    "delayed": "text-orange-700",
+                    "approved": "text-indigo-700",
+                  };
+                  const textColor = statusTextColor[row.status] || "text-gray-700";
+
+                  return (
+                    <div key={idx} className={`group p-4 border rounded-lg transition-all cursor-pointer hover:shadow-md ${statusBgColor}`}>
+                      {/* Main Row */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <p className={`font-bold text-sm ${textColor} uppercase px-2 py-1 rounded text-xs`}>
+                              {row.status}
+                            </p>
+                            {duration !== null && (
+                              <span style={{ backgroundColor: getDurationColor(duration).color }} className="text-white px-2 py-1 rounded text-xs font-semibold">
+                                {formatDuration(duration)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-semibold text-sm text-gray-900 truncate">
+                            {row.subtask_name || "Unnamed Subtask"}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1 truncate">
+                            Task: {row.task_name || "N/A"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Client: {row.client_name || "N/A"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Hover Details - Detailed Information */}
+                      <div className="mt-3 pt-3 border-t border-current border-opacity-20 space-y-2 text-xs text-gray-700">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <span className="font-semibold text-gray-800">Started:</span>
+                            <p>{formatDate(row.started_at) || "N/A"} {formatTime(row.started_at) || ""}</p>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-800">Completed:</span>
+                            <p>{formatDate(row.completed_at) || "N/A"} {formatTime(row.completed_at) || ""}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <span className="font-semibold text-gray-800">Completed By:</span>
+                            <p>{row.completed_by || "N/A"}</p>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-800">Assigned To:</span>
+                            <p>{parseManagers(row.assigned_to) || "N/A"}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <span className="font-semibold text-gray-800">Period:</span>
+                            <p>{row.period || "N/A"}</p>
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-800">Updated:</span>
+                            <p>{formatDate(row.updated_at)} {formatTime(row.updated_at)}</p>
+                          </div>
+                        </div>
+                        {row.delay_reason && (
+                          <div className="col-span-2 p-2 bg-red-100 rounded border border-red-300 mt-2">
+                            <span className="font-semibold text-gray-800">Delay Reason:</span>
+                            <p>{row.delay_reason}</p>
+                          </div>
+                        )}
+                        {row.reporting_managers && (
+                          <div>
+                            <span className="font-semibold text-gray-800">Reporting Managers:</span>
+                            <p>{parseManagers(row.reporting_managers)}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+                {fromDate || toDate ? (
+                  <div>
+                    <p className="text-sm">No task data available for selected date range</p>
+                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm">Select date range to view all tasks</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Data Quality Alert */}
         {Array.isArray(validProductivityData) && validProductivityData.length > 0 && (() => {

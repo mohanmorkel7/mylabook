@@ -3066,6 +3066,68 @@ router.get("/tracker/user-productivity-data", async (req: Request, res: Response
   }
 });
 
+// Get all tracker data (all statuses) for comprehensive task listing
+router.get("/tracker/all", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+
+    const params: any[] = [];
+    let where = "WHERE 1=1";
+
+    if (fromDate) {
+      params.push(fromDate);
+      where += ` AND ft.run_date >= $${params.length}`;
+    }
+    if (toDate) {
+      params.push(toDate);
+      where += ` AND ft.run_date <= $${params.length}`;
+    }
+
+    const query = `
+      SELECT
+        ft.id,
+        ft.run_date,
+        ft.period,
+        ft.task_id,
+        ft.task_name,
+        ft.subtask_id,
+        ft.subtask_name,
+        ft.status,
+        ft.started_at,
+        ft.completed_at,
+        ft.scheduled_time,
+        ft.subtask_scheduled_date,
+        ft.description,
+        ft.sla_hours,
+        ft.sla_minutes,
+        ft.order_position,
+        ft.delay_reason,
+        ft.delay_notes,
+        ft.assigned_to,
+        ft.reporting_managers,
+        ft.escalation_managers,
+        ft.completed_by,
+        ft.created_at,
+        ft.updated_at,
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name
+      FROM finops_tracker ft
+      LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
+      LEFT JOIN finops_clients fc ON fts.client_id = fc.id
+      ${where}
+      ORDER BY ft.run_date DESC, ft.task_id ASC, ft.subtask_id ASC, ft.status ASC
+    `;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching all tracker data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch all tracker data", message: e.message });
+  }
+});
+
 // Get enhanced task summary with alert information
 router.get("/tasks/:id/summary", async (req: Request, res: Response) => {
   try {

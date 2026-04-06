@@ -473,6 +473,27 @@ export default function FinOpsUserStats() {
     return strValue;
   };
 
+  // Helper: Format assigned names (convert space-separated to comma-separated)
+  const formatAssignedNames = (value: any): string => {
+    if (!value) return "Not Assigned";
+    const strValue = String(value).trim();
+    if (!strValue || strValue === "N/A" || strValue === "''") return "Not Assigned";
+
+    // If already comma-separated, return as is
+    if (strValue.includes(",")) {
+      return strValue;
+    }
+
+    // If space-separated (multiple words with capital letters indicating names)
+    // Split by spaces and rejoin with commas
+    const words = strValue.split(/\s+/).filter(word => word.length > 0);
+    if (words.length > 1) {
+      return words.join(", ");
+    }
+
+    return strValue;
+  };
+
   // Helper: Export productivity data to Excel
   const exportProductivityToExcel = () => {
     if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) {
@@ -901,11 +922,11 @@ export default function FinOpsUserStats() {
                                             </div>
                                             <div className="bg-indigo-700 p-3 rounded-lg border border-indigo-900 col-span-2">
                                               <p className="text-indigo-50 text-xs font-semibold mb-1">Assigned To</p>
-                                              <p className="font-bold text-white text-sm line-clamp-3">{task.assignedTo || 'Not Assigned'}</p>
+                                              <p className="font-bold text-white text-sm line-clamp-3">{formatAssignedNames(task.assignedTo)}</p>
                                             </div>
                                             <div className="bg-pink-700 p-3 rounded-lg border border-pink-900 col-span-2">
                                               <p className="text-pink-50 text-xs font-semibold mb-1">Completed By</p>
-                                              <p className="font-bold text-white text-sm line-clamp-3">{task.completedBy || 'Not Specified'}</p>
+                                              <p className="font-bold text-white text-sm line-clamp-3">{formatAssignedNames(task.completedBy)}</p>
                                             </div>
                                           </div>
                                         </div>

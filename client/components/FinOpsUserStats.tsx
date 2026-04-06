@@ -342,35 +342,56 @@ export default function FinOpsUserStats() {
         return;
       }
 
-      // Only count completed tasks (tasks with both started_at and completed_at)
-      if (!row.started_at || !row.completed_at) {
-        if (idx < 3) console.warn(`Row ${idx}: missing started_at or completed_at, skipping`);
+      // Only count completed tasks (need completed_at timestamp)
+      if (!row.completed_at) {
+        if (idx < 3) console.warn(`Row ${idx}: missing completed_at, skipping`);
         skippedCount++;
         return;
       }
 
-      // Calculate duration in hours
-      const startTime = new Date(row.started_at).getTime();
-      const endTime = new Date(row.completed_at).getTime();
+      // Calculate duration using start_time (HH:MM:SS) + completion date
+      // This gives us realistic task duration (20 min instead of 100+ hours)
+      const completedDate = new Date(row.completed_at);
+      const completedHour = completedDate.getHours();
+      const completedMinutes = completedDate.getMinutes();
+      const completedSeconds = completedDate.getSeconds();
 
-      if (isNaN(startTime) || isNaN(endTime) || startTime >= endTime) {
-        if (idx < 3) console.warn(`Row ${idx}: invalid timestamps or negative duration, skipping`);
+      // Build start timestamp from start_time (HH:MM:SS) on the same day as completion
+      const [hourStr, minStr, secStr] = row.start_time.split(':');
+      const startHourNum = parseInt(hourStr, 10);
+      const startMinNum = parseInt(minStr, 10);
+      const startSecNum = parseInt(secStr, 10);
+
+      // Create start time on the completion date
+      const startTime = new Date(completedDate);
+      startTime.setHours(startHourNum, startMinNum, startSecNum, 0);
+
+      // Handle case where task completed after midnight (if start_time is later than completion time)
+      // This means the task started yesterday
+      if (startTime > completedDate) {
+        startTime.setDate(startTime.getDate() - 1);
+      }
+
+      const startTimeMs = startTime.getTime();
+      const endTimeMs = completedDate.getTime();
+
+      if (isNaN(startTimeMs) || isNaN(endTimeMs) || startTimeMs > endTimeMs) {
+        if (idx < 3) console.warn(`Row ${idx}: invalid time calculation, skipping`);
         skippedCount++;
         return;
       }
 
-      const durationMs = endTime - startTime;
+      const durationMs = endTimeMs - startTimeMs;
       const durationHours = durationMs / (1000 * 60 * 60);
       const durationMinutes = durationMs / (1000 * 60);
       const durationSeconds = durationMs / 1000;
 
       // Debug: Log sample tasks to verify duration calculation
       if (idx < 5) {
-        console.log(`Task ${idx}: ${row.name || row.subtask_name} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
+        console.log(`Task ${idx}: ${row.name || row.subtask_name} - Start: ${row.start_time}, Completed: ${completedDate.toISOString()} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
       }
 
       // Categorize by duration
-      // Note: Tasks can have very long durations if they span multiple days
       let durationCategory = "lessThan1h";
       if (durationHours > 3) {
         durationCategory = "moreThan3h";

@@ -899,13 +899,13 @@ export default function FinOpsUserStats() {
                                               <p className="text-gray-600 text-xs">Completed</p>
                                               <p className="font-semibold text-orange-700 text-xs truncate">{task.completedAt.split(' ')[0]}</p>
                                             </div>
-                                            <div className="bg-indigo-50 p-2 rounded-lg border border-indigo-100 col-span-2">
-                                              <p className="text-gray-600 text-xs">Assigned To</p>
-                                              <p className="font-semibold text-indigo-700 text-xs truncate">{task.assignedTo}</p>
+                                            <div className="bg-indigo-100 p-3 rounded-lg border border-indigo-300 col-span-2">
+                                              <p className="text-indigo-600 text-xs font-semibold mb-1">Assigned To</p>
+                                              <p className="font-bold text-indigo-900 text-sm truncate">{task.assignedTo || 'Not Assigned'}</p>
                                             </div>
-                                            <div className="bg-pink-50 p-2 rounded-lg border border-pink-100 col-span-2">
-                                              <p className="text-gray-600 text-xs">Completed By</p>
-                                              <p className="font-semibold text-pink-700 text-xs truncate">{task.completedBy}</p>
+                                            <div className="bg-pink-100 p-3 rounded-lg border border-pink-300 col-span-2">
+                                              <p className="text-pink-600 text-xs font-semibold mb-1">Completed By</p>
+                                              <p className="font-bold text-pink-900 text-sm truncate">{task.completedBy || 'Not Specified'}</p>
                                             </div>
                                           </div>
                                         </div>

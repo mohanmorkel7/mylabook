@@ -795,14 +795,17 @@ export default function FinOpsUserStats() {
                           label={{ value: "Task Count", angle: -90, position: "insideLeft", offset: 5 }}
                         />
                         <Recharts.Tooltip
-                          active={lockedHour !== null}
                           content={({ active, payload }) => {
                             // Show tooltip if actively hovering OR if an hour is locked
-                            const shouldShow = active || lockedHour !== null;
-                            const dataToShow = shouldShow ? (lockedHour !== null
-                              ? getHourlyTaskData.find((d: any) => d.hour === lockedHour)
-                              : payload?.[0]?.payload
-                            ) : null;
+                            let dataToShow = null;
+
+                            if (lockedHour !== null) {
+                              // If locked, show the locked hour's data
+                              dataToShow = getHourlyTaskData.find((d: any) => d.hour === lockedHour);
+                            } else if (active && payload && payload.length > 0) {
+                              // Otherwise show hovered data
+                              dataToShow = payload[0].payload;
+                            }
 
                             if (!dataToShow) return null;
 
@@ -860,7 +863,6 @@ export default function FinOpsUserStats() {
                             );
                           }}
                           contentStyle={{ borderRadius: "8px", position: "relative", zIndex: 50 }}
-                          cursor="pointer"
                         />
                         <Recharts.Legend />
                         <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />

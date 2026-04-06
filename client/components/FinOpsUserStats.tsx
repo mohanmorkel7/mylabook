@@ -41,8 +41,15 @@ interface TrackerRow {
 
 export default function FinOpsUserStats() {
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
-  const [fromDate, setFromDate] = useState<string>("");
-  const [toDate, setToDate] = useState<string>("");
+
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toLocaleDateString("en-CA"); // YYYY-MM-DD format
+  };
+
+  const [fromDate, setFromDate] = useState<string>(getTodayDate());
+  const [toDate, setToDate] = useState<string>(getTodayDate());
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [filterType, setFilterType] = useState<"completed_by" | "approved_by" | "in_progress">("completed_by");
 
@@ -216,6 +223,26 @@ export default function FinOpsUserStats() {
     return { color: "#EF4444", label: ">5h (Red)" };
   };
 
+  // Helper: Get hour in IST timezone
+  const getHourInIST = (dateString: string | null): number | null => {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      // Convert to IST timezone (UTC+5:30)
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        hour12: false,
+      });
+      const parts = formatter.formatToParts(date);
+      const hourPart = parts.find(p => p.type === 'hour');
+      return hourPart ? parseInt(hourPart.value, 10) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Helper: Get hourly task completion data
   const getHourlyTaskData = useMemo(() => {
     if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) {
@@ -239,8 +266,8 @@ export default function FinOpsUserStats() {
       const duration = calculateDuration(row.started_at, row.completed_at);
       if (!row.completed_at || duration === null) return;
 
-      const completedDate = new Date(row.completed_at);
-      const completionHour = completedDate.getHours(); // IST hour
+      const completionHour = getHourInIST(row.completed_at);
+      if (completionHour === null) return;
 
       if (!hourlyTasks[completionHour]) {
         hourlyTasks[completionHour] = [];
@@ -562,6 +589,97 @@ export default function FinOpsUserStats() {
                 ) : (
                   <div>
                     <p className="text-sm">Select date range and/or user to view chart</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Subtask List with Hover Details */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b">
+            <CardTitle className="text-base font-semibold text-gray-800">Subtask List & Details</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {isLoadingProductivity ? (
+              <div className="text-center py-12 text-gray-500">Loading subtask data...</div>
+            ) : Array.isArray(validProductivityData) && validProductivityData.length > 0 ? (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {validProductivityData.map((row: TrackerRow, idx: number) => {
+                  const duration = calculateDuration(row.started_at, row.completed_at);
+                  const durationColor = getDurationColor(duration);
+                  return (
+                    <div
+                      key={idx}
+                      className="group p-3 border border-gray-200 rounded-lg hover:shadow-md hover:border-blue-300 transition-all cursor-default bg-white hover:bg-blue-50"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-gray-900 truncate">
+                            {row.subtask_name || "Unnamed Subtask"}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1 truncate">
+                            Task: {row.task_name || "N/A"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Client: {row.client_name || "N/A"}
+                          </p>
+                        </div>
+                        <div
+                          className="flex-shrink-0 px-2 py-1 rounded text-xs font-semibold text-white whitespace-nowrap"
+                          style={{ backgroundColor: durationColor.color }}
+                        >
+                          {formatDuration(duration)}
+                        </div>
+                      </div>
+
+                      {/* Hover Details - Hidden by default, shown on hover */}
+                      <div className="hidden group-hover:block mt-3 pt-3 border-t border-gray-200 text-xs text-gray-700 space-y-1">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="font-semibold text-gray-800">Status:</span> {row.status || "N/A"}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-800">Period:</span> {row.period || "N/A"}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="font-semibold text-gray-800">Started:</span> {formatDate(row.started_at) || "N/A"} {formatTime(row.started_at) || ""}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-800">Completed:</span> {formatDate(row.completed_at) || "N/A"} {formatTime(row.completed_at) || ""}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="font-semibold text-gray-800">Completed By:</span> {row.completed_by || "N/A"}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-gray-800">Approved By:</span> {row.approved_by || "N/A"}
+                          </div>
+                        </div>
+                        {row.delay_reason && (
+                          <div className="col-span-2 p-2 bg-yellow-50 rounded border border-yellow-200">
+                            <span className="font-semibold text-gray-800">Reason:</span> {row.delay_reason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+                {fromDate || toDate || selectedUser ? (
+                  <div>
+                    <p className="text-sm">No subtask data available for selected filters</p>
+                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range or user selection</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm">Select date range and/or user to view subtasks</p>
                   </div>
                 )}
               </div>

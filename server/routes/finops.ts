@@ -3129,21 +3129,33 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
 });
 
 // Get hourly task data from finops_subtasks (for hourly status chart)
+// Filters by actual execution date (completed_at > started_at > updated_at)
 router.get("/subtasks/hourly", async (req: Request, res: Response) => {
   try {
     const fromDate = (req.query.from_date as string) || null;
     const toDate = (req.query.to_date as string) || null;
 
-    const params: any[] = [];
-    let where = "WHERE 1=1";
+    console.log("Subtasks/hourly request - fromDate:", fromDate, "toDate:", toDate);
 
+    const params: any[] = [];
+    let whereClause = "";
+
+    // Build WHERE clause using COALESCE for execution date
+    // Priority: completed_at > started_at > updated_at
+    const executionDateExpr = "COALESCE(DATE(st.completed_at), DATE(st.started_at), DATE(st.updated_at))";
+
+    const whereParts: string[] = [];
     if (fromDate) {
       params.push(fromDate);
-      where += ` AND st.scheduled_date >= $${params.length}`;
+      whereParts.push(`${executionDateExpr} >= $${params.length}`);
     }
     if (toDate) {
       params.push(toDate);
-      where += ` AND st.scheduled_date <= $${params.length}`;
+      whereParts.push(`${executionDateExpr} <= $${params.length}`);
+    }
+
+    if (whereParts.length > 0) {
+      whereClause = "WHERE " + whereParts.join(" AND ");
     }
 
     // Query finops_subtasks directly to get hourly task data with actual status
@@ -3157,6 +3169,7 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
         st.status,
         st.started_at,
         st.completed_at,
+        st.updated_at,
         st.order_position,
         st.sla_hours,
         st.sla_minutes,
@@ -3167,11 +3180,19 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
       FROM finops_subtasks st
       LEFT JOIN finops_tasks ft ON st.task_id = ft.id
       LEFT JOIN finops_clients fc ON ft.client_id = fc.id
-      ${where}
-      ORDER BY st.scheduled_date DESC, st.task_id ASC, st.order_position ASC
+      ${whereClause}
+      ORDER BY st.updated_at DESC, st.task_id ASC, st.order_position ASC
     `;
 
+    console.log("Subtasks/hourly query:", query);
+    console.log("Subtasks/hourly params:", params);
+
     const result = await pool.query(query, params);
+    console.log("Subtasks/hourly result count:", result.rows.length);
+    if (result.rows.length > 0) {
+      console.log("Sample row:", result.rows[0]);
+    }
+
     res.json(result.rows);
   } catch (e: any) {
     console.error("Error fetching hourly subtask data:", e);

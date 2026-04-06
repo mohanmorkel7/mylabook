@@ -777,11 +777,6 @@ export default function FinOpsUserStats() {
                       <Recharts.BarChart
                         data={getHourlyTaskData}
                         margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                        onClick={(state: any) => {
-                          if (state && state.activeLabel) {
-                            setLockedHour(state.activeLabel === lockedHour ? null : state.activeLabel);
-                          }
-                        }}
                       >
                         <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <Recharts.XAxis
@@ -815,11 +810,18 @@ export default function FinOpsUserStats() {
                             const nextHour = String((parseInt(hour) + 1) % 24).padStart(2, "0");
 
                             return (
-                              <div className="bg-white p-4 border-2 border-gray-300 rounded shadow-xl text-xs max-w-md max-h-96 overflow-y-auto z-50">
+                              <div
+                                className="bg-white p-4 border-2 border-gray-300 rounded shadow-xl text-xs max-w-md max-h-96 overflow-y-auto z-50 cursor-default"
+                                onClick={(e: any) => {
+                                  e.stopPropagation();
+                                  // Toggle lock on tooltip click
+                                  setLockedHour(lockedHour === hour ? null : hour);
+                                }}
+                              >
                                 <div className="flex items-center justify-between mb-3 pb-2 border-b">
                                   <p className="font-bold text-gray-900 text-sm">{hour} - {nextHour}:00 IST | Total: {total}</p>
                                   {lockedHour === hour && (
-                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">LOCKED</span>
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">🔒 LOCKED</span>
                                   )}
                                 </div>
 
@@ -854,9 +856,13 @@ export default function FinOpsUserStats() {
                                 </div>
 
                                 {/* Hint for locked state */}
-                                {lockedHour === hour && (
+                                {lockedHour === hour ? (
+                                  <p className="text-xs text-blue-600 mt-3 pt-3 border-t font-semibold">
+                                    ✓ Locked! Scroll to see all tasks. Click to unlock.
+                                  </p>
+                                ) : (
                                   <p className="text-xs text-gray-500 mt-3 pt-3 border-t italic">
-                                    💡 Click the hour bar to unlock
+                                    💡 Click in tooltip to lock and scroll
                                   </p>
                                 )}
                               </div>

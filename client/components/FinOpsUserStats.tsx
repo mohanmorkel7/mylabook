@@ -364,22 +364,13 @@ export default function FinOpsUserStats() {
       const durationMinutes = durationMs / (1000 * 60);
       const durationSeconds = durationMs / 1000;
 
-      // Filter out unreasonable durations (> 72 hours/3 days) - likely data quality issues
-      // Only include tasks completed within 72 hours of start
-      if (durationHours > 72) {
-        if (idx < 3) {
-          console.warn(`Task ${idx}: SKIPPED - Duration too long (${durationHours.toFixed(2)}h). Started=${row.started_at}, Completed=${row.completed_at}`);
-        }
-        skippedCount++;
-        return;
-      }
-
       // Debug: Log sample tasks to verify duration calculation
       if (idx < 5) {
         console.log(`Task ${idx}: ${row.name || row.subtask_name} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
       }
 
       // Categorize by duration
+      // Note: Tasks can have very long durations if they span multiple days
       let durationCategory = "lessThan1h";
       if (durationHours > 3) {
         durationCategory = "moreThan3h";

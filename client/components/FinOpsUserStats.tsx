@@ -794,12 +794,18 @@ export default function FinOpsUserStats() {
                             // Show tooltip if actively hovering OR if an hour is locked
                             let dataToShow = null;
 
+                            let dataToShow = null;
+
+                            // When locked, ALWAYS show locked hour and NEVER update on hover
                             if (lockedHour !== null) {
-                              // If locked, show the locked hour's data
                               dataToShow = getHourlyTaskData.find((d: any) => d.hour === lockedHour);
+                              // Don't rely on active/payload when locked - always show locked data
                             } else if (active && payload && payload.length > 0) {
-                              // Otherwise show hovered data
+                              // Only when NOT locked, show hovered data
                               dataToShow = payload[0].payload;
+                            } else {
+                              // No data to show
+                              return null;
                             }
 
                             if (!dataToShow) return null;
@@ -811,12 +817,18 @@ export default function FinOpsUserStats() {
 
                             return (
                               <div
-                                className="bg-white p-4 border-2 border-gray-300 rounded shadow-xl text-xs max-w-md max-h-96 overflow-y-auto z-50 cursor-default"
+                                className={`bg-white p-4 rounded shadow-xl text-xs max-w-md max-h-96 overflow-y-auto z-50 cursor-default pointer-events-auto ${
+                                  lockedHour === hour ? 'border-2 border-blue-500' : 'border-2 border-gray-300'
+                                }`}
                                 onClick={(e: any) => {
+                                  e.preventDefault();
                                   e.stopPropagation();
                                   // Toggle lock on tooltip click
                                   setLockedHour(lockedHour === hour ? null : hour);
                                 }}
+                                onMouseEnter={(e: any) => e.stopPropagation()}
+                                onMouseMove={(e: any) => e.stopPropagation()}
+                                onMouseLeave={(e: any) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-between mb-3 pb-2 border-b">
                                   <p className="font-bold text-gray-900 text-sm">{hour} - {nextHour}:00 IST | Total: {total}</p>

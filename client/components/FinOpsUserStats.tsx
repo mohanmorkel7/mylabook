@@ -301,6 +301,15 @@ export default function FinOpsUserStats() {
     }
   };
 
+  // Helper: Get duration category and styling for a task
+  const getDurationCategoryForTask = (durationMinutes: number): { category: string; bgColor: string; borderColor: string } => {
+    const hours = durationMinutes / 60;
+    if (hours <= 1) return { category: 'green', bgColor: 'bg-green-700', borderColor: 'border-green-900' };
+    if (hours <= 2) return { category: 'amber', bgColor: 'bg-amber-700', borderColor: 'border-amber-900' };
+    if (hours <= 3) return { category: 'orange', bgColor: 'bg-orange-700', borderColor: 'border-orange-900' };
+    return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
+  };
+
   // Helper: Get hourly task data from finops_subtasks (based on duration from start_time to completed_at)
   const getHourlyTaskData = useMemo(() => {
     console.log("=== getHourlyTaskData calculation started ===");
@@ -496,15 +505,6 @@ export default function FinOpsUserStats() {
     const mins = Math.round(minutes % 60);
     if (mins === 0) return `${hours}h`;
     return `${hours}h ${mins}m`;
-  };
-
-  // Helper: Get duration category and styling for a task
-  const getDurationCategoryForTask = (durationMinutes: number): { category: string; bgColor: string; borderColor: string } => {
-    const hours = durationMinutes / 60;
-    if (hours <= 1) return { category: 'green', bgColor: 'bg-green-700', borderColor: 'border-green-900' };
-    if (hours <= 2) return { category: 'amber', bgColor: 'bg-amber-700', borderColor: 'border-amber-900' };
-    if (hours <= 3) return { category: 'orange', bgColor: 'bg-orange-700', borderColor: 'border-orange-900' };
-    return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
   };
 
   // Helper: Export productivity data to Excel

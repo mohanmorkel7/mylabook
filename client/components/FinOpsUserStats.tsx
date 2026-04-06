@@ -312,7 +312,7 @@ export default function FinOpsUserStats() {
     }));
 
     // Group tasks by start time hour and categorize by duration
-    hourlySubtasksData.forEach((row: any) => {
+    hourlySubtasksData.forEach((row: any, idx: number) => {
       // Extract hour from start_time (HH:MM:SS format)
       const startHour = getHourFromTimeString(row.start_time);
       if (startHour === null) return;
@@ -326,7 +326,24 @@ export default function FinOpsUserStats() {
 
       if (isNaN(startTime) || isNaN(endTime) || startTime >= endTime) return;
 
-      const durationHours = (endTime - startTime) / (1000 * 60 * 60);
+      const durationMs = endTime - startTime;
+      const durationHours = durationMs / (1000 * 60 * 60);
+      const durationMinutes = durationMs / (1000 * 60);
+      const durationSeconds = durationMs / 1000;
+
+      // Filter out unreasonable durations (> 24 hours) - likely data quality issues
+      // Only include tasks completed within 24 hours of start
+      if (durationHours > 24) {
+        if (idx < 3) {
+          console.warn(`Task ${idx}: SKIPPED - Duration too long (${durationHours.toFixed(2)}h). Started=${row.started_at}, Completed=${row.completed_at}`);
+        }
+        return;
+      }
+
+      // Debug: Log sample tasks to verify duration calculation
+      if (idx < 5) {
+        console.log(`Task ${idx}: ${row.name || row.subtask_name} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h`);
+      }
 
       // Categorize by duration
       let durationCategory = "lessThan1h";

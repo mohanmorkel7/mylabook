@@ -622,6 +622,95 @@ export default function FinOpsUserStats() {
     XLSX.writeFile(wb, filename);
   };
 
+  // Helper: Export hourly task duration data to Excel with pivot and detailed sheets
+  const exportHourlyTaskDurationToExcel = () => {
+    if (!Array.isArray(getHourlyTaskData) || getHourlyTaskData.length === 0) {
+      alert("No hourly task data available to export");
+      return;
+    }
+
+    // Sheet 1: Hourly Summary Pivot
+    const pivotData: any[] = [];
+    pivotData.push({
+      "Hour": "Hour (IST)",
+      "≤1 Hour": "≤1 Hour",
+      "1-2 Hours": "1-2 Hours",
+      "2-3 Hours": "2-3 Hours",
+      ">3 Hours": ">3 Hours",
+      "Total": "Total",
+    });
+
+    getHourlyTaskData.forEach((hourData: any) => {
+      pivotData.push({
+        "Hour": hourData.hour,
+        "≤1 Hour": hourData.lessThan1h || 0,
+        "1-2 Hours": hourData["1to2h"] || 0,
+        "2-3 Hours": hourData["2to3h"] || 0,
+        ">3 Hours": hourData.moreThan3h || 0,
+        "Total": hourData.total || 0,
+      });
+    });
+
+    // Sheet 2: Detailed Task Data
+    const detailedData: any[] = [];
+    getHourlyTaskData.forEach((hourData: any) => {
+      if (hourData.tasks && hourData.tasks.length > 0) {
+        hourData.tasks.forEach((task: any) => {
+          detailedData.push({
+            "Hour": hourData.hour,
+            "Task Name": task.name || "N/A",
+            "Client Name": task.clientName || "N/A",
+            "Assigned To": task.assignedTo || "N/A",
+            "Completed By": task.completedBy || "N/A",
+            "Start Time": task.startTime || "N/A",
+            "Completed At": task.completedAt || "N/A",
+            "Duration": formatDurationMinutes(task.durationMinutes),
+            "Duration Category":
+              task.durationCategory === 'green' ? '≤1 Hour' :
+              task.durationCategory === 'amber' ? '1-2 Hours' :
+              task.durationCategory === 'orange' ? '2-3 Hours' :
+              '>3 Hours',
+            "Status": task.status || "N/A",
+          });
+        });
+      }
+    });
+
+    // Create workbook with two sheets
+    const wb = XLSX.utils.book_new();
+
+    // Pivot Summary Sheet
+    const pivotWs = XLSX.utils.json_to_sheet(pivotData);
+    pivotWs["!cols"] = [
+      { wch: 12 }, // Hour
+      { wch: 12 }, // ≤1 Hour
+      { wch: 12 }, // 1-2 Hours
+      { wch: 12 }, // 2-3 Hours
+      { wch: 12 }, // >3 Hours
+      { wch: 10 }, // Total
+    ];
+    XLSX.utils.book_append_sheet(wb, pivotWs, "Summary Pivot");
+
+    // Detailed Data Sheet
+    const detailedWs = XLSX.utils.json_to_sheet(detailedData);
+    detailedWs["!cols"] = [
+      { wch: 12 }, // Hour
+      { wch: 25 }, // Task Name
+      { wch: 20 }, // Client Name
+      { wch: 20 }, // Assigned To
+      { wch: 20 }, // Completed By
+      { wch: 12 }, // Start Time
+      { wch: 20 }, // Completed At
+      { wch: 12 }, // Duration
+      { wch: 15 }, // Duration Category
+      { wch: 12 }, // Status
+    ];
+    XLSX.utils.book_append_sheet(wb, detailedWs, "Detailed Data");
+
+    const filename = `hourly-task-duration-${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -788,8 +877,21 @@ export default function FinOpsUserStats() {
         {/* Hourly Task Status Timeline Chart */}
         <Card className="border border-gray-200 shadow-sm">
           <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-            <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
-            <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
+                <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
+              </div>
+              <button
+                onClick={exportHourlyTaskDurationToExcel}
+                disabled={!getHourlyTaskData.some(d => d.total > 0)}
+                className="ml-4 flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                title="Export hourly task data to Excel"
+              >
+                <Download size={16} />
+                Export
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="pt-6">
             {isLoadingAllTasks ? (

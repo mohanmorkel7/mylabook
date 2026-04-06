@@ -261,56 +261,41 @@ export default function FinOpsUserStats() {
     }
   };
 
-  // Helper: Get hourly task completion data
+  // Helper: Get hourly task status data (based on start_time, all statuses)
   const getHourlyTaskData = useMemo(() => {
-    if (!Array.isArray(validProductivityData) || validProductivityData.length === 0) {
+    if (!Array.isArray(allTrackerData) || allTrackerData.length === 0) {
       return [];
     }
 
-    // Initialize 24 hours with duration categories
+    // Initialize 24 hours with status categories
     const hourlyData = Array.from({ length: 24 }, (_, hour) => ({
       hour: `${String(hour).padStart(2, "0")}:00`,
-      "≤1h": 0,
-      "1-2h": 0,
-      "2-5h": 0,
-      ">5h": 0,
+      "pending": 0,
+      "in_progress": 0,
+      "completed": 0,
+      "overdue": 0,
+      "delayed": 0,
       total: 0,
     }));
 
-    // Group tasks by completion hour
-    const hourlyTasks: Record<number, Array<{ name: string; duration: number }>> = {};
+    // Group tasks by start time hour based on start_time field
+    allTrackerData.forEach((row: TrackerRow) => {
+      if (!row.started_at) return;
 
-    validProductivityData.forEach((row: TrackerRow) => {
-      const duration = calculateDuration(row.started_at, row.completed_at);
-      if (!row.completed_at || duration === null) return;
+      // Get the hour from started_at in IST timezone
+      const startHour = getHourInIST(row.started_at);
+      if (startHour === null) return;
 
-      const completionHour = getHourInIST(row.completed_at);
-      if (completionHour === null) return;
-
-      if (!hourlyTasks[completionHour]) {
-        hourlyTasks[completionHour] = [];
+      // Categorize by status
+      const status = row.status?.toLowerCase() || "pending";
+      if (status === "pending" || status === "in_progress" || status === "completed" || status === "overdue" || status === "delayed") {
+        hourlyData[startHour][status]++;
+        hourlyData[startHour].total++;
       }
-
-      // Store task details
-      const taskKey = `${row.task_name} - ${row.subtask_name}`;
-      hourlyTasks[completionHour].push({ name: taskKey, duration });
-
-      // Categorize by duration
-      if (duration <= 1) {
-        hourlyData[completionHour]["≤1h"]++;
-      } else if (duration <= 2) {
-        hourlyData[completionHour]["1-2h"]++;
-      } else if (duration <= 5) {
-        hourlyData[completionHour]["2-5h"]++;
-      } else {
-        hourlyData[completionHour][">5h"]++;
-      }
-      hourlyData[completionHour].total++;
     });
 
-    // Store hourly tasks for hover details
     return hourlyData;
-  }, [validProductivityData]);
+  }, [allTrackerData]);
 
   // Helper: Parse managers field (handles string, JSON array, or null)
   const parseManagers = (value: any): string => {
@@ -387,11 +372,11 @@ export default function FinOpsUserStats() {
     // Create hourly analytics pivot table
     const hourlyPivotData: any[] = [];
 
-    // Create header row with duration categories
+    // Create header row with status categories
     const headerRow: any = { "Hour": "" };
-    const durationCategories = ["≤1h", "1-2h", "2-5h", ">5h"];
-    durationCategories.forEach(cat => {
-      headerRow[cat] = cat;
+    const statusCategories = ["pending", "in_progress", "completed", "overdue", "delayed"];
+    statusCategories.forEach(cat => {
+      headerRow[cat.charAt(0).toUpperCase() + cat.slice(1).replace("_", " ")] = cat;
     });
     headerRow["Total"] = "Total";
     hourlyPivotData.push(headerRow);
@@ -399,8 +384,8 @@ export default function FinOpsUserStats() {
     // Add data for each hour
     getHourlyTaskData.forEach((hourData: any) => {
       const row: any = { "Hour": hourData.hour };
-      durationCategories.forEach(cat => {
-        row[cat] = hourData[cat] || 0;
+      statusCategories.forEach(cat => {
+        row[cat.charAt(0).toUpperCase() + cat.slice(1).replace("_", " ")] = hourData[cat] || 0;
       });
       row["Total"] = hourData.total || 0;
       hourlyPivotData.push(row);
@@ -440,10 +425,11 @@ export default function FinOpsUserStats() {
     const hourlyWs = XLSX.utils.json_to_sheet(hourlyPivotData);
     hourlyWs["!cols"] = [
       { wch: 10 }, // Hour
-      { wch: 12 }, // ≤1h
-      { wch: 12 }, // 1-2h
-      { wch: 12 }, // 2-5h
-      { wch: 12 }, // >5h
+      { wch: 12 }, // Pending
+      { wch: 15 }, // In Progress
+      { wch: 12 }, // Completed
+      { wch: 12 }, // Overdue
+      { wch: 12 }, // Delayed
       { wch: 12 }, // Total
     ];
     XLSX.utils.book_append_sheet(wb, hourlyWs, "Hourly Analytics");
@@ -615,25 +601,26 @@ export default function FinOpsUserStats() {
         </Card>
 
 
-        {/* Hourly Task Completion Chart */}
+        {/* Hourly Task Status Timeline Chart */}
         <Card className="border border-gray-200 shadow-sm">
           <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-            <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Completion (12 AM - 11:59 PM IST)</CardTitle>
-            <p className="text-xs text-gray-500 mt-2">Color-coded by task duration: Green (&lt;=1h) | Amber (1-2h) | Orange (2-5h) | Red (&gt;5h)</p>
+            <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Status (12 AM - 11:59 PM IST)</CardTitle>
+            <p className="text-xs text-gray-500 mt-2">All tasks grouped by start time - Shows status breakdown for each hour</p>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoadingProductivity ? (
-              <div className="text-center py-12 text-gray-500">Loading productivity data...</div>
+            {isLoadingAllTasks ? (
+              <div className="text-center py-12 text-gray-500">Loading task data...</div>
             ) : getHourlyTaskData.some(d => d.total > 0) ? (
               <div className="w-full overflow-auto">
                 <div style={{ minHeight: 400, width: "100%" }}>
                   <ChartContainer
-                    id="hourly-completion"
+                    id="hourly-status"
                     config={{
-                      "≤1h": { color: "#10B981", label: "On Time (≤1h)" },
-                      "1-2h": { color: "#F59E0B", label: "Amber (1-2h)" },
-                      "2-5h": { color: "#F97316", label: "Orange (2-5h)" },
-                      ">5h": { color: "#EF4444", label: "Red (>5h)" },
+                      "pending": { color: "#FBBF24", label: "Pending" },
+                      "in_progress": { color: "#60A5FA", label: "In Progress" },
+                      "completed": { color: "#10B981", label: "Completed" },
+                      "overdue": { color: "#EF4444", label: "Overdue" },
+                      "delayed": { color: "#F97316", label: "Delayed" },
                     }}
                   >
                     <Recharts.ResponsiveContainer width="100%" height={400}>
@@ -657,14 +644,16 @@ export default function FinOpsUserStats() {
                             if (active && payload && payload.length > 0) {
                               const hour = payload[0].payload.hour;
                               const total = payload[0].payload.total;
+                              const nextHour = String((parseInt(hour) + 1) % 24).padStart(2, "0");
                               return (
                                 <div className="bg-white p-3 border border-gray-300 rounded shadow-lg text-sm">
-                                  <p className="font-semibold text-gray-900">{hour} - {String(parseInt(hour) + 1).padStart(2, "0")}:00</p>
+                                  <p className="font-semibold text-gray-900">{hour} - {nextHour}:00 IST</p>
                                   <p className="text-gray-600 mt-1">Total Tasks: <strong>{total}</strong></p>
-                                  {payload[0].payload["≤1h"] > 0 && <p className="text-green-600">✓ On Time (&lt;=1h): {payload[0].payload["≤1h"]}</p>}
-                                  {payload[0].payload["1-2h"] > 0 && <p className="text-amber-600">⚠ Amber (1-2h): {payload[0].payload["1-2h"]}</p>}
-                                  {payload[0].payload["2-5h"] > 0 && <p className="text-orange-600">⚠ Orange (2-5h): {payload[0].payload["2-5h"]}</p>}
-                                  {payload[0].payload[">5h"] > 0 && <p className="text-red-600">✕ Red (&gt;5h): {payload[0].payload[">5h"]}</p>}
+                                  {payload[0].payload.pending > 0 && <p className="text-amber-600">📋 Pending: {payload[0].payload.pending}</p>}
+                                  {payload[0].payload.in_progress > 0 && <p className="text-blue-600">⏳ In Progress: {payload[0].payload.in_progress}</p>}
+                                  {payload[0].payload.completed > 0 && <p className="text-green-600">✓ Completed: {payload[0].payload.completed}</p>}
+                                  {payload[0].payload.overdue > 0 && <p className="text-red-600">❌ Overdue: {payload[0].payload.overdue}</p>}
+                                  {payload[0].payload.delayed > 0 && <p className="text-orange-600">⚠ Delayed: {payload[0].payload.delayed}</p>}
                                 </div>
                               );
                             }
@@ -673,10 +662,11 @@ export default function FinOpsUserStats() {
                           contentStyle={{ borderRadius: "8px" }}
                         />
                         <Recharts.Legend />
-                        <Recharts.Bar dataKey="≤1h" stackId="duration" fill="#10B981" />
-                        <Recharts.Bar dataKey="1-2h" stackId="duration" fill="#F59E0B" />
-                        <Recharts.Bar dataKey="2-5h" stackId="duration" fill="#F97316" />
-                        <Recharts.Bar dataKey=">5h" stackId="duration" fill="#EF4444" />
+                        <Recharts.Bar dataKey="pending" stackId="status" fill="#FBBF24" />
+                        <Recharts.Bar dataKey="in_progress" stackId="status" fill="#60A5FA" />
+                        <Recharts.Bar dataKey="completed" stackId="status" fill="#10B981" />
+                        <Recharts.Bar dataKey="overdue" stackId="status" fill="#EF4444" />
+                        <Recharts.Bar dataKey="delayed" stackId="status" fill="#F97316" />
                       </Recharts.BarChart>
                     </Recharts.ResponsiveContainer>
                   </ChartContainer>
@@ -684,14 +674,14 @@ export default function FinOpsUserStats() {
               </div>
             ) : (
               <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
-                {fromDate || toDate || selectedUser ? (
+                {fromDate || toDate ? (
                   <div>
-                    <p className="text-sm">No hourly task data available for selected filters</p>
-                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range or user selection</p>
+                    <p className="text-sm">No hourly task data available for selected date range</p>
+                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range</p>
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm">Select date range and/or user to view hourly chart</p>
+                    <p className="text-sm">Select date range to view hourly task status chart</p>
                   </div>
                 )}
               </div>

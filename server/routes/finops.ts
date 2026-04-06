@@ -3183,11 +3183,12 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
         st.delay_notes,
         ft.task_name,
         ft.assigned_to,
-        ft.completed_by,
-        fc.company_name as client_name
+        fc.company_name as client_name,
+        ftr.completed_by
       FROM finops_subtasks st
       LEFT JOIN finops_tasks ft ON st.task_id = ft.id
       LEFT JOIN finops_clients fc ON ft.client_id = fc.id
+      LEFT JOIN finops_tracker ftr ON st.id = ftr.subtask_id AND DATE(ftr.run_date) = DATE(st.completed_at)
       ${whereClause}
       ORDER BY st.completed_at DESC, st.task_id ASC, st.order_position ASC
     `;

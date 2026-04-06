@@ -22,6 +22,7 @@ interface TrackerRow {
   status: string;
   started_at: string | null;
   completed_at: string | null;
+  scheduled_time: string | null; // HH:MM:SS format (e.g., "03:00:00")
   completed_by: string | null;
   assigned_to: string | null;
   reporting_managers: string | null;
@@ -241,7 +242,7 @@ export default function FinOpsUserStats() {
     return { color: "#EF4444", label: ">5h (Red)" };
   };
 
-  // Helper: Get hour in IST timezone
+  // Helper: Get hour in IST timezone from a full datetime string
   const getHourInIST = (dateString: string | null): number | null => {
     if (!dateString) return null;
     try {
@@ -256,6 +257,21 @@ export default function FinOpsUserStats() {
       const parts = formatter.formatToParts(date);
       const hourPart = parts.find(p => p.type === 'hour');
       return hourPart ? parseInt(hourPart.value, 10) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Helper: Extract hour from TIME format string (HH:MM:SS)
+  const getHourFromTimeString = (timeString: string | null): number | null => {
+    if (!timeString) return null;
+    try {
+      // Format: "HH:MM:SS" or "HH:MM"
+      const parts = timeString.split(':');
+      if (parts.length === 0) return null;
+      const hour = parseInt(parts[0], 10);
+      if (isNaN(hour) || hour < 0 || hour > 23) return null;
+      return hour;
     } catch (e) {
       return null;
     }
@@ -278,12 +294,21 @@ export default function FinOpsUserStats() {
       total: 0,
     }));
 
-    // Group tasks by start time hour based on start_time field
+    // Group tasks by start time hour based on started_at or scheduled_time
     allTrackerData.forEach((row: TrackerRow) => {
-      if (!row.started_at) return;
+      let startHour: number | null = null;
 
-      // Get the hour from started_at in IST timezone
-      const startHour = getHourInIST(row.started_at);
+      // Priority 1: Use started_at if available (actual start time with full datetime)
+      if (row.started_at) {
+        startHour = getHourInIST(row.started_at);
+      }
+
+      // Priority 2: Fallback to scheduled_time if started_at is null
+      if (startHour === null && row.scheduled_time) {
+        startHour = getHourFromTimeString(row.scheduled_time);
+      }
+
+      // Skip if we couldn't determine the hour
       if (startHour === null) return;
 
       // Categorize by status

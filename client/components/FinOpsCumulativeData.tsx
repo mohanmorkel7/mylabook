@@ -231,6 +231,58 @@ export default function FinOpsCumulativeData() {
     return metrics;
   }, [byDate]);
 
+  // Calculate cumulative metrics across all dates in selected range
+  const cumulativeMetrics = useMemo(() => {
+    let totalTasks = 0;
+    let totalSubtasks = 0;
+    let completed = 0;
+    let delayed = 0;
+    let overdue = 0;
+    let pending = 0;
+    let inProgress = 0;
+    const clientsSet = new Set<string>();
+
+    byDate.forEach(([date, tasks]) => {
+      tasks.forEach((task: any) => {
+        if (task.client_id) clientsSet.add(String(task.client_id));
+        totalTasks++;
+
+        const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+        if (subtasks.length === 0 && task.status) {
+          const status = String(task.status).toLowerCase();
+          totalSubtasks++;
+          if (status === "completed") completed++;
+          else if (status === "delayed") delayed++;
+          else if (status === "overdue") overdue++;
+          else if (status === "pending") pending++;
+          else if (status === "in_progress") inProgress++;
+        } else {
+          subtasks.forEach((s: any) => {
+            const status = String(s.status || "").toLowerCase();
+            if (status && status !== "completed" && allowedStatuses.has(status)) {
+              totalSubtasks++;
+              if (status === "delayed") delayed++;
+              else if (status === "overdue") overdue++;
+              else if (status === "pending") pending++;
+              else if (status === "in_progress") inProgress++;
+            }
+          });
+        }
+      });
+    });
+
+    return {
+      total_tasks: totalTasks,
+      total_subtasks: totalSubtasks,
+      completed_subtasks: completed,
+      delayed_subtasks: delayed,
+      overdue_subtasks: overdue,
+      pending_subtasks: pending,
+      in_progress_subtasks: inProgress,
+      active_clients: clientsSet.size,
+    };
+  }, [byDate]);
+
   const exportDate = (date: string) => {
     const rows: any[] = [];
     const groups = byDate.find(([d]) => d === date);
@@ -574,6 +626,83 @@ export default function FinOpsCumulativeData() {
               </div>
             );
           })
+        )}
+
+        {/* Cumulative Summary Section */}
+        {byDate.length > 0 && (
+          <div className="mt-8 pt-6 border-t-2 border-gray-300">
+            <h4 className="font-semibold text-lg text-gray-900 mb-4">
+              Cumulative Summary
+              {fromDate && toDate && ` (${fromDate} to ${toDate})`}
+            </h4>
+
+            {/* Cumulative Metric Cards Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+              {/* Total Tasks */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 shadow-md border border-blue-200">
+                <div className="text-3xl font-bold text-blue-600">
+                  {cumulativeMetrics.total_tasks || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">Total Tasks</div>
+              </div>
+
+              {/* Total Subtasks */}
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 shadow-md border border-gray-200">
+                <div className="text-3xl font-bold text-gray-900">
+                  {cumulativeMetrics.total_subtasks || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">Total Subtasks</div>
+              </div>
+
+              {/* Completed */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 shadow-md border border-green-200">
+                <div className="text-3xl font-bold text-green-600">
+                  {cumulativeMetrics.completed_subtasks || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">Completed</div>
+              </div>
+
+              {/* Delayed */}
+              <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 shadow-md border border-yellow-200">
+                <div className="text-3xl font-bold text-yellow-600">
+                  {cumulativeMetrics.delayed_subtasks || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">Delayed</div>
+              </div>
+
+              {/* Overdue */}
+              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 shadow-md border border-red-200">
+                <div className="text-3xl font-bold text-red-600">
+                  {cumulativeMetrics.overdue_subtasks || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">Overdue</div>
+              </div>
+
+              {/* Pending */}
+              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-4 shadow-md border border-indigo-200">
+                <div className="text-3xl font-bold text-indigo-600">
+                  {cumulativeMetrics.pending_subtasks || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">Pending</div>
+              </div>
+
+              {/* In-Progress */}
+              <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-4 shadow-md border border-cyan-200">
+                <div className="text-3xl font-bold text-cyan-600">
+                  {cumulativeMetrics.in_progress_subtasks || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">In-Progress</div>
+              </div>
+
+              {/* Active Clients */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 shadow-md border border-purple-200">
+                <div className="text-3xl font-bold text-purple-600">
+                  {cumulativeMetrics.active_clients || 0}
+                </div>
+                <div className="text-xs text-gray-700 font-medium">Active Clients</div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

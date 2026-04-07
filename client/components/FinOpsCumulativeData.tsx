@@ -59,10 +59,6 @@ export default function FinOpsCumulativeData() {
   });
 
   const today = IST_DATE_STRING();
-  // When showing date range history, include completed status; otherwise just pending/overdue/open/delayed
-  const allowedStatuses = (fromDate || toDate)
-    ? new Set(["pending", "overdue", "open", "delayed", "completed", "in_progress"])
-    : new Set(["pending", "overdue", "open", "delayed"]);
 
   // Helper: Format date string (YYYY-MM-DD) as local date without timezone shifts
   const formatDateString = (dateStr: string): string => {
@@ -80,20 +76,6 @@ export default function FinOpsCumulativeData() {
       return dateStr;
     }
   };
-
-  // Get all unique dates from data
-  const allDates = useMemo(() => {
-    const datesSet = new Set<string>();
-    (tracker || []).forEach((row: any) => {
-      const runDate = toISTDateString(
-        row.run_date || row.run_date_at || row.date || row.run_date_string,
-      );
-      if (runDate && runDate !== "unknown" && runDate !== today) {
-        datesSet.add(runDate);
-      }
-    });
-    return Array.from(datesSet).sort((a, b) => b.localeCompare(a));
-  }, [tracker, today]);
 
   // Helper: Generate array of dates between two dates (using local time, not UTC)
   const generateDateRange = (start: string, end: string): string[] => {
@@ -118,152 +100,48 @@ export default function FinOpsCumulativeData() {
     return dates.sort((a, b) => b.localeCompare(a));
   };
 
-  // Filter data by date range and group by date
+  // Process backend aggregated data - backend now returns pre-aggregated counts
   const byDate = useMemo(() => {
-    const map: Record<string, Record<string, any>> = {};
-
-    (tracker || []).forEach((row: any) => {
-      if (row.deleted_at) return;
-
-      const duration =
-        (row.duration ||
-          row.period ||
-          row.task_duration ||
-          row.task_period ||
-          "") + "";
-      if (duration.toLowerCase() !== "daily") return;
-
-      const runDate = toISTDateString(
-        row.run_date || row.run_date_at || row.date || row.run_date_string,
-      );
-      if (!runDate || runDate === "unknown" || runDate === today) return;
-
-      // Apply date range filter
-      if (fromDate && runDate < fromDate) return;
-      if (toDate && runDate > toDate) return;
-
-      if (row.status) {
-        const rs = String(row.status).toLowerCase();
-        if (!allowedStatuses.has(rs)) return;
-      }
-
-      if (!map[runDate]) map[runDate] = {};
-      const tasksMap = map[runDate];
-
-      const taskIdKey = String(
-        row.task_id ||
-          row.task ||
-          row.task_name ||
-          `task_${row.id || Math.random()}`,
-      );
-      if (!tasksMap[taskIdKey]) {
-        tasksMap[taskIdKey] = {
-          task_id: row.task_id || null,
-          task_name: row.task_name || row.task || row.name || "",
-          period: row.period || row.duration || row.task_period || "",
-          client_name: row.client_name || null,
-          client_id: row.client_id || null,
-          assigned_to: row.assigned_to || row.assigned || null,
-          reporting_managers: row.reporting_managers || null,
-          escalation_managers: row.escalation_managers || null,
-          subtasks: [] as any[],
-        };
-      }
-
-      const subtaskId = row.subtask_id || row.id || null;
-      const subtaskName = row.subtask_name || row.name || row.subtask || "";
-      const subtaskObj = {
-        subtask_id: subtaskId,
-        subtask_name: subtaskName,
-        status: row.status || null,
-        started_at: row.started_at || null,
-        completed_at: row.completed_at || null,
-        scheduled_time: row.scheduled_time || row.start_time || null,
-      };
-
-      if (subtaskId || subtaskName || subtaskObj.status) {
-        tasksMap[taskIdKey].subtasks.push(subtaskObj);
-      }
-    });
-
-    // If date range is selected, include all dates in range even if no data
-    let datesToShow: string[] = Object.keys(map).sort((a, b) => b.localeCompare(a));
-    if (fromDate && toDate) {
-      datesToShow = generateDateRange(fromDate, toDate);
-    } else if (fromDate) {
-      // If only fromDate is selected, show from that date onwards
-      datesToShow = Object.keys(map).filter(d => d >= fromDate).sort((a, b) => b.localeCompare(a));
-    } else if (toDate) {
-      // If only toDate is selected, show up to that date
-      datesToShow = Object.keys(map).filter(d => d <= toDate).sort((a, b) => b.localeCompare(a));
+    // Backend returns already aggregated data with counts
+    if (!tracker || tracker.length === 0) {
+      return [];
     }
 
-    const ordered: [string, any[]][] = datesToShow.map(date => [
-      date,
-      map[date] ? Object.values(map[date]) : []
-    ]);
+    // If date range is selected, fill in all dates even if no data exists
+    if (fromDate && toDate) {
+      const allDates = generateDateRange(fromDate, toDate);
+      const dataMap = tracker.reduce((acc: any, row: any) => {
+        const dateKey = row.run_date;
+        acc[dateKey] = row;
+        return acc;
+      }, {});
 
-    return ordered;
-  }, [tracker, today, fromDate, toDate]);
+      return allDates.map(date => [
+        date,
+        dataMap[date] || {
+          run_date: date,
+          total_tasks: 0,
+          total_subtasks: 0,
+          completed_subtasks: 0,
+          delayed_subtasks: 0,
+          overdue_subtasks: 0,
+          pending_subtasks: 0,
+          in_progress_subtasks: 0,
+          active_clients: 0,
+        },
+      ]);
+    }
 
-  // Calculate metrics per date
-  const metricsPerDate = useMemo(() => {
-    const metrics: Record<string, any> = {};
+    // No date range - just return the data sorted by date
+    return tracker
+      .sort((a: any, b: any) => b.run_date.localeCompare(a.run_date))
+      .map((row: any) => [
+        row.run_date,
+        row,
+      ]);
+  }, [tracker, fromDate, toDate]);
 
-    byDate.forEach(([date, tasks]) => {
-      const clientsSet = new Set<string>();
-      let totalTasks = 0;
-      let totalSubtasks = 0;
-      let completed = 0;
-      let delayed = 0;
-      let overdue = 0;
-      let pending = 0;
-      let inProgress = 0;
-
-      tasks.forEach((task: any) => {
-        if (task.client_id) clientsSet.add(String(task.client_id));
-        totalTasks++;
-
-        const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
-        if (subtasks.length === 0 && task.status) {
-          const status = String(task.status).toLowerCase();
-          totalSubtasks++;
-          if (status === "completed") completed++;
-          else if (status === "delayed") delayed++;
-          else if (status === "overdue") overdue++;
-          else if (status === "pending") pending++;
-          else if (status === "in_progress") inProgress++;
-        } else {
-          subtasks.forEach((s: any) => {
-            const status = String(s.status || "").toLowerCase();
-            if (status && allowedStatuses.has(status)) {
-              totalSubtasks++;
-              if (status === "completed") completed++;
-              else if (status === "delayed") delayed++;
-              else if (status === "overdue") overdue++;
-              else if (status === "pending") pending++;
-              else if (status === "in_progress") inProgress++;
-            }
-          });
-        }
-      });
-
-      metrics[date] = {
-        total_tasks: totalTasks,
-        total_subtasks: totalSubtasks,
-        completed_subtasks: completed,
-        delayed_subtasks: delayed,
-        overdue_subtasks: overdue,
-        pending_subtasks: pending,
-        in_progress_subtasks: inProgress,
-        active_clients: clientsSet.size,
-      };
-    });
-
-    return metrics;
-  }, [byDate]);
-
-  // Calculate cumulative metrics across all dates in selected range
+  // Calculate cumulative metrics across all dates
   const cumulativeMetrics = useMemo(() => {
     let totalTasks = 0;
     let totalSubtasks = 0;
@@ -274,34 +152,17 @@ export default function FinOpsCumulativeData() {
     let inProgress = 0;
     const clientsSet = new Set<string>();
 
-    byDate.forEach(([date, tasks]) => {
-      tasks.forEach((task: any) => {
-        if (task.client_id) clientsSet.add(String(task.client_id));
-        totalTasks++;
+    byDate.forEach(([date, metrics]) => {
+      totalTasks += metrics.total_tasks || 0;
+      totalSubtasks += metrics.total_subtasks || 0;
+      completed += metrics.completed_subtasks || 0;
+      delayed += metrics.delayed_subtasks || 0;
+      overdue += metrics.overdue_subtasks || 0;
+      pending += metrics.pending_subtasks || 0;
+      inProgress += metrics.in_progress_subtasks || 0;
 
-        const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
-        if (subtasks.length === 0 && task.status) {
-          const status = String(task.status).toLowerCase();
-          totalSubtasks++;
-          if (status === "completed") completed++;
-          else if (status === "delayed") delayed++;
-          else if (status === "overdue") overdue++;
-          else if (status === "pending") pending++;
-          else if (status === "in_progress") inProgress++;
-        } else {
-          subtasks.forEach((s: any) => {
-            const status = String(s.status || "").toLowerCase();
-            if (status && allowedStatuses.has(status)) {
-              totalSubtasks++;
-              if (status === "completed") completed++;
-              else if (status === "delayed") delayed++;
-              else if (status === "overdue") overdue++;
-              else if (status === "pending") pending++;
-              else if (status === "in_progress") inProgress++;
-            }
-          });
-        }
-      });
+      // For cumulative clients, we can't just add them up
+      // Each metric row already has the count, so we'll just use the max or note this
     });
 
     return {
@@ -312,89 +173,24 @@ export default function FinOpsCumulativeData() {
       overdue_subtasks: overdue,
       pending_subtasks: pending,
       in_progress_subtasks: inProgress,
-      active_clients: clientsSet.size,
+      active_clients: Math.max(...byDate.map(([_, m]) => m.active_clients || 0), 0),
     };
   }, [byDate]);
 
-  const exportDate = (date: string) => {
-    const rows: any[] = [];
-    const groups = byDate.find(([d]) => d === date);
-    if (!groups) return;
-    const rowsForDate = groups[1];
-    rowsForDate.forEach((t: any) => {
-      const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
-      if (subt.length === 0) {
-        const rs = String(t.status || "").toLowerCase();
-        if (allowedStatuses.has(rs)) {
-          rows.push({
-            run_date: date,
-            task: t.task_name || t.name || "",
-            subtask: "",
-            status: t.status,
-            start_time: t.scheduled_time || t.start_time || "",
-            started_at: t.started_at || "",
-            completed_at: t.completed_at || "",
-          });
-        }
-      } else {
-        subt.forEach((s: any) => {
-          const st = String(s.status || s.state || "").toLowerCase();
-          if (!allowedStatuses.has(st)) return;
-          rows.push({
-            run_date: date,
-            task: t.task_name || t.name || "",
-            subtask: s.subtask_name || s.name || "",
-            status: s.status,
-            start_time: s.scheduled_time || s.start_time || "",
-            started_at: s.started_at || "",
-            completed_at: s.completed_at || "",
-          });
-        });
-      }
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "CumulativeData");
-    const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([wbout]), `finops_cumulative_${date}.xlsx`);
-  };
-
   const exportAll = () => {
-    const rows: any[] = [];
-    byDate.forEach(([date, rowsForDate]) => {
-      rowsForDate.forEach((t: any) => {
-        const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
-        if (subt.length === 0) {
-          const rs = String(t.status || "").toLowerCase();
-          if (allowedStatuses.has(rs)) {
-            rows.push({
-              run_date: date,
-              task: t.task_name || t.name || "",
-              subtask: "",
-              status: t.status,
-              start_time: t.scheduled_time || t.start_time || "",
-              started_at: t.started_at || "",
-              completed_at: t.completed_at || "",
-            });
-          }
-        } else {
-          subt.forEach((s: any) => {
-            const st = String(s.status || s.state || "").toLowerCase();
-            if (!allowedStatuses.has(st)) return;
-            rows.push({
-              run_date: date,
-              task: t.task_name || t.name || "",
-              subtask: s.subtask_name || s.name || "",
-              status: s.status,
-              start_time: s.scheduled_time || s.start_time || "",
-              started_at: s.started_at || "",
-              completed_at: s.completed_at || "",
-            });
-          });
-        }
-      });
-    });
+    // Export only metrics summary per date
+    const rows = byDate.map(([date, metrics]) => ({
+      run_date: date,
+      total_tasks: metrics.total_tasks || 0,
+      total_subtasks: metrics.total_subtasks || 0,
+      completed: metrics.completed_subtasks || 0,
+      delayed: metrics.delayed_subtasks || 0,
+      overdue: metrics.overdue_subtasks || 0,
+      pending: metrics.pending_subtasks || 0,
+      in_progress: metrics.in_progress_subtasks || 0,
+      active_clients: metrics.active_clients || 0,
+    }));
+
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "CumulativeData");
@@ -457,9 +253,7 @@ export default function FinOpsCumulativeData() {
             No history data available for the selected date range
           </div>
         ) : (
-          byDate.map(([date, tasks]) => {
-            const metrics = metricsPerDate[date] || {};
-
+          byDate.map(([date, metrics]) => {
             return (
               <div
                 key={date}

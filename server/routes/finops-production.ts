@@ -1993,15 +1993,26 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
       `;
     }
 
+    // Aggregated counts query - returns only metric counts per date, not raw task details
     const query = `
-      SELECT ft.*, t.client_name, t.client_id, t.assigned_to, t.reporting_managers, t.escalation_managers
+      SELECT
+        (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date as run_date,
+        COUNT(DISTINCT ft.task_id) as total_tasks,
+        COUNT(*) as total_subtasks,
+        COUNT(CASE WHEN ft.status = 'completed' THEN 1 END) as completed_subtasks,
+        COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END) as delayed_subtasks,
+        COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END) as overdue_subtasks,
+        COUNT(CASE WHEN ft.status = 'pending' THEN 1 END) as pending_subtasks,
+        COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END) as in_progress_subtasks,
+        COUNT(DISTINCT t.client_id) as active_clients
       FROM finops_tracker ft
       JOIN finops_tasks t ON t.id = ft.task_id
       WHERE ${whereConditions}
-      ORDER BY ft.run_date DESC, ft.id DESC
+      GROUP BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date
+      ORDER BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date DESC
     `;
 
-    console.log("Cumulative query:", { fromDate, toDate, query });
+    console.log("Cumulative aggregated query:", { fromDate, toDate });
     const result = await pool.query(query);
     console.log("Cumulative result rows count:", result.rows.length);
     res.json(result.rows);

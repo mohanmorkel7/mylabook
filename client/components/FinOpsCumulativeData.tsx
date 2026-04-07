@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import {
@@ -9,6 +9,9 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ChevronDown, Download } from "lucide-react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
@@ -41,7 +44,6 @@ export default function FinOpsCumulativeData() {
     queryKey: ["finops-tracker-all"],
     queryFn: async () => {
       try {
-        // Use the new cumulative endpoint that matches the exact SQL filter
         return await apiClient.getFinOpsCumulative();
       } catch (e) {
         console.error("Failed to fetch finops tracker:", e);
@@ -54,17 +56,32 @@ export default function FinOpsCumulativeData() {
   const today = IST_DATE_STRING();
   const allowedStatuses = new Set(["pending", "overdue", "open", "delayed"]);
 
-  // filter rows according to SQL criteria and group by run_date (IST) excluding today's IST date
-  // NOTE: the cumulative endpoint returns flat finops_tracker rows (one row per subtask/tracker).
-  // Convert these flat rows into tasks with subtasks so the UI shows subtask_name correctly.
+  // Date range filter state
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+
+  // Get all unique dates from data
+  const allDates = useMemo(() => {
+    const datesSet = new Set<string>();
+    (tracker || []).forEach((row: any) => {
+      const runDate = toISTDateString(
+        row.run_date || row.run_date_at || row.date || row.run_date_string,
+      );
+      if (runDate && runDate !== "unknown" && runDate !== today) {
+        datesSet.add(runDate);
+      }
+    });
+    return Array.from(datesSet).sort((a, b) => b.localeCompare(a));
+  }, [tracker, today]);
+
+  // Filter data by date range and group by date
   const byDate = useMemo(() => {
-    const map: Record<string, Record<string, any>> = {}; // date -> (taskId -> taskObj)
+    const map: Record<string, Record<string, any>> = {};
 
     (tracker || []).forEach((row: any) => {
-      // Skip deleted tasks
       if (row.deleted_at) return;
 
-      // Ensure duration = 'daily' (task-level or row-level)
       const duration =
         (row.duration ||
           row.period ||
@@ -73,16 +90,15 @@ export default function FinOpsCumulativeData() {
           "") + "";
       if (duration.toLowerCase() !== "daily") return;
 
-      // Determine run_date in IST YYYY-MM-DD
       const runDate = toISTDateString(
         row.run_date || row.run_date_at || row.date || row.run_date_string,
       );
-      if (!runDate || runDate === "unknown") return;
+      if (!runDate || runDate === "unknown" || runDate === today) return;
 
-      // Exclude today (IST)
-      if (runDate === today) return;
+      // Apply date range filter
+      if (fromDate && runDate < fromDate) return;
+      if (toDate && runDate > toDate) return;
 
-      // If row-level status exists, ensure it's in allowed set; otherwise proceed because subtasks may carry statuses
       if (row.status) {
         const rs = String(row.status).toLowerCase();
         if (!allowedStatuses.has(rs)) return;
@@ -111,7 +127,6 @@ export default function FinOpsCumulativeData() {
         };
       }
 
-      // Build subtask entry from tracker row fields (finops_tracker columns)
       const subtaskId = row.subtask_id || row.id || null;
       const subtaskName = row.subtask_name || row.name || row.subtask || "";
       const subtaskObj = {
@@ -123,90 +138,73 @@ export default function FinOpsCumulativeData() {
         scheduled_time: row.scheduled_time || row.start_time || null,
       };
 
-      // Only push meaningful subtasks (avoid pushing empty placeholder without name/status)
       if (subtaskId || subtaskName || subtaskObj.status) {
         tasksMap[taskIdKey].subtasks.push(subtaskObj);
-      } else {
-        // If no subtask data, still ensure the task exists (no subtasks)
       }
     });
 
-    // Convert map to ordered array of [date, tasks[]]
     const ordered: [string, any[]][] = Object.entries(map)
       .map(([date, tasksMap]) => [date, Object.values(tasksMap)])
       .sort((a, b) => b[0].localeCompare(a[0]));
 
-    return ordered; // array of [date, tasks]
-  }, [tracker, today]);
+    return ordered;
+  }, [tracker, today, fromDate, toDate]);
 
-  // Counts per date: total, pending, overdue, open, delayed (exclude 'completed')
-  const countsPerDate = useMemo(() => {
-    const counts: Record<string, Record<string, number>> = {};
-    byDate.forEach(([date, rows]) => {
-      const c: Record<string, number> = {
-        total: 0,
-        pending: 0,
-        overdue: 0,
-        open: 0,
-        delayed: 0,
-      };
+  // Calculate metrics per date
+  const metricsPerDate = useMemo(() => {
+    const metrics: Record<string, any> = {};
 
-      rows.forEach((t: any) => {
-        const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
-        subs.forEach((s: any) => {
-          const st = String(s.status || s.state || "").toLowerCase();
-          if (!st || st === "completed") return;
-          if (!allowedStatuses.has(st)) return; // only count the SQL-requested statuses
+    byDate.forEach(([date, tasks]) => {
+      const clientsSet = new Set<string>();
+      let totalTasks = 0;
+      let totalSubtasks = 0;
+      let completed = 0;
+      let delayed = 0;
+      let overdue = 0;
+      let pending = 0;
+      let inProgress = 0;
 
-          if (st === "pending") c.pending++;
-          else if (st === "overdue") c.overdue++;
-          else if (st === "open") c.open++;
-          else if (st === "delayed") c.delayed++;
+      tasks.forEach((task: any) => {
+        if (task.client_id) clientsSet.add(String(task.client_id));
+        totalTasks++;
 
-          c.total++;
-        });
-
-        // If there are no subtasks but row/status itself is a tracked status, count it
-        if (
-          (!Array.isArray(t.subtasks) || t.subtasks.length === 0) &&
-          t.status
-        ) {
-          const rs = String(t.status).toLowerCase();
-          if (allowedStatuses.has(rs)) {
-            if (rs === "pending") c.pending++;
-            else if (rs === "overdue") c.overdue++;
-            else if (rs === "open") c.open++;
-            else if (rs === "delayed") c.delayed++;
-            c.total++;
-          }
+        const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+        if (subtasks.length === 0 && task.status) {
+          const status = String(task.status).toLowerCase();
+          totalSubtasks++;
+          if (status === "completed") completed++;
+          else if (status === "delayed") delayed++;
+          else if (status === "overdue") overdue++;
+          else if (status === "pending") pending++;
+          else if (status === "in_progress") inProgress++;
+        } else {
+          subtasks.forEach((s: any) => {
+            const status = String(s.status || "").toLowerCase();
+            if (status && status !== "completed" && allowedStatuses.has(status)) {
+              totalSubtasks++;
+              if (status === "delayed") delayed++;
+              else if (status === "overdue") overdue++;
+              else if (status === "pending") pending++;
+              else if (status === "in_progress") inProgress++;
+            }
+          });
         }
       });
-      counts[date] = c;
+
+      metrics[date] = {
+        total_tasks: totalTasks,
+        total_subtasks: totalSubtasks,
+        completed_subtasks: completed,
+        delayed_subtasks: delayed,
+        overdue_subtasks: overdue,
+        pending_subtasks: pending,
+        in_progress_subtasks: inProgress,
+        active_clients: clientsSet.size,
+      };
     });
-    return counts;
+
+    return metrics;
   }, [byDate]);
-
-  // Aggregate global counts across all dates
-  const globalCounts = useMemo(() => {
-    const totals = {
-      totalDates: byDate.length,
-      total: 0,
-      pending: 0,
-      overdue: 0,
-      open: 0,
-      delayed: 0,
-    } as Record<string, number>;
-
-    Object.values(countsPerDate).forEach((c) => {
-      totals.total += c.total || 0;
-      totals.pending += c.pending || 0;
-      totals.overdue += c.overdue || 0;
-      totals.open += c.open || 0;
-      totals.delayed += c.delayed || 0;
-    });
-
-    return totals;
-  }, [countsPerDate, byDate.length]);
 
   const exportDate = (date: string) => {
     const rows: any[] = [];
@@ -216,7 +214,6 @@ export default function FinOpsCumulativeData() {
     rowsForDate.forEach((t: any) => {
       const subt = Array.isArray(t.subtasks) ? t.subtasks : [];
       if (subt.length === 0) {
-        // include row-level statuses if present and allowed
         const rs = String(t.status || "").toLowerCase();
         if (allowedStatuses.has(rs)) {
           rows.push({
@@ -295,207 +292,264 @@ export default function FinOpsCumulativeData() {
     saveAs(new Blob([wbout]), `finops_cumulative_all.xlsx`);
   };
 
-  if (isLoading) return <div>Loading cumulative data...</div>;
+  if (isLoading) return <div className="p-4">Loading cumulative data...</div>;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">
-          Cumulative Data (historical dates)
-        </h3>
+        <h3 className="text-lg font-semibold">Cumulative Data (Date-wise)</h3>
         <div className="flex gap-2">
-          <Button onClick={exportAll} disabled={isLoading}>
-            Export All XLSX
+          <Button onClick={exportAll} disabled={isLoading || byDate.length === 0} size="sm">
+            <Download size={16} className="mr-2" />
+            Export All
           </Button>
-          <Button onClick={() => window.print()}>Print</Button>
         </div>
       </div>
 
-      {/* Top aggregated counts: total dates + status totals */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-        <Card className="p-0">
-          <CardHeader>
-            <CardTitle className="text-sm">Total Dates</CardTitle>
-            <CardDescription className="text-lg font-medium">
-              {globalCounts.totalDates}
-            </CardDescription>
-          </CardHeader>
-          <CardContent />
-        </Card>
+      {/* Date Range Filters */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="min-w-[180px]">
+              <Label htmlFor="from-date" className="text-xs font-medium">From Date</Label>
+              <Input
+                id="from-date"
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="font-medium"
+              />
+            </div>
 
-        {[
-          { key: "total", label: "Total" },
-          { key: "pending", label: "Pending" },
-          { key: "overdue", label: "Overdue" },
-          { key: "open", label: "Open" },
-          { key: "delayed", label: "Delayed" },
-        ].map((c) => (
-          <Card key={c.key} className="p-0">
-            <CardHeader>
-              <CardTitle className="text-sm">{c.label}</CardTitle>
-              <CardDescription className="text-lg font-medium">
-                {globalCounts[c.key] || 0}
-              </CardDescription>
-            </CardHeader>
-            <CardContent />
-          </Card>
-        ))}
-      </div>
+            <div className="min-w-[180px]">
+              <Label htmlFor="to-date" className="text-xs font-medium">To Date</Label>
+              <Input
+                id="to-date"
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="font-medium"
+              />
+            </div>
 
-      <div className="space-y-4">
-        {byDate.length === 0 && (
-          <div className="text-sm text-gray-600">
-            No historical dates available
+            <div className="flex-1 text-xs text-gray-600">
+              {byDate.length} date(s) found
+            </div>
           </div>
-        )}
+        </CardContent>
+      </Card>
 
-        {/* Dates as accordions (details/summary) - no counts inside accordion */}
-        {byDate.map(([date, rows]) => (
-          <details key={date} className="border rounded-md p-3">
-            <summary className="flex items-center justify-between cursor-pointer list-none">
-              <div className="flex items-center gap-3">
-                <h4 className="font-semibold">{date}</h4>
-                <div className="text-sm text-gray-500">
-                  {rows.length} task(s)
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    exportDate(date);
-                  }}
+      {/* Date-wise rows with metrics */}
+      <div className="space-y-3">
+        {byDate.length === 0 ? (
+          <div className="text-sm text-gray-600 p-4 text-center">
+            No cumulative data available for the selected date range
+          </div>
+        ) : (
+          byDate.map(([date, tasks]) => {
+            const metrics = metricsPerDate[date] || {};
+            const isExpanded = expandedDate === date;
+
+            return (
+              <div
+                key={date}
+                className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              >
+                {/* Date Row with Metric Cards */}
+                <button
+                  onClick={() => setExpandedDate(isExpanded ? null : date)}
+                  className="w-full text-left p-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-150 transition-colors"
                 >
-                  Export {date}
-                </Button>
-              </div>
-            </summary>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <ChevronDown
+                        size={20}
+                        className={`text-gray-600 transition-transform ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                      <h4 className="font-semibold text-base text-gray-900">
+                        {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          weekday: "short",
+                        })}
+                      </h4>
+                      <span className="text-xs text-gray-500">({tasks.length} tasks)</span>
+                    </div>
+                  </div>
 
-            <div className="mt-3 space-y-3">
-              {rows.map((t: any) => (
-                <Card key={`${t.task_id || t.id}-${date}`}>
-                  <CardHeader>
-                    <div className="flex justify-between items-center w-full">
-                      <div>
-                        <CardTitle>{t.task_name || t.name}</CardTitle>
-                        <CardDescription>
-                          {t.period || t.duration || ""}
-                        </CardDescription>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {t.client_name ? `Client: ${t.client_name}` : ""}
+                  {/* Metric Cards Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                    {/* Total Tasks */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-blue-600">
+                        {metrics.total_tasks || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Total Tasks</div>
+                    </div>
+
+                    {/* Total Subtasks */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-gray-900">
+                        {metrics.total_subtasks || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Total Subtasks</div>
+                    </div>
+
+                    {/* Completed */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-green-600">
+                        {metrics.completed_subtasks || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Completed</div>
+                    </div>
+
+                    {/* Delayed */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-yellow-600">
+                        {metrics.delayed_subtasks || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Delayed</div>
+                    </div>
+
+                    {/* Overdue */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-red-600">
+                        {metrics.overdue_subtasks || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Overdue</div>
+                    </div>
+
+                    {/* Pending */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-indigo-600">
+                        {metrics.pending_subtasks || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Pending</div>
+                    </div>
+
+                    {/* In-Progress */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-blue-600">
+                        {metrics.in_progress_subtasks || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">In-Progress</div>
+                    </div>
+
+                    {/* Active Clients */}
+                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                      <div className="text-lg font-bold text-purple-600">
+                        {metrics.active_clients || 0}
+                      </div>
+                      <div className="text-xs text-gray-600">Active Clients</div>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Accordion Details */}
+                {isExpanded && (
+                  <div className="border-t border-gray-200 bg-white p-4 space-y-4">
+                    {/* Summary Stats */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
+                      <h5 className="font-semibold text-sm text-gray-900 mb-3">Summary for {date}</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <div className="text-gray-600">Total Tasks</div>
+                          <div className="text-2xl font-bold text-blue-600">
+                            {metrics.total_tasks || 0}
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {t.assigned_to
-                            ? `Assigned: ${Array.isArray(t.assigned_to) ? (t.assigned_to as any[]).join(", ") : String(t.assigned_to)}`
-                            : ""}
+                        <div>
+                          <div className="text-gray-600">Total Subtasks</div>
+                          <div className="text-2xl font-bold text-gray-900">
+                            {metrics.total_subtasks || 0}
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {t.reporting_managers
-                            ? `Reporting: ${
-                                typeof t.reporting_managers === "string"
-                                  ? (() => {
-                                      try {
-                                        const p = JSON.parse(
-                                          t.reporting_managers,
-                                        );
-                                        return Array.isArray(p)
-                                          ? p.join(", ")
-                                          : String(t.reporting_managers);
-                                      } catch {
-                                        return String(t.reporting_managers);
-                                      }
-                                    })()
-                                  : Array.isArray(t.reporting_managers)
-                                    ? t.reporting_managers.join(", ")
-                                    : ""
-                              }`
-                            : ""}
+                        <div>
+                          <div className="text-gray-600">Completed</div>
+                          <div className="text-2xl font-bold text-green-600">
+                            {metrics.completed_subtasks || 0}
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {t.escalation_managers
-                            ? `Escalation: ${
-                                typeof t.escalation_managers === "string"
-                                  ? (() => {
-                                      try {
-                                        const p = JSON.parse(
-                                          t.escalation_managers,
-                                        );
-                                        return Array.isArray(p)
-                                          ? p.join(", ")
-                                          : String(t.escalation_managers);
-                                      } catch {
-                                        return String(t.escalation_managers);
-                                      }
-                                    })()
-                                  : Array.isArray(t.escalation_managers)
-                                    ? t.escalation_managers.join(", ")
-                                    : ""
-                              }`
-                            : ""}
+                        <div>
+                          <div className="text-gray-600">Active Clients</div>
+                          <div className="text-2xl font-bold text-purple-600">
+                            {metrics.active_clients || 0}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-sm text-gray-500">{date}</div>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {(t.subtasks || [])
-                        .filter((s: any) => {
-                          const st = String(
-                            s.status || s.state || "",
-                          ).toLowerCase();
-                          return st !== "completed" && allowedStatuses.has(st);
-                        })
-                        .map((s: any) => (
-                          <div
-                            key={s.subtask_id || s.id}
-                            className="flex justify-between items-center border-b pb-2"
-                          >
-                            <div>
-                              <div className="font-medium">
-                                {s.subtask_name || s.name}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                Status: {s.status} • Start:{" "}
-                                {s.scheduled_time || s.start_time || "-"}
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {s.started_at ? `Started: ${s.started_at}` : ""}
-                              {s.completed_at
-                                ? ` • Completed: ${s.completed_at}`
-                                : ""}
-                              <div>Run Date: {date}</div>
-                            </div>
-                          </div>
-                        ))}
 
-                      {/* handle row-level status when subtasks absent or none matched */}
-                      {(!t.subtasks || t.subtasks.length === 0) &&
-                        t.status &&
-                        allowedStatuses.has(String(t.status).toLowerCase()) && (
-                          <div className="flex justify-between items-center border-b pb-2">
-                            <div>
-                              <div className="font-medium">
-                                {t.task_name || t.name}
+                    {/* Tasks List */}
+                    <div>
+                      <h5 className="font-semibold text-sm text-gray-900 mb-3">Tasks & Subtasks</h5>
+                      <div className="space-y-3">
+                        {tasks.map((task: any) => (
+                          <Card key={`${task.task_id || task.id}-${date}`}>
+                            <CardHeader className="pb-3">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <CardTitle className="text-sm">{task.task_name || "Unnamed Task"}</CardTitle>
+                                  {task.client_name && (
+                                    <CardDescription>Client: {task.client_name}</CardDescription>
+                                  )}
+                                  {task.assigned_to && (
+                                    <CardDescription className="text-xs">
+                                      Assigned: {Array.isArray(task.assigned_to) ? task.assigned_to.join(", ") : task.assigned_to}
+                                    </CardDescription>
+                                  )}
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-500">
-                                Status: {t.status}
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Run Date: {date}
-                            </div>
-                          </div>
-                        )}
+                            </CardHeader>
+                            {task.subtasks && task.subtasks.length > 0 && (
+                              <CardContent className="pt-0">
+                                <div className="space-y-2">
+                                  {task.subtasks
+                                    .filter((s: any) => {
+                                      const st = String(s.status || "").toLowerCase();
+                                      return st !== "completed" && allowedStatuses.has(st);
+                                    })
+                                    .map((subtask: any) => (
+                                      <div
+                                        key={subtask.subtask_id || subtask.id}
+                                        className="border-l-4 border-gray-200 pl-3 py-2"
+                                      >
+                                        <div className="font-medium text-sm">
+                                          {subtask.subtask_name || "Unnamed Subtask"}
+                                        </div>
+                                        <div className="text-xs text-gray-600 mt-1">
+                                          Status: <span className="font-medium">{subtask.status}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                </div>
+                              </CardContent>
+                            )}
+                          </Card>
+                        ))}
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </details>
-        ))}
+
+                    {/* Export Button */}
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => exportDate(date)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Download size={14} className="mr-2" />
+                        Export {date}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

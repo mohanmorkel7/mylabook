@@ -1348,6 +1348,15 @@ export class ApiClient {
     return this.request(`/finops-production/tracker/summary`);
   }
 
+  // Fetch raw task data for History tab (date range)
+  async getFinOpsHistoryTasks(fromDate?: string, toDate?: string) {
+    const params = new URLSearchParams();
+    if (fromDate) params.append("fromDate", fromDate);
+    if (toDate) params.append("toDate", toDate);
+    const queryString = params.toString();
+    return this.request(`/finops-production/tracker/history-tasks${queryString ? "?" + queryString : ""}`);
+  }
+
   // Exact cumulative endpoint matching requested SQL
   async getFinOpsCumulative(fromDate?: string, toDate?: string) {
     const params = new URLSearchParams();

@@ -2069,6 +2069,64 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
   }
 });
 
+// Fetch raw task data for a date range (for History tab display)
+router.get("/tracker/history-tasks", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+    const { fromDate, toDate } = req.query;
+
+    let whereConditions = `
+      t.deleted_at IS NULL
+      AND ft.period = 'daily'
+    `;
+
+    // Apply date range filters
+    if (fromDate && typeof fromDate === "string") {
+      whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date >= '${fromDate}'::date`;
+    }
+    if (toDate && typeof toDate === "string") {
+      whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date <= '${toDate}'::date`;
+    }
+
+    // Fetch raw task data with subtasks
+    const query = `
+      SELECT DISTINCT
+        t.id as task_id,
+        t.task_name,
+        t.client_id,
+        t.client_name,
+        t.assigned_to,
+        t.reporting_managers,
+        t.escalation_managers,
+        t.duration,
+        t.period,
+        t.effective_from,
+        ft.id as subtask_id,
+        ft.status,
+        ft.run_date,
+        ft.started_at,
+        ft.completed_at,
+        ft.start_time,
+        ft.period as task_period
+      FROM finops_tasks t
+      LEFT JOIN finops_tracker ft ON t.id = ft.task_id
+      WHERE ${whereConditions}
+      ORDER BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date DESC, t.task_name, ft.id
+    `;
+
+    console.log("History tasks query:", { fromDate, toDate });
+    const result = await pool.query(query);
+    console.log("History tasks result rows count:", result.rows.length);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching history tasks:", e);
+    res.status(500).json({
+      error: "Failed to fetch history tasks",
+      message: e.message,
+    });
+  }
+});
+
 // Manual trigger for approval check (for testing)
 router.post("/trigger-approval-check", async (req: Request, res: Response) => {
   try {

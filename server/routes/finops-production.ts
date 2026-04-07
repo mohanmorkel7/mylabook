@@ -1972,7 +1972,6 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
 
     let whereConditions = `
       t.deleted_at IS NULL
-      AND t.duration = 'daily'
     `;
 
     // If specific date range is provided, show ALL statuses for those dates

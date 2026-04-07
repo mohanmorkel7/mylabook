@@ -1410,22 +1410,6 @@ export default function ClientBasedFinOpsTaskManager() {
     },
   });
 
-  // Fetch overall summary counts (all tasks, no date filtering)
-  const { data: overallSummaryData = null } = useQuery({
-    queryKey: ["finops-task-management-summary"],
-    queryFn: async () => {
-      try {
-        return await apiClient.getFinOpsTaskManagementSummary();
-      } catch (error) {
-        if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
-          console.error("Failed to fetch task management summary:", error);
-        return null;
-      }
-    },
-    staleTime: 30000,
-    refetchInterval: 30000,
-  });
-
   // Mutations for CRUD operations (moved here to fix reference error)
   const updateSubTaskMutation = useMutation({
     mutationFn: ({
@@ -2835,31 +2819,13 @@ export default function ClientBasedFinOpsTaskManager() {
 
   // Calculate summary statistics - use API data for overall summary (all tasks), not filtered
   const getOverallSummary = () => {
-    // If API data is available, use it (shows overall counts matching History tab)
-    if (overallSummaryData) {
-      return {
-        total_tasks: overallSummaryData.total_tasks || 0,
-        total_subtasks: overallSummaryData.total_subtasks || 0,
-        completed_tasks: 0, // Not tracking task-level completion in API
-        delayed_tasks: 0,
-        overdue_tasks: 0,
-        pending_tasks: 0,
-        in_progress_tasks: 0,
-        completed_subtasks: overallSummaryData.completed_subtasks || 0,
-        delayed_subtasks: overallSummaryData.delayed_subtasks || 0,
-        overdue_subtasks: overallSummaryData.overdue_subtasks || 0,
-        pending_subtasks: overallSummaryData.pending_subtasks || 0,
-        in_progress_subtasks: overallSummaryData.in_progress_subtasks || 0,
-      };
-    }
-
-    // Fallback: calculate from filtered tasks
     const summary = {
       total_tasks: filteredTasks.length,
       total_subtasks: 0,
       completed_tasks: 0,
       delayed_tasks: 0,
       overdue_tasks: 0,
+      // Added counts
       pending_tasks: 0,
       in_progress_tasks: 0,
       completed_subtasks: 0,

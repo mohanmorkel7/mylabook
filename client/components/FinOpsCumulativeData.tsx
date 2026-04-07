@@ -280,38 +280,6 @@ export default function FinOpsCumulativeData() {
                 </div>
               </div>
 
-              {/* Tasks List */}
-              {metrics.tasks && metrics.tasks.length > 0 && (
-                <div className="pt-4 border-t border-gray-200">
-                  <h5 className="font-semibold text-sm text-gray-900 mb-3">Tasks ({metrics.tasks.length})</h5>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {metrics.tasks.map((task: any) => (
-                      <div key={task.task_id} className="bg-gray-50 p-3 rounded border border-gray-200">
-                        <div className="font-medium text-sm text-gray-900">{task.task_name}</div>
-                        <div className="text-xs text-gray-600 mt-1">Client: {task.client_name || "Unknown"}</div>
-                        {task.assigned_to && <div className="text-xs text-gray-600">Assigned: {task.assigned_to}</div>}
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {task.subtasks && task.subtasks.map((s: any) => (
-                            <span
-                              key={s.subtask_id}
-                              className={`inline-block px-2 py-1 rounded text-white text-xs font-medium ${
-                                s.status === 'completed' ? 'bg-green-500' :
-                                s.status === 'delayed' ? 'bg-yellow-500' :
-                                s.status === 'overdue' ? 'bg-red-500' :
-                                s.status === 'pending' ? 'bg-indigo-500' :
-                                s.status === 'in_progress' ? 'bg-blue-500' :
-                                'bg-gray-500'
-                              }`}
-                            >
-                              {s.status}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           ))
         )}

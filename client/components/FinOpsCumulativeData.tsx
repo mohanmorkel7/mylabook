@@ -75,6 +75,18 @@ export default function FinOpsCumulativeData() {
     return Array.from(datesSet).sort((a, b) => b.localeCompare(a));
   }, [tracker, today]);
 
+  // Helper: Generate array of dates between two dates
+  const generateDateRange = (start: string, end: string): string[] => {
+    const dates: string[] = [];
+    const current = new Date(start + "T00:00:00");
+    const endDate = new Date(end + "T00:00:00");
+    while (current <= endDate) {
+      dates.push(current.toISOString().split("T")[0]);
+      current.setDate(current.getDate() + 1);
+    }
+    return dates.sort((a, b) => b.localeCompare(a));
+  };
+
   // Filter data by date range and group by date
   const byDate = useMemo(() => {
     const map: Record<string, Record<string, any>> = {};
@@ -143,9 +155,22 @@ export default function FinOpsCumulativeData() {
       }
     });
 
-    const ordered: [string, any[]][] = Object.entries(map)
-      .map(([date, tasksMap]) => [date, Object.values(tasksMap)])
-      .sort((a, b) => b[0].localeCompare(a[0]));
+    // If date range is selected, include all dates in range even if no data
+    let datesToShow: string[] = Object.keys(map).sort((a, b) => b.localeCompare(a));
+    if (fromDate && toDate) {
+      datesToShow = generateDateRange(fromDate, toDate);
+    } else if (fromDate) {
+      // If only fromDate is selected, show from that date onwards
+      datesToShow = Object.keys(map).filter(d => d >= fromDate).sort((a, b) => b.localeCompare(a));
+    } else if (toDate) {
+      // If only toDate is selected, show up to that date
+      datesToShow = Object.keys(map).filter(d => d <= toDate).sort((a, b) => b.localeCompare(a));
+    }
+
+    const ordered: [string, any[]][] = datesToShow.map(date => [
+      date,
+      map[date] ? Object.values(map[date]) : []
+    ]);
 
     return ordered;
   }, [tracker, today, fromDate, toDate]);
@@ -298,7 +323,7 @@ export default function FinOpsCumulativeData() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Cumulative Data (Date-wise)</h3>
+        <h3 className="text-lg font-semibold">History (Date-wise)</h3>
         <div className="flex gap-2">
           <Button onClick={exportAll} disabled={isLoading || byDate.length === 0} size="sm">
             <Download size={16} className="mr-2" />
@@ -344,7 +369,7 @@ export default function FinOpsCumulativeData() {
       <div className="space-y-3">
         {byDate.length === 0 ? (
           <div className="text-sm text-gray-600 p-4 text-center">
-            No cumulative data available for the selected date range
+            No history data available for the selected date range
           </div>
         ) : (
           byDate.map(([date, tasks]) => {

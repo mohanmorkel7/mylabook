@@ -22,6 +22,15 @@ const IST_DATE_STRING = (): string => {
   return ist.toISOString().slice(0, 10);
 };
 
+const getFirstDayOfMonth = (): string => {
+  const ist = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+  );
+  const year = ist.getFullYear();
+  const month = String(ist.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
+};
+
 const toISTDateString = (val: any) => {
   try {
     if (!val) return "unknown";
@@ -40,9 +49,9 @@ const toISTDateString = (val: any) => {
 };
 
 export default function FinOpsCumulativeData() {
-  // Date range filter state
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  // Date range filter state - default to first day of month and today
+  const [fromDate, setFromDate] = useState(getFirstDayOfMonth());
+  const [toDate, setToDate] = useState(IST_DATE_STRING());
 
   // Fetch cumulative aggregated data for the selected date range
   const { data: tracker = [], isLoading } = useQuery({

@@ -1343,6 +1343,11 @@ export class ApiClient {
     return this.request(path);
   }
 
+  // Overall summary counts for Task Management (all tasks, no date filtering)
+  async getFinOpsTaskManagementSummary() {
+    return this.request(`/finops-production/tracker/summary`);
+  }
+
   // Exact cumulative endpoint matching requested SQL
   async getFinOpsCumulative(fromDate?: string, toDate?: string) {
     const params = new URLSearchParams();

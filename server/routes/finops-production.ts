@@ -1964,6 +1964,49 @@ router.get("/next-calls", async (req: Request, res: Response) => {
   }
 });
 
+// Overall summary counts for Task Management (all tasks, no date filtering)
+router.get("/tracker/summary", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+
+    // Get overall summary across all tasks
+    const query = `
+      SELECT
+        COUNT(DISTINCT ft.task_id)::int as total_tasks,
+        COUNT(*)::int as total_subtasks,
+        COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int as completed_subtasks,
+        COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
+        COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
+        COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int as pending_subtasks,
+        COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
+        COUNT(DISTINCT t.client_id)::int as active_clients
+      FROM finops_tracker ft
+      JOIN finops_tasks t ON t.id = ft.task_id
+      WHERE t.deleted_at IS NULL
+    `;
+
+    console.log("Task Management summary query running");
+    const result = await pool.query(query);
+    console.log("Task Management summary result:", result.rows[0]);
+    res.json(result.rows[0] || {
+      total_tasks: 0,
+      total_subtasks: 0,
+      completed_subtasks: 0,
+      delayed_subtasks: 0,
+      overdue_subtasks: 0,
+      pending_subtasks: 0,
+      in_progress_subtasks: 0,
+      active_clients: 0,
+    });
+  } catch (e: any) {
+    console.error("Error fetching task management summary:", e);
+    res.status(500).json({
+      error: "Failed to fetch task management summary",
+      message: e.message,
+    });
+  }
+});
+
 // Historical cumulative tracker rows (matches exact SQL requested)
 router.get("/tracker/cumulative", async (req: Request, res: Response) => {
   try {

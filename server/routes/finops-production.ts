@@ -2105,7 +2105,6 @@ router.get("/tracker/history-tasks", async (req: Request, res: Response) => {
         ft.run_date,
         ft.started_at,
         ft.completed_at,
-        ft.start_time,
         ft.period
       FROM finops_tasks t
       LEFT JOIN finops_tracker ft ON t.id = ft.task_id

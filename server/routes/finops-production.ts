@@ -1983,6 +1983,7 @@ router.get("/tracker/summary", async (req: Request, res: Response) => {
       FROM finops_tracker ft
       JOIN finops_tasks t ON t.id = ft.task_id
       WHERE t.deleted_at IS NULL
+        AND ft.period = 'daily'
     `;
 
     console.log("Task Management summary query running");
@@ -2015,6 +2016,7 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
 
     let whereConditions = `
       t.deleted_at IS NULL
+      AND ft.period = 'daily'
     `;
 
     // If specific date range is provided, show ALL statuses for those dates

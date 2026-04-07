@@ -65,6 +65,23 @@ export default function FinOpsCumulativeData() {
     ? new Set(["pending", "overdue", "open", "delayed", "completed", "in_progress"])
     : new Set(["pending", "overdue", "open", "delayed"]);
 
+  // Helper: Format date string (YYYY-MM-DD) as local date without timezone shifts
+  const formatDateString = (dateStr: string): string => {
+    try {
+      const [year, month, day] = dateStr.split('-');
+      // Create date as local date (not UTC) to avoid timezone shift
+      const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return localDate.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        weekday: "short",
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   // Get all unique dates from data
   const allDates = useMemo(() => {
     const datesSet = new Set<string>();
@@ -453,12 +470,7 @@ export default function FinOpsCumulativeData() {
                         }`}
                       />
                       <h4 className="font-semibold text-base text-gray-900">
-                        {new Date(date + "T00:00:00").toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                          weekday: "short",
-                        })}
+                        {formatDateString(date)}
                       </h4>
                       <span className="text-xs text-gray-500">({tasks.length} tasks)</span>
                     </div>
@@ -537,7 +549,7 @@ export default function FinOpsCumulativeData() {
                   <div className="border-t border-gray-200 bg-white p-4 space-y-4">
                     {/* Summary Stats */}
                     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
-                      <h5 className="font-semibold text-sm text-gray-900 mb-3">Summary for {date}</h5>
+                      <h5 className="font-semibold text-sm text-gray-900 mb-3">Summary for {formatDateString(date)}</h5>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
                           <div className="text-gray-600">Total Tasks</div>
@@ -639,7 +651,7 @@ export default function FinOpsCumulativeData() {
           <div className="mt-8 pt-6 border-t-2 border-gray-300">
             <h4 className="font-semibold text-lg text-gray-900 mb-4">
               Cumulative Summary
-              {fromDate && toDate && ` (${fromDate} to ${toDate})`}
+              {fromDate && toDate && ` (${formatDateString(fromDate)} to ${formatDateString(toDate)})`}
             </h4>
 
             {/* Cumulative Metric Cards Row */}

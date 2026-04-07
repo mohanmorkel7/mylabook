@@ -40,26 +40,27 @@ const toISTDateString = (val: any) => {
 };
 
 export default function FinOpsCumulativeData() {
+  // Date range filter state
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+
   const { data: tracker = [], isLoading } = useQuery({
-    queryKey: ["finops-tracker-all"],
+    queryKey: ["finops-tracker-all", fromDate, toDate],
     queryFn: async () => {
       try {
-        return await apiClient.getFinOpsCumulative();
+        console.log("Fetching cumulative data with dates:", { fromDate, toDate });
+        return await apiClient.getFinOpsCumulative(fromDate, toDate);
       } catch (e) {
         console.error("Failed to fetch finops tracker:", e);
         return [];
       }
     },
-    staleTime: 60_000,
+    staleTime: 30_000,
   });
 
   const today = IST_DATE_STRING();
   const allowedStatuses = new Set(["pending", "overdue", "open", "delayed"]);
-
-  // Date range filter state
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
   // Get all unique dates from data
   const allDates = useMemo(() => {

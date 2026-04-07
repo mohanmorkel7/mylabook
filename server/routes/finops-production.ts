@@ -1968,14 +1968,29 @@ router.get("/next-calls", async (req: Request, res: Response) => {
 router.get("/tracker/cumulative", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
+    const { fromDate, toDate } = req.query;
+
+    let whereConditions = `
+      t.deleted_at IS NULL
+      AND t.duration = 'daily'
+      AND ft.status IN ('pending','overdue','open','delayed')
+      AND ft.run_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+    `;
+
+    // Add date range filtering if provided
+    if (fromDate && typeof fromDate === "string") {
+      whereConditions += ` AND ft.run_date >= '${fromDate}'::date`;
+    }
+    if (toDate && typeof toDate === "string") {
+      whereConditions += ` AND ft.run_date <= '${toDate}'::date`;
+    }
+
     const query = `
       SELECT ft.*, t.client_name, t.client_id, t.assigned_to, t.reporting_managers, t.escalation_managers
       FROM finops_tracker ft
       JOIN finops_tasks t ON t.id = ft.task_id
-      WHERE t.deleted_at IS NULL
-        AND t.duration = 'daily'
-        AND ft.status IN ('pending','overdue','open','delayed')
-        AND ft.run_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+      WHERE ${whereConditions}
+      ORDER BY ft.run_date DESC, ft.id DESC
     `;
     const result = await pool.query(query);
     res.json(result.rows);

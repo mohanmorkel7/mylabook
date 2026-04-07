@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronDown, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
@@ -43,7 +43,6 @@ export default function FinOpsCumulativeData() {
   // Date range filter state
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
   const { data: tracker = [], isLoading } = useQuery({
     queryKey: ["finops-tracker-all", fromDate, toDate],
@@ -460,35 +459,21 @@ export default function FinOpsCumulativeData() {
         ) : (
           byDate.map(([date, tasks]) => {
             const metrics = metricsPerDate[date] || {};
-            const isExpanded = expandedDate === date;
 
             return (
               <div
                 key={date}
-                className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow p-4 bg-white"
               >
-                {/* Date Row with Metric Cards */}
-                <button
-                  onClick={() => setExpandedDate(isExpanded ? null : date)}
-                  className="w-full text-left p-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-150 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <ChevronDown
-                        size={20}
-                        className={`text-gray-600 transition-transform ${
-                          isExpanded ? "rotate-180" : ""
-                        }`}
-                      />
-                      <h4 className="font-semibold text-base text-gray-900">
-                        {formatDateString(date)}
-                      </h4>
-                      <span className="text-xs text-gray-500">({tasks.length} tasks)</span>
-                    </div>
-                  </div>
+                {/* Date Header */}
+                <div className="mb-4">
+                  <h4 className="font-semibold text-base text-gray-900">
+                    {formatDateString(date)}
+                  </h4>
+                </div>
 
-                  {/* Metric Cards Row */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                {/* Metric Cards Row */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                     {/* Total Tasks */}
                     <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
                       <div className="text-lg font-bold text-blue-600">
@@ -551,107 +536,8 @@ export default function FinOpsCumulativeData() {
                         {metrics.active_clients || 0}
                       </div>
                       <div className="text-xs text-gray-600">Active Clients</div>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Accordion Details */}
-                {isExpanded && (
-                  <div className="border-t border-gray-200 bg-white p-4 space-y-4">
-                    {/* Summary Stats */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
-                      <h5 className="font-semibold text-sm text-gray-900 mb-3">Summary for {formatDateString(date)}</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <div className="text-gray-600">Total Tasks</div>
-                          <div className="text-2xl font-bold text-blue-600">
-                            {metrics.total_tasks || 0}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-600">Total Subtasks</div>
-                          <div className="text-2xl font-bold text-gray-900">
-                            {metrics.total_subtasks || 0}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-600">Completed</div>
-                          <div className="text-2xl font-bold text-green-600">
-                            {metrics.completed_subtasks || 0}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-600">Active Clients</div>
-                          <div className="text-2xl font-bold text-purple-600">
-                            {metrics.active_clients || 0}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Tasks List */}
-                    <div>
-                      <h5 className="font-semibold text-sm text-gray-900 mb-3">Tasks & Subtasks</h5>
-                      <div className="space-y-3">
-                        {tasks.map((task: any) => (
-                          <Card key={`${task.task_id || task.id}-${date}`}>
-                            <CardHeader className="pb-3">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <CardTitle className="text-sm">{task.task_name || "Unnamed Task"}</CardTitle>
-                                  {task.client_name && (
-                                    <CardDescription>Client: {task.client_name}</CardDescription>
-                                  )}
-                                  {task.assigned_to && (
-                                    <CardDescription className="text-xs">
-                                      Assigned: {Array.isArray(task.assigned_to) ? task.assigned_to.join(", ") : task.assigned_to}
-                                    </CardDescription>
-                                  )}
-                                </div>
-                              </div>
-                            </CardHeader>
-                            {task.subtasks && task.subtasks.length > 0 && (
-                              <CardContent className="pt-0">
-                                <div className="space-y-2">
-                                  {task.subtasks
-                                    .filter((s: any) => {
-                                      const st = String(s.status || "").toLowerCase();
-                                      return st !== "completed" && allowedStatuses.has(st);
-                                    })
-                                    .map((subtask: any) => (
-                                      <div
-                                        key={subtask.subtask_id || subtask.id}
-                                        className="border-l-4 border-gray-200 pl-3 py-2"
-                                      >
-                                        <div className="font-medium text-sm">
-                                          {subtask.subtask_name || "Unnamed Subtask"}
-                                        </div>
-                                        <div className="text-xs text-gray-600 mt-1">
-                                          Status: <span className="font-medium">{subtask.status}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                </div>
-                              </CardContent>
-                            )}
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Export Button */}
-                    <div className="flex justify-end pt-2">
-                      <Button
-                        onClick={() => exportDate(date)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <Download size={14} className="mr-2" />
-                        Export {date}
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                </div>
+              </div>
               </div>
             );
           })

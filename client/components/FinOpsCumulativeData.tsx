@@ -31,37 +31,18 @@ const getFirstDayOfMonth = (): string => {
   return `${year}-${month}-01`;
 };
 
-const toISTDateString = (val: any) => {
-  try {
-    if (!val) return "unknown";
-    const d = new Date(val);
-    const ist = new Date(
-      d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
-    );
-    return ist.toISOString().slice(0, 10);
-  } catch (e) {
-    try {
-      return String(val).slice(0, 10);
-    } catch (e2) {
-      return "unknown";
-    }
-  }
-};
-
 export default function FinOpsCumulativeData() {
-  // Date range filter state - default to first day of month and today
   const [fromDate, setFromDate] = useState(getFirstDayOfMonth());
   const [toDate, setToDate] = useState(IST_DATE_STRING());
 
-  // Fetch cumulative aggregated data for the selected date range
-  const { data: tracker = [], isLoading } = useQuery({
-    queryKey: ["finops-tracker-all", fromDate, toDate],
+  const { data: rawTaskData = [], isLoading } = useQuery({
+    queryKey: ["finops-history-tasks", fromDate, toDate],
     queryFn: async () => {
       try {
-        console.log("Fetching cumulative data with dates:", { fromDate, toDate });
-        return await apiClient.getFinOpsCumulative(fromDate, toDate);
+        console.log("Fetching history task data with dates:", { fromDate, toDate });
+        return await apiClient.getFinOpsHistoryTasks(fromDate, toDate);
       } catch (e) {
-        console.error("Failed to fetch finops tracker:", e);
+        console.error("Failed to fetch history tasks:", e);
         return [];
       }
     },
@@ -70,11 +51,9 @@ export default function FinOpsCumulativeData() {
 
   const today = IST_DATE_STRING();
 
-  // Helper: Format date string (YYYY-MM-DD) as local date without timezone shifts
   const formatDateString = (dateStr: string): string => {
     try {
       const [year, month, day] = dateStr.split('-');
-      // Create date as local date (not UTC) to avoid timezone shift
       const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
       return localDate.toLocaleDateString("en-US", {
         year: "numeric",
@@ -87,71 +66,79 @@ export default function FinOpsCumulativeData() {
     }
   };
 
-  // Helper: Generate array of dates between two dates (using local time, not UTC)
-  const generateDateRange = (start: string, end: string): string[] => {
-    const dates: string[] = [];
-
-    // Parse start and end dates as local dates (not UTC)
-    const [startYear, startMonth, startDay] = start.split('-').map(Number);
-    const [endYear, endMonth, endDay] = end.split('-').map(Number);
-
-    const current = new Date(startYear, startMonth - 1, startDay);
-    const endDate = new Date(endYear, endMonth - 1, endDay);
-
-    while (current <= endDate) {
-      // Format current date as YYYY-MM-DD
-      const year = current.getFullYear();
-      const month = String(current.getMonth() + 1).padStart(2, '0');
-      const day = String(current.getDate()).padStart(2, '0');
-      dates.push(`${year}-${month}-${day}`);
-      current.setDate(current.getDate() + 1);
-    }
-
-    return dates.sort((a, b) => b.localeCompare(a));
-  };
-
-  // Process backend aggregated data
+  // Group raw tasks by date and calculate metrics
   const byDate = useMemo(() => {
-    // Backend returns already aggregated data with counts
-    if (!tracker || tracker.length === 0) {
-      return [];
-    }
+    const dateGroups: Record<string, any> = {};
 
-    // If date range is selected, fill in all dates even if no data exists
-    if (fromDate && toDate) {
-      const allDates = generateDateRange(fromDate, toDate);
-      const dataMap = tracker.reduce((acc: any, row: any) => {
-        const dateKey = row.run_date;
-        acc[dateKey] = row;
-        return acc;
-      }, {});
+    (rawTaskData || []).forEach((row: any) => {
+      if (!row || row.deleted_at) return;
 
-      return allDates.map(date => [
+      const runDate = row.run_date ? String(row.run_date).slice(0, 10) : today;
+      
+      if (!dateGroups[runDate]) {
+        dateGroups[runDate] = {
+          date: runDate,
+          tasks: {},
+          totalTasks: 0,
+          totalSubtasks: 0,
+          completed: 0,
+          delayed: 0,
+          overdue: 0,
+          pending: 0,
+          inProgress: 0,
+          clients: new Set<string>(),
+        };
+      }
+
+      const taskKey = String(row.task_id);
+      if (!dateGroups[runDate].tasks[taskKey]) {
+        dateGroups[runDate].tasks[taskKey] = {
+          task_id: row.task_id,
+          task_name: row.task_name,
+          client_id: row.client_id,
+          client_name: row.client_name,
+          assigned_to: row.assigned_to,
+          status: row.status,
+          subtasks: [],
+        };
+        dateGroups[runDate].totalTasks++;
+        if (row.client_id) dateGroups[runDate].clients.add(String(row.client_id));
+      }
+
+      if (row.subtask_id) {
+        dateGroups[runDate].tasks[taskKey].subtasks.push({
+          subtask_id: row.subtask_id,
+          status: row.status,
+        });
+        dateGroups[runDate].totalSubtasks++;
+        
+        const status = String(row.status || "").toLowerCase();
+        if (status === "completed") dateGroups[runDate].completed++;
+        else if (status === "delayed") dateGroups[runDate].delayed++;
+        else if (status === "overdue") dateGroups[runDate].overdue++;
+        else if (status === "pending") dateGroups[runDate].pending++;
+        else if (status === "in_progress") dateGroups[runDate].inProgress++;
+      }
+    });
+
+    return Object.entries(dateGroups)
+      .map(([date, data]) => [
         date,
-        dataMap[date] || {
-          run_date: date,
-          total_tasks: 0,
-          total_subtasks: 0,
-          completed_subtasks: 0,
-          delayed_subtasks: 0,
-          overdue_subtasks: 0,
-          pending_subtasks: 0,
-          in_progress_subtasks: 0,
-          active_clients: 0,
+        {
+          total_tasks: data.totalTasks,
+          total_subtasks: data.totalSubtasks,
+          completed_subtasks: data.completed,
+          delayed_subtasks: data.delayed,
+          overdue_subtasks: data.overdue,
+          pending_subtasks: data.pending,
+          in_progress_subtasks: data.inProgress,
+          active_clients: data.clients.size,
+          tasks: Object.values(data.tasks),
         },
-      ]);
-    }
+      ])
+      .sort((a, b) => b[0].localeCompare(a[0]));
+  }, [rawTaskData, today]);
 
-    // No date range - just return the data sorted by date
-    return tracker
-      .sort((a: any, b: any) => b.run_date.localeCompare(a.run_date))
-      .map((row: any) => [
-        row.run_date,
-        row,
-      ]);
-  }, [tracker, fromDate, toDate]);
-
-  // Calculate cumulative metrics across all dates
   const cumulativeMetrics = useMemo(() => {
     let totalTasks = 0;
     let totalSubtasks = 0;
@@ -160,7 +147,6 @@ export default function FinOpsCumulativeData() {
     let overdue = 0;
     let pending = 0;
     let inProgress = 0;
-    const clientsSet = new Set<string>();
 
     byDate.forEach(([date, metrics]) => {
       totalTasks += metrics.total_tasks || 0;
@@ -185,7 +171,6 @@ export default function FinOpsCumulativeData() {
   }, [byDate]);
 
   const exportAll = () => {
-    // Export only metrics summary per date
     const rows = byDate.map(([date, metrics]) => ({
       run_date: date,
       total_tasks: metrics.total_tasks || 0,
@@ -209,18 +194,14 @@ export default function FinOpsCumulativeData() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">History (Date-wise)</h3>
-        <div className="flex gap-2">
-          <Button onClick={exportAll} disabled={isLoading || byDate.length === 0} size="sm">
-            <Download size={16} className="mr-2" />
-            Export All
-          </Button>
-        </div>
+        <Button onClick={exportAll} disabled={isLoading || byDate.length === 0} size="sm">
+          <Download size={16} className="mr-2" />
+          Export All
+        </Button>
       </div>
 
-      {/* Date Range Filters */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4 items-end">
@@ -253,168 +234,126 @@ export default function FinOpsCumulativeData() {
         </CardContent>
       </Card>
 
-      {/* Date-wise rows with metrics */}
-      <div className="space-y-3">
+      <div className="space-y-6">
         {byDate.length === 0 ? (
           <div className="text-sm text-gray-600 p-4 text-center">
             No history data available for the selected date range
           </div>
         ) : (
-          byDate.map(([date, metrics]) => {
-            return (
-              <div
-                key={date}
-                className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow p-4 bg-white"
-              >
-                {/* Date Header */}
-                <div className="mb-4">
-                  <h4 className="font-semibold text-base text-gray-900">
-                    {formatDateString(date)}
-                  </h4>
+          byDate.map(([date, metrics]: any) => (
+            <div key={date} className="border border-gray-200 rounded-lg shadow-sm p-6 bg-white">
+              <h4 className="font-semibold text-base text-gray-900 mb-4">{formatDateString(date)}</h4>
+
+              {/* Metrics Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-blue-600">{metrics.total_tasks || 0}</div>
+                  <div className="text-xs text-gray-600">Total Tasks</div>
                 </div>
-
-                {/* Metric Cards Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-                    {/* Total Tasks */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-blue-600">
-                        {metrics.total_tasks || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">Total Tasks</div>
-                    </div>
-
-                    {/* Total Subtasks */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-gray-900">
-                        {metrics.total_subtasks || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">Total Subtasks</div>
-                    </div>
-
-                    {/* Completed */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-green-600">
-                        {metrics.completed_subtasks || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">Completed</div>
-                    </div>
-
-                    {/* Delayed */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-yellow-600">
-                        {metrics.delayed_subtasks || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">Delayed</div>
-                    </div>
-
-                    {/* Overdue */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-red-600">
-                        {metrics.overdue_subtasks || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">Overdue</div>
-                    </div>
-
-                    {/* Pending */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-indigo-600">
-                        {metrics.pending_subtasks || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">Pending</div>
-                    </div>
-
-                    {/* In-Progress */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-blue-600">
-                        {metrics.in_progress_subtasks || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">In-Progress</div>
-                    </div>
-
-                    {/* Active Clients */}
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-lg font-bold text-purple-600">
-                        {metrics.active_clients || 0}
-                      </div>
-                      <div className="text-xs text-gray-600">Active Clients</div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-gray-900">{metrics.total_subtasks || 0}</div>
+                  <div className="text-xs text-gray-600">Total Subtasks</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-green-600">{metrics.completed_subtasks || 0}</div>
+                  <div className="text-xs text-gray-600">Completed</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-yellow-600">{metrics.delayed_subtasks || 0}</div>
+                  <div className="text-xs text-gray-600">Delayed</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-red-600">{metrics.overdue_subtasks || 0}</div>
+                  <div className="text-xs text-gray-600">Overdue</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-indigo-600">{metrics.pending_subtasks || 0}</div>
+                  <div className="text-xs text-gray-600">Pending</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-blue-600">{metrics.in_progress_subtasks || 0}</div>
+                  <div className="text-xs text-gray-600">In-Progress</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                  <div className="text-lg font-bold text-purple-600">{metrics.active_clients || 0}</div>
+                  <div className="text-xs text-gray-600">Active Clients</div>
                 </div>
               </div>
-              </div>
-            );
-          })
+
+              {/* Tasks List */}
+              {metrics.tasks && metrics.tasks.length > 0 && (
+                <div className="pt-4 border-t border-gray-200">
+                  <h5 className="font-semibold text-sm text-gray-900 mb-3">Tasks ({metrics.tasks.length})</h5>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {metrics.tasks.map((task: any) => (
+                      <div key={task.task_id} className="bg-gray-50 p-3 rounded border border-gray-200">
+                        <div className="font-medium text-sm text-gray-900">{task.task_name}</div>
+                        <div className="text-xs text-gray-600 mt-1">Client: {task.client_name || "Unknown"}</div>
+                        {task.assigned_to && <div className="text-xs text-gray-600">Assigned: {task.assigned_to}</div>}
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {task.subtasks && task.subtasks.map((s: any) => (
+                            <span
+                              key={s.subtask_id}
+                              className={`inline-block px-2 py-1 rounded text-white text-xs font-medium ${
+                                s.status === 'completed' ? 'bg-green-500' :
+                                s.status === 'delayed' ? 'bg-yellow-500' :
+                                s.status === 'overdue' ? 'bg-red-500' :
+                                s.status === 'pending' ? 'bg-indigo-500' :
+                                s.status === 'in_progress' ? 'bg-blue-500' :
+                                'bg-gray-500'
+                              }`}
+                            >
+                              {s.status}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
         )}
 
-        {/* Cumulative Summary Section */}
+        {/* Cumulative Summary */}
         {byDate.length > 0 && (
           <div className="mt-8 pt-6 border-t-2 border-gray-300">
             <h4 className="font-semibold text-lg text-gray-900 mb-4">
-              Cumulative Summary
-              {fromDate && toDate && ` (${formatDateString(fromDate)} to ${formatDateString(toDate)})`}
+              Cumulative Summary {fromDate && toDate && `(${formatDateString(fromDate)} to ${formatDateString(toDate)})`}
             </h4>
 
-            {/* Cumulative Metric Cards Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-              {/* Total Tasks */}
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 shadow-md border border-blue-200">
-                <div className="text-3xl font-bold text-blue-600">
-                  {cumulativeMetrics.total_tasks || 0}
-                </div>
+                <div className="text-3xl font-bold text-blue-600">{cumulativeMetrics.total_tasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Total Tasks</div>
               </div>
-
-              {/* Total Subtasks */}
               <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 shadow-md border border-gray-200">
-                <div className="text-3xl font-bold text-gray-900">
-                  {cumulativeMetrics.total_subtasks || 0}
-                </div>
+                <div className="text-3xl font-bold text-gray-900">{cumulativeMetrics.total_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Total Subtasks</div>
               </div>
-
-              {/* Completed */}
               <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 shadow-md border border-green-200">
-                <div className="text-3xl font-bold text-green-600">
-                  {cumulativeMetrics.completed_subtasks || 0}
-                </div>
+                <div className="text-3xl font-bold text-green-600">{cumulativeMetrics.completed_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Completed</div>
               </div>
-
-              {/* Delayed */}
               <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 shadow-md border border-yellow-200">
-                <div className="text-3xl font-bold text-yellow-600">
-                  {cumulativeMetrics.delayed_subtasks || 0}
-                </div>
+                <div className="text-3xl font-bold text-yellow-600">{cumulativeMetrics.delayed_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Delayed</div>
               </div>
-
-              {/* Overdue */}
               <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 shadow-md border border-red-200">
-                <div className="text-3xl font-bold text-red-600">
-                  {cumulativeMetrics.overdue_subtasks || 0}
-                </div>
+                <div className="text-3xl font-bold text-red-600">{cumulativeMetrics.overdue_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Overdue</div>
               </div>
-
-              {/* Pending */}
               <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-4 shadow-md border border-indigo-200">
-                <div className="text-3xl font-bold text-indigo-600">
-                  {cumulativeMetrics.pending_subtasks || 0}
-                </div>
+                <div className="text-3xl font-bold text-indigo-600">{cumulativeMetrics.pending_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Pending</div>
               </div>
-
-              {/* In-Progress */}
               <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-4 shadow-md border border-cyan-200">
-                <div className="text-3xl font-bold text-cyan-600">
-                  {cumulativeMetrics.in_progress_subtasks || 0}
-                </div>
+                <div className="text-3xl font-bold text-cyan-600">{cumulativeMetrics.in_progress_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">In-Progress</div>
               </div>
-
-              {/* Active Clients */}
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 shadow-md border border-purple-200">
-                <div className="text-3xl font-bold text-purple-600">
-                  {cumulativeMetrics.active_clients || 0}
-                </div>
+                <div className="text-3xl font-bold text-purple-600">{cumulativeMetrics.active_clients || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Active Clients</div>
               </div>
             </div>

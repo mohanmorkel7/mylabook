@@ -2090,7 +2090,7 @@ router.get("/tracker/history-tasks", async (req: Request, res: Response) => {
 
     // Fetch raw task data with subtasks
     const query = `
-      SELECT DISTINCT
+      SELECT
         t.id as task_id,
         t.task_name,
         t.client_id,

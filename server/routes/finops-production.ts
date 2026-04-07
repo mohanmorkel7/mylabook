@@ -1973,16 +1973,23 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
     let whereConditions = `
       t.deleted_at IS NULL
       AND t.duration = 'daily'
-      AND ft.status IN ('pending','overdue','open','delayed')
-      AND ft.run_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
     `;
 
-    // Add date range filtering if provided
-    if (fromDate && typeof fromDate === "string") {
-      whereConditions += ` AND ft.run_date >= '${fromDate}'::date`;
-    }
-    if (toDate && typeof toDate === "string") {
-      whereConditions += ` AND ft.run_date <= '${toDate}'::date`;
+    // If specific date range is provided, show ALL statuses for those dates
+    // If no date range, show only non-completed statuses before today
+    if (fromDate || toDate) {
+      // For date range queries, include all statuses
+      if (fromDate && typeof fromDate === "string") {
+        whereConditions += ` AND ft.run_date >= '${fromDate}'::date`;
+      }
+      if (toDate && typeof toDate === "string") {
+        whereConditions += ` AND ft.run_date <= '${toDate}'::date`;
+      }
+    } else {
+      // Default cumulative: only pending/overdue/open/delayed before today
+      whereConditions += ` AND ft.status IN ('pending','overdue','open','delayed')
+        AND ft.run_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+      `;
     }
 
     const query = `
@@ -1992,7 +1999,10 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
       WHERE ${whereConditions}
       ORDER BY ft.run_date DESC, ft.id DESC
     `;
+
+    console.log("Cumulative query:", { fromDate, toDate, query });
     const result = await pool.query(query);
+    console.log("Cumulative result rows count:", result.rows.length);
     res.json(result.rows);
   } catch (e: any) {
     console.error("Error fetching cumulative tracker rows:", e);

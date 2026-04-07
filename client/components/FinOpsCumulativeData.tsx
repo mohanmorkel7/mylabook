@@ -60,7 +60,10 @@ export default function FinOpsCumulativeData() {
   });
 
   const today = IST_DATE_STRING();
-  const allowedStatuses = new Set(["pending", "overdue", "open", "delayed"]);
+  // When showing date range history, include completed status; otherwise just pending/overdue/open/delayed
+  const allowedStatuses = (fromDate || toDate)
+    ? new Set(["pending", "overdue", "open", "delayed", "completed", "in_progress"])
+    : new Set(["pending", "overdue", "open", "delayed"]);
 
   // Get all unique dates from data
   const allDates = useMemo(() => {
@@ -206,9 +209,10 @@ export default function FinOpsCumulativeData() {
         } else {
           subtasks.forEach((s: any) => {
             const status = String(s.status || "").toLowerCase();
-            if (status && status !== "completed" && allowedStatuses.has(status)) {
+            if (status && allowedStatuses.has(status)) {
               totalSubtasks++;
-              if (status === "delayed") delayed++;
+              if (status === "completed") completed++;
+              else if (status === "delayed") delayed++;
               else if (status === "overdue") overdue++;
               else if (status === "pending") pending++;
               else if (status === "in_progress") inProgress++;
@@ -260,9 +264,10 @@ export default function FinOpsCumulativeData() {
         } else {
           subtasks.forEach((s: any) => {
             const status = String(s.status || "").toLowerCase();
-            if (status && status !== "completed" && allowedStatuses.has(status)) {
+            if (status && allowedStatuses.has(status)) {
               totalSubtasks++;
-              if (status === "delayed") delayed++;
+              if (status === "completed") completed++;
+              else if (status === "delayed") delayed++;
               else if (status === "overdue") overdue++;
               else if (status === "pending") pending++;
               else if (status === "in_progress") inProgress++;

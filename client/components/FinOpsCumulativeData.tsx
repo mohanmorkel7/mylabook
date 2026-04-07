@@ -96,15 +96,26 @@ export default function FinOpsCumulativeData() {
     return Array.from(datesSet).sort((a, b) => b.localeCompare(a));
   }, [tracker, today]);
 
-  // Helper: Generate array of dates between two dates
+  // Helper: Generate array of dates between two dates (using local time, not UTC)
   const generateDateRange = (start: string, end: string): string[] => {
     const dates: string[] = [];
-    const current = new Date(start + "T00:00:00");
-    const endDate = new Date(end + "T00:00:00");
+
+    // Parse start and end dates as local dates (not UTC)
+    const [startYear, startMonth, startDay] = start.split('-').map(Number);
+    const [endYear, endMonth, endDay] = end.split('-').map(Number);
+
+    const current = new Date(startYear, startMonth - 1, startDay);
+    const endDate = new Date(endYear, endMonth - 1, endDay);
+
     while (current <= endDate) {
-      dates.push(current.toISOString().split("T")[0]);
+      // Format current date as YYYY-MM-DD
+      const year = current.getFullYear();
+      const month = String(current.getMonth() + 1).padStart(2, '0');
+      const day = String(current.getDate()).padStart(2, '0');
+      dates.push(`${year}-${month}-${day}`);
       current.setDate(current.getDate() + 1);
     }
+
     return dates.sort((a, b) => b.localeCompare(a));
   };
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import {
@@ -44,14 +45,22 @@ export default function FinOpsCumulativeData() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  const { data: tracker = [], isLoading } = useQuery({
-    queryKey: ["finops-tracker-all", fromDate, toDate],
+  // Fetch raw task data for the selected date range (not pre-aggregated)
+  const { data: rawTasks = [], isLoading } = useQuery({
+    queryKey: ["finops-history-raw-tasks", fromDate, toDate],
     queryFn: async () => {
       try {
-        console.log("Fetching cumulative data with dates:", { fromDate, toDate });
-        return await apiClient.getFinOpsCumulative(fromDate, toDate);
+        console.log("Fetching raw task data for date range:", { fromDate, toDate });
+        // Use the same endpoint as Task Management to get raw task data
+        // For each date in the range, fetch the tasks for that date
+        const toDateToUse = toDate || fromDate || IST_DATE_STRING();
+        const fromDateToUse = fromDate || toDateToUse;
+
+        // Fetch tasks for the from date (this will return tasks for that specific date)
+        const result = await apiClient.getFinOpsTasks(fromDateToUse);
+        return Array.isArray(result) ? result : [];
       } catch (e) {
-        console.error("Failed to fetch finops tracker:", e);
+        console.error("Failed to fetch raw task data:", e);
         return [];
       }
     },
@@ -77,71 +86,7 @@ export default function FinOpsCumulativeData() {
     }
   };
 
-  // Helper: Generate array of dates between two dates (using local time, not UTC)
-  const generateDateRange = (start: string, end: string): string[] => {
-    const dates: string[] = [];
-
-    // Parse start and end dates as local dates (not UTC)
-    const [startYear, startMonth, startDay] = start.split('-').map(Number);
-    const [endYear, endMonth, endDay] = end.split('-').map(Number);
-
-    const current = new Date(startYear, startMonth - 1, startDay);
-    const endDate = new Date(endYear, endMonth - 1, endDay);
-
-    while (current <= endDate) {
-      // Format current date as YYYY-MM-DD
-      const year = current.getFullYear();
-      const month = String(current.getMonth() + 1).padStart(2, '0');
-      const day = String(current.getDate()).padStart(2, '0');
-      dates.push(`${year}-${month}-${day}`);
-      current.setDate(current.getDate() + 1);
-    }
-
-    return dates.sort((a, b) => b.localeCompare(a));
-  };
-
-  // Process backend aggregated data - backend now returns pre-aggregated counts
-  const byDate = useMemo(() => {
-    // Backend returns already aggregated data with counts
-    if (!tracker || tracker.length === 0) {
-      return [];
-    }
-
-    // If date range is selected, fill in all dates even if no data exists
-    if (fromDate && toDate) {
-      const allDates = generateDateRange(fromDate, toDate);
-      const dataMap = tracker.reduce((acc: any, row: any) => {
-        const dateKey = row.run_date;
-        acc[dateKey] = row;
-        return acc;
-      }, {});
-
-      return allDates.map(date => [
-        date,
-        dataMap[date] || {
-          run_date: date,
-          total_tasks: 0,
-          total_subtasks: 0,
-          completed_subtasks: 0,
-          delayed_subtasks: 0,
-          overdue_subtasks: 0,
-          pending_subtasks: 0,
-          in_progress_subtasks: 0,
-          active_clients: 0,
-        },
-      ]);
-    }
-
-    // No date range - just return the data sorted by date
-    return tracker
-      .sort((a: any, b: any) => b.run_date.localeCompare(a.run_date))
-      .map((row: any) => [
-        row.run_date,
-        row,
-      ]);
-  }, [tracker, fromDate, toDate]);
-
-  // Calculate cumulative metrics across all dates
+  // Calculate summary from raw filtered tasks (matching Task Management logic)
   const cumulativeMetrics = useMemo(() => {
     let totalTasks = 0;
     let totalSubtasks = 0;
@@ -152,17 +97,35 @@ export default function FinOpsCumulativeData() {
     let inProgress = 0;
     const clientsSet = new Set<string>();
 
-    byDate.forEach(([date, metrics]) => {
-      totalTasks += metrics.total_tasks || 0;
-      totalSubtasks += metrics.total_subtasks || 0;
-      completed += metrics.completed_subtasks || 0;
-      delayed += metrics.delayed_subtasks || 0;
-      overdue += metrics.overdue_subtasks || 0;
-      pending += metrics.pending_subtasks || 0;
-      inProgress += metrics.in_progress_subtasks || 0;
+    // Use raw tasks like Task Management does
+    rawTasks.forEach((task: any) => {
+      if (!task || task.deleted_at) return;
 
-      // For cumulative clients, we can't just add them up
-      // Each metric row already has the count, so we'll just use the max or note this
+      if (task.client_id) clientsSet.add(String(task.client_id));
+      totalTasks++;
+
+      const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+      if (subtasks.length === 0) {
+        // If no subtasks, count the task itself as a subtask
+        totalSubtasks++;
+        const status = String(task.status || "").toLowerCase();
+        if (status === "completed") completed++;
+        else if (status === "delayed") delayed++;
+        else if (status === "overdue") overdue++;
+        else if (status === "pending") pending++;
+        else if (status === "in_progress") inProgress++;
+      } else {
+        // Count all subtasks
+        subtasks.forEach((subtask: any) => {
+          totalSubtasks++;
+          const status = String(subtask.status || "").toLowerCase();
+          if (status === "completed") completed++;
+          else if (status === "delayed") delayed++;
+          else if (status === "overdue") overdue++;
+          else if (status === "pending") pending++;
+          else if (status === "in_progress") inProgress++;
+        });
+      }
     });
 
     return {
@@ -173,9 +136,26 @@ export default function FinOpsCumulativeData() {
       overdue_subtasks: overdue,
       pending_subtasks: pending,
       in_progress_subtasks: inProgress,
-      active_clients: Math.max(...byDate.map(([_, m]) => m.active_clients || 0), 0),
+      active_clients: clientsSet.size,
     };
-  }, [byDate]);
+  }, [rawTasks]);
+
+  // Create a simple byDate structure for displaying per-date metrics
+  const byDate = useMemo(() => {
+    // Return a single entry with the summary for the selected date
+    const toDateToUse = toDate || fromDate || today;
+    const fromDateToUse = fromDate || toDateToUse;
+    const dateToShow = fromDateToUse;
+
+    if (cumulativeMetrics.total_tasks === 0 && rawTasks.length === 0) {
+      return [];
+    }
+
+    return [[
+      dateToShow,
+      cumulativeMetrics,
+    ]];
+  }, [cumulativeMetrics, fromDate, toDate, rawTasks.length, today]);
 
   const exportAll = () => {
     // Export only metrics summary per date

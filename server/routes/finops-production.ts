@@ -2099,7 +2099,6 @@ router.get("/tracker/history-tasks", async (req: Request, res: Response) => {
         t.reporting_managers,
         t.escalation_managers,
         t.duration,
-        t.period,
         t.effective_from,
         ft.id as subtask_id,
         ft.status,
@@ -2107,7 +2106,7 @@ router.get("/tracker/history-tasks", async (req: Request, res: Response) => {
         ft.started_at,
         ft.completed_at,
         ft.start_time,
-        ft.period as task_period
+        ft.period
       FROM finops_tasks t
       LEFT JOIN finops_tracker ft ON t.id = ft.task_id
       WHERE ${whereConditions}

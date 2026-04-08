@@ -628,7 +628,27 @@ export default function FinOpsUserStats() {
       return;
     }
 
-    // Sheet 1: Hourly Summary Pivot
+    // Sheet 1: Summary Statistics
+    const summaryStats: any[] = [];
+    const totalTasks = getHourlyTaskData.reduce((sum, h) => sum + h.total, 0);
+    const totalLessThan1h = getHourlyTaskData.reduce((sum, h) => sum + h.lessThan1h, 0);
+    const total1to2h = getHourlyTaskData.reduce((sum, h) => sum + h["1to2h"], 0);
+    const total2to3h = getHourlyTaskData.reduce((sum, h) => sum + h["2to3h"], 0);
+    const totalMoreThan3h = getHourlyTaskData.reduce((sum, h) => sum + h.moreThan3h, 0);
+
+    summaryStats.push(
+      { "Metric": "Report Date", "Value": new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
+      { "Metric": "Date Range", "Value": `${fromDate} to ${toDate}` },
+      { "Metric": "Total Tasks", "Value": totalTasks },
+      { "Metric": "", "Value": "" }, // Blank row
+      { "Metric": "Duration Category", "Value": "Count", "Percentage": "%" },
+      { "Metric": "≤1 Hour (On Time)", "Value": totalLessThan1h, "Percentage": totalTasks > 0 ? ((totalLessThan1h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+      { "Metric": "1-2 Hours (Amber)", "Value": total1to2h, "Percentage": totalTasks > 0 ? ((total1to2h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+      { "Metric": "2-3 Hours (Orange)", "Value": total2to3h, "Percentage": totalTasks > 0 ? ((total2to3h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+      { "Metric": ">3 Hours (Red)", "Value": totalMoreThan3h, "Percentage": totalTasks > 0 ? ((totalMoreThan3h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+    );
+
+    // Sheet 2: Hourly Summary Pivot
     const pivotData: any[] = [];
     pivotData.push({
       "Hour": "Hour (IST)",
@@ -637,20 +657,65 @@ export default function FinOpsUserStats() {
       "2-3 Hours": "2-3 Hours",
       ">3 Hours": ">3 Hours",
       "Total": "Total",
+      "On-Time %": "On-Time %",
     });
 
     getHourlyTaskData.forEach((hourData: any) => {
+      const hourTotal = hourData.total || 0;
+      const onTimePercentage = hourTotal > 0 ? ((hourData.lessThan1h / hourTotal) * 100).toFixed(1) : "0";
       pivotData.push({
         "Hour": hourData.hour,
         "≤1 Hour": hourData.lessThan1h || 0,
         "1-2 Hours": hourData["1to2h"] || 0,
         "2-3 Hours": hourData["2to3h"] || 0,
         ">3 Hours": hourData.moreThan3h || 0,
-        "Total": hourData.total || 0,
+        "Total": hourTotal,
+        "On-Time %": onTimePercentage + "%",
       });
     });
 
-    // Sheet 2: Detailed Task Data
+    // Sheet 3: Client-wise Breakdown by Duration
+    const clientBreakdown: { [key: string]: { lessThan1h: number; "1to2h": number; "2to3h": number; moreThan3h: number; total: number } } = {};
+    getHourlyTaskData.forEach((hourData: any) => {
+      if (hourData.tasks && hourData.tasks.length > 0) {
+        hourData.tasks.forEach((task: any) => {
+          const client = task.clientName || "Unknown";
+          if (!clientBreakdown[client]) {
+            clientBreakdown[client] = { lessThan1h: 0, "1to2h": 0, "2to3h": 0, moreThan3h: 0, total: 0 };
+          }
+          const category = task.durationCategory === 'green' ? 'lessThan1h' :
+                          task.durationCategory === 'amber' ? '1to2h' :
+                          task.durationCategory === 'orange' ? '2to3h' :
+                          'moreThan3h';
+          clientBreakdown[client][category]++;
+          clientBreakdown[client].total++;
+        });
+      }
+    });
+
+    const clientBreakdownData: any[] = [{
+      "Client Name": "Client Name",
+      "≤1 Hour": "≤1 Hour",
+      "1-2 Hours": "1-2 Hours",
+      "2-3 Hours": "2-3 Hours",
+      ">3 Hours": ">3 Hours",
+      "Total": "Total",
+      "On-Time %": "On-Time %",
+    }];
+
+    Object.entries(clientBreakdown).forEach(([client, data]) => {
+      clientBreakdownData.push({
+        "Client Name": client,
+        "≤1 Hour": data.lessThan1h,
+        "1-2 Hours": data["1to2h"],
+        "2-3 Hours": data["2to3h"],
+        ">3 Hours": data.moreThan3h,
+        "Total": data.total,
+        "On-Time %": data.total > 0 ? ((data.lessThan1h / data.total) * 100).toFixed(1) + "%" : "0%",
+      });
+    });
+
+    // Sheet 4: Detailed Task Data
     const detailedData: any[] = [];
     getHourlyTaskData.forEach((hourData: any) => {
       if (hourData.tasks && hourData.tasks.length > 0) {
@@ -663,7 +728,8 @@ export default function FinOpsUserStats() {
             "Completed By": task.completedBy || "N/A",
             "Start Time": task.startTime || "N/A",
             "Completed At": task.completedAt || "N/A",
-            "Duration": formatDurationMinutes(task.durationMinutes),
+            "Duration (Minutes)": task.durationMinutes,
+            "Duration (Formatted)": formatDurationMinutes(task.durationMinutes),
             "Duration Category":
               task.durationCategory === 'green' ? '≤1 Hour' :
               task.durationCategory === 'amber' ? '1-2 Hours' :
@@ -675,8 +741,17 @@ export default function FinOpsUserStats() {
       }
     });
 
-    // Create workbook with two sheets
+    // Create workbook with multiple sheets
     const wb = XLSX.utils.book_new();
+
+    // Summary Statistics Sheet
+    const summaryWs = XLSX.utils.json_to_sheet(summaryStats);
+    summaryWs["!cols"] = [
+      { wch: 25 }, // Metric
+      { wch: 30 }, // Value
+      { wch: 12 }, // Percentage
+    ];
+    XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
 
     // Pivot Summary Sheet
     const pivotWs = XLSX.utils.json_to_sheet(pivotData);
@@ -687,8 +762,22 @@ export default function FinOpsUserStats() {
       { wch: 12 }, // 2-3 Hours
       { wch: 12 }, // >3 Hours
       { wch: 10 }, // Total
+      { wch: 12 }, // On-Time %
     ];
-    XLSX.utils.book_append_sheet(wb, pivotWs, "Summary Pivot");
+    XLSX.utils.book_append_sheet(wb, pivotWs, "Hourly Pivot");
+
+    // Client-wise Breakdown Sheet
+    const clientWs = XLSX.utils.json_to_sheet(clientBreakdownData);
+    clientWs["!cols"] = [
+      { wch: 25 }, // Client Name
+      { wch: 12 }, // ≤1 Hour
+      { wch: 12 }, // 1-2 Hours
+      { wch: 12 }, // 2-3 Hours
+      { wch: 12 }, // >3 Hours
+      { wch: 10 }, // Total
+      { wch: 12 }, // On-Time %
+    ];
+    XLSX.utils.book_append_sheet(wb, clientWs, "Client Breakdown");
 
     // Detailed Data Sheet
     const detailedWs = XLSX.utils.json_to_sheet(detailedData);
@@ -700,13 +789,15 @@ export default function FinOpsUserStats() {
       { wch: 20 }, // Completed By
       { wch: 12 }, // Start Time
       { wch: 20 }, // Completed At
-      { wch: 12 }, // Duration
+      { wch: 15 }, // Duration (Minutes)
+      { wch: 15 }, // Duration (Formatted)
       { wch: 15 }, // Duration Category
       { wch: 12 }, // Status
     ];
-    XLSX.utils.book_append_sheet(wb, detailedWs, "Detailed Data");
+    XLSX.utils.book_append_sheet(wb, detailedWs, "Task Details");
 
-    const filename = `hourly-task-duration-${new Date().toISOString().split('T')[0]}.xlsx`;
+    const dateRange = fromDate === toDate ? fromDate : `${fromDate}_to_${toDate}`;
+    const filename = `hourly-task-duration-${dateRange}-${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(wb, filename);
   };
 
@@ -875,20 +966,54 @@ export default function FinOpsUserStats() {
         {/* Hourly Task Status Timeline Chart */}
         <Card className="border border-gray-200 shadow-sm">
           <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
-                <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
+                  <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
+                </div>
+                <button
+                  onClick={exportHourlyTaskDurationToExcel}
+                  disabled={!getHourlyTaskData.some(d => d.total > 0)}
+                  className="ml-4 flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                  title="Export hourly task data to Excel"
+                >
+                  <Download size={16} />
+                  Export
+                </button>
               </div>
-              <button
-                onClick={exportHourlyTaskDurationToExcel}
-                disabled={!getHourlyTaskData.some(d => d.total > 0)}
-                className="ml-4 flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                title="Export hourly task data to Excel"
-              >
-                <Download size={16} />
-                Export
-              </button>
+
+              {/* Date Picker Controls */}
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <span className="text-xs font-semibold text-gray-700">Select Date Range:</span>
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1">
+                  <div className="flex-1 min-w-[150px]">
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">From Date</label>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[150px]">
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">To Date</label>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500 sm:mt-6">
+                    {fromDate && toDate && fromDate === toDate ? (
+                      <span className="font-semibold text-green-600">Selected: {new Date(fromDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    ) : fromDate && toDate ? (
+                      <span className="font-semibold text-green-600">Selected: {new Date(fromDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(toDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-6">

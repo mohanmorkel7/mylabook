@@ -1233,12 +1233,14 @@ function ActivityTab({
     (r: any) => r.category === category,
   );
 
-  // Today view: only show activities that are actually due today,
-  // and if the status was last recorded on a PREVIOUS day (midnight cron may have missed),
+  // Today view:
+  // - For admins (canEditAll): show ALL activities regardless of scheduled start date
+  // - For regular users: only show activities actually due today
+  // If the status was last recorded on a PREVIOUS day (midnight cron may have missed),
   // treat it as "pending" so stale statuses never carry over to the next day.
   const activities = isToday
     ? activitiesBase
-        .filter((a) => isActivityDueOnDate(a, todayStr))
+        .filter((a) => canEditAll || isActivityDueOnDate(a, todayStr))
         .map((a) => {
           const updatedIST = a.updated_at
             ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })

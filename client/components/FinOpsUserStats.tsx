@@ -343,61 +343,85 @@ export default function FinOpsUserStats() {
 
     let processedCount = 0;
     let skippedCount = 0;
+    const skipReasons: { [key: string]: number } = {};
 
     // Group tasks by start time hour and categorize by duration
     hourlySubtasksData.forEach((row: any, idx: number) => {
-      if (idx < 2) {
+      if (idx < 3) {
         console.log(`[Data Check] Row ${idx}:`, {
           start_time: row.start_time,
           started_at: row.started_at,
           completed_at: row.completed_at,
           name: row.name,
+          assigned_to: row.assigned_to,
         });
       }
 
       // Extract hour from start_time (HH:MM:SS format)
       const startHour = getHourFromTimeString(row.start_time);
       if (startHour === null) {
-        if (idx < 3) console.warn(`Row ${idx}: startHour is null, skipping`);
+        const reason = 'null_hour';
+        skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+        if (idx < 5) console.warn(`Row ${idx}: startHour is null, skipping. start_time=${row.start_time}`);
         skippedCount++;
         return;
       }
 
       // Only count completed tasks (need completed_at timestamp)
       if (!row.completed_at) {
-        if (idx < 3) console.warn(`Row ${idx}: missing completed_at, skipping`);
+        const reason = 'missing_completed_at';
+        skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+        if (idx < 5) console.warn(`Row ${idx}: missing completed_at, skipping`);
         skippedCount++;
         return;
       }
 
       // Calculate duration using start_time (HH:MM:SS) + completion date
       // This gives us realistic task duration (20 min instead of 100+ hours)
-      const completedDate = new Date(row.completed_at);
-      const completedHour = completedDate.getHours();
-      const completedMinutes = completedDate.getMinutes();
-      const completedSeconds = completedDate.getSeconds();
+      try {
+        const completedDate = new Date(row.completed_at);
+        if (isNaN(completedDate.getTime())) {
+          throw new Error(`Invalid completed_at date: ${row.completed_at}`);
+        }
 
-      // Build start timestamp from start_time (HH:MM:SS) on the same day as completion
-      const [hourStr, minStr, secStr] = row.start_time.split(':');
-      const startHourNum = parseInt(hourStr, 10);
-      const startMinNum = parseInt(minStr, 10);
-      const startSecNum = parseInt(secStr, 10);
+        const completedHour = completedDate.getHours();
+        const completedMinutes = completedDate.getMinutes();
+        const completedSeconds = completedDate.getSeconds();
 
-      // Create start time on the completion date
-      const startTime = new Date(completedDate);
-      startTime.setHours(startHourNum, startMinNum, startSecNum, 0);
+        // Build start timestamp from start_time (HH:MM:SS) on the same day as completion
+        const [hourStr, minStr, secStr] = row.start_time.split(':');
+        const startHourNum = parseInt(hourStr, 10);
+        const startMinNum = parseInt(minStr, 10);
+        const startSecNum = parseInt(secStr, 10);
 
-      // Handle case where task completed after midnight (if start_time is later than completion time)
-      // This means the task started yesterday
-      if (startTime > completedDate) {
-        startTime.setDate(startTime.getDate() - 1);
-      }
+        if (isNaN(startHourNum) || isNaN(startMinNum) || isNaN(startSecNum)) {
+          throw new Error(`Invalid start_time format: ${row.start_time}`);
+        }
 
-      const startTimeMs = startTime.getTime();
-      const endTimeMs = completedDate.getTime();
+        // Create start time on the completion date
+        const startTime = new Date(completedDate);
+        startTime.setHours(startHourNum, startMinNum, startSecNum, 0);
 
-      if (isNaN(startTimeMs) || isNaN(endTimeMs) || startTimeMs > endTimeMs) {
-        if (idx < 3) console.warn(`Row ${idx}: invalid time calculation, skipping`);
+        // Handle case where task completed after midnight (if start_time is later than completion time)
+        // This means the task started yesterday
+        if (startTime > completedDate) {
+          startTime.setDate(startTime.getDate() - 1);
+        }
+
+        const startTimeMs = startTime.getTime();
+        const endTimeMs = completedDate.getTime();
+
+        if (isNaN(startTimeMs) || isNaN(endTimeMs) || startTimeMs > endTimeMs) {
+          const reason = 'invalid_time_calc';
+          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+          if (idx < 5) console.warn(`Row ${idx}: invalid time calculation. startTimeMs=${startTimeMs}, endTimeMs=${endTimeMs}, skipping`);
+          skippedCount++;
+          return;
+        }
+      } catch (e: any) {
+        const reason = 'time_parse_error';
+        skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+        if (idx < 5) console.error(`Row ${idx}: Time parsing error: ${e.message}`, row);
         skippedCount++;
         return;
       }
@@ -480,7 +504,10 @@ export default function FinOpsUserStats() {
 
     console.log("=== Processing complete ===");
     console.log(`Processed: ${processedCount}, Skipped: ${skippedCount}, Total: ${hourlySubtasksData.length}`);
-    console.log("Hour with data:", hourlyData.filter(d => d.total > 0));
+    console.log("Skip reasons:", skipReasons);
+    const hoursWithData = hourlyData.filter(d => d.total > 0);
+    console.log(`Hours with data: ${hoursWithData.length}/24`);
+    console.log("Hour breakdown:", hoursWithData.map(h => ({ hour: h.hour, total: h.total, tasks: h.tasks.length })));
 
     return hourlyData;
   }, [hourlySubtasksData]);

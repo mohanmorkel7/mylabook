@@ -3182,7 +3182,7 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
         st.delay_reason,
         st.delay_notes,
         ft.task_name,
-        COALESCE(ftr.assigned_to, ft.assigned_to) as assigned_to,
+        COALESCE(ftr.assigned_to, ft.assigned_to::text) as assigned_to,
         fc.company_name as client_name,
         COALESCE(ftr.completed_by, '') as completed_by
       FROM finops_subtasks st

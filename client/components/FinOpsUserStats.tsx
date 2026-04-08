@@ -378,15 +378,23 @@ export default function FinOpsUserStats() {
 
       // Calculate duration using start_time (HH:MM:SS) + completion date
       // This gives us realistic task duration (20 min instead of 100+ hours)
+      let completedDate: Date;
+      let startTimeMs: number;
+      let endTimeMs: number;
+      let durationMs: number;
+      let durationHours: number;
+      let durationMinutes: number;
+      let durationSeconds: number;
+
       try {
-        const completedDate = new Date(row.completed_at);
+        completedDate = new Date(row.completed_at);
         if (isNaN(completedDate.getTime())) {
           throw new Error(`Invalid completed_at date: ${row.completed_at}`);
         }
 
         const completedHour = completedDate.getHours();
-        const completedMinutes = completedDate.getMinutes();
-        const completedSeconds = completedDate.getSeconds();
+        const completedMinutesVal = completedDate.getMinutes();
+        const completedSecondsVal = completedDate.getSeconds();
 
         // Build start timestamp from start_time (HH:MM:SS) on the same day as completion
         const [hourStr, minStr, secStr] = row.start_time.split(':');
@@ -408,8 +416,8 @@ export default function FinOpsUserStats() {
           startTime.setDate(startTime.getDate() - 1);
         }
 
-        const startTimeMs = startTime.getTime();
-        const endTimeMs = completedDate.getTime();
+        startTimeMs = startTime.getTime();
+        endTimeMs = completedDate.getTime();
 
         if (isNaN(startTimeMs) || isNaN(endTimeMs) || startTimeMs > endTimeMs) {
           const reason = 'invalid_time_calc';
@@ -418,6 +426,11 @@ export default function FinOpsUserStats() {
           skippedCount++;
           return;
         }
+
+        durationMs = endTimeMs - startTimeMs;
+        durationHours = durationMs / (1000 * 60 * 60);
+        durationMinutes = durationMs / (1000 * 60);
+        durationSeconds = durationMs / 1000;
       } catch (e: any) {
         const reason = 'time_parse_error';
         skipReasons[reason] = (skipReasons[reason] || 0) + 1;
@@ -425,11 +438,6 @@ export default function FinOpsUserStats() {
         skippedCount++;
         return;
       }
-
-      const durationMs = endTimeMs - startTimeMs;
-      const durationHours = durationMs / (1000 * 60 * 60);
-      const durationMinutes = durationMs / (1000 * 60);
-      const durationSeconds = durationMs / 1000;
 
       // Debug: Log sample tasks to verify duration calculation
       if (idx < 5) {

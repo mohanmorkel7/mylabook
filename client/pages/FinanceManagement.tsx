@@ -1274,7 +1274,7 @@ function ActivityTab({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900">{CAT_LABEL[category] ?? category}</h2>
-          <p className="text-xs text-gray-500">{isToday ? `${filtered.length} visible ${filtered.length === 1 ? "activity" : "activities"}` : `${filteredHist.length} historical ${filteredHist.length === 1 ? "record" : "records"}`}</p>
+          <p className="text-xs text-gray-500">{filtered.length} visible {filtered.length === 1 ? "activity" : "activities"}</p>
         </div>
         <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
           <FileText className="w-4 h-4" /> Export to Excel

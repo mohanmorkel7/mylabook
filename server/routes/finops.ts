@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { pool, queryWithRetry } from "../database/connection";
 import finopsAlertService from "../services/finopsAlertService";
 import finopsScheduler from "../services/finopsScheduler";
+import { aggregateFullDay } from "../jobs/aggregateHourlyTimeline";
 
 const router = Router();
 
@@ -2977,6 +2978,239 @@ router.get("/tracker", async (req: Request, res: Response) => {
   }
 });
 
+// Get detailed tracker data for user productivity chart with date range and user filters
+router.get("/tracker/user-productivity-data", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+    const filterUser = (req.query.filter_user as string) || null;
+    const filterType = (req.query.filter_type as string) || "completed_by";
+
+    const params: any[] = [];
+    let where = "WHERE 1=1";
+
+    if (fromDate) {
+      params.push(fromDate);
+      where += ` AND ft.run_date >= $${params.length}`;
+    }
+    if (toDate) {
+      params.push(toDate);
+      where += ` AND ft.run_date <= $${params.length}`;
+    }
+
+    // Apply filter based on filter type
+    // Only filter by user if a specific user is selected (not "All Users")
+    const shouldFilterByUser = filterUser && filterUser.trim() !== "" && filterUser.trim().toLowerCase() !== "all users";
+
+    if (shouldFilterByUser) {
+      params.push(filterUser.trim());
+      if (filterType === "completed_by") {
+        where += ` AND ft.status = 'completed' AND TRIM(COALESCE(ft.completed_by, '')) = $${params.length}`;
+      } else if (filterType === "approved_by") {
+        where += ` AND TRIM(COALESCE(ft.approved_by, '')) = $${params.length}`;
+      } else if (filterType === "in_progress") {
+        where += ` AND ft.status = 'in_progress'`;
+      }
+    } else {
+      // Apply filter type without user filter (for all users)
+      if (filterType === "completed_by") {
+        where += ` AND ft.status = 'completed' AND TRIM(COALESCE(ft.completed_by, '')) != ''`;
+      } else if (filterType === "approved_by") {
+        where += ` AND TRIM(COALESCE(ft.approved_by, '')) != ''`;
+      } else if (filterType === "in_progress") {
+        where += ` AND ft.status = 'in_progress'`;
+      }
+    }
+
+    const query = `
+      SELECT
+        ft.id,
+        ft.run_date,
+        ft.period,
+        ft.task_id,
+        ft.task_name,
+        ft.subtask_id,
+        ft.subtask_name,
+        ft.status,
+        ft.started_at,
+        ft.completed_at,
+        COALESCE(ft.completed_by, '') as completed_by,
+        COALESCE(ft.assigned_to, '') as assigned_to,
+        COALESCE(ft.reporting_managers, '') as reporting_managers,
+        COALESCE(ft.escalation_managers, '') as escalation_managers,
+        COALESCE(ft.approved_by, '') as approved_by,
+        ft.approved_at,
+        ft.delay_reason,
+        ft.delay_notes,
+        ft.description,
+        ft.sla_hours,
+        ft.sla_minutes,
+        ft.order_position,
+        ft.created_at,
+        ft.updated_at,
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name
+      FROM finops_tracker ft
+      LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
+      LEFT JOIN finops_clients fc ON fts.client_id = fc.id
+      ${where}
+      ORDER BY ft.run_date DESC, ft.task_id ASC, ft.subtask_id ASC
+    `;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching user productivity data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch user productivity data", message: e.message });
+  }
+});
+
+// Get all tracker data (all statuses) for comprehensive task listing
+router.get("/tracker/all", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+
+    const params: any[] = [];
+    let where = "WHERE 1=1";
+
+    if (fromDate) {
+      params.push(fromDate);
+      where += ` AND ft.run_date >= $${params.length}`;
+    }
+    if (toDate) {
+      params.push(toDate);
+      where += ` AND ft.run_date <= $${params.length}`;
+    }
+
+    const query = `
+      SELECT
+        ft.id,
+        ft.run_date,
+        ft.period,
+        ft.task_id,
+        ft.task_name,
+        ft.subtask_id,
+        ft.subtask_name,
+        ft.status,
+        ft.started_at,
+        ft.completed_at,
+        ft.scheduled_time,
+        ft.subtask_scheduled_date,
+        ft.description,
+        ft.sla_hours,
+        ft.sla_minutes,
+        ft.order_position,
+        ft.delay_reason,
+        ft.delay_notes,
+        ft.assigned_to,
+        ft.reporting_managers,
+        ft.escalation_managers,
+        ft.completed_by,
+        ft.created_at,
+        ft.updated_at,
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name
+      FROM finops_tracker ft
+      LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
+      LEFT JOIN finops_clients fc ON fts.client_id = fc.id
+      ${where}
+      ORDER BY ft.run_date DESC, ft.task_id ASC, ft.subtask_id ASC, ft.status ASC
+    `;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching all tracker data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch all tracker data", message: e.message });
+  }
+});
+
+// Get hourly task data from finops_subtasks (for hourly status chart)
+// Filters by completion date (when tasks were actually completed)
+router.get("/subtasks/hourly", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+
+    console.log("Subtasks/hourly request - fromDate:", fromDate, "toDate:", toDate);
+
+    const params: any[] = [];
+    let whereClause = "";
+
+    // Build WHERE clause filtering by COMPLETION date
+    // We want tasks that were completed on the specified date
+    // Note: Some tasks may have long durations if they started on earlier dates
+    const completionDateExpr = "DATE(st.completed_at)";
+
+    const whereParts: string[] = [];
+    if (fromDate) {
+      params.push(fromDate);
+      whereParts.push(`${completionDateExpr} >= $${params.length}`);
+    }
+    if (toDate) {
+      params.push(toDate);
+      whereParts.push(`${completionDateExpr} <= $${params.length}`);
+    }
+
+    // Also filter to only include tasks with both started_at and completed_at
+    // to ensure we have valid duration data
+    whereParts.push("st.started_at IS NOT NULL");
+    whereParts.push("st.completed_at IS NOT NULL");
+
+    if (whereParts.length > 0) {
+      whereClause = "WHERE " + whereParts.join(" AND ");
+    }
+
+    // Query finops_subtasks directly to get hourly task data with actual status
+    const query = `
+      SELECT
+        st.id,
+        st.task_id,
+        st.name,
+        st.start_time,
+        st.scheduled_date,
+        st.status,
+        st.started_at,
+        st.completed_at,
+        st.updated_at,
+        st.order_position,
+        st.sla_hours,
+        st.sla_minutes,
+        st.delay_reason,
+        st.delay_notes,
+        ft.task_name,
+        ft.assigned_to,
+        fc.company_name as client_name,
+        ftr.completed_by
+      FROM finops_subtasks st
+      LEFT JOIN finops_tasks ft ON st.task_id = ft.id
+      LEFT JOIN finops_clients fc ON ft.client_id = fc.id
+      LEFT JOIN finops_tracker ftr ON st.id = ftr.subtask_id AND DATE(ftr.run_date) = DATE(st.completed_at)
+      ${whereClause}
+      ORDER BY st.completed_at DESC, st.task_id ASC, st.order_position ASC
+    `;
+
+    console.log("Subtasks/hourly query:", query);
+    console.log("Subtasks/hourly params:", params);
+
+    const result = await pool.query(query, params);
+    console.log("Subtasks/hourly result count:", result.rows.length);
+    if (result.rows.length > 0) {
+      console.log("Sample row:", result.rows[0]);
+    }
+
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching hourly subtask data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch hourly subtask data", message: e.message });
+  }
+});
+
 // Get enhanced task summary with alert information
 router.get("/tasks/:id/summary", async (req: Request, res: Response) => {
   try {
@@ -4465,6 +4699,335 @@ router.get("/metrics", async (req: Request, res: Response) => {
   }
 });
 
+// Get hourly task status timeline
+router.get("/hourly-timeline", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    const period = String(req.query.period || "daily").toLowerCase();
+
+    const now = new Date();
+    // IST is UTC+5:30, so add 5.5 hours to UTC time
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffsetMs);
+
+    // Get the correct IST date in YYYY-MM-DD format
+    const istYear = istNow.getUTCFullYear();
+    const istMonth = String(istNow.getUTCMonth() + 1).padStart(2, "0");
+    const istDay = String(istNow.getUTCDate()).padStart(2, "0");
+    const endDate = `${istYear}-${istMonth}-${istDay}`;
+
+    let startDate: string;
+    if (period === "daily") {
+      startDate = endDate;
+    } else if (period === "weekly") {
+      const start = new Date(istNow.getTime() - 6 * 24 * 60 * 60 * 1000);
+      const startYear = start.getUTCFullYear();
+      const startMonth = String(start.getUTCMonth() + 1).padStart(2, "0");
+      const startDay = String(start.getUTCDate()).padStart(2, "0");
+      startDate = `${startYear}-${startMonth}-${startDay}`;
+    } else {
+      // First day of current IST month
+      startDate = `${istYear}-${istMonth}-01`;
+    }
+
+    if (!(await isDatabaseAvailable())) {
+      // Return mock hourly timeline for daily view
+      const mockData = [];
+      for (let hour = 0; hour < 24; hour++) {
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        mockData.push({
+          hour: `${displayHour}:00 ${ampm}`,
+          timeValue: hour,
+          pending: Math.floor(Math.random() * 10),
+          inprogress: Math.floor(Math.random() * 8),
+          completed: Math.floor(Math.random() * 12),
+          overdue: Math.floor(Math.random() * 3),
+          delayed: Math.floor(Math.random() * 2),
+        });
+      }
+      return res.json({
+        period,
+        start_date: startDate,
+        end_date: endDate,
+        data: mockData,
+      });
+    }
+
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // For daily view: aggregate by hour of day
+    // For weekly/monthly: aggregate by day
+    let timelineData: any[] = [];
+
+    if (period === "daily") {
+      // Hourly breakdown for a single day
+      // Use created_at to show when tasks were created/entered the system in each hour
+      const hourlyRes = await q(
+        `WITH hours AS (
+          SELECT generate_series(0, 23) AS hour
+        )
+        SELECT h.hour,
+               COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int AS pending,
+               COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress,
+               COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int AS completed,
+               COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
+               COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
+        FROM hours h
+        LEFT JOIN finops_tracker ft ON
+          ft.created_at::date = $1::date
+          AND EXTRACT(HOUR FROM ft.created_at::timestamp) = h.hour
+        GROUP BY h.hour
+        ORDER BY h.hour`,
+        [startDate],
+      );
+
+      timelineData = hourlyRes.rows.map((r: any) => {
+        const hour = Number(r.hour);
+        const period = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return {
+          hour: `${displayHour}:00 ${period}`,
+          timeValue: hour, // Keep numeric value for sorting
+          pending: Number(r.pending || 0),
+          inprogress: Number(r.inprogress || 0),
+          completed: Number(r.completed || 0),
+          overdue: Number(r.overdue || 0),
+          delayed: Number(r.delayed || 0),
+        };
+      });
+    } else {
+      // Daily breakdown for weekly/monthly
+      // Use created_at to show when tasks were created/entered the system on each day
+      const dailyRes = await q(
+        `WITH daterange AS (
+          SELECT generate_series($1::date, $2::date, '1 day'::interval)::date AS run_date
+        )
+        SELECT d.run_date,
+               COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int AS pending,
+               COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int AS inprogress,
+               COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int AS completed,
+               COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int AS overdue,
+               COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int AS delayed
+        FROM daterange d
+        LEFT JOIN finops_tracker ft ON ft.created_at::date = d.run_date
+        GROUP BY d.run_date
+        ORDER BY d.run_date`,
+        [startDate, endDate],
+      );
+
+      timelineData = dailyRes.rows.map((r: any) => ({
+        timeLabel: new Date(r.run_date).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        pending: Number(r.pending || 0),
+        inprogress: Number(r.inprogress || 0),
+        completed: Number(r.completed || 0),
+        overdue: Number(r.overdue || 0),
+        delayed: Number(r.delayed || 0),
+      }));
+    }
+
+    res.json({
+      period,
+      start_date: startDate,
+      end_date: endDate,
+      data: timelineData,
+    });
+  } catch (error: any) {
+    console.error("/finops/hourly-timeline error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get stored hourly timeline data by date
+router.get("/hourly-timeline-stored", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    // Get date from query params, default to today in IST
+    let queryDate = String(req.query.date || "").trim();
+
+    if (!queryDate) {
+      // Get today's date in IST
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const istNow = new Date(new Date().getTime() + istOffsetMs);
+      const istYear = istNow.getUTCFullYear();
+      const istMonth = String(istNow.getUTCMonth() + 1).padStart(2, "0");
+      const istDay = String(istNow.getUTCDate()).padStart(2, "0");
+      queryDate = `${istYear}-${istMonth}-${istDay}`;
+    }
+
+    if (!(await isDatabaseAvailable())) {
+      // Return mock data for today if database unavailable
+      const mockData = [];
+      for (let hour = 0; hour < 24; hour++) {
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        mockData.push({
+          date: queryDate,
+          hour,
+          hour_label: `${displayHour}:00 ${ampm}`,
+          pending_count: Math.floor(Math.random() * 5),
+          inprogress_count: Math.floor(Math.random() * 3),
+          completed_count: Math.floor(Math.random() * 8),
+          overdue_count: 0,
+          delayed_count: 0,
+          total_count: 0,
+        });
+      }
+      return res.json({
+        date: queryDate,
+        data: mockData,
+      });
+    }
+
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // Get today's date in IST
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(new Date().getTime() + istOffsetMs);
+    const todayIST = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth() + 1).padStart(2, "0")}-${String(istNow.getUTCDate()).padStart(2, "0")}`;
+    const isToday = queryDate === todayIST;
+
+    let rows: any[] = [];
+
+    if (isToday) {
+      // For today: CUMULATIVE SNAPSHOT - real-time from finops_tracker (daily tasks only)
+      // Rules:
+      //  - Only period = 'daily' tasks (exclude weekly/monthly)
+      //  - Hours < current IST hour → actual cumulative snapshot counts
+      //  - Hours >= current IST hour → all zeros (upcoming, no data yet)
+      console.log(`[hourly-timeline-stored] Real-time cumulative snapshot for today (${queryDate})`);
+      const liveResult = await q(
+        `WITH hours AS (
+          SELECT generate_series(0, 23) AS hour
+        ),
+        current_ist_hour AS (
+          SELECT EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Asia/Kolkata')::int AS cur_hour
+        ),
+        hourly_snapshot AS (
+          SELECT
+            h.hour,
+            CASE
+              WHEN (ft.updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') >
+                   ($1::date + (h.hour * INTERVAL '1 hour') + INTERVAL '59 minutes 59 seconds')
+              THEN 'pending'
+              ELSE ft.status
+            END AS status_at_hour
+          FROM hours h
+          CROSS JOIN finops_tracker ft
+          WHERE ft.run_date = $1::date
+            AND ft.period = 'daily'
+        ),
+        aggregated AS (
+          SELECT
+            hour,
+            COUNT(CASE WHEN status_at_hour = 'pending'     THEN 1 END)::int AS pending_count,
+            COUNT(CASE WHEN status_at_hour = 'in_progress' THEN 1 END)::int AS inprogress_count,
+            COUNT(CASE WHEN status_at_hour = 'completed'   THEN 1 END)::int AS completed_count,
+            COUNT(CASE WHEN status_at_hour = 'delayed'     THEN 1 END)::int AS delayed_count,
+            COUNT(CASE WHEN status_at_hour = 'overdue'     THEN 1 END)::int AS overdue_count,
+            COUNT(*)::int AS total_count
+          FROM hourly_snapshot
+          GROUP BY hour
+        )
+        SELECT
+          a.hour,
+          CASE
+            WHEN a.hour = 0  THEN '12:00 AM'
+            WHEN a.hour < 12 THEN a.hour::text || ':00 AM'
+            WHEN a.hour = 12 THEN '12:00 PM'
+            ELSE (a.hour - 12)::text || ':00 PM'
+          END AS hour_label,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.pending_count    END AS pending_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.inprogress_count END AS inprogress_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.completed_count  END AS completed_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.delayed_count    END AS delayed_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.overdue_count    END AS overdue_count,
+          CASE WHEN a.hour > c.cur_hour THEN 0 ELSE a.total_count      END AS total_count
+        FROM aggregated a
+        CROSS JOIN current_ist_hour c
+        ORDER BY a.hour ASC`,
+        [queryDate]
+      );
+      rows = liveResult.rows;
+    } else {
+      // For past dates: use stored finops_hourly_timeline table
+      console.log(`[hourly-timeline-stored] Stored query for past date (${queryDate})`);
+      const storedResult = await q(
+        `SELECT hour, hour_label, pending_count, inprogress_count,
+                completed_count, overdue_count, delayed_count, total_count
+         FROM finops_hourly_timeline
+         WHERE date = $1::date
+         ORDER BY hour ASC`,
+        [queryDate]
+      );
+      rows = storedResult.rows;
+    }
+
+    // Normalise rows to clean response format
+    let data = rows.map((row: any) => ({
+      date: queryDate,
+      hour: row.hour,
+      hour_label: (row.hour_label || '').trim(),
+      pending_count: row.pending_count || 0,
+      inprogress_count: row.inprogress_count || 0,
+      completed_count: row.completed_count || 0,
+      overdue_count: row.overdue_count || 0,
+      delayed_count: row.delayed_count || 0,
+      total_count: row.total_count || 0,
+    }));
+
+    if (data.length === 0) {
+      data = [];
+      for (let hour = 0; hour < 24; hour++) {
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        data.push({
+          date: queryDate,
+          hour,
+          hour_label: `${displayHour}:00 ${ampm}`,
+          pending_count: 0,
+          inprogress_count: 0,
+          completed_count: 0,
+          overdue_count: 0,
+          delayed_count: 0,
+          total_count: 0,
+        });
+      }
+    }
+
+    res.json({
+      date: queryDate,
+      data,
+    });
+  } catch (error: any) {
+    console.error("/finops/hourly-timeline-stored error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all external alert next_call timestamps
 router.get("/next-calls", async (req: Request, res: Response) => {
   try {
@@ -4496,6 +5059,174 @@ router.get("/next-calls", async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("Error fetching next calls:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual endpoint to trigger hourly timeline aggregation (for testing/backfilling)
+router.post("/aggregate-hourly-timeline", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-User-Id",
+    );
+
+    const { date } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ error: "Date parameter is required (YYYY-MM-DD format)" });
+    }
+
+    console.log(`[POST /aggregate-hourly-timeline] Triggering aggregation for ${date}`);
+
+    const result = await aggregateFullDay(date);
+
+    res.json({
+      success: true,
+      message: `Successfully aggregated hourly timeline for ${date}`,
+      ...result,
+    });
+  } catch (error: any) {
+    console.error("/finops/aggregate-hourly-timeline error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Task Timeframe Hourly - line chart data showing active tasks per hour
+router.get("/task-timeframe-hourly", async (req: Request, res: Response) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id");
+
+    let queryDate = String(req.query.date || "").trim();
+    if (!queryDate) {
+      const istOffsetMs = 5.5 * 60 * 60 * 1000;
+      const istNow = new Date(new Date().getTime() + istOffsetMs);
+      queryDate = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth() + 1).padStart(2, "0")}-${String(istNow.getUTCDate()).padStart(2, "0")}`;
+    }
+
+    if (!(await isDatabaseAvailable())) {
+      return res.json({ date: queryDate, data: [] });
+    }
+
+    const q = (sql: string, params: any[] = []) =>
+      queryWithRetry(() => pool.query(sql, params), 2, 500);
+
+    // For each hour H, find tasks that are "active":
+    //   scheduled_time hour <= H  AND  (completed_at hour >= H  OR  completed_at IS NULL)
+    // completed_at is stored in IST local time; scheduled_time is IST time string
+    const result = await q(
+      `WITH hours AS (
+        SELECT generate_series(0, 23) AS hour
+      ),
+      tasks AS (
+        SELECT
+          ft.id,
+          ft.task_id,
+          ft.task_name,
+          ft.subtask_id,
+          ft.subtask_name,
+          ft.scheduled_time,
+          ft.completed_at,
+          ft.started_at,
+          ft.overdue_at,
+          ft.delayed_at,
+          ft.delay_reason,
+          ft.delay_notes,
+          ft.completed_by,
+          ft.assigned_to,
+          ft.status,
+          COALESCE(tk.client_name, ft.task_name) AS client_name,
+          EXTRACT(HOUR FROM ft.scheduled_time::time)::int             AS sched_hour,
+          EXTRACT(HOUR FROM ft.completed_at::timestamp)::int          AS compl_hour
+        FROM finops_tracker ft
+        LEFT JOIN finops_tasks tk ON tk.id = ft.task_id
+        WHERE ft.run_date = $1::date
+          AND ft.period   = 'daily'
+          AND ft.scheduled_time IS NOT NULL
+      ),
+      active_per_hour AS (
+        SELECT
+          h.hour,
+          t.task_id,
+          t.task_name,
+          t.subtask_id,
+          t.subtask_name,
+          t.scheduled_time::text   AS scheduled_time,
+          t.completed_at::text     AS completed_at,
+          t.started_at::text       AS started_at,
+          t.overdue_at::text       AS overdue_at,
+          t.delayed_at::text       AS delayed_at,
+          t.delay_reason,
+          t.delay_notes,
+          t.completed_by,
+          t.assigned_to,
+          t.client_name,
+          t.status,
+          t.sched_hour,
+          t.compl_hour
+        FROM hours h
+        JOIN tasks t
+          ON t.sched_hour <= h.hour
+         AND (t.compl_hour IS NULL OR t.compl_hour >= h.hour)
+      )
+      SELECT
+        h.hour,
+        CASE
+          WHEN h.hour = 0  THEN '12:00 AM'
+          WHEN h.hour < 12 THEN h.hour::text || ':00 AM'
+          WHEN h.hour = 12 THEN '12:00 PM'
+          ELSE (h.hour - 12)::text || ':00 PM'
+        END AS hour_label,
+        COUNT(DISTINCT a.task_id)  AS active_tasks,
+        COUNT(a.subtask_id)        AS active_subtasks,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'task_id',        a.task_id,
+              'task_name',      a.task_name,
+              'subtask_id',     a.subtask_id,
+              'subtask_name',   a.subtask_name,
+              'scheduled_time', a.scheduled_time,
+              'completed_at',   a.completed_at,
+              'started_at',     a.started_at,
+              'overdue_at',     a.overdue_at,
+              'delayed_at',     a.delayed_at,
+              'delay_reason',   a.delay_reason,
+              'delay_notes',    a.delay_notes,
+              'completed_by',   a.completed_by,
+              'assigned_to',    a.assigned_to,
+              'client_name',    a.client_name,
+              'status',         a.status
+            )
+            ORDER BY a.task_id, a.subtask_id
+          ) FILTER (WHERE a.subtask_id IS NOT NULL),
+          '[]'::json
+        ) AS task_list
+      FROM hours h
+      LEFT JOIN active_per_hour a ON a.hour = h.hour
+      GROUP BY h.hour
+      ORDER BY h.hour`,
+      [queryDate]
+    );
+
+    const data = result.rows.map((row: any) => ({
+      hour: row.hour,
+      hour_label: row.hour_label,
+      active_tasks: Number(row.active_tasks) || 0,
+      active_subtasks: Number(row.active_subtasks) || 0,
+      task_list: row.task_list || [],
+    }));
+
+    res.json({ date: queryDate, data });
+  } catch (error: any) {
+    console.error("/finops/task-timeframe-hourly error:", error);
     res.status(500).json({ error: error.message });
   }
 });

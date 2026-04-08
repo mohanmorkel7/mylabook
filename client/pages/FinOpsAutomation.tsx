@@ -367,7 +367,7 @@ export default function FinOpsAutomation() {
           <TabsTrigger value="task-management">Task Management</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="activity-log">User Stats</TabsTrigger>
-          <TabsTrigger value="cumulative-data">Cumulative Data</TabsTrigger>
+          <TabsTrigger value="cumulative-data">History</TabsTrigger>
         </TabsList>
 
         {/* Task Management Tab */}
@@ -385,7 +385,7 @@ export default function FinOpsAutomation() {
           <FinOpsUserStats />
         </TabsContent>
 
-        {/* Cumulative Data Tab */}
+        {/* History Tab */}
         <TabsContent value="cumulative-data" className="space-y-6">
           <FinOpsCumulativeData />
         </TabsContent>

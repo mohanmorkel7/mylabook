@@ -857,11 +857,21 @@ router.put("/:id", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const updateData: UpdateTicketRequest = req.body;
-    const updatedBy = req.body.updated_by || 1;
+    const headerUserIdRaw = req.headers["x-user-id"];
+    const headerUserIdValue = Array.isArray(headerUserIdRaw)
+      ? headerUserIdRaw[0]
+      : headerUserIdRaw;
+    const normalizedHeaderUserId = headerUserIdValue
+      ? normalizeUserId(headerUserIdValue)
+      : undefined;
+    const updatedByFromBody =
+      typeof req.body.updated_by !== "undefined"
+        ? normalizeUserId(req.body.updated_by)
+        : undefined;
+    const userId =
+      normalizedHeaderUserId ?? updatedByFromBody ?? normalizeUserId(1);
 
     if (await isDatabaseAvailable()) {
-      const userId = (req as any).userId || updatedBy;
-
       const updated = await TicketRepository.update(id, updateData, userId);
       if (updated) {
         res.json(updated);
@@ -935,12 +945,23 @@ router.post("/:ticketId/comments", async (req: Request, res: Response) => {
   try {
     if (await isDatabaseAvailable()) {
       const ticketId = parseInt(req.params.ticketId);
-      const { content, created_by } = req.body;
+      const { content } = req.body;
+      const createdByHeader = req.headers["x-user-id"] as string;
+      const { created_by } = req.body;
+      const userId = Number.isInteger(created_by)
+        ? created_by
+        : createdByHeader
+          ? parseInt(createdByHeader)
+          : undefined;
+
+      if (!userId || Number.isNaN(userId)) {
+        return res.status(400).json({ error: "Missing or invalid user id" });
+      }
 
       const comment = await TicketRepository.addComment(
         ticketId,
+        userId,
         content,
-        created_by,
       );
       res.status(201).json(comment);
     } else {
@@ -991,30 +1012,114 @@ router.put(
   },
 );
 
+// Helper to normalize uploaded file response
+const handleTicketFileUpload = async (req: Request, res: Response) => {
+  const cleanupTempFile = () => {
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.warn("Failed to cleanup uploaded file:", cleanupError);
+      }
+    }
+  };
+
+  let attachmentInserted = false;
+
+  try {
+    const ticketId = parseInt(req.params.ticketId, 10);
+    if (Number.isNaN(ticketId)) {
+      cleanupTempFile();
+      return res.status(400).json({ error: "Invalid ticket ID" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const commentIdRaw = req.body?.comment_id;
+    const userIdRaw = req.body?.user_id;
+    const commentId =
+      commentIdRaw !== undefined
+        ? parseInt(commentIdRaw as string, 10)
+        : undefined;
+    const userId =
+      userIdRaw !== undefined ? parseInt(userIdRaw as string, 10) : undefined;
+
+    const commentIdValue =
+      typeof commentId === "number" && !Number.isNaN(commentId)
+        ? commentId
+        : null;
+    const userIdValue =
+      typeof userId === "number" && !Number.isNaN(userId) ? userId : null;
+
+    const filePath = `/uploads/tickets/${req.file.filename}`;
+    const fileInfo: any = {
+      ticket_id: ticketId,
+      file_name: req.file.filename,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      original_filename: req.file.originalname,
+      file_path: filePath,
+      path: filePath,
+      size: req.file.size,
+      file_size: req.file.size,
+      mimetype: req.file.mimetype,
+      mime_type: req.file.mimetype,
+    };
+
+    if (commentIdValue !== null) {
+      fileInfo.comment_id = commentIdValue;
+    }
+    if (userIdValue !== null) {
+      fileInfo.user_id = userIdValue;
+    }
+
+    const insertResult = await pool.query(
+      `INSERT INTO ticket_attachments
+        (ticket_id, comment_id, user_id, file_name, filename, original_filename, file_path, file_size, mime_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, uploaded_at`,
+      [
+        ticketId,
+        commentIdValue,
+        userIdValue,
+        req.file.filename,
+        req.file.filename,
+        req.file.originalname,
+        filePath,
+        req.file.size,
+        req.file.mimetype,
+      ],
+    );
+
+    attachmentInserted = true;
+    const insertedAttachment = insertResult.rows[0];
+    fileInfo.id = insertedAttachment.id;
+    fileInfo.uploaded_at = insertedAttachment.uploaded_at;
+
+    res.json(fileInfo);
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    if (!attachmentInserted) {
+      cleanupTempFile();
+    }
+    res.status(500).json({ error: "Failed to upload file" });
+  }
+};
+
 // Upload file for a ticket
 router.post(
   "/:ticketId/upload",
   upload.single("file"),
-  async (req: Request, res: Response) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
+  handleTicketFileUpload,
+);
 
-      const fileInfo = {
-        filename: req.file.filename,
-        originalName: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-        path: `/uploads/tickets/${req.file.filename}`,
-      };
-
-      res.json(fileInfo);
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      res.status(500).json({ error: "Failed to upload file" });
-    }
-  },
+// Upload attachments for a ticket (current UI expectation)
+router.post(
+  "/:ticketId/attachments",
+  upload.single("file"),
+  handleTicketFileUpload,
 );
 
 // Get assigned options

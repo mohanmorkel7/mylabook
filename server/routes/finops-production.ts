@@ -1964,25 +1964,162 @@ router.get("/next-calls", async (req: Request, res: Response) => {
   }
 });
 
+// Overall summary counts for Task Management (all tasks, no date filtering)
+router.get("/tracker/summary", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+
+    // Get overall summary across all tasks
+    const query = `
+      SELECT
+        COUNT(DISTINCT ft.task_id)::int as total_tasks,
+        COUNT(*)::int as total_subtasks,
+        COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int as completed_subtasks,
+        COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
+        COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
+        COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int as pending_subtasks,
+        COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
+        COUNT(DISTINCT t.client_id)::int as active_clients
+      FROM finops_tracker ft
+      JOIN finops_tasks t ON t.id = ft.task_id
+      WHERE t.deleted_at IS NULL
+        AND ft.period = 'daily'
+    `;
+
+    console.log("Task Management summary query running");
+    const result = await pool.query(query);
+    console.log("Task Management summary result:", result.rows[0]);
+    res.json(result.rows[0] || {
+      total_tasks: 0,
+      total_subtasks: 0,
+      completed_subtasks: 0,
+      delayed_subtasks: 0,
+      overdue_subtasks: 0,
+      pending_subtasks: 0,
+      in_progress_subtasks: 0,
+      active_clients: 0,
+    });
+  } catch (e: any) {
+    console.error("Error fetching task management summary:", e);
+    res.status(500).json({
+      error: "Failed to fetch task management summary",
+      message: e.message,
+    });
+  }
+});
+
 // Historical cumulative tracker rows (matches exact SQL requested)
 router.get("/tracker/cumulative", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
+    const { fromDate, toDate } = req.query;
+
+    let whereConditions = `
+      t.deleted_at IS NULL
+      AND ft.period = 'daily'
+    `;
+
+    // If specific date range is provided, show ALL statuses for those dates
+    // If no date range, show only non-completed statuses before today
+    if (fromDate || toDate) {
+      // For date range queries, include all statuses
+      // Convert run_date to IST timezone before comparing with date range
+      if (fromDate && typeof fromDate === "string") {
+        whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date >= '${fromDate}'::date`;
+      }
+      if (toDate && typeof toDate === "string") {
+        whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date <= '${toDate}'::date`;
+      }
+    } else {
+      // Default cumulative: only pending/overdue/open/delayed before today
+      whereConditions += ` AND ft.status IN ('pending','overdue','open','delayed')
+        AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+      `;
+    }
+
+    // Aggregated counts query - returns only metric counts per date, not raw task details
     const query = `
-      SELECT ft.*, t.client_name, t.client_id, t.assigned_to, t.reporting_managers, t.escalation_managers
+      SELECT
+        to_char((ft.run_date AT TIME ZONE 'Asia/Kolkata')::date, 'YYYY-MM-DD') as run_date,
+        COUNT(DISTINCT ft.task_id)::int as total_tasks,
+        COUNT(*)::int as total_subtasks,
+        COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int as completed_subtasks,
+        COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
+        COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
+        COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int as pending_subtasks,
+        COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
+        COUNT(DISTINCT t.client_id)::int as active_clients
       FROM finops_tracker ft
       JOIN finops_tasks t ON t.id = ft.task_id
-      WHERE t.deleted_at IS NULL
-        AND t.duration = 'daily'
-        AND ft.status IN ('pending','overdue','open','delayed')
-        AND ft.run_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+      WHERE ${whereConditions}
+      GROUP BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date
+      ORDER BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date DESC
     `;
+
+    console.log("Cumulative aggregated query:", { fromDate, toDate });
     const result = await pool.query(query);
+    console.log("Cumulative result rows count:", result.rows.length);
     res.json(result.rows);
   } catch (e: any) {
     console.error("Error fetching cumulative tracker rows:", e);
     res.status(500).json({
       error: "Failed to fetch cumulative tracker rows",
+      message: e.message,
+    });
+  }
+});
+
+// Fetch raw task data for a date range (for History tab display)
+router.get("/tracker/history-tasks", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+    const { fromDate, toDate } = req.query;
+
+    let whereConditions = `
+      t.deleted_at IS NULL
+      AND ft.period = 'daily'
+    `;
+
+    // Apply date range filters
+    if (fromDate && typeof fromDate === "string") {
+      whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date >= '${fromDate}'::date`;
+    }
+    if (toDate && typeof toDate === "string") {
+      whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date <= '${toDate}'::date`;
+    }
+
+    // Fetch raw task data with subtasks
+    const query = `
+      SELECT
+        t.id as task_id,
+        t.task_name,
+        t.client_id,
+        t.client_name,
+        t.assigned_to,
+        t.reporting_managers,
+        t.escalation_managers,
+        t.duration,
+        t.effective_from,
+        ft.id as subtask_id,
+        ft.status,
+        ft.run_date,
+        ft.started_at,
+        ft.completed_at,
+        ft.period
+      FROM finops_tasks t
+      LEFT JOIN finops_tracker ft ON t.id = ft.task_id
+      WHERE ${whereConditions}
+      ORDER BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date DESC, t.task_name, ft.id
+    `;
+
+    console.log("History tasks query:", { fromDate, toDate });
+    const result = await pool.query(query);
+    console.log("History tasks result rows count:", result.rows.length);
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching history tasks:", e);
+    res.status(500).json({
+      error: "Failed to fetch history tasks",
       message: e.message,
     });
   }

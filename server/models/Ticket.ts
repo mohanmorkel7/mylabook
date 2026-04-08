@@ -42,6 +42,8 @@ export interface Ticket {
   created_by: number;
   updated_by?: number;
   assigned_to?: number;
+  in_progress_by?: number | null;
+  closed_by?: number | null;
   related_lead_id?: number;
   related_client_id?: number;
   mail_config_id?: number | null; // For tickets created from email automation
@@ -61,6 +63,20 @@ export interface Ticket {
   creator?: { id: number; name: string; email: string };
   assignee?: { id: number; name: string; email: string };
   watchers?: number[]; // Array of user IDs watching this ticket
+  status_change_history?: Record<StatusHistoryKey, StatusHistoryEntry>;
+  in_progress_at?: string | null;
+  in_progress_by?: number | null;
+  closed_by?: number | null;
+}
+
+export type StatusHistoryKey = "in_progress" | "completed" | "closed";
+
+export interface StatusHistoryEntry {
+  status_key: StatusHistoryKey;
+  status_name: string;
+  user_id: number | null;
+  user_name: string;
+  changed_at: string;
 }
 
 export interface TicketComment {
@@ -208,6 +224,16 @@ export class TicketRepository {
       return istTimestampStr.replace(" ", "T") + "Z";
     }
   }
+
+  private static STATUS_HISTORY_TEMPLATES: {
+    key: StatusHistoryKey;
+    label: string;
+    match: RegExp;
+  }[] = [
+    { key: "in_progress", label: "In Progress", match: /in progress/i },
+    { key: "completed", label: "Completed", match: /completed/i },
+    { key: "closed", label: "Closed", match: /closed/i },
+  ];
 
   // Get all priorities
   static async getPriorities(): Promise<TicketPriority[]> {
@@ -507,6 +533,70 @@ export class TicketRepository {
   }
 
   // Get tickets with filters and pagination
+  private static async getStatusChangeHistory(
+    ticketIds: number[],
+  ): Promise<Record<number, Record<StatusHistoryKey, StatusHistoryEntry>>> {
+    if (!ticketIds || ticketIds.length === 0) return {};
+    const normalizedIds = ticketIds;
+
+    const rows = await pool.query(
+      `SELECT
+        ta.ticket_id,
+      ta.user_id,
+      ta.new_value,
+      ts.name as status_name,
+      ta.created_at,
+      u.first_name,
+      u.last_name,
+      CONCAT_WS(' ', u.first_name, u.last_name) as full_name,
+      u.email as user_email
+       FROM ticket_activities ta
+       LEFT JOIN ticket_statuses ts ON ts.id = NULLIF(ta.new_value, '')::int
+       LEFT JOIN users u ON u.id = ta.user_id
+       WHERE ta.ticket_id = ANY($1)
+         AND ta.field_name = 'status_id'
+         AND ta.new_value IS NOT NULL
+       ORDER BY ta.ticket_id, ta.created_at DESC`,
+      [normalizedIds],
+    );
+
+    const history: Record<number, Record<StatusHistoryKey, StatusHistoryEntry>> = {};
+    for (const row of rows.rows) {
+      const ticketId: number = row.ticket_id;
+      const statusName = String(row.status_name || "");
+      const template = TicketRepository.STATUS_HISTORY_TEMPLATES.find((t) =>
+        t.match.test(statusName),
+      );
+      if (!template) continue;
+
+      if (!history[ticketId]) history[ticketId] = {};
+      if (history[ticketId][template.key]) continue;
+
+      const actorNameParts = [row.first_name, row.last_name]
+        .filter(Boolean)
+        .map((v: string) => v.trim());
+      const actorName =
+        actorNameParts.length > 0
+          ? actorNameParts.join(" ")
+          : row.full_name || row.user_email || "User";
+      const createdAt = row.created_at;
+      const changedAt =
+        createdAt instanceof Date
+          ? createdAt.toISOString()
+          : String(createdAt || new Date().toISOString());
+
+      history[ticketId][template.key] = {
+        status_key: template.key,
+        status_name: statusName || template.label,
+        user_id: row.user_id ?? null,
+        user_name: actorName,
+        changed_at: changedAt,
+      };
+    }
+
+    return history;
+  }
+
   static async getAll(
     filters: TicketFilters = {},
     page: number = 1,
@@ -883,6 +973,7 @@ export class TicketRepository {
       demand: row.demand,
       created_by: row.created_by,
       assigned_to: row.assigned_to,
+      updated_by: row.updated_by,
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
       mail_config_id: row.mail_config_id || null,
@@ -1042,8 +1133,25 @@ export class TicketRepository {
       });
     }
 
+    const statusHistoryMap = await this.getStatusChangeHistory(
+      tickets.map((ticket) => ticket.id),
+    );
+    const ticketsWithHistory = tickets.map((ticket) => {
+      const history = statusHistoryMap[ticket.id] || {};
+      const inProgressEntry = history.in_progress;
+      const closedEntry = history.closed;
+
+      return {
+        ...ticket,
+        status_change_history: history,
+        in_progress_at: inProgressEntry?.changed_at ?? null,
+        in_progress_by: inProgressEntry?.user_id ?? null,
+        closed_by: closedEntry?.user_id ?? null,
+      };
+    });
+
     return {
-      tickets,
+      tickets: ticketsWithHistory,
       total,
       pages,
       status_counts,
@@ -1114,7 +1222,7 @@ export class TicketRepository {
       console.warn("Failed to fetch ticket watchers:", e);
     }
 
-    return {
+    const ticket: Ticket = {
       id: row.id,
       track_id: row.track_id,
       subject: row.subject,
@@ -1127,6 +1235,7 @@ export class TicketRepository {
       demand: row.demand,
       created_by: row.created_by,
       assigned_to: row.assigned_to,
+      updated_by: row.updated_by,
       related_lead_id: row.related_lead_id,
       related_client_id: row.related_client_id,
       mail_config_id: row.mail_config_id || null,
@@ -1234,6 +1343,17 @@ export class TicketRepository {
         : undefined,
       watchers,
     };
+
+    const statusHistoryMap = await this.getStatusChangeHistory([id]);
+    const history = statusHistoryMap[id] || {};
+
+    return {
+      ...ticket,
+      status_change_history: history,
+      in_progress_at: history.in_progress?.changed_at ?? null,
+      in_progress_by: history.in_progress?.user_id ?? null,
+      closed_by: history.closed?.user_id ?? null,
+    };
   }
 
   // Get ticket by track_id
@@ -1280,17 +1400,19 @@ export class TicketRepository {
       }
     });
 
-    if (updates.length > 0) {
-      values.push(id);
-      const updateQuery = `
-        UPDATE tickets
-        SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $${paramIndex}
-        RETURNING *
-      `;
+    // Always update to set updated_by and updated_at
+    updates.push(`updated_by = $${paramIndex++}`);
+    values.push(updatedBy);
 
-      await pool.query(updateQuery, values);
-    }
+    values.push(id);
+    const updateQuery = `
+      UPDATE tickets
+      SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+
+    await pool.query(updateQuery, values);
 
     // Handle watchers separately
     if (watchers && Array.isArray(watchers)) {
@@ -1363,17 +1485,34 @@ export class TicketRepository {
               "SELECT name, is_closed FROM ticket_statuses WHERE id = $1",
               [newValue],
             );
-            if (status.rows[0]?.is_closed) {
-              await pool.query(
-                "UPDATE tickets SET closed_at = CURRENT_TIMESTAMP WHERE id = $1",
-                [id],
-              );
+            const statusName = String(status.rows[0]?.name || "").toLowerCase();
+
+            // Update tracking fields based on new status
+            let updateQuery =
+              "UPDATE tickets SET updated_by = $1, updated_at = CURRENT_TIMESTAMP";
+            const queryParams: any[] = [updatedBy];
+            let paramIndex = 2;
+
+            // Track when ticket moved to In Progress
+            if (statusName.includes("in progress")) {
+              updateQuery += `, in_progress_at = CURRENT_TIMESTAMP, in_progress_by = $${paramIndex++}`;
+              queryParams.push(updatedBy);
             }
+
+            // Track when ticket was closed and who closed it
+            if (status.rows[0]?.is_closed) {
+              updateQuery += `, closed_at = CURRENT_TIMESTAMP, closed_by = $${paramIndex++}`;
+              queryParams.push(updatedBy);
+            }
+
+            updateQuery += ` WHERE id = $${paramIndex}`;
+            queryParams.push(id);
+
+            await pool.query(updateQuery, queryParams);
 
             // If status name indicates 'overdue', mark ever_overdue and overdue_at
             try {
-              const nm = String(status.rows[0]?.name || "").toLowerCase();
-              if (nm.includes("overdue")) {
+              if (statusName.includes("overdue")) {
                 await pool.query(
                   "UPDATE tickets SET ever_overdue = TRUE, overdue_at = COALESCE(overdue_at, NOW()) WHERE id = $1",
                   [id],

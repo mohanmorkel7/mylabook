@@ -42,16 +42,20 @@ CREATE TABLE IF NOT EXISTS tickets (
     -- User relationships
     created_by INTEGER REFERENCES users(id),
     assigned_to INTEGER REFERENCES users(id),
-    
+    updated_by INTEGER REFERENCES users(id),
+    in_progress_by INTEGER REFERENCES users(id),
+    closed_by INTEGER REFERENCES users(id),
+
     -- Lead/Client relationships (optional)
     related_lead_id INTEGER REFERENCES leads(id),
     related_client_id INTEGER REFERENCES clients(id),
-    
+
     -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP,
     closed_at TIMESTAMP,
+    in_progress_at TIMESTAMP,
     
     -- Additional metadata
     estimated_hours DECIMAL(5,2),
@@ -154,7 +158,11 @@ CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_tickets_created_by ON tickets(created_by);
+CREATE INDEX IF NOT EXISTS idx_tickets_updated_by ON tickets(updated_by);
+CREATE INDEX IF NOT EXISTS idx_tickets_in_progress_by ON tickets(in_progress_by);
+CREATE INDEX IF NOT EXISTS idx_tickets_closed_by ON tickets(closed_by);
 CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at);
+CREATE INDEX IF NOT EXISTS idx_tickets_in_progress_at ON tickets(in_progress_at);
 CREATE INDEX IF NOT EXISTS idx_ticket_comments_ticket_id ON ticket_comments(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_comments_created_at ON ticket_comments(created_at);
 CREATE INDEX IF NOT EXISTS idx_ticket_attachments_ticket_id ON ticket_attachments(ticket_id);

@@ -310,6 +310,48 @@ export async function initializeDatabase() {
           activityIpMigrationError.message,
         );
       }
+
+      // Run ticket status tracking columns migration
+      try {
+        const ticketTrackingMigrationPath = path.join(
+          __dirname,
+          "migration-add-ticket-status-tracking.sql",
+        );
+        if (fs.existsSync(ticketTrackingMigrationPath)) {
+          const ticketTrackingMigration = fs.readFileSync(
+            ticketTrackingMigrationPath,
+            "utf8",
+          );
+          await client.query(ticketTrackingMigration);
+          console.log("Ticket status tracking migration applied successfully");
+        }
+      } catch (ticketTrackingError) {
+        console.log(
+          "Ticket status tracking migration already applied or error:",
+          ticketTrackingError.message,
+        );
+      }
+
+      // Run finops hourly timeline migration
+      try {
+        const hourlyTimelineMigrationPath = path.join(
+          __dirname,
+          "migration-finops-hourly-timeline.sql",
+        );
+        if (fs.existsSync(hourlyTimelineMigrationPath)) {
+          const hourlyTimelineMigration = fs.readFileSync(
+            hourlyTimelineMigrationPath,
+            "utf8",
+          );
+          await client.query(hourlyTimelineMigration);
+          console.log("FinOps hourly timeline migration applied successfully");
+        }
+      } catch (hourlyTimelineError) {
+        console.log(
+          "FinOps hourly timeline migration already applied or error:",
+          hourlyTimelineError.message,
+        );
+      }
     } else {
       console.log("Database schema already exists");
 
@@ -908,6 +950,9 @@ export async function initializeDatabase() {
           assigned_to TEXT,
           reporting_managers TEXT,
           escalation_managers TEXT,
+          overdue_at TIMESTAMP NULL,
+          delayed_at TIMESTAMP NULL,
+          completed_by TEXT,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW(),
           UNIQUE(run_date, period, task_id, subtask_id)
@@ -929,7 +974,10 @@ export async function initializeDatabase() {
           ADD COLUMN IF NOT EXISTS auto_notify BOOLEAN DEFAULT true,
           ADD COLUMN IF NOT EXISTS assigned_to TEXT,
           ADD COLUMN IF NOT EXISTS reporting_managers TEXT,
-          ADD COLUMN IF NOT EXISTS escalation_managers TEXT;
+          ADD COLUMN IF NOT EXISTS escalation_managers TEXT,
+          ADD COLUMN IF NOT EXISTS overdue_at TIMESTAMP NULL,
+          ADD COLUMN IF NOT EXISTS delayed_at TIMESTAMP NULL,
+          ADD COLUMN IF NOT EXISTS completed_by TEXT;
       `);
 
       console.log("finops_tracker table ensured");

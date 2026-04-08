@@ -42,23 +42,19 @@ export async function runMarkOverdueTickets() {
         continue;
       }
 
-      // Skip if current status is 'In Progress' (do not auto-mark)
-      if (
-        currentStatusName.includes("in progress") ||
-        currentStatusName.includes("inprogress")
-      ) {
-        // console.log(
-        //   `[markOverdueTickets] Skipping ticket ${ticketId} because status is In Progress`,
-        // );
+      // ✅ CRITICAL: Skip ALL closed tickets - they should NEVER be marked as overdue
+      if (row.is_closed === true) {
+        console.log(
+          `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed (is_closed=true)`,
+        );
         continue;
       }
 
-      // Check if current status is closed
-      const isClosed = row.is_closed === true;
-      if (isClosed) {
-        // console.log(
-        //   `[markOverdueTickets] Skipping ticket ${ticketId} because status is closed`,
-        // );
+      // ✅ CRITICAL: ONLY mark "pending" status tickets as overdue when SLA is exceeded
+      if (currentStatusName !== "pending") {
+        console.log(
+          `[markOverdueTickets] Skipping ticket ${ticketId} because status '${currentStatusName}' is not 'pending' (only pending tickets should be marked overdue)`,
+        );
         continue;
       }
 

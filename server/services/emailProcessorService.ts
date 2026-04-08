@@ -1185,6 +1185,47 @@ export async function processEmailsForConfigs(
 /**
  * Fetch attachments from Microsoft Graph API and convert image attachments to base64 data URLs
  */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string,
+  timeoutMs: number = 30000,
+  retries: number = 2,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+    } catch (error: any) {
+      const message = error?.message || String(error);
+      const isRetryable =
+        message.includes("ECONNRESET") ||
+        message.includes("fetch failed") ||
+        message.includes("network") ||
+        error?.name === "AbortError";
+
+      if (!isRetryable || attempt === retries) {
+        throw error;
+      }
+
+      const delayMs = 500 * Math.pow(2, attempt);
+      console.warn(
+        `[${label}] Attempt ${attempt + 1} failed: ${message}. Retrying in ${delayMs}ms...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw new Error(`${label} failed after retries`);
+}
+
 async function fetchAttachmentData(
   token: string,
   emailId: string,
@@ -1205,21 +1246,17 @@ async function fetchAttachmentData(
       `[FetchAttachmentData] Fetching bytes from: ${bytesUrl.substring(0, 80)}...`,
     );
 
-    const controller = new AbortController();
-    // Increased timeout from 20s to 30s for downloading attachment bytes
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    let bytesRes;
-    try {
-      bytesRes = await fetch(bytesUrl, {
+    const bytesRes = await fetchWithRetry(
+      bytesUrl,
+      {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+      },
+      "FetchAttachmentData",
+      30000,
+      2,
+    );
 
     if (!bytesRes.ok) {
       console.warn(
@@ -1489,7 +1526,7 @@ export async function fetchEmailAttachments(
 
   try {
     // Fetch raw MIME content of the email
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages/${messageId}/$value`,
       {
         method: "GET",
@@ -1497,6 +1534,9 @@ export async function fetchEmailAttachments(
           Authorization: `Bearer ${graphToken}`,
         },
       },
+      "EmailInlineImages",
+      30000,
+      2,
     );
 
     if (!response.ok) {
@@ -1591,6 +1631,10 @@ function replaceCidReferences(
   return modified;
 }
 
+// Module-level Azure AD token cache — avoids re-acquiring token on every 30-second poll
+let _cachedAppToken: string | null = null;
+let _cachedAppTokenExpiry: number = 0; // epoch ms
+
 export async function getTodayEmails(
   since?: Date,
   mailbox?: string,
@@ -1671,8 +1715,12 @@ export async function getTodayEmails(
     return [];
   }
 
-  // Acquire app token
+  // Acquire app token — uses module-level cache to avoid hitting Azure AD on every 30s poll
   async function getAppToken(): Promise<string | null> {
+    // Return cached token if still valid (with 2-min safety buffer before expiry)
+    if (_cachedAppToken && Date.now() < _cachedAppTokenExpiry - 2 * 60 * 1000) {
+      return _cachedAppToken;
+    }
     try {
       const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
       const body = new URLSearchParams();
@@ -1714,8 +1762,12 @@ export async function getTodayEmails(
         console.error("Azure AD token response missing access_token:", data);
         return null;
       }
-      console.log("getTodayEmails: acquired Azure AD app token (masked)");
-      return data.access_token as string;
+      // Cache the token; expires_in is in seconds (default 3600)
+      const expiresIn: number = (data.expires_in as number) || 3600;
+      _cachedAppToken = data.access_token as string;
+      _cachedAppTokenExpiry = Date.now() + expiresIn * 1000;
+      console.log(`getTodayEmails: acquired Azure AD app token (masked) — cached for ${Math.floor(expiresIn / 60)} min`);
+      return _cachedAppToken;
     } catch (error) {
       console.error("Error fetching app token:", error);
       return null;
@@ -1750,7 +1802,8 @@ export async function getTodayEmails(
         }
 
         if (!res.ok) {
-          console.warn(`Graph fetch failed: ${res.status} ${res.statusText}`);
+          const errText = await res.text().catch(() => "");
+          console.warn(`Graph fetch failed: ${res.status} ${res.statusText} — ${errText.substring(0, 500)}`);
           break;
         }
 
@@ -1796,37 +1849,7 @@ export async function getTodayEmails(
     return [];
   }
 
-  // Resolve reconops mailbox variable early so diagnostics can use it
   const reconopsEmail = mailbox || "reconops@mylapay.com";
-
-  // Diagnostic: verify we can resolve the target mailbox and log its displayName (helps detect permission issues)
-  try {
-    const diagUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(reconopsEmail)}`;
-    const diagRes = await fetch(diagUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!diagRes.ok) {
-      const diagText = await diagRes
-        .text()
-        .catch(() => "<failed-to-read-body>");
-      console.warn(
-        `getTodayEmails: diagnostic user lookup failed: ${diagRes.status} ${diagRes.statusText} - ${diagText.substring(0, 1000)}`,
-      );
-    } else {
-      const diagJson = await diagRes.json().catch(() => null);
-      console.log(
-        `getTodayEmails: diagnostic user lookup succeeded for ${reconopsEmail}: displayName=${diagJson?.displayName || "(unknown)"}`,
-      );
-    }
-  } catch (diagErr) {
-    console.warn(
-      "getTodayEmails: diagnostic user lookup threw error:",
-      diagErr,
-    );
-  }
 
   // Determine start and end for filtering
   // If 'since' is provided, include any earlier messages from the start of the current IST day.
@@ -2327,11 +2350,17 @@ export async function getTodayEmails(
 
     const url = `https://graph.microsoft.com/v1.0/users/${sharedMailbox}/messages/${messageId}/attachments/${attachmentId}/$value`;
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${graphToken}`,
+    const response = await fetchWithRetry(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${graphToken}`,
+        },
       },
-    });
+      "EmailInlineImages",
+      30000,
+      2,
+    );
 
     if (!response.ok) {
       console.error(
@@ -2379,28 +2408,28 @@ export async function getTodayEmails(
   try {
     // Try 1: Direct access to shared mailbox with pagination
     console.log(
-      `getTodayEmails: attempting direct access to shared mailbox ${reconopsEmail}`,
+      `getTodayEmails: attempting direct access to shared mailbox ${reconopsEmail} (window: ${startISO} → ${endISO})`,
     );
 
     const sharedMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       reconopsEmail,
-    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
+    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$filter=${graphFilter}&$orderby=receivedDateTime desc&$top=200`;
 
     const sharedEmails = await fetchAllEmailsFromUrl(sharedMailboxUrl, token);
     console.log(
       `getTodayEmails: direct shared mailbox returned ${sharedEmails.length} total messages`,
     );
 
-    // If debugging for a specific config, log raw fetched items (first 20)
-    if (debugForConfigId === 30) {
+    // Log raw fetched items when DEBUG_EMAIL_MATCHING is enabled
+    if (process.env.DEBUG_EMAIL_MATCHING === "true" || debugForConfigId) {
       try {
         console.log(
-          `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from shared mailbox ${reconopsEmail}:`,
+          `getTodayEmails: [DEBUG config=${debugForConfigId}] shared mailbox ${reconopsEmail} returned ${sharedEmails.length} raw items:`,
         );
         for (let i = 0; i < Math.min(20, sharedEmails.length); i++) {
           const it = sharedEmails[i];
           console.log(
-            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
+            `  [RAW] idx=${i} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
           );
         }
       } catch (e) {
@@ -2497,7 +2526,7 @@ export async function getTodayEmails(
           userAzureId,
         )}/mailFolders/${encodeURIComponent(
           reconopsFolder.id,
-        )}/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
+        )}/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$filter=${graphFilter}&$orderby=receivedDateTime desc&$top=200`;
 
         const folderEmails = await fetchAllEmailsFromUrl(
           sharedFolderUrl,
@@ -2507,10 +2536,10 @@ export async function getTodayEmails(
           `getTodayEmails: shared mailbox folder returned ${folderEmails.length} total messages`,
         );
 
-        if (debugForConfigId === 30) {
+        if (process.env.DEBUG_EMAIL_MATCHING === "true" || debugForConfigId) {
           try {
             console.log(
-              `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`,
+              `getTodayEmails: [DEBUG config=${debugForConfigId}] listing up to 20 raw fetched items from folder ${reconopsFolder.displayName}:`,
             );
             for (let i = 0; i < Math.min(20, folderEmails.length); i++) {
               const it = folderEmails[i];
@@ -2565,22 +2594,22 @@ export async function getTodayEmails(
 
     const userMailboxUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
       userAzureId,
-    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$orderby=receivedDateTime desc&$top=50`;
+    )}/mailFolders/Inbox/messages?$select=id,subject,from,toRecipients,body,bodyPreview,receivedDateTime,hasAttachments,webLink&$filter=${graphFilter}&$orderby=receivedDateTime desc&$top=200`;
 
     const userEmails = await fetchAllEmailsFromUrl(userMailboxUrl, token);
     console.log(
       `getTodayEmails: user main inbox returned ${userEmails.length} total messages`,
     );
 
-    if (debugForConfigId === 30) {
+    if (process.env.DEBUG_EMAIL_MATCHING === "true" || debugForConfigId) {
       try {
         console.log(
-          `getTodayEmails: [DEBUG] listing up to 20 raw fetched items from user inbox:`,
+          `getTodayEmails: [DEBUG config=${debugForConfigId}] user inbox returned ${userEmails.length} raw items:`,
         );
         for (let i = 0; i < Math.min(20, userEmails.length); i++) {
           const it = userEmails[i];
           console.log(
-            `  [RAW] idx=${i} id=${it.id} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
+            `  [RAW] idx=${i} subject="${(it.subject || "").substring(0, 120)}" from="${(it.from?.emailAddress?.address || it.from || "").substring(0, 80)}" receivedDateTime=${it.receivedDateTime}`,
           );
         }
       } catch (e) {

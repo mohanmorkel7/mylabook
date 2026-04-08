@@ -144,6 +144,17 @@ export function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
   }
 
   if (operator === "domain") {
+    // If the configured "domain" is actually a full email address (contains @),
+    // treat it as an exact email match against the target
+    if (domain.includes("@")) {
+      const matches = target === domain || target.includes(domain);
+      if (debug)
+        console.log(
+          `[emailMatching] domain rule (full-email mode): target="${target}" configured="${domain}" => ${matches}`,
+        );
+      return matches;
+    }
+
     const match = target.match(/([a-z0-9._%+-]+)@([a-z0-9.-]+\.[a-z]{2,})/i);
     if (!match) {
       if (debug)
@@ -156,7 +167,10 @@ export function evaluateSingleRule(rule: EmailRule, email: Email): boolean {
     const configuredDomain = domain.startsWith("@")
       ? domain.substring(1)
       : domain;
-    const matches = actualDomain === configuredDomain;
+    // Support subdomain matching: opo.razorpay.com matches @razorpay.com
+    const matches =
+      actualDomain === configuredDomain ||
+      actualDomain.endsWith("." + configuredDomain);
     if (debug)
       console.log(
         `[emailMatching] domain check: actual=${actualDomain} configured=${configuredDomain} => ${matches}`,

@@ -1343,9 +1343,27 @@ export class ApiClient {
     return this.request(path);
   }
 
+  // Overall summary counts for Task Management (all tasks, no date filtering)
+  async getFinOpsTaskManagementSummary() {
+    return this.request(`/finops-production/tracker/summary`);
+  }
+
+  // Fetch raw task data for History tab (date range)
+  async getFinOpsHistoryTasks(fromDate?: string, toDate?: string) {
+    const params = new URLSearchParams();
+    if (fromDate) params.append("fromDate", fromDate);
+    if (toDate) params.append("toDate", toDate);
+    const queryString = params.toString();
+    return this.request(`/finops-production/tracker/history-tasks${queryString ? "?" + queryString : ""}`);
+  }
+
   // Exact cumulative endpoint matching requested SQL
-  async getFinOpsCumulative() {
-    return this.request(`/finops-production/tracker/cumulative`);
+  async getFinOpsCumulative(fromDate?: string, toDate?: string) {
+    const params = new URLSearchParams();
+    if (fromDate) params.append("fromDate", fromDate);
+    if (toDate) params.append("toDate", toDate);
+    const queryString = params.toString();
+    return this.request(`/finops-production/tracker/cumulative${queryString ? "?" + queryString : ""}`);
   }
 
   async getFinOpsNextCalls(alertKey?: string) {
@@ -2218,6 +2236,53 @@ export class ApiClient {
 
     const query = params.toString();
     return this.request(`/finops/metrics${query ? `?${query}` : ""}`);
+  }
+
+  async getFinOpsUserProductivityData(
+    fromDate?: string,
+    toDate?: string,
+    selectedUser?: string,
+    filterType: "completed_by" | "approved_by" | "in_progress" = "completed_by",
+  ) {
+    const params = new URLSearchParams();
+    if (fromDate) params.append("from_date", fromDate);
+    if (toDate) params.append("to_date", toDate);
+    if (selectedUser) params.append("filter_user", selectedUser);
+    params.append("filter_type", filterType);
+
+    const query = params.toString();
+    return this.request(
+      `/finops/tracker/user-productivity-data${query ? `?${query}` : ""}`,
+    );
+  }
+
+  async getHourlyTaskStatusTimeline(period?: string) {
+    const params = new URLSearchParams();
+    if (period) params.append("period", period);
+
+    const query = params.toString();
+    return this.request(
+      `/finops/hourly-timeline${query ? `?${query}` : ""}`,
+    );
+  }
+
+  async getHourlyTimelineStored(date?: string) {
+    const params = new URLSearchParams();
+    if (date) params.append("date", date);
+
+    const query = params.toString();
+    return this.request(
+      `/finops/hourly-timeline-stored${query ? `?${query}` : ""}`,
+    );
+  }
+
+  async getTaskTimeframeHourly(date?: string) {
+    const params = new URLSearchParams();
+    if (date) params.append("date", date);
+    const query = params.toString();
+    return this.request(
+      `/finops/task-timeframe-hourly${query ? `?${query}` : ""}`,
+    );
   }
 
   async getFinOpsAccounts() {

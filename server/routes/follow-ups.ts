@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { pool } from "../database/connection";
+import { pool, isDatabaseAvailable, queryWithRetry } from "../database/connection";
 import { normalizeUserId } from "../services/mockData";
 
 const router = Router();
@@ -44,24 +44,6 @@ function addISTFields(row: any) {
     (row as any)[`${f}_ist_iso`] = toISTISO(v);
   }
   return row;
-}
-
-// Enhanced helper function with better error handling and timeout
-async function isDatabaseAvailable() {
-  try {
-    // Add a 5-second timeout to prevent long waits
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Database query timeout")), 5000),
-    );
-
-    const queryPromise = pool.query("SELECT 1");
-
-    await Promise.race([queryPromise, timeoutPromise]);
-    return true;
-  } catch (error) {
-    console.log("Database not available:", error.message);
-    return false;
-  }
 }
 
 // Create a new follow-up
@@ -761,7 +743,11 @@ router.get("/", async (req: Request, res: Response) => {
       // console.log("📊 Follow-ups query:", query);
       // console.log("��� Query params:", queryParams);
 
-      const result = await pool.query(query, queryParams);
+      const result = await queryWithRetry(
+        () => pool.query(query, queryParams),
+        2,
+        500,
+      );
 
       console.log(`📊 Found ${result.rows.length} follow-ups`);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useLayoutEffect } from "react";
+import React, { useEffect, useState, useLayoutEffect, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import apiClient from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -195,6 +195,13 @@ export default function TicketDetailPage() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const clearFileSelection = () => {
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editData, setEditData] = useState({
     status_id: null,
@@ -270,7 +277,12 @@ export default function TicketDetailPage() {
         watcher_user_ids: t.watchers || [],
       });
       const c = await apiClient.getTicketComments(parseInt(id));
-      setComments(Array.isArray(c) ? c : []);
+      const normalizedComments = Array.isArray(c)
+        ? c
+        : Array.isArray((c as any)?.comments)
+          ? (c as any).comments
+          : [];
+      setComments(normalizedComments);
     } catch (e) {
       console.error(e);
     }
@@ -369,10 +381,15 @@ export default function TicketDetailPage() {
   const postComment = async () => {
     if (!id || !commentText) return;
     try {
+      const storedUser = JSON.parse(localStorage.getItem("banani_user") || "{}") || {};
+      const userId = Number(storedUser.id);
+      if (Number.isNaN(userId)) {
+        throw new Error("Missing user id");
+      }
       const payload = {
         content: commentText,
         is_internal: false,
-        user_id: JSON.parse(localStorage.getItem("banani_user") || "{}").id,
+        created_by: userId,
       };
       const res = await apiClient.addTicketComment(parseInt(id), payload);
       setComments((s) => [...s, res]);
@@ -382,11 +399,11 @@ export default function TicketDetailPage() {
           parseInt(id),
           file,
           res.id,
-          payload.user_id,
+          userId.toString(),
         );
-        setFile(null);
-        load();
+        await load();
       }
+      clearFileSelection();
     } catch (e) {
       console.error(e);
       alert("Failed to post comment");
@@ -674,6 +691,7 @@ export default function TicketDetailPage() {
                   />
                   <div className="flex items-center gap-3 mt-2">
                     <input
+                      ref={fileInputRef}
                       type="file"
                       onChange={(e) =>
                         setFile(e.target.files ? e.target.files[0] : null)

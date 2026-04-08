@@ -74,64 +74,17 @@ export default function FinOpsCumulativeData() {
     }
   };
 
-  // Helper: Generate all dates in range
-  const generateDateRange = (start: string, end: string): string[] => {
-    const dates: string[] = [];
-    const [startYear, startMonth, startDay] = start.split('-').map(Number);
-    const [endYear, endMonth, endDay] = end.split('-').map(Number);
-
-    const current = new Date(startYear, startMonth - 1, startDay);
-    const endDate = new Date(endYear, endMonth - 1, endDay);
-
-    while (current <= endDate) {
-      const year = current.getFullYear();
-      const month = String(current.getMonth() + 1).padStart(2, '0');
-      const day = String(current.getDate()).padStart(2, '0');
-      dates.push(`${year}-${month}-${day}`);
-      current.setDate(current.getDate() + 1);
-    }
-
-    return dates.sort((a, b) => b.localeCompare(a));
-  };
-
   // Process cumulative aggregated data
   const byDate = useMemo(() => {
     if (!cumulativeData || cumulativeData.length === 0) {
       return [];
     }
 
-    // Create map of data by date
-    const dataMap: Record<string, any> = {};
-    (cumulativeData || []).forEach((row: any) => {
-      const dateKey = row.run_date;
-      dataMap[dateKey] = row;
-    });
-
-    // If date range provided, fill in all dates even if no data
-    let datesToDisplay: string[] = [];
-    if (fromDate && toDate) {
-      datesToDisplay = generateDateRange(fromDate, toDate);
-    } else {
-      // Just use the dates from the data
-      datesToDisplay = Object.keys(dataMap).sort((a, b) => b.localeCompare(a));
-    }
-
-    // Map to output format
-    return datesToDisplay.map(date => [
-      date,
-      dataMap[date] || {
-        run_date: date,
-        total_tasks: 0,
-        total_subtasks: 0,
-        completed_subtasks: 0,
-        delayed_subtasks: 0,
-        overdue_subtasks: 0,
-        pending_subtasks: 0,
-        in_progress_subtasks: 0,
-        active_clients: 0,
-      },
-    ]);
-  }, [cumulativeData, fromDate, toDate]);
+    // Use dates directly from API response (they are already in correct IST dates)
+    return (cumulativeData || [])
+      .map((row: any) => [row.run_date, row])
+      .sort((a, b) => b[0].localeCompare(a[0]));
+  }, [cumulativeData]);
 
   const cumulativeMetrics = useMemo(() => {
     let totalTasks = 0;

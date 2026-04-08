@@ -3110,9 +3110,12 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
         ft.completed_by,
         ft.created_at,
         ft.updated_at,
-        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name,
+        st.approved_by,
+        st.approved_at
       FROM finops_tracker ft
       LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
+      LEFT JOIN finops_subtasks st ON ft.subtask_id = st.id
       LEFT JOIN finops_clients fc ON fts.client_id = fc.id
       ${where}
       ORDER BY ft.run_date DESC, ft.task_id ASC, ft.subtask_id ASC, ft.status ASC

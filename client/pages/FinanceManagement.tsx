@@ -1229,11 +1229,6 @@ function ActivityTab({
       return a;
     });
 
-  // For history view: filter snapshot records by category
-  const histRecords: any[] = (histData?.history ?? []).filter(
-    (r: any) => r.category === category,
-  );
-
   const counts = Object.fromEntries(STATUSES.map((s) => [s.value, 0]));
   activities.forEach((a) => { if (a.status in counts) counts[a.status]++; });
 

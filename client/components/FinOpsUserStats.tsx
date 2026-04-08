@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, Building2, CheckCircle, Download } from "lucide-react";
 import * as Recharts from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
-import HourlyTaskStatusTimeline from "@/components/HourlyTaskStatusTimeline";
 import TaskTimeframeChart from "@/components/TaskTimeframeChart";
 import * as XLSX from "xlsx";
 
@@ -873,6 +872,232 @@ export default function FinOpsUserStats() {
           </CardContent>
         </Card>
 
+        {/* Hourly Task Status Timeline Chart */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
+                <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
+              </div>
+              <button
+                onClick={exportHourlyTaskDurationToExcel}
+                disabled={!getHourlyTaskData.some(d => d.total > 0)}
+                className="ml-4 flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                title="Export hourly task data to Excel"
+              >
+                <Download size={16} />
+                Export
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {isLoadingAllTasks ? (
+              <div className="text-center py-12 text-gray-500">Loading task data...</div>
+            ) : getHourlyTaskData.some(d => d.total > 0) ? (
+              <div className="w-full overflow-auto">
+                <div style={{ minHeight: 400, width: "100%" }}>
+                  <ChartContainer
+                    id="hourly-status"
+                    config={{
+                      "pending": { color: "#FBBF24", label: "Pending" },
+                      "in_progress": { color: "#60A5FA", label: "In Progress" },
+                      "completed": { color: "#10B981", label: "Completed" },
+                      "overdue": { color: "#EF4444", label: "Overdue" },
+                      "delayed": { color: "#F97316", label: "Delayed" },
+                    }}
+                  >
+                    <Recharts.ResponsiveContainer width="100%" height={400}>
+                      <Recharts.BarChart
+                        data={getHourlyTaskData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                      >
+                        <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <Recharts.XAxis
+                          dataKey="hour"
+                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                          label={{ value: "Hour (IST) - Click to Lock/Unlock Tooltip", position: "insideBottomRight", offset: -10 }}
+                        />
+                        <Recharts.YAxis
+                          type="number"
+                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                          label={{ value: "Task Count", angle: -90, position: "insideLeft", offset: 5 }}
+                        />
+                        <Recharts.Tooltip
+                          content={({ active, payload }) => {
+                            // When locked, ALWAYS show locked hour and NEVER update on hover
+                            let dataToShow = null;
+                            if (lockedHour !== null) {
+                              dataToShow = getHourlyTaskData.find((d: any) => d.hour === lockedHour);
+                              // Don't rely on active/payload when locked - always show locked data
+                            } else if (active && payload && payload.length > 0) {
+                              // Only when NOT locked, show hovered data
+                              dataToShow = payload[0].payload;
+                            } else {
+                              // No data to show
+                              return null;
+                            }
+
+                            if (!dataToShow) return null;
+
+                            const hour = dataToShow.hour;
+                            const total = dataToShow.total;
+                            const tasks = dataToShow.tasks || [];
+                            const nextHour = String((parseInt(hour) + 1) % 24).padStart(2, "0");
+
+                            return (
+                              <div
+                                className={`rounded-lg shadow-2xl z-50 cursor-default pointer-events-auto overflow-hidden ${
+                                  lockedHour === hour ? 'border-2 border-blue-500' : 'border-2 border-gray-300'
+                                }`}
+                                style={{ width: '450px', maxHeight: '550px', display: 'flex', flexDirection: 'column' }}
+                                onClick={(e: any) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setLockedHour(lockedHour === hour ? null : hour);
+                                }}
+                                onMouseEnter={(e: any) => e.stopPropagation()}
+                                onMouseMove={(e: any) => e.stopPropagation()}
+                                onMouseLeave={(e: any) => e.stopPropagation()}
+                              >
+                                {/* Header */}
+                                <div className={`${lockedHour === hour ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-gray-700 to-gray-800'} px-5 py-4 text-white flex items-center justify-between`}>
+                                  <div>
+                                    <p className="font-bold text-base">{hour} - {nextHour}:00 IST</p>
+                                    <p className="text-xs opacity-90 mt-1">Total Tasks: <strong>{total}</strong></p>
+                                  </div>
+                                  {lockedHour === hour && (
+                                    <span className="text-xs bg-white text-blue-600 px-3 py-1 rounded-full font-bold">🔒 LOCKED</span>
+                                  )}
+                                </div>
+
+                                {/* Duration Summary Boxes */}
+                                <div className="bg-gray-50 px-5 py-3 border-b border-gray-200">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {dataToShow.lessThan1h > 0 && (
+                                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
+                                        <p className="text-xs font-semibold text-green-700">🟢 ≤1 Hour</p>
+                                        <p className="text-2xl font-bold text-green-600">{dataToShow.lessThan1h}</p>
+                                      </div>
+                                    )}
+                                    {dataToShow["1to2h"] > 0 && (
+                                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200">
+                                        <p className="text-xs font-semibold text-amber-700">🟡 1-2 Hours</p>
+                                        <p className="text-2xl font-bold text-amber-600">{dataToShow["1to2h"]}</p>
+                                      </div>
+                                    )}
+                                    {dataToShow["2to3h"] > 0 && (
+                                      <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
+                                        <p className="text-xs font-semibold text-orange-700">🟠 2-3 Hours</p>
+                                        <p className="text-2xl font-bold text-orange-600">{dataToShow["2to3h"]}</p>
+                                      </div>
+                                    )}
+                                    {dataToShow.moreThan3h > 0 && (
+                                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-3 border border-red-200">
+                                        <p className="text-xs font-semibold text-red-700">🔴 {"\u003e"}3 Hours</p>
+                                        <p className="text-2xl font-bold text-red-600">{dataToShow.moreThan3h}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Task list - scrollable only */}
+                                <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}>
+                                  <div className="px-5 py-4 space-y-3">
+                                    {tasks.length > 0 ? (
+                                      tasks.map((task: any, idx: number) => (
+                                        <div key={idx} className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow border-l-4 ${
+                                          task.durationCategory === 'green' ? 'border-green-500' :
+                                          task.durationCategory === 'amber' ? 'border-amber-500' :
+                                          task.durationCategory === 'orange' ? 'border-orange-500' :
+                                          'border-red-500'
+                                        }`}>
+                                          <div className="flex items-start justify-between mb-3">
+                                            <p className={`font-bold text-white text-xs px-3 py-1 rounded-full ${
+                                              task.durationCategory === 'green' ? 'bg-green-500' :
+                                              task.durationCategory === 'amber' ? 'bg-amber-500' :
+                                              task.durationCategory === 'orange' ? 'bg-orange-500' :
+                                              'bg-red-500'
+                                            }`}>Task {idx + 1}</p>
+                                            <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                                              task.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                                            }`}>
+                                              {task.status}
+                                            </span>
+                                          </div>
+                                          <p className="font-semibold text-gray-900 text-sm mb-3 line-clamp-2">{task.name}</p>
+                                          <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="bg-blue-700 p-2 rounded-lg border border-blue-900">
+                                              <p className="text-blue-50 text-xs font-semibold">Client</p>
+                                              <p className="font-bold text-white text-sm line-clamp-2">{task.clientName}</p>
+                                            </div>
+                                            <div className="bg-purple-700 p-2 rounded-lg border border-purple-900">
+                                              <p className="text-purple-50 text-xs font-semibold">Duration</p>
+                                              <p className="font-bold text-white text-sm">{formatDurationMinutes(task.durationMinutes)}</p>
+                                            </div>
+                                            <div className="bg-green-700 p-2 rounded-lg border border-green-900">
+                                              <p className="text-green-50 text-xs font-semibold">Start</p>
+                                              <p className="font-bold text-white text-sm">{task.startTime}</p>
+                                            </div>
+                                            <div className="bg-orange-700 p-2 rounded-lg border border-orange-900">
+                                              <p className="text-orange-50 text-xs font-semibold">Completed</p>
+                                              <p className="font-bold text-white text-sm line-clamp-2">{task.completedAt.split(' ')[0]}</p>
+                                            </div>
+                                            <div className="bg-indigo-700 p-3 rounded-lg border border-indigo-900 col-span-2">
+                                              <p className="text-indigo-50 text-xs font-semibold mb-1">Assigned To</p>
+                                              <p className="font-bold text-white text-sm line-clamp-3">{formatAssignedNames(task.assignedTo)}</p>
+                                            </div>
+                                            <div className="bg-pink-700 p-3 rounded-lg border border-pink-900 col-span-2">
+                                              <p className="text-pink-50 text-xs font-semibold mb-1">Completed By</p>
+                                              <p className="font-bold text-white text-sm line-clamp-3">{formatAssignedNames(task.completedBy)}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="text-center text-gray-500 italic py-8">No tasks for this hour</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Footer */}
+                                <div className={`${
+                                  lockedHour === hour ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'
+                                } px-5 py-3 border-t border-gray-200 text-xs font-semibold text-center transition-colors`}>
+                                  {lockedHour === hour ? '✓ Locked - Click to unlock' : '💡 Click to lock and scroll'}
+                                </div>
+                              </div>
+                            );
+                          }}
+                          contentStyle={{ borderRadius: "8px", position: "relative", zIndex: 50 }}
+                        />
+                        <Recharts.Legend />
+                        <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />
+                        <Recharts.Bar dataKey="1to2h" name="1-2 Hours" stackId="duration" fill="#FBBF24" />
+                        <Recharts.Bar dataKey="2to3h" name="2-3 Hours" stackId="duration" fill="#F97316" />
+                        <Recharts.Bar dataKey="moreThan3h" name="More than 3h" stackId="duration" fill="#EF4444" />
+                      </Recharts.BarChart>
+                    </Recharts.ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+                {fromDate || toDate ? (
+                  <div>
+                    <p className="text-sm">No hourly task data available for selected date range</p>
+                    <p className="text-xs text-gray-400 mt-1">Try adjusting your date range</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm">Select date range to view hourly task status chart</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
 
 
         {/* Summary Cards */}
@@ -1178,8 +1403,6 @@ export default function FinOpsUserStats() {
             )}
           </CardContent>
         </Card>
-
-        <HourlyTaskStatusTimeline />
       </div>
 
     </div>

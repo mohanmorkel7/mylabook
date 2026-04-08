@@ -3128,6 +3128,37 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
   }
 });
 
+// Get diagnostic info about available dates in finops_subtasks
+router.get("/subtasks/dates-available", async (req: Request, res: Response) => {
+  try {
+    if (await isDatabaseAvailable()) {
+      const query = `
+        SELECT
+          DATE(st.completed_at) as completion_date,
+          COUNT(*) as record_count,
+          COUNT(DISTINCT st.task_id) as unique_tasks,
+          COUNT(DISTINCT fc.id) as unique_clients
+        FROM finops_subtasks st
+        LEFT JOIN finops_tasks ft ON st.task_id = ft.id
+        LEFT JOIN finops_clients fc ON ft.client_id = fc.id
+        WHERE st.completed_at IS NOT NULL
+        GROUP BY DATE(st.completed_at)
+        ORDER BY DATE(st.completed_at) DESC
+        LIMIT 30
+      `;
+
+      const result = await pool.query(query);
+      console.log("Available dates with data:", result.rows);
+      res.json(result.rows);
+    } else {
+      res.json([]);
+    }
+  } catch (e: any) {
+    console.error("Error fetching available dates:", e);
+    res.status(500).json({ error: "Failed to fetch available dates" });
+  }
+});
+
 // Get hourly task data from finops_subtasks (for hourly status chart)
 // Filters by completion date (when tasks were actually completed)
 router.get("/subtasks/hourly", async (req: Request, res: Response) => {
@@ -3155,9 +3186,8 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
       whereParts.push(`${completionDateExpr} <= $${params.length}`);
     }
 
-    // Also filter to only include tasks with both started_at and completed_at
-    // to ensure we have valid duration data
-    whereParts.push("st.started_at IS NOT NULL");
+    // Filter to include tasks that have been completed on the selected date
+    // Include only records with completed_at (we need completion data for the chart)
     whereParts.push("st.completed_at IS NOT NULL");
 
     if (whereParts.length > 0) {
@@ -3198,8 +3228,23 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
 
     const result = await pool.query(query, params);
     console.log("Subtasks/hourly result count:", result.rows.length);
+    console.log("Query returned", result.rows.length, "rows for date range:", fromDate, "to", toDate);
+
     if (result.rows.length > 0) {
       console.log("Sample row:", result.rows[0]);
+      console.log("Sample completed_at values:", result.rows.slice(0, 5).map((r: any) => r.completed_at));
+
+      // Group by hour to show distribution
+      const hourlyDistribution: any = {};
+      result.rows.forEach((row: any) => {
+        if (row.start_time) {
+          const hour = row.start_time.split(':')[0];
+          hourlyDistribution[hour] = (hourlyDistribution[hour] || 0) + 1;
+        }
+      });
+      console.log("Hourly distribution:", hourlyDistribution);
+    } else {
+      console.log("No data found for date range:", fromDate, "to", toDate);
     }
 
     res.json(result.rows);

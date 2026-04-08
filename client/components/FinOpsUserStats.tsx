@@ -676,15 +676,6 @@ export default function FinOpsUserStats() {
 
     // Sheet 2: Hourly Summary Pivot
     const pivotData: any[] = [];
-    pivotData.push({
-      "Hour": "Hour (IST)",
-      "≤1 Hour": "≤1 Hour",
-      "1-2 Hours": "1-2 Hours",
-      "2-3 Hours": "2-3 Hours",
-      ">3 Hours": ">3 Hours",
-      "Total": "Total",
-      "On-Time %": "On-Time %",
-    });
 
     getHourlyTaskData.forEach((hourData: any) => {
       const hourTotal = hourData.total || 0;
@@ -719,15 +710,7 @@ export default function FinOpsUserStats() {
       }
     });
 
-    const clientBreakdownData: any[] = [{
-      "Client Name": "Client Name",
-      "≤1 Hour": "≤1 Hour",
-      "1-2 Hours": "1-2 Hours",
-      "2-3 Hours": "2-3 Hours",
-      ">3 Hours": ">3 Hours",
-      "Total": "Total",
-      "On-Time %": "On-Time %",
-    }];
+    const clientBreakdownData: any[] = [];
 
     Object.entries(clientBreakdown).forEach(([client, data]) => {
       clientBreakdownData.push({

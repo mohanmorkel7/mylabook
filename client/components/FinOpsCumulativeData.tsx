@@ -53,14 +53,21 @@ export default function FinOpsCumulativeData() {
 
   const formatDateString = (dateStr: string): string => {
     try {
+      // dateStr is in format YYYY-MM-DD (already in IST)
+      // Don't use Date constructor as it interprets as UTC
+      // Instead, format directly from the string
       const [year, month, day] = dateStr.split('-');
-      const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return localDate.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        weekday: "short",
-      });
+      const monthNum = parseInt(month);
+      const dayNum = parseInt(day);
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+      // Create a date at UTC to get the correct day
+      const date = new Date(`${dateStr}T00:00:00Z`);
+      const utcDay = date.getUTCDay();
+
+      return `${dayNames[utcDay]}, ${monthNames[monthNum - 1]} ${dayNum}, ${year}`;
     } catch (e) {
       return dateStr;
     }

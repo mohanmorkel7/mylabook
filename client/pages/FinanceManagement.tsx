@@ -1169,11 +1169,21 @@ function ActivityTab({
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const isToday = selectedDate === todayStr;
 
-  // Live activities (for all dates - today and past dates)
+  // Live activities (today)
   const { data, isLoading } = useQuery({
     queryKey: ["finance-activities", category],
     queryFn: () => apiFetch(`/activities?category=${category}`),
     staleTime: 30_000,
+    enabled: isToday,
+  });
+
+  // Historical activities (past dates via snapshot history)
+  const { data: histData, isLoading: histLoading } = useQuery({
+    queryKey: ["finance-history", selectedDate, category],
+    queryFn: ({ queryKey }) =>
+      apiFetch(`/history?date=${queryKey[1]}`),
+    staleTime: 60_000,
+    enabled: !isToday,
   });
 
   const statusPatchMut = useMutation({
@@ -1203,10 +1213,10 @@ function ActivityTab({
     },
   });
 
-  // Get all live activities
-  const allActivities: Activity[] = data?.activities ?? [];
+  // For live view (today): use live activities
+  const allActivities: Activity[] = isToday ? (data?.activities ?? []) : [];
 
-  // Role-based filter
+  // Role-based filter for live view
   const activitiesBase = canEditAll
     ? allActivities
     : allActivities.filter((a) =>
@@ -1214,24 +1224,35 @@ function ActivityTab({
         a.approval_users.some((v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase()),
       );
 
-  // For selected date (today or past): show activities that are due on that date,
-  // and if the status was last recorded on a PREVIOUS day, treat it as "pending"
-  // so stale statuses never carry over to the next day.
-  const activities = activitiesBase
-    .filter((a) => isActivityDueOnDate(a, selectedDate))
-    .map((a) => {
-      const updatedIST = a.updated_at
-        ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
-        : null;
-      if (updatedIST && updatedIST < selectedDate) {
-        // Status is stale from a previous day — show fresh pending for the selected date
-        return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
-      }
-      return a;
-    });
+  // For history view: filter snapshot records by category
+  const histRecords: any[] = (histData?.history ?? []).filter(
+    (r: any) => r.category === category,
+  );
+
+  // Today view: only show activities that are actually due today,
+  // and if the status was last recorded on a PREVIOUS day (midnight cron may have missed),
+  // treat it as "pending" so stale statuses never carry over to the next day.
+  const activities = isToday
+    ? activitiesBase
+        .filter((a) => isActivityDueOnDate(a, todayStr))
+        .map((a) => {
+          const updatedIST = a.updated_at
+            ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+            : null;
+          if (updatedIST && updatedIST < todayStr) {
+            // Status is stale from a previous day — show fresh pending for today
+            return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
+          }
+          return a;
+        })
+    : activitiesBase;
 
   const counts = Object.fromEntries(STATUSES.map((s) => [s.value, 0]));
-  activities.forEach((a) => { if (a.status in counts) counts[a.status]++; });
+  if (isToday) {
+    activities.forEach((a) => { if (a.status in counts) counts[a.status]++; });
+  } else {
+    histRecords.forEach((r: any) => { if (r.status in counts) counts[r.status]++; });
+  }
 
   // Today's pending (live only)
   const todayPending = isToday
@@ -1240,32 +1261,54 @@ function ActivityTab({
 
   useSLANotifications(isToday ? activities : []);
 
-  // Filtering for activities view (same for both today and past dates)
+  // Filtering for live view
   let filtered = activities;
-  if (filterStatus) filtered = filtered.filter((a) => a.status === filterStatus);
-  if (filterDuration && isToday) filtered = filtered.filter((a) => a.duration === filterDuration);
-  if (search) {
-    const q = search.toLowerCase();
-    filtered = filtered.filter((a) =>
-      a.activity_name.toLowerCase().includes(q) ||
-      a.description?.toLowerCase().includes(q) ||
-      a.activity_id.toLowerCase().includes(q),
-    );
+  if (isToday) {
+    if (filterStatus) filtered = filtered.filter((a) => a.status === filterStatus);
+    if (filterDuration) filtered = filtered.filter((a) => a.duration === filterDuration);
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter((a) =>
+        a.activity_name.toLowerCase().includes(q) ||
+        a.description?.toLowerCase().includes(q) ||
+        a.activity_id.toLowerCase().includes(q),
+      );
+    }
   }
 
-  const isLoadingAny = isLoading;
+  // Filtering for history view
+  let filteredHist = histRecords;
+  if (!isToday) {
+    if (filterStatus) filteredHist = filteredHist.filter((r: any) => r.status === filterStatus);
+    if (search) {
+      const q = search.toLowerCase();
+      filteredHist = filteredHist.filter((r: any) => r.activity_name?.toLowerCase().includes(q));
+    }
+  }
+
+  const isLoadingAny = isToday ? isLoading : histLoading;
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["finance-activities", category] });
     qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+    if (!isToday) qc.invalidateQueries({ queryKey: ["finance-history", selectedDate, category] });
   };
 
   const handleExport = () => {
     const label = CAT_LABEL[category] ?? category;
+    if (isToday) {
+      exportSingleSheet(
+        `finance-${category}-${selectedDate}.xlsx`,
+        label,
+        filtered.map(activityRowToExcel),
+      );
+      return;
+    }
+
     exportSingleSheet(
-      `finance-${category}-${selectedDate}.xlsx`,
-      label,
-      filtered.map(activityRowToExcel),
+      `finance-${category}-history-${selectedDate}.xlsx`,
+      `${label} History`,
+      filteredHist.map(historyRowToExcel),
     );
   };
 
@@ -1416,30 +1459,99 @@ function ActivityTab({
       </div>
 
       <p className="text-xs text-gray-500">
-        Showing ${filtered.length} of ${activities.length} activities for {selectedDate}
-        {!canEditAll && <span className="ml-1 text-blue-600 font-medium">(filtered to your assigned activities)</span>}
+        {isToday
+          ? `Showing ${filtered.length} of ${activities.length} activities`
+          : `${filteredHist.length} snapshot records for ${selectedDate}`
+        }
+        {isToday && !canEditAll && <span className="ml-1 text-blue-600 font-medium">(filtered to your assigned activities)</span>}
       </p>
 
-      {/* Activity cards (today and past dates) */}
-      {isLoadingAny ? (
+      {/* Historical view for past dates */}
+      {!isToday && (
+        isLoadingAny ? (
+          <div className="h-48 flex items-center justify-center">
+            <div className="text-center text-gray-400">
+              <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
+              <p className="text-sm">Loading snapshot…</p>
+            </div>
+          </div>
+        ) : filteredHist.length === 0 ? (
+          <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-3">
+            <History className="w-10 h-10 opacity-20" />
+            <p className="text-sm">No snapshot recorded for {selectedDate}</p>
+            <p className="text-xs text-gray-400">Snapshots are taken automatically at midnight IST or via the History tab.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredHist.map((r: any) => {
+              const st = STATUS_MAP[r.status] ?? { color: "#9CA3AF", bg: "#F9FAFB", label: r.status, icon: FileText };
+              const Icon = st.icon;
+              return (
+                <div key={r.id} className="bg-white rounded-2xl border-2 border-gray-100 relative overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: st.color }} />
+                  <div className="pl-4 pr-4 py-4 flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: st.bg }}>
+                      <Icon className="w-4 h-4" style={{ color: st.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="font-bold text-gray-900 text-sm">{r.activity_name}</span>
+                        <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md">{r.activity_id}</span>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border"
+                          style={{ backgroundColor: st.bg, color: st.color, borderColor: st.color + "40" }}>
+                          <Icon className="w-3 h-3" />{st.label}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {DURATIONS.find((d) => d.value === r.duration)?.label || r.duration}
+                        </span>
+                        {r.assigned_to?.length > 0 && (
+                          <span className="flex items-center gap-1">
+                            <UserCheck className="w-3 h-3 text-blue-500" />
+                            {Array.isArray(r.assigned_to) ? r.assigned_to.map(extractName).join(", ") : r.assigned_to}
+                          </span>
+                        )}
+                      </div>
+                      {r.reason_non_completion && (
+                        <div className="flex items-start gap-1.5 bg-orange-50 rounded-lg px-2 py-1.5 mt-2 border border-orange-100">
+                          <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-orange-700">{r.reason_non_completion}</p>
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-gray-400 flex-shrink-0">
+                      {new Date(r.recorded_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {/* Live activity cards (today only) */}
+      {isToday && isLoadingAny ? (
         <div className="h-48 flex items-center justify-center">
           <div className="text-center text-gray-400">
             <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
             <p className="text-sm">Loading activities…</p>
           </div>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : isToday && filtered.length === 0 ? (
         <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-3">
           <FileText className="w-10 h-10 opacity-20" />
-          <p className="text-sm">No activities found for {selectedDate}</p>
-          {canCreate && !filterStatus && !filterDuration && !search && isToday && (
+          <p className="text-sm">No activities found</p>
+          {canCreate && !filterStatus && !filterDuration && !search && (
             <Button onClick={() => { setEditActivity(null); setModalOpen(true); }} size="sm"
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
               <Plus className="w-4 h-4 mr-1" /> Create First Activity
             </Button>
           )}
         </div>
-      ) : (
+      ) : isToday && (
         <div className="space-y-3">
           {filtered.map((act) => {
             const isApproverForThis = act.approval_users.some(

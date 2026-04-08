@@ -35,14 +35,15 @@ export default function FinOpsCumulativeData() {
   const [fromDate, setFromDate] = useState(getFirstDayOfMonth());
   const [toDate, setToDate] = useState(IST_DATE_STRING());
 
-  const { data: rawTaskData = [], isLoading } = useQuery({
-    queryKey: ["finops-history-tasks", fromDate, toDate],
+  // Fetch aggregated counts (not raw task data)
+  const { data: cumulativeData = [], isLoading } = useQuery({
+    queryKey: ["finops-tracker-cumulative", fromDate, toDate],
     queryFn: async () => {
       try {
-        console.log("Fetching history task data with dates:", { fromDate, toDate });
-        return await apiClient.getFinOpsHistoryTasks(fromDate, toDate);
+        console.log("Fetching cumulative counts with dates:", { fromDate, toDate });
+        return await apiClient.getFinOpsCumulative(fromDate, toDate);
       } catch (e) {
-        console.error("Failed to fetch history tasks:", e);
+        console.error("Failed to fetch cumulative data:", e);
         return [];
       }
     },
@@ -73,78 +74,17 @@ export default function FinOpsCumulativeData() {
     }
   };
 
-  // Group raw tasks by date and calculate metrics
+  // Process cumulative aggregated data
   const byDate = useMemo(() => {
-    const dateGroups: Record<string, any> = {};
+    if (!cumulativeData || cumulativeData.length === 0) {
+      return [];
+    }
 
-    (rawTaskData || []).forEach((row: any) => {
-      if (!row || row.deleted_at) return;
-
-      const runDate = row.run_date ? String(row.run_date).slice(0, 10) : today;
-      
-      if (!dateGroups[runDate]) {
-        dateGroups[runDate] = {
-          date: runDate,
-          tasks: {},
-          totalTasks: 0,
-          totalSubtasks: 0,
-          completed: 0,
-          delayed: 0,
-          overdue: 0,
-          pending: 0,
-          inProgress: 0,
-          clients: new Set<string>(),
-        };
-      }
-
-      const taskKey = String(row.task_id);
-      if (!dateGroups[runDate].tasks[taskKey]) {
-        dateGroups[runDate].tasks[taskKey] = {
-          task_id: row.task_id,
-          task_name: row.task_name,
-          client_id: row.client_id,
-          client_name: row.client_name,
-          assigned_to: row.assigned_to,
-          status: row.status,
-          subtasks: [],
-        };
-        dateGroups[runDate].totalTasks++;
-        if (row.client_id) dateGroups[runDate].clients.add(String(row.client_id));
-      }
-
-      if (row.subtask_id) {
-        dateGroups[runDate].tasks[taskKey].subtasks.push({
-          subtask_id: row.subtask_id,
-          status: row.status,
-        });
-        dateGroups[runDate].totalSubtasks++;
-        
-        const status = String(row.status || "").toLowerCase();
-        if (status === "completed") dateGroups[runDate].completed++;
-        else if (status === "delayed") dateGroups[runDate].delayed++;
-        else if (status === "overdue") dateGroups[runDate].overdue++;
-        else if (status === "pending") dateGroups[runDate].pending++;
-        else if (status === "in_progress") dateGroups[runDate].inProgress++;
-      }
-    });
-
-    return Object.entries(dateGroups)
-      .map(([date, data]) => [
-        date,
-        {
-          total_tasks: data.totalTasks,
-          total_subtasks: data.totalSubtasks,
-          completed_subtasks: data.completed,
-          delayed_subtasks: data.delayed,
-          overdue_subtasks: data.overdue,
-          pending_subtasks: data.pending,
-          in_progress_subtasks: data.inProgress,
-          active_clients: data.clients.size,
-          tasks: Object.values(data.tasks),
-        },
-      ])
+    // Use dates directly from API response (they are already in correct IST dates)
+    return (cumulativeData || [])
+      .map((row: any) => [row.run_date, row])
       .sort((a, b) => b[0].localeCompare(a[0]));
-  }, [rawTaskData, today]);
+  }, [cumulativeData]);
 
   const cumulativeMetrics = useMemo(() => {
     let totalTasks = 0;
@@ -154,6 +94,7 @@ export default function FinOpsCumulativeData() {
     let overdue = 0;
     let pending = 0;
     let inProgress = 0;
+    const clientsSet = new Set<string>();
 
     byDate.forEach(([date, metrics]) => {
       totalTasks += metrics.total_tasks || 0;

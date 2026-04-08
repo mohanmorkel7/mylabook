@@ -3074,6 +3074,17 @@ export default function ClientBasedFinOpsTaskManager() {
                       ? await apiClient.request(trackerUrl)
                       : [];
                     console.log("Tracker data fetched for export:", trackerResp.length, "records");
+                    if (trackerResp.length > 0) {
+                      console.log("Sample tracker row:", {
+                        task_name: trackerResp[0].task_name,
+                        subtask_name: trackerResp[0].subtask_name,
+                        client_name: trackerResp[0].client_name,
+                        completed_by: trackerResp[0].completed_by,
+                        approved_by: trackerResp[0].approved_by,
+                        approved_at: trackerResp[0].approved_at,
+                        assigned_to: trackerResp[0].assigned_to,
+                      });
+                    }
                   } catch (err) {
                     console.warn(
                       "Failed to fetch tracker data from server for export:",
@@ -3169,9 +3180,9 @@ export default function ClientBasedFinOpsTaskManager() {
 
                     if (isTrackerFormat) {
                       // Tracker format: flat rows with all fields
-                      tasksForExport.forEach((row: any) => {
+                      tasksForExport.forEach((row: any, idx: number) => {
                         if ((row.client_name || "").toString() !== clientName) return;
-                        rows.push([
+                        const rowData = [
                           row.task_name || "",
                           row.subtask_name || "",
                           clientName,
@@ -3186,7 +3197,16 @@ export default function ClientBasedFinOpsTaskManager() {
                           extractNameFromValue(row.reporting_managers || ""),
                           extractNameFromValue(row.escalation_managers || ""),
                           row.delay_reason || row.delay_notes || "",
-                        ]);
+                        ];
+                        if (idx === 0) {
+                          console.log("First exported row (tracker format):", {
+                            raw: row,
+                            processed: rowData,
+                            completed_by_raw: row.completed_by,
+                            completed_by_extracted: rowData[7],
+                          });
+                        }
+                        rows.push(rowData);
                       });
                     } else {
                       // Task format: nested with subtasks

@@ -3122,6 +3122,17 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
     `;
 
     const result = await pool.query(query, params);
+    console.log(`Tracker/all query returned ${result.rows.length} rows`);
+    if (result.rows.length > 0) {
+      console.log("Sample tracker row columns:", Object.keys(result.rows[0]));
+      console.log("Sample tracker row data:", {
+        task_name: result.rows[0].task_name,
+        subtask_name: result.rows[0].subtask_name,
+        completed_by: result.rows[0].completed_by,
+        approved_by: result.rows[0].approved_by,
+        client_name: result.rows[0].client_name,
+      });
+    }
     res.json(result.rows);
   } catch (e: any) {
     console.error("Error fetching all tracker data:", e);

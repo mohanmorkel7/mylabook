@@ -1205,10 +1205,14 @@ function ActivityTab({
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => apiFetch(`/activities/${id}`, { method: "DELETE" }),
+    mutationFn: (id: number) => {
+      const endpoint = isToday ? `/activities/${id}` : `/history/${id}`;
+      return apiFetch(endpoint, { method: "DELETE" });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-activities", category] });
       qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+      if (!isToday) qc.invalidateQueries({ queryKey: ["finance-history", selectedDate, category] });
       setDeleteId(null);
     },
   });
@@ -1466,43 +1470,32 @@ function ActivityTab({
         {isToday && !canEditAll && <span className="ml-1 text-blue-600 font-medium">(filtered to your assigned activities)</span>}
       </p>
 
-      {/* Historical view for past dates */}
+      {/* Historical view for past dates - with editable cards */}
       {!isToday && (
         isLoadingAny ? (
           <div className="h-48 flex items-center justify-center">
             <div className="text-center text-gray-400">
               <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
-              <p className="text-sm">Loading snapshot…</p>
+              <p className="text-sm">Loading records…</p>
             </div>
           </div>
         ) : filteredHist.length === 0 ? (
           <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-3">
             <History className="w-10 h-10 opacity-20" />
-            <p className="text-sm">No snapshot recorded for {selectedDate}</p>
-            <p className="text-xs text-gray-400">Snapshots are taken automatically at midnight IST or via the History tab.</p>
+            <p className="text-sm">No records for {selectedDate}</p>
           </div>
         ) : (
           <div className="space-y-3">
             {filteredHist.map((r: any) => {
-              const st = STATUS_MAP[r.status] ?? { color: "#9CA3AF", bg: "#F9FAFB", label: r.status, icon: FileText };
-              const Icon = st.icon;
               return (
-                <div key={r.id} className="bg-white rounded-2xl border-2 border-gray-100 relative overflow-hidden">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: st.color }} />
-                  <div className="pl-4 pr-4 py-4 flex items-start gap-3">
-                    <div className="flex-shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: st.bg }}>
-                      <Icon className="w-4 h-4" style={{ color: st.color }} />
-                    </div>
+                <div key={r.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                  <div className="p-4 flex items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="font-bold text-gray-900 text-sm">{r.activity_name}</span>
-                        <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md">{r.activity_id}</span>
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border"
-                          style={{ backgroundColor: st.bg, color: st.color, borderColor: st.color + "40" }}>
-                          <Icon className="w-3 h-3" />{st.label}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="font-bold text-gray-900">{r.activity_name}</span>
+                        <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{r.activity_id}</span>
                       </div>
-                      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {DURATIONS.find((d) => d.value === r.duration)?.label || r.duration}
@@ -1515,15 +1508,35 @@ function ActivityTab({
                         )}
                       </div>
                       {r.reason_non_completion && (
-                        <div className="flex items-start gap-1.5 bg-orange-50 rounded-lg px-2 py-1.5 mt-2 border border-orange-100">
+                        <div className="flex items-start gap-1.5 bg-orange-50 rounded-lg px-2 py-1.5 border border-orange-100">
                           <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
                           <p className="text-xs text-orange-700">{r.reason_non_completion}</p>
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-gray-400 flex-shrink-0">
-                      {new Date(r.recorded_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })}
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <select
+                        value={r.status}
+                        onChange={(e) => {
+                          apiFetch(`/history/${r.id}/status`, {
+                            method: "PATCH",
+                            body: JSON.stringify({ status: e.target.value }),
+                          }).then(() => refresh());
+                        }}
+                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        {STATUSES.map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => setDeleteId(r.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1652,7 +1665,11 @@ function ActivityTab({
               <Trash2 className="w-6 h-6 text-red-600" />
             </div>
             <h3 className="font-bold text-gray-900 text-center mb-1">Delete Activity?</h3>
-            <p className="text-sm text-gray-500 text-center mb-5">This action is permanent and cannot be undone.</p>
+            <p className="text-sm text-gray-500 text-center mb-5">
+              {isToday
+                ? "This action is permanent and cannot be undone."
+                : `This will delete the activity record for ${selectedDate}. This action is permanent and cannot be undone.`}
+            </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setDeleteId(null)} className="flex-1 rounded-xl h-11">Cancel</Button>
               <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl h-11 font-semibold"

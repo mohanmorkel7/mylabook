@@ -429,10 +429,36 @@ export default function FinOpsUserStats() {
       // Store task details for tooltip
       const roundedDurationMinutes = Math.round(durationMinutes);
       const durationCat = getDurationCategoryForTask(roundedDurationMinutes);
+
+      // Parse assigned_to - could be array, JSON, or plain text
+      const parseAssignedTo = (value: any): string => {
+        if (!value) return "N/A";
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          // Try to parse if it looks like JSON
+          if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (Array.isArray(parsed)) {
+                return parsed.filter(p => p && String(p).trim()).join(", ");
+              }
+              return String(parsed);
+            } catch (e) {
+              return trimmed;
+            }
+          }
+          return trimmed || "N/A";
+        }
+        if (Array.isArray(value)) {
+          return value.filter(v => v && String(v).trim()).join(", ") || "N/A";
+        }
+        return String(value) || "N/A";
+      };
+
       hourlyData[startHour].tasks.push({
         name: row.name || "N/A",
         clientName: row.client_name || "N/A",
-        assignedTo: row.assigned_to || "N/A",
+        assignedTo: parseAssignedTo(row.assigned_to),
         completedBy: row.completed_by || "N/A",
         startTime: row.start_time,
         completedAt: new Date(row.completed_at).toLocaleString("en-US", {

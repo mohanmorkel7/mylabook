@@ -3064,8 +3064,24 @@ export default function ClientBasedFinOpsTaskManager() {
                     "In-Progress",
                   ];
 
-                  // Fetch authoritative data from server once (tasks + summary)
+                  // Fetch tracker data for export (has all completed_by and assigned_to fields)
+                  let trackerResp: any[] = [];
                   let serverResp: any = null;
+                  try {
+                    // Get tracker data (has complete information including completed_by)
+                    const trackerUrl = `/finops/tracker/all?from_date=${dateFilter}&to_date=${dateFilter}`;
+                    trackerResp = Array.isArray(await apiClient.request(trackerUrl))
+                      ? await apiClient.request(trackerUrl)
+                      : [];
+                    console.log("Tracker data fetched for export:", trackerResp.length, "records");
+                  } catch (err) {
+                    console.warn(
+                      "Failed to fetch tracker data from server for export:",
+                      err,
+                    );
+                  }
+
+                  // Also fetch daily tasks for summary data
                   try {
                     serverResp =
                       await apiClient.getFinOpsDailyTasks(dateFilter);
@@ -3080,10 +3096,13 @@ export default function ClientBasedFinOpsTaskManager() {
                     serverResp && serverResp.summary
                       ? serverResp.summary
                       : null;
-                  const tasksForExport: any[] =
-                    serverResp && Array.isArray(serverResp.tasks)
+
+                  // Use tracker data if available, otherwise fall back to tasks
+                  const tasksForExport: any[] = trackerResp.length > 0
+                    ? trackerResp
+                    : (serverResp && Array.isArray(serverResp.tasks)
                       ? serverResp.tasks
-                      : filteredTasks;
+                      : filteredTasks);
 
                   const summaryRow = serverSummary
                     ? [
@@ -3114,6 +3133,9 @@ export default function ClientBasedFinOpsTaskManager() {
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
                   // Build client sheets based on server data
+                  // Handle both tracker format (flat) and task format (nested with subtasks)
+                  const isTrackerFormat = trackerResp.length > 0 && !tasksForExport[0]?.subtasks;
+
                   const clientNames = Array.from(
                     new Set(
                       tasksForExport.map(
@@ -3145,48 +3167,72 @@ export default function ClientBasedFinOpsTaskManager() {
                       "Reason",
                     ]);
 
-                    tasksForExport.forEach((task: any) => {
-                      const tClientName =
-                        task.client_name ||
-                        (task.client_id
-                          ? `Client ${task.client_id}`
-                          : "Unknown Client");
-                      if ((tClientName || "").toString() !== clientName) return;
-                      const period = task.duration || "daily";
-                      (task.subtasks || []).forEach((st: any) => {
+                    if (isTrackerFormat) {
+                      // Tracker format: flat rows with all fields
+                      tasksForExport.forEach((row: any) => {
+                        if ((row.client_name || "").toString() !== clientName) return;
                         rows.push([
-                          task.task_name || "",
-                          st.name || "",
+                          row.task_name || "",
+                          row.subtask_name || "",
                           clientName,
-                          period,
-                          st.start_time || "",
-                          formatDateTime(st.completed_at) || "",
-                          st.status || "",
-                          extractNameFromValue(
-                            st.completed_by ||
-                              st.completedBy ||
-                              st.completed_by ||
-                              "",
-                          ),
-                          extractNameFromValue(
-                            st.approved_by || st.approvedBy || "",
-                          ),
-                          st.approved_at
-                            ? formatToISTDateTime(st.approved_at)
-                            : "",
-                          Array.isArray(task.assigned_to)
-                            ? task.assigned_to.join(", ")
-                            : task.assigned_to || "",
-                          Array.isArray(task.reporting_managers)
-                            ? task.reporting_managers.join(", ")
-                            : task.reporting_managers || "",
-                          Array.isArray(task.escalation_managers)
-                            ? task.escalation_managers.join(", ")
-                            : task.escalation_managers || "",
-                          st.delay_reason || st.delay_notes || "",
+                          row.period || "daily",
+                          row.scheduled_time || "",
+                          formatDateTime(row.completed_at) || "",
+                          row.status || "",
+                          extractNameFromValue(row.completed_by || ""),
+                          extractNameFromValue(row.approved_by || ""),
+                          row.approved_at ? formatToISTDateTime(row.approved_at) : "",
+                          extractNameFromValue(row.assigned_to || ""),
+                          extractNameFromValue(row.reporting_managers || ""),
+                          extractNameFromValue(row.escalation_managers || ""),
+                          row.delay_reason || row.delay_notes || "",
                         ]);
                       });
-                    });
+                    } else {
+                      // Task format: nested with subtasks
+                      tasksForExport.forEach((task: any) => {
+                        const tClientName =
+                          task.client_name ||
+                          (task.client_id
+                            ? `Client ${task.client_id}`
+                            : "Unknown Client");
+                        if ((tClientName || "").toString() !== clientName) return;
+                        const period = task.duration || "daily";
+                        (task.subtasks || []).forEach((st: any) => {
+                          rows.push([
+                            task.task_name || "",
+                            st.name || "",
+                            clientName,
+                            period,
+                            st.start_time || "",
+                            formatDateTime(st.completed_at) || "",
+                            st.status || "",
+                            extractNameFromValue(
+                              st.completed_by ||
+                                st.completedBy ||
+                                st.completed_by ||
+                                "",
+                            ),
+                            extractNameFromValue(
+                              st.approved_by || st.approvedBy || "",
+                            ),
+                            st.approved_at
+                              ? formatToISTDateTime(st.approved_at)
+                              : "",
+                            Array.isArray(task.assigned_to)
+                              ? task.assigned_to.join(", ")
+                              : task.assigned_to || "",
+                            Array.isArray(task.reporting_managers)
+                              ? task.reporting_managers.join(", ")
+                              : task.reporting_managers || "",
+                            Array.isArray(task.escalation_managers)
+                              ? task.escalation_managers.join(", ")
+                              : task.escalation_managers || "",
+                            st.delay_reason || st.delay_notes || "",
+                          ]);
+                        });
+                      });
+                    }
 
                     const ws = XLSX.utils.aoa_to_sheet(rows);
                     const safeName = (clientName || "Client")
@@ -3209,52 +3255,101 @@ export default function ClientBasedFinOpsTaskManager() {
                   ]);
 
                   const clientAgg: Record<string, any> = {};
-                  tasksForExport.forEach((task: any) => {
-                    const name =
-                      task.client_name ||
-                      (task.client_id
-                        ? `Client ${task.client_id}`
-                        : "Unknown Client");
-                    if (!clientAgg[name])
-                      clientAgg[name] = {
-                        total_tasks: 0,
-                        total_subtasks: 0,
-                        completed_subtasks: 0,
-                        delayed_subtasks: 0,
-                        overdue_subtasks: 0,
-                        pending_subtasks: 0,
-                        in_progress_subtasks: 0,
-                      };
-                    clientAgg[name].total_tasks += 1;
-                    clientAgg[name].total_subtasks += (
-                      task.subtasks || []
-                    ).length;
-                    (task.subtasks || []).forEach((st: any) => {
-                      if (st.status === "completed")
+
+                  if (isTrackerFormat) {
+                    // Tracker format: count unique tasks and each row represents a subtask
+                    const trackerSet = new Set<string>();
+                    tasksForExport.forEach((row: any) => {
+                      const name = row.client_name || "Unknown Client";
+                      const taskKey = `${row.task_id}-${row.subtask_id}`;
+
+                      if (!clientAgg[name])
+                        clientAgg[name] = {
+                          total_tasks: new Set<number>(),
+                          total_subtasks: 0,
+                          completed_subtasks: 0,
+                          delayed_subtasks: 0,
+                          overdue_subtasks: 0,
+                          pending_subtasks: 0,
+                          in_progress_subtasks: 0,
+                        };
+
+                      clientAgg[name].total_tasks.add(row.task_id);
+                      clientAgg[name].total_subtasks += 1;
+
+                      if (row.status === "completed")
                         clientAgg[name].completed_subtasks++;
-                      if (st.status === "delayed")
+                      if (row.status === "delayed")
                         clientAgg[name].delayed_subtasks++;
-                      if (st.status === "overdue")
+                      if (row.status === "overdue")
                         clientAgg[name].overdue_subtasks++;
-                      if (st.status === "pending")
+                      if (row.status === "pending")
                         clientAgg[name].pending_subtasks++;
-                      if (st.status === "in_progress")
+                      if (row.status === "in_progress")
                         clientAgg[name].in_progress_subtasks++;
                     });
-                  });
 
-                  Object.entries(clientAgg).forEach(([cName, sum]: any) => {
-                    clientSummaryRows.push([
-                      cName,
-                      sum.total_tasks || 0,
-                      sum.total_subtasks || 0,
-                      sum.completed_subtasks || 0,
-                      sum.delayed_subtasks || 0,
-                      sum.overdue_subtasks || 0,
-                      sum.pending_subtasks || 0,
-                      sum.in_progress_subtasks || 0,
-                    ]);
-                  });
+                    Object.entries(clientAgg).forEach(([cName, sum]: any) => {
+                      clientSummaryRows.push([
+                        cName,
+                        sum.total_tasks.size || 0,
+                        sum.total_subtasks || 0,
+                        sum.completed_subtasks || 0,
+                        sum.delayed_subtasks || 0,
+                        sum.overdue_subtasks || 0,
+                        sum.pending_subtasks || 0,
+                        sum.in_progress_subtasks || 0,
+                      ]);
+                    });
+                  } else {
+                    // Task format: original logic
+                    tasksForExport.forEach((task: any) => {
+                      const name =
+                        task.client_name ||
+                        (task.client_id
+                          ? `Client ${task.client_id}`
+                          : "Unknown Client");
+                      if (!clientAgg[name])
+                        clientAgg[name] = {
+                          total_tasks: 0,
+                          total_subtasks: 0,
+                          completed_subtasks: 0,
+                          delayed_subtasks: 0,
+                          overdue_subtasks: 0,
+                          pending_subtasks: 0,
+                          in_progress_subtasks: 0,
+                        };
+                      clientAgg[name].total_tasks += 1;
+                      clientAgg[name].total_subtasks += (
+                        task.subtasks || []
+                      ).length;
+                      (task.subtasks || []).forEach((st: any) => {
+                        if (st.status === "completed")
+                          clientAgg[name].completed_subtasks++;
+                        if (st.status === "delayed")
+                          clientAgg[name].delayed_subtasks++;
+                        if (st.status === "overdue")
+                          clientAgg[name].overdue_subtasks++;
+                        if (st.status === "pending")
+                          clientAgg[name].pending_subtasks++;
+                        if (st.status === "in_progress")
+                          clientAgg[name].in_progress_subtasks++;
+                      });
+                    });
+
+                    Object.entries(clientAgg).forEach(([cName, sum]: any) => {
+                      clientSummaryRows.push([
+                        cName,
+                        sum.total_tasks || 0,
+                        sum.total_subtasks || 0,
+                        sum.completed_subtasks || 0,
+                        sum.delayed_subtasks || 0,
+                        sum.overdue_subtasks || 0,
+                        sum.pending_subtasks || 0,
+                        sum.in_progress_subtasks || 0,
+                      ]);
+                    });
+                  }
 
                   const wsClient = XLSX.utils.aoa_to_sheet(clientSummaryRows);
                   XLSX.utils.book_append_sheet(wb, wsClient, "Client Summary");
@@ -3269,12 +3364,22 @@ export default function ClientBasedFinOpsTaskManager() {
                     delayed: 0,
                     overdue: 0,
                   };
-                  tasksForExport.forEach((task: any) => {
-                    (task.subtasks || []).forEach((st: any) => {
-                      statusCounts[st.status] =
-                        (statusCounts[st.status] || 0) + 1;
+
+                  if (isTrackerFormat) {
+                    // Tracker format: each row is a subtask
+                    tasksForExport.forEach((row: any) => {
+                      statusCounts[row.status] =
+                        (statusCounts[row.status] || 0) + 1;
                     });
-                  });
+                  } else {
+                    // Task format: subtasks are nested
+                    tasksForExport.forEach((task: any) => {
+                      (task.subtasks || []).forEach((st: any) => {
+                        statusCounts[st.status] =
+                          (statusCounts[st.status] || 0) + 1;
+                      });
+                    });
+                  }
 
                   Object.entries(statusCounts).forEach(([status, cnt]) => {
                     statusSummaryRows.push([status, cnt]);

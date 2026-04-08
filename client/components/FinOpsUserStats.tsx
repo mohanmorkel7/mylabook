@@ -1002,7 +1002,7 @@ export default function FinOpsUserStats() {
                                 </div>
 
                                 {/* Task list - scrollable only */}
-                                <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}>
+                                <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent', backgroundColor:"white" }}>
                                   <div className="px-5 py-4 space-y-3">
                                     {tasks.length > 0 ? (
                                       tasks.map((task: any, idx: number) => (

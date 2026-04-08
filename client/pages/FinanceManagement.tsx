@@ -116,7 +116,6 @@ const ACTIVITY_CATEGORIES = [
   "taxation",
   "secretarial",
   "hr_compliance",
-  "legal_contracts",
   "admin",
 ] as const;
 
@@ -1165,21 +1164,11 @@ function ActivityTab({
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const isToday = selectedDate === todayStr;
 
-  // Live activities (today)
+  // Live activities (for any date)
   const { data, isLoading } = useQuery({
     queryKey: ["finance-activities", category],
     queryFn: () => apiFetch(`/activities?category=${category}`),
     staleTime: 30_000,
-    enabled: isToday,
-  });
-
-  // Historical activities (past dates via snapshot history)
-  const { data: histData, isLoading: histLoading } = useQuery({
-    queryKey: ["finance-history", selectedDate, category],
-    queryFn: ({ queryKey }) =>
-      apiFetch(`/history?date=${queryKey[1]}`),
-    staleTime: 60_000,
-    enabled: !isToday,
   });
 
   const statusPatchMut = useMutation({
@@ -1219,23 +1208,21 @@ function ActivityTab({
         a.approval_users.some((v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase()),
       );
 
-  // Today view: only show activities that are actually due today,
-  // and if the status was last recorded on a PREVIOUS day (midnight cron may have missed),
-  // treat it as "pending" so stale statuses never carry over to the next day.
-  const activities = isToday
-    ? activitiesBase
-        .filter((a) => isActivityDueOnDate(a, todayStr))
-        .map((a) => {
-          const updatedIST = a.updated_at
-            ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
-            : null;
-          if (updatedIST && updatedIST < todayStr) {
-            // Status is stale from a previous day — show fresh pending for today
-            return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
-          }
-          return a;
-        })
-    : activitiesBase;
+  // For any selected date (today or before): show activities that are due on that date,
+  // and if the status was last recorded on a PREVIOUS day, treat it as "pending"
+  // so stale statuses never carry over to the next day.
+  const activities = activitiesBase
+    .filter((a) => isActivityDueOnDate(a, selectedDate))
+    .map((a) => {
+      const updatedIST = a.updated_at
+        ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+        : null;
+      if (updatedIST && updatedIST < selectedDate) {
+        // Status is stale from a previous day — show fresh pending for the selected date
+        return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
+      }
+      return a;
+    });
 
   // For history view: filter snapshot records by category
   const histRecords: any[] = (histData?.history ?? []).filter(
@@ -1243,11 +1230,7 @@ function ActivityTab({
   );
 
   const counts = Object.fromEntries(STATUSES.map((s) => [s.value, 0]));
-  if (isToday) {
-    activities.forEach((a) => { if (a.status in counts) counts[a.status]++; });
-  } else {
-    histRecords.forEach((r: any) => { if (r.status in counts) counts[r.status]++; });
-  }
+  activities.forEach((a) => { if (a.status in counts) counts[a.status]++; });
 
   // Today's pending (live only)
   const todayPending = isToday
@@ -1256,54 +1239,32 @@ function ActivityTab({
 
   useSLANotifications(isToday ? activities : []);
 
-  // Filtering for live view
+  // Filtering for activities view (same for both today and past dates)
   let filtered = activities;
-  if (isToday) {
-    if (filterStatus) filtered = filtered.filter((a) => a.status === filterStatus);
-    if (filterDuration) filtered = filtered.filter((a) => a.duration === filterDuration);
-    if (search) {
-      const q = search.toLowerCase();
-      filtered = filtered.filter((a) =>
-        a.activity_name.toLowerCase().includes(q) ||
-        a.description?.toLowerCase().includes(q) ||
-        a.activity_id.toLowerCase().includes(q),
-      );
-    }
+  if (filterStatus) filtered = filtered.filter((a) => a.status === filterStatus);
+  if (filterDuration && isToday) filtered = filtered.filter((a) => a.duration === filterDuration);
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter((a) =>
+      a.activity_name.toLowerCase().includes(q) ||
+      a.description?.toLowerCase().includes(q) ||
+      a.activity_id.toLowerCase().includes(q),
+    );
   }
 
-  // Filtering for history view
-  let filteredHist = histRecords;
-  if (!isToday) {
-    if (filterStatus) filteredHist = filteredHist.filter((r: any) => r.status === filterStatus);
-    if (search) {
-      const q = search.toLowerCase();
-      filteredHist = filteredHist.filter((r: any) => r.activity_name?.toLowerCase().includes(q));
-    }
-  }
-
-  const isLoadingAny = isToday ? isLoading : histLoading;
+  const isLoadingAny = isLoading;
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["finance-activities", category] });
     qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
-    if (!isToday) qc.invalidateQueries({ queryKey: ["finance-history", selectedDate, category] });
   };
 
   const handleExport = () => {
     const label = CAT_LABEL[category] ?? category;
-    if (isToday) {
-      exportSingleSheet(
-        `finance-${category}-${selectedDate}.xlsx`,
-        label,
-        filtered.map(activityRowToExcel),
-      );
-      return;
-    }
-
     exportSingleSheet(
-      `finance-${category}-history-${selectedDate}.xlsx`,
-      `${label} History`,
-      filteredHist.map(historyRowToExcel),
+      `finance-${category}-${selectedDate}.xlsx`,
+      label,
+      filtered.map(activityRowToExcel),
     );
   };
 
@@ -1341,7 +1302,7 @@ function ActivityTab({
         )}
         {!isToday && (
           <span className="ml-auto text-xs text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
-            Historical Snapshot — {new Date(selectedDate + "T00:00:00+05:30").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+            Past Date — {new Date(selectedDate + "T00:00:00+05:30").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
           </span>
         )}
         {isToday && (
@@ -1454,92 +1415,23 @@ function ActivityTab({
       </div>
 
       <p className="text-xs text-gray-500">
-        {isToday
-          ? `Showing ${filtered.length} of ${activities.length} activities`
-          : `${filteredHist.length} snapshot records for ${selectedDate}`
-        }
-        {isToday && !canEditAll && <span className="ml-1 text-blue-600 font-medium">(filtered to your assigned activities)</span>}
+        Showing ${filtered.length} of ${activities.length} activities
+        {!canEditAll && <span className="ml-1 text-blue-600 font-medium">(filtered to your assigned activities)</span>}
       </p>
 
-      {/* Historical view for past dates */}
-      {!isToday && (
-        isLoadingAny ? (
-          <div className="h-48 flex items-center justify-center">
-            <div className="text-center text-gray-400">
-              <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
-              <p className="text-sm">Loading snapshot…</p>
-            </div>
-          </div>
-        ) : filteredHist.length === 0 ? (
-          <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-3">
-            <History className="w-10 h-10 opacity-20" />
-            <p className="text-sm">No snapshot recorded for {selectedDate}</p>
-            <p className="text-xs text-gray-400">Snapshots are taken automatically at midnight IST or via the History tab.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredHist.map((r: any) => {
-              const st = STATUS_MAP[r.status] ?? { color: "#9CA3AF", bg: "#F9FAFB", label: r.status, icon: FileText };
-              const Icon = st.icon;
-              return (
-                <div key={r.id} className="bg-white rounded-2xl border-2 border-gray-100 relative overflow-hidden">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: st.color }} />
-                  <div className="pl-4 pr-4 py-4 flex items-start gap-3">
-                    <div className="flex-shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: st.bg }}>
-                      <Icon className="w-4 h-4" style={{ color: st.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="font-bold text-gray-900 text-sm">{r.activity_name}</span>
-                        <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md">{r.activity_id}</span>
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border"
-                          style={{ backgroundColor: st.bg, color: st.color, borderColor: st.color + "40" }}>
-                          <Icon className="w-3 h-3" />{st.label}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {DURATIONS.find((d) => d.value === r.duration)?.label || r.duration}
-                        </span>
-                        {r.assigned_to?.length > 0 && (
-                          <span className="flex items-center gap-1">
-                            <UserCheck className="w-3 h-3 text-blue-500" />
-                            {Array.isArray(r.assigned_to) ? r.assigned_to.map(extractName).join(", ") : r.assigned_to}
-                          </span>
-                        )}
-                      </div>
-                      {r.reason_non_completion && (
-                        <div className="flex items-start gap-1.5 bg-orange-50 rounded-lg px-2 py-1.5 mt-2 border border-orange-100">
-                          <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
-                          <p className="text-xs text-orange-700">{r.reason_non_completion}</p>
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-gray-400 flex-shrink-0">
-                      {new Date(r.recorded_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )
-      )}
-
-      {/* Live activity cards (today only) */}
-      {isToday && isLoadingAny ? (
+      {/* Activity cards (today and past dates) */}
+      {isLoadingAny ? (
         <div className="h-48 flex items-center justify-center">
           <div className="text-center text-gray-400">
             <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
             <p className="text-sm">Loading activities…</p>
           </div>
         </div>
-      ) : isToday && filtered.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-3">
           <FileText className="w-10 h-10 opacity-20" />
-          <p className="text-sm">No activities found</p>
-          {canCreate && !filterStatus && !filterDuration && !search && (
+          <p className="text-sm">No activities found for {selectedDate}</p>
+          {canCreate && !filterStatus && !filterDuration && !search && isToday && (
             <Button onClick={() => { setEditActivity(null); setModalOpen(true); }} size="sm"
               className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
               <Plus className="w-4 h-4 mr-1" /> Create First Activity
@@ -2478,6 +2370,295 @@ function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
   );
 }
 
+// ─── Legal Contracts Tab ──────────────────────────────────────────────────────
+interface LegalContractCol { id: number; label: string; position: number; }
+interface LegalContractRow { id: number; category: string; extra_data: Record<string, string>; position: number; }
+
+function LegalContractsTab({ canCreate }: { canCreate: boolean }) {
+  const qc = useQueryClient();
+  const [editingCell, setEditingCell] = useState<{ rowId: number; colKey: string } | null>(null);
+  const [editingColId, setEditingColId] = useState<number | null>(null);
+  const [deleteColId, setDeleteColId] = useState<number | null>(null);
+  const [deleteRowId, setDeleteRowId] = useState<number | null>(null);
+  const [newColName, setNewColName] = useState("");
+  const [showAddCol, setShowAddCol] = useState(false);
+  const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["finance-legal-contracts"],
+    queryFn: () => apiFetch("/legal-contracts"),
+    staleTime: 30_000,
+  });
+  const cols: LegalContractCol[] = data?.cols ?? [];
+  const rows: LegalContractRow[] = data?.rows ?? [];
+
+  const addColMut = useMutation({
+    mutationFn: (label: string) => apiFetch("/legal-contracts-cols", { method: "POST", body: JSON.stringify({ label }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setNewColName(""); setShowAddCol(false); },
+  });
+  const renameColMut = useMutation({
+    mutationFn: ({ id, label }: { id: number; label: string }) => apiFetch(`/legal-contracts-cols/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setEditingColId(null); },
+  });
+  const deleteColMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/legal-contracts-cols/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setDeleteColId(null); },
+  });
+  const addRowMut = useMutation({
+    mutationFn: () => apiFetch("/legal-contracts-rows", { method: "POST", body: JSON.stringify({ category: "", extra_data: {} }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }),
+  });
+  const updateRowMut = useMutation({
+    mutationFn: ({ id, category, extra_data }: { id: number; category: string; extra_data: Record<string, string> }) =>
+      apiFetch(`/legal-contracts-rows/${id}`, { method: "PATCH", body: JSON.stringify({ category, extra_data }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }),
+  });
+  const deleteRowMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/legal-contracts-rows/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setDeleteRowId(null); },
+  });
+
+  const cellKey = (rowId: number, colKey: string) => `${rowId}::${colKey}`;
+
+  const startEdit = (rowId: number, colKey: string, cur: string) => {
+    if (!canCreate) return;
+    setLocalEdits((p) => ({ ...p, [cellKey(rowId, colKey)]: cur }));
+    setEditingCell({ rowId, colKey });
+  };
+
+  const commitEdit = (row: LegalContractRow, colKey: string) => {
+    const val = localEdits[cellKey(row.id, colKey)] ?? "";
+    const newCat = colKey === "category" ? val : row.category;
+    const newExtra = colKey === "category" ? row.extra_data : { ...row.extra_data, [colKey]: val };
+    updateRowMut.mutate({ id: row.id, category: newCat, extra_data: newExtra });
+    setEditingCell(null);
+  };
+
+  // Column widths: Sno=48px, Category=160px, dynamic cols=180px
+  const SNO_W = 48;
+  const CAT_W = 160;
+  const COL_W = 180; // first dynamic col — frozen as 3rd column
+
+  const handleExport = () => {
+    exportSingleSheet("finance-legal-contracts.xlsx", "Legal Contracts", rows.map((row, index) => agreementRowToExcel(row, cols, index)));
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Legal Contracts</h2>
+            <p className="text-xs text-gray-500">{rows.length} rows · {cols.length + 2} columns (Sno + Category + {cols.length} custom)</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
+            <FileText className="w-4 h-4" /> Export to Excel
+          </Button>
+          {canCreate && (
+            <>
+              <button onClick={() => addRowMut.mutate()} disabled={addRowMut.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition shadow-sm">
+                <Plus className="w-4 h-4" /> Add Row
+              </button>
+              <button onClick={() => setShowAddCol(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">
+                <Plus className="w-4 h-4" /> Add Column
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Add column modal */}
+      {showAddCol && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+            <h3 className="font-bold text-gray-900 mb-4">New Column Title</h3>
+            <input autoFocus type="text" placeholder="e.g. Contract Type, Status, Notes…" value={newColName}
+              onChange={(e) => setNewColName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && newColName.trim()) addColMut.mutate(newColName.trim()); if (e.key === "Escape") setShowAddCol(false); }}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setShowAddCol(false); setNewColName(""); }} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => newColName.trim() && addColMut.mutate(newColName.trim())} disabled={!newColName.trim() || addColMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-white">
+        {isLoading ? (
+          <div className="h-40 flex items-center justify-center text-gray-400 text-sm">Loading…</div>
+        ) : (
+          <div style={{ overflowX: "auto", maxHeight: "65vh", overflowY: "auto" }}>
+            <table className="text-sm" style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed", minWidth: SNO_W + CAT_W + cols.length * 180 + (canCreate ? 52 : 0) }}>
+              <colgroup>
+                <col style={{ width: SNO_W }} />
+                <col style={{ width: CAT_W }} />
+                {cols.map((c) => <col key={c.id} style={{ width: 180 }} />)}
+                {canCreate && <col style={{ width: 52 }} />}
+              </colgroup>
+              <thead>
+                <tr style={{ position: "sticky", top: 0, zIndex: 4 }}>
+                  {/* Sno - double-frozen */}
+                  <th style={{ position: "sticky", left: 0, top: 0, zIndex: 5, background: "#F1F5F9", width: SNO_W, minWidth: SNO_W }}
+                    className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide border-b-2 border-r border-gray-200">
+                    Sno
+                  </th>
+                  {/* Category - double-frozen */}
+                  <th style={{ position: "sticky", left: SNO_W, top: 0, zIndex: 5, background: "#F1F5F9", width: CAT_W, minWidth: CAT_W }}
+                    className="px-3 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wide border-b-2 border-r border-gray-200">
+                    Category
+                  </th>
+                  {/* Dynamic column headers — first one is also frozen (3rd column) */}
+                  {cols.map((col, colIdx) => (
+                    <th key={col.id}
+                      style={colIdx === 0
+                        ? { background: "#F1F5F9", position: "sticky", left: SNO_W + CAT_W, top: 0, zIndex: 5, width: COL_W, minWidth: COL_W }
+                        : { background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }}
+                      className="px-3 py-3 text-left border-b-2 border-r border-gray-200 group">
+                      {editingColId === col.id ? (
+                        <input autoFocus
+                          className="w-full text-xs font-bold text-gray-700 uppercase tracking-wide bg-white border border-indigo-300 rounded px-1 py-0.5 focus:outline-none"
+                          defaultValue={col.label}
+                          onBlur={(e) => renameColMut.mutate({ id: col.id, label: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") renameColMut.mutate({ id: col.id, label: (e.target as HTMLInputElement).value });
+                            if (e.key === "Escape") setEditingColId(null);
+                          }} />
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide flex-1 truncate">{col.label}</span>
+                          {canCreate && (
+                            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
+                              <button onClick={() => setEditingColId(col.id)} className="p-0.5 text-gray-400 hover:text-blue-600 rounded"><Pencil className="w-3 h-3" /></button>
+                              <button onClick={() => setDeleteColId(col.id)} className="p-0.5 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </th>
+                  ))}
+                  {canCreate && <th style={{ background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }} className="border-b-2 border-gray-200" />}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={cols.length + 3} className="px-4 py-16 text-center text-gray-400 text-sm">
+                      <ShieldCheck className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                      No contracts yet. Click "Add Row" to start.
+                    </td>
+                  </tr>
+                ) : rows.map((row, idx) => (
+                  <tr key={row.id} className="group/row hover:bg-indigo-50/30 transition-colors">
+                    {/* Sno - frozen */}
+                    <td style={{ position: "sticky", left: 0, zIndex: 2, background: "#F8FAFC", width: SNO_W, minWidth: SNO_W }}
+                      className="px-3 py-2 text-gray-400 font-mono text-xs border-r border-b border-gray-100 text-center">
+                      {idx + 1}
+                    </td>
+                    {/* Category - frozen */}
+                    <td style={{ position: "sticky", left: SNO_W, zIndex: 2, background: "white", width: CAT_W, minWidth: CAT_W }}
+                      className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text"
+                      onClick={() => startEdit(row.id, "category", row.category)}>
+                      {editingCell?.rowId === row.id && editingCell?.colKey === "category" ? (
+                        <input autoFocus
+                          className="w-full px-1.5 py-0.5 text-sm font-medium text-gray-800 bg-white border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          value={localEdits[cellKey(row.id, "category")] ?? ""}
+                          onChange={(e) => setLocalEdits((p) => ({ ...p, [cellKey(row.id, "category")]: e.target.value }))}
+                          onBlur={() => commitEdit(row, "category")}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commitEdit(row, "category"); } if (e.key === "Escape") setEditingCell(null); }} />
+                      ) : (
+                        <span className={`block px-1.5 py-0.5 text-sm font-medium min-h-[26px] rounded hover:bg-indigo-50 ${row.category ? "text-gray-800" : "text-gray-300 italic"}`}>
+                          {row.category || (canCreate ? "Click to edit" : "—")}
+                        </span>
+                      )}
+                    </td>
+                    {/* Dynamic cells — first one also frozen as 3rd column */}
+                    {cols.map((col, colIdx) => {
+                      const colKey = String(col.id);
+                      const val = row.extra_data[colKey] ?? "";
+                      const isEditing = editingCell?.rowId === row.id && editingCell?.colKey === colKey;
+                      const isThirdFrozen = colIdx === 0;
+                      return (
+                        <td key={col.id}
+                          style={isThirdFrozen ? { position: "sticky", left: SNO_W + CAT_W, zIndex: 2, background: "white", width: COL_W, minWidth: COL_W } : {}}
+                          className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text" onClick={() => startEdit(row.id, colKey, val)}>
+                          {isEditing ? (
+                            <input autoFocus
+                              className="w-full px-1.5 py-0.5 text-sm text-gray-700 bg-white border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                              value={localEdits[cellKey(row.id, colKey)] ?? ""}
+                              onChange={(e) => setLocalEdits((p) => ({ ...p, [cellKey(row.id, colKey)]: e.target.value }))}
+                              onBlur={() => commitEdit(row, colKey)}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commitEdit(row, colKey); } if (e.key === "Escape") setEditingCell(null); }} />
+                          ) : (
+                            <span className={`block px-1.5 py-0.5 text-sm min-h-[26px] rounded hover:bg-indigo-50 ${val ? "text-gray-700" : "text-gray-200"}`}>
+                              {val}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    {/* Delete row button */}
+                    {canCreate && (
+                      <td className="px-2 py-1.5 border-b border-gray-100 text-center">
+                        <button onClick={() => setDeleteRowId(row.id)}
+                          className="opacity-0 group-hover/row:opacity-100 p-1 text-gray-300 hover:text-red-500 rounded transition-all">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Delete column confirm */}
+      {deleteColId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 className="w-6 h-6 text-red-600" /></div>
+            <h3 className="font-bold text-gray-900 text-center mb-1">Delete Column?</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">All cell data in this column will be lost.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteColId(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => deleteColMut.mutate(deleteColId)} disabled={deleteColMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete row confirm */}
+      {deleteRowId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 className="w-6 h-6 text-red-600" /></div>
+            <h3 className="font-bold text-gray-900 text-center mb-1">Delete Row?</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteRowId(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => deleteRowMut.mutate(deleteRowId)} disabled={deleteRowMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── History Tab ──────────────────────────────────────────────────────────────
 interface HistoryRecord {
   id: number;
@@ -3109,6 +3290,7 @@ export default function FinanceManagement() {
         {activeTab === "history" && <HistoryTab />}
         {activeTab === "management" && <ManagementTab canCreate={canCreate} />}
         {activeTab === "agreement_summary" && <AgreementSummaryTab canCreate={canCreate} />}
+        {activeTab === "legal_contracts" && <LegalContractsTab canCreate={canCreate} />}
         {ACTIVITY_CATEGORIES.includes(activeTab as (typeof ACTIVITY_CATEGORIES)[number]) && (
           <ActivityTab
             key={activeTab}

@@ -365,10 +365,11 @@ async function exportAllFinanceTabsToExcel() {
   const today = getISTDateStr();
   const activityCategories = [...ACTIVITY_CATEGORIES];
 
-  const [dashboard, recruitment, agreement, history, management, ...activityResponses] = await Promise.all([
+  const [dashboard, recruitment, agreement, legalContracts, history, management, ...activityResponses] = await Promise.all([
     apiFetch("/dashboard"),
     apiFetch("/recruitment"),
     apiFetch("/agreement-summary"),
+    apiFetch("/legal-contracts"),
     apiFetch(`/history?date=${today}`),
     apiFetch("/management-tasks"),
     ...activityCategories.map((category) => apiFetch(`/activities?category=${category}`)),
@@ -391,6 +392,10 @@ async function exportAllFinanceTabsToExcel() {
     {
       name: "Agreement Summary",
       rows: ((agreement?.rows ?? []) as AgreementRow[]).map((row, index) => agreementRowToExcel(row, agreement?.cols ?? [], index)),
+    },
+    {
+      name: "Legal Contracts",
+      rows: ((legalContracts?.rows ?? []) as LegalContractRow[]).map((row, index) => agreementRowToExcel(row, legalContracts?.cols ?? [], index)),
     },
     {
       name: "History",

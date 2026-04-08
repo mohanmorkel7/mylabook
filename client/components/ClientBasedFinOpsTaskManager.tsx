@@ -3348,76 +3348,76 @@ export default function ClientBasedFinOpsTaskManager() {
         )}
 
         {/* Overall Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-blue-600">
                 {overallSummary.total_tasks}
               </div>
-              <div className="text-xs text-gray-600">Total Tasks</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Total Tasks</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-gray-900">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-gray-900">
                 {overallSummary.total_subtasks}
               </div>
-              <div className="text-xs text-gray-600">Total Subtasks</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Total Subtasks</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-green-600">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-green-600">
                 {overallSummary.completed_subtasks}
               </div>
-              <div className="text-xs text-gray-600">Completed</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Completed</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-yellow-600">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-yellow-600">
                 {overallSummary.delayed_subtasks}
               </div>
-              <div className="text-xs text-gray-600">Delayed</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Delayed</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-red-600">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-red-600">
                 {overallSummary.overdue_subtasks}
               </div>
-              <div className="text-xs text-gray-600">Overdue</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Overdue</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-indigo-600">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-indigo-600">
                 {overallSummary.pending_subtasks}
               </div>
-              <div className="text-xs text-gray-600">Pending</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Pending</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-blue-600">
                 {overallSummary.in_progress_subtasks}
               </div>
-              <div className="text-xs text-gray-600">In-Progress</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">In-Progress</div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-purple-600">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-purple-600">
                 {Object.keys(clientSummary).length}
               </div>
-              <div className="text-xs text-gray-600">Active Clients</div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Active Clients</div>
             </CardContent>
           </Card>
         </div>

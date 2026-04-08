@@ -993,6 +993,57 @@ router.post("/history/snapshot", async (req: Request, res: Response) => {
   }
 });
 
+// PATCH: update a specific history record's status
+router.patch("/history/:id/status", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, reason_non_completion } = req.body;
+    if (!status) return res.status(400).json({ error: "status is required" });
+
+    const result = await pool.query(
+      `UPDATE finance_activity_history
+       SET status=$1, reason_non_completion=$2
+       WHERE id=$3 RETURNING *`,
+      [
+        encrypt(status),
+        encrypt(reason_non_completion ?? ""),
+        id,
+      ],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "History record not found" });
+
+    const row = result.rows[0];
+    const updated = {
+      id: row.id,
+      activity_ref_id: row.activity_ref_id,
+      history_date: row.history_date,
+      activity_id: decrypt(row.activity_id),
+      category: decrypt(row.category),
+      activity_name: decrypt(row.activity_name),
+      duration: decrypt(row.duration),
+      status: decrypt(row.status),
+      reason_non_completion: decrypt(row.reason_non_completion),
+      assigned_to: decryptArr(row.assigned_to),
+      recorded_at: row.recorded_at,
+    };
+    res.json({ history: updated });
+  } catch (err: any) {
+    console.error("PATCH /finance/history/status:", err.message);
+    res.status(500).json({ error: "Failed to update history record" });
+  }
+});
+
+// DELETE: remove a specific history record
+router.delete("/history/:id", async (req: Request, res: Response) => {
+  try {
+    await pool.query("DELETE FROM finance_activity_history WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("DELETE /finance/history:", err.message);
+    res.status(500).json({ error: "Failed to delete history record" });
+  }
+});
+
 // ── Agreement Summary CRUD ────────────────────────────────────────────────────
 function decryptAgreementCol(row: any) {
   return { id: row.id, label: decrypt(row.label), position: row.position, created_at: row.created_at };

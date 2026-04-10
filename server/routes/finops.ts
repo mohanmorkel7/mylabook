@@ -3323,6 +3323,7 @@ router.get("/tracker/hourly", async (req: Request, res: Response) => {
     }
 
     // Query finops_tracker to get hourly task data based on started_at
+    // Join with finops_tasks and finops_clients to get client_name
     const query = `
       SELECT
         ft.id,
@@ -3334,18 +3335,20 @@ router.get("/tracker/hourly", async (req: Request, res: Response) => {
         ft.started_at,
         ft.completed_at,
         ft.completed_by,
-        ft.assigned_to,
+        COALESCE(ft.assigned_to, fts.assigned_to::text) as assigned_to,
         ft.reporting_managers,
         ft.escalation_managers,
         ft.approved_by,
         ft.approved_at,
         ft.delay_reason,
         ft.delay_notes,
-        ft.client_name,
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name,
         ft.sla_hours,
         ft.sla_minutes,
         ft.period
       FROM finops_tracker ft
+      LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
+      LEFT JOIN finops_clients fc ON fts.client_id = fc.id
       ${whereClause}
       ORDER BY ft.started_at DESC, ft.task_id ASC
     `;

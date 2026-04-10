@@ -363,11 +363,11 @@ function dashboardSummaryRows(data: any) {
 
 async function exportAllFinanceTabsToExcel() {
   const today = getISTDateStr();
-  // Use yesterday's date for history since today's data is typically empty
+  // Use 2 days ago for history since today and yesterday typically have no data
   const ist = getISTNow();
-  const yesterday = new Date(ist);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayIST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+  const twoDaysAgo = new Date(ist);
+  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+  const twoDaysAgoIST = `${twoDaysAgo.getFullYear()}-${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(twoDaysAgo.getDate()).padStart(2, "0")}`;
   const activityCategories = [...ACTIVITY_CATEGORIES];
 
   const [dashboard, recruitment, agreement, legalContracts, history, management, ...activityResponses] = await Promise.all([
@@ -375,7 +375,7 @@ async function exportAllFinanceTabsToExcel() {
     apiFetch("/recruitment"),
     apiFetch("/agreement-summary"),
     apiFetch("/legal-contracts"),
-    apiFetch(`/history?date=${yesterdayIST}`),
+    apiFetch(`/history?date=${twoDaysAgoIST}`),
     apiFetch("/management-tasks"),
     ...activityCategories.map((category) => apiFetch(`/activities?category=${category}`)),
   ]);
@@ -2816,14 +2816,14 @@ function HistoryTab() {
   const ist = getISTNow();
   const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
 
-  // Default to yesterday's date since today's data is typically empty
-  const yesterdayIST = (() => {
-    const yesterday = new Date(ist);
-    yesterday.setDate(yesterday.getDate() - 1);
-    return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+  // Default to 2 days ago since today and yesterday typically have no data
+  const twoDaysAgoIST = (() => {
+    const twoDaysAgo = new Date(ist);
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    return `${twoDaysAgo.getFullYear()}-${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(twoDaysAgo.getDate()).padStart(2, "0")}`;
   })();
 
-  const [selectedDate, setSelectedDate] = useState(yesterdayIST);
+  const [selectedDate, setSelectedDate] = useState(twoDaysAgoIST);
   const [snapping, setSnapping] = useState(false);
 
   const { data, isLoading, isError } = useQuery({

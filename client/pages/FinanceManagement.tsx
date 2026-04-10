@@ -2810,7 +2810,15 @@ function HistoryTab() {
   const qc = useQueryClient();
   const ist = getISTNow();
   const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
-  const [selectedDate, setSelectedDate] = useState(todayIST);
+
+  // Default to yesterday's date since today's data is typically empty
+  const yesterdayIST = (() => {
+    const yesterday = new Date(ist);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+  })();
+
+  const [selectedDate, setSelectedDate] = useState(yesterdayIST);
   const [snapping, setSnapping] = useState(false);
 
   const { data, isLoading, isError } = useQuery({

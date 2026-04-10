@@ -439,7 +439,7 @@ export default function FinOpsUserStats() {
       let isActiveTask = false;
 
       // Check if this is an active/ongoing task (no completed_at and status is not completed)
-      const activeStatuses = ['pending', 'in_progress', 'delayed'];
+      const activeStatuses = ['pending', 'in_progress', 'delayed', 'overdue'];
       if (!row.completed_at && activeStatuses.includes(row.status?.toLowerCase())) {
         isActiveTask = true;
       }

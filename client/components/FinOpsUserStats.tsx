@@ -136,22 +136,23 @@ export default function FinOpsUserStats() {
     staleTime: 30_000,
   });
 
-  // Fetch hourly subtask data (from finops_subtasks) for hourly status chart
+  // Fetch hourly tracker data (from finops_tracker) for hourly status chart
+  // Uses started_at field to group tasks by hour (12:00 AM to 11:59 PM IST)
   const { data: hourlySubtasksData = [] } = useQuery({
-    queryKey: ["finops-subtasks-hourly", fromDate, toDate],
+    queryKey: ["finops-tracker-hourly", fromDate, toDate],
     queryFn: async () => {
       try {
-        const url = `/finops/subtasks/hourly?from_date=${fromDate || ""}&to_date=${toDate || ""}`;
-        console.log("Fetching hourly subtask data from:", url);
+        const url = `/finops/tracker/hourly?from_date=${fromDate || ""}&to_date=${toDate || ""}`;
+        console.log("Fetching hourly tracker data from:", url);
         const resp = await apiClient.request(url);
         const data = Array.isArray(resp) ? resp : resp?.data || [];
-        console.log("Hourly subtask response received - count:", data.length);
+        console.log("Hourly tracker response received - count:", data.length);
         if (data.length > 0) {
           console.log("Sample response rows:", data.slice(0, 2));
         }
         return data;
       } catch (e) {
-        console.error("Failed to fetch hourly subtask data:", e);
+        console.error("Failed to fetch hourly tracker data:", e);
         return [];
       }
     },
@@ -307,6 +308,27 @@ export default function FinOpsUserStats() {
     }
   };
 
+  // Helper: Extract hour from started_at ISO timestamp (in IST timezone)
+  const getHourFromStartedAt = (startedAt: string | null): number | null => {
+    if (!startedAt) return null;
+    try {
+      const date = new Date(startedAt);
+      if (isNaN(date.getTime())) return null;
+      // Extract hour in IST timezone
+      const istFormatter = new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Kolkata"
+      });
+      const istHour = istFormatter.format(date);
+      const hour = parseInt(istHour, 10);
+      if (isNaN(hour) || hour < 0 || hour > 23) return null;
+      return hour;
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Helper: Get duration category and styling for a task
   const getDurationCategoryForTask = (durationMinutes: number): { category: string; bgColor: string; borderColor: string } => {
     const hours = durationMinutes / 60;
@@ -352,24 +374,24 @@ export default function FinOpsUserStats() {
     let skippedCount = 0;
     const skipReasons: { [key: string]: number } = {};
 
-    // Group tasks by start time hour and categorize by duration
+    // Group tasks by started_at hour (from finops_tracker) and categorize by duration
     hourlySubtasksData.forEach((row: any, idx: number) => {
       if (idx < 3) {
         console.log(`[Data Check] Row ${idx}:`, {
-          start_time: row.start_time,
           started_at: row.started_at,
           completed_at: row.completed_at,
-          name: row.name,
+          subtask_name: row.subtask_name,
+          task_name: row.task_name,
           assigned_to: row.assigned_to,
         });
       }
 
-      // Extract hour from start_time (HH:MM:SS format)
-      const startHour = getHourFromTimeString(row.start_time);
+      // Extract hour from started_at (ISO timestamp in IST timezone)
+      const startHour = getHourFromStartedAt(row.started_at);
       if (startHour === null) {
         const reason = 'null_hour';
         skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-        if (idx < 5) console.warn(`Row ${idx}: startHour is null, skipping. start_time=${row.start_time}`);
+        if (idx < 5) console.warn(`Row ${idx}: startHour is null, skipping. started_at=${row.started_at}`);
         skippedCount++;
         return;
       }
@@ -383,8 +405,9 @@ export default function FinOpsUserStats() {
         return;
       }
 
-      // Calculate duration using start_time (HH:MM:SS) + completion date
-      // This gives us realistic task duration (20 min instead of 100+ hours)
+      // Calculate duration using started_at and completed_at timestamps
+      // Both are ISO timestamps, so calculation is straightforward
+      let startedDate: Date;
       let completedDate: Date;
       let startTimeMs: number;
       let endTimeMs: number;
@@ -394,36 +417,17 @@ export default function FinOpsUserStats() {
       let durationSeconds: number;
 
       try {
+        startedDate = new Date(row.started_at);
         completedDate = new Date(row.completed_at);
+
+        if (isNaN(startedDate.getTime())) {
+          throw new Error(`Invalid started_at date: ${row.started_at}`);
+        }
         if (isNaN(completedDate.getTime())) {
           throw new Error(`Invalid completed_at date: ${row.completed_at}`);
         }
 
-        const completedHour = completedDate.getHours();
-        const completedMinutesVal = completedDate.getMinutes();
-        const completedSecondsVal = completedDate.getSeconds();
-
-        // Build start timestamp from start_time (HH:MM:SS) on the same day as completion
-        const [hourStr, minStr, secStr] = row.start_time.split(':');
-        const startHourNum = parseInt(hourStr, 10);
-        const startMinNum = parseInt(minStr, 10);
-        const startSecNum = parseInt(secStr, 10);
-
-        if (isNaN(startHourNum) || isNaN(startMinNum) || isNaN(startSecNum)) {
-          throw new Error(`Invalid start_time format: ${row.start_time}`);
-        }
-
-        // Create start time on the completion date
-        const startTime = new Date(completedDate);
-        startTime.setHours(startHourNum, startMinNum, startSecNum, 0);
-
-        // Handle case where task completed after midnight (if start_time is later than completion time)
-        // This means the task started yesterday
-        if (startTime > completedDate) {
-          startTime.setDate(startTime.getDate() - 1);
-        }
-
-        startTimeMs = startTime.getTime();
+        startTimeMs = startedDate.getTime();
         endTimeMs = completedDate.getTime();
 
         if (isNaN(startTimeMs) || isNaN(endTimeMs) || startTimeMs > endTimeMs) {
@@ -448,7 +452,7 @@ export default function FinOpsUserStats() {
 
       // Debug: Log sample tasks to verify duration calculation
       if (idx < 5) {
-        console.log(`Task ${idx}: ${row.name || row.subtask_name} - Start: ${row.start_time}, Completed: ${completedDate.toISOString()} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
+        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} - Started: ${startedDate.toISOString()}, Completed: ${completedDate.toISOString()} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
       }
 
       // Categorize by duration
@@ -495,11 +499,17 @@ export default function FinOpsUserStats() {
       };
 
       hourlyData[startHour].tasks.push({
-        name: row.name || "N/A",
+        name: row.subtask_name || row.task_name || "N/A",
         clientName: row.client_name || "N/A",
         assignedTo: parseAssignedTo(row.assigned_to),
         completedBy: row.completed_by || "N/A",
-        startTime: row.start_time,
+        startTime: new Date(row.started_at).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+          timeZone: "Asia/Kolkata"
+        }),
         completedAt: new Date(row.completed_at).toLocaleString("en-US", {
           year: "numeric",
           month: "2-digit",
@@ -508,6 +518,7 @@ export default function FinOpsUserStats() {
           minute: "2-digit",
           second: "2-digit",
           hour12: true,
+          timeZone: "Asia/Kolkata"
         }),
         status: row.status,
         durationMinutes: roundedDurationMinutes,

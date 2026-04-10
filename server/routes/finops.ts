@@ -3292,6 +3292,113 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
   }
 });
 
+// Get hourly task data from finops_tracker (using started_at field)
+// Filters by run_date and groups by the hour of started_at
+router.get("/tracker/hourly", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+
+    console.log("Tracker/hourly request - fromDate:", fromDate, "toDate:", toDate);
+
+    const params: any[] = [];
+    let whereClause = "";
+
+    // Filter by run_date (which represents the date in IST)
+    const whereParts: string[] = [];
+    if (fromDate) {
+      params.push(fromDate);
+      whereParts.push(`DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') >= $${params.length}`);
+    }
+    if (toDate) {
+      params.push(toDate);
+      whereParts.push(`DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') <= $${params.length}`);
+    }
+
+    // Ensure we have valid started_at for hourly grouping
+    whereParts.push("ft.started_at IS NOT NULL");
+
+    if (whereParts.length > 0) {
+      whereClause = "WHERE " + whereParts.join(" AND ");
+    }
+
+    // Query finops_tracker to get hourly task data based on started_at
+    const query = `
+      SELECT
+        ft.id,
+        ft.task_id,
+        ft.task_name,
+        ft.subtask_id,
+        ft.subtask_name,
+        ft.status,
+        ft.started_at,
+        ft.completed_at,
+        ft.completed_by,
+        ft.assigned_to,
+        ft.reporting_managers,
+        ft.escalation_managers,
+        ft.approved_by,
+        ft.approved_at,
+        ft.delay_reason,
+        ft.delay_notes,
+        ft.client_name,
+        ft.sla_hours,
+        ft.sla_minutes,
+        ft.period
+      FROM finops_tracker ft
+      ${whereClause}
+      ORDER BY ft.started_at DESC, ft.task_id ASC
+    `;
+
+    console.log("Tracker/hourly query:", query);
+    console.log("Tracker/hourly params:", params);
+
+    const result = await pool.query(query, params);
+    console.log("Tracker/hourly result count:", result.rows.length);
+    console.log("Query returned", result.rows.length, "rows for date range:", fromDate, "to", toDate);
+
+    if (result.rows.length > 0) {
+      console.log("Sample row:", result.rows[0]);
+      console.log("Sample started_at values:", result.rows.slice(0, 5).map((r: any) => r.started_at));
+
+      // Group by hour based on started_at (in IST timezone)
+      const hourlyDistribution: any = {};
+      result.rows.forEach((row: any) => {
+        if (row.started_at) {
+          const startDate = new Date(row.started_at);
+          // Convert to IST to get the hour
+          const istFormatter = new Intl.DateTimeFormat("en-US", {
+            hour: "2-digit",
+            hour12: false,
+            timeZone: "Asia/Kolkata"
+          });
+          const istHour = String(istFormatter.format(startDate)).padStart(2, '0');
+          hourlyDistribution[istHour] = (hourlyDistribution[istHour] || 0) + 1;
+        }
+      });
+
+      // Check for missing hours
+      const allHours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+      const presentHours = Object.keys(hourlyDistribution).map((h: string) => String(h).padStart(2, '0'));
+      const missingHours = allHours.filter(h => !presentHours.includes(h));
+
+      console.log("✅ Hourly distribution (by started_at):", hourlyDistribution);
+      console.log(`📊 Present hours: ${presentHours.sort().join(', ')}`);
+      console.log(`❌ Missing hours: ${missingHours.length > 0 ? missingHours.join(', ') : 'None'}`);
+      console.log(`📈 Total tasks returned: ${result.rows.length}`);
+    } else {
+      console.log("⚠️  No data found for date range:", fromDate, "to", toDate);
+    }
+
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching hourly tracker data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch hourly tracker data", message: e.message });
+  }
+});
+
 // Get enhanced task summary with alert information
 router.get("/tasks/:id/summary", async (req: Request, res: Response) => {
   try {

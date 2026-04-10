@@ -42,10 +42,17 @@ interface TrackerRow {
 export default function FinOpsUserStats() {
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
 
-  // Get today's date in YYYY-MM-DD format
+  // Get today's date in IST timezone (Asia/Kolkata) in YYYY-MM-DD format
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toLocaleDateString("en-CA"); // YYYY-MM-DD format
+    const now = new Date();
+    // Convert to IST (UTC+5:30) for consistent date filtering
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "Asia/Kolkata",
+    });
+    return formatter.format(now); // Returns YYYY-MM-DD format
   };
 
   const [fromDate, setFromDate] = useState<string>(getTodayDate());

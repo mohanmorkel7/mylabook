@@ -3184,10 +3184,11 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
     const params: any[] = [];
     let whereClause = "";
 
-    // Build WHERE clause filtering by COMPLETION date
-    // We want tasks that were completed on the specified date
+    // Build WHERE clause filtering by COMPLETION date in IST (Asia/Kolkata)
+    // We want tasks that were completed on the specified date in IST timezone
     // Note: Some tasks may have long durations if they started on earlier dates
-    const completionDateExpr = "DATE(st.completed_at)";
+    // Use AT TIME ZONE to convert UTC timestamps to IST before extracting date
+    const completionDateExpr = "DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')";
 
     const whereParts: string[] = [];
     if (fromDate) {

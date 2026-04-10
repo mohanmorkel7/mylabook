@@ -1181,11 +1181,24 @@ function ActivityTab({
   });
 
   const statusPatchMut = useMutation({
-    mutationFn: ({ id, status, reason }: { id: number; status: string; reason?: string }) =>
-      apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, reason_non_completion: reason }) }),
+    mutationFn: async ({ id, status, reason }: { id: number; status: string; reason?: string }) => {
+      // Update activity status
+      await apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, reason_non_completion: reason }) });
+      // Automatically create snapshot for today
+      const ist = getISTNow();
+      const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+      await apiFetch("/history/snapshot", {
+        method: "POST",
+        body: JSON.stringify({ date: todayStr }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-activities", category] });
       qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+      // Also invalidate today's history
+      const ist = getISTNow();
+      const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+      qc.invalidateQueries({ queryKey: ["finance-activities-history", todayStr] });
     },
   });
 
@@ -2805,7 +2818,6 @@ function HistoryTab() {
   const ist = getISTNow();
   const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
   const [selectedDate, setSelectedDate] = useState(todayIST);
-  const [snapping, setSnapping] = useState(false);
   const isToday = selectedDate === todayIST;
 
   // For today: fetch live activities
@@ -2816,27 +2828,13 @@ function HistoryTab() {
     enabled: isToday,
   });
 
-  // For past dates: fetch historical snapshots
+  // For past dates: fetch historical snapshots (auto-created when status changes)
   const { data: histData, isLoading: histLoading } = useQuery({
     queryKey: ["finance-activities-history", selectedDate],
     queryFn: ({ queryKey }) => apiFetch(`/history?date=${queryKey[1]}`),
     staleTime: 60_000,
     enabled: !isToday,
   });
-
-  // Take snapshot of current activities for the selected date
-  const takeSnapshot = async () => {
-    setSnapping(true);
-    try {
-      await apiFetch("/history/snapshot", {
-        method: "POST",
-        body: JSON.stringify({ date: selectedDate }),
-      });
-      qc.invalidateQueries({ queryKey: ["finance-activities-history", selectedDate] });
-    } catch { /* ignore */ } finally {
-      setSnapping(false);
-    }
-  };
 
   const isLoading = isToday ? liveLoading : histLoading;
 
@@ -2912,21 +2910,6 @@ function HistoryTab() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
             />
-            {!isToday && (
-              <button
-                onClick={takeSnapshot}
-                disabled={snapping}
-                title="Save current activity status snapshot for this date"
-                className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              >
-                {snapping ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <History className="w-3.5 h-3.5" />
-                )}
-                Snapshot
-              </button>
-            )}
           </div>
         </div>
 
@@ -2960,7 +2943,7 @@ function HistoryTab() {
           <p className="text-xs text-gray-400 mt-1">
             {isToday
               ? "Activities will appear here once they are created today"
-              : "No snapshot found for this date. Click 'Snapshot' to capture current status"}
+              : "Status snapshots are automatically saved when activity status is changed"}
           </p>
         </div>
       ) : (

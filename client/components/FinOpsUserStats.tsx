@@ -444,7 +444,13 @@ export default function FinOpsUserStats() {
         isActiveTask = true;
       }
 
-      if (row.started_at) {
+      // For active/overdue tasks without started_at, use a default high duration (>3h indicator)
+      if (!row.started_at && isActiveTask) {
+        // No started_at but task is active/overdue - mark as very long duration
+        durationHours = 5; // 5+ hours (will show as >3h / RED)
+        durationMinutes = 300;
+        durationSeconds = 18000;
+      } else if (row.started_at) {
         try {
           startedDate = new Date(row.started_at);
 
@@ -479,18 +485,25 @@ export default function FinOpsUserStats() {
             }
           }
         } catch (e: any) {
-          // Timestamp parse error, use 0 duration
-          durationHours = 0;
-          durationMinutes = 0;
-          durationSeconds = 0;
+          // Timestamp parse error, use 0 duration (unless active task)
+          if (isActiveTask) {
+            // Active tasks should show as long duration even on error
+            durationHours = 5;
+            durationMinutes = 300;
+            durationSeconds = 18000;
+          } else {
+            durationHours = 0;
+            durationMinutes = 0;
+            durationSeconds = 0;
+          }
         }
       }
 
-      // Debug: Log sample tasks
-      if (idx < 5) {
+      // Debug: Log sample tasks and overdue tasks
+      if (idx < 5 || row.status?.toLowerCase() === 'overdue') {
         const startStr = row.started_at ? new Date(row.started_at).toISOString() : 'N/A';
         const completedStr = row.completed_at ? new Date(row.completed_at).toISOString() : 'N/A';
-        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} - Scheduled: ${row.scheduled_time}, Started: ${startStr}, Completed: ${completedStr} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
+        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} [${row.status}] - Scheduled: ${row.scheduled_time}, Started: ${startStr}, Completed: ${completedStr} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Active: ${isActiveTask} - Hour: ${startHour}`);
       }
 
       // Categorize by duration, but use "upcomingHourTasks" for tasks in future hours

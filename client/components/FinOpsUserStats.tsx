@@ -382,72 +382,76 @@ export default function FinOpsUserStats() {
       }
 
       // Extract hour from scheduled_time (HH:MM:SS format)
-      const startHour = getHourFromScheduledTime(row.scheduled_time);
+      // If scheduled_time is null, try to use started_at, otherwise use hour 0
+      let startHour = getHourFromScheduledTime(row.scheduled_time);
+      if (startHour === null && row.started_at) {
+        // Fallback: try to extract hour from started_at if scheduled_time is missing
+        try {
+          const date = new Date(row.started_at);
+          if (!isNaN(date.getTime())) {
+            const istFormatter = new Intl.DateTimeFormat("en-US", {
+              hour: "2-digit",
+              hour12: false,
+              timeZone: "Asia/Kolkata"
+            });
+            const istHour = istFormatter.format(date);
+            startHour = parseInt(istHour, 10);
+            if (isNaN(startHour) || startHour < 0 || startHour > 23) {
+              startHour = 0;
+            }
+          }
+        } catch (e) {
+          startHour = 0;
+        }
+      }
+      // If still null, use hour 0 as default
       if (startHour === null) {
-        const reason = 'null_hour';
-        skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-        if (idx < 5) console.warn(`Row ${idx}: startHour is null, skipping. scheduled_time=${row.scheduled_time}`);
-        skippedCount++;
-        return;
+        startHour = 0;
       }
 
-      // Only count completed tasks (need completed_at timestamp)
-      if (!row.completed_at) {
-        const reason = 'missing_completed_at';
-        skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-        if (idx < 5) console.warn(`Row ${idx}: missing completed_at, skipping`);
-        skippedCount++;
-        return;
+      // Calculate duration using started_at and completed_at timestamps if both exist
+      // If timestamps are invalid or missing, use 0 duration
+      let durationHours = 0;
+      let durationMinutes = 0;
+      let durationSeconds = 0;
+      let startedDate: Date | null = null;
+      let completedDate: Date | null = null;
+
+      if (row.started_at && row.completed_at) {
+        try {
+          startedDate = new Date(row.started_at);
+          completedDate = new Date(row.completed_at);
+
+          const startTimeMs = startedDate.getTime();
+          const endTimeMs = completedDate.getTime();
+
+          if (!isNaN(startTimeMs) && !isNaN(endTimeMs)) {
+            const durationMs = endTimeMs - startTimeMs;
+            if (durationMs >= 0) {
+              // Valid duration calculation
+              durationHours = durationMs / (1000 * 60 * 60);
+              durationMinutes = durationMs / (1000 * 60);
+              durationSeconds = durationMs / 1000;
+            } else {
+              // Invalid sequence (completed before started), use 0
+              durationHours = 0;
+              durationMinutes = 0;
+              durationSeconds = 0;
+            }
+          }
+        } catch (e: any) {
+          // Timestamp parse error, use 0 duration
+          durationHours = 0;
+          durationMinutes = 0;
+          durationSeconds = 0;
+        }
       }
 
-      // Calculate duration using started_at and completed_at timestamps
-      // Both are ISO timestamps, so calculation is straightforward
-      let startedDate: Date;
-      let completedDate: Date;
-      let startTimeMs: number;
-      let endTimeMs: number;
-      let durationMs: number;
-      let durationHours: number;
-      let durationMinutes: number;
-      let durationSeconds: number;
-
-      try {
-        startedDate = new Date(row.started_at);
-        completedDate = new Date(row.completed_at);
-
-        if (isNaN(startedDate.getTime())) {
-          throw new Error(`Invalid started_at date: ${row.started_at}`);
-        }
-        if (isNaN(completedDate.getTime())) {
-          throw new Error(`Invalid completed_at date: ${row.completed_at}`);
-        }
-
-        startTimeMs = startedDate.getTime();
-        endTimeMs = completedDate.getTime();
-
-        if (isNaN(startTimeMs) || isNaN(endTimeMs) || startTimeMs > endTimeMs) {
-          const reason = 'invalid_time_calc';
-          skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-          if (idx < 5) console.warn(`Row ${idx}: invalid time calculation. startTimeMs=${startTimeMs}, endTimeMs=${endTimeMs}, skipping`);
-          skippedCount++;
-          return;
-        }
-
-        durationMs = endTimeMs - startTimeMs;
-        durationHours = durationMs / (1000 * 60 * 60);
-        durationMinutes = durationMs / (1000 * 60);
-        durationSeconds = durationMs / 1000;
-      } catch (e: any) {
-        const reason = 'time_parse_error';
-        skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-        if (idx < 5) console.error(`Row ${idx}: Time parsing error: ${e.message}`, row);
-        skippedCount++;
-        return;
-      }
-
-      // Debug: Log sample tasks to verify duration calculation
+      // Debug: Log sample tasks
       if (idx < 5) {
-        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} - Scheduled: ${row.scheduled_time}, Completed: ${completedDate.toISOString()} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
+        const startStr = row.started_at ? new Date(row.started_at).toISOString() : 'N/A';
+        const completedStr = row.completed_at ? new Date(row.completed_at).toISOString() : 'N/A';
+        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} - Scheduled: ${row.scheduled_time}, Started: ${startStr}, Completed: ${completedStr} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
       }
 
       // Categorize by duration
@@ -493,28 +497,48 @@ export default function FinOpsUserStats() {
         return String(value) || "N/A";
       };
 
+      // Format start time (handle missing started_at)
+      let startTimeStr = "N/A";
+      if (row.started_at) {
+        try {
+          startTimeStr = new Date(row.started_at).toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+            timeZone: "Asia/Kolkata"
+          });
+        } catch (e) {
+          startTimeStr = "N/A";
+        }
+      }
+
+      // Format completed time (handle missing completed_at)
+      let completedAtStr = "N/A";
+      if (row.completed_at) {
+        try {
+          completedAtStr = new Date(row.completed_at).toLocaleString("en-US", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+            timeZone: "Asia/Kolkata"
+          });
+        } catch (e) {
+          completedAtStr = "N/A";
+        }
+      }
+
       hourlyData[startHour].tasks.push({
         name: row.subtask_name || row.task_name || "N/A",
         clientName: row.client_name || "N/A",
         assignedTo: parseAssignedTo(row.assigned_to),
         completedBy: row.completed_by || "N/A",
-        startTime: new Date(row.started_at).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: true,
-          timeZone: "Asia/Kolkata"
-        }),
-        completedAt: new Date(row.completed_at).toLocaleString("en-US", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: true,
-          timeZone: "Asia/Kolkata"
-        }),
+        startTime: startTimeStr,
+        completedAt: completedAtStr,
         status: row.status,
         durationMinutes: roundedDurationMinutes,
         durationCategory: durationCat.category,
@@ -524,8 +548,7 @@ export default function FinOpsUserStats() {
     });
 
     console.log("=== Processing complete ===");
-    console.log(`Processed: ${processedCount}, Skipped: ${skippedCount}, Total: ${hourlySubtasksData.length}`);
-    console.log("Skip reasons:", skipReasons);
+    console.log(`Processed: ${processedCount} out of ${hourlySubtasksData.length} records`);
     const hoursWithData = hourlyData.filter(d => d.total > 0);
     console.log(`Hours with data: ${hoursWithData.length}/24`);
     console.log("Hour breakdown:", hoursWithData.map(h => ({ hour: h.hour, total: h.total, tasks: h.tasks.length })));

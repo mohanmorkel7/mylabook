@@ -3315,8 +3315,13 @@ router.get("/tracker/hourly", async (req: Request, res: Response) => {
       whereParts.push(`DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') <= $${params.length}`);
     }
 
-    // Ensure we have valid started_at for hourly grouping
+    // Ensure we have valid timestamps for hourly grouping
+    // Only include completed tasks with both started_at and completed_at timestamps
+    // AND where completed_at is on or after started_at (valid time sequence)
     whereParts.push("ft.started_at IS NOT NULL");
+    whereParts.push("ft.completed_at IS NOT NULL");
+    whereParts.push("ft.status = 'completed'");
+    whereParts.push("ft.completed_at >= ft.started_at");
 
     if (whereParts.length > 0) {
       whereClause = "WHERE " + whereParts.join(" AND ");

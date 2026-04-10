@@ -2802,10 +2802,13 @@ interface HistoryRecord {
 
 function HistoryTab() {
   const qc = useQueryClient();
+  const ist = getISTNow();
+  const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+  const [selectedDate, setSelectedDate] = useState(todayIST);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["finance-activities-all"],
-    queryFn: () => apiFetch(`/activities`),
+    queryKey: ["finance-activities", selectedDate],
+    queryFn: ({ queryKey }) => apiFetch(`/activities?date=${queryKey[1]}`),
     staleTime: 30_000,
   });
 
@@ -2846,14 +2849,22 @@ function HistoryTab() {
               <History className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 text-lg">All Activities</h2>
-              <p className="text-xs text-gray-500">Current status of all finance activities</p>
+              <h2 className="font-bold text-gray-900 text-lg">Activity Status</h2>
+              <p className="text-xs text-gray-500">Finance activities status for selected date</p>
             </div>
           </div>
           <div className="sm:ml-auto flex items-center gap-3 flex-wrap">
             <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
               <FileText className="w-4 h-4" /> Export to Excel
             </Button>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              max={todayIST}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+            />
           </div>
         </div>
 

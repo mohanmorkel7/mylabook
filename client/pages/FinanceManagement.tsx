@@ -363,6 +363,11 @@ function dashboardSummaryRows(data: any) {
 
 async function exportAllFinanceTabsToExcel() {
   const today = getISTDateStr();
+  // Use yesterday's date for history since today's data is typically empty
+  const ist = getISTNow();
+  const yesterday = new Date(ist);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayIST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
   const activityCategories = [...ACTIVITY_CATEGORIES];
 
   const [dashboard, recruitment, agreement, legalContracts, history, management, ...activityResponses] = await Promise.all([
@@ -370,7 +375,7 @@ async function exportAllFinanceTabsToExcel() {
     apiFetch("/recruitment"),
     apiFetch("/agreement-summary"),
     apiFetch("/legal-contracts"),
-    apiFetch(`/history?date=${today}`),
+    apiFetch(`/history?date=${yesterdayIST}`),
     apiFetch("/management-tasks"),
     ...activityCategories.map((category) => apiFetch(`/activities?category=${category}`)),
   ]);

@@ -3184,20 +3184,19 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
     const params: any[] = [];
     let whereClause = "";
 
-    // Build WHERE clause filtering by SCHEDULED date in IST (Asia/Kolkata)
-    // We want tasks that were SCHEDULED for the specified date
-    // This includes tasks that started on the date even if they completed later
+    // Build WHERE clause filtering by COMPLETION date in IST (Asia/Kolkata)
+    // We want tasks that were completed on the specified date in IST timezone
     // Use AT TIME ZONE to convert UTC timestamps to IST before extracting date
-    const scheduledDateExpr = "DATE(st.scheduled_date AT TIME ZONE 'Asia/Kolkata')";
+    const completionDateExpr = "DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')";
 
     const whereParts: string[] = [];
     if (fromDate) {
       params.push(fromDate);
-      whereParts.push(`${scheduledDateExpr} >= $${params.length}`);
+      whereParts.push(`${completionDateExpr} >= $${params.length}`);
     }
     if (toDate) {
       params.push(toDate);
-      whereParts.push(`${scheduledDateExpr} <= $${params.length}`);
+      whereParts.push(`${completionDateExpr} <= $${params.length}`);
     }
 
     // Filter to include only completed tasks (we need valid completion data for the chart)
@@ -3240,7 +3239,8 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
       ORDER BY st.completed_at DESC, st.task_id ASC, st.order_position ASC
     `;
 
-    console.log("Subtasks/hourly request - filtering by SCHEDULED date (not completion date)");
+    console.log("Subtasks/hourly request - filtering by COMPLETION date in IST timezone");
+    console.log("Date range (IST): ", fromDate, "to", toDate);
     console.log("Subtasks/hourly query:", query);
     console.log("Subtasks/hourly params:", params);
 

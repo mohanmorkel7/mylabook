@@ -189,18 +189,24 @@ export default function FinOpsUserStats() {
     return `${wholeHours}h ${minutes}m`;
   };
 
-  // Helper: Check if duration is reasonable (has valid timestamps)
-  const isReasonableDuration = (row: TrackerRow): boolean => {
+  // Helper: Check if duration is valid (has timestamps) - for tracking filtered records
+  const hasValidDuration = (row: TrackerRow): boolean => {
     const duration = calculateDuration(row.started_at, row.completed_at);
-    // Only filter out records with no duration (null values)
-    // Allow all positive durations regardless of period type
     return duration !== null && duration > 0;
   };
 
-  // Filter productivity data to only include records with valid durations
+  // Show ALL productivity data without filtering by duration
+  // (Previously was filtering by duration, now we show everything)
   const validProductivityData = useMemo(() => {
     if (!Array.isArray(productivityData)) return [];
-    return productivityData.filter(isReasonableDuration);
+    // Return ALL records - no duration filtering
+    return productivityData;
+  }, [productivityData]);
+
+  // Calculate how many records were skipped (for the warning message)
+  const filteredOutCount = useMemo(() => {
+    if (!Array.isArray(productivityData)) return 0;
+    return productivityData.filter(row => !hasValidDuration(row)).length;
   }, [productivityData]);
 
   // Calculate unique user count based on filter type
@@ -1054,10 +1060,10 @@ export default function FinOpsUserStats() {
             <CardTitle className="text-base font-semibold text-gray-800">Client-wise Subtask Count</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            {/* Show warning if data was filtered */}
-            {productivityData.length > validProductivityData.length && (
+            {/* Show warning if records were filtered out due to missing duration */}
+            {filteredOutCount > 0 && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                ⚠️ Filtered {productivityData.length - validProductivityData.length} record(s) with unreasonably long durations (data quality issue)
+                ℹ️ Filtered {filteredOutCount} record(s) with missing or zero durations (data quality issue) - showing all {productivityData.length} records
               </div>
             )}
             {isLoadingProductivity ? (

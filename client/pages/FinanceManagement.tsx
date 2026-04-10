@@ -1181,11 +1181,24 @@ function ActivityTab({
   });
 
   const statusPatchMut = useMutation({
-    mutationFn: ({ id, status, reason }: { id: number; status: string; reason?: string }) =>
-      apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, reason_non_completion: reason }) }),
+    mutationFn: async ({ id, status, reason }: { id: number; status: string; reason?: string }) => {
+      // Update activity status
+      await apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, reason_non_completion: reason }) });
+      // Automatically create snapshot for today
+      const ist = getISTNow();
+      const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+      await apiFetch("/history/snapshot", {
+        method: "POST",
+        body: JSON.stringify({ date: todayStr }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-activities", category] });
       qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+      // Also invalidate today's history
+      const ist = getISTNow();
+      const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+      qc.invalidateQueries({ queryKey: ["finance-activities-history", todayStr] });
     },
   });
 
@@ -1569,6 +1582,8 @@ function ActivityTab({
             const isAssignedToThis = act.assigned_to.some(
               (v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase(),
             );
+            // Department admins can also approve, plus anyone listed in approval_users
+            const canApproveThis = isApproverForThis || canEditAll;
             const canEditThis = canEditAll || isApproverForThis;
             return (
               <ActivityCard
@@ -1576,7 +1591,7 @@ function ActivityTab({
                 act={act}
                 canEdit={canEditThis}
                 canDelete={canEditThis}
-                canApprove={isApproverForThis}
+                canApprove={canApproveThis}
                 isAdmin={canEditAll}
                 isFinance={!canEditAll}
                 userEmail={userEmail}
@@ -2802,14 +2817,48 @@ interface HistoryRecord {
 
 function HistoryTab() {
   const qc = useQueryClient();
+  const ist = getISTNow();
+  const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+  const [selectedDate, setSelectedDate] = useState(todayIST);
+  const isToday = selectedDate === todayIST;
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["finance-activities-all"],
+  // For today: fetch live activities
+  const { data: liveData, isLoading: liveLoading } = useQuery({
+    queryKey: ["finance-activities-live"],
     queryFn: () => apiFetch(`/activities`),
     staleTime: 30_000,
+    enabled: isToday,
   });
 
-  const records: Activity[] = data?.activities ?? [];
+  // For past dates: fetch historical snapshots (auto-created when status changes)
+  const { data: histData, isLoading: histLoading } = useQuery({
+    queryKey: ["finance-activities-history", selectedDate],
+    queryFn: ({ queryKey }) => apiFetch(`/history?date=${queryKey[1]}`),
+    staleTime: 60_000,
+    enabled: !isToday,
+  });
+
+  const isLoading = isToday ? liveLoading : histLoading;
+
+  // Combine data from either live activities or history
+  let records: Activity[] = [];
+  if (isToday) {
+    records = liveData?.activities ?? [];
+  } else {
+    // Convert history records to Activity format for display
+    records = (histData?.history ?? []).map((h: any) => ({
+      id: h.activity_ref_id,
+      activity_id: h.activity_id,
+      activity_name: h.activity_name,
+      category: h.category,
+      duration: h.duration,
+      status: h.status,
+      reason_non_completion: h.reason_non_completion,
+      assigned_to: h.assigned_to || [],
+      due_date: h.history_date?.split('T')[0],
+      recorded_at: h.recorded_at,
+    })) as Activity[];
+  }
 
   // Group by category
   const grouped = records.reduce<Record<string, Activity[]>>((acc, r) => {
@@ -2825,15 +2874,16 @@ function HistoryTab() {
 
   const handleExport = () => {
     const excelRows = records.map((r) => ({
-      "Activity ID": r.id,
+      "Activity ID": r.activity_id || r.id,
       "Activity Name": r.activity_name,
       "Category": CAT_LABEL[r.category] ?? r.category,
       "Status": r.status,
       "Duration": r.duration,
       "Due Date": r.due_date,
       "Assigned To": r.assigned_to?.join("; ") ?? "",
+      "Recorded At": r.recorded_at ? new Date(r.recorded_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "",
     }));
-    exportSingleSheet(`finance-activities.xlsx`, "Activities", excelRows);
+    exportSingleSheet(`finance-activities-${selectedDate}.xlsx`, `Activities ${selectedDate}`, excelRows);
   };
 
   return (
@@ -2846,14 +2896,22 @@ function HistoryTab() {
               <History className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 text-lg">All Activities</h2>
-              <p className="text-xs text-gray-500">Current status of all finance activities</p>
+              <h2 className="font-bold text-gray-900 text-lg">Activity Status</h2>
+              <p className="text-xs text-gray-500">Finance activities status for selected date</p>
             </div>
           </div>
           <div className="sm:ml-auto flex items-center gap-3 flex-wrap">
             <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
               <FileText className="w-4 h-4" /> Export to Excel
             </Button>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              max={todayIST}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+            />
           </div>
         </div>
 
@@ -2883,8 +2941,12 @@ function HistoryTab() {
       ) : records.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
           <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No activities found</p>
-          <p className="text-xs text-gray-400 mt-1">Finance activities will appear here once they are created</p>
+          <p className="text-gray-500 font-medium">No activities found for {selectedDate}</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {isToday
+              ? "Activities will appear here once they are created today"
+              : "Status snapshots are automatically saved when activity status is changed"}
+          </p>
         </div>
       ) : (
         Object.entries(grouped).map(([category, recs]) => (
@@ -3218,12 +3280,14 @@ export default function FinanceManagement() {
   const role = (user as any)?.role ?? "";
   const userEmail = (user as any)?.email ?? (user as any)?.username ?? "";
   const isAdmin = role === "admin";
-  const isDeptAdmin = role === "department_admin";
+  const isDeptAdmin = (user as any)?.department_admin === true;
+  const isFinanceDeptAdmin = isDeptAdmin && (user as any)?.admin_for_department?.toLowerCase() === "finance";
   const isFinance = role === "finance";
 
-  // Admin or dept_admin with finance context → see everything
-  const canCreate = isAdmin || isFinance;
-  const canEditAll = isAdmin || isDeptAdmin;
+  // Admin or finance role or finance dept_admin → can create/manage activities
+  const canCreate = isAdmin || isFinance || isFinanceDeptAdmin;
+  // Admin or finance role or finance dept_admin → see and edit everything
+  const canEditAll = isAdmin || isFinance || isFinanceDeptAdmin;
 
   // Fetch users for dropdowns
   const { data: users = [] } = useQuery({

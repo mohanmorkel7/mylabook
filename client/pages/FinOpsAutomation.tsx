@@ -80,13 +80,15 @@ export default function FinOpsAutomation() {
   // Add this line to define selectedTask
   const [selectedTask, setSelectedTask] = useState<AutomationTask | null>(null);
 
-  // Pulse alerts toggle visibility
+  // Pulse alerts toggle visibility and full access
   const isAdmin = user?.role === "admin";
-  const isSpecificFinOpsDeptAdmin =
-    String(user?.id || "") === "226" &&
-    !!user?.department_admin &&
+  const isFinOpsRole = user?.role === "finops";
+  const isFinOpsDeptAdmin =
+    user?.department_admin === true &&
     String(user?.admin_for_department || "").toLowerCase() === "finops";
-  const canSeePulseToggle = isAdmin || isSpecificFinOpsDeptAdmin;
+  const canSeePulseToggle = isAdmin || isFinOpsDeptAdmin;
+  // Full access: admin, finops role, or finops department admin
+  const hasFullAccess = isAdmin || isFinOpsRole || isFinOpsDeptAdmin;
 
   const { data: pulseAlertsEnabled = true } = useQuery({
     queryKey: ["finops-pulse-alerts"],

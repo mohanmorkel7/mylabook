@@ -3316,17 +3316,13 @@ router.get("/tracker/hourly", async (req: Request, res: Response) => {
     }
 
     // Ensure we have valid timestamps for hourly grouping
-    // Only include completed tasks with both completed_at and scheduled_time
-    // AND where completed_at is on or after started_at (valid time sequence)
-    whereParts.push("ft.completed_at IS NOT NULL");
-    whereParts.push("ft.status = 'completed'");
-    whereParts.push("ft.completed_at >= ft.started_at");
+    // Filter by date range only - get all task records
 
     if (whereParts.length > 0) {
       whereClause = "WHERE " + whereParts.join(" AND ");
     }
 
-    // Query finops_tracker to get hourly task data based on started_at
+    // Query finops_tracker to get hourly task data based on scheduled_time
     // Join with finops_tasks and finops_clients to get client_name
     const query = `
       SELECT

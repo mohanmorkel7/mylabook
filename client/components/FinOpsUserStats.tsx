@@ -356,7 +356,8 @@ export default function FinOpsUserStats() {
       "1to2h": 0,         // >1h to ≤2h (AMBER)
       "2to3h": 0,         // >2h to ≤3h (ORANGE)
       "moreThan3h": 0,    // >3h (RED)
-      "upcoming": 0,      // Upcoming/future hours (SKY BLUE)
+      "upcomingHourTasks": 0,  // Tasks in upcoming/future hours (SKY BLUE)
+      "upcoming": 0,      // Empty upcoming/future hours indicator (SKY BLUE)
       total: 0,
       isFutureHour: hour > currentHour, // Mark future hours
       // Store detailed task info for tooltip
@@ -483,14 +484,22 @@ export default function FinOpsUserStats() {
         console.log(`Task ${idx}: ${row.subtask_name || row.task_name} - Scheduled: ${row.scheduled_time}, Started: ${startStr}, Completed: ${completedStr} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
       }
 
-      // Categorize by duration
-      let durationCategory = "lessThan1h";
-      if (durationHours > 3) {
-        durationCategory = "moreThan3h";
-      } else if (durationHours > 2) {
-        durationCategory = "2to3h";
-      } else if (durationHours > 1) {
-        durationCategory = "1to2h";
+      // Categorize by duration, but use "upcomingHourTasks" for tasks in future hours
+      let durationCategory: string;
+
+      if (hourlyData[startHour].isFutureHour) {
+        // Tasks in upcoming/future hours - show all in sky blue
+        durationCategory = "upcomingHourTasks";
+      } else {
+        // Tasks in past/current hours - categorize by actual duration
+        durationCategory = "lessThan1h";
+        if (durationHours > 3) {
+          durationCategory = "moreThan3h";
+        } else if (durationHours > 2) {
+          durationCategory = "2to3h";
+        } else if (durationHours > 1) {
+          durationCategory = "1to2h";
+        }
       }
 
       // Increment the counter for this duration category at this hour
@@ -792,7 +801,8 @@ export default function FinOpsUserStats() {
       const onTimePercentage = hourTotal > 0 ? ((hourData.lessThan1h / hourTotal) * 100).toFixed(1) : "0";
       pivotData.push({
         "Hour": hourData.hour,
-        "Upcoming": hourData.upcoming || 0,
+        "Empty Upcoming": hourData.upcoming || 0,
+        "Upcoming Tasks": hourData.upcomingHourTasks || 0,
         "≤1 Hour": hourData.lessThan1h || 0,
         "1-2 Hours": hourData["1to2h"] || 0,
         "2-3 Hours": hourData["2to3h"] || 0,
@@ -1226,8 +1236,14 @@ export default function FinOpsUserStats() {
                                   <div className="grid grid-cols-2 gap-2">
                                     {dataToShow.upcoming > 0 && (
                                       <div className="bg-gradient-to-br from-sky-50 to-sky-100 rounded-lg p-3 border border-sky-200">
-                                        <p className="text-xs font-semibold text-sky-700">🔵 Upcoming Hour</p>
+                                        <p className="text-xs font-semibold text-sky-700">🔵 Empty Upcoming</p>
                                         <p className="text-2xl font-bold text-sky-600">{dataToShow.upcoming}</p>
+                                      </div>
+                                    )}
+                                    {dataToShow.upcomingHourTasks > 0 && (
+                                      <div className="bg-gradient-to-br from-sky-50 to-sky-100 rounded-lg p-3 border border-sky-200">
+                                        <p className="text-xs font-semibold text-sky-700">🔵 Upcoming Tasks</p>
+                                        <p className="text-2xl font-bold text-sky-600">{dataToShow.upcomingHourTasks}</p>
                                       </div>
                                     )}
                                     {dataToShow.lessThan1h > 0 && (
@@ -1328,7 +1344,8 @@ export default function FinOpsUserStats() {
                           contentStyle={{ borderRadius: "8px", position: "relative", zIndex: 50 }}
                         />
                         <Recharts.Legend />
-                        <Recharts.Bar dataKey="upcoming" name="Upcoming Hours" stackId="duration" fill="#0EA5E9" />
+                        <Recharts.Bar dataKey="upcoming" name="Empty Upcoming Hour" stackId="duration" fill="#0EA5E9" />
+                        <Recharts.Bar dataKey="upcomingHourTasks" name="Upcoming Hour Tasks" stackId="duration" fill="#0EA5E9" />
                         <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />
                         <Recharts.Bar dataKey="1to2h" name="1-2 Hours" stackId="duration" fill="#FBBF24" />
                         <Recharts.Bar dataKey="2to3h" name="2-3 Hours" stackId="duration" fill="#F97316" />

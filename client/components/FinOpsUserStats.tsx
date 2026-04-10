@@ -324,7 +324,10 @@ export default function FinOpsUserStats() {
   };
 
   // Helper: Get duration category and styling for a task
-  const getDurationCategoryForTask = (durationMinutes: number): { category: string; bgColor: string; borderColor: string } => {
+  const getDurationCategoryForTask = (durationMinutes: number, isActive: boolean = false): { category: string; bgColor: string; borderColor: string } => {
+    // Active/ongoing tasks (pending, in_progress, delayed with null completed_at) are always RED
+    if (isActive) return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
+
     const hours = durationMinutes / 60;
     if (hours <= 1) return { category: 'green', bgColor: 'bg-green-700', borderColor: 'border-green-900' };
     if (hours <= 2) return { category: 'amber', bgColor: 'bg-amber-700', borderColor: 'border-amber-900' };
@@ -342,6 +345,10 @@ export default function FinOpsUserStats() {
       return [];
     }
 
+    // Get current hour in IST for future hour detection
+    const currentISTDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const currentHour = currentISTDate.getHours();
+
     // Initialize 24 hours with duration categories
     const hourlyData = Array.from({ length: 24 }, (_, hour) => ({
       hour: `${String(hour).padStart(2, "0")}:00`,
@@ -349,7 +356,9 @@ export default function FinOpsUserStats() {
       "1to2h": 0,         // >1h to ≤2h (AMBER)
       "2to3h": 0,         // >2h to ≤3h (ORANGE)
       "moreThan3h": 0,    // >3h (RED)
+      "upcoming": 0,      // Upcoming/future hours (SKY BLUE)
       total: 0,
+      isFutureHour: hour > currentHour, // Mark future hours
       // Store detailed task info for tooltip
       tasks: [] as Array<{
         name: string;
@@ -409,21 +418,41 @@ export default function FinOpsUserStats() {
         startHour = 0;
       }
 
-      // Calculate duration using started_at and completed_at timestamps if both exist
-      // If timestamps are invalid or missing, use 0 duration
+      // Calculate duration based on task state
+      // If completed_at is null and status is pending/in_progress/delayed: calculate from started_at to NOW (RED)
+      // Otherwise: calculate from started_at to completed_at
       let durationHours = 0;
       let durationMinutes = 0;
       let durationSeconds = 0;
       let startedDate: Date | null = null;
       let completedDate: Date | null = null;
+      let isActiveTask = false;
 
-      if (row.started_at && row.completed_at) {
+      // Check if this is an active/ongoing task (no completed_at and status is not completed)
+      const activeStatuses = ['pending', 'in_progress', 'delayed'];
+      if (!row.completed_at && activeStatuses.includes(row.status?.toLowerCase())) {
+        isActiveTask = true;
+      }
+
+      if (row.started_at) {
         try {
           startedDate = new Date(row.started_at);
-          completedDate = new Date(row.completed_at);
+
+          // If active task, use current time; otherwise use completed_at
+          let endTime: Date;
+          if (isActiveTask) {
+            endTime = new Date(); // Current time
+            completedDate = null; // No completion time yet
+          } else if (row.completed_at) {
+            completedDate = new Date(row.completed_at);
+            endTime = completedDate;
+          } else {
+            // No completion time and not active, use 0 duration
+            endTime = startedDate;
+          }
 
           const startTimeMs = startedDate.getTime();
-          const endTimeMs = completedDate.getTime();
+          const endTimeMs = endTime.getTime();
 
           if (!isNaN(startTimeMs) && !isNaN(endTimeMs)) {
             const durationMs = endTimeMs - startTimeMs;
@@ -433,7 +462,7 @@ export default function FinOpsUserStats() {
               durationMinutes = durationMs / (1000 * 60);
               durationSeconds = durationMs / 1000;
             } else {
-              // Invalid sequence (completed before started), use 0
+              // Invalid sequence, use 0
               durationHours = 0;
               durationMinutes = 0;
               durationSeconds = 0;
@@ -470,7 +499,7 @@ export default function FinOpsUserStats() {
 
       // Store task details for tooltip
       const roundedDurationMinutes = Math.round(durationMinutes);
-      const durationCat = getDurationCategoryForTask(roundedDurationMinutes);
+      const durationCat = getDurationCategoryForTask(roundedDurationMinutes, isActiveTask);
 
       // Parse assigned_to - could be array, JSON, or plain text
       const parseAssignedTo = (value: any): string => {
@@ -547,11 +576,18 @@ export default function FinOpsUserStats() {
       processedCount++;
     });
 
+    // Mark future hours with no tasks as "upcoming" (sky blue color)
+    hourlyData.forEach((hourData, hourIndex) => {
+      if (hourData.isFutureHour && hourData.total === 0) {
+        hourData.upcoming = 1; // Mark as upcoming hour
+      }
+    });
+
     console.log("=== Processing complete ===");
     console.log(`Processed: ${processedCount} out of ${hourlySubtasksData.length} records`);
-    const hoursWithData = hourlyData.filter(d => d.total > 0);
+    const hoursWithData = hourlyData.filter(d => d.total > 0 || d.upcoming > 0);
     console.log(`Hours with data: ${hoursWithData.length}/24`);
-    console.log("Hour breakdown:", hoursWithData.map(h => ({ hour: h.hour, total: h.total, tasks: h.tasks.length })));
+    console.log("Hour breakdown:", hoursWithData.map(h => ({ hour: h.hour, total: h.total, upcoming: h.upcoming, tasks: h.tasks.length })));
 
     return hourlyData;
   }, [hourlySubtasksData]);
@@ -753,10 +789,11 @@ export default function FinOpsUserStats() {
       const onTimePercentage = hourTotal > 0 ? ((hourData.lessThan1h / hourTotal) * 100).toFixed(1) : "0";
       pivotData.push({
         "Hour": hourData.hour,
+        "Upcoming": hourData.upcoming || 0,
         "≤1 Hour": hourData.lessThan1h || 0,
         "1-2 Hours": hourData["1to2h"] || 0,
         "2-3 Hours": hourData["2to3h"] || 0,
-        ">3 Hours": hourData.moreThan3h || 0,
+        ">3 Hours (Active)": hourData.moreThan3h || 0,
         "Total": hourTotal,
         "On-Time %": onTimePercentage + "%",
       });
@@ -786,10 +823,11 @@ export default function FinOpsUserStats() {
     Object.entries(clientBreakdown).forEach(([client, data]) => {
       clientBreakdownData.push({
         "Client Name": client,
+        "Upcoming": data.upcoming || 0,
         "≤1 Hour": data.lessThan1h,
         "1-2 Hours": data["1to2h"],
         "2-3 Hours": data["2to3h"],
-        ">3 Hours": data.moreThan3h,
+        ">3 Hours (Active)": data.moreThan3h,
         "Total": data.total,
         "On-Time %": data.total > 0 ? ((data.lessThan1h / data.total) * 100).toFixed(1) + "%" : "0%",
       });
@@ -1183,6 +1221,12 @@ export default function FinOpsUserStats() {
                                 {/* Duration Summary Boxes */}
                                 <div className="bg-gray-50 px-5 py-3 border-b border-gray-200">
                                   <div className="grid grid-cols-2 gap-2">
+                                    {dataToShow.upcoming > 0 && (
+                                      <div className="bg-gradient-to-br from-sky-50 to-sky-100 rounded-lg p-3 border border-sky-200">
+                                        <p className="text-xs font-semibold text-sky-700">🔵 Upcoming Hour</p>
+                                        <p className="text-2xl font-bold text-sky-600">{dataToShow.upcoming}</p>
+                                      </div>
+                                    )}
                                     {dataToShow.lessThan1h > 0 && (
                                       <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
                                         <p className="text-xs font-semibold text-green-700">🟢 ≤1 Hour</p>
@@ -1281,10 +1325,11 @@ export default function FinOpsUserStats() {
                           contentStyle={{ borderRadius: "8px", position: "relative", zIndex: 50 }}
                         />
                         <Recharts.Legend />
+                        <Recharts.Bar dataKey="upcoming" name="Upcoming Hours" stackId="duration" fill="#0EA5E9" />
                         <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />
                         <Recharts.Bar dataKey="1to2h" name="1-2 Hours" stackId="duration" fill="#FBBF24" />
                         <Recharts.Bar dataKey="2to3h" name="2-3 Hours" stackId="duration" fill="#F97316" />
-                        <Recharts.Bar dataKey="moreThan3h" name="More than 3h" stackId="duration" fill="#EF4444" />
+                        <Recharts.Bar dataKey="moreThan3h" name="More than 3h (Active)" stackId="duration" fill="#EF4444" />
                       </Recharts.BarChart>
                     </Recharts.ResponsiveContainer>
                   </ChartContainer>

@@ -1072,7 +1072,7 @@ export default function FinOpsUserStats() {
               <div className="text-center py-12 text-gray-500">Loading task data...</div>
             ) : getHourlyTaskData.some(d => d.total > 0) ? (
               <div className="w-full overflow-auto">
-                <div style={{ minHeight: 400, width: "100%" }}>
+                <div style={{ minHeight: 500, width: "100%" }}>
                   <ChartContainer
                     id="hourly-status"
                     config={{
@@ -1083,10 +1083,10 @@ export default function FinOpsUserStats() {
                       "delayed": { color: "#F97316", label: "Delayed" },
                     }}
                   >
-                    <Recharts.ResponsiveContainer width="100%" height={400}>
+                    <Recharts.ResponsiveContainer width="100%" height={500}>
                       <Recharts.BarChart
                         data={getHourlyTaskData}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 120 }}
                       >
                         <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <Recharts.XAxis

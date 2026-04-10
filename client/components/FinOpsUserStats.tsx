@@ -576,18 +576,21 @@ export default function FinOpsUserStats() {
       processedCount++;
     });
 
-    // Mark future hours with no tasks as "upcoming" (sky blue color)
+    // Mark ALL future hours with "upcoming" indicator (sky blue color) for visual distinction
     hourlyData.forEach((hourData, hourIndex) => {
-      if (hourData.isFutureHour && hourData.total === 0) {
-        hourData.upcoming = 1; // Mark as upcoming hour
+      if (hourData.isFutureHour) {
+        hourData.upcoming = 1; // Add small sky blue segment to ALL future hours for visual distinction
+        console.log(`Future hour ${hourData.hour} marked with upcoming indicator`);
       }
     });
 
     console.log("=== Processing complete ===");
+    console.log(`Current IST Hour for detection: ${currentHour}`);
     console.log(`Processed: ${processedCount} out of ${hourlySubtasksData.length} records`);
     const hoursWithData = hourlyData.filter(d => d.total > 0 || d.upcoming > 0);
     console.log(`Hours with data: ${hoursWithData.length}/24`);
-    console.log("Hour breakdown:", hoursWithData.map(h => ({ hour: h.hour, total: h.total, upcoming: h.upcoming, tasks: h.tasks.length })));
+    console.log("Full hour breakdown:", hourlyData.map(h => ({ hour: h.hour, total: h.total, upcoming: h.upcoming, isFuture: h.isFutureHour, tasks: h.tasks.length })));
+    console.log("Hour breakdown (with data only):", hoursWithData.map(h => ({ hour: h.hour, total: h.total, upcoming: h.upcoming, tasks: h.tasks.length })));
 
     return hourlyData;
   }, [hourlySubtasksData]);

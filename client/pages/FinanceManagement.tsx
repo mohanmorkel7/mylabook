@@ -1582,6 +1582,8 @@ function ActivityTab({
             const isAssignedToThis = act.assigned_to.some(
               (v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase(),
             );
+            // Department admins can also approve, plus anyone listed in approval_users
+            const canApproveThis = isApproverForThis || canEditAll;
             const canEditThis = canEditAll || isApproverForThis;
             return (
               <ActivityCard
@@ -1589,7 +1591,7 @@ function ActivityTab({
                 act={act}
                 canEdit={canEditThis}
                 canDelete={canEditThis}
-                canApprove={isApproverForThis}
+                canApprove={canApproveThis}
                 isAdmin={canEditAll}
                 isFinance={!canEditAll}
                 userEmail={userEmail}
@@ -3278,12 +3280,14 @@ export default function FinanceManagement() {
   const role = (user as any)?.role ?? "";
   const userEmail = (user as any)?.email ?? (user as any)?.username ?? "";
   const isAdmin = role === "admin";
-  const isDeptAdmin = role === "department_admin";
+  const isDeptAdmin = (user as any)?.department_admin === true;
+  const isFinanceDeptAdmin = isDeptAdmin && (user as any)?.admin_for_department?.toLowerCase() === "finance";
   const isFinance = role === "finance";
 
-  // Admin or dept_admin with finance context → see everything
-  const canCreate = isAdmin || isFinance;
-  const canEditAll = isAdmin || isDeptAdmin;
+  // Admin or finance role or finance dept_admin → can create/manage activities
+  const canCreate = isAdmin || isFinance || isFinanceDeptAdmin;
+  // Admin or finance role or finance dept_admin → see and edit everything
+  const canEditAll = isAdmin || isFinance || isFinanceDeptAdmin;
 
   // Fetch users for dropdowns
   const { data: users = [] } = useQuery({

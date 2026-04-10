@@ -1159,6 +1159,8 @@ export default function ClientBasedFinOpsTaskManager() {
     if (!user || !user.name) return false;
     // Admin can edit everything
     if (user.role === "admin") return true;
+    // FinOps department admin can edit everything
+    if (user.department_admin && String(user.admin_for_department || "").toLowerCase() === "finops") return true;
 
     // Safely parse managers in case they come as strings or null/undefined
     const parseManagersArray = (managers: any): string[] => {
@@ -2291,6 +2293,11 @@ export default function ClientBasedFinOpsTaskManager() {
 
     // Admin can edit any task
     if (user?.role === "admin") {
+      return true;
+    }
+
+    // FinOps department admin can edit any task
+    if (user.department_admin && String(user.admin_for_department || "").toLowerCase() === "finops") {
       return true;
     }
 

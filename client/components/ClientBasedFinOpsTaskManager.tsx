@@ -1335,9 +1335,9 @@ export default function ClientBasedFinOpsTaskManager() {
   // Real-time timer state
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Keep the "X min ago" labels updating in real time, independent of data fetching
+  // Keep the "X min ago" labels and timers updating in real time, independent of data fetching
   useEffect(() => {
-    const tick = setInterval(() => setCurrentTime(new Date()), 10000); // 10s cadence
+    const tick = setInterval(() => setCurrentTime(new Date()), 1000); // 1s cadence for accurate countdown
     return () => clearInterval(tick);
   }, []);
 
@@ -2763,16 +2763,20 @@ export default function ClientBasedFinOpsTaskManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredTasks]);
 
-  // Countdown interval
+  // Countdown interval - only decrement if > 0
   useEffect(() => {
     const interval = setInterval(() => {
       setOverdueTimers((prev) => {
         const updated = { ...prev };
+        let hasChanges = false;
         Object.keys(updated).forEach((k) => {
           const id = Number(k);
-          updated[id] = Math.max(0, (updated[id] || 0) - 1);
+          if ((updated[id] || 0) > 0) {
+            updated[id] = (updated[id] || 0) - 1;
+            hasChanges = true;
+          }
         });
-        return updated;
+        return hasChanges ? updated : prev;
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -4005,35 +4009,8 @@ export default function ClientBasedFinOpsTaskManager() {
                             <span className="text-red-600">
                               Next call in:{" "}
                               {(() => {
-                                // Prefer server-provided next_call_at if available
-                                let seconds = overdueTimers[task.id] || 15 * 60;
-                                try {
-                                  if ((task as any).next_call_at) {
-                                    const nextMs = new Date(
-                                      (task as any).next_call_at,
-                                    ).getTime();
-                                    const diff = Math.max(
-                                      0,
-                                      Math.ceil((nextMs - Date.now()) / 1000),
-                                    );
-                                    if (!isNaN(diff)) seconds = diff;
-                                  } else {
-                                    const stored =
-                                      typeof window !== "undefined"
-                                        ? localStorage.getItem(
-                                            `finops_next_call_${task.id}`,
-                                          )
-                                        : null;
-                                    if (stored) {
-                                      const nextMs = parseInt(stored, 10);
-                                      const diff = Math.max(
-                                        0,
-                                        Math.ceil((nextMs - Date.now()) / 1000),
-                                      );
-                                      if (!isNaN(diff)) seconds = diff;
-                                    }
-                                  }
-                                } catch {}
+                                // Use the countdown state from overdueTimers
+                                const seconds = overdueTimers[task.id] ?? 15 * 60;
                                 const mins = Math.floor(seconds / 60);
                                 const secs = seconds % 60;
                                 return `${mins}m ${secs.toString().padStart(2, "0")}s`;

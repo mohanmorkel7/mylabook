@@ -362,20 +362,13 @@ function dashboardSummaryRows(data: any) {
 }
 
 async function exportAllFinanceTabsToExcel() {
-  const today = getISTDateStr();
-  // Use 2 days ago for history since today and yesterday typically have no data
-  const ist = getISTNow();
-  const twoDaysAgo = new Date(ist);
-  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-  const twoDaysAgoIST = `${twoDaysAgo.getFullYear()}-${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(twoDaysAgo.getDate()).padStart(2, "0")}`;
   const activityCategories = [...ACTIVITY_CATEGORIES];
 
-  const [dashboard, recruitment, agreement, legalContracts, history, management, ...activityResponses] = await Promise.all([
+  const [dashboard, recruitment, agreement, legalContracts, management, ...activityResponses] = await Promise.all([
     apiFetch("/dashboard"),
     apiFetch("/recruitment"),
     apiFetch("/agreement-summary"),
     apiFetch("/legal-contracts"),
-    apiFetch(`/history?date=${twoDaysAgoIST}`),
     apiFetch("/management-tasks"),
     ...activityCategories.map((category) => apiFetch(`/activities?category=${category}`)),
   ]);
@@ -401,10 +394,6 @@ async function exportAllFinanceTabsToExcel() {
     {
       name: "Legal Contracts",
       rows: ((legalContracts?.rows ?? []) as LegalContractRow[]).map((row, index) => agreementRowToExcel(row, legalContracts?.cols ?? [], index)),
-    },
-    {
-      name: "History",
-      rows: ((history?.history ?? []) as HistoryRecord[]).map((row) => historyRowToExcel(row)),
     },
   ];
 
@@ -2813,43 +2802,17 @@ interface HistoryRecord {
 
 function HistoryTab() {
   const qc = useQueryClient();
-  const ist = getISTNow();
-  const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
-
-  // Default to 2 days ago since today and yesterday typically have no data
-  const twoDaysAgoIST = (() => {
-    const twoDaysAgo = new Date(ist);
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    return `${twoDaysAgo.getFullYear()}-${String(twoDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(twoDaysAgo.getDate()).padStart(2, "0")}`;
-  })();
-
-  const [selectedDate, setSelectedDate] = useState(twoDaysAgoIST);
-  const [snapping, setSnapping] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["finance-history", selectedDate] as [string, string],
-    queryFn: ({ queryKey }) => apiFetch(`/history?date=${queryKey[1]}`),
-    staleTime: 0,
-    refetchOnMount: true,
+    queryKey: ["finance-activities-all"],
+    queryFn: () => apiFetch(`/activities`),
+    staleTime: 30_000,
   });
 
-  const takeSnapshot = async () => {
-    setSnapping(true);
-    try {
-      await apiFetch("/history/snapshot", {
-        method: "POST",
-        body: JSON.stringify({ date: selectedDate }),
-      });
-      qc.invalidateQueries({ queryKey: ["finance-history", selectedDate] });
-    } catch { /* ignore */ } finally {
-      setSnapping(false);
-    }
-  };
-
-  const records: HistoryRecord[] = data?.history ?? [];
+  const records: Activity[] = data?.activities ?? [];
 
   // Group by category
-  const grouped = records.reduce<Record<string, HistoryRecord[]>>((acc, r) => {
+  const grouped = records.reduce<Record<string, Activity[]>>((acc, r) => {
     if (!acc[r.category]) acc[r.category] = [];
     acc[r.category].push(r);
     return acc;
@@ -2861,7 +2824,16 @@ function HistoryTab() {
   }, {});
 
   const handleExport = () => {
-    exportSingleSheet(`finance-history-${selectedDate}.xlsx`, `History ${selectedDate}`, records.map(historyRowToExcel));
+    const excelRows = records.map((r) => ({
+      "Activity ID": r.id,
+      "Activity Name": r.activity_name,
+      "Category": CAT_LABEL[r.category] ?? r.category,
+      "Status": r.status,
+      "Duration": r.duration,
+      "Due Date": r.due_date,
+      "Assigned To": r.assigned_to?.join("; ") ?? "",
+    }));
+    exportSingleSheet(`finance-activities.xlsx`, "Activities", excelRows);
   };
 
   return (
@@ -2874,35 +2846,14 @@ function HistoryTab() {
               <History className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 text-lg">Activity History</h2>
-              <p className="text-xs text-gray-500">End-of-day status snapshots per activity</p>
+              <h2 className="font-bold text-gray-900 text-lg">All Activities</h2>
+              <p className="text-xs text-gray-500">Current status of all finance activities</p>
             </div>
           </div>
           <div className="sm:ml-auto flex items-center gap-3 flex-wrap">
             <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
               <FileText className="w-4 h-4" /> Export to Excel
             </Button>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Date</label>
-            <input
-              type="date"
-              value={selectedDate}
-              max={todayIST}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
-            />
-            <button
-              onClick={takeSnapshot}
-              disabled={snapping}
-              title="Record current status of all activities for this date"
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            >
-              {snapping ? (
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <History className="w-3.5 h-3.5" />
-              )}
-              Snapshot Now
-            </button>
           </div>
         </div>
 
@@ -2932,8 +2883,8 @@ function HistoryTab() {
       ) : records.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
           <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No history for this date</p>
-          <p className="text-xs text-gray-400 mt-1">Status snapshots are recorded when activities are updated or at midnight IST reset</p>
+          <p className="text-gray-500 font-medium">No activities found</p>
+          <p className="text-xs text-gray-400 mt-1">Finance activities will appear here once they are created</p>
         </div>
       ) : (
         Object.entries(grouped).map(([category, recs]) => (
@@ -2965,7 +2916,7 @@ function HistoryTab() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-gray-900 text-sm">{r.activity_name}</p>
-                        <span className="text-[10px] text-gray-400 font-mono">{r.activity_id}</span>
+                        <span className="text-[10px] text-gray-400 font-mono">FA-{String(r.id).padStart(4, "0")}</span>
                         {dur && (
                           <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-semibold border border-indigo-100">
                             {dur.label}
@@ -2978,15 +2929,17 @@ function HistoryTab() {
                           <p className="text-xs text-orange-700 line-clamp-1">{r.reason_non_completion}</p>
                         </div>
                       )}
-                      {r.assigned_to.length > 0 && (
+                      {r.assigned_to && r.assigned_to.length > 0 && (
                         <div className="flex items-center gap-1.5 mt-1">
                           <UserCheck className="w-3 h-3 text-blue-400" />
                           <p className="text-xs text-gray-500">{r.assigned_to.map(extractName).join(", ")}</p>
                         </div>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-1">
-                        Recorded: {new Date(r.recorded_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })} IST
-                      </p>
+                      {r.due_date && (
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          Due: {new Date(r.due_date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
+                        </p>
+                      )}
                     </div>
 
                     {/* Status badge */}

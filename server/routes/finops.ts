@@ -3178,25 +3178,34 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
   try {
     const fromDate = (req.query.from_date as string) || null;
     const toDate = (req.query.to_date as string) || null;
+    const filterBy = (req.query.filter_by as string) || "completion"; // "completion" or "scheduled"
 
     console.log("Subtasks/hourly request - fromDate:", fromDate, "toDate:", toDate);
+    console.log("Filtering by:", filterBy, "(completion date in IST, or scheduled date in IST)");
 
     const params: any[] = [];
     let whereClause = "";
 
-    // Build WHERE clause filtering by COMPLETION date in IST (Asia/Kolkata)
-    // We want tasks that were completed on the specified date in IST timezone
-    // Use AT TIME ZONE to convert UTC timestamps to IST before extracting date
-    const completionDateExpr = "DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')";
+    // Choose filter: completion_date or scheduled_date (both in IST timezone)
+    let dateExpr: string;
+    if (filterBy === "scheduled") {
+      // Filter by when the task was SCHEDULED (use scheduled_date in IST)
+      dateExpr = "DATE(st.scheduled_date AT TIME ZONE 'Asia/Kolkata')";
+      console.log("Using SCHEDULED date for filtering");
+    } else {
+      // Filter by when the task was actually COMPLETED (use completed_at in IST)
+      dateExpr = "DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')";
+      console.log("Using COMPLETION date for filtering");
+    }
 
     const whereParts: string[] = [];
     if (fromDate) {
       params.push(fromDate);
-      whereParts.push(`${completionDateExpr} >= $${params.length}`);
+      whereParts.push(`${dateExpr} >= $${params.length}`);
     }
     if (toDate) {
       params.push(toDate);
-      whereParts.push(`${completionDateExpr} <= $${params.length}`);
+      whereParts.push(`${dateExpr} <= $${params.length}`);
     }
 
     // Filter to include only completed tasks (we need valid completion data for the chart)

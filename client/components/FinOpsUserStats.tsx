@@ -308,20 +308,14 @@ export default function FinOpsUserStats() {
     }
   };
 
-  // Helper: Extract hour from started_at ISO timestamp (in IST timezone)
-  const getHourFromStartedAt = (startedAt: string | null): number | null => {
-    if (!startedAt) return null;
+  // Helper: Extract hour from scheduled_time (HH:MM:SS format)
+  const getHourFromScheduledTime = (scheduledTime: string | null): number | null => {
+    if (!scheduledTime) return null;
     try {
-      const date = new Date(startedAt);
-      if (isNaN(date.getTime())) return null;
-      // Extract hour in IST timezone
-      const istFormatter = new Intl.DateTimeFormat("en-US", {
-        hour: "2-digit",
-        hour12: false,
-        timeZone: "Asia/Kolkata"
-      });
-      const istHour = istFormatter.format(date);
-      const hour = parseInt(istHour, 10);
+      // scheduledTime is in HH:MM:SS format (TIME type from database)
+      const parts = scheduledTime.split(':');
+      if (parts.length < 1) return null;
+      const hour = parseInt(parts[0], 10);
       if (isNaN(hour) || hour < 0 || hour > 23) return null;
       return hour;
     } catch (e) {
@@ -338,7 +332,7 @@ export default function FinOpsUserStats() {
     return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
   };
 
-  // Helper: Get hourly task data from finops_subtasks (based on duration from start_time to completed_at)
+  // Helper: Get hourly task data from finops_tracker (based on scheduled_time hour and duration)
   const getHourlyTaskData = useMemo(() => {
     console.log("=== getHourlyTaskData calculation started ===");
     console.log("hourlySubtasksData length:", hourlySubtasksData?.length || 0);
@@ -374,10 +368,11 @@ export default function FinOpsUserStats() {
     let skippedCount = 0;
     const skipReasons: { [key: string]: number } = {};
 
-    // Group tasks by started_at hour (from finops_tracker) and categorize by duration
+    // Group tasks by scheduled_time hour (from finops_tracker) and categorize by duration
     hourlySubtasksData.forEach((row: any, idx: number) => {
       if (idx < 3) {
         console.log(`[Data Check] Row ${idx}:`, {
+          scheduled_time: row.scheduled_time,
           started_at: row.started_at,
           completed_at: row.completed_at,
           subtask_name: row.subtask_name,
@@ -386,12 +381,12 @@ export default function FinOpsUserStats() {
         });
       }
 
-      // Extract hour from started_at (ISO timestamp in IST timezone)
-      const startHour = getHourFromStartedAt(row.started_at);
+      // Extract hour from scheduled_time (HH:MM:SS format)
+      const startHour = getHourFromScheduledTime(row.scheduled_time);
       if (startHour === null) {
         const reason = 'null_hour';
         skipReasons[reason] = (skipReasons[reason] || 0) + 1;
-        if (idx < 5) console.warn(`Row ${idx}: startHour is null, skipping. started_at=${row.started_at}`);
+        if (idx < 5) console.warn(`Row ${idx}: startHour is null, skipping. scheduled_time=${row.scheduled_time}`);
         skippedCount++;
         return;
       }
@@ -452,7 +447,7 @@ export default function FinOpsUserStats() {
 
       // Debug: Log sample tasks to verify duration calculation
       if (idx < 5) {
-        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} - Started: ${startedDate.toISOString()}, Completed: ${completedDate.toISOString()} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
+        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} - Scheduled: ${row.scheduled_time}, Completed: ${completedDate.toISOString()} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
       }
 
       // Categorize by duration

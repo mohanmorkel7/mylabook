@@ -3316,9 +3316,8 @@ router.get("/tracker/hourly", async (req: Request, res: Response) => {
     }
 
     // Ensure we have valid timestamps for hourly grouping
-    // Only include completed tasks with both started_at and completed_at timestamps
+    // Only include completed tasks with both completed_at and scheduled_time
     // AND where completed_at is on or after started_at (valid time sequence)
-    whereParts.push("ft.started_at IS NOT NULL");
     whereParts.push("ft.completed_at IS NOT NULL");
     whereParts.push("ft.status = 'completed'");
     whereParts.push("ft.completed_at >= ft.started_at");
@@ -3337,6 +3336,7 @@ router.get("/tracker/hourly", async (req: Request, res: Response) => {
         ft.subtask_id,
         ft.subtask_name,
         ft.status,
+        ft.scheduled_time,
         ft.started_at,
         ft.completed_at,
         ft.completed_by,
@@ -3355,7 +3355,7 @@ router.get("/tracker/hourly", async (req: Request, res: Response) => {
       LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
       LEFT JOIN finops_clients fc ON fts.client_id = fc.id
       ${whereClause}
-      ORDER BY ft.started_at DESC, ft.task_id ASC
+      ORDER BY ft.scheduled_time DESC, ft.task_id ASC
     `;
 
     console.log("Tracker/hourly query:", query);

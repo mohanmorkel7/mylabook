@@ -1091,8 +1091,12 @@ export default function FinOpsUserStats() {
                         <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <Recharts.XAxis
                           dataKey="hour"
-                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                          tick={{ fontSize: 10, fill: "#6b7280" }}
                           label={{ value: "Hour (IST) - Click to Lock/Unlock Tooltip", position: "insideBottomRight", offset: -10 }}
+                          interval={0}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
                         />
                         <Recharts.YAxis
                           type="number"

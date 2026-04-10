@@ -1252,11 +1252,26 @@ function ActivityTab({
           const updatedIST = a.updated_at
             ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
             : null;
+
+          // If status is stale from a previous day, reset to pending
+          let activity = a;
           if (updatedIST && updatedIST < todayStr) {
             // Status is stale from a previous day — show fresh pending for today
-            return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
+            activity = { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
           }
-          return a;
+
+          // Auto-mark as overdue after 5:00 PM IST if still pending (applies to all durations including daily)
+          const ist = getISTNow();
+          const istHour = ist.getHours();
+          const istMin = ist.getMinutes();
+          const isAfter5PM = istHour > 17 || (istHour === 17 && istMin >= 0);
+
+          if (isAfter5PM && activity.status === "pending" && isActivityDueOnDate(activity, todayStr)) {
+            // Activity is pending but it's past 5:00 PM and it was due today
+            return { ...activity, status: "overdue" };
+          }
+
+          return activity;
         })
     : activitiesBase;
 
@@ -3308,27 +3323,40 @@ export default function FinanceManagement() {
         .then(() => {
           qcMain.invalidateQueries({ queryKey: ["finance-activities"] });
           qcMain.invalidateQueries({ queryKey: ["finance-dashboard"] });
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.log("[Auto-Overdue] Activities updated at", new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }));
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.error("[Auto-Overdue] Failed:", err);
+        });
     };
 
     const startPolling = () => {
       runAutoOverdue();
-      intervalId = setInterval(runAutoOverdue, 60_000);
+      intervalId = setInterval(runAutoOverdue, 60_000); // Check every minute
     };
 
     const ist = getISTNow();
     const istHour = ist.getHours();
     const istMin = ist.getMinutes();
+    const istSec = ist.getSeconds();
 
-    if (istHour > 17 || (istHour === 17 && istMin >= 0)) {
+    // Check if current time is >= 5:00 PM IST (17:00)
+    const isAtOrPast5PM = istHour > 17 || (istHour === 17 && (istMin > 0 || (istMin === 0 && istSec >= 0)));
+
+    if (isAtOrPast5PM) {
       // Already at or past 5:00 PM IST — start immediately
+      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+        console.log("[Auto-Overdue] Current time is past 5:00 PM IST, starting auto-overdue");
       startPolling();
     } else {
       // Schedule to fire exactly at 17:00:00 IST
       const target = new Date(ist);
       target.setHours(17, 0, 0, 0);
       const msUntil5PM = target.getTime() - ist.getTime();
+      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+        console.log(`[Auto-Overdue] Scheduled to run in ${Math.round(msUntil5PM / 1000)} seconds at 5:00 PM IST`);
       timeoutId = setTimeout(startPolling, msUntil5PM);
     }
 

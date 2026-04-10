@@ -2805,14 +2805,60 @@ function HistoryTab() {
   const ist = getISTNow();
   const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
   const [selectedDate, setSelectedDate] = useState(todayIST);
+  const [snapping, setSnapping] = useState(false);
+  const isToday = selectedDate === todayIST;
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["finance-activities", selectedDate],
-    queryFn: ({ queryKey }) => apiFetch(`/activities?date=${queryKey[1]}`),
+  // For today: fetch live activities
+  const { data: liveData, isLoading: liveLoading } = useQuery({
+    queryKey: ["finance-activities-live"],
+    queryFn: () => apiFetch(`/activities`),
     staleTime: 30_000,
+    enabled: isToday,
   });
 
-  const records: Activity[] = data?.activities ?? [];
+  // For past dates: fetch historical snapshots
+  const { data: histData, isLoading: histLoading } = useQuery({
+    queryKey: ["finance-activities-history", selectedDate],
+    queryFn: ({ queryKey }) => apiFetch(`/history?date=${queryKey[1]}`),
+    staleTime: 60_000,
+    enabled: !isToday,
+  });
+
+  // Take snapshot of current activities for the selected date
+  const takeSnapshot = async () => {
+    setSnapping(true);
+    try {
+      await apiFetch("/history/snapshot", {
+        method: "POST",
+        body: JSON.stringify({ date: selectedDate }),
+      });
+      qc.invalidateQueries({ queryKey: ["finance-activities-history", selectedDate] });
+    } catch { /* ignore */ } finally {
+      setSnapping(false);
+    }
+  };
+
+  const isLoading = isToday ? liveLoading : histLoading;
+
+  // Combine data from either live activities or history
+  let records: Activity[] = [];
+  if (isToday) {
+    records = liveData?.activities ?? [];
+  } else {
+    // Convert history records to Activity format for display
+    records = (histData?.history ?? []).map((h: any) => ({
+      id: h.activity_ref_id,
+      activity_id: h.activity_id,
+      activity_name: h.activity_name,
+      category: h.category,
+      duration: h.duration,
+      status: h.status,
+      reason_non_completion: h.reason_non_completion,
+      assigned_to: h.assigned_to || [],
+      due_date: h.history_date?.split('T')[0],
+      recorded_at: h.recorded_at,
+    })) as Activity[];
+  }
 
   // Group by category
   const grouped = records.reduce<Record<string, Activity[]>>((acc, r) => {
@@ -2828,15 +2874,16 @@ function HistoryTab() {
 
   const handleExport = () => {
     const excelRows = records.map((r) => ({
-      "Activity ID": r.id,
+      "Activity ID": r.activity_id || r.id,
       "Activity Name": r.activity_name,
       "Category": CAT_LABEL[r.category] ?? r.category,
       "Status": r.status,
       "Duration": r.duration,
       "Due Date": r.due_date,
       "Assigned To": r.assigned_to?.join("; ") ?? "",
+      "Recorded At": r.recorded_at ? new Date(r.recorded_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "",
     }));
-    exportSingleSheet(`finance-activities.xlsx`, "Activities", excelRows);
+    exportSingleSheet(`finance-activities-${selectedDate}.xlsx`, `Activities ${selectedDate}`, excelRows);
   };
 
   return (
@@ -2865,6 +2912,21 @@ function HistoryTab() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
             />
+            {!isToday && (
+              <button
+                onClick={takeSnapshot}
+                disabled={snapping}
+                title="Save current activity status snapshot for this date"
+                className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {snapping ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <History className="w-3.5 h-3.5" />
+                )}
+                Snapshot
+              </button>
+            )}
           </div>
         </div>
 
@@ -2894,8 +2956,12 @@ function HistoryTab() {
       ) : records.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
           <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No activities found</p>
-          <p className="text-xs text-gray-400 mt-1">Finance activities will appear here once they are created</p>
+          <p className="text-gray-500 font-medium">No activities found for {selectedDate}</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {isToday
+              ? "Activities will appear here once they are created today"
+              : "No snapshot found for this date. Click 'Snapshot' to capture current status"}
+          </p>
         </div>
       ) : (
         Object.entries(grouped).map(([category, recs]) => (

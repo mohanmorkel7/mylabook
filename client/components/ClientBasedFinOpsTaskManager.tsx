@@ -242,9 +242,9 @@ const PendingApprovalTimer = ({
 
       // Debug: Log the timer state every second
       if (cycleNumber > 0) {
-        console.log(
-          `⏱️ Subtask ${subtaskId} - Cycle ${cycleNumber}: ${minutes}m ${seconds}s remaining`,
-        );
+        // console.log(
+        //   `⏱️ Subtask ${subtaskId} - Cycle ${cycleNumber}: ${minutes}m ${seconds}s remaining`,
+        // );
       }
 
       // Trigger API call when countdown reaches 00m 00s or 00m 01s (only once per cycle)

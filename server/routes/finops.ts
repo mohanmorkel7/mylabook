@@ -3184,31 +3184,34 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
     const params: any[] = [];
     let whereClause = "";
 
-    // Build WHERE clause filtering by COMPLETION date in IST (Asia/Kolkata)
-    // We want tasks that were completed on the specified date in IST timezone
-    // Note: Some tasks may have long durations if they started on earlier dates
+    // Build WHERE clause filtering by SCHEDULED date in IST (Asia/Kolkata)
+    // We want tasks that were SCHEDULED for the specified date
+    // This includes tasks that started on the date even if they completed later
     // Use AT TIME ZONE to convert UTC timestamps to IST before extracting date
-    const completionDateExpr = "DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')";
+    const scheduledDateExpr = "DATE(st.scheduled_date AT TIME ZONE 'Asia/Kolkata')";
 
     const whereParts: string[] = [];
     if (fromDate) {
       params.push(fromDate);
-      whereParts.push(`${completionDateExpr} >= $${params.length}`);
+      whereParts.push(`${scheduledDateExpr} >= $${params.length}`);
     }
     if (toDate) {
       params.push(toDate);
-      whereParts.push(`${completionDateExpr} <= $${params.length}`);
+      whereParts.push(`${scheduledDateExpr} <= $${params.length}`);
     }
 
-    // Filter to include tasks that have been completed on the selected date
-    // Include only records with completed_at (we need completion data for the chart)
+    // Filter to include only completed tasks (we need valid completion data for the chart)
     whereParts.push("st.completed_at IS NOT NULL");
+
+    // Also ensure the task has a valid start_time for hourly grouping
+    whereParts.push("st.start_time IS NOT NULL");
 
     if (whereParts.length > 0) {
       whereClause = "WHERE " + whereParts.join(" AND ");
     }
 
     // Query finops_subtasks directly to get hourly task data with actual status
+    // Ensure we get ALL tasks for the specified date range
     const query = `
       SELECT
         st.id,
@@ -3232,11 +3235,12 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
       FROM finops_subtasks st
       LEFT JOIN finops_tasks ft ON st.task_id = ft.id
       LEFT JOIN finops_clients fc ON ft.client_id = fc.id
-      LEFT JOIN finops_tracker ftr ON st.id = ftr.subtask_id AND DATE(ftr.run_date) = DATE(st.completed_at)
+      LEFT JOIN finops_tracker ftr ON st.id = ftr.subtask_id AND DATE(ftr.run_date) = DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')
       ${whereClause}
       ORDER BY st.completed_at DESC, st.task_id ASC, st.order_position ASC
     `;
 
+    console.log("Subtasks/hourly request - filtering by SCHEDULED date (not completion date)");
     console.log("Subtasks/hourly query:", query);
     console.log("Subtasks/hourly params:", params);
 
@@ -3256,9 +3260,18 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
           hourlyDistribution[hour] = (hourlyDistribution[hour] || 0) + 1;
         }
       });
-      console.log("Hourly distribution:", hourlyDistribution);
+
+      // Check for missing hours
+      const allHours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+      const presentHours = Object.keys(hourlyDistribution).map((h: string) => String(h).padStart(2, '0'));
+      const missingHours = allHours.filter(h => !presentHours.includes(h));
+
+      console.log("✅ Hourly distribution:", hourlyDistribution);
+      console.log(`📊 Present hours: ${presentHours.sort().join(', ')}`);
+      console.log(`❌ Missing hours: ${missingHours.length > 0 ? missingHours.join(', ') : 'None'}`);
+      console.log(`📈 Total tasks returned: ${result.rows.length}`);
     } else {
-      console.log("No data found for date range:", fromDate, "to", toDate);
+      console.log("⚠️  No data found for date range:", fromDate, "to", toDate);
     }
 
     res.json(result.rows);

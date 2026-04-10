@@ -345,9 +345,18 @@ export default function FinOpsUserStats() {
       return [];
     }
 
-    // Get current hour in IST for future hour detection
+    // Get current date and hour in IST for future hour detection
     const currentISTDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     const currentHour = currentISTDate.getHours();
+    const todayIST = currentISTDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+
+    // Get the selected date (use fromDate if available, otherwise today)
+    const selectedDateStr = fromDate || toDate || todayIST;
+    console.log("Today IST:", todayIST, "Selected Date:", selectedDateStr, "Current Hour:", currentHour);
+
+    // Only mark hours as future if selected date is TODAY
+    const isSelectedDateToday = selectedDateStr === todayIST;
+    console.log("Is selected date today?:", isSelectedDateToday);
 
     // Initialize 24 hours with duration categories
     const hourlyData = Array.from({ length: 24 }, (_, hour) => ({
@@ -359,7 +368,7 @@ export default function FinOpsUserStats() {
       "upcomingHourTasks": 0,  // Tasks in upcoming/future hours (SKY BLUE)
       "upcoming": 0,      // Empty upcoming/future hours indicator (SKY BLUE)
       total: 0,
-      isFutureHour: hour > currentHour, // Mark future hours
+      isFutureHour: isSelectedDateToday && hour > currentHour, // Mark future hours only if today
       // Store detailed task info for tooltip
       tasks: [] as Array<{
         name: string;
@@ -602,7 +611,7 @@ export default function FinOpsUserStats() {
     console.log("Hour breakdown (with data only):", hoursWithData.map(h => ({ hour: h.hour, total: h.total, upcoming: h.upcoming, tasks: h.tasks.length })));
 
     return hourlyData;
-  }, [hourlySubtasksData]);
+  }, [hourlySubtasksData, fromDate, toDate]);
 
   // Helper: Parse managers field (handles string, JSON array, or null)
   const parseManagers = (value: any): string => {

@@ -1252,23 +1252,26 @@ function ActivityTab({
           const updatedIST = a.updated_at
             ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
             : null;
+
+          // If status is stale from a previous day, reset to pending
+          let activity = a;
           if (updatedIST && updatedIST < todayStr) {
             // Status is stale from a previous day — show fresh pending for today
-            return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
+            activity = { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
           }
 
-          // Auto-mark as overdue after 5:00 PM IST if still pending
+          // Auto-mark as overdue after 5:00 PM IST if still pending (applies to all durations including daily)
           const ist = getISTNow();
           const istHour = ist.getHours();
           const istMin = ist.getMinutes();
           const isAfter5PM = istHour > 17 || (istHour === 17 && istMin >= 0);
 
-          if (isAfter5PM && a.status === "pending" && isActivityDueOnDate(a, todayStr)) {
+          if (isAfter5PM && activity.status === "pending" && isActivityDueOnDate(activity, todayStr)) {
             // Activity is pending but it's past 5:00 PM and it was due today
-            return { ...a, status: "overdue" };
+            return { ...activity, status: "overdue" };
           }
 
-          return a;
+          return activity;
         })
     : activitiesBase;
 

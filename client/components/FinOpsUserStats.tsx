@@ -1072,7 +1072,7 @@ export default function FinOpsUserStats() {
               <div className="text-center py-12 text-gray-500">Loading task data...</div>
             ) : getHourlyTaskData.some(d => d.total > 0) ? (
               <div className="w-full overflow-auto">
-                <div style={{ minHeight: 500, width: "100%" }}>
+                <div style={{ minHeight: 600, width: "100%", minWidth: "1200px" }}>
                   <ChartContainer
                     id="hourly-status"
                     config={{
@@ -1083,20 +1083,20 @@ export default function FinOpsUserStats() {
                       "delayed": { color: "#F97316", label: "Delayed" },
                     }}
                   >
-                    <Recharts.ResponsiveContainer width="100%" height={500}>
+                    <Recharts.ResponsiveContainer width="100%" height={600}>
                       <Recharts.BarChart
                         data={getHourlyTaskData}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 120 }}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 180 }}
                       >
                         <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <Recharts.XAxis
                           dataKey="hour"
-                          tick={{ fontSize: 10, fill: "#6b7280" }}
-                          label={{ value: "Hour (IST) - Click to Lock/Unlock Tooltip", position: "insideBottomRight", offset: -10 }}
+                          tick={{ fontSize: 9, fill: "#6b7280" }}
+                          label={{ value: "Hour (IST) - Click to Lock/Unlock Tooltip", position: "insideBottomRight", offset: -15 }}
                           interval={0}
-                          angle={-45}
-                          textAnchor="end"
-                          height={80}
+                          angle={-90}
+                          textAnchor="middle"
+                          height={100}
                         />
                         <Recharts.YAxis
                           type="number"

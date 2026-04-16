@@ -1272,6 +1272,46 @@ export class ApiClient {
     );
   }
 
+  // Sales Leads Notification methods
+  async getLeadManagementNotifications(userEmail: string, limit = 20, offset = 0) {
+    return this.request(
+      `/sales-leads-notifications?user_email=${encodeURIComponent(userEmail)}&limit=${limit}&offset=${offset}`
+    );
+  }
+
+  async getLeadManagementUnreadCount(userEmail: string) {
+    return this.request(
+      `/sales-leads-notifications/unread-count/${encodeURIComponent(userEmail)}`
+    );
+  }
+
+  async markLeadNotificationAsRead(notificationId: number) {
+    return this.request(`/sales-leads-notifications/${notificationId}/read`, {
+      method: "PUT",
+    });
+  }
+
+  async deleteLeadNotification(notificationId: number) {
+    return this.request(`/sales-leads-notifications/${notificationId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async createFollowUpNotification(followUpData: {
+    follow_up_id: number;
+    lead_id: number;
+    user_email: string;
+    user_name: string;
+    user_id?: number;
+    follow_up_date: string;
+    lead_company_name: string;
+  }) {
+    return this.request("/sales-leads-notifications/create-for-followup", {
+      method: "POST",
+      body: JSON.stringify(followUpData),
+    });
+  }
+
   // FinOps Task Management methods with enhanced error handling
   async getFinOpsTasks(date?: string) {
     let userNameParam = "";

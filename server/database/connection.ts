@@ -956,6 +956,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Add notifications support to sales leads
+    try {
+      const notifPath = path.join(
+        __dirname,
+        "add-sales-leads-notifications.sql",
+      );
+      if (fs.existsSync(notifPath)) {
+        const notifSql = fs.readFileSync(notifPath, "utf8");
+        await client.query(notifSql);
+        console.log("Sales leads notifications migration applied successfully");
+      }
+    } catch (notifErr) {
+      console.log(
+        "Sales leads notifications migration already applied or error:",
+        (notifErr as any).message,
+      );
+    }
+
     // Ensure finops_tracker table exists for daily tracking
     try {
       await pool.query(`

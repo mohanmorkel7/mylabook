@@ -41,6 +41,7 @@ import slackImportRouter from "./routes/slack-import";
 import leadManagementRouter from "./routes/lead-management";
 import leadFollowupsRouter from "./routes/lead-followups";
 import leadInitRouter from "./routes/lead-init";
+import salesLeadsNotificationsRouter from "./routes/sales-leads-notifications";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
 import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
 import { initialize as initializeSlackProcessingJob } from "./jobs/slackProcessingJob";
@@ -487,6 +488,7 @@ export function createServer() {
     app.use("/api/lead-management", leadManagementRouter);
     app.use("/api/lead-followups", leadFollowupsRouter);
     app.use("/api/lead-init", leadInitRouter);
+    app.use("/api/sales-leads-notifications", salesLeadsNotificationsRouter);
     console.log("Lead Management router loaded successfully");
   } catch (error) {
     console.error("Error loading Lead Management router:", error);

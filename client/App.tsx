@@ -124,7 +124,9 @@ import LeadDashboard from "@/pages/LeadDashboard";
 import CreateLead from "@/pages/CreateLead";
 import LeadDetails from "@/pages/LeadDetails";
 import LeadEdit from "@/pages/LeadEdit";
-import LeadManagementPage from "@/pages/LeadManagement";
+import LeadManagementRefactored from "@/pages/LeadManagementRefactored";
+import LeadOverviewPage from "@/pages/LeadOverview";
+import LeadEditPage from "@/pages/LeadEditPage";
 import VCDashboard from "@/pages/VCDashboard";
 import CreateVC from "@/pages/CreateVC";
 import VCDetails from "@/pages/VCDetails";
@@ -736,7 +738,40 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
             <DashboardLayout>
-              <LeadManagementPage />
+              <LeadManagementRefactored />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/lead-management/new"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadEditPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/lead-management/:id/overview"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadOverviewPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/lead-management/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadEditPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

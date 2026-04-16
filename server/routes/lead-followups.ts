@@ -66,7 +66,7 @@ router.get("/lead/:leadId", async (req: Request, res: Response) => {
 // ── POST /api/lead-followups - Create a new follow-up ───────────────────
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { lead_id, notes, follow_up_date, status = "Pending" } = req.body;
+    const { lead_id, notes, follow_up_date, status = "Pending", image_url, image_filename, assigned_to_user_id } = req.body;
 
     if (!lead_id || !follow_up_date) {
       return res.status(400).json({ error: "Missing required fields: lead_id, follow_up_date" });
@@ -80,10 +80,10 @@ router.post("/", async (req: Request, res: Response) => {
 
     const result = await queryWithRetry(() =>
       pool.query(
-        `INSERT INTO sales_leads_follow_ups (lead_id, notes, follow_up_date, status)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO sales_leads_follow_ups (lead_id, notes, follow_up_date, status, image_url, image_filename, assigned_to_user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
-        [lead_id, encrypt(notes), follow_up_date, status]
+        [lead_id, encrypt(notes), follow_up_date, status, image_url || null, image_filename || null, assigned_to_user_id || null]
       )
     );
 
@@ -102,20 +102,28 @@ router.post("/", async (req: Request, res: Response) => {
 router.put("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { notes, follow_up_date, status } = req.body;
+    const { notes, follow_up_date, status, image_url, image_filename, assigned_to_user_id, reminder_sent } = req.body;
 
     const result = await queryWithRetry(() =>
       pool.query(
         `UPDATE sales_leads_follow_ups SET
           notes = COALESCE($1, notes),
           follow_up_date = COALESCE($2, follow_up_date),
-          status = COALESCE($3, status)
-        WHERE id = $4
+          status = COALESCE($3, status),
+          image_url = COALESCE($4, image_url),
+          image_filename = COALESCE($5, image_filename),
+          assigned_to_user_id = COALESCE($6, assigned_to_user_id),
+          reminder_sent = COALESCE($7, reminder_sent)
+        WHERE id = $8
         RETURNING *`,
         [
           notes ? encrypt(notes) : null,
           follow_up_date,
           status,
+          image_url,
+          image_filename,
+          assigned_to_user_id,
+          reminder_sent,
           id,
         ]
       )

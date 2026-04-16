@@ -396,4 +396,50 @@ router.get("/:id/audio", async (req: Request, res: Response) => {
   }
 });
 
+// ── DELETE /api/lead-followups/audio/:recordingId - Delete audio recording ──
+router.delete("/audio/:recordingId", async (req: Request, res: Response) => {
+  try {
+    const { recordingId } = req.params;
+
+    // First, get the recording to get its file path
+    const recordingResult = await queryWithRetry(() =>
+      pool.query(
+        "SELECT * FROM sales_leads_audio_recordings WHERE id = $1",
+        [recordingId]
+      )
+    );
+
+    if (recordingResult.rows.length === 0) {
+      return res.status(404).json({ error: "Recording not found" });
+    }
+
+    const recording = recordingResult.rows[0];
+
+    // Delete the file from disk if it exists
+    if (recording.filename) {
+      const filePath = path.join(audioDir, recording.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    // Delete from database
+    const deleteResult = await queryWithRetry(() =>
+      pool.query(
+        "DELETE FROM sales_leads_audio_recordings WHERE id = $1 RETURNING id",
+        [recordingId]
+      )
+    );
+
+    if (deleteResult.rows.length === 0) {
+      return res.status(404).json({ error: "Recording not found" });
+    }
+
+    res.json({ message: "Audio recording deleted successfully", id: recordingId });
+  } catch (error: any) {
+    console.error("Failed to delete audio recording:", error.message);
+    res.status(500).json({ error: "Failed to delete audio recording" });
+  }
+});
+
 export default router;

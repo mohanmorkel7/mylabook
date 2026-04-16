@@ -124,7 +124,7 @@ import LeadDashboard from "@/pages/LeadDashboard";
 import CreateLead from "@/pages/CreateLead";
 import LeadDetails from "@/pages/LeadDetails";
 import LeadEdit from "@/pages/LeadEdit";
-import LeadManagementRefactored from "@/pages/LeadManagementRefactored";
+import LeadManagementDashboard from "@/pages/LeadManagementDashboard";
 import LeadOverviewPage from "@/pages/LeadOverview";
 import LeadEditPage from "@/pages/LeadEditPage";
 import VCDashboard from "@/pages/VCDashboard";
@@ -738,7 +738,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
             <DashboardLayout>
-              <LeadManagementRefactored />
+              <LeadManagementDashboard />
             </DashboardLayout>
           </ProtectedRoute>
         }

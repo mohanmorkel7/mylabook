@@ -124,6 +124,7 @@ import LeadDashboard from "@/pages/LeadDashboard";
 import CreateLead from "@/pages/CreateLead";
 import LeadDetails from "@/pages/LeadDetails";
 import LeadEdit from "@/pages/LeadEdit";
+import LeadManagementPage from "@/pages/LeadManagement";
 import VCDashboard from "@/pages/VCDashboard";
 import CreateVC from "@/pages/CreateVC";
 import VCDetails from "@/pages/VCDetails";
@@ -724,6 +725,18 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "sales"]}>
             <DashboardLayout>
               <LeadEdit />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Lead Generation Management - New System */}
+      <Route
+        path="/lead-management"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadManagementPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

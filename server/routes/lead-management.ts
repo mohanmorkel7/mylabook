@@ -1,8 +1,96 @@
 import { Router, Request, Response } from "express";
 import { pool, queryWithRetry } from "../database/connection";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 const router = Router();
+
+// ── Auto-initialize tables if they don't exist ──────────────────────────
+let initInProgress = false;
+let initSuccess = false;
+
+async function ensureTablesExist() {
+  // Return early if already successfully initialized
+  if (initSuccess) return;
+
+  // Prevent concurrent initialization attempts
+  if (initInProgress) return;
+  initInProgress = true;
+
+  try {
+    // Try to check if table exists
+    console.log("[Lead Management] Checking if tables exist...");
+
+    let tableExists = false;
+    try {
+      const checkResult = await pool.query(
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'sales_leads') as exists`
+      );
+      tableExists = checkResult?.rows?.[0]?.exists ?? false;
+    } catch (checkErr: any) {
+      console.warn("[Lead Management] Table check query failed:", checkErr.message);
+      // If check fails, assume table doesn't exist and try to create it anyway
+      tableExists = false;
+    }
+
+    if (tableExists) {
+      console.log("[Lead Management] Tables already exist");
+      initSuccess = true;
+      initInProgress = false;
+      return;
+    }
+
+    console.log("[Lead Management] Creating tables...");
+    const migrationPath = path.join(
+      __dirname,
+      "..",
+      "database",
+      "create-lead-management-tables.sql"
+    );
+
+    if (!fs.existsSync(migrationPath)) {
+      console.error("[Lead Management] Migration file not found:", migrationPath);
+      initInProgress = false;
+      return;
+    }
+
+    const sql = fs.readFileSync(migrationPath, "utf8");
+
+    // Split by semicolon and execute each statement
+    const statements = sql
+      .split(";")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && !s.startsWith("--"));
+
+    let successCount = 0;
+    let errorCount = 0;
+    for (const statement of statements) {
+      try {
+        await pool.query(statement);
+        successCount++;
+      } catch (stmtErr: any) {
+        const errMsg = String(stmtErr.message || "");
+        // Ignore "already exists" errors and continue
+        if (errMsg.includes("already exists") || errMsg.includes("duplicate") || errMsg.includes("relation") && errMsg.includes("exists")) {
+          successCount++;
+          continue;
+        }
+        // For other errors, log but continue
+        errorCount++;
+        console.warn("[Lead Management] Statement error (continuing):", errMsg.substring(0, 100));
+      }
+    }
+
+    console.log(`[Lead Management] Initialization complete: ${successCount} success, ${errorCount} errors out of ${statements.length} statements`);
+    initSuccess = true;
+  } catch (error: any) {
+    console.error("[Lead Management] Init fatal error:", error.message);
+    initSuccess = false;
+  } finally {
+    initInProgress = false;
+  }
+}
 
 // ── AES-256-CBC encryption (same as finance-management) ─────────────────
 const RAW_KEY = process.env.LEAD_ENCRYPTION_KEY ?? process.env.FINANCE_ENCRYPTION_KEY ?? "lead-management-aes-key-secure!";
@@ -32,9 +120,14 @@ function decrypt(text: string | null | undefined): string {
 // ── GET /api/leads - List all leads with filters and search ──────────────
 router.get("/", async (req: Request, res: Response) => {
   try {
+    // Ensure tables exist before querying
+    await ensureTablesExist().catch((err) => {
+      console.warn("[Lead Management] Table initialization failed, continuing anyway:", err.message);
+    });
+
     const { status, industry, country, search, sortBy = "created_at", sortOrder = "DESC", limit = 100, offset = 0 } = req.query;
 
-    let query = "SELECT * FROM leads WHERE 1=1";
+    let query = "SELECT * FROM sales_leads WHERE 1=1";
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -85,7 +178,7 @@ router.get("/", async (req: Request, res: Response) => {
     }));
 
     // Get total count
-    let countQuery = "SELECT COUNT(*) as count FROM leads WHERE 1=1";
+    let countQuery = "SELECT COUNT(*) as count FROM sales_leads WHERE 1=1";
     const countParams: any[] = [];
     let countParamIndex = 1;
 
@@ -121,7 +214,7 @@ router.get("/", async (req: Request, res: Response) => {
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const leadResult = await queryWithRetry(() => pool.query("SELECT * FROM leads WHERE id = $1", [id]));
+    const leadResult = await queryWithRetry(() => pool.query("SELECT * FROM sales_leads WHERE id = $1", [id]));
 
     if (leadResult.rows.length === 0) {
       return res.status(404).json({ error: "Lead not found" });
@@ -131,12 +224,12 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     // Get follow-ups
     const followUpsResult = await queryWithRetry(() =>
-      pool.query("SELECT * FROM lead_follow_ups WHERE lead_id = $1 ORDER BY follow_up_date DESC", [id])
+      pool.query("SELECT * FROM sales_leads_follow_ups WHERE lead_id = $1 ORDER BY follow_up_date DESC", [id])
     );
 
     // Get status history
     const historyResult = await queryWithRetry(() =>
-      pool.query("SELECT * FROM lead_status_history WHERE lead_id = $1 ORDER BY changed_at DESC LIMIT 10", [id])
+      pool.query("SELECT * FROM sales_leads_status_history WHERE lead_id = $1 ORDER BY changed_at DESC LIMIT 10", [id])
     );
 
     // Decrypt sensitive fields
@@ -167,6 +260,11 @@ router.get("/:id", async (req: Request, res: Response) => {
 // ── POST /api/leads - Create a new lead ────────────────────────────────
 router.post("/", async (req: Request, res: Response) => {
   try {
+    // Ensure tables exist before inserting
+    await ensureTablesExist().catch((err) => {
+      console.warn("[Lead Management] Table initialization failed on POST, continuing:", err.message);
+    });
+
     const {
       company_name,
       company_legal_name,
@@ -190,9 +288,39 @@ router.post("/", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing required fields: company_name, industry, company_size, country" });
     }
 
+    // Try to create the sales_leads table if it doesn't exist (emergency fallback)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS sales_leads (
+          id SERIAL PRIMARY KEY,
+          company_name TEXT NOT NULL,
+          company_legal_name TEXT,
+          company_website TEXT,
+          company_logo_url TEXT,
+          industry TEXT NOT NULL CHECK (industry IN ('Banking', 'Fintech', 'Payments', 'Insurance', 'Retail', 'Telecom', 'Government', 'Other')),
+          sub_industry TEXT,
+          company_size TEXT NOT NULL CHECK (company_size IN ('1-50', '51-200', '201-1000', '1001-5000', '5000+')),
+          annual_revenue_band TEXT CHECK (annual_revenue_band IN ('<1M', '1-10M', '10-50M', '50-250M', '250M-1B', '1B+')),
+          years_in_business INTEGER,
+          country TEXT NOT NULL,
+          state_region TEXT,
+          city TEXT,
+          address TEXT,
+          timezone TEXT,
+          preferred_language TEXT CHECK (preferred_language IN ('English', 'Hindi', 'Tamil', 'Kannada', 'Malayalam', 'Telugu', 'Marathi', 'Gujarati', 'Bengali', 'Punjabi', 'Urdu', 'Other')),
+          status TEXT NOT NULL DEFAULT 'New' CHECK (status IN ('New', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost')),
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+    } catch (tableErr: any) {
+      console.warn("[Lead Management] Table creation fallback failed:", tableErr.message);
+      // Continue anyway - table might already exist
+    }
+
     const result = await queryWithRetry(() =>
       pool.query(
-        `INSERT INTO leads (
+        `INSERT INTO sales_leads (
           company_name, company_legal_name, company_website, company_logo_url,
           industry, sub_industry, company_size, annual_revenue_band, years_in_business,
           country, state_region, city, address, timezone, preferred_language, status
@@ -261,7 +389,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 
     const result = await queryWithRetry(() =>
       pool.query(
-        `UPDATE leads SET
+        `UPDATE sales_leads SET
           company_name = COALESCE($1, company_name),
           company_legal_name = COALESCE($2, company_legal_name),
           company_website = COALESCE($3, company_website),
@@ -327,7 +455,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const result = await queryWithRetry(() => pool.query("DELETE FROM leads WHERE id = $1 RETURNING id", [id]));
+    const result = await queryWithRetry(() => pool.query("DELETE FROM sales_leads WHERE id = $1 RETURNING id", [id]));
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Lead not found" });
@@ -343,18 +471,21 @@ router.delete("/:id", async (req: Request, res: Response) => {
 // ── GET /api/leads/dashboard/stats - Get dashboard statistics ───────────
 router.get("/dashboard/stats", async (req: Request, res: Response) => {
   try {
-    const totalResult = await queryWithRetry(() => pool.query("SELECT COUNT(*) as count FROM leads"));
+    // Ensure tables exist before querying
+    await ensureTablesExist();
+
+    const totalResult = await queryWithRetry(() => pool.query("SELECT COUNT(*) as count FROM sales_leads"));
     const statusResult = await queryWithRetry(() =>
-      pool.query("SELECT status, COUNT(*) as count FROM leads GROUP BY status ORDER BY count DESC")
+      pool.query("SELECT status, COUNT(*) as count FROM sales_leads GROUP BY status ORDER BY count DESC")
     );
     const industryResult = await queryWithRetry(() =>
-      pool.query("SELECT industry, COUNT(*) as count FROM leads GROUP BY industry ORDER BY count DESC LIMIT 10")
+      pool.query("SELECT industry, COUNT(*) as count FROM sales_leads GROUP BY industry ORDER BY count DESC LIMIT 10")
     );
     const countryResult = await queryWithRetry(() =>
-      pool.query("SELECT country, COUNT(*) as count FROM leads GROUP BY country ORDER BY count DESC LIMIT 10")
+      pool.query("SELECT country, COUNT(*) as count FROM sales_leads GROUP BY country ORDER BY count DESC LIMIT 10")
     );
     const recentResult = await queryWithRetry(() =>
-      pool.query("SELECT * FROM leads ORDER BY created_at DESC LIMIT 5")
+      pool.query("SELECT * FROM sales_leads ORDER BY created_at DESC LIMIT 5")
     );
 
     res.json({

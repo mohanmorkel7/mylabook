@@ -36,9 +36,18 @@ import {
   Play,
   Pause,
   Volume2,
+  Send,
+  Settings,
+  Zap,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const STATUSES = ["Pending", "Completed", "Cancelled"];
 
@@ -143,6 +152,14 @@ async function fetchAudioRecordings(followUpId: number) {
   return res.json();
 }
 
+async function deleteAudioRecording(recordingId: number) {
+  const res = await fetch(`/api/lead-followups/audio/${recordingId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete audio recording");
+  return res.json();
+}
+
 export function FollowUpDetail({
   followUp,
   leadId,
@@ -172,12 +189,19 @@ export function FollowUpDetail({
   const [attendees, setAttendees] = useState("");
   const [audioRecordings, setAudioRecordings] = useState<AudioRecording[]>([]);
   const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isListening, setIsListening] = useState(false);
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const audioPlayerRef = useRef<HTMLAudioElement>(null);
   const recordedAudioUrlRef = useRef<string>("");
+  const recognitionRef = useRef<any>(null);
 
   // Fetch audio recordings
   const { data: audioData, refetch: refetchAudio } = useQuery({
@@ -252,6 +276,18 @@ export function FollowUpDetail({
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to upload audio", variant: "destructive" });
+    },
+  });
+
+  // Delete audio mutation
+  const deleteAudioMutation = useMutation({
+    mutationFn: (recordingId: number) => deleteAudioRecording(recordingId),
+    onSuccess: () => {
+      toast({ title: "Audio recording deleted successfully" });
+      refetchAudio();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete audio", variant: "destructive" });
     },
   });
 
@@ -332,6 +368,89 @@ export function FollowUpDetail({
     const filename = `audio-${new Date().getTime()}.webm`;
     const file = new File([audioBlob], filename, { type: "audio/webm" });
     await audioMutation.mutateAsync(file);
+  };
+
+  // Speech-to-text conversion using Web Speech API
+  const startSpeechToText = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      toast({
+        title: "Error",
+        description: "Speech recognition not supported in your browser",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = "";
+      let finalTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + " ";
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        setChatInput((prev) => prev + " " + finalTranscript);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      toast({
+        title: "Error",
+        description: `Speech recognition error: ${event.error}`,
+        variant: "destructive",
+      });
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
+  const stopSpeechToText = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  // Send chat message
+  const handleSendMessage = () => {
+    if (!chatInput.trim()) return;
+
+    const newMessage = {
+      id: Date.now(),
+      content: chatInput,
+      author: "Current User",
+      timestamp: new Date(),
+      isNote: true,
+    };
+
+    setChatMessages((prev) => [...prev, newMessage]);
+    setChatInput("");
+    toast({ title: "Note added to MOM" });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -747,6 +866,20 @@ export function FollowUpDetail({
                               Download
                             </a>
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (confirm("Delete this recording?")) {
+                                deleteAudioMutation.mutate(recording.id);
+                              }
+                            }}
+                            disabled={deleteAudioMutation.isPending}
+                            className="gap-1 flex-1 text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Delete
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -760,6 +893,144 @@ export function FollowUpDetail({
                 No recordings yet. Start recording or upload an audio file to begin.
               </div>
             )}
+          </div>
+
+          {/* Team Chat / MOM Section */}
+          <div className="border-t pt-4">
+            <h4 className="font-medium text-sm flex items-center gap-2 mb-3">
+              <MessageSquare className="h-4 w-4" />
+              Team Chat & MOM (Minutes of Meeting)
+            </h4>
+
+            {/* Chat Messages */}
+            <div className="bg-gray-50 rounded border p-3 space-y-3 max-h-96 overflow-y-auto mb-3">
+              {chatMessages.length === 0 ? (
+                <p className="text-xs text-gray-500 text-center py-4">
+                  No messages yet. Start adding notes or transcribed text from audio.
+                </p>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex space-x-3 p-3 rounded border ${
+                      msg.author === "Current User"
+                        ? "bg-green-50 border-green-200"
+                        : "bg-white border-gray-200"
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center bg-blue-500 text-white text-xs font-medium flex-shrink-0">
+                      {msg.author?.charAt(0) || "?"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-xs font-medium text-gray-900">
+                          {msg.author}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-700 break-words">
+                        {msg.content}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Message Input with Action Icons */}
+            <div className="space-y-3 bg-blue-50 p-3 rounded border border-blue-200">
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    placeholder={isListening ? "🎤 Listening..." : "Type or use speech to text..."}
+                    className="pr-40"
+                    disabled={isListening}
+                  />
+                  {/* Horizontal action icons */}
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={isListening ? stopSpeechToText : startSpeechToText}
+                      className={`gap-1 h-8 ${
+                        isListening ? "bg-red-100 text-red-600 hover:bg-red-200" : "text-gray-600"
+                      }`}
+                      title="Speech to Text"
+                    >
+                      <Mic className="h-3 w-3" />
+                    </Button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1 h-8 text-gray-600"
+                          title="More options"
+                        >
+                          <Settings className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setChatInput("");
+                            toast({ title: "Input cleared" });
+                          }}
+                        >
+                          <X className="h-3 w-3 mr-2" />
+                          Clear Input
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setChatMessages([]);
+                            toast({ title: "Chat history cleared" });
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 mr-2" />
+                          Clear Chat History
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const chatText = chatMessages
+                              .map((m) => `${m.author}: ${m.content}`)
+                              .join("\n");
+                            navigator.clipboard.writeText(chatText);
+                            toast({ title: "Chat copied to clipboard" });
+                          }}
+                        >
+                          <Zap className="h-3 w-3 mr-2" />
+                          Copy All Messages
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <Button
+                      size="sm"
+                      onClick={handleSendMessage}
+                      disabled={!chatInput.trim() || isListening}
+                      className="gap-1 h-8 bg-blue-600 hover:bg-blue-700 text-white"
+                      title="Send message (Enter)"
+                    >
+                      <Send className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600">
+                💡 <strong>Tip:</strong> Click the microphone to convert speech to text, then send as note.
+              </p>
+            </div>
           </div>
         </AccordionContent>
       </AccordionItem>

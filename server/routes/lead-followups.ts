@@ -194,4 +194,151 @@ router.get("/upcoming/:days", async (req: Request, res: Response) => {
   }
 });
 
+// ── POST /api/lead-followups/:id/attachment - Upload attachment ─────────
+router.post("/:id/attachment", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    // In a real implementation, handle file upload
+    // For now, just return a placeholder response
+    res.json({ message: "Attachment endpoint ready", followup_id: id });
+  } catch (error: any) {
+    console.error("Failed to upload attachment:", error.message);
+    res.status(500).json({ error: "Failed to upload attachment" });
+  }
+});
+
+// ── POST /api/lead-followups/:id/notes - Add a note to follow-up ────────
+router.post("/:id/notes", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { content, author } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: "Note content is required" });
+    }
+
+    // Create notes table if it doesn't exist
+    await queryWithRetry(() =>
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS sales_leads_follow_up_notes (
+          id SERIAL PRIMARY KEY,
+          follow_up_id INTEGER NOT NULL REFERENCES sales_leads_follow_ups(id) ON DELETE CASCADE,
+          content TEXT NOT NULL,
+          author TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+    );
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO sales_leads_follow_up_notes (follow_up_id, content, author)
+         VALUES ($1, $2, $3)
+         RETURNING *`,
+        [id, encrypt(content), author]
+      )
+    );
+
+    res.status(201).json({
+      ...result.rows[0],
+      content: decrypt(result.rows[0].content),
+    });
+  } catch (error: any) {
+    console.error("Failed to add note:", error.message);
+    res.status(500).json({ error: "Failed to add note" });
+  }
+});
+
+// ── GET /api/lead-followups/:id/notes - Get notes for follow-up ─────────
+router.get("/:id/notes", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `SELECT * FROM sales_leads_follow_up_notes WHERE follow_up_id = $1 ORDER BY created_at DESC`,
+        [id]
+      )
+    );
+
+    const notes = result.rows.map((n: any) => ({
+      ...n,
+      content: decrypt(n.content),
+    }));
+
+    res.json({ notes });
+  } catch (error: any) {
+    console.error("Failed to fetch notes:", error.message);
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
+});
+
+// ── POST /api/lead-followups/:id/audio - Upload audio recording ────────
+router.post("/:id/audio", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { attendees } = req.body;
+
+    // Create audio recordings table if it doesn't exist
+    await queryWithRetry(() =>
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS sales_leads_audio_recordings (
+          id SERIAL PRIMARY KEY,
+          follow_up_id INTEGER NOT NULL REFERENCES sales_leads_follow_ups(id) ON DELETE CASCADE,
+          filename TEXT NOT NULL,
+          url TEXT,
+          attendees TEXT,
+          duration INTEGER DEFAULT 0,
+          recorded_at TIMESTAMP DEFAULT NOW(),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+    );
+
+    // In a real implementation, file upload would happen here
+    // For now, create a database record
+    const filename = `audio-${new Date().getTime()}.webm`;
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO sales_leads_audio_recordings (follow_up_id, filename, attendees, url)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [id, filename, encrypt(attendees || ""), `/api/files/audio/${id}/${filename}`]
+      )
+    );
+
+    res.status(201).json({
+      ...result.rows[0],
+      attendees: decrypt(result.rows[0].attendees),
+    });
+  } catch (error: any) {
+    console.error("Failed to upload audio:", error.message);
+    res.status(500).json({ error: "Failed to upload audio" });
+  }
+});
+
+// ── GET /api/lead-followups/:id/audio - Get audio recordings ───────────
+router.get("/:id/audio", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `SELECT * FROM sales_leads_audio_recordings WHERE follow_up_id = $1 ORDER BY created_at DESC`,
+        [id]
+      )
+    );
+
+    const recordings = result.rows.map((r: any) => ({
+      ...r,
+      attendees: decrypt(r.attendees),
+    }));
+
+    res.json({ recordings });
+  } catch (error: any) {
+    console.error("Failed to fetch audio recordings:", error.message);
+    res.status(500).json({ error: "Failed to fetch audio recordings" });
+  }
+});
+
 export default router;

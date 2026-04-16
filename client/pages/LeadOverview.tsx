@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FollowUpForm } from "@/components/FollowUpForm";
+import { FollowUpDetail } from "@/components/FollowUpDetail";
 
 const STATUS_COLORS: Record<string, string> = {
   New: "bg-blue-100 text-blue-800",
@@ -177,29 +178,15 @@ export default function LeadOverview() {
               {followUps.length === 0 ? (
                 <p className="text-gray-500">No follow-ups scheduled</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {followUps.map((fu: any) => (
-                    <div key={fu.id} className="p-3 border rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-gray-400" />
-                          <span className="font-medium">
-                            {new Date(fu.follow_up_date).toLocaleString()}
-                          </span>
-                        </div>
-                        <Badge variant={fu.status === "Completed" ? "default" : "outline"}>
-                          {fu.status}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-600">{fu.notes}</p>
-                      {fu.image_url && (
-                        <img
-                          src={fu.image_url}
-                          alt="Follow-up attachment"
-                          className="mt-2 max-w-xs rounded"
-                        />
-                      )}
-                    </div>
+                    <FollowUpDetail
+                      key={fu.id}
+                      followUp={fu}
+                      leadId={lead.id}
+                      onUpdate={() => qc.invalidateQueries({ queryKey: ["lead-followups", id] })}
+                      onDelete={() => qc.invalidateQueries({ queryKey: ["lead-followups", id] })}
+                    />
                   ))}
                 </div>
               )}

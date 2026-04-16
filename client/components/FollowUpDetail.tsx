@@ -33,8 +33,12 @@ import {
   Save,
   AlertCircle,
   CheckCircle,
+  Play,
+  Pause,
+  Volume2,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 const STATUSES = ["Pending", "Completed", "Cancelled"];
 
@@ -133,6 +137,12 @@ async function uploadAudioRecording(
   return res.json();
 }
 
+async function fetchAudioRecordings(followUpId: number) {
+  const res = await fetch(`/api/lead-followups/${followUpId}/audio`);
+  if (!res.ok) throw new Error("Failed to fetch audio recordings");
+  return res.json();
+}
+
 export function FollowUpDetail({
   followUp,
   leadId,
@@ -161,10 +171,26 @@ export function FollowUpDetail({
   // Audio state
   const [attendees, setAttendees] = useState("");
   const [audioRecordings, setAudioRecordings] = useState<AudioRecording[]>([]);
+  const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement>(null);
+  const recordedAudioUrlRef = useRef<string>("");
+
+  // Fetch audio recordings
+  const { data: audioData, refetch: refetchAudio } = useQuery({
+    queryKey: ["audio-recordings", followUp.id],
+    queryFn: () => fetchAudioRecordings(followUp.id),
+    staleTime: 30 * 1000,
+  });
+
+  React.useEffect(() => {
+    if (audioData?.recordings) {
+      setAudioRecordings(audioData.recordings);
+    }
+  }, [audioData]);
 
   // Update mutation
   const updateMutation = useMutation({
@@ -218,7 +244,14 @@ export function FollowUpDetail({
     onSuccess: () => {
       toast({ title: "Audio recording uploaded successfully" });
       setAttendees("");
+      setRecordingTime(0);
+      recordedAudioUrlRef.current = "";
       if (audioInputRef.current) audioInputRef.current.value = "";
+      // Refetch audio recordings to show the new one
+      refetchAudio();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to upload audio", variant: "destructive" });
     },
   });
 
@@ -270,10 +303,35 @@ export function FollowUpDetail({
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
+  };
+
+  const uploadRecordedAudio = async () => {
+    if (audioChunksRef.current.length === 0) {
+      toast({
+        title: "Error",
+        description: "No audio recorded",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!attendees.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter attendee names",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+    const filename = `audio-${new Date().getTime()}.webm`;
+    const file = new File([audioBlob], filename, { type: "audio/webm" });
+    await audioMutation.mutateAsync(file);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -523,7 +581,8 @@ export function FollowUpDetail({
               <Mic className="h-4 w-4" />
               Call/Meeting Recording
             </h4>
-            
+
+            {/* Recording Controls */}
             {!isRecording ? (
               <div className="space-y-3">
                 <div>
@@ -555,7 +614,7 @@ export function FollowUpDetail({
                     className="gap-2"
                   >
                     <Upload className="h-4 w-4" />
-                    Upload Audio
+                    Upload Audio File
                   </Button>
                 </div>
                 <input
@@ -564,17 +623,25 @@ export function FollowUpDetail({
                   accept="audio/*"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) audioMutation.mutate(file);
+                    if (file && attendees.trim()) {
+                      audioMutation.mutate(file);
+                    } else if (!attendees.trim()) {
+                      toast({
+                        title: "Error",
+                        description: "Please enter attendee names first",
+                        variant: "destructive",
+                      });
+                    }
                   }}
                   className="hidden"
                 />
               </div>
             ) : (
-              <div className="bg-red-50 p-3 rounded border">
+              <div className="bg-red-50 p-3 rounded border space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-3 w-3 bg-red-500 rounded-full animate-pulse" />
-                    <span className="font-mono text-sm">{formatTime(recordingTime)}</span>
+                    <span className="font-mono text-sm font-medium">{formatTime(recordingTime)}</span>
                   </div>
                   <Button
                     size="sm"
@@ -586,32 +653,111 @@ export function FollowUpDetail({
                     Stop Recording
                   </Button>
                 </div>
+                {recordingTime > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={uploadRecordedAudio}
+                    disabled={audioMutation.isPending}
+                    className="w-full gap-2 bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    {audioMutation.isPending ? "Uploading..." : "Save Recording"}
+                  </Button>
+                )}
               </div>
             )}
 
+            {/* Audio Recordings History */}
             {audioRecordings.length > 0 && (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs font-medium text-gray-600">Recordings:</p>
-                {audioRecordings.map((recording) => (
-                  <div key={recording.id} className="bg-gray-50 p-2 rounded text-xs">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{recording.filename}</p>
-                        <p className="text-gray-600">
-                          {new Date(recording.recorded_at).toLocaleString()} • {recording.attendees}
-                        </p>
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  Recording History ({audioRecordings.length})
+                </p>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {audioRecordings.map((recording, idx) => (
+                    <div key={recording.id} className="bg-gradient-to-r from-gray-50 to-gray-100 p-3 rounded-lg border border-gray-200">
+                      <div className="space-y-2">
+                        {/* Recording Info */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-900">
+                              Recording #{audioRecordings.length - idx}
+                            </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              <span className="font-medium">Date:</span>{" "}
+                              {new Date(recording.recorded_at).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              <span className="font-medium">Attendees:</span> {recording.attendees}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Audio Player */}
+                        <div className="bg-white rounded border border-gray-300 p-2">
+                          <audio
+                            ref={playingAudioId === recording.id ? audioPlayerRef : null}
+                            controls
+                            className="w-full h-8"
+                            controlsList="nodownload"
+                          >
+                            <source src={recording.url} type="audio/webm" />
+                            Your browser does not support the audio element.
+                          </audio>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 text-xs">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (audioPlayerRef.current) {
+                                if (audioPlayerRef.current.paused) {
+                                  audioPlayerRef.current.play();
+                                  setPlayingAudioId(recording.id);
+                                } else {
+                                  audioPlayerRef.current.pause();
+                                  setPlayingAudioId(null);
+                                }
+                              }
+                            }}
+                            className="gap-1 flex-1"
+                          >
+                            {playingAudioId === recording.id ? (
+                              <>
+                                <Pause className="h-3 w-3" />
+                                Pause
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3" />
+                                Play
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            asChild
+                            className="gap-1 flex-1"
+                          >
+                            <a href={recording.url} download={recording.filename}>
+                              <Download className="h-3 w-3" />
+                              Download
+                            </a>
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="gap-1"
-                      >
-                        <Download className="h-3 w-3" />
-                        Download
-                      </Button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {audioRecordings.length === 0 && !isRecording && (
+              <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200 text-xs text-blue-700">
+                No recordings yet. Start recording or upload an audio file to begin.
               </div>
             )}
           </div>

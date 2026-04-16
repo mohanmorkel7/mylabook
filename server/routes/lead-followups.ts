@@ -1,6 +1,37 @@
 import { Router, Request, Response } from "express";
 import { pool, queryWithRetry } from "../database/connection";
 import crypto from "crypto";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+// Configure multer for audio uploads
+const audioDir = path.join(process.cwd(), "public", "uploads", "audio");
+if (!fs.existsSync(audioDir)) {
+  fs.mkdirSync(audioDir, { recursive: true });
+}
+
+const audioStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, audioDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `audio-${Date.now()}${ext}`);
+  },
+});
+
+const audioUpload = multer({
+  storage: audioStorage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("audio/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only audio files are allowed"));
+    }
+  },
+});
 
 const router = Router();
 
@@ -274,10 +305,19 @@ router.get("/:id/notes", async (req: Request, res: Response) => {
 });
 
 // ── POST /api/lead-followups/:id/audio - Upload audio recording ────────
-router.post("/:id/audio", async (req: Request, res: Response) => {
+router.post("/:id/audio", audioUpload.single("audio"), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { attendees } = req.body;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No audio file provided" });
+    }
+
+    if (!attendees || attendees.trim().length === 0) {
+      return res.status(400).json({ error: "Attendees information is required" });
+    }
 
     // Create audio recordings table if it doesn't exist
     await queryWithRetry(() =>
@@ -295,15 +335,14 @@ router.post("/:id/audio", async (req: Request, res: Response) => {
       `)
     );
 
-    // In a real implementation, file upload would happen here
-    // For now, create a database record
-    const filename = `audio-${new Date().getTime()}.webm`;
+    // Save audio file URL and metadata
+    const audioUrl = `/uploads/audio/${file.filename}`;
     const result = await queryWithRetry(() =>
       pool.query(
         `INSERT INTO sales_leads_audio_recordings (follow_up_id, filename, attendees, url)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [id, filename, encrypt(attendees || ""), `/api/files/audio/${id}/${filename}`]
+        [id, file.filename, encrypt(attendees), audioUrl]
       )
     );
 
@@ -322,9 +361,25 @@ router.get("/:id/audio", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
+    // Create table if it doesn't exist (for first-time use)
+    await queryWithRetry(() =>
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS sales_leads_audio_recordings (
+          id SERIAL PRIMARY KEY,
+          follow_up_id INTEGER NOT NULL REFERENCES sales_leads_follow_ups(id) ON DELETE CASCADE,
+          filename TEXT NOT NULL,
+          url TEXT,
+          attendees TEXT,
+          duration INTEGER DEFAULT 0,
+          recorded_at TIMESTAMP DEFAULT NOW(),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+    );
+
     const result = await queryWithRetry(() =>
       pool.query(
-        `SELECT * FROM sales_leads_audio_recordings WHERE follow_up_id = $1 ORDER BY created_at DESC`,
+        `SELECT * FROM sales_leads_audio_recordings WHERE follow_up_id = $1 ORDER BY recorded_at DESC`,
         [id]
       )
     );

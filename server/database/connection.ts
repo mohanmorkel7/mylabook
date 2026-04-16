@@ -920,6 +920,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Lead Management tables migration
+    try {
+      const leadManagementPath = path.join(
+        __dirname,
+        "create-lead-management-tables.sql",
+      );
+      if (fs.existsSync(leadManagementPath)) {
+        const leadMgmtSql = fs.readFileSync(leadManagementPath, "utf8");
+        await client.query(leadMgmtSql);
+        console.log("Lead Management tables migration applied successfully");
+      }
+    } catch (leadMgmtErr) {
+      console.log(
+        "Lead Management tables migration already applied or error:",
+        (leadMgmtErr as any).message,
+      );
+    }
+
     // Ensure finops_tracker table exists for daily tracking
     try {
       await pool.query(`

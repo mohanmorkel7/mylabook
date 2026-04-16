@@ -38,6 +38,8 @@ import connectionsRouter from "./routes/connections";
 import mailConfigsRouter from "./routes/mail-configs";
 import emailProcessingRouter from "./routes/email-processing";
 import slackImportRouter from "./routes/slack-import";
+import leadManagementRouter from "./routes/lead-management";
+import leadFollowupsRouter from "./routes/lead-followups";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
 import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
 import { initialize as initializeSlackProcessingJob } from "./jobs/slackProcessingJob";
@@ -478,6 +480,14 @@ export function createServer() {
     );
   } catch (error) {
     console.error("Error loading Slack import route:", error);
+  }
+
+  try {
+    app.use("/api/lead-management", leadManagementRouter);
+    app.use("/api/lead-followups", leadFollowupsRouter);
+    console.log("Lead Management router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Lead Management router:", error);
   }
 
   try {

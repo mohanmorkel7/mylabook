@@ -98,6 +98,13 @@ const navigationItems: NavigationItem[] = [
     icon: Building,
     roles: ["admin", "sales", "product", "business_analyst"],
   },
+  // f2) Lead Management
+  {
+    name: "Lead Management",
+    href: "/lead-management",
+    icon: Megaphone,
+    roles: ["admin", "sales", "product"],
+  },
   // g) Sales (was Business Offerings)
   {
     name: "Sales",

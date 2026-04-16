@@ -25,7 +25,7 @@ async function ensureTablesExist() {
     let tableExists = false;
     try {
       const checkResult = await pool.query(
-        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'leads') as exists`
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'sales_leads') as exists`
       );
       tableExists = checkResult?.rows?.[0]?.exists ?? false;
     } catch (checkErr: any) {
@@ -127,7 +127,7 @@ router.get("/", async (req: Request, res: Response) => {
 
     const { status, industry, country, search, sortBy = "created_at", sortOrder = "DESC", limit = 100, offset = 0 } = req.query;
 
-    let query = "SELECT * FROM leads WHERE 1=1";
+    let query = "SELECT * FROM sales_leads WHERE 1=1";
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -178,7 +178,7 @@ router.get("/", async (req: Request, res: Response) => {
     }));
 
     // Get total count
-    let countQuery = "SELECT COUNT(*) as count FROM leads WHERE 1=1";
+    let countQuery = "SELECT COUNT(*) as count FROM sales_leads WHERE 1=1";
     const countParams: any[] = [];
     let countParamIndex = 1;
 
@@ -214,7 +214,7 @@ router.get("/", async (req: Request, res: Response) => {
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const leadResult = await queryWithRetry(() => pool.query("SELECT * FROM leads WHERE id = $1", [id]));
+    const leadResult = await queryWithRetry(() => pool.query("SELECT * FROM sales_leads WHERE id = $1", [id]));
 
     if (leadResult.rows.length === 0) {
       return res.status(404).json({ error: "Lead not found" });
@@ -224,12 +224,12 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     // Get follow-ups
     const followUpsResult = await queryWithRetry(() =>
-      pool.query("SELECT * FROM lead_follow_ups WHERE lead_id = $1 ORDER BY follow_up_date DESC", [id])
+      pool.query("SELECT * FROM sales_leads_follow_ups WHERE lead_id = $1 ORDER BY follow_up_date DESC", [id])
     );
 
     // Get status history
     const historyResult = await queryWithRetry(() =>
-      pool.query("SELECT * FROM lead_status_history WHERE lead_id = $1 ORDER BY changed_at DESC LIMIT 10", [id])
+      pool.query("SELECT * FROM sales_leads_status_history WHERE lead_id = $1 ORDER BY changed_at DESC LIMIT 10", [id])
     );
 
     // Decrypt sensitive fields
@@ -288,10 +288,10 @@ router.post("/", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing required fields: company_name, industry, company_size, country" });
     }
 
-    // Try to create the leads table if it doesn't exist (emergency fallback)
+    // Try to create the sales_leads table if it doesn't exist (emergency fallback)
     try {
       await pool.query(`
-        CREATE TABLE IF NOT EXISTS leads (
+        CREATE TABLE IF NOT EXISTS sales_leads (
           id SERIAL PRIMARY KEY,
           company_name TEXT NOT NULL,
           company_legal_name TEXT,
@@ -320,7 +320,7 @@ router.post("/", async (req: Request, res: Response) => {
 
     const result = await queryWithRetry(() =>
       pool.query(
-        `INSERT INTO leads (
+        `INSERT INTO sales_leads (
           company_name, company_legal_name, company_website, company_logo_url,
           industry, sub_industry, company_size, annual_revenue_band, years_in_business,
           country, state_region, city, address, timezone, preferred_language, status
@@ -389,7 +389,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 
     const result = await queryWithRetry(() =>
       pool.query(
-        `UPDATE leads SET
+        `UPDATE sales_leads SET
           company_name = COALESCE($1, company_name),
           company_legal_name = COALESCE($2, company_legal_name),
           company_website = COALESCE($3, company_website),
@@ -455,7 +455,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const result = await queryWithRetry(() => pool.query("DELETE FROM leads WHERE id = $1 RETURNING id", [id]));
+    const result = await queryWithRetry(() => pool.query("DELETE FROM sales_leads WHERE id = $1 RETURNING id", [id]));
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Lead not found" });
@@ -474,18 +474,18 @@ router.get("/dashboard/stats", async (req: Request, res: Response) => {
     // Ensure tables exist before querying
     await ensureTablesExist();
 
-    const totalResult = await queryWithRetry(() => pool.query("SELECT COUNT(*) as count FROM leads"));
+    const totalResult = await queryWithRetry(() => pool.query("SELECT COUNT(*) as count FROM sales_leads"));
     const statusResult = await queryWithRetry(() =>
-      pool.query("SELECT status, COUNT(*) as count FROM leads GROUP BY status ORDER BY count DESC")
+      pool.query("SELECT status, COUNT(*) as count FROM sales_leads GROUP BY status ORDER BY count DESC")
     );
     const industryResult = await queryWithRetry(() =>
-      pool.query("SELECT industry, COUNT(*) as count FROM leads GROUP BY industry ORDER BY count DESC LIMIT 10")
+      pool.query("SELECT industry, COUNT(*) as count FROM sales_leads GROUP BY industry ORDER BY count DESC LIMIT 10")
     );
     const countryResult = await queryWithRetry(() =>
-      pool.query("SELECT country, COUNT(*) as count FROM leads GROUP BY country ORDER BY count DESC LIMIT 10")
+      pool.query("SELECT country, COUNT(*) as count FROM sales_leads GROUP BY country ORDER BY count DESC LIMIT 10")
     );
     const recentResult = await queryWithRetry(() =>
-      pool.query("SELECT * FROM leads ORDER BY created_at DESC LIMIT 5")
+      pool.query("SELECT * FROM sales_leads ORDER BY created_at DESC LIMIT 5")
     );
 
     res.json({

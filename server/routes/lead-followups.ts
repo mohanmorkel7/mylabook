@@ -35,7 +35,7 @@ router.get("/lead/:leadId", async (req: Request, res: Response) => {
     const { leadId } = req.params;
     const { status, sortBy = "follow_up_date", sortOrder = "DESC" } = req.query;
 
-    let query = "SELECT * FROM lead_follow_ups WHERE lead_id = $1";
+    let query = "SELECT * FROM sales_leads_follow_ups WHERE lead_id = $1";
     const params: any[] = [leadId];
     let paramIndex = 2;
 
@@ -73,14 +73,14 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     // Verify lead exists
-    const leadCheck = await queryWithRetry(() => pool.query("SELECT id FROM leads WHERE id = $1", [lead_id]));
+    const leadCheck = await queryWithRetry(() => pool.query("SELECT id FROM sales_leads WHERE id = $1", [lead_id]));
     if (leadCheck.rows.length === 0) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
     const result = await queryWithRetry(() =>
       pool.query(
-        `INSERT INTO lead_follow_ups (lead_id, notes, follow_up_date, status)
+        `INSERT INTO sales_leads_follow_ups (lead_id, notes, follow_up_date, status)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
         [lead_id, encrypt(notes), follow_up_date, status]
@@ -106,7 +106,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 
     const result = await queryWithRetry(() =>
       pool.query(
-        `UPDATE lead_follow_ups SET
+        `UPDATE sales_leads_follow_ups SET
           notes = COALESCE($1, notes),
           follow_up_date = COALESCE($2, follow_up_date),
           status = COALESCE($3, status)
@@ -141,7 +141,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await queryWithRetry(() =>
-      pool.query("DELETE FROM lead_follow_ups WHERE id = $1 RETURNING id", [id])
+      pool.query("DELETE FROM sales_leads_follow_ups WHERE id = $1 RETURNING id", [id])
     );
 
     if (result.rows.length === 0) {
@@ -163,8 +163,8 @@ router.get("/upcoming/:days", async (req: Request, res: Response) => {
     const result = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, l.company_name, l.status
-         FROM lead_follow_ups lfu
-         JOIN leads l ON lfu.lead_id = l.id
+         FROM sales_leads_follow_ups lfu
+         JOIN sales_leads l ON lfu.lead_id = l.id
          WHERE lfu.status = 'Pending'
          AND lfu.follow_up_date >= NOW()
          AND lfu.follow_up_date <= NOW() + INTERVAL '1 day' * $1

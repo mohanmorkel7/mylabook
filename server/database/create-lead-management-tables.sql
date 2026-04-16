@@ -1,10 +1,11 @@
 -- ============================================================================
 -- Lead Generation Management System - Database Schema
 -- All sensitive fields encrypted with AES-256-CBC
+-- Using "sales_leads" prefix to avoid conflicts with existing "leads" table
 -- ============================================================================
 
--- Create Leads table
-CREATE TABLE IF NOT EXISTS leads (
+-- Create Sales Leads table
+CREATE TABLE IF NOT EXISTS sales_leads (
   id SERIAL PRIMARY KEY,
   
   -- Company Information (encrypted)
@@ -37,18 +38,18 @@ CREATE TABLE IF NOT EXISTS leads (
 );
 
 -- Create indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
-CREATE INDEX IF NOT EXISTS idx_leads_industry ON leads(industry);
-CREATE INDEX IF NOT EXISTS idx_leads_country ON leads(country);
-CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_leads_updated_at ON leads(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_status ON sales_leads(status);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_industry ON sales_leads(industry);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_country ON sales_leads(country);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_created_at ON sales_leads(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_updated_at ON sales_leads(updated_at DESC);
 
--- Create Follow-ups table
-CREATE TABLE IF NOT EXISTS lead_follow_ups (
+-- Create Sales Leads Follow-ups table
+CREATE TABLE IF NOT EXISTS sales_leads_follow_ups (
   id SERIAL PRIMARY KEY,
-  
+
   -- Foreign Key
-  lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  lead_id INTEGER NOT NULL REFERENCES sales_leads(id) ON DELETE CASCADE,
   
   -- Follow-up Content (encrypted)
   notes TEXT,
@@ -63,15 +64,15 @@ CREATE TABLE IF NOT EXISTS lead_follow_ups (
 );
 
 -- Create indexes for follow-ups
-CREATE INDEX IF NOT EXISTS idx_follow_ups_lead_id ON lead_follow_ups(lead_id);
-CREATE INDEX IF NOT EXISTS idx_follow_ups_follow_up_date ON lead_follow_ups(follow_up_date);
-CREATE INDEX IF NOT EXISTS idx_follow_ups_status ON lead_follow_ups(status);
-CREATE INDEX IF NOT EXISTS idx_follow_ups_created_at ON lead_follow_ups(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_follow_ups_lead_id ON sales_leads_follow_ups(lead_id);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_follow_ups_follow_up_date ON sales_leads_follow_ups(follow_up_date);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_follow_ups_status ON sales_leads_follow_ups(status);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_follow_ups_created_at ON sales_leads_follow_ups(created_at DESC);
 
--- Create Lead Status History table (for analytics)
-CREATE TABLE IF NOT EXISTS lead_status_history (
+-- Create Sales Leads Status History table (for analytics)
+CREATE TABLE IF NOT EXISTS sales_leads_status_history (
   id SERIAL PRIMARY KEY,
-  lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  lead_id INTEGER NOT NULL REFERENCES sales_leads(id) ON DELETE CASCADE,
   from_status TEXT NOT NULL,
   to_status TEXT NOT NULL,
   changed_at TIMESTAMP DEFAULT NOW(),
@@ -79,13 +80,13 @@ CREATE TABLE IF NOT EXISTS lead_status_history (
 );
 
 -- Create indexes for status history
-CREATE INDEX IF NOT EXISTS idx_lead_status_history_lead_id ON lead_status_history(lead_id);
-CREATE INDEX IF NOT EXISTS idx_lead_status_history_changed_at ON lead_status_history(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_status_history_lead_id ON sales_leads_status_history(lead_id);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_status_history_changed_at ON sales_leads_status_history(changed_at DESC);
 
--- Create Lead Activity Log table (for tracking interactions)
-CREATE TABLE IF NOT EXISTS lead_activity_log (
+-- Create Sales Leads Activity Log table (for tracking interactions)
+CREATE TABLE IF NOT EXISTS sales_leads_activity_log (
   id SERIAL PRIMARY KEY,
-  lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  lead_id INTEGER NOT NULL REFERENCES sales_leads(id) ON DELETE CASCADE,
   activity_type TEXT NOT NULL CHECK (activity_type IN ('created', 'updated', 'contacted', 'follow_up_added', 'status_changed', 'deleted')),
   activity_details TEXT,
   performed_by TEXT,
@@ -93,11 +94,11 @@ CREATE TABLE IF NOT EXISTS lead_activity_log (
 );
 
 -- Create indexes for activity log
-CREATE INDEX IF NOT EXISTS idx_lead_activity_log_lead_id ON lead_activity_log(lead_id);
-CREATE INDEX IF NOT EXISTS idx_lead_activity_log_performed_at ON lead_activity_log(performed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_activity_log_lead_id ON sales_leads_activity_log(lead_id);
+CREATE INDEX IF NOT EXISTS idx_sales_leads_activity_log_performed_at ON sales_leads_activity_log(performed_at DESC);
 
 -- Trigger to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_leads_timestamp()
+CREATE OR REPLACE FUNCTION update_sales_leads_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
@@ -105,13 +106,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER lead_updated_at_trigger
-BEFORE UPDATE ON leads
+CREATE TRIGGER sales_leads_updated_at_trigger
+BEFORE UPDATE ON sales_leads
 FOR EACH ROW
-EXECUTE FUNCTION update_leads_timestamp();
+EXECUTE FUNCTION update_sales_leads_timestamp();
 
 -- Trigger to update follow-ups timestamp
-CREATE OR REPLACE FUNCTION update_follow_ups_timestamp()
+CREATE OR REPLACE FUNCTION update_sales_leads_follow_ups_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
@@ -119,44 +120,44 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER follow_ups_updated_at_trigger
-BEFORE UPDATE ON lead_follow_ups
+CREATE TRIGGER sales_leads_follow_ups_updated_at_trigger
+BEFORE UPDATE ON sales_leads_follow_ups
 FOR EACH ROW
-EXECUTE FUNCTION update_follow_ups_timestamp();
+EXECUTE FUNCTION update_sales_leads_follow_ups_timestamp();
 
 -- Trigger to log status changes
-CREATE OR REPLACE FUNCTION log_status_change()
+CREATE OR REPLACE FUNCTION log_sales_leads_status_change()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.status IS DISTINCT FROM OLD.status THEN
-    INSERT INTO lead_status_history (lead_id, from_status, to_status, changed_by)
+    INSERT INTO sales_leads_status_history (lead_id, from_status, to_status, changed_by)
     VALUES (NEW.id, OLD.status, NEW.status, 'system');
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER lead_status_change_trigger
-BEFORE UPDATE ON leads
+CREATE TRIGGER sales_leads_status_change_trigger
+BEFORE UPDATE ON sales_leads
 FOR EACH ROW
-EXECUTE FUNCTION log_status_change();
+EXECUTE FUNCTION log_sales_leads_status_change();
 
 -- Trigger to log activities
-CREATE OR REPLACE FUNCTION log_lead_activity()
+CREATE OR REPLACE FUNCTION log_sales_leads_activity()
 RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    INSERT INTO lead_activity_log (lead_id, activity_type, activity_details)
+    INSERT INTO sales_leads_activity_log (lead_id, activity_type, activity_details)
     VALUES (NEW.id, 'created', 'Lead created');
   ELSIF TG_OP = 'UPDATE' THEN
-    INSERT INTO lead_activity_log (lead_id, activity_type, activity_details)
+    INSERT INTO sales_leads_activity_log (lead_id, activity_type, activity_details)
     VALUES (NEW.id, 'updated', 'Lead updated');
   END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER lead_activity_log_trigger
-AFTER INSERT OR UPDATE ON leads
+CREATE TRIGGER sales_leads_activity_log_trigger
+AFTER INSERT OR UPDATE ON sales_leads
 FOR EACH ROW
-EXECUTE FUNCTION log_lead_activity();
+EXECUTE FUNCTION log_sales_leads_activity();

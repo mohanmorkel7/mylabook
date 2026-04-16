@@ -938,6 +938,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Migrate leads to sales_leads (rename to avoid conflicts)
+    try {
+      const migrateLeadsPath = path.join(
+        __dirname,
+        "migrate-leads-to-sales-leads.sql",
+      );
+      if (fs.existsSync(migrateLeadsPath)) {
+        const migrateSql = fs.readFileSync(migrateLeadsPath, "utf8");
+        await client.query(migrateSql);
+        console.log("Lead tables migration (leads -> sales_leads) applied successfully");
+      }
+    } catch (leadsRenameErr) {
+      console.log(
+        "Lead tables migration already applied or error:",
+        (leadsRenameErr as any).message,
+      );
+    }
+
     // Ensure finops_tracker table exists for daily tracking
     try {
       await pool.query(`

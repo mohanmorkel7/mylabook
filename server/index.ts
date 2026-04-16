@@ -2,6 +2,7 @@ import "dotenv/config";
 // Force Vite rebuild - emailProcessorService hotfix applied
 import express from "express";
 import cors from "cors";
+import path from "path";
 
 // Extend Express Request interface for raw body
 declare global {
@@ -320,6 +321,11 @@ export function createServer() {
     });
     next();
   });
+
+  // Serve static files (uploads directory)
+  const uploadsPath = path.join(process.cwd(), "public", "uploads");
+  app.use("/uploads", express.static(uploadsPath));
+  console.log("Static file serving configured for uploads directory");
 
   // API routes
   app.get("/api/ping", (_req, res) => {

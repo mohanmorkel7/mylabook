@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2 } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { FollowUpForm } from "@/components/FollowUpForm";
 
 const STATUS_COLORS: Record<string, string> = {
   New: "bg-blue-100 text-blue-800",
@@ -41,6 +42,7 @@ export default function LeadOverview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [showFollowUpForm, setShowFollowUpForm] = useState(false);
 
   const { data: leadData, isLoading } = useQuery({
     queryKey: ["lead", id],
@@ -160,8 +162,16 @@ export default function LeadOverview() {
 
           {/* Follow-ups */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Follow-ups ({followUps.length})</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => setShowFollowUpForm(true)}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Follow-up
+              </Button>
             </CardHeader>
             <CardContent>
               {followUps.length === 0 ? (
@@ -216,6 +226,17 @@ export default function LeadOverview() {
           </Card>
         </div>
       </div>
+
+      {/* Follow-up Form Dialog */}
+      {lead && (
+        <FollowUpForm
+          leadId={lead.id}
+          leadName={lead.company_name}
+          open={showFollowUpForm}
+          onOpenChange={setShowFollowUpForm}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ["lead-followups", id] })}
+        />
+      )}
     </div>
   );
 }

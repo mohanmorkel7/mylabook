@@ -41,7 +41,10 @@ router.post(
     try {
       const file = req.file;
 
+      console.log("[Audio Transcription] Request received");
+
       if (!file) {
+        console.error("[Audio Transcription] No file provided");
         return res.status(400).json({ error: "No audio file provided" });
       }
 
@@ -50,6 +53,8 @@ router.post(
       const fileName = file.filename;
 
       console.log(`[Audio Transcription] Processing file: ${fileName}`);
+      console.log(`[Audio Transcription] File size: ${file.size} bytes`);
+      console.log(`[Audio Transcription] File path: ${audioPath}`);
 
       // For now, we'll use a placeholder transcription
       // In a production environment, you would integrate with:
@@ -61,17 +66,26 @@ router.post(
 
       // Generate intelligent transcription using NLP patterns
       const transcribedText = generateIntelligentTranscription();
+      console.log(`[Audio Transcription] Generated text length: ${transcribedText.length}`);
 
       // Clean up the uploaded file (optional, can keep for re-processing)
       // fs.unlinkSync(audioPath);
 
-      res.json({
+      const response = {
         success: true,
         filename: fileName,
         text: transcribedText,
         message:
           "Audio transcription processed. For production use, integrate with a speech-to-text service.",
+      };
+
+      console.log("[Audio Transcription] Sending response:", {
+        success: response.success,
+        filename: response.filename,
+        textLength: response.text.length,
       });
+
+      res.json(response);
     } catch (error: any) {
       console.error("Failed to transcribe audio:", error.message);
       res.status(500).json({

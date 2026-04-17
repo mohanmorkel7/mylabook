@@ -152,8 +152,6 @@ export function FollowUpDetail({
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const recognitionRef = useRef<any>(null);
-  const audioPlayerRef = useRef<HTMLAudioElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Edit state
@@ -305,138 +303,57 @@ export function FollowUpDetail({
     }
   };
 
-  // Convert audio to text
+  // Convert audio to text using backend endpoint
   const convertAudioToText = async (audioUrl: string) => {
     setIsConverting(true);
     try {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      toast({ title: "Processing audio...", description: "Converting audio to text in background" });
 
-      if (!SpeechRecognition) {
-        setConversionText(
-          "[Audio Transcription Unavailable]\n\nNote: Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari for automatic audio transcription.\n\nAlternatively, you can manually add the notes from the audio recording using the chat input."
-        );
-        setShowConversionDialog(true);
-        setIsConverting(false);
-        return;
+      // Fetch the audio blob from the URL
+      const response = await fetch(audioUrl);
+      if (!response.ok) {
+        throw new Error("Failed to fetch audio file");
       }
 
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
+      const audioBlob = await response.blob();
 
-      let transcript = "";
-      let hasError = false;
-      const startTime = Date.now();
-      const timeoutDuration = 60000; // 60 seconds timeout
+      // Create FormData and send to backend
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "audio.webm");
 
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
-      recognition.maxAlternatives = 1;
+      const transcriptResponse = await fetch("/api/audio-transcription/transcribe", {
+        method: "POST",
+        body: formData,
+      });
 
-      recognition.onstart = () => {
-        console.log("Speech recognition started");
-        toast({ title: "Processing audio...", description: "Converting audio to text" });
-      };
-
-      recognition.onresult = (event: any) => {
-        console.log("Recognition result received");
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            const transcriptSegment = event.results[i][0].transcript;
-            transcript += transcriptSegment + " ";
-          }
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error("Speech recognition error:", event.error);
-        hasError = true;
-
-        if (event.error === "network") {
-          setConversionText(
-            "[Network Error During Transcription]\n\nThe speech recognition service requires an internet connection. Please ensure you have an active network connection and try again.\n\nAlternatively, you can manually transcribe the key points from the audio recording into the chat."
-          );
-        } else if (event.error === "no-speech") {
-          setConversionText(
-            "[No Speech Detected]\n\nThe audio file appears to be silent or contains no recognizable speech.\n\nPlease check the recording and try again or manually add notes from the audio."
-          );
-        } else {
-          setConversionText(
-            `[Transcription Error: ${event.error}]\n\nAn error occurred during speech recognition. Please try again or manually add notes from the audio recording.`
-          );
-        }
-
-        toast({
-          title: "Transcription Error",
-          description: `Error: ${event.error}. Please check your internet connection and try again.`,
-          variant: "destructive",
-        });
-      };
-
-      recognition.onend = () => {
-        console.log("Recognition ended");
-        if (!hasError) {
-          if (transcript.trim()) {
-            setConversionText(transcript.trim());
-          } else {
-            setConversionText(
-              "[No Speech Detected]\n\nThe audio could not be converted to text. Please try again or manually add notes."
-            );
-          }
-        }
-        setShowConversionDialog(true);
-        setIsConverting(false);
-      };
-
-      // Timeout handler
-      const timeoutId = setTimeout(() => {
-        recognition.abort();
-        if (!hasError && !transcript) {
-          setConversionText(
-            "[Transcription Timeout]\n\nThe conversion took too long. This might indicate:\n- Very long audio file\n- Poor internet connection\n- Speech recognition service delay\n\nPlease try again or manually add notes."
-          );
-          setShowConversionDialog(true);
-        }
-        setIsConverting(false);
-      }, timeoutDuration);
-
-      // Create audio element to play while recognizing
-      const audio = new Audio(audioUrl);
-
-      // Try to start recognition
-      try {
-        recognition.start();
-
-        // Play audio for context (user can hear what's being transcribed)
-        audio.play().catch((err) => {
-          console.log("Audio playback not critical:", err);
-        });
-
-        // Clean up timeout on successful end
-        recognition.addEventListener("end", () => {
-          clearTimeout(timeoutId);
-        });
-      } catch (err) {
-        console.error("Failed to start recognition:", err);
-        clearTimeout(timeoutId);
-        setConversionText(
-          "[Recognition Start Error]\n\nFailed to start the speech recognition engine. Please ensure:\n- Your browser supports speech recognition (Chrome, Edge, Safari)\n- You have granted microphone permissions\n- Your internet connection is active"
-        );
-        setShowConversionDialog(true);
-        setIsConverting(false);
+      if (!transcriptResponse.ok) {
+        const errorData = await transcriptResponse.json();
+        throw new Error(errorData.error || "Transcription failed");
       }
+
+      const result = await transcriptResponse.json();
+
+      if (result.success) {
+        setConversionText(result.text);
+        toast({ title: "Audio converted successfully" });
+      } else {
+        throw new Error("Transcription was not successful");
+      }
+
+      setShowConversionDialog(true);
     } catch (error: any) {
       console.error("Conversion error:", error);
-      setIsConverting(false);
       setConversionText(
-        `[Conversion Error]\n\n${error?.message || "An unexpected error occurred during audio conversion."}\n\nPlease try again or manually add notes from the audio.`
+        `[Conversion Error]\n\n${error?.message || "Failed to transcribe audio"}\n\nPlease try again or manually add notes from the audio.`
       );
       setShowConversionDialog(true);
       toast({
-        title: "Error",
-        description: "Failed to convert audio. Check your internet connection.",
+        title: "Transcription Error",
+        description: error?.message || "Failed to convert audio",
         variant: "destructive",
       });
+    } finally {
+      setIsConverting(false);
     }
   };
 

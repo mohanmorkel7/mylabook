@@ -85,6 +85,7 @@ router.get("/lead/:leadId", async (req: Request, res: Response) => {
     const followUps = result.rows.map((fu: any) => ({
       ...fu,
       notes: decrypt(fu.notes),
+      assigned_users: fu.assigned_users ? fu.assigned_users.split(",").map((id: string) => parseInt(id)) : [],
     }));
 
     res.json({ follow_ups: followUps });
@@ -97,7 +98,19 @@ router.get("/lead/:leadId", async (req: Request, res: Response) => {
 // ── POST /api/lead-followups - Create a new follow-up ───────────────────
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { lead_id, notes, follow_up_date, status = "Pending", image_url, image_filename, assigned_to_user_id } = req.body;
+    const {
+      lead_id,
+      notes,
+      follow_up_date,
+      status = "Pending",
+      image_url,
+      image_filename,
+      assigned_to_user_id,
+      title,
+      source,
+      assigned_users,
+      delayed_until
+    } = req.body;
 
     if (!lead_id || !follow_up_date) {
       return res.status(400).json({ error: "Missing required fields: lead_id, follow_up_date" });
@@ -109,12 +122,31 @@ router.post("/", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Lead not found" });
     }
 
+    // Prepare assigned_users (comma-separated string if array provided)
+    let assignedUsersStr = null;
+    if (assigned_users && Array.isArray(assigned_users)) {
+      assignedUsersStr = assigned_users.join(",");
+    }
+
     const result = await queryWithRetry(() =>
       pool.query(
-        `INSERT INTO sales_leads_follow_ups (lead_id, notes, follow_up_date, status, image_url, image_filename, assigned_to_user_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO sales_leads_follow_ups
+         (lead_id, notes, follow_up_date, status, image_url, image_filename, assigned_to_user_id, title, source, assigned_users, delayed_until)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
-        [lead_id, encrypt(notes), follow_up_date, status, image_url || null, image_filename || null, assigned_to_user_id || null]
+        [
+          lead_id,
+          encrypt(notes),
+          follow_up_date,
+          status,
+          image_url || null,
+          image_filename || null,
+          assigned_to_user_id || null,
+          title || null,
+          source || null,
+          assignedUsersStr || null,
+          delayed_until || null
+        ]
       )
     );
 
@@ -122,6 +154,7 @@ router.post("/", async (req: Request, res: Response) => {
     res.status(201).json({
       ...followUp,
       notes: decrypt(followUp.notes),
+      assigned_users: followUp.assigned_users ? followUp.assigned_users.split(",").map((id: string) => parseInt(id)) : [],
     });
   } catch (error: any) {
     console.error("Failed to create follow-up:", error.message);
@@ -133,7 +166,29 @@ router.post("/", async (req: Request, res: Response) => {
 router.put("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { notes, follow_up_date, status, image_url, image_filename, assigned_to_user_id, reminder_sent } = req.body;
+    const {
+      notes,
+      follow_up_date,
+      status,
+      image_url,
+      image_filename,
+      assigned_to_user_id,
+      reminder_sent,
+      title,
+      source,
+      assigned_users,
+      delayed_until
+    } = req.body;
+
+    // Prepare assigned_users (comma-separated string if array provided)
+    let assignedUsersStr = null;
+    if (assigned_users !== undefined) {
+      if (Array.isArray(assigned_users)) {
+        assignedUsersStr = assigned_users.join(",");
+      } else if (assigned_users === null) {
+        assignedUsersStr = null;
+      }
+    }
 
     const result = await queryWithRetry(() =>
       pool.query(
@@ -144,8 +199,12 @@ router.put("/:id", async (req: Request, res: Response) => {
           image_url = COALESCE($4, image_url),
           image_filename = COALESCE($5, image_filename),
           assigned_to_user_id = COALESCE($6, assigned_to_user_id),
-          reminder_sent = COALESCE($7, reminder_sent)
-        WHERE id = $8
+          reminder_sent = COALESCE($7, reminder_sent),
+          title = COALESCE($8, title),
+          source = COALESCE($9, source),
+          assigned_users = CASE WHEN $10::TEXT IS NOT NULL THEN $10 ELSE assigned_users END,
+          delayed_until = CASE WHEN $11::TIMESTAMP IS NOT NULL THEN $11 ELSE delayed_until END
+        WHERE id = $12
         RETURNING *`,
         [
           notes ? encrypt(notes) : null,
@@ -155,6 +214,10 @@ router.put("/:id", async (req: Request, res: Response) => {
           image_filename,
           assigned_to_user_id,
           reminder_sent,
+          title,
+          source,
+          assignedUsersStr,
+          delayed_until,
           id,
         ]
       )
@@ -168,6 +231,7 @@ router.put("/:id", async (req: Request, res: Response) => {
     res.json({
       ...followUp,
       notes: decrypt(followUp.notes),
+      assigned_users: followUp.assigned_users ? followUp.assigned_users.split(",").map((uid: string) => parseInt(uid)) : [],
     });
   } catch (error: any) {
     console.error("Failed to update follow-up:", error.message);

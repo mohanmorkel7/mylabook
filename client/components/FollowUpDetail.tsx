@@ -54,9 +54,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-const STATUSES = ["Pending", "Completed", "Cancelled"];
+const STATUSES = ["Pending", "Completed", "Cancelled", "Delayed", "Overdue"];
 
 interface FollowUp {
   id: number;
@@ -74,7 +77,7 @@ interface FollowUp {
 
 interface ChatMessage {
   id: number;
-  type: "text" | "audio"; // text message or audio message
+  type: "text" | "audio" | "system"; // text message, audio message, or system event
   content: string; // text content or audio URL
   author: string; // username
   timestamp: Date;
@@ -82,6 +85,7 @@ interface ChatMessage {
   audioUrl?: string;
   replyTo?: number; // ID of message this is replying to
   isEdited?: boolean;
+  systemEventType?: "status_change" | "assignment_change" | "date_change" | "note_change"; // Type of system event
 }
 
 interface FollowUpDetailProps {
@@ -201,7 +205,27 @@ export function FollowUpDetail({
     notes: followUp.notes,
     follow_up_date: followUp.follow_up_date.split("T")[0],
     follow_up_time: followUp.follow_up_date.split("T")[1]?.slice(0, 5) || "",
+    title: (followUp as any).title || "",
+    source: (followUp as any).source || "",
+    assigned_users: (followUp as any).assigned_users || [],
+    delayed_until: (followUp as any).delayed_until ? new Date(followUp.delayed_until).toISOString().split("T")[0] : "",
+    delayed_until_time: (followUp as any).delayed_until ? new Date(followUp.delayed_until).toTimeString().slice(0, 5) : "",
   });
+
+  // Fetch users for edit form
+  const { data: usersData } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users");
+      if (!res.ok) throw new Error("Failed to fetch users");
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const users = usersData || [];
+  const [editUsersSearch, setEditUsersSearch] = useState("");
+  const [openEditUsersPopover, setOpenEditUsersPopover] = useState(false);
 
   // Fetch chat messages from database
   const { data: chatData, refetch: refetchChat } = useQuery({
@@ -244,12 +268,21 @@ export function FollowUpDetail({
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: () =>
-      updateFollowUp(followUp.id, {
+    mutationFn: () => {
+      const delayedUntil = editData.status === "Delayed" && editData.delayed_until
+        ? `${editData.delayed_until}T${editData.delayed_until_time || "00:00"}`
+        : null;
+
+      return updateFollowUp(followUp.id, {
         status: editData.status,
         notes: editData.notes,
         follow_up_date: `${editData.follow_up_date}T${editData.follow_up_time || "00:00"}`,
-      }),
+        title: editData.title,
+        source: editData.source,
+        assigned_users: editData.assigned_users,
+        delayed_until: delayedUntil,
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
       toast({ title: "Follow-up updated successfully" });
@@ -653,6 +686,31 @@ export function FollowUpDetail({
       });
       console.log("[Status Change] Response:", response);
 
+      // Add system message to chat
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' });
+      const systemMessage: ChatMessage = {
+        id: Date.now(),
+        type: "system",
+        systemEventType: "status_change",
+        content: `Status changed from ${followUp.status} to ${newStatus}`,
+        author: "System",
+        timestamp: now,
+      };
+
+      setChatMessages((prev) => [...prev, systemMessage]);
+
+      // Save system message to database
+      try {
+        await saveChatMessage(followUp.id, {
+          type: "text",
+          content: `[SYSTEM] Status changed from ${followUp.status} to ${newStatus} at ${timeStr}`,
+          author: "System",
+        });
+      } catch (error) {
+        console.error("Failed to save system message:", error);
+      }
+
       // Invalidate queries to refresh data
       qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
       toast({ title: `Status changed to ${newStatus}` });
@@ -690,9 +748,23 @@ export function FollowUpDetail({
                     </span>
                   )}
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm text-gray-600 font-semibold">{followUp.notes}</p>
-                  {assignedUserName && (
+                  {(followUp as any).assigned_users && (followUp as any).assigned_users.length > 0 && (
+                    (followUp as any).assigned_users.map((userId: number) => {
+                      const user = users.find((u: any) => u.id === userId);
+                      const displayName = user
+                        ? `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email
+                        : `User #${userId}`;
+                      return (
+                        <span key={userId} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {displayName}
+                        </span>
+                      );
+                    })
+                  )}
+                  {!((followUp as any).assigned_users && (followUp as any).assigned_users.length > 0) && assignedUserName && (
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1">
                       <Users className="h-3 w-3" />
                       {assignedUserName}
@@ -747,12 +819,13 @@ export function FollowUpDetail({
         <AccordionContent className="px-4 py-4 space-y-4">
           {/* Status and Basic Info */}
           {isEditing ? (
-            <div className="space-y-4 border rounded-lg p-4 bg-blue-50">
+            <div className="space-y-4 border rounded-lg p-4 bg-blue-50 max-h-[70vh] overflow-y-auto">
               <h4 className="font-medium">Edit Follow-up</h4>
 
+              {/* Date and Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Date</Label>
+                  <Label className="text-xs">Date *</Label>
                   <Input
                     type="date"
                     value={editData.follow_up_date}
@@ -773,6 +846,42 @@ export function FollowUpDetail({
                 </div>
               </div>
 
+              {/* Title */}
+              <div>
+                <Label className="text-xs">Title</Label>
+                <Input
+                  type="text"
+                  value={editData.title}
+                  onChange={(e) =>
+                    setEditData({ ...editData, title: e.target.value })
+                  }
+                  placeholder="Follow-up title..."
+                />
+              </div>
+
+              {/* Source */}
+              <div>
+                <Label className="text-xs">Source</Label>
+                <Select
+                  value={editData.source}
+                  onValueChange={(val) =>
+                    setEditData({ ...editData, source: val })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select source..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["Email", "Call", "Meeting", "LinkedIn", "Website", "Referral", "Other"].map((src) => (
+                      <SelectItem key={src} value={src}>
+                        {src}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status */}
               <div>
                 <Label className="text-xs">Status</Label>
                 <Select
@@ -794,15 +903,138 @@ export function FollowUpDetail({
                 </Select>
               </div>
 
+              {/* Delayed Until (show only if status is Delayed) */}
+              {editData.status === "Delayed" && (
+                <div className="grid grid-cols-2 gap-3 border-l-4 border-orange-400 pl-3 bg-orange-50 p-2 rounded">
+                  <div>
+                    <Label className="text-xs">Postponed to Date</Label>
+                    <Input
+                      type="date"
+                      value={editData.delayed_until}
+                      onChange={(e) =>
+                        setEditData({ ...editData, delayed_until: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Postponed to Time</Label>
+                    <Input
+                      type="time"
+                      value={editData.delayed_until_time}
+                      onChange={(e) =>
+                        setEditData({ ...editData, delayed_until_time: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
               <div>
-                <Label className="text-xs">Notes</Label>
+                <Label className="text-xs">Notes / Description</Label>
                 <Textarea
                   value={editData.notes}
                   onChange={(e) =>
                     setEditData({ ...editData, notes: e.target.value })
                   }
                   rows={3}
+                  placeholder="Add any additional notes for this follow-up..."
                 />
+              </div>
+
+              {/* Assign Users */}
+              <div>
+                <Label className="text-xs">Assign to</Label>
+                <div className="space-y-2">
+                  {/* Selected Users */}
+                  {editData.assigned_users.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {editData.assigned_users.map((userId) => {
+                        const user = users.find((u: any) => u.id === userId);
+                        const displayName = user
+                          ? `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email
+                          : `User #${userId}`;
+
+                        return (
+                          <Badge key={userId} variant="secondary" className="gap-1">
+                            {displayName}
+                            <button
+                              onClick={() =>
+                                setEditData({
+                                  ...editData,
+                                  assigned_users: editData.assigned_users.filter((id) => id !== userId),
+                                })
+                              }
+                              className="ml-1 hover:text-red-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* User Search Dropdown */}
+                  <Popover open={openEditUsersPopover} onOpenChange={setOpenEditUsersPopover}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openEditUsersPopover}
+                        className="w-full justify-between"
+                      >
+                        Search and select users...
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Search users..."
+                          value={editUsersSearch}
+                          onValueChange={setEditUsersSearch}
+                        />
+                        <CommandEmpty>No users found.</CommandEmpty>
+                        <CommandGroup className="max-h-64 overflow-y-auto">
+                          {(users as any[])
+                            .filter((u) =>
+                              `${u.firstname || ""} ${u.lastname || ""} ${u.email || ""}`
+                                .toLowerCase()
+                                .includes(editUsersSearch.toLowerCase())
+                            )
+                            .map((u: any) => (
+                              <CommandItem
+                                key={u.id}
+                                onSelect={() => {
+                                  const isSelected = editData.assigned_users.includes(u.id);
+                                  setEditData({
+                                    ...editData,
+                                    assigned_users: isSelected
+                                      ? editData.assigned_users.filter((id) => id !== u.id)
+                                      : [...editData.assigned_users, u.id],
+                                  });
+                                  setEditUsersSearch("");
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${
+                                    editData.assigned_users.includes(u.id) ? "opacity-100" : "opacity-0"
+                                  }`}
+                                />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {u.firstname} {u.lastname}
+                                  </span>
+                                  <span className="text-xs text-gray-500">{u.email}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -827,11 +1059,34 @@ export function FollowUpDetail({
           ) : (
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 space-y-2">
+                  {(followUp as any).title && (
+                    <p><strong>Title:</strong> {(followUp as any).title}</p>
+                  )}
                   <p><strong>Status:</strong> {followUp.status}</p>
-                  <p className="mt-2"><strong>Notes:</strong> {followUp.notes}</p>
-                  {followUp.source && (
-                    <p className="mt-1"><strong>Source:</strong> {followUp.source}</p>
+                  {(followUp as any).source && (
+                    <p><strong>Source:</strong> {(followUp as any).source}</p>
+                  )}
+                  <p><strong>Notes:</strong> {followUp.notes}</p>
+                  {(followUp as any).assigned_users && (followUp as any).assigned_users.length > 0 && (
+                    <p><strong>Assigned to:</strong> {(followUp as any).assigned_users.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {(followUp as any).assigned_users.map((userId: number) => {
+                          const user = users.find((u: any) => u.id === userId);
+                          const displayName = user
+                            ? `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email
+                            : `User #${userId}`;
+                          return (
+                            <Badge key={userId} variant="secondary" className="text-xs">
+                              {displayName}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}</p>
+                  )}
+                  {(followUp as any).delayed_until && (
+                    <p className="text-orange-600"><strong>Postponed to:</strong> {new Date((followUp as any).delayed_until).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
                   )}
                 </div>
               </div>
@@ -883,10 +1138,21 @@ export function FollowUpDetail({
                       <div
                         key={msg.id}
                         className={`flex ${
-                          msg.author === "You" ? "justify-end" : "justify-start"
+                          msg.type === "system" ? "justify-center" : msg.author === "You" ? "justify-end" : "justify-start"
                         } gap-2 group`}
                       >
-                        {msg.type === "text" ? (
+                        {msg.type === "system" ? (
+                          // System Message - Inline Badge
+                          <div className="flex items-center justify-center w-full my-1">
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-xs text-gray-700 font-medium">
+                              <span className="text-gray-400">•</span>
+                              {msg.content}
+                              <span className="text-gray-400 text-xs ml-1">
+                                {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
+                              </span>
+                            </div>
+                          </div>
+                        ) : msg.type === "text" ? (
                           // Text Message with actions
                           <div className="flex items-start gap-1">
                             {editingMessageId === msg.id ? (

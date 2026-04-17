@@ -34,6 +34,7 @@ import {
   Play,
   Pause,
   Volume2,
+  Wand2,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import {
@@ -245,30 +246,50 @@ export function FollowUpDetail({
         const audioBlob = new Blob(audioChunksRef.current, {
           type: "audio/webm",
         });
-        const url = URL.createObjectURL(audioBlob);
+        const audioFilename = `audio-${Date.now()}.webm`;
 
-        // Add audio message to chat
-        const newMessage: ChatMessage = {
-          id: Date.now(),
-          type: "audio",
-          content: url,
-          author: "You",
-          timestamp: new Date(),
-          audioFilename: `audio-${Date.now()}.webm`,
-          audioUrl: url,
-        };
+        // Upload audio file to server
+        const formData = new FormData();
+        formData.append("audio", audioBlob, audioFilename);
 
-        setChatMessages((prev) => [...prev, newMessage]);
-
-        // Save to database
         try {
+          console.log("[Audio Recording] Uploading audio file...");
+          const uploadResponse = await fetch("/api/lead-followups/upload-audio", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error("Failed to upload audio file");
+          }
+
+          const uploadResult = await uploadResponse.json();
+          const audioUrl = uploadResult.audioUrl || `/uploads/audio/${audioFilename}`;
+
+          console.log("[Audio Recording] Audio uploaded successfully:", audioUrl);
+
+          // Add audio message to chat with persistent URL
+          const newMessage: ChatMessage = {
+            id: Date.now(),
+            type: "audio",
+            content: audioUrl,
+            author: "You",
+            timestamp: new Date(),
+            audioFilename: audioFilename,
+            audioUrl: audioUrl,
+          };
+
+          setChatMessages((prev) => [...prev, newMessage]);
+
+          // Save to database with persistent URL
           await saveChatMessage(followUp.id, {
             type: "audio",
-            content: url,
+            content: audioUrl,
             author: "You",
-            audioFilename: newMessage.audioFilename,
-            audioUrl: url,
+            audioFilename: audioFilename,
+            audioUrl: audioUrl,
           });
+
           refetchChat();
           toast({ title: "Audio recorded and saved to chat" });
         } catch (error) {
@@ -627,27 +648,24 @@ export function FollowUpDetail({
                           </div>
                         ) : (
                           // Audio Message
-                          <div className="max-w-sm">
-                            <div className="text-xs font-medium text-gray-700 mb-2">
+                          <div className="w-full">
+                            <div className="text-xs font-medium text-gray-700 mb-1">
                               {msg.author} • {new Date(msg.timestamp).toLocaleTimeString()}
                             </div>
-                            <div className="bg-gray-100 rounded-lg p-3 border border-gray-200">
+                            <div className="bg-blue-50 rounded-lg p-2 border border-blue-200 flex items-center gap-1.5">
                               <audio
                                 controls
-                                className="w-full h-8"
+                                className="flex-1 h-6"
                                 src={msg.audioUrl}
                               />
-                              <div className="mt-2 flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => convertAudioToText(msg.audioUrl || "")}
-                                  disabled={isConverting}
-                                  className="flex-1 gap-2 bg-purple-600 hover:bg-purple-700 text-xs"
-                                >
-                                  {isConverting ? "Converting..." : "Convert to Text"}
-                                </Button>
-                              </div>
+                              <button
+                                onClick={() => convertAudioToText(msg.audioUrl || "")}
+                                disabled={isConverting}
+                                title="Convert to text"
+                                className="p-1.5 hover:bg-blue-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed text-purple-600 hover:text-purple-700"
+                              >
+                                <Wand2 className="h-4 w-4" />
+                              </button>
                             </div>
                           </div>
                         )}

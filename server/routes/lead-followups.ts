@@ -530,4 +530,36 @@ router.delete("/chat-messages/:messageId", async (req: Request, res: Response) =
   }
 });
 
+// ── POST /api/lead-followups/upload-audio - Upload audio file for chat ──────
+router.post(
+  "/upload-audio",
+  audioUpload.single("audio"),
+  async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ error: "No audio file provided" });
+      }
+
+      console.log(`[Audio Upload] File uploaded: ${file.filename}`);
+
+      const audioUrl = `/uploads/audio/${file.filename}`;
+
+      res.json({
+        success: true,
+        filename: file.filename,
+        audioUrl: audioUrl,
+        message: "Audio file uploaded successfully",
+      });
+    } catch (error: any) {
+      console.error("Failed to upload audio:", error.message);
+      res.status(500).json({
+        error: "Failed to upload audio",
+        details: error.message,
+      });
+    }
+  }
+);
+
 export default router;

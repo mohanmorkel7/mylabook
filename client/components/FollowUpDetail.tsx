@@ -595,30 +595,40 @@ export function FollowUpDetail({
     }
   }, [followUp.assigned_to_user_id]);
 
-  // Calculate SLA countdown (30 mins before follow-up)
+  // Calculate SLA countdown (show remaining time until follow-up)
   useEffect(() => {
     const interval = setInterval(() => {
       const now = getISTTime();
       const followUpTime = new Date(followUp.follow_up_date);
-      const slaAlertTime = new Date(followUpTime.getTime() - 30 * 60 * 1000); // 30 mins before
 
-      const diff = slaAlertTime.getTime() - now.getTime();
-      const isOverdue = diff <= 0;
+      // Calculate time remaining until follow-up
+      const diffUntilFollowUp = followUpTime.getTime() - now.getTime();
 
-      if (diff > 0 && changedStatus === "Pending") {
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const secs = Math.floor((diff % (1000 * 60)) / 1000);
-        setSlaTimeRemaining(`${hours}h ${mins}m ${secs}s`);
+      // SLA alert is 30 mins before follow-up
+      const slaAlertTime = new Date(followUpTime.getTime() - 30 * 60 * 1000);
+      const diffUntilSLA = slaAlertTime.getTime() - now.getTime();
 
-        // Show alert when within 30 mins
-        if (diff < 30 * 60 * 1000 && diff > 0) {
+      if (changedStatus === "Pending") {
+        if (diffUntilFollowUp > 0) {
+          // Still time remaining until follow-up
+          const hours = Math.floor(diffUntilFollowUp / (1000 * 60 * 60));
+          const mins = Math.floor((diffUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
+          const secs = Math.floor((diffUntilFollowUp % (1000 * 60)) / 1000);
+          setSlaTimeRemaining(`${hours}h ${mins}m ${secs}s`);
+
+          // Show alert when within 30 mins of follow-up (red styling)
+          if (diffUntilFollowUp <= 30 * 60 * 1000 && diffUntilFollowUp > 0) {
+            setShowSLAAlert(true);
+          } else {
+            setShowSLAAlert(false);
+          }
+        } else {
+          // Follow-up is overdue
+          setSlaTimeRemaining("Due Now!");
           setShowSLAAlert(true);
         }
-      } else if (isOverdue && changedStatus === "Pending") {
-        setSlaTimeRemaining("Due Now!");
-        setShowSLAAlert(true);
       } else {
+        // Not Pending, hide timer
         setSlaTimeRemaining("");
         setShowSLAAlert(false);
       }

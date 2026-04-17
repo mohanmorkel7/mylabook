@@ -94,13 +94,26 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
         ? `${formData.follow_up_date}T${formData.follow_up_time}`
         : formData.follow_up_date;
 
+      // Get the first assigned user ID (backend only supports single assignment currently)
+      let assigned_to_user_id = null;
+      if (formData.assigned_users.length > 0) {
+        const firstAssignee = formData.assigned_users[0];
+        // If it's a number, use it directly; if it's an email, find the user
+        if (typeof firstAssignee === 'number') {
+          assigned_to_user_id = firstAssignee;
+        } else {
+          const user = users.find(u => u.email === firstAssignee);
+          assigned_to_user_id = user?.id || null;
+        }
+      }
+
       return createFollowUp({
         lead_id: leadId,
         follow_up_date: dateTime,
         title: formData.title || formData.notes,
         notes: formData.notes,
         source: formData.source,
-        assigned_users: formData.assigned_users,
+        assigned_to_user_id: assigned_to_user_id,
       });
     },
     onSuccess: () => {

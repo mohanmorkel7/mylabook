@@ -992,6 +992,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Add Cancelled status support to follow-ups
+    try {
+      const cancelledStatusPath = path.join(
+        __dirname,
+        "add-cancelled-status.sql",
+      );
+      if (fs.existsSync(cancelledStatusPath)) {
+        const cancelledStatusSql = fs.readFileSync(cancelledStatusPath, "utf8");
+        await client.query(cancelledStatusSql);
+        console.log("Cancelled status migration applied successfully");
+      }
+    } catch (cancelledStatusErr) {
+      console.log(
+        "Cancelled status migration already applied or error:",
+        (cancelledStatusErr as any).message,
+      );
+    }
+
     // Ensure finops_tracker table exists for daily tracking
     try {
       await pool.query(`

@@ -306,7 +306,9 @@ export function FollowUpDetail({
   // Convert audio to text using backend endpoint
   const convertAudioToText = async (audioUrl: string) => {
     setIsConverting(true);
+    setConversionText(""); // Clear previous text
     try {
+      console.log("[Audio Conversion] Starting conversion for:", audioUrl);
       toast({ title: "Processing audio...", description: "Converting audio to text in background" });
 
       // Fetch the audio blob from the URL
@@ -316,11 +318,13 @@ export function FollowUpDetail({
       }
 
       const audioBlob = await response.blob();
+      console.log("[Audio Conversion] Audio blob size:", audioBlob.size);
 
       // Create FormData and send to backend
       const formData = new FormData();
       formData.append("audio", audioBlob, "audio.webm");
 
+      console.log("[Audio Conversion] Sending to backend...");
       const transcriptResponse = await fetch("/api/audio-transcription/transcribe", {
         method: "POST",
         body: formData,
@@ -328,24 +332,29 @@ export function FollowUpDetail({
 
       if (!transcriptResponse.ok) {
         const errorData = await transcriptResponse.json();
+        console.error("[Audio Conversion] Backend error:", errorData);
         throw new Error(errorData.error || "Transcription failed");
       }
 
       const result = await transcriptResponse.json();
+      console.log("[Audio Conversion] Backend response:", result);
+      console.log("[Audio Conversion] Response text:", result.text);
+      console.log("[Audio Conversion] Response success:", result.success);
 
-      if (result.success) {
+      if (result.success && result.text) {
+        console.log("[Audio Conversion] Text to be set (length:", result.text.length, "):", result.text.substring(0, 100));
         setConversionText(result.text);
+        console.log("[Audio Conversion] Opening dialog...");
+        setShowConversionDialog(true);
         toast({ title: "Audio converted successfully" });
       } else {
-        throw new Error("Transcription was not successful");
+        console.error("[Audio Conversion] Invalid response - success:", result.success, "text:", !!result.text);
+        throw new Error("Transcription was not successful or no text returned");
       }
-
-      setShowConversionDialog(true);
     } catch (error: any) {
-      console.error("Conversion error:", error);
-      setConversionText(
-        `[Conversion Error]\n\n${error?.message || "Failed to transcribe audio"}\n\nPlease try again or manually add notes from the audio.`
-      );
+      console.error("[Audio Conversion] Error:", error);
+      const errorMsg = `[Conversion Error]\n\n${error?.message || "Failed to transcribe audio"}\n\nPlease try again or manually add notes from the audio.`;
+      setConversionText(errorMsg);
       setShowConversionDialog(true);
       toast({
         title: "Transcription Error",
@@ -712,39 +721,58 @@ export function FollowUpDetail({
 
       {/* Audio Conversion Dialog */}
       <Dialog open={showConversionDialog} onOpenChange={setShowConversionDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Audio Transcription</DialogTitle>
-            <DialogDescription>
-              Review the converted text below. Click "Approve & Send" to add it to the chat.
+            <DialogTitle className="text-xl">Audio Transcription Result</DialogTitle>
+            <DialogDescription className="text-base">
+              Review the transcribed text below. You can edit it if needed, then click "Approve & Send" to add it to the chat.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <Label className="text-sm font-medium text-gray-700">Transcribed Text:</Label>
+          <div className="space-y-4 my-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-base font-semibold text-gray-800">Transcribed Text:</Label>
+                {conversionText && (
+                  <span className="text-xs bg-blue-600 text-white px-3 py-1 rounded-full">
+                    {conversionText.length} characters
+                  </span>
+                )}
+              </div>
               <Textarea
-                value={conversionText}
+                value={conversionText || ""}
                 onChange={(e) => setConversionText(e.target.value)}
-                className="mt-2 min-h-32"
-                placeholder="Transcribed text will appear here..."
+                className="w-full min-h-48 p-4 text-sm bg-white border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                placeholder="Transcribed text will appear here... (Loading...)"
               />
+              {conversionText.length === 0 && (
+                <p className="text-sm text-gray-500 mt-2 italic">Waiting for transcription...</p>
+              )}
             </div>
+
+            {conversionText.toLowerCase().includes("error") && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-700">
+                  ⚠️ There was an issue transcribing the audio. You can manually type the notes or try again.
+                </p>
+              </div>
+            )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex gap-2 pt-4 border-t">
             <Button
               variant="outline"
               onClick={() => setShowConversionDialog(false)}
+              className="text-gray-700"
             >
               Cancel
             </Button>
             <Button
               onClick={approveConvertedText}
-              disabled={!conversionText.trim()}
-              className="bg-purple-600 hover:bg-purple-700"
+              disabled={!conversionText.trim() || conversionText.toLowerCase().includes("error")}
+              className="bg-purple-600 hover:bg-purple-700 text-white flex-1"
             >
-              Approve & Send
+              ✓ Approve & Send to Chat
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -35,6 +35,9 @@ import {
   Pause,
   Volume2,
   Wand2,
+  ChevronDown,
+  Bell,
+  Users,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import {
@@ -131,6 +134,18 @@ async function saveChatMessage(
   return res.json();
 }
 
+async function fetchUserName(userId: number) {
+  try {
+    const res = await fetch(`/api/users/${userId}`);
+    if (!res.ok) return null;
+    const user = await res.json();
+    return user.name || user.email || "Unknown";
+  } catch (error) {
+    console.error("Failed to fetch user:", error);
+    return null;
+  }
+}
+
 export function FollowUpDetail({
   followUp,
   leadId,
@@ -157,6 +172,13 @@ export function FollowUpDetail({
   const [editingMessageText, setEditingMessageText] = useState("");
   const [replyingToMessageId, setReplyingToMessageId] = useState<number | null>(null);
   const [deletingMessageId, setDeletingMessageId] = useState<number | null>(null);
+
+  // SLA and Status
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [slaTimeRemaining, setSlaTimeRemaining] = useState<string>("");
+  const [showSLAAlert, setShowSLAAlert] = useState(false);
+  const [changedStatus, setChangedStatus] = useState(followUp.status);
+  const [assignedUserName, setAssignedUserName] = useState<string | null>(null);
 
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -547,6 +569,76 @@ export function FollowUpDetail({
     }, 100);
   };
 
+  // Get current time in IST
+  const getISTTime = () => {
+    const now = new Date();
+    const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    return istTime;
+  };
+
+  // Fetch assigned user's name
+  useEffect(() => {
+    if (followUp.assigned_to_user_id) {
+      fetchUserName(followUp.assigned_to_user_id).then((name) => {
+        setAssignedUserName(name);
+      });
+    }
+  }, [followUp.assigned_to_user_id]);
+
+  // Calculate SLA countdown (30 mins before follow-up)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = getISTTime();
+      const followUpTime = new Date(followUp.follow_up_date);
+      const slaAlertTime = new Date(followUpTime.getTime() - 30 * 60 * 1000); // 30 mins before
+
+      const diff = slaAlertTime.getTime() - now.getTime();
+
+      if (diff > 0 && followUp.status === "Pending") {
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+        setSlaTimeRemaining(`${hours}h ${mins}m ${secs}s`);
+
+        // Show alert when within 30 mins
+        if (diff < 30 * 60 * 1000 && diff > 0) {
+          setShowSLAAlert(true);
+        }
+      } else if (diff <= 0 && followUp.status === "Pending") {
+        setSlaTimeRemaining("Due Now!");
+        setShowSLAAlert(true);
+      } else {
+        setSlaTimeRemaining("");
+      }
+      setCurrentTime(now);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [followUp.status, followUp.follow_up_date]);
+
+  // Change status inline
+  const changeStatusInline = async (newStatus: string) => {
+    try {
+      setChangedStatus(newStatus);
+      await updateFollowUp(followUp.id, {
+        status: newStatus,
+        notes: followUp.notes,
+        follow_up_date: followUp.follow_up_date,
+      });
+      qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
+      toast({ title: `Status changed to ${newStatus}` });
+      onUpdate?.();
+    } catch (error) {
+      console.error("Failed to change status:", error);
+      setChangedStatus(followUp.status);
+      toast({
+        title: "Error",
+        description: "Failed to change status",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem value={`followup-${followUp.id}`} className="border rounded-lg mb-3">
@@ -556,17 +648,53 @@ export function FollowUpDetail({
               <Clock className="h-4 w-4 text-gray-400" />
               <div className="text-left">
                 <p className="font-medium">
-                  {new Date(followUp.follow_up_date).toLocaleString()}
+                  {new Date(followUp.follow_up_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
                 </p>
-                <p className="text-sm text-gray-600">{followUp.notes}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-600">{followUp.notes}</p>
+                  {assignedUserName && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      {assignedUserName}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            <Badge
-              variant={followUp.status === "Completed" ? "default" : "outline"}
-              className="ml-2"
-            >
-              {followUp.status}
-            </Badge>
+
+            <div className="flex items-center gap-2">
+              {/* SLA Alert */}
+              {showSLAAlert && followUp.status === "Pending" && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700 text-xs">
+                  <Bell className="h-3 w-3" />
+                  {slaTimeRemaining}
+                </div>
+              )}
+
+              {/* Status Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Badge
+                    variant={changedStatus === "Completed" ? "default" : "outline"}
+                    className="ml-2 cursor-pointer hover:opacity-80"
+                  >
+                    {changedStatus}
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Badge>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {STATUSES.map((status) => (
+                    <DropdownMenuItem
+                      key={status}
+                      onClick={() => changeStatusInline(status)}
+                      className={changedStatus === status ? "bg-blue-50" : ""}
+                    >
+                      {status}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </AccordionTrigger>
 

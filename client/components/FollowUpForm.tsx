@@ -69,6 +69,7 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
   const [formData, setFormData] = useState({
     follow_up_date: "",
     follow_up_time: "",
+    title: "",
     notes: "",
     source: "",
     assigned_users: [] as (number | string)[],
@@ -96,6 +97,7 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
       return createFollowUp({
         lead_id: leadId,
         follow_up_date: dateTime,
+        title: formData.title || formData.notes,
         notes: formData.notes,
         source: formData.source,
         assigned_users: formData.assigned_users,
@@ -110,6 +112,7 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
       setFormData({
         follow_up_date: "",
         follow_up_time: "",
+        title: "",
         notes: "",
         source: "",
         assigned_users: [],
@@ -173,6 +176,19 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
             </div>
           </div>
 
+          {/* Title */}
+          <div>
+            <Label htmlFor="title">Follow-up Title *</Label>
+            <Input
+              id="title"
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="e.g., Check with client, Demo presentation, etc."
+              required
+            />
+          </div>
+
           {/* Source */}
           <div>
             <Label htmlFor="source">Source</Label>
@@ -192,12 +208,12 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
 
           {/* Notes */}
           <div>
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">Notes / Description</Label>
             <Textarea
               id="notes"
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Add any notes for this follow-up..."
+              placeholder="Add any additional notes for this follow-up..."
               rows={3}
             />
           </div>
@@ -298,7 +314,7 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
           </Button>
           <Button
             onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending || !formData.follow_up_date}
+            disabled={createMutation.isPending || !formData.follow_up_date || !formData.title.trim()}
           >
             Create Follow-up
           </Button>

@@ -50,6 +50,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useQuery } from "@tanstack/react-query";
 
 const STATUSES = ["Pending", "Completed", "Cancelled"];
 
@@ -102,6 +103,31 @@ async function deleteFollowUp(followUpId: number) {
   return res.json();
 }
 
+async function fetchChatMessages(followUpId: number) {
+  const res = await fetch(`/api/lead-followups/${followUpId}/chat-messages`);
+  if (!res.ok) throw new Error("Failed to fetch chat messages");
+  return res.json();
+}
+
+async function saveChatMessage(
+  followUpId: number,
+  message: Omit<ChatMessage, "id" | "timestamp">
+) {
+  const res = await fetch(`/api/lead-followups/${followUpId}/chat-messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message_type: message.type,
+      content: message.content,
+      author: message.author,
+      audio_filename: message.audioFilename,
+      audio_url: message.audioUrl,
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to save chat message");
+  return res.json();
+}
+
 export function FollowUpDetail({
   followUp,
   leadId,
@@ -137,6 +163,29 @@ export function FollowUpDetail({
     follow_up_date: followUp.follow_up_date.split("T")[0],
     follow_up_time: followUp.follow_up_date.split("T")[1]?.slice(0, 5) || "",
   });
+
+  // Fetch chat messages from database
+  const { data: chatData, refetch: refetchChat } = useQuery({
+    queryKey: ["chat-messages", followUp.id],
+    queryFn: () => fetchChatMessages(followUp.id),
+    staleTime: 30 * 1000,
+  });
+
+  // Load messages from database on component mount
+  useEffect(() => {
+    if (chatData?.messages) {
+      const loadedMessages: ChatMessage[] = chatData.messages.map((msg: any) => ({
+        id: msg.id,
+        type: msg.message_type as "text" | "audio",
+        content: msg.content,
+        author: msg.author,
+        timestamp: new Date(msg.created_at),
+        audioFilename: msg.audio_filename,
+        audioUrl: msg.audio_url,
+      }));
+      setChatMessages(loadedMessages);
+    }
+  }, [chatData]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -199,7 +248,7 @@ export function FollowUpDetail({
           type: "audio/webm",
         });
         const url = URL.createObjectURL(audioBlob);
-        
+
         // Add audio message to chat
         const newMessage: ChatMessage = {
           id: Date.now(),
@@ -212,8 +261,28 @@ export function FollowUpDetail({
         };
 
         setChatMessages((prev) => [...prev, newMessage]);
+
+        // Save to database
+        try {
+          await saveChatMessage(followUp.id, {
+            type: "audio",
+            content: url,
+            author: "You",
+            audioFilename: newMessage.audioFilename,
+            audioUrl: url,
+          });
+          refetchChat();
+          toast({ title: "Audio recorded and saved to chat" });
+        } catch (error) {
+          console.error("Failed to save audio message:", error);
+          toast({
+            title: "Warning",
+            description: "Audio recorded but failed to save to database",
+            variant: "default",
+          });
+        }
+
         stream.getTracks().forEach((track) => track.stop());
-        toast({ title: "Audio recorded and added to chat" });
       };
 
       mediaRecorder.start();
@@ -372,7 +441,7 @@ export function FollowUpDetail({
   };
 
   // Add converted text to chat
-  const approveConvertedText = () => {
+  const approveConvertedText = async () => {
     if (conversionText.trim()) {
       const newMessage: ChatMessage = {
         id: Date.now(),
@@ -383,9 +452,27 @@ export function FollowUpDetail({
       };
 
       setChatMessages((prev) => [...prev, newMessage]);
+
+      // Save to database
+      try {
+        await saveChatMessage(followUp.id, {
+          type: "text",
+          content: conversionText,
+          author: "You (from audio)",
+        });
+        refetchChat();
+        toast({ title: "Converted text added and saved to chat" });
+      } catch (error) {
+        console.error("Failed to save converted text:", error);
+        toast({
+          title: "Warning",
+          description: "Text added but failed to save to database",
+          variant: "default",
+        });
+      }
+
       setShowConversionDialog(false);
       setConversionText("");
-      toast({ title: "Converted text added to chat" });
     }
   };
 
@@ -393,6 +480,39 @@ export function FollowUpDetail({
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const sendTextMessage = async () => {
+    if (!chatInput.trim()) return;
+
+    const newMessage: ChatMessage = {
+      id: Date.now(),
+      type: "text",
+      content: chatInput,
+      author: "You",
+      timestamp: new Date(),
+    };
+
+    setChatMessages((prev) => [...prev, newMessage]);
+    const messageContent = chatInput;
+    setChatInput("");
+
+    // Save to database
+    try {
+      await saveChatMessage(followUp.id, {
+        type: "text",
+        content: messageContent,
+        author: "You",
+      });
+      refetchChat();
+    } catch (error) {
+      console.error("Failed to save message:", error);
+      toast({
+        title: "Warning",
+        description: "Message sent but failed to save to database",
+        variant: "default",
+      });
+    }
   };
 
   return (
@@ -640,19 +760,7 @@ export function FollowUpDetail({
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
-                            if (chatInput.trim()) {
-                              setChatMessages((prev) => [
-                                ...prev,
-                                {
-                                  id: Date.now(),
-                                  type: "text",
-                                  content: chatInput,
-                                  author: "You",
-                                  timestamp: new Date(),
-                                },
-                              ]);
-                              setChatInput("");
-                            }
+                            sendTextMessage();
                           }
                         }}
                         placeholder="Write a message..."
@@ -672,21 +780,7 @@ export function FollowUpDetail({
 
                     <Button
                       size="sm"
-                      onClick={() => {
-                        if (chatInput.trim()) {
-                          setChatMessages((prev) => [
-                            ...prev,
-                            {
-                              id: Date.now(),
-                              type: "text",
-                              content: chatInput,
-                              author: "You",
-                              timestamp: new Date(),
-                            },
-                          ]);
-                          setChatInput("");
-                        }
-                      }}
+                      onClick={sendTextMessage}
                       disabled={!chatInput.trim()}
                       className="h-9 bg-blue-600 hover:bg-blue-700 text-white gap-2"
                     >

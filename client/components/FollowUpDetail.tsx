@@ -708,27 +708,36 @@ export function FollowUpDetail({
       });
       console.log("[Status Change] Response:", response);
 
-      // Add system message to chat
+      // Add system message to chat with username
       const now = new Date();
       const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' });
+
+      // Format: "You changed the status pending to completed"
+      const systemMessageContent = `You changed the status ${followUp.status.toLowerCase()} to ${newStatus.toLowerCase()}`;
+
       const systemMessage: ChatMessage = {
         id: Date.now(),
         type: "system",
         systemEventType: "status_change",
-        content: `Status changed from ${followUp.status} to ${newStatus}`,
+        content: systemMessageContent,
         author: "System",
         timestamp: now,
       };
 
+      console.log("[Status Change] System message:", systemMessageContent);
       setChatMessages((prev) => [...prev, systemMessage]);
 
       // Save system message to database
       try {
         await saveChatMessage(followUp.id, {
           type: "text",
-          content: `[SYSTEM] Status changed from ${followUp.status} to ${newStatus} at ${timeStr}`,
+          content: `[SYSTEM] ${systemMessageContent} at ${timeStr}`,
           author: "System",
         });
+
+        // Refetch chat to ensure message is persisted
+        refetchChat();
+        console.log("[Status Change] System message saved successfully");
       } catch (error) {
         console.error("Failed to save system message:", error);
       }

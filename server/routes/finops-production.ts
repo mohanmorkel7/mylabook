@@ -359,12 +359,12 @@ router.get("/tasks", async (req: Request, res: Response) => {
 
     const filterDateClause =
       normalizedUser && !callerIsManager && !callerIsAdmin
-        ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $2)"
+        ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to::jsonb,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $2)"
         : "";
 
     const filterTodayClause =
       normalizedUser && !callerIsManager && !callerIsAdmin
-        ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $1)"
+        ? "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(t.assigned_to::jsonb,'[]'::jsonb)) a WHERE LOWER(TRIM(a)) = $1)"
         : "";
 
     let result;

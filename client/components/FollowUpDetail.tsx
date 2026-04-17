@@ -136,13 +136,23 @@ async function saveChatMessage(
 
 async function fetchUserName(userId: number) {
   try {
-    const res = await fetch(`/api/users/${userId}`);
-    if (!res.ok) return null;
+    // Try multiple endpoints to fetch user info
+    let res = await fetch(`/api/users/${userId}`);
+    if (!res.ok) {
+      // Fallback: try alternate endpoint
+      res = await fetch(`/api/lead-followups/user/${userId}`);
+    }
+    if (!res.ok) {
+      // If both endpoints fail, return generic "Assigned" text
+      console.log(`User ${userId} could not be fetched, returning generic text`);
+      return `User #${userId}`;
+    }
     const user = await res.json();
-    return user.name || user.email || "Unknown";
+    return user.name || user.email || user.username || `User #${userId}`;
   } catch (error) {
     console.error("Failed to fetch user:", error);
-    return null;
+    // Return generic text on error instead of null
+    return `User #${userId}`;
   }
 }
 
@@ -593,8 +603,9 @@ export function FollowUpDetail({
       const slaAlertTime = new Date(followUpTime.getTime() - 30 * 60 * 1000); // 30 mins before
 
       const diff = slaAlertTime.getTime() - now.getTime();
+      const isOverdue = diff <= 0;
 
-      if (diff > 0 && followUp.status === "Pending") {
+      if (diff > 0 && changedStatus === "Pending") {
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const secs = Math.floor((diff % (1000 * 60)) / 1000);
@@ -604,32 +615,41 @@ export function FollowUpDetail({
         if (diff < 30 * 60 * 1000 && diff > 0) {
           setShowSLAAlert(true);
         }
-      } else if (diff <= 0 && followUp.status === "Pending") {
+      } else if (isOverdue && changedStatus === "Pending") {
         setSlaTimeRemaining("Due Now!");
         setShowSLAAlert(true);
       } else {
         setSlaTimeRemaining("");
+        setShowSLAAlert(false);
       }
       setCurrentTime(now);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [followUp.status, followUp.follow_up_date]);
+  }, [changedStatus, followUp.follow_up_date]);
 
   // Change status inline
   const changeStatusInline = async (newStatus: string) => {
+    console.log("[Status Change] Changing status to:", newStatus);
     try {
+      // Update UI immediately
       setChangedStatus(newStatus);
-      await updateFollowUp(followUp.id, {
+
+      // Save to database
+      const response = await updateFollowUp(followUp.id, {
         status: newStatus,
         notes: followUp.notes,
         follow_up_date: followUp.follow_up_date,
       });
+      console.log("[Status Change] Response:", response);
+
+      // Invalidate queries to refresh data
       qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
       toast({ title: `Status changed to ${newStatus}` });
       onUpdate?.();
     } catch (error) {
       console.error("Failed to change status:", error);
+      // Revert to original status on error
       setChangedStatus(followUp.status);
       toast({
         title: "Error",
@@ -664,8 +684,14 @@ export function FollowUpDetail({
 
             <div className="flex items-center gap-2">
               {/* SLA Alert */}
-              {showSLAAlert && followUp.status === "Pending" && (
-                <div className="flex items-center gap-1 px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700 text-xs">
+              {showSLAAlert && changedStatus === "Pending" && slaTimeRemaining && (
+                <div
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                    slaTimeRemaining === "Due Now!"
+                      ? "bg-red-100 border border-red-300 text-red-700"
+                      : "bg-orange-50 border border-orange-200 text-orange-700"
+                  }`}
+                >
                   <Bell className="h-3 w-3" />
                   {slaTimeRemaining}
                 </div>

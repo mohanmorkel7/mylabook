@@ -669,9 +669,19 @@ export function FollowUpDetail({
               <div className="text-left">
                 <p className="font-medium">
                   {new Date(followUp.follow_up_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                  {followUp.follow_up_date && (
+                    <span className="ml-2 text-sm text-blue-600 font-semibold">
+                      {new Date(followUp.follow_up_date).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        timeZone: 'Asia/Kolkata',
+                      })}
+                    </span>
+                  )}
                 </p>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-600">{followUp.notes}</p>
+                  <p className="text-sm text-gray-600 font-semibold">{followUp.notes}</p>
                   {assignedUserName && (
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1">
                       <Users className="h-3 w-3" />

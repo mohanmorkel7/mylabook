@@ -77,6 +77,8 @@ interface ChatMessage {
   timestamp: Date;
   audioFilename?: string;
   audioUrl?: string;
+  replyTo?: number; // ID of message this is replying to
+  isEdited?: boolean;
 }
 
 interface FollowUpDetailProps {
@@ -149,6 +151,12 @@ export function FollowUpDetail({
   const [showConversionDialog, setShowConversionDialog] = useState(false);
   const [conversionText, setConversionText] = useState("");
   const [isConverting, setIsConverting] = useState(false);
+
+  // Message editing, replying, and deleting
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editingMessageText, setEditingMessageText] = useState("");
+  const [replyingToMessageId, setReplyingToMessageId] = useState<number | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<number | null>(null);
 
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -438,11 +446,13 @@ export function FollowUpDetail({
       content: chatInput,
       author: "You",
       timestamp: new Date(),
+      replyTo: replyingToMessageId || undefined,
     };
 
     setChatMessages((prev) => [...prev, newMessage]);
     const messageContent = chatInput;
     setChatInput("");
+    setReplyingToMessageId(null);
 
     // Save to database
     try {
@@ -450,6 +460,7 @@ export function FollowUpDetail({
         type: "text",
         content: messageContent,
         author: "You",
+        replyTo: replyingToMessageId || undefined,
       });
       refetchChat();
     } catch (error) {
@@ -460,6 +471,80 @@ export function FollowUpDetail({
         variant: "default",
       });
     }
+  };
+
+  // Delete message
+  const deleteMessage = async (messageId: number) => {
+    try {
+      setDeletingMessageId(messageId);
+      const res = await fetch(`/api/lead-followups/chat-messages/${messageId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete message");
+      }
+
+      setChatMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+      toast({ title: "Message deleted" });
+      refetchChat();
+    } catch (error) {
+      console.error("Failed to delete message:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete message",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  // Edit message
+  const startEditingMessage = (message: ChatMessage) => {
+    if (message.type === "text") {
+      setEditingMessageId(message.id);
+      setEditingMessageText(message.content);
+    }
+  };
+
+  const saveEditedMessage = async () => {
+    if (!editingMessageId) return;
+
+    try {
+      // Update message in state
+      setChatMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === editingMessageId
+            ? { ...msg, content: editingMessageText, isEdited: true }
+            : msg
+        )
+      );
+
+      setEditingMessageId(null);
+      setEditingMessageText("");
+      toast({ title: "Message updated" });
+      refetchChat();
+    } catch (error) {
+      console.error("Failed to edit message:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update message",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Reply to message
+  const startReplyingToMessage = (message: ChatMessage) => {
+    setReplyingToMessageId(message.id);
+    // Focus on input
+    setTimeout(() => {
+      const input = document.querySelector(
+        'input[placeholder="Write a message..."]'
+      ) as HTMLInputElement;
+      if (input) input.focus();
+    }, 100);
   };
 
   return (
@@ -625,47 +710,142 @@ export function FollowUpDetail({
                         key={msg.id}
                         className={`flex ${
                           msg.author === "You" ? "justify-end" : "justify-start"
-                        } gap-2`}
+                        } gap-2 group`}
                       >
                         {msg.type === "text" ? (
-                          // Text Message
-                          <div
-                            className={`max-w-xs rounded-lg px-4 py-2 ${
-                              msg.author === "You"
-                                ? "bg-blue-500 text-white"
-                                : "bg-gray-100 text-gray-900"
-                            }`}
-                          >
-                            <p className="text-xs font-medium mb-1 opacity-90">
-                              {msg.author}
-                            </p>
-                            <p className="text-sm break-words">
-                              {msg.content}
-                            </p>
-                            <p className="text-xs mt-1 opacity-75">
-                              {new Date(msg.timestamp).toLocaleTimeString()}
-                            </p>
+                          // Text Message with actions
+                          <div className="flex items-start gap-1">
+                            {editingMessageId === msg.id ? (
+                              // Edit mode
+                              <div className="flex-1 flex gap-1">
+                                <Input
+                                  value={editingMessageText}
+                                  onChange={(e) => setEditingMessageText(e.target.value)}
+                                  className="text-sm"
+                                  autoFocus
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={saveEditedMessage}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  <Save className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingMessageId(null);
+                                    setEditingMessageText("");
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                <div
+                                  className={`max-w-xs rounded-lg px-4 py-2 ${
+                                    msg.author === "You"
+                                      ? "bg-blue-500 text-white"
+                                      : "bg-gray-100 text-gray-900"
+                                  }`}
+                                >
+                                  <p className="text-xs font-medium mb-1 opacity-90">
+                                    {msg.author} {msg.isEdited && <span className="text-xs opacity-75">(edited)</span>}
+                                  </p>
+                                  <p className="text-sm break-words">
+                                    {msg.content}
+                                  </p>
+                                  <p className="text-xs mt-1 opacity-75">
+                                    {new Date(msg.timestamp).toLocaleTimeString()}
+                                  </p>
+                                </div>
+
+                                {/* Action buttons */}
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button className="p-1 hover:bg-gray-200 rounded">
+                                        <MoreVertical className="h-4 w-4 text-gray-600" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align={msg.author === "You" ? "end" : "start"}>
+                                      {msg.author === "You" && (
+                                        <>
+                                          <DropdownMenuItem onClick={() => startEditingMessage(msg)}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onClick={() => deleteMessage(msg.id)}
+                                            disabled={deletingMessageId === msg.id}
+                                            className="text-red-600"
+                                          >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        </>
+                                      )}
+                                      <DropdownMenuItem onClick={() => startReplyingToMessage(msg)}>
+                                        <Send className="h-4 w-4 mr-2" />
+                                        Reply
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </>
+                            )}
                           </div>
                         ) : (
-                          // Audio Message
-                          <div className="w-full">
-                            <div className="text-xs font-medium text-gray-700 mb-1">
-                              {msg.author} • {new Date(msg.timestamp).toLocaleTimeString()}
+                          // Audio Message with actions
+                          <div className="flex items-start gap-1">
+                            <div className="w-96">
+                              <div className="text-xs font-medium text-gray-700 mb-1">
+                                {msg.author} • {new Date(msg.timestamp).toLocaleTimeString()}
+                              </div>
+                              <div className="bg-blue-50 rounded-lg p-2 border border-blue-200 flex items-center gap-1.5">
+                                <audio
+                                  controls
+                                  className="flex-1 h-6"
+                                  src={msg.audioUrl}
+                                />
+                                <button
+                                  onClick={() => convertAudioToText(msg.audioUrl || "")}
+                                  disabled={isConverting}
+                                  title="Convert to text"
+                                  className="p-1.5 hover:bg-blue-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed text-purple-600 hover:text-purple-700"
+                                >
+                                  <Wand2 className="h-4 w-4" />
+                                </button>
+                              </div>
                             </div>
-                            <div className="bg-blue-50 rounded-lg p-2 border border-blue-200 flex items-center gap-1.5">
-                              <audio
-                                controls
-                                className="flex-1 h-6"
-                                src={msg.audioUrl}
-                              />
-                              <button
-                                onClick={() => convertAudioToText(msg.audioUrl || "")}
-                                disabled={isConverting}
-                                title="Convert to text"
-                                className="p-1.5 hover:bg-blue-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed text-purple-600 hover:text-purple-700"
-                              >
-                                <Wand2 className="h-4 w-4" />
-                              </button>
+
+                            {/* Action buttons for audio */}
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="p-1 hover:bg-gray-200 rounded">
+                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  {msg.author === "You" && (
+                                    <DropdownMenuItem
+                                      onClick={() => deleteMessage(msg.id)}
+                                      disabled={deletingMessageId === msg.id}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => startReplyingToMessage(msg)}>
+                                    <Send className="h-4 w-4 mr-2" />
+                                    Reply
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         )}

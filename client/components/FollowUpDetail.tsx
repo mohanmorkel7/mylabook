@@ -212,18 +212,21 @@ export function FollowUpDetail({
     delayed_until_time: (followUp as any).delayed_until ? new Date(followUp.delayed_until).toTimeString().slice(0, 5) : "",
   });
 
-  // Fetch users for edit form
-  const { data: usersData } = useQuery({
+  // Fetch users for edit form - CRITICAL: this is needed for both edit form and accordion display
+  const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
+      console.log("[Users] Fetching users list...");
       const res = await fetch("/api/users");
       if (!res.ok) throw new Error("Failed to fetch users");
-      return res.json();
+      const data = await res.json();
+      console.log("[Users] Loaded users:", data.length || data.length || 0);
+      return Array.isArray(data) ? data : [];
     },
     staleTime: 5 * 60_000,
   });
 
-  const users = usersData || [];
+  const users = usersData ? (Array.isArray(usersData) ? usersData : []) : [];
   const [editUsersSearch, setEditUsersSearch] = useState("");
   const [openEditUsersPopover, setOpenEditUsersPopover] = useState(false);
 
@@ -628,18 +631,21 @@ export function FollowUpDetail({
     }
   }, [followUp.assigned_to_user_id]);
 
-  // Calculate SLA countdown (show remaining time until follow-up)
+  // Calculate SLA countdown (show remaining time until follow-up) - Fixed timer
   useEffect(() => {
-    const interval = setInterval(() => {
+    console.log("[Timer] Setting up timer for follow-up:", followUp.follow_up_date, "Status:", changedStatus);
+
+    // Immediately calculate and update (don't wait for interval)
+    const updateTimer = () => {
       const now = getISTTime();
-      const followUpTime = new Date(followUp.follow_up_date);
+      const followUpDate = followUp.follow_up_date;
+
+      // Parse IST time from database (which stores in UTC)
+      const followUpTime = new Date(followUpDate);
+      console.log("[Timer] Now (IST):", now.toISOString(), "FollowUp:", followUpTime.toISOString());
 
       // Calculate time remaining until follow-up
       const diffUntilFollowUp = followUpTime.getTime() - now.getTime();
-
-      // SLA alert is 30 mins before follow-up
-      const slaAlertTime = new Date(followUpTime.getTime() - 30 * 60 * 1000);
-      const diffUntilSLA = slaAlertTime.getTime() - now.getTime();
 
       if (changedStatus === "Pending") {
         if (diffUntilFollowUp > 0) {
@@ -647,10 +653,12 @@ export function FollowUpDetail({
           const hours = Math.floor(diffUntilFollowUp / (1000 * 60 * 60));
           const mins = Math.floor((diffUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
           const secs = Math.floor((diffUntilFollowUp % (1000 * 60)) / 1000);
-          setSlaTimeRemaining(`${hours}h ${mins}m ${secs}s`);
+          const timeStr = `${hours}h ${mins}m ${secs}s`;
+          setSlaTimeRemaining(timeStr);
+          console.log("[Timer] Time remaining:", timeStr);
 
-          // Show alert when within 30 mins of follow-up (red styling)
-          if (diffUntilFollowUp <= 30 * 60 * 1000 && diffUntilFollowUp > 0) {
+          // Show alert when within 30 mins of follow-up
+          if (diffUntilFollowUp <= 30 * 60 * 1000) {
             setShowSLAAlert(true);
           } else {
             setShowSLAAlert(false);
@@ -659,6 +667,7 @@ export function FollowUpDetail({
           // Follow-up is overdue
           setSlaTimeRemaining("Due Now!");
           setShowSLAAlert(true);
+          console.log("[Timer] Follow-up is overdue!");
         }
       } else {
         // Not Pending, hide timer
@@ -666,9 +675,18 @@ export function FollowUpDetail({
         setShowSLAAlert(false);
       }
       setCurrentTime(now);
-    }, 1000);
+    };
 
-    return () => clearInterval(interval);
+    // Run once immediately
+    updateTimer();
+
+    // Then set up interval
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => {
+      console.log("[Timer] Cleaning up interval");
+      clearInterval(interval);
+    };
   }, [changedStatus, followUp.follow_up_date]);
 
   // Change status inline
@@ -750,68 +768,72 @@ export function FollowUpDetail({
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm text-gray-600 font-semibold">{followUp.notes}</p>
-                  {(followUp as any).assigned_users && (followUp as any).assigned_users.length > 0 && (
-                    (followUp as any).assigned_users.map((userId: number) => {
+                  {((followUp as any).assigned_users && Array.isArray((followUp as any).assigned_users) && (followUp as any).assigned_users.length > 0)
+                    ? (followUp as any).assigned_users.map((userId: number) => {
                       const user = users.find((u: any) => u.id === userId);
                       const displayName = user
                         ? `${user.firstname || ""} ${user.lastname || ""}`.trim() || user.email
                         : `User #${userId}`;
                       return (
-                        <span key={userId} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1">
+                        <span key={userId} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded inline-flex items-center gap-1">
                           <Users className="h-3 w-3" />
-                          {displayName}
+                          <span className="truncate max-w-xs">{displayName}</span>
                         </span>
                       );
                     })
-                  )}
-                  {!((followUp as any).assigned_users && (followUp as any).assigned_users.length > 0) && assignedUserName && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1">
+                    : assignedUserName && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded inline-flex items-center gap-1">
                       <Users className="h-3 w-3" />
-                      {assignedUserName}
+                      <span className="truncate max-w-xs">{assignedUserName}</span>
                     </span>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* SLA Alert */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* SLA Alert - Always visible when pending and has time remaining */}
               {showSLAAlert && changedStatus === "Pending" && slaTimeRemaining && (
                 <div
-                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
                     slaTimeRemaining === "Due Now!"
                       ? "bg-red-100 border border-red-300 text-red-700"
                       : "bg-orange-50 border border-orange-200 text-orange-700"
                   }`}
+                  title={`Time remaining: ${slaTimeRemaining}`}
                 >
                   <Bell className="h-3 w-3" />
-                  {slaTimeRemaining}
+                  <span>{slaTimeRemaining}</span>
                 </div>
               )}
 
-              {/* Status Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Badge
-                    variant={changedStatus === "Completed" ? "default" : "outline"}
-                    className="ml-2 cursor-pointer hover:opacity-80"
-                  >
-                    {changedStatus}
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Badge>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {STATUSES.map((status) => (
-                    <DropdownMenuItem
-                      key={status}
-                      onClick={() => changeStatusInline(status)}
-                      className={changedStatus === status ? "bg-blue-50" : ""}
+              {/* Status Dropdown - Always visible */}
+              <div className="ml-auto pl-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Badge
+                      variant={changedStatus === "Completed" ? "default" : "outline"}
+                      className="cursor-pointer hover:opacity-80 whitespace-nowrap"
+                      title="Click to change status"
                     >
-                      {status}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      {changedStatus}
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Badge>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-auto">
+                    {STATUSES.map((status) => (
+                      <DropdownMenuItem
+                        key={status}
+                        onClick={() => changeStatusInline(status)}
+                        className={changedStatus === status ? "bg-blue-50" : ""}
+                      >
+                        <span className="w-24">{status}</span>
+                        {changedStatus === status && <Check className="h-4 w-4 ml-2" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
         </AccordionTrigger>
@@ -1198,7 +1220,7 @@ export function FollowUpDetail({
                                     {msg.content}
                                   </p>
                                   <p className="text-xs mt-1 opacity-75">
-                                    {new Date(msg.timestamp).toLocaleTimeString()}
+                                    {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' })}
                                   </p>
                                 </div>
 
@@ -1242,7 +1264,7 @@ export function FollowUpDetail({
                           <div className="flex items-start gap-1">
                             <div className="w-96">
                               <div className="text-xs font-medium text-gray-700 mb-1">
-                                {msg.author} • {new Date(msg.timestamp).toLocaleTimeString()}
+                                {msg.author} • {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' })}
                               </div>
                               <div className="bg-blue-50 rounded-lg p-2 border border-blue-200 flex items-center gap-1.5">
                                 <audio

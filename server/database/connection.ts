@@ -974,6 +974,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Add team chat messages table for follow-ups
+    try {
+      const chatPath = path.join(
+        __dirname,
+        "add-team-chat-messages.sql",
+      );
+      if (fs.existsSync(chatPath)) {
+        const chatSql = fs.readFileSync(chatPath, "utf8");
+        await client.query(chatSql);
+        console.log("Team chat messages migration applied successfully");
+      }
+    } catch (chatErr) {
+      console.log(
+        "Team chat messages migration already applied or error:",
+        (chatErr as any).message,
+      );
+    }
+
     // Ensure finops_tracker table exists for daily tracking
     try {
       await pool.query(`

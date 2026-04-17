@@ -442,4 +442,92 @@ router.delete("/audio/:recordingId", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET /api/lead-followups/:id/chat-messages - Get all chat messages ──────
+router.get("/:id/chat-messages", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Create table if it doesn't exist (for first-time use)
+    await queryWithRetry(() =>
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS sales_leads_team_chat_messages (
+          id SERIAL PRIMARY KEY,
+          follow_up_id INTEGER NOT NULL REFERENCES sales_leads_follow_ups(id) ON DELETE CASCADE,
+          message_type TEXT NOT NULL CHECK (message_type IN ('text', 'audio')),
+          content TEXT NOT NULL,
+          author TEXT NOT NULL,
+          audio_filename TEXT,
+          audio_url TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `)
+    );
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `SELECT * FROM sales_leads_team_chat_messages WHERE follow_up_id = $1 ORDER BY created_at ASC`,
+        [id]
+      )
+    );
+
+    res.json({ messages: result.rows });
+  } catch (error: any) {
+    console.error("Failed to fetch chat messages:", error.message);
+    res.status(500).json({ error: "Failed to fetch chat messages" });
+  }
+});
+
+// ── POST /api/lead-followups/:id/chat-messages - Save a chat message ─────
+router.post("/:id/chat-messages", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { message_type, content, author, audio_filename, audio_url } = req.body;
+
+    if (!message_type || !content || !author) {
+      return res.status(400).json({
+        error: "Missing required fields: message_type, content, author"
+      });
+    }
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO sales_leads_team_chat_messages
+         (follow_up_id, message_type, content, author, audio_filename, audio_url)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        [id, message_type, content, author, audio_filename || null, audio_url || null]
+      )
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    console.error("Failed to save chat message:", error.message);
+    res.status(500).json({ error: "Failed to save chat message" });
+  }
+});
+
+// ── DELETE /api/lead-followups/chat-messages/:messageId - Delete a message ──
+router.delete("/chat-messages/:messageId", async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        "DELETE FROM sales_leads_team_chat_messages WHERE id = $1 RETURNING id",
+        [messageId]
+      )
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    res.json({ message: "Chat message deleted successfully", id: messageId });
+  } catch (error: any) {
+    console.error("Failed to delete chat message:", error.message);
+    res.status(500).json({ error: "Failed to delete chat message" });
+  }
+});
+
 export default router;

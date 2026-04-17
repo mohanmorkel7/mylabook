@@ -631,60 +631,64 @@ export function FollowUpDetail({
     }
   }, [followUp.assigned_to_user_id]);
 
-  // Calculate SLA countdown (show remaining time until follow-up) - Fixed timer
+  // Calculate SLA countdown - Only runs for Pending status
   useEffect(() => {
-    console.log("[Timer] Setting up timer for follow-up:", followUp.follow_up_date, "Status:", changedStatus);
+    console.log("[Timer] Setting up timer. Status:", changedStatus, "FollowUp:", followUp.follow_up_date);
 
-    // Immediately calculate and update (don't wait for interval)
+    // Only set up timer if status is Pending
+    if (changedStatus !== "Pending") {
+      console.log("[Timer] Status is not Pending, hiding timer");
+      setSlaTimeRemaining("");
+      setShowSLAAlert(false);
+      return; // Don't run timer for other statuses
+    }
+
+    // Timer update function - only for Pending status
     const updateTimer = () => {
       const now = getISTTime();
-      const followUpDate = followUp.follow_up_date;
+      const followUpTime = new Date(followUp.follow_up_date);
 
-      // Parse IST time from database (which stores in UTC)
-      const followUpTime = new Date(followUpDate);
-      console.log("[Timer] Now (IST):", now.toISOString(), "FollowUp:", followUpTime.toISOString());
+      // Calculate time difference
+      const diffMs = followUpTime.getTime() - now.getTime();
 
-      // Calculate time remaining until follow-up
-      const diffUntilFollowUp = followUpTime.getTime() - now.getTime();
+      if (diffMs > 0) {
+        // Still time remaining until follow-up
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
+        const timeStr = `${hours}h ${mins}m ${secs}s`;
+        setSlaTimeRemaining(timeStr);
+        console.log("[Timer] Remaining:", timeStr);
 
-      if (changedStatus === "Pending") {
-        if (diffUntilFollowUp > 0) {
-          // Still time remaining until follow-up
-          const hours = Math.floor(diffUntilFollowUp / (1000 * 60 * 60));
-          const mins = Math.floor((diffUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
-          const secs = Math.floor((diffUntilFollowUp % (1000 * 60)) / 1000);
-          const timeStr = `${hours}h ${mins}m ${secs}s`;
-          setSlaTimeRemaining(timeStr);
-          console.log("[Timer] Time remaining:", timeStr);
-
-          // Show alert when within 30 mins of follow-up
-          if (diffUntilFollowUp <= 30 * 60 * 1000) {
-            setShowSLAAlert(true);
-          } else {
-            setShowSLAAlert(false);
-          }
-        } else {
-          // Follow-up is overdue
-          setSlaTimeRemaining("Due Now!");
+        // Show SLA alert when within 30 mins (orange) or less
+        if (diffMs <= 30 * 60 * 1000) {
           setShowSLAAlert(true);
-          console.log("[Timer] Follow-up is overdue!");
+        } else {
+          setShowSLAAlert(false);
         }
       } else {
-        // Not Pending, hide timer
-        setSlaTimeRemaining("");
-        setShowSLAAlert(false);
+        // Follow-up time has passed - show overdue duration
+        const absDiffMs = Math.abs(diffMs);
+        const hours = Math.floor(absDiffMs / (1000 * 60 * 60));
+        const mins = Math.floor((absDiffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((absDiffMs % (1000 * 60)) / 1000);
+        const overdueDuration = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        const timeStr = `Overdue: ${overdueDuration}`;
+        setSlaTimeRemaining(timeStr);
+        setShowSLAAlert(true); // Always show red alert when overdue
+        console.log("[Timer] Overdue:", timeStr);
       }
       setCurrentTime(now);
     };
 
-    // Run once immediately
+    // Run immediately
     updateTimer();
 
-    // Then set up interval
+    // Set up 1-second interval
     const interval = setInterval(updateTimer, 1000);
 
     return () => {
-      console.log("[Timer] Cleaning up interval");
+      console.log("[Timer] Clearing interval");
       clearInterval(interval);
     };
   }, [changedStatus, followUp.follow_up_date]);
@@ -796,11 +800,11 @@ export function FollowUpDetail({
               {showSLAAlert && changedStatus === "Pending" && slaTimeRemaining && (
                 <div
                   className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-                    slaTimeRemaining === "Due Now!"
+                    slaTimeRemaining.startsWith("Overdue:")
                       ? "bg-red-100 border border-red-300 text-red-700"
                       : "bg-orange-50 border border-orange-200 text-orange-700"
                   }`}
-                  title={`Time remaining: ${slaTimeRemaining}`}
+                  title={slaTimeRemaining}
                 >
                   <Bell className="h-3 w-3" />
                   <span>{slaTimeRemaining}</span>

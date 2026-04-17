@@ -54,6 +54,7 @@
     "jspdf": "^3.0.1",
     "mailparser": "^3.9.0",
     "multer": "^2.0.2",
+    "natural": "^8.1.1",
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",

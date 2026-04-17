@@ -624,7 +624,6 @@ export function FollowUpDetail({
                             </div>
                             <div className="bg-gray-100 rounded-lg p-3 border border-gray-200">
                               <audio
-                                ref={audioPlayerRef}
                                 controls
                                 className="w-full h-8"
                                 src={msg.audioUrl}

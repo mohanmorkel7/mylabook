@@ -1010,6 +1010,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Extend follow-up statuses to include Delayed, Overdue and add delay tracking
+    try {
+      const extendStatusPath = path.join(
+        __dirname,
+        "extend-follow-up-statuses.sql",
+      );
+      if (fs.existsSync(extendStatusPath)) {
+        const extendStatusSql = fs.readFileSync(extendStatusPath, "utf8");
+        await client.query(extendStatusSql);
+        console.log("Extended follow-up statuses migration applied successfully");
+      }
+    } catch (extendStatusErr) {
+      console.log(
+        "Extended follow-up statuses migration already applied or error:",
+        (extendStatusErr as any).message,
+      );
+    }
+
     // Ensure finops_tracker table exists for daily tracking
     try {
       await pool.query(`

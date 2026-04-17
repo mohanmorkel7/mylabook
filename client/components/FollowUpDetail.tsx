@@ -808,10 +808,13 @@ export function FollowUpDetail({
                                 <audio
                                   controls
                                   className="flex-1 h-6"
-                                  src={msg.audioUrl}
+                                  src={msg.audioUrl || msg.content}
+                                  onError={(e) => {
+                                    console.error("[Audio Playback] Error loading audio:", e);
+                                  }}
                                 />
                                 <button
-                                  onClick={() => convertAudioToText(msg.audioUrl || "")}
+                                  onClick={() => convertAudioToText(msg.audioUrl || msg.content || "")}
                                   disabled={isConverting}
                                   title="Convert to text"
                                   className="p-1.5 hover:bg-blue-100 rounded transition disabled:opacity-50 disabled:cursor-not-allowed text-purple-600 hover:text-purple-700"

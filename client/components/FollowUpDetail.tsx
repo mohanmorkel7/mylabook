@@ -1187,12 +1187,10 @@ export function FollowUpDetail({
                       >
                         {msg.type === "system" ? (
                           // System Message - Single line, centered
-                          <div className="flex items-center justify-center w-full my-1">
-                            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-gray-700 font-medium whitespace-nowrap overflow-hidden text-ellipsis" style={{ fontSize: '0.7rem' }}>
-                              <span className="text-gray-400">•</span>
-                              <span className="truncate">{msg.content}</span>
-                              <span className="text-gray-400 ml-1">
-                                {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
+                          <div className="flex items-center justify-center w-full my-2">
+                            <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-gray-700 font-medium text-center max-w-2xl" style={{ fontSize: '0.65rem', lineHeight: '1' }}>
+                              <span className="inline-block whitespace-nowrap overflow-ellipsis overflow-hidden">
+                                • {msg.content} @ {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
                               </span>
                             </div>
                           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -95,11 +95,14 @@ async function generateShareableLink(demoId: string) {
   return res.json();
 }
 
-async function deleteVideo(demoId: string, videoId: number) {
-  const res = await fetch(`/api/demos/${demoId}/videos/${videoId}`, {
+async function deleteFile(demoId: string, fileId: number, isLegacyVideo: boolean = false) {
+  const endpoint = isLegacyVideo
+    ? `/api/demos/${demoId}/videos/${fileId}`
+    : `/api/demos/${demoId}/files/${fileId}`;
+  const res = await fetch(endpoint, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("Failed to delete video");
+  if (!res.ok) throw new Error("Failed to delete file");
   return res.json();
 }
 
@@ -133,12 +136,20 @@ export default function DemoDetail() {
   const [nextSteps, setNextSteps] = useState("");
   const [proceedToNext, setProceedToNext] = useState(false);
   const [nextModule, setNextModule] = useState("Proposal");
+  const [filterFileType, setFilterFileType] = useState<"all" | "video" | "pdf" | "ppt" | "word">("all");
 
   const { data: demoData, isLoading } = useQuery({
     queryKey: ["demo", id],
     queryFn: () => fetchDemoDetails(id!),
     enabled: !!id,
   });
+
+  // Debug logging for files
+  useEffect(() => {
+    if (demoData?.files) {
+      console.log("Files loaded:", demoData.files);
+    }
+  }, [demoData?.files]);
 
   const uploadMutation = useMutation({
     mutationFn: () => uploadFile(id!, videoFile!, videoTitle, videoDescription, fileType),
@@ -177,10 +188,11 @@ export default function DemoDetail() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (videoId: number) => deleteVideo(id!, videoId),
+    mutationFn: ({ fileId, isLegacyVideo }: { fileId: number; isLegacyVideo?: boolean }) =>
+      deleteFile(id!, fileId, isLegacyVideo),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["demo", id] });
-      toast({ title: "Video deleted successfully" });
+      toast({ title: "File deleted successfully" });
     },
   });
 
@@ -233,80 +245,193 @@ export default function DemoDetail() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Demo Files</CardTitle>
-                <Button
-                  size="sm"
-                  onClick={() => setShowUploadDialog(true)}
-                  className="gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload Material
-                </Button>
+                <div>
+                  <CardTitle>Demo Files</CardTitle>
+                  <CardDescription className="mt-1">
+                    {files.length + videos.length} material(s) available
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/demo-workshop/${id}/materials`)}
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Manage Materials
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowUploadDialog(true)}
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload Material
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {videos.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-8">No videos uploaded yet</p>
-              ) : (
-                videos.map((video) => (
-                  <div
-                    key={video.id}
-                    className="border rounded-lg p-4 hover:bg-gray-50 transition"
+              {/* Filter */}
+              {files.length > 0 && (
+                <div className="mb-4">
+                  <Label htmlFor="file-filter" className="text-sm">Filter by Type</Label>
+                  <Select
+                    value={filterFileType}
+                    onValueChange={(val) => setFilterFileType(val as any)}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium">{video.title || "Untitled Video"}</h4>
-                          {playingVideoId === video.id && (
-                            <Badge variant="outline" className="text-xs">
-                              Playing
-                            </Badge>
-                          )}
-                        </div>
-                        {video.description && (
-                          <p className="text-sm text-gray-600 mt-1">{video.description}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-2">
-                          Uploaded: {new Date(video.uploaded_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPlayingVideoId(video.id)}
-                          className="gap-2"
-                        >
-                          <Play className="h-4 w-4" />
-                          Play
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => deleteMutation.mutate(video.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
+                    <SelectTrigger id="file-filter" className="mt-2 w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Materials</SelectItem>
+                      <SelectItem value="video">Videos</SelectItem>
+                      <SelectItem value="pdf">PDFs</SelectItem>
+                      <SelectItem value="ppt">Presentations</SelectItem>
+                      <SelectItem value="word">Documents</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-                    {/* Video Player */}
-                    {playingVideoId === video.id && (
-                      <div className="mt-4 bg-black rounded-lg overflow-hidden">
-                        <video
-                          width="100%"
-                          height="auto"
-                          controls
-                          autoPlay
-                          className="w-full"
-                        >
-                          <source src={video.file_url} type="video/mp4" />
-                          Your browser does not support the video tag.
-                        </video>
+              {files.length === 0 && videos.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-8">No materials uploaded yet</p>
+              ) : (
+                <>
+                  {files
+                    .filter((file: any) => filterFileType === "all" || file.file_type === filterFileType)
+                    .map((file: any) => (
+                    <div
+                      key={file.id}
+                      className="border rounded-lg p-4 hover:bg-gray-50 transition"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium">{file.title || `Untitled ${file.file_type.toUpperCase()}`}</h4>
+                            {playingVideoId === file.id && file.file_type === "video" && (
+                              <Badge variant="outline" className="text-xs">
+                                Playing
+                              </Badge>
+                            )}
+                            <Badge variant="secondary" className="text-xs">{file.file_type.toUpperCase()}</Badge>
+                          </div>
+                          {file.description && (
+                            <p className="text-sm text-gray-600 mt-1">{file.description}</p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            Uploaded: {new Date(file.uploaded_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {file.file_type === "video" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setPlayingVideoId(file.id)}
+                              className="gap-2"
+                            >
+                              <Play className="h-4 w-4" />
+                              Play
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(file.file_url, '_blank')}
+                            className="gap-2"
+                          >
+                            <FileText className="h-4 w-4" />
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => deleteMutation.mutate({ fileId: file.id, isLegacyVideo: false })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))
+
+                      {/* Video Player for video files */}
+                      {playingVideoId === file.id && file.file_type === "video" && (
+                        <div className="mt-4 bg-black rounded-lg overflow-hidden">
+                          <video
+                            width="100%"
+                            height="auto"
+                            controls
+                            autoPlay
+                            className="w-full"
+                          >
+                            <source src={file.file_url} type="video/mp4" />
+                            Your browser does not support the video tag.
+                          </video>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {videos.map((video) => (
+                    <div
+                      key={video.id}
+                      className="border rounded-lg p-4 hover:bg-gray-50 transition"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium">{video.title || "Untitled Video"}</h4>
+                            {playingVideoId === video.id && (
+                              <Badge variant="outline" className="text-xs">
+                                Playing
+                              </Badge>
+                            )}
+                          </div>
+                          {video.description && (
+                            <p className="text-sm text-gray-600 mt-1">{video.description}</p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            Uploaded: {new Date(video.uploaded_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPlayingVideoId(video.id)}
+                            className="gap-2"
+                          >
+                            <Play className="h-4 w-4" />
+                            Play
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => deleteMutation.mutate({ fileId: video.id, isLegacyVideo: true })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Video Player */}
+                      {playingVideoId === video.id && (
+                        <div className="mt-4 bg-black rounded-lg overflow-hidden">
+                          <video
+                            width="100%"
+                            height="auto"
+                            controls
+                            autoPlay
+                            className="w-full"
+                          >
+                            <source src={video.file_url} type="video/mp4" />
+                            Your browser does not support the video tag.
+                          </video>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </>
               )}
             </CardContent>
           </Card>

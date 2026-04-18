@@ -131,6 +131,7 @@ import DemoWorkshopDashboard from "@/pages/DemoWorkshopDashboard";
 import DemoDetail from "@/pages/DemoDetail";
 import DemoCreate from "@/pages/DemoCreate";
 import DemoPublicViewer from "@/pages/DemoPublicViewer";
+import DemoMaterialsManagement from "@/pages/DemoMaterialsManagement";
 import VCDashboard from "@/pages/VCDashboard";
 import CreateVC from "@/pages/CreateVC";
 import VCDetails from "@/pages/VCDetails";
@@ -810,6 +811,17 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
             <DashboardLayout>
               <DemoDetail />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/:id/materials"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoMaterialsManagement />
             </DashboardLayout>
           </ProtectedRoute>
         }

@@ -62,6 +62,8 @@ interface FollowUp {
   follow_up_date: string;
   status: "Pending" | "Completed";
   notes: string;
+  title?: string;
+  company_name: string;
   assigned_to_user_id?: number;
 }
 
@@ -114,6 +116,12 @@ async function updateLeadStatus(id: number, status: string) {
   return res.json();
 }
 
+async function fetchFollowUpSummary() {
+  const res = await fetch("/api/lead-followups/dashboard/summary");
+  if (!res.ok) throw new Error("Failed to fetch follow-up summary");
+  return res.json();
+}
+
 // Main Component
 export default function LeadManagementDashboard() {
   const navigate = useNavigate();
@@ -129,6 +137,12 @@ export default function LeadManagementDashboard() {
     queryKey: ["lead-dashboard-stats"],
     queryFn: fetchDashboardStats,
     staleTime: 5 * 60_000,
+  });
+
+  const { data: followUpSummary } = useQuery({
+    queryKey: ["lead-followup-summary"],
+    queryFn: fetchFollowUpSummary,
+    staleTime: 2 * 60_000,
   });
 
   const { data, isLoading } = useQuery({
@@ -290,9 +304,30 @@ export default function LeadManagementDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <p className="text-sm text-gray-600">Follow-ups scheduled for today</p>
-              <div className="text-2xl font-bold text-blue-600">0</div>
-              <p className="text-xs text-gray-400">Enable follow-up tracking to see details</p>
+              {followUpSummary && followUpSummary.today && followUpSummary.today.length > 0 ? (
+                <>
+                  <div className="text-2xl font-bold text-blue-600">{followUpSummary.today_count}</div>
+                  <div className="space-y-2 mt-3">
+                    {followUpSummary.today.map((fu: FollowUp) => (
+                      <div
+                        key={fu.id}
+                        className="p-2 bg-blue-50 rounded border-l-4 border-blue-300 cursor-pointer hover:shadow-sm transition"
+                        onClick={() => navigate(`/lead-management/${fu.lead_id}/overview`)}
+                      >
+                        <p className="text-sm font-medium text-gray-900">{fu.title || "Follow-up"}</p>
+                        <p className="text-xs text-gray-600">{fu.company_name}</p>
+                        {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Follow-ups scheduled for today</p>
+                  <div className="text-2xl font-bold text-blue-600">0</div>
+                  <p className="text-xs text-gray-400">No follow-ups scheduled for today</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -307,9 +342,30 @@ export default function LeadManagementDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <p className="text-sm text-gray-600">Follow-ups overdue for action</p>
-              <div className="text-2xl font-bold text-red-600">0</div>
-              <p className="text-xs text-gray-400">Enable follow-up tracking to see details</p>
+              {followUpSummary && followUpSummary.overdue && followUpSummary.overdue.length > 0 ? (
+                <>
+                  <div className="text-2xl font-bold text-red-600">{followUpSummary.overdue_count}</div>
+                  <div className="space-y-2 mt-3">
+                    {followUpSummary.overdue.map((fu: FollowUp) => (
+                      <div
+                        key={fu.id}
+                        className="p-2 bg-red-50 rounded border-l-4 border-red-300 cursor-pointer hover:shadow-sm transition"
+                        onClick={() => navigate(`/lead-management/${fu.lead_id}/overview`)}
+                      >
+                        <p className="text-sm font-medium text-gray-900">{fu.title || "Follow-up"}</p>
+                        <p className="text-xs text-gray-600">{fu.company_name}</p>
+                        {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Follow-ups overdue for action</p>
+                  <div className="text-2xl font-bold text-red-600">0</div>
+                  <p className="text-xs text-gray-400">No overdue follow-ups</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

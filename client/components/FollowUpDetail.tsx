@@ -702,11 +702,9 @@ export function FollowUpDetail({
       // Update UI immediately
       setChangedStatus(newStatus);
 
-      // Save to database
+      // Save to database - only update status, do not send follow_up_date
       const response = await updateFollowUp(followUp.id, {
         status: newStatus,
-        notes: followUp.notes,
-        follow_up_date: followUp.follow_up_date,
       });
       console.log("[Status Change] Response:", response);
 

@@ -730,8 +730,8 @@ export function FollowUpDetail({
       // Save system message to database
       try {
         await saveChatMessage(followUp.id, {
-          type: "text",
-          content: `[SYSTEM] ${systemMessageContent} at ${timeStr}`,
+          type: "system",
+          content: systemMessageContent,
           author: "System",
         });
 

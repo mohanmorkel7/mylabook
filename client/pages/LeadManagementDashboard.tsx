@@ -25,6 +25,7 @@ import {
   Building2,
   Eye,
   ChevronRight,
+  Video,
 } from "lucide-react";
 import {
   LineChart,
@@ -554,6 +555,17 @@ export default function LeadManagementDashboard() {
                     title="Edit"
                   >
                     <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-blue-100 text-blue-700 hover:bg-blue-200"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/demo-workshop/new?lead_id=${lead.id}`);
+                    }}
+                    title="Create Demo"
+                  >
+                    <Video className="h-4 w-4" />
                   </Button>
                   <Button
                     size="sm"

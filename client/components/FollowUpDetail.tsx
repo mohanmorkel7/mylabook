@@ -820,28 +820,37 @@ export function FollowUpDetail({
                 </div>
               )}
 
-              {/* Status Dropdown - Always visible */}
+              {/* Status Badge - Separate display */}
+              <Badge
+                variant={changedStatus === "Completed" ? "default" : "outline"}
+                className="whitespace-nowrap"
+              >
+                {changedStatus}
+              </Badge>
+
+              {/* Status Dropdown - Normal dropdown */}
               <div className="ml-auto pl-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Badge
-                      variant={changedStatus === "Completed" ? "default" : "outline"}
-                      className="cursor-pointer hover:opacity-80 whitespace-nowrap"
-                      title="Click to change status"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3"
+                      title="Change status"
                     >
-                      {changedStatus}
+                      Change
                       <ChevronDown className="h-3 w-3 ml-1" />
-                    </Badge>
+                    </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-auto">
+                  <DropdownMenuContent align="end" className="w-40">
                     {STATUSES.map((status) => (
                       <DropdownMenuItem
                         key={status}
                         onClick={() => changeStatusInline(status)}
                         className={changedStatus === status ? "bg-blue-50" : ""}
                       >
-                        <span className="w-24">{status}</span>
-                        {changedStatus === status && <Check className="h-4 w-4 ml-2" />}
+                        <span>{status}</span>
+                        {changedStatus === status && <Check className="h-4 w-4 ml-2 ml-auto" />}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

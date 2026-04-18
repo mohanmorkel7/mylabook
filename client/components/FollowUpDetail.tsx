@@ -1186,12 +1186,12 @@ export function FollowUpDetail({
                         } gap-2 group`}
                       >
                         {msg.type === "system" ? (
-                          // System Message - Inline Badge
+                          // System Message - Single line, centered
                           <div className="flex items-center justify-center w-full my-1">
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-xs text-gray-700 font-medium">
+                            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-gray-700 font-medium whitespace-nowrap overflow-hidden text-ellipsis" style={{ fontSize: '0.7rem' }}>
                               <span className="text-gray-400">•</span>
-                              {msg.content}
-                              <span className="text-gray-400 text-xs ml-1">
+                              <span className="truncate">{msg.content}</span>
+                              <span className="text-gray-400 ml-1">
                                 {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
                               </span>
                             </div>

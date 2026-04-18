@@ -820,42 +820,32 @@ export function FollowUpDetail({
                 </div>
               )}
 
-              {/* Status Badge - Separate display */}
-              <Badge
-                variant={changedStatus === "Completed" ? "default" : "outline"}
-                className="whitespace-nowrap"
-              >
-                {changedStatus}
-              </Badge>
-
-              {/* Status Dropdown - Normal dropdown */}
-              <div className="ml-auto pl-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-3"
-                      title="Change status"
+              {/* Status Dropdown - Shows selected value */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={changedStatus === "Completed" ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 px-3 whitespace-nowrap"
+                    title="Change status"
+                  >
+                    {changedStatus}
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  {STATUSES.map((status) => (
+                    <DropdownMenuItem
+                      key={status}
+                      onClick={() => changeStatusInline(status)}
+                      className={changedStatus === status ? "bg-blue-50" : ""}
                     >
-                      Change
-                      <ChevronDown className="h-3 w-3 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40">
-                    {STATUSES.map((status) => (
-                      <DropdownMenuItem
-                        key={status}
-                        onClick={() => changeStatusInline(status)}
-                        className={changedStatus === status ? "bg-blue-50" : ""}
-                      >
-                        <span>{status}</span>
-                        {changedStatus === status && <Check className="h-4 w-4 ml-2 ml-auto" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                      <span>{status}</span>
+                      {changedStatus === status && <Check className="h-4 w-4 ml-auto ml-2" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </AccordionTrigger>

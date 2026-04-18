@@ -32,16 +32,6 @@ const ALLOWED_TYPES = {
 const fileUpload = multer({
   storage: fileStorage,
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
-  fileFilter: (req, file, cb) => {
-    const fileType = req.body.file_type || "video";
-    const allowed = ALLOWED_TYPES[fileType as keyof typeof ALLOWED_TYPES] || ALLOWED_TYPES.video;
-
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`File type ${file.mimetype} not allowed for ${fileType}`));
-    }
-  },
 });
 
 // Legacy videoUpload for backward compatibility
@@ -83,7 +73,7 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
-// ── GET /api/demos/:id - Get demo details with videos and results ──
+// ── GET /api/demos/:id - Get demo details with files and results ──
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -99,7 +89,12 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     const demo = demoResult.rows[0];
 
-    // Get demo videos
+    // Get demo files (supports video, PDF, PPT, Word)
+    const filesResult = await queryWithRetry(() =>
+      pool.query("SELECT * FROM demo_files WHERE demo_id = $1 ORDER BY uploaded_at DESC", [id])
+    );
+
+    // Get demo videos (legacy support)
     const videosResult = await queryWithRetry(() =>
       pool.query("SELECT * FROM demo_videos WHERE demo_id = $1 ORDER BY uploaded_at DESC", [id])
     );
@@ -121,6 +116,7 @@ router.get("/:id", async (req: Request, res: Response) => {
 
     res.json({
       demo,
+      files: filesResult.rows,
       videos: videosResult.rows,
       results: resultsResult.rows[0] || null,
       participants: participantsResult.rows,
@@ -450,6 +446,20 @@ router.post("/:id/files", fileUpload.single("file"), async (req: Request, res: R
 
     if (!file) {
       return res.status(400).json({ error: "No file provided" });
+    }
+
+    // Validate file type against mime type
+    const allowed = ALLOWED_TYPES[file_type as keyof typeof ALLOWED_TYPES] || ALLOWED_TYPES.video;
+    if (!allowed.includes(file.mimetype)) {
+      // Delete uploaded file since it failed validation
+      const filePath = path.join(filesDir, file.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      return res.status(400).json({
+        error: `File type ${file.mimetype} not allowed for ${file_type}`,
+        allowed: allowed
+      });
     }
 
     const fileUrl = `/uploads/demos/${file.filename}`;

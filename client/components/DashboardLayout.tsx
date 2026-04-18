@@ -33,6 +33,7 @@ import {
   Briefcase,
   UserPlus,
   Layers,
+  Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
@@ -103,6 +104,13 @@ const navigationItems: NavigationItem[] = [
     name: "Lead Management",
     href: "/lead-management",
     icon: Megaphone,
+    roles: ["admin", "sales", "product"],
+  },
+  // f3) Demo/Workshop
+  {
+    name: "Demo/Workshop",
+    href: "/demo-workshop",
+    icon: Video,
     roles: ["admin", "sales", "product"],
   },
   // g) Sales (was Business Offerings)

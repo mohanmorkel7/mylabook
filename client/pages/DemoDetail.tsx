@@ -70,17 +70,28 @@ async function fetchDemoDetails(id: string) {
   return res.json();
 }
 
-async function uploadVideo(demoId: string, file: File, title: string, description: string) {
+async function uploadFile(demoId: string, file: File, title: string, description: string, fileType: string) {
   const formData = new FormData();
-  formData.append("video", file);
+  formData.append("file", file);
   formData.append("title", title);
   formData.append("description", description);
+  formData.append("file_type", fileType);
 
-  const res = await fetch(`/api/demos/${demoId}/upload-video`, {
+  const res = await fetch(`/api/demos/${demoId}/files`, {
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error("Failed to upload video");
+  if (!res.ok) throw new Error("Failed to upload file");
+  return res.json();
+}
+
+async function generateShareableLink(demoId: string) {
+  const res = await fetch(`/api/demos/${demoId}/generate-shareable-link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expires_days: 30 }),
+  });
+  if (!res.ok) throw new Error("Failed to generate shareable link");
   return res.json();
 }
 
@@ -110,9 +121,12 @@ export default function DemoDetail() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
   const [videoDescription, setVideoDescription] = useState("");
+  const [fileType, setFileType] = useState<"video" | "pdf" | "ppt" | "word">("video");
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [playingVideoId, setPlayingVideoId] = useState<number | null>(null);
   const [showResultsDialog, setShowResultsDialog] = useState(false);
+  const [shareableLink, setShareableLink] = useState<string | null>(null);
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   const [resultStatus, setResultStatus] = useState("Positive");
   const [clientFeedback, setClientFeedback] = useState("");
@@ -127,19 +141,36 @@ export default function DemoDetail() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: () => uploadVideo(id!, videoFile!, videoTitle, videoDescription),
+    mutationFn: () => uploadFile(id!, videoFile!, videoTitle, videoDescription, fileType),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["demo", id] });
       setVideoFile(null);
       setVideoTitle("");
       setVideoDescription("");
+      setFileType("video");
       setShowUploadDialog(false);
-      toast({ title: "Video uploaded successfully" });
+      toast({ title: `${fileType.toUpperCase()} uploaded successfully` });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to upload video",
+        description: `Failed to upload ${fileType}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const shareableLinkMutation = useMutation({
+    mutationFn: () => generateShareableLink(id!),
+    onSuccess: (data) => {
+      setShareableLink(data.shareable_link);
+      qc.invalidateQueries({ queryKey: ["demo", id] });
+      toast({ title: "Shareable link generated successfully" });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to generate shareable link",
         variant: "destructive",
       });
     },
@@ -197,11 +228,11 @@ export default function DemoDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Videos Section */}
+          {/* Demo Files Section */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Demo Videos</CardTitle>
+                <CardTitle>Demo Files</CardTitle>
                 <Button
                   size="sm"
                   onClick={() => setShowUploadDialog(true)}
@@ -361,6 +392,48 @@ export default function DemoDetail() {
             </CardContent>
           </Card>
 
+          {/* Shareable Link Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                Share with Client
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {shareableLink ? (
+                <>
+                  <div className="bg-gray-50 p-3 rounded border border-gray-200 break-all text-xs font-mono">
+                    {shareableLink}
+                  </div>
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareableLink);
+                      toast({ title: "Link copied to clipboard" });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy Link
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-2">
+                  No shareable link yet
+                </p>
+              )}
+              <Button
+                className="w-full gap-2"
+                variant={shareableLink ? "outline" : "default"}
+                onClick={() => shareableLinkMutation.mutate()}
+                disabled={shareableLinkMutation.isPending}
+              >
+                <Link2 className="h-4 w-4" />
+                {shareableLink ? "Generate New Link" : "Generate Link"}
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Action Buttons */}
           <div className="space-y-2">
             {demo.status === "Draft" && (
@@ -388,23 +461,38 @@ export default function DemoDetail() {
         </div>
       </div>
 
-      {/* Upload Video Dialog */}
+      {/* Upload File Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upload Demo Video</DialogTitle>
+            <DialogTitle>Upload Demo File</DialogTitle>
             <DialogDescription>
-              Upload a video file to be used in this demo/workshop
+              Upload video, PDF, PowerPoint, or Word document for this demo
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="video-file">Video File</Label>
+              <Label htmlFor="file-type">File Type</Label>
+              <Select value={fileType} onValueChange={(val) => setFileType(val as any)}>
+                <SelectTrigger id="file-type" className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="video">Video (MP4, WebM, Ogg)</SelectItem>
+                  <SelectItem value="pdf">PDF Document</SelectItem>
+                  <SelectItem value="ppt">PowerPoint Presentation</SelectItem>
+                  <SelectItem value="word">Word Document</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="demo-file">File</Label>
               <Input
-                id="video-file"
+                id="demo-file"
                 type="file"
-                accept="video/*"
+                accept={fileType === "video" ? "video/*" : fileType === "pdf" ? ".pdf" : fileType === "ppt" ? ".ppt,.pptx" : ".doc,.docx"}
                 onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
                 className="mt-2"
               />

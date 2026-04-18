@@ -58,6 +58,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth-context";
 
 const STATUSES = ["Pending", "Completed", "Cancelled", "Delayed", "Overdue"];
 
@@ -166,6 +167,7 @@ export function FollowUpDetail({
   onUpdate,
   onDelete,
 }: FollowUpDetailProps) {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -712,8 +714,9 @@ export function FollowUpDetail({
       const now = new Date();
       const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' });
 
-      // Format: "You changed the status pending to completed"
-      const systemMessageContent = `You changed the status ${followUp.status.toLowerCase()} to ${newStatus.toLowerCase()}`;
+      // Format: "FirstName LastName changed the status pending to completed"
+      const userName = user ? user.name : "User";
+      const systemMessageContent = `${userName} changed the status ${followUp.status.toLowerCase()} to ${newStatus.toLowerCase()}`;
 
       const systemMessage: ChatMessage = {
         id: Date.now(),

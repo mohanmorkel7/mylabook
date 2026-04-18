@@ -6,8 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, User, Mail, Phone, Building } from "lucide-react";
 
 interface DemoFormData {
   title: string;
@@ -44,6 +51,18 @@ async function updateDemo(id: string, data: any) {
   return res.json();
 }
 
+async function fetchLeads() {
+  const res = await fetch(`/api/lead-management?limit=1000`);
+  if (!res.ok) throw new Error("Failed to fetch leads");
+  return res.json();
+}
+
+async function fetchLead(id: string) {
+  const res = await fetch(`/api/lead-management/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch lead");
+  return res.json();
+}
+
 export default function DemoCreate() {
   const { id } = useParams<{ id?: string }>();
   const location = useLocation();
@@ -68,6 +87,17 @@ export default function DemoCreate() {
     queryKey: ["demo", id],
     queryFn: () => fetchDemo(id!),
     enabled: isEditing,
+  });
+
+  const { data: leadsData = { leads: [] } } = useQuery({
+    queryKey: ["leads"],
+    queryFn: () => fetchLeads(),
+  });
+
+  const { data: selectedLeadData } = useQuery({
+    queryKey: ["lead", formData.lead_id],
+    queryFn: () => fetchLead(formData.lead_id),
+    enabled: !!formData.lead_id,
   });
 
   useEffect(() => {
@@ -194,16 +224,76 @@ export default function DemoCreate() {
               {/* Lead ID */}
               <div>
                 <Label htmlFor="lead_id">Lead ID *</Label>
-                <Input
-                  id="lead_id"
-                  type="number"
-                  placeholder="Enter the lead ID"
-                  value={formData.lead_id}
-                  onChange={(e) => handleChange("lead_id", e.target.value)}
-                  className="mt-2"
-                  required
-                />
+                <Select value={formData.lead_id} onValueChange={(value) => handleChange("lead_id", value)}>
+                  <SelectTrigger id="lead_id" className="mt-2">
+                    <SelectValue placeholder="Select a lead..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leadsData.leads && leadsData.leads.length > 0 ? (
+                      leadsData.leads.map((lead: any) => (
+                        <SelectItem key={lead.id} value={lead.id.toString()}>
+                          {lead.company_name} - {lead.contact_name || "N/A"}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        No leads available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Selected Lead Client Details */}
+              {selectedLeadData && selectedLeadData.lead && (
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Selected Lead Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-start gap-3">
+                        <Building className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-gray-600">Company</p>
+                          <p className="font-medium">{selectedLeadData.lead.company_name}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <User className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
+                        <div>
+                          <p className="text-xs text-gray-600">Contact</p>
+                          <p className="font-medium">{selectedLeadData.lead.contact_name || "N/A"}</p>
+                        </div>
+                      </div>
+                      {selectedLeadData.lead.email && (
+                        <div className="flex items-start gap-3">
+                          <Mail className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs text-gray-600">Email</p>
+                            <p className="font-medium text-sm break-all">{selectedLeadData.lead.email}</p>
+                          </div>
+                        </div>
+                      )}
+                      {selectedLeadData.lead.phone && (
+                        <div className="flex items-start gap-3">
+                          <Phone className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs text-gray-600">Phone</p>
+                            <p className="font-medium">{selectedLeadData.lead.phone}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {selectedLeadData.lead.description && (
+                      <div className="pt-2 border-t border-blue-200">
+                        <p className="text-xs text-gray-600">Notes</p>
+                        <p className="text-sm mt-1">{selectedLeadData.lead.description}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Description */}
               <div>

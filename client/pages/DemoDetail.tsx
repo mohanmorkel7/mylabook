@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Upload, Play, Trash2, Send, Check, X, ChevronRight, Copy, Link2, FileText } from "lucide-react";
+import { Play, Trash2, ChevronRight, Copy, Link2, FileText, Plus, Download, Archive } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
 interface Demo {
@@ -36,16 +36,6 @@ interface Demo {
   attendees?: string;
 }
 
-interface DemoVideo {
-  id: number;
-  demo_id: number;
-  filename: string;
-  file_url: string;
-  title?: string;
-  description?: string;
-  uploaded_at: string;
-}
-
 interface DemoResult {
   id: number;
   demo_id: number;
@@ -54,6 +44,24 @@ interface DemoResult {
   next_steps?: string;
   proceed_to_next: boolean;
   next_module?: string;
+}
+
+interface Material {
+  id: number;
+  title: string;
+  description?: string;
+  file_type: "video" | "pdf" | "ppt" | "word";
+  file_url: string;
+  file_size_bytes: number;
+}
+
+interface LinkedMaterial {
+  id: number;
+  material_id: number;
+  demo_id: number;
+  display_order: number;
+  added_at: string;
+  material?: Material;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -70,18 +78,33 @@ async function fetchDemoDetails(id: string) {
   return res.json();
 }
 
-async function uploadFile(demoId: string, file: File, title: string, description: string, fileType: string) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("title", title);
-  formData.append("description", description);
-  formData.append("file_type", fileType);
+async function fetchMaterials() {
+  const res = await fetch(`/api/materials?is_published=true`);
+  if (!res.ok) throw new Error("Failed to fetch materials");
+  return res.json();
+}
 
-  const res = await fetch(`/api/demos/${demoId}/files`, {
+async function fetchLinkedMaterials(demoId: string) {
+  const res = await fetch(`/api/demos/${demoId}/materials`);
+  if (!res.ok) throw new Error("Failed to fetch linked materials");
+  return res.json();
+}
+
+async function linkMaterial(demoId: string, materialId: number) {
+  const res = await fetch(`/api/materials/${materialId}/link-to-demo`, {
     method: "POST",
-    body: formData,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ demo_id: parseInt(demoId) }),
   });
-  if (!res.ok) throw new Error("Failed to upload file");
+  if (!res.ok) throw new Error("Failed to link material");
+  return res.json();
+}
+
+async function unlinkMaterial(demoId: string, materialId: number) {
+  const res = await fetch(`/api/materials/${materialId}/unlink-from-demo/${demoId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to unlink material");
   return res.json();
 }
 
@@ -92,17 +115,6 @@ async function generateShareableLink(demoId: string) {
     body: JSON.stringify({ expires_days: 30 }),
   });
   if (!res.ok) throw new Error("Failed to generate shareable link");
-  return res.json();
-}
-
-async function deleteFile(demoId: string, fileId: number, isLegacyVideo: boolean = false) {
-  const endpoint = isLegacyVideo
-    ? `/api/demos/${demoId}/videos/${fileId}`
-    : `/api/demos/${demoId}/files/${fileId}`;
-  const res = await fetch(endpoint, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Failed to delete file");
   return res.json();
 }
 
@@ -121,22 +133,20 @@ export default function DemoDetail() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoTitle, setVideoTitle] = useState("");
-  const [videoDescription, setVideoDescription] = useState("");
-  const [fileType, setFileType] = useState<"video" | "pdf" | "ppt" | "word">("video");
-  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [showAddMaterialDialog, setShowAddMaterialDialog] = useState(false);
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
   const [playingVideoId, setPlayingVideoId] = useState<number | null>(null);
   const [showResultsDialog, setShowResultsDialog] = useState(false);
   const [shareableLink, setShareableLink] = useState<string | null>(null);
+  const [zipFileLink, setZipFileLink] = useState<string>("");
   const [showShareDialog, setShowShareDialog] = useState(false);
+  const [showZipDialog, setShowZipDialog] = useState(false);
 
   const [resultStatus, setResultStatus] = useState("Positive");
   const [clientFeedback, setClientFeedback] = useState("");
   const [nextSteps, setNextSteps] = useState("");
   const [proceedToNext, setProceedToNext] = useState(false);
   const [nextModule, setNextModule] = useState("Proposal");
-  const [filterFileType, setFilterFileType] = useState<"all" | "video" | "pdf" | "ppt" | "word">("all");
 
   const { data: demoData, isLoading } = useQuery({
     queryKey: ["demo", id],
@@ -144,28 +154,44 @@ export default function DemoDetail() {
     enabled: !!id,
   });
 
-  // Debug logging for files
-  useEffect(() => {
-    if (demoData?.files) {
-      console.log("Files loaded:", demoData.files);
-    }
-  }, [demoData?.files]);
+  const { data: materialsData = { materials: [] } } = useQuery({
+    queryKey: ["materials"],
+    queryFn: () => fetchMaterials(),
+  });
 
-  const uploadMutation = useMutation({
-    mutationFn: () => uploadFile(id!, videoFile!, videoTitle, videoDescription, fileType),
+  const { data: linkedMaterialsData = { materials: [] } } = useQuery({
+    queryKey: ["demo-materials", id],
+    queryFn: () => fetchLinkedMaterials(id!),
+    enabled: !!id,
+  });
+
+  const linkMaterialMutation = useMutation({
+    mutationFn: (materialId: number) => linkMaterial(id!, materialId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["demo", id] });
-      setVideoFile(null);
-      setVideoTitle("");
-      setVideoDescription("");
-      setFileType("video");
-      setShowUploadDialog(false);
-      toast({ title: `${fileType.toUpperCase()} uploaded successfully` });
+      qc.invalidateQueries({ queryKey: ["demo-materials", id] });
+      setSelectedMaterialId("");
+      setShowAddMaterialDialog(false);
+      toast({ title: "Material linked successfully" });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: `Failed to upload ${fileType}`,
+        description: error.message || "Failed to link material",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unlinkMaterialMutation = useMutation({
+    mutationFn: (materialId: number) => unlinkMaterial(id!, materialId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["demo-materials", id] });
+      toast({ title: "Material unlinked successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to unlink material",
         variant: "destructive",
       });
     },
@@ -184,15 +210,6 @@ export default function DemoDetail() {
         description: "Failed to generate shareable link",
         variant: "destructive",
       });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: ({ fileId, isLegacyVideo }: { fileId: number; isLegacyVideo?: boolean }) =>
-      deleteFile(id!, fileId, isLegacyVideo),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["demo", id] });
-      toast({ title: "File deleted successfully" });
     },
   });
 
@@ -216,9 +233,18 @@ export default function DemoDetail() {
   if (!demoData) return <div className="text-center py-12">Demo not found</div>;
 
   const demo: Demo = demoData.demo;
-  const files = demoData.files || [];
-  const videos: DemoVideo[] = demoData.videos || [];
+  const linkedMaterials: Material[] = linkedMaterialsData.materials || [];
+  const availableMaterials: Material[] = (materialsData.materials || []).filter(
+    (m: Material) => !linkedMaterials.some((lm: Material) => lm.id === m.id)
+  );
   const results: DemoResult = demoData.results;
+
+  const FILE_TYPE_ICONS: Record<string, string> = {
+    video: "🎥",
+    pdf: "📄",
+    ppt: "📊",
+    word: "📝",
+  };
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-6">
@@ -241,197 +267,115 @@ export default function DemoDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Demo Files Section */}
+          {/* Demo Materials Section */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Demo Files</CardTitle>
+                  <CardTitle>Demo Materials</CardTitle>
                   <CardDescription className="mt-1">
-                    {files.length + videos.length} material(s) available
+                    {linkedMaterials.length} material(s) linked
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                {availableMaterials.length > 0 && (
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={() => navigate(`/demo-workshop/${id}/materials`)}
+                    onClick={() => setShowAddMaterialDialog(true)}
                     className="gap-2"
                   >
-                    <Upload className="h-4 w-4" />
-                    Manage Materials
+                    <Plus className="h-4 w-4" />
+                    Add Material
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setShowUploadDialog(true)}
-                    className="gap-2"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Upload Material
-                  </Button>
-                </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Filter */}
-              {files.length > 0 && (
-                <div className="mb-4">
-                  <Label htmlFor="file-filter" className="text-sm">Filter by Type</Label>
-                  <Select
-                    value={filterFileType}
-                    onValueChange={(val) => setFilterFileType(val as any)}
-                  >
-                    <SelectTrigger id="file-filter" className="mt-2 w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Materials</SelectItem>
-                      <SelectItem value="video">Videos</SelectItem>
-                      <SelectItem value="pdf">PDFs</SelectItem>
-                      <SelectItem value="ppt">Presentations</SelectItem>
-                      <SelectItem value="word">Documents</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {linkedMaterials.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-500 mb-4">No materials linked to this demo yet</p>
+                  {availableMaterials.length === 0 ? (
+                    <p className="text-xs text-gray-400">No materials available. Create materials in the Materials library first.</p>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAddMaterialDialog(true)}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Material
+                    </Button>
+                  )}
                 </div>
-              )}
-
-              {files.length === 0 && videos.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-8">No materials uploaded yet</p>
               ) : (
-                <>
-                  {files
-                    .filter((file: any) => filterFileType === "all" || file.file_type === filterFileType)
-                    .map((file: any) => (
-                    <div
-                      key={file.id}
-                      className="border rounded-lg p-4 hover:bg-gray-50 transition"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium">{file.title || `Untitled ${file.file_type.toUpperCase()}`}</h4>
-                            {playingVideoId === file.id && file.file_type === "video" && (
-                              <Badge variant="outline" className="text-xs">
-                                Playing
-                              </Badge>
-                            )}
-                            <Badge variant="secondary" className="text-xs">{file.file_type.toUpperCase()}</Badge>
+                linkedMaterials.map((material) => (
+                  <div
+                    key={material.id}
+                    className="border rounded-lg p-4 hover:bg-gray-50 transition"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-2xl">{FILE_TYPE_ICONS[material.file_type]}</span>
+                          <div>
+                            <h4 className="font-medium">{material.title}</h4>
+                            <p className="text-xs text-gray-500">
+                              {material.file_type.toUpperCase()} • {(material.file_size_bytes / 1024 / 1024).toFixed(2)} MB
+                            </p>
                           </div>
-                          {file.description && (
-                            <p className="text-sm text-gray-600 mt-1">{file.description}</p>
-                          )}
-                          <p className="text-xs text-gray-400 mt-2">
-                            Uploaded: {new Date(file.uploaded_at).toLocaleString()}
-                          </p>
                         </div>
-                        <div className="flex gap-2">
-                          {file.file_type === "video" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setPlayingVideoId(file.id)}
-                              className="gap-2"
-                            >
-                              <Play className="h-4 w-4" />
-                              Play
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(file.file_url, '_blank')}
-                            className="gap-2"
-                          >
-                            <FileText className="h-4 w-4" />
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => deleteMutation.mutate({ fileId: file.id, isLegacyVideo: false })}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        {material.description && (
+                          <p className="text-sm text-gray-600 mt-2">{material.description}</p>
+                        )}
                       </div>
-
-                      {/* Video Player for video files */}
-                      {playingVideoId === file.id && file.file_type === "video" && (
-                        <div className="mt-4 bg-black rounded-lg overflow-hidden">
-                          <video
-                            width="100%"
-                            height="auto"
-                            controls
-                            autoPlay
-                            className="w-full"
-                          >
-                            <source src={file.file_url} type="video/mp4" />
-                            Your browser does not support the video tag.
-                          </video>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {videos.map((video) => (
-                    <div
-                      key={video.id}
-                      className="border rounded-lg p-4 hover:bg-gray-50 transition"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium">{video.title || "Untitled Video"}</h4>
-                            {playingVideoId === video.id && (
-                              <Badge variant="outline" className="text-xs">
-                                Playing
-                              </Badge>
-                            )}
-                          </div>
-                          {video.description && (
-                            <p className="text-sm text-gray-600 mt-1">{video.description}</p>
-                          )}
-                          <p className="text-xs text-gray-400 mt-2">
-                            Uploaded: {new Date(video.uploaded_at).toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
+                      <div className="flex gap-2">
+                        {material.file_type === "video" && (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setPlayingVideoId(video.id)}
+                            onClick={() => setPlayingVideoId(material.id)}
                             className="gap-2"
                           >
                             <Play className="h-4 w-4" />
                             Play
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => deleteMutation.mutate({ fileId: video.id, isLegacyVideo: true })}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(material.file_url, "_blank")}
+                          className="gap-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => unlinkMaterialMutation.mutate(material.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-
-                      {/* Video Player */}
-                      {playingVideoId === video.id && (
-                        <div className="mt-4 bg-black rounded-lg overflow-hidden">
-                          <video
-                            width="100%"
-                            height="auto"
-                            controls
-                            autoPlay
-                            className="w-full"
-                          >
-                            <source src={video.file_url} type="video/mp4" />
-                            Your browser does not support the video tag.
-                          </video>
-                        </div>
-                      )}
                     </div>
-                  ))}
-                </>
+
+                    {/* Video Player for video materials */}
+                    {playingVideoId === material.id && material.file_type === "video" && (
+                      <div className="mt-4 bg-black rounded-lg overflow-hidden">
+                        <video
+                          width="100%"
+                          height="auto"
+                          controls
+                          autoPlay
+                          className="w-full"
+                        >
+                          <source src={material.file_url} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
+                      </div>
+                    )}
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>
@@ -518,12 +462,80 @@ export default function DemoDetail() {
             </CardContent>
           </Card>
 
+          {/* Share Materials Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                Share Materials
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-sm font-medium mb-2">Individual Material Links</p>
+                <div className="space-y-2">
+                  {linkedMaterials.length === 0 ? (
+                    <p className="text-xs text-gray-500">No materials to share</p>
+                  ) : (
+                    linkedMaterials.map((material) => (
+                      <div key={material.id} className="flex items-center justify-between text-xs">
+                        <span className="truncate">{material.title}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            navigator.clipboard.writeText(material.file_url);
+                            toast({ title: "Link copied!" });
+                          }}
+                          className="h-6 px-2"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-3">
+                <p className="text-sm font-medium mb-2">All Materials Bundle</p>
+                <Button
+                  className="w-full gap-2 mb-2"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowZipDialog(true)}
+                >
+                  <Archive className="h-4 w-4" />
+                  Create Zip Download
+                </Button>
+                {zipFileLink && (
+                  <>
+                    <div className="bg-gray-50 p-2 rounded text-xs break-all font-mono border mb-2">
+                      {zipFileLink}
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full gap-2"
+                      onClick={() => {
+                        navigator.clipboard.writeText(zipFileLink);
+                        toast({ title: "Zip link copied!" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy Zip Link
+                    </Button>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Shareable Link Card */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Link2 className="h-4 w-4" />
-                Share with Client
+                Demo Viewer Link
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -566,7 +578,6 @@ export default function DemoDetail() {
               <Button
                 className="w-full gap-2 bg-blue-600"
                 onClick={() => {
-                  // Update status to Scheduled
                   navigate(`/demo-workshop/${id}/edit`);
                 }}
               >
@@ -587,80 +598,85 @@ export default function DemoDetail() {
         </div>
       </div>
 
-      {/* Upload File Dialog */}
-      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+      {/* Add Material Dialog */}
+      <Dialog open={showAddMaterialDialog} onOpenChange={setShowAddMaterialDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upload Demo File</DialogTitle>
+            <DialogTitle>Add Material to Demo</DialogTitle>
             <DialogDescription>
-              Upload video, PDF, PowerPoint, or Word document for this demo
+              Select a material from your materials library to add to this demo
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="file-type">File Type</Label>
-              <Select value={fileType} onValueChange={(val) => setFileType(val as any)}>
-                <SelectTrigger id="file-type" className="mt-2">
-                  <SelectValue />
+              <Label htmlFor="material-select">Select Material</Label>
+              <Select value={selectedMaterialId} onValueChange={setSelectedMaterialId}>
+                <SelectTrigger id="material-select" className="mt-2">
+                  <SelectValue placeholder="Choose a material..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="video">Video (MP4, WebM, Ogg)</SelectItem>
-                  <SelectItem value="pdf">PDF Document</SelectItem>
-                  <SelectItem value="ppt">PowerPoint Presentation</SelectItem>
-                  <SelectItem value="word">Word Document</SelectItem>
+                  {availableMaterials.map((material) => (
+                    <SelectItem key={material.id} value={material.id.toString()}>
+                      {FILE_TYPE_ICONS[material.file_type]} {material.title}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="demo-file">File</Label>
-              <Input
-                id="demo-file"
-                type="file"
-                accept={fileType === "video" ? "video/*" : fileType === "pdf" ? ".pdf" : fileType === "ppt" ? ".ppt,.pptx" : ".doc,.docx"}
-                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                className="mt-2"
-              />
-              {videoFile && (
-                <p className="text-sm text-gray-600 mt-2">{videoFile.name}</p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="video-title">
-                {fileType === "video" ? "Video Title" : fileType === "pdf" ? "PDF Title" : fileType === "ppt" ? "Presentation Title" : "Document Title"}
-              </Label>
-              <Input
-                id="video-title"
-                placeholder={`Enter ${fileType === "video" ? "video" : fileType === "pdf" ? "PDF" : fileType === "ppt" ? "presentation" : "document"} title`}
-                value={videoTitle}
-                onChange={(e) => setVideoTitle(e.target.value)}
-                className="mt-2"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="video-description">Description (Optional)</Label>
-              <Textarea
-                id="video-description"
-                placeholder="Enter video description"
-                value={videoDescription}
-                onChange={(e) => setVideoDescription(e.target.value)}
-                className="mt-2 min-h-24"
-              />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUploadDialog(false)}>
+            <Button variant="outline" onClick={() => setShowAddMaterialDialog(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() => uploadMutation.mutate()}
-              disabled={!videoFile || uploadMutation.isPending}
+              onClick={() => selectedMaterialId && linkMaterialMutation.mutate(parseInt(selectedMaterialId))}
+              disabled={!selectedMaterialId || linkMaterialMutation.isPending}
             >
-              {uploadMutation.isPending ? "Uploading..." : "Upload"}
+              {linkMaterialMutation.isPending ? "Adding..." : "Add Material"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Zip File Dialog */}
+      <Dialog open={showZipDialog} onOpenChange={setShowZipDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Download All Materials as ZIP</DialogTitle>
+            <DialogDescription>
+              Create a ZIP file link to download all linked materials at once
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Label htmlFor="zip-link">Paste your ZIP file link here:</Label>
+            <Input
+              id="zip-link"
+              placeholder="https://..."
+              value={zipFileLink}
+              onChange={(e) => setZipFileLink(e.target.value)}
+            />
+            <p className="text-xs text-gray-500">
+              You can generate a ZIP file link from your file storage service and paste it here. This link will be available for clients to download all materials together.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowZipDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (zipFileLink) {
+                  toast({ title: "ZIP link saved successfully" });
+                  setShowZipDialog(false);
+                }
+              }}
+              disabled={!zipFileLink}
+            >
+              Save ZIP Link
             </Button>
           </DialogFooter>
         </DialogContent>

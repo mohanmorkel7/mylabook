@@ -1132,6 +1132,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Demo Files (multi-format support: video, PDF, PPT, Word)
+    try {
+      const demoFilesPath = path.join(
+        __dirname,
+        "add-demo-files.sql",
+      );
+      if (fs.existsSync(demoFilesPath)) {
+        const sql = fs.readFileSync(demoFilesPath, "utf8");
+        await client.query(sql);
+        console.log("Demo Files multi-format migration applied successfully");
+      }
+    } catch (demoFilesErr) {
+      console.log(
+        "Demo Files migration already applied or error:",
+        (demoFilesErr as any).message,
+      );
+    }
+
     // await client.query(schema);
     console.log("Database initialized successfully");
     client.release();

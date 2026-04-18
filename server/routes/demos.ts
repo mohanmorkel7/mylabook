@@ -5,15 +5,15 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 
-// Configure multer for video uploads
-const videoDir = path.join(process.cwd(), "public", "uploads", "videos");
-if (!fs.existsSync(videoDir)) {
-  fs.mkdirSync(videoDir, { recursive: true });
+// Configure multer for multi-format file uploads (video, PDF, PPT, Word)
+const filesDir = path.join(process.cwd(), "public", "uploads", "demos");
+if (!fs.existsSync(filesDir)) {
+  fs.mkdirSync(filesDir, { recursive: true });
 }
 
-const videoStorage = multer.diskStorage({
+const fileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, videoDir);
+    cb(null, filesDir);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -21,17 +21,31 @@ const videoStorage = multer.diskStorage({
   },
 });
 
-const videoUpload = multer({
-  storage: videoStorage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit for videos
+// Allowed MIME types for different file formats
+const ALLOWED_TYPES = {
+  video: ["video/mp4", "video/webm", "video/ogg"],
+  pdf: ["application/pdf"],
+  ppt: ["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+  word: ["application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+};
+
+const fileUpload = multer({
+  storage: fileStorage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("video/")) {
+    const fileType = req.body.file_type || "video";
+    const allowed = ALLOWED_TYPES[fileType as keyof typeof ALLOWED_TYPES] || ALLOWED_TYPES.video;
+
+    if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Only video files are allowed"));
+      cb(new Error(`File type ${file.mimetype} not allowed for ${fileType}`));
     }
   },
 });
+
+// Legacy videoUpload for backward compatibility
+const videoUpload = fileUpload;
 
 const router = Router();
 
@@ -396,15 +410,15 @@ router.delete("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Get all videos for this demo
-    const videosResult = await queryWithRetry(() =>
-      pool.query("SELECT * FROM demo_videos WHERE demo_id = $1", [id])
+    // Get all files for this demo
+    const filesResult = await queryWithRetry(() =>
+      pool.query("SELECT * FROM demo_files WHERE demo_id = $1", [id])
     );
 
-    // Delete video files from disk
-    for (const video of videosResult.rows) {
-      if (video.filename) {
-        const filePath = path.join(videoDir, video.filename);
+    // Delete files from disk
+    for (const file of filesResult.rows) {
+      if (file.filename) {
+        const filePath = path.join(filesDir, file.filename);
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
         }
@@ -424,6 +438,196 @@ router.delete("/:id", async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Failed to delete demo:", error.message);
     res.status(500).json({ error: "Failed to delete demo" });
+  }
+});
+
+// ── POST /api/demos/:id/files - Upload multi-format files (video, PDF, PPT, Word) ──
+router.post("/:id/files", fileUpload.single("file"), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, description, file_type = "video" } = req.body;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No file provided" });
+    }
+
+    const fileUrl = `/uploads/demos/${file.filename}`;
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO demo_files (demo_id, file_type, filename, file_url, title, description, mime_type, file_size_bytes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [id, file_type, file.filename, fileUrl, title || null, description || null, file.mimetype, file.size]
+      )
+    );
+
+    res.status(201).json({
+      success: true,
+      file: result.rows[0],
+      fileUrl,
+      message: `${file_type} file uploaded successfully`,
+    });
+  } catch (error: any) {
+    console.error("Failed to upload file:", error.message);
+    res.status(500).json({ error: "Failed to upload file", details: error.message });
+  }
+});
+
+// ── GET /api/demos/:id/files - Get all files for a demo ──
+router.get("/:id/files", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `SELECT * FROM demo_files WHERE demo_id = $1 AND is_published = true ORDER BY uploaded_at DESC`,
+        [id]
+      )
+    );
+
+    res.json({ files: result.rows });
+  } catch (error: any) {
+    console.error("Failed to fetch files:", error.message);
+    res.status(500).json({ error: "Failed to fetch files" });
+  }
+});
+
+// ── DELETE /api/demos/:demoId/files/:fileId - Delete demo file ──
+router.delete("/:demoId/files/:fileId", async (req: Request, res: Response) => {
+  try {
+    const { demoId, fileId } = req.params;
+
+    const fileResult = await queryWithRetry(() =>
+      pool.query("SELECT * FROM demo_files WHERE id = $1 AND demo_id = $2", [fileId, demoId])
+    );
+
+    if (fileResult.rows.length === 0) {
+      return res.status(404).json({ error: "File not found" });
+    }
+
+    const file = fileResult.rows[0];
+
+    // Delete file from disk
+    if (file.filename) {
+      const filePath = path.join(filesDir, file.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    // Delete from database
+    await queryWithRetry(() =>
+      pool.query("DELETE FROM demo_files WHERE id = $1", [fileId])
+    );
+
+    res.json({ message: "File deleted successfully" });
+  } catch (error: any) {
+    console.error("Failed to delete file:", error.message);
+    res.status(500).json({ error: "Failed to delete file" });
+  }
+});
+
+// ── POST /api/demos/:id/generate-shareable-link - Generate public shareable link ──
+router.post("/:id/generate-shareable-link", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { expires_days = 30 } = req.body;
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + expires_days);
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO demo_public_links (demo_id, shareable_token, expires_at)
+         VALUES ($1, $2, $3)
+         RETURNING *`,
+        [id, token, expiresAt]
+      )
+    );
+
+    // Update demos table with shareable link
+    const baseUrl = process.env.APP_URL || "http://localhost:8080";
+    const shareableLink = `${baseUrl}/demo/view/${token}`;
+
+    await queryWithRetry(() =>
+      pool.query(
+        `UPDATE demos SET shareable_link = $1, shareable_link_enabled = true WHERE id = $2`,
+        [shareableLink, id]
+      )
+    );
+
+    res.status(201).json({
+      success: true,
+      token,
+      shareable_link: shareableLink,
+      expires_at: expiresAt,
+      message: "Shareable link generated successfully",
+    });
+  } catch (error: any) {
+    console.error("Failed to generate shareable link:", error.message);
+    res.status(500).json({ error: "Failed to generate shareable link" });
+  }
+});
+
+// ── GET /api/demos/public/:token - Get demo by shareable token (public endpoint) ──
+router.get("/public/:token", async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    // Check if token is valid and not expired
+    const linkResult = await queryWithRetry(() =>
+      pool.query(
+        `SELECT * FROM demo_public_links
+         WHERE shareable_token = $1 AND is_active = true
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+        [token]
+      )
+    );
+
+    if (linkResult.rows.length === 0) {
+      return res.status(404).json({ error: "Shareable link not found or expired" });
+    }
+
+    const link = linkResult.rows[0];
+
+    // Get demo details
+    const demoResult = await queryWithRetry(() =>
+      pool.query("SELECT id, title, description, status FROM demos WHERE id = $1", [link.demo_id])
+    );
+
+    if (demoResult.rows.length === 0) {
+      return res.status(404).json({ error: "Demo not found" });
+    }
+
+    // Get all published files
+    const filesResult = await queryWithRetry(() =>
+      pool.query(
+        `SELECT id, file_type, filename, file_url, title, description FROM demo_files
+         WHERE demo_id = $1 AND is_published = true
+         ORDER BY uploaded_at DESC`,
+        [link.demo_id]
+      )
+    );
+
+    // Update access count
+    await queryWithRetry(() =>
+      pool.query(
+        `UPDATE demo_public_links SET accessed_count = accessed_count + 1, last_accessed_at = NOW()
+         WHERE id = $1`,
+        [link.id]
+      )
+    );
+
+    res.json({
+      demo: demoResult.rows[0],
+      files: filesResult.rows,
+    });
+  } catch (error: any) {
+    console.error("Failed to fetch shared demo:", error.message);
+    res.status(500).json({ error: "Failed to fetch shared demo" });
   }
 });
 

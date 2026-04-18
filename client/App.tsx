@@ -130,6 +130,7 @@ import LeadEditPage from "@/pages/LeadEditPage";
 import DemoWorkshopDashboard from "@/pages/DemoWorkshopDashboard";
 import DemoDetail from "@/pages/DemoDetail";
 import DemoCreate from "@/pages/DemoCreate";
+import DemoPublicViewer from "@/pages/DemoPublicViewer";
 import VCDashboard from "@/pages/VCDashboard";
 import CreateVC from "@/pages/CreateVC";
 import VCDetails from "@/pages/VCDetails";
@@ -823,6 +824,12 @@ function AppRoutes() {
             </DashboardLayout>
           </ProtectedRoute>
         }
+      />
+
+      {/* Public Demo Viewer - No authentication required */}
+      <Route
+        path="/demo/view/:token"
+        element={<DemoPublicViewer />}
       />
 
       {/* Clients Routes */}

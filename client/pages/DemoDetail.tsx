@@ -204,6 +204,7 @@ export default function DemoDetail() {
   if (!demoData) return <div className="text-center py-12">Demo not found</div>;
 
   const demo: Demo = demoData.demo;
+  const files = demoData.files || [];
   const videos: DemoVideo[] = demoData.videos || [];
   const results: DemoResult = demoData.results;
 
@@ -239,7 +240,7 @@ export default function DemoDetail() {
                   className="gap-2"
                 >
                   <Upload className="h-4 w-4" />
-                  Upload Video
+                  Upload Material
                 </Button>
               </div>
             </CardHeader>
@@ -502,10 +503,12 @@ export default function DemoDetail() {
             </div>
 
             <div>
-              <Label htmlFor="video-title">Video Title</Label>
+              <Label htmlFor="video-title">
+                {fileType === "video" ? "Video Title" : fileType === "pdf" ? "PDF Title" : fileType === "ppt" ? "Presentation Title" : "Document Title"}
+              </Label>
               <Input
                 id="video-title"
-                placeholder="Enter video title"
+                placeholder={`Enter ${fileType === "video" ? "video" : fileType === "pdf" ? "PDF" : fileType === "ppt" ? "presentation" : "document"} title`}
                 value={videoTitle}
                 onChange={(e) => setVideoTitle(e.target.value)}
                 className="mt-2"

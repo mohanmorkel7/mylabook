@@ -517,7 +517,7 @@ router.get("/:id/chat-messages", async (req: Request, res: Response) => {
         CREATE TABLE IF NOT EXISTS sales_leads_team_chat_messages (
           id SERIAL PRIMARY KEY,
           follow_up_id INTEGER NOT NULL REFERENCES sales_leads_follow_ups(id) ON DELETE CASCADE,
-          message_type TEXT NOT NULL CHECK (message_type IN ('text', 'audio')),
+          message_type TEXT NOT NULL CHECK (message_type IN ('text', 'audio', 'system')),
           content TEXT NOT NULL,
           author TEXT NOT NULL,
           audio_filename TEXT,
@@ -527,6 +527,25 @@ router.get("/:id/chat-messages", async (req: Request, res: Response) => {
         )
       `)
     );
+
+    // Alter existing table constraint if needed to allow 'system' type
+    try {
+      await queryWithRetry(() =>
+        pool.query(`
+          ALTER TABLE sales_leads_team_chat_messages
+          DROP CONSTRAINT IF EXISTS sales_leads_team_chat_messages_message_type_check
+        `)
+      );
+      await queryWithRetry(() =>
+        pool.query(`
+          ALTER TABLE sales_leads_team_chat_messages
+          ADD CONSTRAINT sales_leads_team_chat_messages_message_type_check
+          CHECK (message_type IN ('text', 'audio', 'system'))
+        `)
+      );
+    } catch (e) {
+      // Constraint migration might fail if already exists, that's fine
+    }
 
     const result = await queryWithRetry(() =>
       pool.query(

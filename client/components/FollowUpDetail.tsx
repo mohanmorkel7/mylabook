@@ -735,8 +735,9 @@ export function FollowUpDetail({
           author: "System",
         });
 
-        // Refetch chat to ensure message is persisted
-        refetchChat();
+        // Invalidate and refetch chat to ensure message is persisted
+        await qc.invalidateQueries({ queryKey: ["chat-messages", followUp.id] });
+        await refetchChat();
         console.log("[Status Change] System message saved successfully");
       } catch (error) {
         console.error("Failed to save system message:", error);

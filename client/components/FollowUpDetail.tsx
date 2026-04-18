@@ -242,7 +242,7 @@ export function FollowUpDetail({
     if (chatData?.messages) {
       const loadedMessages: ChatMessage[] = chatData.messages.map((msg: any) => ({
         id: msg.id,
-        type: msg.message_type as "text" | "audio",
+        type: msg.message_type as "text" | "audio" | "system",
         content: msg.content,
         author: msg.author,
         timestamp: new Date(msg.created_at),

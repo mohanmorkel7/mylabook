@@ -272,27 +272,25 @@ router.get("/dashboard/summary", async (req: Request, res: Response) => {
 
     const istNow = formatter.format(new Date());
 
-    // Get today's follow-ups (Pending status scheduled for today)
+    // Get today's follow-ups (any status scheduled for today)
     const todayResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
          LEFT JOIN sales_leads l ON lfu.lead_id = l.id
-         WHERE lfu.status = 'Pending'
-         AND DATE(lfu.follow_up_date) = $1::DATE
+         WHERE DATE(lfu.follow_up_date) = $1::DATE
          ORDER BY lfu.follow_up_date ASC`,
         [istNow]
       )
     );
 
-    // Get overdue follow-ups (Pending status with date in the past)
+    // Get overdue follow-ups (any status with date in the past)
     const overdueResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
          LEFT JOIN sales_leads l ON lfu.lead_id = l.id
-         WHERE lfu.status = 'Pending'
-         AND DATE(lfu.follow_up_date) < $1::DATE
+         WHERE DATE(lfu.follow_up_date) < $1::DATE
          ORDER BY lfu.follow_up_date DESC`,
         [istNow]
       )

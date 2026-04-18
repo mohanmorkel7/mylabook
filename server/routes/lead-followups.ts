@@ -299,13 +299,13 @@ router.get("/dashboard/summary", async (req: Request, res: Response) => {
     const todayFollowUps = todayResult.rows.map((fu: any) => ({
       ...fu,
       notes: decrypt(fu.notes),
-      company_name: fu.company_name, // Don't decrypt company_name, it's already plain
+      company_name: fu.company_name && fu.company_name !== 'Unknown Lead' ? decrypt(fu.company_name) : fu.company_name,
     }));
 
     const overdueFollowUps = overdueResult.rows.map((fu: any) => ({
       ...fu,
       notes: decrypt(fu.notes),
-      company_name: fu.company_name, // Don't decrypt company_name, it's already plain
+      company_name: fu.company_name && fu.company_name !== 'Unknown Lead' ? decrypt(fu.company_name) : fu.company_name,
     }));
 
     res.json({

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
@@ -120,6 +120,47 @@ async function fetchFollowUpSummary() {
   const res = await fetch("/api/lead-followups/dashboard/summary");
   if (!res.ok) throw new Error("Failed to fetch follow-up summary");
   return res.json();
+}
+
+// Timer component for follow-up cards
+function FollowUpTimer({ followUpDate, isOverdue }: { followUpDate: string; isOverdue: boolean }) {
+  const [timeDisplay, setTimeDisplay] = useState<string>("");
+
+  useEffect(() => {
+    const calculateTime = () => {
+      const followUpTime = new Date(followUpDate);
+      const now = new Date();
+
+      if (isOverdue) {
+        // Show overdue duration
+        const diffMs = now.getTime() - followUpTime.getTime();
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        setTimeDisplay(`Overdue: ${hours}h ${minutes}m`);
+      } else {
+        // Show remaining time
+        const diffMs = followUpTime.getTime() - now.getTime();
+        if (diffMs > 0) {
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          setTimeDisplay(`${hours}h ${minutes}m remaining`);
+        } else {
+          setTimeDisplay("Due now");
+        }
+      }
+    };
+
+    calculateTime();
+    const interval = setInterval(calculateTime, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [followUpDate, isOverdue]);
+
+  return (
+    <span className={`text-xs font-semibold ${isOverdue ? "text-red-600" : "text-blue-600"}`}>
+      {timeDisplay}
+    </span>
+  );
 }
 
 // Main Component
@@ -311,12 +352,26 @@ export default function LeadManagementDashboard() {
                     {followUpSummary.today.map((fu: FollowUp) => (
                       <div
                         key={fu.id}
-                        className="p-2 bg-blue-50 rounded border-l-4 border-blue-300 cursor-pointer hover:shadow-sm transition"
+                        className="p-3 bg-blue-50 rounded border-l-4 border-blue-300 cursor-pointer hover:shadow-sm transition"
                         onClick={() => navigate(`/lead-management/${fu.lead_id}/overview`)}
                       >
-                        <p className="text-sm font-medium text-gray-900">{fu.title || "Follow-up"}</p>
-                        <p className="text-xs text-gray-600">{fu.company_name}</p>
-                        {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{fu.title || "Follow-up"}</p>
+                            <p className="text-xs text-gray-600">{fu.company_name}</p>
+                            {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-xs text-gray-700 font-medium">
+                            {new Date(fu.follow_up_date).toLocaleTimeString('en-IN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              timeZone: 'Asia/Kolkata',
+                            })}
+                          </span>
+                          <FollowUpTimer followUpDate={fu.follow_up_date} isOverdue={false} />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -349,12 +404,26 @@ export default function LeadManagementDashboard() {
                     {followUpSummary.overdue.map((fu: FollowUp) => (
                       <div
                         key={fu.id}
-                        className="p-2 bg-red-50 rounded border-l-4 border-red-300 cursor-pointer hover:shadow-sm transition"
+                        className="p-3 bg-red-50 rounded border-l-4 border-red-300 cursor-pointer hover:shadow-sm transition"
                         onClick={() => navigate(`/lead-management/${fu.lead_id}/overview`)}
                       >
-                        <p className="text-sm font-medium text-gray-900">{fu.title || "Follow-up"}</p>
-                        <p className="text-xs text-gray-600">{fu.company_name}</p>
-                        {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{fu.title || "Follow-up"}</p>
+                            <p className="text-xs text-gray-600">{fu.company_name}</p>
+                            {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-xs text-gray-700 font-medium">
+                            {new Date(fu.follow_up_date).toLocaleTimeString('en-IN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              timeZone: 'Asia/Kolkata',
+                            })}
+                          </span>
+                          <FollowUpTimer followUpDate={fu.follow_up_date} isOverdue={true} />
+                        </div>
                       </div>
                     ))}
                   </div>

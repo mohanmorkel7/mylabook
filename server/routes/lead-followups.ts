@@ -258,6 +258,57 @@ router.delete("/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET /api/lead-followups/dashboard/summary - Get today's and overdue follow-ups ─────
+router.get("/dashboard/summary", async (req: Request, res: Response) => {
+  try {
+    // Get today's follow-ups (Pending status scheduled for today)
+    const todayResult = await queryWithRetry(() =>
+      pool.query(
+        `SELECT lfu.*, l.company_name
+         FROM sales_leads_follow_ups lfu
+         JOIN sales_leads l ON lfu.lead_id = l.id
+         WHERE lfu.status = 'Pending'
+         AND DATE(lfu.follow_up_date AT TIME ZONE 'Asia/Kolkata') = CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'
+         ORDER BY lfu.follow_up_date ASC`
+      )
+    );
+
+    // Get overdue follow-ups (Pending status with date in the past)
+    const overdueResult = await queryWithRetry(() =>
+      pool.query(
+        `SELECT lfu.*, l.company_name
+         FROM sales_leads_follow_ups lfu
+         JOIN sales_leads l ON lfu.lead_id = l.id
+         WHERE lfu.status = 'Pending'
+         AND DATE(lfu.follow_up_date AT TIME ZONE 'Asia/Kolkata') < CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'
+         ORDER BY lfu.follow_up_date DESC`
+      )
+    );
+
+    const todayFollowUps = todayResult.rows.map((fu: any) => ({
+      ...fu,
+      notes: decrypt(fu.notes),
+      company_name: decrypt(fu.company_name),
+    }));
+
+    const overdueFollowUps = overdueResult.rows.map((fu: any) => ({
+      ...fu,
+      notes: decrypt(fu.notes),
+      company_name: decrypt(fu.company_name),
+    }));
+
+    res.json({
+      today: todayFollowUps,
+      overdue: overdueFollowUps,
+      today_count: todayFollowUps.length,
+      overdue_count: overdueFollowUps.length
+    });
+  } catch (error: any) {
+    console.error("Failed to fetch follow-up summary:", error.message);
+    res.status(500).json({ error: "Failed to fetch follow-up summary" });
+  }
+});
+
 // ── GET /api/lead-followups/upcoming - Get upcoming follow-ups ──────────
 router.get("/upcoming/:days", async (req: Request, res: Response) => {
   try {

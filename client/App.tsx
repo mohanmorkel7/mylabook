@@ -132,6 +132,7 @@ import DemoDetail from "@/pages/DemoDetail";
 import DemoCreate from "@/pages/DemoCreate";
 import DemoPublicViewer from "@/pages/DemoPublicViewer";
 import DemoMaterialsManagement from "@/pages/DemoMaterialsManagement";
+import MaterialsManagement from "@/pages/MaterialsManagement";
 import VCDashboard from "@/pages/VCDashboard";
 import CreateVC from "@/pages/CreateVC";
 import VCDetails from "@/pages/VCDetails";
@@ -842,6 +843,18 @@ function AppRoutes() {
       <Route
         path="/demo/view/:token"
         element={<DemoPublicViewer />}
+      />
+
+      {/* Materials Library Routes */}
+      <Route
+        path="/materials"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <MaterialsManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
       />
 
       {/* Clients Routes */}

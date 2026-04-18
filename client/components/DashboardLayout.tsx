@@ -34,6 +34,7 @@ import {
   UserPlus,
   Layers,
   Video,
+  Library,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
@@ -111,6 +112,13 @@ const navigationItems: NavigationItem[] = [
     name: "Demo/Workshop",
     href: "/demo-workshop",
     icon: Video,
+    roles: ["admin", "sales", "product"],
+  },
+  // f4) Materials Library
+  {
+    name: "Materials",
+    href: "/materials",
+    icon: Library,
     roles: ["admin", "sales", "product"],
   },
   // g) Sales (was Business Offerings)

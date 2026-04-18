@@ -1150,6 +1150,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Materials Module (independent CRUD for reusable materials)
+    try {
+      const materialsPath = path.join(
+        __dirname,
+        "create-materials-module.sql",
+      );
+      if (fs.existsSync(materialsPath)) {
+        const sql = fs.readFileSync(materialsPath, "utf8");
+        await client.query(sql);
+        console.log("Materials module migration applied successfully");
+      }
+    } catch (materialsErr) {
+      console.log(
+        "Materials module migration already applied or error:",
+        (materialsErr as any).message,
+      );
+    }
+
     // await client.query(schema);
     console.log("Database initialized successfully");
     client.release();

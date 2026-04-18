@@ -44,6 +44,7 @@ import leadFollowupsRouter from "./routes/lead-followups";
 import leadInitRouter from "./routes/lead-init";
 import salesLeadsNotificationsRouter from "./routes/sales-leads-notifications";
 import audioTranscriptionRouter from "./routes/audio-transcription";
+import demosRouter from "./routes/demos";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
 import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
 import { initialize as initializeSlackProcessingJob } from "./jobs/slackProcessingJob";
@@ -497,7 +498,9 @@ export function createServer() {
     app.use("/api/lead-init", leadInitRouter);
     app.use("/api/sales-leads-notifications", salesLeadsNotificationsRouter);
     app.use("/api/audio-transcription", audioTranscriptionRouter);
+    app.use("/api/demos", demosRouter);
     console.log("Lead Management router loaded successfully");
+    console.log("Demo/Workshop router loaded successfully");
     console.log("Audio transcription router loaded successfully");
   } catch (error) {
     console.error("Error loading Lead Management router:", error);

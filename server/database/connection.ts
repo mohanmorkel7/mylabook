@@ -1114,6 +1114,24 @@ export async function initializeDatabase() {
       );
     }
 
+    // Demo/Workshop tables for product demonstrations
+    try {
+      const demoPath = path.join(
+        __dirname,
+        "create-demo-workshop-tables.sql",
+      );
+      if (fs.existsSync(demoPath)) {
+        const sql = fs.readFileSync(demoPath, "utf8");
+        await client.query(sql);
+        console.log("Demo/Workshop tables migration applied successfully");
+      }
+    } catch (demoErr) {
+      console.log(
+        "Demo/Workshop tables migration already applied or error:",
+        (demoErr as any).message,
+      );
+    }
+
     // await client.query(schema);
     console.log("Database initialized successfully");
     client.release();

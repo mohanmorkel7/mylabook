@@ -127,6 +127,9 @@ import LeadEdit from "@/pages/LeadEdit";
 import LeadManagementDashboard from "@/pages/LeadManagementDashboard";
 import LeadOverviewPage from "@/pages/LeadOverview";
 import LeadEditPage from "@/pages/LeadEditPage";
+import DemoWorkshopDashboard from "@/pages/DemoWorkshopDashboard";
+import DemoDetail from "@/pages/DemoDetail";
+import DemoCreate from "@/pages/DemoCreate";
 import VCDashboard from "@/pages/VCDashboard";
 import CreateVC from "@/pages/CreateVC";
 import VCDetails from "@/pages/VCDetails";
@@ -772,6 +775,51 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
             <DashboardLayout>
               <LeadEditPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Demo/Workshop Routes */}
+      <Route
+        path="/demo-workshop"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoWorkshopDashboard />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/new"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoCreate />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoDetail />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoCreate />
             </DashboardLayout>
           </ProtectedRoute>
         }

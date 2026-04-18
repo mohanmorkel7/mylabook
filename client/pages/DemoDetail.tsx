@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Upload, Play, Trash2, Send, Check, X, ChevronRight } from "lucide-react";
+import { Upload, Play, Trash2, Send, Check, X, ChevronRight, Copy, Link2, FileText } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
 interface Demo {

@@ -712,11 +712,12 @@ export function FollowUpDetail({
 
       // Add system message to chat with username
       const now = new Date();
-      const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' });
+      const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const timeStr = istTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 
-      // Format: "FirstName LastName changed the status pending to completed"
+      // Format: "FirstName LastName changed the status pending to completed @ HH:MM AM/PM"
       const userName = user ? user.name : "User";
-      const systemMessageContent = `${userName} changed the status ${followUp.status.toLowerCase()} to ${newStatus.toLowerCase()}`;
+      const systemMessageContent = `${userName} changed the status ${followUp.status.toLowerCase()} to ${newStatus.toLowerCase()} @ ${timeStr}`;
 
       const systemMessage: ChatMessage = {
         id: Date.now(),
@@ -1184,7 +1185,7 @@ export function FollowUpDetail({
                           <div className="flex items-center justify-center w-full my-2">
                             <div className="px-3 py-1.5 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 text-gray-700 font-medium text-center max-w-2xl" style={{ fontSize: '0.65rem', lineHeight: '1' }}>
                               <span className="inline-block whitespace-nowrap overflow-ellipsis overflow-hidden">
-                                • {msg.content} @ {new Date(msg.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
+                                • {msg.content}
                               </span>
                             </div>
                           </div>

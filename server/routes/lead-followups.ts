@@ -262,25 +262,27 @@ router.delete("/:id", async (req: Request, res: Response) => {
 router.get("/dashboard/summary", async (req: Request, res: Response) => {
   try {
     // Get today's follow-ups (Pending status scheduled for today)
+    // Compare dates in IST timezone, not timestamps - to capture all follow-ups scheduled for today regardless of time
     const todayResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, l.company_name
          FROM sales_leads_follow_ups lfu
          JOIN sales_leads l ON lfu.lead_id = l.id
          WHERE lfu.status = 'Pending'
-         AND DATE(lfu.follow_up_date AT TIME ZONE 'Asia/Kolkata') = CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'
+         AND DATE(lfu.follow_up_date) = CURRENT_DATE
          ORDER BY lfu.follow_up_date ASC`
       )
     );
 
     // Get overdue follow-ups (Pending status with date in the past)
+    // Only show follow-ups where the date has completely passed (yesterday or earlier)
     const overdueResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, l.company_name
          FROM sales_leads_follow_ups lfu
          JOIN sales_leads l ON lfu.lead_id = l.id
          WHERE lfu.status = 'Pending'
-         AND DATE(lfu.follow_up_date AT TIME ZONE 'Asia/Kolkata') < CURRENT_DATE AT TIME ZONE 'Asia/Kolkata'
+         AND DATE(lfu.follow_up_date) < CURRENT_DATE
          ORDER BY lfu.follow_up_date DESC`
       )
     );

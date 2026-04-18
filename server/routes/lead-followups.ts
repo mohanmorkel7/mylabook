@@ -261,42 +261,53 @@ router.delete("/:id", async (req: Request, res: Response) => {
 // ── GET /api/lead-followups/dashboard/summary - Get today's and overdue follow-ups ─────
 router.get("/dashboard/summary", async (req: Request, res: Response) => {
   try {
+    // Get current date in IST (Asia/Kolkata timezone)
+    // Using Intl API for reliable date formatting
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Asia/Kolkata'
+    });
+
+    const istNow = formatter.format(new Date());
+
     // Get today's follow-ups (Pending status scheduled for today)
-    // Compare dates in IST timezone, not timestamps - to capture all follow-ups scheduled for today regardless of time
     const todayResult = await queryWithRetry(() =>
       pool.query(
-        `SELECT lfu.*, l.company_name
+        `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
-         JOIN sales_leads l ON lfu.lead_id = l.id
+         LEFT JOIN sales_leads l ON lfu.lead_id = l.id
          WHERE lfu.status = 'Pending'
-         AND DATE(lfu.follow_up_date) = CURRENT_DATE
-         ORDER BY lfu.follow_up_date ASC`
+         AND DATE(lfu.follow_up_date) = $1::DATE
+         ORDER BY lfu.follow_up_date ASC`,
+        [istNow]
       )
     );
 
     // Get overdue follow-ups (Pending status with date in the past)
-    // Only show follow-ups where the date has completely passed (yesterday or earlier)
     const overdueResult = await queryWithRetry(() =>
       pool.query(
-        `SELECT lfu.*, l.company_name
+        `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
-         JOIN sales_leads l ON lfu.lead_id = l.id
+         LEFT JOIN sales_leads l ON lfu.lead_id = l.id
          WHERE lfu.status = 'Pending'
-         AND DATE(lfu.follow_up_date) < CURRENT_DATE
-         ORDER BY lfu.follow_up_date DESC`
+         AND DATE(lfu.follow_up_date) < $1::DATE
+         ORDER BY lfu.follow_up_date DESC`,
+        [istNow]
       )
     );
 
     const todayFollowUps = todayResult.rows.map((fu: any) => ({
       ...fu,
       notes: decrypt(fu.notes),
-      company_name: decrypt(fu.company_name),
+      company_name: fu.company_name, // Don't decrypt company_name, it's already plain
     }));
 
     const overdueFollowUps = overdueResult.rows.map((fu: any) => ({
       ...fu,
       notes: decrypt(fu.notes),
-      company_name: decrypt(fu.company_name),
+      company_name: fu.company_name, // Don't decrypt company_name, it's already plain
     }));
 
     res.json({

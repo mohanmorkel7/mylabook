@@ -255,7 +255,7 @@ export default function DemoPublicViewer() {
                     <Badge variant="outline">{selectedMaterial.file_type.toUpperCase()}</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 p-6">
+                <CardContent className="space-y-4 p-6 max-h-[calc(100vh-260px)] overflow-y-scroll pr-3" style={{ scrollbarGutter: "stable" }}>
                   {selectedMaterial.file_type === "video" ? (
                     <div className="space-y-4">
                       <div className="bg-black rounded-lg overflow-hidden">
@@ -266,11 +266,13 @@ export default function DemoPublicViewer() {
                       </div>
                     </div>
                   ) : selectedMaterial.file_type === "pdf" ? (
-                    <iframe
-                      src={selectedMaterial.file_url}
-                      title={selectedMaterial.title || selectedMaterial.filename}
-                      className="w-full h-[75vh] rounded-lg border bg-white"
-                    />
+                    <div className="space-y-4">
+                      <iframe
+                        src={selectedMaterial.file_url}
+                        title={selectedMaterial.title || selectedMaterial.filename}
+                        className="w-full h-[75vh] rounded-lg border bg-white"
+                      />
+                    </div>
                   ) : (
                     <div className="space-y-4">
                       <div className="rounded-lg border bg-white p-4">

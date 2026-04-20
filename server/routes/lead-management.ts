@@ -101,9 +101,9 @@ async function ensureSchemaUpdated() {
   schemaMigrationInProgress = true;
 
   try {
-    console.log("[Lead Management] Checking if schema needs updating...");
+    console.log("[Lead Management] Updating schema...");
 
-    // List of columns to add if they don't exist
+    // List of columns to add - we'll just try to add and catch "already exists" errors
     const columnsToAdd = [
       { name: "source", type: "TEXT" },
       { name: "client_type", type: "TEXT" },
@@ -126,49 +126,23 @@ async function ensureSchemaUpdated() {
 
     let addedCount = 0;
     let skippedCount = 0;
-    let errorCount = 0;
 
     for (const column of columnsToAdd) {
       try {
-        // Check if column exists
-        const checkResult = await queryWithRetry(() => pool.query(
-          `SELECT EXISTS (
-            SELECT FROM information_schema.columns
-            WHERE table_schema = 'public'
-            AND table_name = 'sales_leads'
-            AND column_name = $1
-          ) as exists`,
-          [column.name]
+        // Just try to add the column - PostgreSQL will error if it already exists
+        await queryWithRetry(() => pool.query(
+          `ALTER TABLE sales_leads ADD COLUMN IF NOT EXISTS ${column.name} ${column.type}`
         ));
-
-        if (!checkResult.rows[0].exists) {
-          console.log(`[Lead Management] Adding missing column: ${column.name}`);
-          try {
-            await queryWithRetry(() => pool.query(
-              `ALTER TABLE sales_leads ADD COLUMN ${column.name} ${column.type}`
-            ));
-            console.log(`[Lead Management] Column ${column.name} added successfully`);
-            addedCount++;
-          } catch (alterErr: any) {
-            const errMsg = String(alterErr.message || "");
-            if (errMsg.includes("already exists") || errMsg.includes("duplicate")) {
-              console.log(`[Lead Management] Column ${column.name} already exists`);
-              skippedCount++;
-            } else {
-              console.error(`[Lead Management] Error adding column ${column.name}:`, errMsg);
-              errorCount++;
-            }
-          }
-        } else {
-          skippedCount++;
-        }
-      } catch (checkErr: any) {
-        console.error(`[Lead Management] Error checking column ${column.name}:`, checkErr.message);
-        errorCount++;
+        console.log(`[Lead Management] Column ${column.name} added or already exists`);
+        addedCount++;
+      } catch (err: any) {
+        const errMsg = String(err.message || "");
+        console.warn(`[Lead Management] Warning adding column ${column.name}:`, errMsg.substring(0, 100));
+        skippedCount++;
       }
     }
 
-    console.log(`[Lead Management] Schema migration complete - Added: ${addedCount}, Skipped: ${skippedCount}, Errors: ${errorCount}`);
+    console.log(`[Lead Management] Schema migration complete - Processed: ${addedCount}, Warnings: ${skippedCount}`);
   } catch (error: any) {
     console.error("[Lead Management] Schema migration error:", error.message);
   } finally {

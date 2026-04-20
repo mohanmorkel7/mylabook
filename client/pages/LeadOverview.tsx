@@ -142,43 +142,46 @@ export default function LeadOverview() {
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="company-information" className="border rounded-lg bg-white">
               <AccordionTrigger className="px-6 py-4 hover:no-underline text-left">
-                <div className="w-full grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr] lg:items-center">
-                  <div className="flex flex-col items-start">
-                    <span className="text-lg font-semibold">Company Information</span>
-                    <span className="text-sm text-gray-500">Summary details</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">Legal Name</p>
-                      <p className="font-medium text-gray-900">{lead.company_legal_name || "—"}</p>
+                <div className="flex w-full items-start justify-between gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-semibold">Company Information</span>
+                      <span className="text-sm text-gray-500">Summary details</span>
                     </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">Industry</p>
-                      <p className="font-medium text-gray-900">{lead.industry || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">Company Size</p>
-                      <p className="font-medium text-gray-900">{lead.company_size || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">Country</p>
-                      <p className="font-medium text-gray-900">{lead.country || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">State</p>
-                      <p className="font-medium text-gray-900">{lead.state || lead.state_region || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">City</p>
-                      <p className="font-medium text-gray-900">{lead.city || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">Revenue Band</p>
-                      <p className="font-medium text-gray-900">{lead.annual_revenue_band || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500">Status</p>
-                      <p className="font-medium text-gray-900">{lead.status || "—"}</p>
+
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Legal Name</p>
+                        <p className="font-medium text-gray-900">{lead.company_legal_name || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Industry</p>
+                        <p className="font-medium text-gray-900">{lead.industry || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Company Size</p>
+                        <p className="font-medium text-gray-900">{lead.company_size || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Country</p>
+                        <p className="font-medium text-gray-900">{lead.country || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">State</p>
+                        <p className="font-medium text-gray-900">{lead.state || lead.state_region || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">City</p>
+                        <p className="font-medium text-gray-900">{lead.city || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Revenue Band</p>
+                        <p className="font-medium text-gray-900">{lead.annual_revenue_band || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Status</p>
+                        <p className="font-medium text-gray-900">{lead.status || "—"}</p>
+                      </div>
                     </div>
                   </div>
                 </div>

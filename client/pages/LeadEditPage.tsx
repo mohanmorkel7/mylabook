@@ -150,6 +150,11 @@ export default function LeadEditPage() {
     ],
   });
 
+  // Tab navigation state
+  const [currentTab, setCurrentTab] = useState("basic");
+  const tabs = ["basic", "address", "contacts"];
+  const currentTabIndex = tabs.indexOf(currentTab);
+
   // Popover state for country/state/city
   const [countryOpen, setCountryOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
@@ -182,12 +187,14 @@ export default function LeadEditPage() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       toast({ title: "Lead created successfully" });
-      navigate(`/lead-management/${data.lead.id}/overview`);
+      // API returns lead object directly, not wrapped in { lead }
+      const leadId = data.id || data.lead?.id;
+      navigate(`/lead-management/${leadId}/overview`);
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to create lead",
+        description: error instanceof Error ? error.message : "Failed to create lead",
         variant: "destructive",
       });
     },
@@ -205,6 +212,28 @@ export default function LeadEditPage() {
       toast({
         title: "Error",
         description: "Failed to update lead",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const saveDraftMutation = useMutation({
+    mutationFn: async () => {
+      if (isCreating) {
+        const draftData = { ...formData, is_draft: true };
+        return createLead(draftData);
+      } else {
+        return updateLead(id as string, { ...formData, is_draft: true });
+      }
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      toast({ title: "Draft saved successfully" });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save draft",
         variant: "destructive",
       });
     },
@@ -420,7 +449,7 @@ export default function LeadEditPage() {
         <div className="p-6 space-y-6">
           <h1 className="text-2xl font-bold">{isCreating ? "Create New Lead" : "Edit Lead"}</h1>
 
-          <Tabs defaultValue="basic" className="w-full">
+          <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="address">Address & Details</TabsTrigger>
@@ -850,19 +879,54 @@ export default function LeadEditPage() {
           </Tabs>
 
           {/* Actions */}
-          <div className="flex gap-3 justify-end pt-4 border-t">
+          <div className="flex gap-3 justify-between pt-4 border-t">
             <Button
               variant="outline"
               onClick={() => navigate("/lead-management")}
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={isCreating ? createMutation.isPending : updateMutation.isPending}
-            >
-              {isCreating ? "Create Lead" : "Save Changes"}
-            </Button>
+
+            <div className="flex gap-3">
+              {/* Save Draft button - visible on all tabs */}
+              <Button
+                variant="secondary"
+                onClick={() => saveDraftMutation.mutate()}
+                disabled={saveDraftMutation.isPending}
+              >
+                Save Draft
+              </Button>
+
+              {/* Previous button - hidden on first tab */}
+              {currentTabIndex > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentTab(tabs[currentTabIndex - 1])}
+                >
+                  Previous
+                </Button>
+              )}
+
+              {/* Next button - visible on all except last tab */}
+              {currentTabIndex < tabs.length - 1 && (
+                <Button
+                  onClick={() => setCurrentTab(tabs[currentTabIndex + 1])}
+                >
+                  Next
+                </Button>
+              )}
+
+              {/* Create Lead button - only on last tab */}
+              {currentTabIndex === tabs.length - 1 && (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isCreating ? createMutation.isPending : updateMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {isCreating ? "Create Lead" : "Save Changes"}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </Card>

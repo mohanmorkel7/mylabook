@@ -212,54 +212,6 @@ export default function LeadOverview() {
               )}
             </CardContent>
           </Card>
-
-          {/* Demos */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Demos ({demos.length})</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => navigate(`/demo-workshop/new?lead_id=${id}`)}
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Schedule Demo
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {demos.length === 0 ? (
-                <p className="text-gray-500">No demos scheduled</p>
-              ) : (
-                <div className="space-y-3">
-                  {demos.map((demo: any) => (
-                    <div
-                      key={demo.id}
-                      className="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer transition"
-                      onClick={() => navigate(`/demo-workshop/${demo.id}`)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium">{demo.title}</h4>
-                        <Badge variant="outline">{demo.status}</Badge>
-                      </div>
-                      {demo.demo_date && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Calendar className="h-4 w-4" />
-                          {new Date(demo.demo_date).toLocaleDateString()} at{" "}
-                          {new Date(demo.demo_date).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      )}
-                      {demo.description && (
-                        <p className="text-sm text-gray-600 mt-2">{demo.description}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         {/* Sidebar */}
@@ -277,6 +229,50 @@ export default function LeadOverview() {
                 <label className="text-xs font-medium text-gray-500">Last Updated</label>
                 <p className="text-sm">{new Date(lead.updated_at).toLocaleDateString()}</p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Demos */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">Demos ({demos.length})</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => navigate(`/demo-workshop/new?lead_id=${id}`)}
+                className="gap-1"
+              >
+                <Plus className="h-3 w-3" />
+                Add
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {demos.length === 0 ? (
+                <p className="text-sm text-gray-500">No demos scheduled</p>
+              ) : (
+                <div className="space-y-2">
+                  {demos.map((demo: any) => (
+                    <div
+                      key={demo.id}
+                      className="border rounded p-2 hover:bg-gray-50 cursor-pointer transition text-sm"
+                      onClick={() => navigate(`/demo-workshop/${demo.id}`)}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-medium text-xs">{demo.title}</h4>
+                        <Badge variant="outline" className="text-xs">{demo.status}</Badge>
+                      </div>
+                      {demo.demo_date && (
+                        <div className="flex items-center gap-1 text-xs text-gray-600">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(demo.demo_date).toLocaleDateString([], {
+                            month: "short",
+                            day: "numeric"
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

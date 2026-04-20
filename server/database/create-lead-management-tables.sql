@@ -24,8 +24,10 @@ CREATE TABLE IF NOT EXISTS sales_leads (
   -- Location (encrypted)
   country TEXT NOT NULL,
   state_region TEXT,
+  state TEXT,
   city TEXT,
   address TEXT,
+  street_address TEXT,
   timezone TEXT,
   preferred_language TEXT CHECK (preferred_language IN ('English', 'Hindi', 'Tamil', 'Kannada', 'Malayalam', 'Telugu', 'Marathi', 'Gujarati', 'Bengali', 'Punjabi', 'Urdu', 'Other')),
 
@@ -35,9 +37,15 @@ CREATE TABLE IF NOT EXISTS sales_leads (
   pa_license TEXT,
   geography TEXT,
   txn_volume TEXT,
+  client_name TEXT,
 
   -- Lead Source Details (encrypted)
+  email_subject TEXT,
+  source_notes TEXT,
   linkedin_profile_link TEXT,
+  website TEXT,
+  fully_approved TEXT,
+  product_tags TEXT,
 
   -- Payment Offerings & Contacts (JSON, encrypted)
   payment_offerings TEXT,

@@ -554,7 +554,7 @@ export default function LeadEditPage() {
                   <MultiSelect
                     options={PAYMENT_OFFERINGS.map((p) => ({ label: p, value: p }))}
                     value={formData.payment_offerings || []}
-                    onValueChange={(val) => setFormData({ ...formData, payment_offerings: val })}
+                    onChange={(val) => setFormData({ ...formData, payment_offerings: val })}
                     placeholder="Select payment offerings"
                   />
                 </div>

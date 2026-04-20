@@ -256,35 +256,37 @@ export default function LeadEditPage() {
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0">
-                  <Command>
+                <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
+                  <Command className="max-h-96">
                     <CommandInput placeholder="Search countries..." />
                     <CommandEmpty>No country found.</CommandEmpty>
-                    <CommandGroup>
-                      {countries.map((country) => (
-                        <CommandItem
-                          key={country}
-                          value={country}
-                          onSelect={(currentValue) => {
-                            setFormData({
-                              ...formData,
-                              country: currentValue,
-                              state: "",
-                              city: "",
-                            });
-                            setCountryOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              formData.country === country ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {country}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
+                    <div className="max-h-80 overflow-y-auto">
+                      <CommandGroup>
+                        {countries.map((country) => (
+                          <CommandItem
+                            key={country}
+                            value={country}
+                            onSelect={(currentValue) => {
+                              setFormData({
+                                ...formData,
+                                country: currentValue,
+                                state: "",
+                                city: "",
+                              });
+                              setCountryOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.country === country ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {country}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </div>
                   </Command>
                 </PopoverContent>
               </Popover>
@@ -307,34 +309,36 @@ export default function LeadEditPage() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
+                  <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
+                    <Command className="max-h-96">
                       <CommandInput placeholder="Search states..." />
                       <CommandEmpty>No state found.</CommandEmpty>
-                      <CommandGroup>
-                        {states.map((state) => (
-                          <CommandItem
-                            key={state}
-                            value={state}
-                            onSelect={(currentValue) => {
-                              setFormData({
-                                ...formData,
-                                state: currentValue,
-                                city: "",
-                              });
-                              setStateOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                formData.state === state ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {state}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <div className="max-h-80 overflow-y-auto">
+                        <CommandGroup>
+                          {states.map((state) => (
+                            <CommandItem
+                              key={state}
+                              value={state}
+                              onSelect={(currentValue) => {
+                                setFormData({
+                                  ...formData,
+                                  state: currentValue,
+                                  city: "",
+                                });
+                                setStateOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.state === state ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {state}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </div>
                     </Command>
                   </PopoverContent>
                 </Popover>
@@ -358,33 +362,35 @@ export default function LeadEditPage() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-full p-0">
-                    <Command>
+                  <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
+                    <Command className="max-h-96">
                       <CommandInput placeholder="Search cities..." />
                       <CommandEmpty>No city found.</CommandEmpty>
-                      <CommandGroup>
-                        {cities.map((city) => (
-                          <CommandItem
-                            key={city}
-                            value={city}
-                            onSelect={(currentValue) => {
-                              setFormData({
-                                ...formData,
-                                city: currentValue,
-                              });
-                              setCityOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                formData.city === city ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {city}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <div className="max-h-80 overflow-y-auto">
+                        <CommandGroup>
+                          {cities.map((city) => (
+                            <CommandItem
+                              key={city}
+                              value={city}
+                              onSelect={(currentValue) => {
+                                setFormData({
+                                  ...formData,
+                                  city: currentValue,
+                                });
+                                setCityOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.city === city ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {city}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </div>
                     </Command>
                   </PopoverContent>
                 </Popover>

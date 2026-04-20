@@ -25,6 +25,42 @@ export const LOCATIONS: Country[] = [
           { name: "Vijayawada" },
           { name: "Visakhapatnam" },
           { name: "Tirupati" },
+          { name: "Nellore" },
+        ],
+      },
+      {
+        name: "Arunachal Pradesh",
+        cities: [
+          { name: "Itanagar" },
+          { name: "Naharlagun" },
+          { name: "Pasighat" },
+        ],
+      },
+      {
+        name: "Assam",
+        cities: [
+          { name: "Guwahati" },
+          { name: "Silchar" },
+          { name: "Dibrugarh" },
+          { name: "Nagaon" },
+        ],
+      },
+      {
+        name: "Bihar",
+        cities: [
+          { name: "Patna" },
+          { name: "Gaya" },
+          { name: "Bhagalpur" },
+          { name: "Muzaffarpur" },
+        ],
+      },
+      {
+        name: "Chhattisgarh",
+        cities: [
+          { name: "Raipur" },
+          { name: "Bhilai" },
+          { name: "Durg" },
+          { name: "Bilaspur" },
         ],
       },
       {
@@ -37,12 +73,48 @@ export const LOCATIONS: Country[] = [
         ],
       },
       {
+        name: "Goa",
+        cities: [
+          { name: "Panaji" },
+          { name: "Margao" },
+          { name: "Vasco da Gama" },
+        ],
+      },
+      {
         name: "Gujarat",
         cities: [
           { name: "Ahmedabad" },
           { name: "Surat" },
           { name: "Vadodara" },
           { name: "Rajkot" },
+          { name: "Gandhinagar" },
+        ],
+      },
+      {
+        name: "Haryana",
+        cities: [
+          { name: "Chandigarh" },
+          { name: "Faridabad" },
+          { name: "Gurgaon" },
+          { name: "Hisar" },
+        ],
+      },
+      {
+        name: "Himachal Pradesh",
+        cities: [
+          { name: "Shimla" },
+          { name: "Mandi" },
+          { name: "Solan" },
+          { name: "Kangra" },
+        ],
+      },
+      {
+        name: "Jharkhand",
+        cities: [
+          { name: "Ranchi" },
+          { name: "Jamshedpur" },
+          { name: "Dhanbad" },
+          { name: "Giridih" },
         ],
       },
       {
@@ -52,6 +124,25 @@ export const LOCATIONS: Country[] = [
           { name: "Mysore" },
           { name: "Mangalore" },
           { name: "Hubli" },
+          { name: "Belgaum" },
+        ],
+      },
+      {
+        name: "Kerala",
+        cities: [
+          { name: "Thiruvananthapuram" },
+          { name: "Kochi" },
+          { name: "Kannur" },
+          { name: "Kozhikode" },
+        ],
+      },
+      {
+        name: "Madhya Pradesh",
+        cities: [
+          { name: "Bhopal" },
+          { name: "Indore" },
+          { name: "Jabalpur" },
+          { name: "Gwalior" },
         ],
       },
       {
@@ -61,6 +152,69 @@ export const LOCATIONS: Country[] = [
           { name: "Pune" },
           { name: "Nagpur" },
           { name: "Aurangabad" },
+          { name: "Nashik" },
+        ],
+      },
+      {
+        name: "Manipur",
+        cities: [
+          { name: "Imphal" },
+          { name: "Bishnupur" },
+        ],
+      },
+      {
+        name: "Meghalaya",
+        cities: [
+          { name: "Shillong" },
+          { name: "Tura" },
+        ],
+      },
+      {
+        name: "Mizoram",
+        cities: [
+          { name: "Aizawl" },
+          { name: "Lunglei" },
+        ],
+      },
+      {
+        name: "Nagaland",
+        cities: [
+          { name: "Kohima" },
+          { name: "Dimapur" },
+        ],
+      },
+      {
+        name: "Odisha",
+        cities: [
+          { name: "Bhubaneswar" },
+          { name: "Cuttack" },
+          { name: "Rourkela" },
+          { name: "Sambalpur" },
+        ],
+      },
+      {
+        name: "Punjab",
+        cities: [
+          { name: "Chandigarh" },
+          { name: "Amritsar" },
+          { name: "Ludhiana" },
+          { name: "Jalandhar" },
+        ],
+      },
+      {
+        name: "Rajasthan",
+        cities: [
+          { name: "Jaipur" },
+          { name: "Jodhpur" },
+          { name: "Udaipur" },
+          { name: "Ajmer" },
+        ],
+      },
+      {
+        name: "Sikkim",
+        cities: [
+          { name: "Gangtok" },
+          { name: "Namchi" },
         ],
       },
       {
@@ -70,6 +224,7 @@ export const LOCATIONS: Country[] = [
           { name: "Coimbatore" },
           { name: "Madurai" },
           { name: "Salem" },
+          { name: "Tiruppur" },
         ],
       },
       {
@@ -78,22 +233,14 @@ export const LOCATIONS: Country[] = [
           { name: "Hyderabad" },
           { name: "Warangal" },
           { name: "Khammam" },
+          { name: "Nizamabad" },
         ],
       },
       {
-        name: "West Bengal",
+        name: "Tripura",
         cities: [
-          { name: "Kolkata" },
-          { name: "Asansol" },
-          { name: "Siliguri" },
-        ],
-      },
-      {
-        name: "Punjab",
-        cities: [
-          { name: "Chandigarh" },
-          { name: "Amritsar" },
-          { name: "Ludhiana" },
+          { name: "Agartala" },
+          { name: "Udaipur" },
         ],
       },
       {
@@ -103,6 +250,63 @@ export const LOCATIONS: Country[] = [
           { name: "Kanpur" },
           { name: "Varanasi" },
           { name: "Agra" },
+          { name: "Ghaziabad" },
+        ],
+      },
+      {
+        name: "Uttarakhand",
+        cities: [
+          { name: "Dehradun" },
+          { name: "Nainital" },
+          { name: "Rishikesh" },
+          { name: "Haridwar" },
+        ],
+      },
+      {
+        name: "West Bengal",
+        cities: [
+          { name: "Kolkata" },
+          { name: "Asansol" },
+          { name: "Siliguri" },
+          { name: "Durgapur" },
+        ],
+      },
+      {
+        name: "Andaman & Nicobar Islands",
+        cities: [
+          { name: "Port Blair" },
+        ],
+      },
+      {
+        name: "Chandigarh",
+        cities: [
+          { name: "Chandigarh" },
+        ],
+      },
+      {
+        name: "Dadra & Nagar Haveli",
+        cities: [
+          { name: "Silvassa" },
+        ],
+      },
+      {
+        name: "Daman & Diu",
+        cities: [
+          { name: "Daman" },
+        ],
+      },
+      {
+        name: "Lakshadweep",
+        cities: [
+          { name: "Kavaratti" },
+        ],
+      },
+      {
+        name: "Puducherry",
+        cities: [
+          { name: "Puducherry" },
+          { name: "Yanam" },
+          { name: "Karaikal" },
         ],
       },
     ],

@@ -175,6 +175,14 @@ router.get("/", async (req: Request, res: Response) => {
       state_region: decrypt(lead.state_region),
       city: decrypt(lead.city),
       address: decrypt(lead.address),
+      source: decrypt(lead.source),
+      client_type: decrypt(lead.client_type),
+      pa_license: decrypt(lead.pa_license),
+      geography: decrypt(lead.geography),
+      txn_volume: decrypt(lead.txn_volume),
+      linkedin_profile_link: decrypt(lead.linkedin_profile_link),
+      payment_offerings: lead.payment_offerings ? JSON.parse(decrypt(lead.payment_offerings)) : [],
+      contacts: lead.contacts ? JSON.parse(decrypt(lead.contacts)) : [],
     }));
 
     // Get total count
@@ -243,6 +251,14 @@ router.get("/:id", async (req: Request, res: Response) => {
       state_region: decrypt(lead.state_region),
       city: decrypt(lead.city),
       address: decrypt(lead.address),
+      source: decrypt(lead.source),
+      client_type: decrypt(lead.client_type),
+      pa_license: decrypt(lead.pa_license),
+      geography: decrypt(lead.geography),
+      txn_volume: decrypt(lead.txn_volume),
+      linkedin_profile_link: decrypt(lead.linkedin_profile_link),
+      payment_offerings: lead.payment_offerings ? JSON.parse(decrypt(lead.payment_offerings)) : [],
+      contacts: lead.contacts ? JSON.parse(decrypt(lead.contacts)) : [],
     };
 
     const followUps = followUpsResult.rows.map((fu: any) => ({
@@ -282,6 +298,15 @@ router.post("/", async (req: Request, res: Response) => {
       timezone,
       preferred_language,
       status = "New",
+      source,
+      client_type,
+      pa_license,
+      geography,
+      txn_volume,
+      linkedin_profile_link,
+      payment_offerings,
+      contacts,
+      is_draft = false,
     } = req.body;
 
     if (!company_name || !industry || !company_size || !country) {
@@ -308,7 +333,16 @@ router.post("/", async (req: Request, res: Response) => {
           address TEXT,
           timezone TEXT,
           preferred_language TEXT CHECK (preferred_language IN ('English', 'Hindi', 'Tamil', 'Kannada', 'Malayalam', 'Telugu', 'Marathi', 'Gujarati', 'Bengali', 'Punjabi', 'Urdu', 'Other')),
+          source TEXT,
+          client_type TEXT,
+          pa_license TEXT,
+          geography TEXT,
+          txn_volume TEXT,
+          linkedin_profile_link TEXT,
+          payment_offerings TEXT,
+          contacts TEXT,
           status TEXT NOT NULL DEFAULT 'New' CHECK (status IN ('New', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost')),
+          is_draft BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )
@@ -323,8 +357,10 @@ router.post("/", async (req: Request, res: Response) => {
         `INSERT INTO sales_leads (
           company_name, company_legal_name, company_website, company_logo_url,
           industry, sub_industry, company_size, annual_revenue_band, years_in_business,
-          country, state_region, city, address, timezone, preferred_language, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          country, state_region, city, address, timezone, preferred_language, status,
+          source, client_type, pa_license, geography, txn_volume, linkedin_profile_link,
+          payment_offerings, contacts, is_draft
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
         RETURNING *`,
         [
           encrypt(company_name),
@@ -343,6 +379,15 @@ router.post("/", async (req: Request, res: Response) => {
           timezone,
           preferred_language,
           status,
+          encrypt(source),
+          encrypt(client_type),
+          encrypt(pa_license),
+          encrypt(geography),
+          encrypt(txn_volume),
+          encrypt(linkedin_profile_link),
+          payment_offerings ? encrypt(JSON.stringify(Array.isArray(payment_offerings) ? payment_offerings : [])) : null,
+          contacts ? encrypt(JSON.stringify(Array.isArray(contacts) ? contacts : [])) : null,
+          is_draft,
         ]
       )
     );
@@ -357,6 +402,14 @@ router.post("/", async (req: Request, res: Response) => {
       state_region: decrypt(lead.state_region),
       city: decrypt(lead.city),
       address: decrypt(lead.address),
+      source: decrypt(lead.source),
+      client_type: decrypt(lead.client_type),
+      pa_license: decrypt(lead.pa_license),
+      geography: decrypt(lead.geography),
+      txn_volume: decrypt(lead.txn_volume),
+      linkedin_profile_link: decrypt(lead.linkedin_profile_link),
+      payment_offerings: lead.payment_offerings ? JSON.parse(decrypt(lead.payment_offerings)) : [],
+      contacts: lead.contacts ? JSON.parse(decrypt(lead.contacts)) : [],
     });
   } catch (error: any) {
     console.error("Failed to create lead:", error.message);
@@ -385,6 +438,15 @@ router.put("/:id", async (req: Request, res: Response) => {
       timezone,
       preferred_language,
       status,
+      source,
+      client_type,
+      pa_license,
+      geography,
+      txn_volume,
+      linkedin_profile_link,
+      payment_offerings,
+      contacts,
+      is_draft,
     } = req.body;
 
     const result = await queryWithRetry(() =>
@@ -405,8 +467,17 @@ router.put("/:id", async (req: Request, res: Response) => {
           address = COALESCE($13, address),
           timezone = COALESCE($14, timezone),
           preferred_language = COALESCE($15, preferred_language),
-          status = COALESCE($16, status)
-        WHERE id = $17
+          status = COALESCE($16, status),
+          source = COALESCE($17, source),
+          client_type = COALESCE($18, client_type),
+          pa_license = COALESCE($19, pa_license),
+          geography = COALESCE($20, geography),
+          txn_volume = COALESCE($21, txn_volume),
+          linkedin_profile_link = COALESCE($22, linkedin_profile_link),
+          payment_offerings = COALESCE($23, payment_offerings),
+          contacts = COALESCE($24, contacts),
+          is_draft = COALESCE($25, is_draft)
+        WHERE id = $26
         RETURNING *`,
         [
           company_name ? encrypt(company_name) : null,
@@ -425,6 +496,15 @@ router.put("/:id", async (req: Request, res: Response) => {
           timezone,
           preferred_language,
           status,
+          source ? encrypt(source) : null,
+          client_type ? encrypt(client_type) : null,
+          pa_license ? encrypt(pa_license) : null,
+          geography ? encrypt(geography) : null,
+          txn_volume ? encrypt(txn_volume) : null,
+          linkedin_profile_link ? encrypt(linkedin_profile_link) : null,
+          payment_offerings ? encrypt(JSON.stringify(Array.isArray(payment_offerings) ? payment_offerings : [])) : null,
+          contacts ? encrypt(JSON.stringify(Array.isArray(contacts) ? contacts : [])) : null,
+          is_draft,
           id,
         ]
       )
@@ -444,6 +524,14 @@ router.put("/:id", async (req: Request, res: Response) => {
       state_region: decrypt(lead.state_region),
       city: decrypt(lead.city),
       address: decrypt(lead.address),
+      source: decrypt(lead.source),
+      client_type: decrypt(lead.client_type),
+      pa_license: decrypt(lead.pa_license),
+      geography: decrypt(lead.geography),
+      txn_volume: decrypt(lead.txn_volume),
+      linkedin_profile_link: decrypt(lead.linkedin_profile_link),
+      payment_offerings: lead.payment_offerings ? JSON.parse(decrypt(lead.payment_offerings)) : [],
+      contacts: lead.contacts ? JSON.parse(decrypt(lead.contacts)) : [],
     });
   } catch (error: any) {
     console.error("Failed to update lead:", error.message);

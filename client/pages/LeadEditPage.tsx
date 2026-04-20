@@ -26,6 +26,16 @@ async function fetchLead(id: string) {
   return res.json();
 }
 
+async function createLead(data: Record<string, any>) {
+  const res = await fetch(`/api/lead-management`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create lead");
+  return res.json();
+}
+
 async function updateLead(id: string, data: Record<string, any>) {
   const res = await fetch(`/api/lead-management/${id}`, {
     method: "PUT",
@@ -40,20 +50,39 @@ export default function LeadEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const isCreating = id === "new";
 
   const { data: leadData, isLoading } = useQuery({
     queryKey: ["lead", id],
     queryFn: () => fetchLead(id!),
-    enabled: !!id,
+    enabled: !!id && !isCreating,
   });
 
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, any>>({
+    status: "New",
+  });
 
   React.useEffect(() => {
     if (leadData?.lead) {
       setFormData(leadData.lead);
     }
   }, [leadData]);
+
+  const createMutation = useMutation({
+    mutationFn: () => createLead(formData),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      toast({ title: "Lead created successfully" });
+      navigate(`/lead-management/${data.lead.id}/overview`);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create lead",
+        variant: "destructive",
+      });
+    },
+  });
 
   const updateMutation = useMutation({
     mutationFn: () => updateLead(id!, formData),
@@ -63,18 +92,42 @@ export default function LeadEditPage() {
       toast({ title: "Lead updated successfully" });
       navigate(`/lead-management/${id}/overview`);
     },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update lead",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) return <div className="p-6">Loading...</div>;
 
-  const lead = leadData?.lead;
-  if (!lead) return <div className="p-6">Lead not found</div>;
+  const lead = isCreating ? null : leadData?.lead;
+  if (!isCreating && !lead) return <div className="p-6">Lead not found</div>;
+
+  const handleSubmit = () => {
+    if (!formData.company_name || !formData.industry || !formData.company_size || !formData.country) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isCreating) {
+      createMutation.mutate();
+    } else {
+      updateMutation.mutate();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-6">
       <Button
         variant="outline"
-        onClick={() => navigate(`/lead-management/${id}/overview`)}
+        onClick={() => navigate("/lead-management")}
         className="gap-2 mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -83,7 +136,7 @@ export default function LeadEditPage() {
 
       <Card className="max-w-2xl">
         <div className="p-6 space-y-6">
-          <h1 className="text-2xl font-bold">Edit Lead</h1>
+          <h1 className="text-2xl font-bold">{isCreating ? "Create New Lead" : "Edit Lead"}</h1>
 
           {/* Company Name & Legal Name */}
           <div className="grid grid-cols-2 gap-4">
@@ -212,15 +265,15 @@ export default function LeadEditPage() {
           <div className="flex gap-3 justify-end pt-4">
             <Button
               variant="outline"
-              onClick={() => navigate(`/lead-management/${id}/overview`)}
+              onClick={() => navigate("/lead-management")}
             >
               Cancel
             </Button>
             <Button
-              onClick={() => updateMutation.mutate()}
-              disabled={updateMutation.isPending}
+              onClick={handleSubmit}
+              disabled={isCreating ? createMutation.isPending : updateMutation.isPending}
             >
-              Save Changes
+              {isCreating ? "Create Lead" : "Save Changes"}
             </Button>
           </div>
         </div>

@@ -97,9 +97,6 @@ let schemaMigrationInProgress = false;
 let schemaMigrationSuccess = false;
 
 async function ensureSchemaUpdated() {
-  // Return early if already successfully migrated
-  if (schemaMigrationSuccess) return;
-
   // Prevent concurrent migration attempts
   if (schemaMigrationInProgress) return;
   schemaMigrationInProgress = true;
@@ -109,14 +106,22 @@ async function ensureSchemaUpdated() {
 
     // List of columns to add if they don't exist
     const columnsToAdd = [
-      { name: "state", type: "TEXT" },
-      { name: "street_address", type: "TEXT" },
+      { name: "source", type: "TEXT" },
+      { name: "client_type", type: "TEXT" },
+      { name: "pa_license", type: "TEXT" },
+      { name: "geography", type: "TEXT" },
+      { name: "txn_volume", type: "TEXT" },
       { name: "client_name", type: "TEXT" },
       { name: "email_subject", type: "TEXT" },
       { name: "source_notes", type: "TEXT" },
+      { name: "linkedin_profile_link", type: "TEXT" },
       { name: "website", type: "TEXT" },
       { name: "fully_approved", type: "TEXT" },
       { name: "product_tags", type: "TEXT" },
+      { name: "state", type: "TEXT" },
+      { name: "street_address", type: "TEXT" },
+      { name: "payment_offerings", type: "TEXT" },
+      { name: "contacts", type: "TEXT" },
       { name: "is_draft", type: "BOOLEAN DEFAULT FALSE" },
     ];
 

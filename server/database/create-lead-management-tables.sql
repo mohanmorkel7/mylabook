@@ -129,6 +129,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS sales_leads_updated_at_trigger ON sales_leads;
 CREATE TRIGGER sales_leads_updated_at_trigger
 BEFORE UPDATE ON sales_leads
 FOR EACH ROW
@@ -143,6 +144,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS sales_leads_follow_ups_updated_at_trigger ON sales_leads_follow_ups;
 CREATE TRIGGER sales_leads_follow_ups_updated_at_trigger
 BEFORE UPDATE ON sales_leads_follow_ups
 FOR EACH ROW
@@ -160,6 +162,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS sales_leads_status_change_trigger ON sales_leads;
 CREATE TRIGGER sales_leads_status_change_trigger
 BEFORE UPDATE ON sales_leads
 FOR EACH ROW
@@ -180,6 +183,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS sales_leads_activity_log_trigger ON sales_leads;
 CREATE TRIGGER sales_leads_activity_log_trigger
 AFTER INSERT OR UPDATE ON sales_leads
 FOR EACH ROW

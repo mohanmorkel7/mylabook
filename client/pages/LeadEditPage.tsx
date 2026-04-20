@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
+import { getCountries, getStates, getCities } from "@/data/locations";
 
 const INDUSTRIES = ["Banking", "Fintech", "Payments", "Insurance", "Retail", "Telecom", "Government", "Other"];
 const SIZES = ["1-50", "51-200", "201-1000", "1001-5000", "5000+"];
@@ -61,6 +75,15 @@ export default function LeadEditPage() {
   const [formData, setFormData] = useState<Record<string, any>>({
     status: "New",
   });
+
+  // Popover state for country/state/city
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [stateOpen, setStateOpen] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
+
+  const countries = useMemo(() => getCountries(), []);
+  const states = useMemo(() => getStates(formData.country || ""), [formData.country]);
+  const cities = useMemo(() => getCities(formData.country || "", formData.state || ""), [formData.country, formData.state]);
 
   React.useEffect(() => {
     if (leadData?.lead) {
@@ -216,22 +239,157 @@ export default function LeadEditPage() {
             </div>
           </div>
 
-          {/* Location */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Location - Cascading Searchable Dropdowns */}
+          <div className="space-y-4">
+            {/* Country */}
             <div>
-              <Label>Country *</Label>
-              <Input
-                value={formData.country || ""}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-              />
+              <Label className="text-sm font-medium mb-2 block">Country *</Label>
+              <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={countryOpen}
+                    className="w-full justify-between"
+                  >
+                    {formData.country || "Select Country..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput placeholder="Search countries..." />
+                    <CommandEmpty>No country found.</CommandEmpty>
+                    <CommandGroup>
+                      {countries.map((country) => (
+                        <CommandItem
+                          key={country}
+                          value={country}
+                          onSelect={(currentValue) => {
+                            setFormData({
+                              ...formData,
+                              country: currentValue,
+                              state: "",
+                              city: "",
+                            });
+                            setCountryOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              formData.country === country ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {country}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
-            <div>
-              <Label>City</Label>
-              <Input
-                value={formData.city || ""}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              />
-            </div>
+
+            {/* State/Province */}
+            {formData.country && (
+              <div>
+                <Label className="text-sm font-medium mb-2 block">State/Province (add)</Label>
+                <Popover open={stateOpen} onOpenChange={setStateOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={stateOpen}
+                      className="w-full justify-between"
+                      disabled={!formData.country}
+                    >
+                      {formData.state || "Select State..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Search states..." />
+                      <CommandEmpty>No state found.</CommandEmpty>
+                      <CommandGroup>
+                        {states.map((state) => (
+                          <CommandItem
+                            key={state}
+                            value={state}
+                            onSelect={(currentValue) => {
+                              setFormData({
+                                ...formData,
+                                state: currentValue,
+                                city: "",
+                              });
+                              setStateOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.state === state ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {state}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
+            {/* City */}
+            {formData.state && (
+              <div>
+                <Label className="text-sm font-medium mb-2 block">City</Label>
+                <Popover open={cityOpen} onOpenChange={setCityOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={cityOpen}
+                      className="w-full justify-between"
+                      disabled={!formData.state}
+                    >
+                      {formData.city || "Select City..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Search cities..." />
+                      <CommandEmpty>No city found.</CommandEmpty>
+                      <CommandGroup>
+                        {cities.map((city) => (
+                          <CommandItem
+                            key={city}
+                            value={city}
+                            onSelect={(currentValue) => {
+                              setFormData({
+                                ...formData,
+                                city: currentValue,
+                              });
+                              setCityOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.city === city ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {city}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
           </div>
 
           {/* Website & Status */}

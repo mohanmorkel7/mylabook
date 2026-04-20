@@ -232,6 +232,179 @@ export default function LeadEditPage() {
     }
   };
 
+  const renderSourceSpecificFields = () => {
+    const source = formData.source || "";
+
+    if (source.includes("LinkedIn")) {
+      return (
+        <>
+          <div>
+            <Label>LinkedIn Profile URL</Label>
+            <Input
+              value={formData.linkedin_url || ""}
+              onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
+              placeholder="https://linkedin.com/in/..."
+              type="url"
+            />
+          </div>
+          <div>
+            <Label>Connection Message / Notes</Label>
+            <Textarea
+              value={formData.source_notes || ""}
+              onChange={(e) => setFormData({ ...formData, source_notes: e.target.value })}
+              placeholder="Message sent or additional notes about the connection"
+              rows={2}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (source.includes("Email")) {
+      return (
+        <>
+          <div>
+            <Label>Email Address / Subject</Label>
+            <Input
+              value={formData.email_subject || ""}
+              onChange={(e) => setFormData({ ...formData, email_subject: e.target.value })}
+              placeholder="Subject line or sender email"
+            />
+          </div>
+          <div>
+            <Label>Email Content / Notes</Label>
+            <Textarea
+              value={formData.source_notes || ""}
+              onChange={(e) => setFormData({ ...formData, source_notes: e.target.value })}
+              placeholder="Email body or key points from the email"
+              rows={2}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (source.includes("Call")) {
+      return (
+        <>
+          <div>
+            <Label>Call Duration (minutes)</Label>
+            <Input
+              value={formData.call_duration || ""}
+              onChange={(e) => setFormData({ ...formData, call_duration: e.target.value })}
+              placeholder="e.g., 15"
+              type="number"
+            />
+          </div>
+          <div>
+            <Label>Call Notes</Label>
+            <Textarea
+              value={formData.source_notes || ""}
+              onChange={(e) => setFormData({ ...formData, source_notes: e.target.value })}
+              placeholder="Key points discussed in the call"
+              rows={2}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (source === "Existing Client") {
+      return (
+        <>
+          <div>
+            <Label>Previous Account ID / Client Reference</Label>
+            <Input
+              value={formData.previous_account_id || ""}
+              onChange={(e) => setFormData({ ...formData, previous_account_id: e.target.value })}
+              placeholder="e.g., ACC-12345"
+            />
+          </div>
+          <div>
+            <Label>Account History Notes</Label>
+            <Textarea
+              value={formData.source_notes || ""}
+              onChange={(e) => setFormData({ ...formData, source_notes: e.target.value })}
+              placeholder="Previous dealings, account status, etc."
+              rows={2}
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (source === "Business Team") {
+      return (
+        <>
+          <div>
+            <Label>Referred By (Team Member Name)</Label>
+            <Input
+              value={formData.referred_by || ""}
+              onChange={(e) => setFormData({ ...formData, referred_by: e.target.value })}
+              placeholder="Name of the team member who referred"
+            />
+          </div>
+          <div>
+            <Label>Department / Team</Label>
+            <Input
+              value={formData.source_department || ""}
+              onChange={(e) => setFormData({ ...formData, source_department: e.target.value })}
+              placeholder="e.g., Sales, Operations, Finance"
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (source === "Reference") {
+      return (
+        <>
+          <div>
+            <Label>Referrer Name</Label>
+            <Input
+              value={formData.referrer_name || ""}
+              onChange={(e) => setFormData({ ...formData, referrer_name: e.target.value })}
+              placeholder="Name of the person who referred this lead"
+            />
+          </div>
+          <div>
+            <Label>Referrer Email / Contact</Label>
+            <Input
+              value={formData.referrer_contact || ""}
+              onChange={(e) => setFormData({ ...formData, referrer_contact: e.target.value })}
+              placeholder="Email or phone number"
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (source === "General List") {
+      return (
+        <>
+          <div>
+            <Label>List Source / Provider</Label>
+            <Input
+              value={formData.list_source || ""}
+              onChange={(e) => setFormData({ ...formData, list_source: e.target.value })}
+              placeholder="e.g., Apollo, Clearbit, ZoomInfo"
+            />
+          </div>
+          <div>
+            <Label>List Name / Campaign</Label>
+            <Input
+              value={formData.list_name || ""}
+              onChange={(e) => setFormData({ ...formData, list_name: e.target.value })}
+              placeholder="Name of the list or campaign"
+            />
+          </div>
+        </>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50/50 p-6">
       <Button
@@ -300,6 +473,13 @@ export default function LeadEditPage() {
                   />
                 </div>
               </div>
+
+              {/* Source-Specific Fields */}
+              {formData.source && (
+                <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  {renderSourceSpecificFields()}
+                </div>
+              )}
 
               {/* Industry & Client Type */}
               <div className="grid grid-cols-2 gap-4">

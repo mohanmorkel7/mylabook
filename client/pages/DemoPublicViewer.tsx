@@ -152,7 +152,7 @@ export default function DemoPublicViewer() {
   const { demo } = demoData;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 overflow-y-auto">
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-start justify-between gap-4">
@@ -255,7 +255,7 @@ export default function DemoPublicViewer() {
                     <Badge variant="outline">{selectedMaterial.file_type.toUpperCase()}</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 p-6">
+                <CardContent className="space-y-6 p-6 pb-12">
                   {selectedMaterial.file_type === "video" ? (
                     <div className="space-y-4">
                       <div className="bg-black rounded-lg overflow-hidden">
@@ -270,7 +270,7 @@ export default function DemoPublicViewer() {
                       <iframe
                         src={selectedMaterial.file_url}
                         title={selectedMaterial.title || selectedMaterial.filename}
-                        className="w-full min-h-[85vh] rounded-lg border bg-white"
+                        className="w-full min-h-[120vh] rounded-lg border bg-white"
                       />
                     </div>
                   ) : (
@@ -289,7 +289,7 @@ export default function DemoPublicViewer() {
                       <iframe
                         src={selectedMaterial.file_url}
                         title={selectedMaterial.title || selectedMaterial.filename}
-                        className="w-full min-h-[85vh] rounded-lg border bg-white"
+                        className="w-full min-h-[120vh] rounded-lg border bg-white"
                       />
                     </div>
                   )}

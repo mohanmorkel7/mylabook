@@ -1,10 +1,18 @@
 import React, { useState } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus, Video, Calendar } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FollowUpForm } from "@/components/FollowUpForm";
@@ -18,6 +26,8 @@ const STATUS_COLORS: Record<string, string> = {
   Won: "bg-green-100 text-green-800",
   Lost: "bg-red-100 text-red-800",
 };
+
+const STATUS_OPTIONS = ["New", "Contacted", "Qualified", "Proposal Sent", "Won", "Lost"] as const;
 
 async function fetchLead(id: string) {
   const res = await fetch(`/api/lead-management/${id}`);
@@ -75,6 +85,23 @@ export default function LeadOverview() {
     onSuccess: () => {
       toast({ title: "Lead deleted successfully" });
       navigate("/lead-management");
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      const res = await fetch(`/api/lead-management/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Failed to update lead status");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead", id] });
+      qc.invalidateQueries({ queryKey: ["lead-management"] });
+      toast({ title: "Lead status updated" });
     },
   });
 
@@ -434,7 +461,28 @@ export default function LeadOverview() {
             <CardHeader>
               <CardTitle className="text-base">Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-gray-500">Lead Status</label>
+                <div className="mt-2">
+                  <Select
+                    value={lead.status}
+                    onValueChange={(value) => updateStatusMutation.mutate(value)}
+                    disabled={updateStatusMutation.isPending}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div>
                 <label className="text-xs font-medium text-gray-500">Created</label>
                 <p className="text-sm">{new Date(lead.created_at).toLocaleDateString()}</p>

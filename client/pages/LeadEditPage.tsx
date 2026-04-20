@@ -165,19 +165,48 @@ export default function LeadEditPage() {
   const cities = useMemo(() => getCities(formData.country || "", formData.state || ""), [formData.country, formData.state]);
 
   React.useEffect(() => {
-    if (leadData?.lead) {
+    if (leadData) {
+      // API returns lead object directly, not wrapped in { lead }
+      const lead = leadData.lead || leadData;
+
+      // Ensure payment_offerings is an array of strings
+      let paymentOfferings: string[] = [];
+      if (Array.isArray(lead.payment_offerings)) {
+        paymentOfferings = lead.payment_offerings;
+      } else if (typeof lead.payment_offerings === 'string') {
+        try {
+          const parsed = JSON.parse(lead.payment_offerings);
+          paymentOfferings = Array.isArray(parsed) ? parsed : [lead.payment_offerings];
+        } catch {
+          paymentOfferings = [lead.payment_offerings];
+        }
+      }
+
+      // Ensure contacts is properly formatted array
+      const contacts = Array.isArray(lead.contacts) && lead.contacts.length > 0
+        ? lead.contacts.map((c: any) => ({
+            contact_name: c.contact_name || "",
+            designation: c.designation || "",
+            phone_prefix: c.phone_prefix || "+91",
+            phone: c.phone || "",
+            email: c.email || "",
+            linkedin_profile_link: c.linkedin_profile_link || "",
+          }))
+        : [
+            {
+              contact_name: "",
+              designation: "",
+              phone_prefix: "+91",
+              phone: "",
+              email: "",
+              linkedin_profile_link: "",
+            },
+          ];
+
       setFormData({
-        ...leadData.lead,
-        contacts: leadData.lead.contacts || [
-          {
-            contact_name: "",
-            designation: "",
-            phone_prefix: "+91",
-            phone: "",
-            email: "",
-            linkedin_profile_link: "",
-          },
-        ],
+        ...lead,
+        payment_offerings: paymentOfferings,
+        contacts: contacts,
       });
     }
   }, [leadData]);
@@ -582,7 +611,7 @@ export default function LeadEditPage() {
                   <Label>Payment Offering (multi-select) *</Label>
                   <MultiSelect
                     options={PAYMENT_OFFERINGS.map((p) => ({ label: p, value: p }))}
-                    value={formData.payment_offerings || []}
+                    value={(formData.payment_offerings || []).map((p: any) => String(p))}
                     onChange={(val) => setFormData({ ...formData, payment_offerings: val })}
                     placeholder="Select payment offerings"
                   />

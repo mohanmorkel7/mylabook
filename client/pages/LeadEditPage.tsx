@@ -47,10 +47,10 @@ async function updateLead(id: string, data: Record<string, any>) {
 }
 
 export default function LeadEditPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const isCreating = id === "new";
+  const isCreating = !id || id === "new";
 
   const { data: leadData, isLoading } = useQuery({
     queryKey: ["lead", id],
@@ -85,7 +85,7 @@ export default function LeadEditPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: () => updateLead(id!, formData),
+    mutationFn: () => updateLead(id as string, formData),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead", id] });
       qc.invalidateQueries({ queryKey: ["leads"] });

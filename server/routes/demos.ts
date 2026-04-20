@@ -559,7 +559,9 @@ router.post("/:id/generate-shareable-link", async (req: Request, res: Response) 
     );
 
     // Update demos table with shareable link
-    const baseUrl = process.env.APP_URL || "http://localhost:8080";
+    const baseUrl =
+      (process.env.PUBLIC_APP_URL || process.env.APP_URL || `${req.headers["x-forwarded-proto"] || req.protocol}://${req.headers["x-forwarded-host"] || req.get("host")}`)
+        .replace(/\/$/, "");
     const shareableLink = `${baseUrl}/demo/view/${token}`;
 
     await queryWithRetry(() =>

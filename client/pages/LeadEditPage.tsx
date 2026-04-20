@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   Select,
   SelectContent,
@@ -24,15 +26,77 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { getCountries, getStates, getCities } from "@/data/locations";
+import { ClientContactInformationSection } from "@/components/ClientContactInformationSection";
 
 const INDUSTRIES = ["Banking", "Fintech", "Payments", "Insurance", "Retail", "Telecom", "Government", "Other"];
 const SIZES = ["1-50", "51-200", "201-1000", "1001-5000", "5000+"];
 const REVENUES = ["<1M", "1-10M", "10-50M", "50-250M", "250M-1B", "1B+"];
 const STATUSES = ["New", "Contacted", "Qualified", "Proposal Sent", "Won", "Lost"];
+
+const SOURCES = [
+  "LinkedIn - Outbound",
+  "LinkedIn - Inbound",
+  "Email - Outbound",
+  "Email - Inbound",
+  "Call - Outbound",
+  "Call - Inbound",
+  "Existing Client",
+  "Business Team",
+  "Reference",
+  "General List",
+];
+
+const CLIENT_TYPES = [
+  "PA-PG",
+  "POS Provider",
+  "PG-Bank",
+  "BIN-Bank",
+  "Strategic Partnership",
+  "Other Acquirers",
+];
+
+const PA_LICENSES = [
+  "License A",
+  "License B",
+  "License C",
+  "License D",
+  "Other",
+];
+
+const PAYMENT_OFFERINGS = [
+  "Online Payments",
+  "Offline Payment",
+  "UPI Payments",
+];
+
+const GEOGRAPHY = ["Domestic", "International"];
+
+const TXN_VOLUMES = [
+  "< 0.05",
+  "0.05 <> 0.10",
+  "0.10 <> 0.25",
+  "0.25 <> 0.50",
+  "0.50 <> 0.75",
+  "0.75 <> 1.00",
+  "1.00 <> 1.50",
+  "1.50 <> 2.00",
+  "2.00 <> 3.00",
+  "> 3.00",
+];
+
+interface Contact {
+  contact_name: string;
+  designation: string;
+  phone_prefix?: string;
+  phone: string;
+  email: string;
+  linkedin_profile_link?: string;
+}
 
 async function fetchLead(id: string) {
   const res = await fetch(`/api/lead-management/${id}`);
@@ -74,6 +138,16 @@ export default function LeadEditPage() {
 
   const [formData, setFormData] = useState<Record<string, any>>({
     status: "New",
+    contacts: [
+      {
+        contact_name: "",
+        designation: "",
+        phone_prefix: "+91",
+        phone: "",
+        email: "",
+        linkedin_profile_link: "",
+      },
+    ],
   });
 
   // Popover state for country/state/city
@@ -87,7 +161,19 @@ export default function LeadEditPage() {
 
   React.useEffect(() => {
     if (leadData?.lead) {
-      setFormData(leadData.lead);
+      setFormData({
+        ...leadData.lead,
+        contacts: leadData.lead.contacts || [
+          {
+            contact_name: "",
+            designation: "",
+            phone_prefix: "+91",
+            phone: "",
+            email: "",
+            linkedin_profile_link: "",
+          },
+        ],
+      });
     }
   }, [leadData]);
 
@@ -157,276 +243,434 @@ export default function LeadEditPage() {
         Back
       </Button>
 
-      <Card className="max-w-2xl">
+      <Card className="max-w-4xl">
         <div className="p-6 space-y-6">
           <h1 className="text-2xl font-bold">{isCreating ? "Create New Lead" : "Edit Lead"}</h1>
 
-          {/* Company Name & Legal Name */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Company Name *</Label>
-              <Input
-                value={formData.company_name || ""}
-                onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Company Legal Name</Label>
-              <Input
-                value={formData.company_legal_name || ""}
-                onChange={(e) => setFormData({ ...formData, company_legal_name: e.target.value })}
-              />
-            </div>
-          </div>
+          <Tabs defaultValue="basic" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="basic">Basic Info</TabsTrigger>
+              <TabsTrigger value="address">Address & Details</TabsTrigger>
+              <TabsTrigger value="contacts">Contact Information</TabsTrigger>
+            </TabsList>
 
-          {/* Industry & Sub-industry */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Industry *</Label>
-              <Select value={formData.industry || ""} onValueChange={(val) => setFormData({ ...formData, industry: val })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INDUSTRIES.map((ind) => (
-                    <SelectItem key={ind} value={ind}>
-                      {ind}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Sub-industry</Label>
-              <Input
-                value={formData.sub_industry || ""}
-                onChange={(e) => setFormData({ ...formData, sub_industry: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Size & Revenue */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Company Size *</Label>
-              <Select value={formData.company_size || ""} onValueChange={(val) => setFormData({ ...formData, company_size: val })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SIZES.map((size) => (
-                    <SelectItem key={size} value={size}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Annual Revenue Band</Label>
-              <Select value={formData.annual_revenue_band || ""} onValueChange={(val) => setFormData({ ...formData, annual_revenue_band: val })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {REVENUES.map((rev) => (
-                    <SelectItem key={rev} value={rev}>
-                      {rev}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Location - Cascading Searchable Dropdowns */}
-          <div className="space-y-4">
-            {/* Country */}
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Country *</Label>
-              <Popover open={countryOpen} onOpenChange={setCountryOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={countryOpen}
-                    className="w-full justify-between"
-                  >
-                    {formData.country || "Select Country..."}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
-                  <Command className="max-h-96">
-                    <CommandInput placeholder="Search countries..." />
-                    <CommandEmpty>No country found.</CommandEmpty>
-                    <div className="max-h-80 overflow-y-auto">
-                      <CommandGroup>
-                        {countries.map((country) => (
-                          <CommandItem
-                            key={country}
-                            value={country}
-                            onSelect={(currentValue) => {
-                              setFormData({
-                                ...formData,
-                                country: currentValue,
-                                state: "",
-                                city: "",
-                              });
-                              setCountryOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                formData.country === country ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {country}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </div>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* State/Province */}
-            {formData.country && (
-              <div>
-                <Label className="text-sm font-medium mb-2 block">State/Province (add)</Label>
-                <Popover open={stateOpen} onOpenChange={setStateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={stateOpen}
-                      className="w-full justify-between"
-                      disabled={!formData.country}
-                    >
-                      {formData.state || "Select State..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
-                    <Command className="max-h-96">
-                      <CommandInput placeholder="Search states..." />
-                      <CommandEmpty>No state found.</CommandEmpty>
-                      <div className="max-h-80 overflow-y-auto">
-                        <CommandGroup>
-                          {states.map((state) => (
-                            <CommandItem
-                              key={state}
-                              value={state}
-                              onSelect={(currentValue) => {
-                                setFormData({
-                                  ...formData,
-                                  state: currentValue,
-                                  city: "",
-                                });
-                                setStateOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  formData.state === state ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {state}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+            {/* Tab 1: Basic Info */}
+            <TabsContent value="basic" className="space-y-6">
+              {/* Company Name & Legal Name */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Company Name *</Label>
+                  <Input
+                    value={formData.company_name || ""}
+                    onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Company Legal Name</Label>
+                  <Input
+                    value={formData.company_legal_name || ""}
+                    onChange={(e) => setFormData({ ...formData, company_legal_name: e.target.value })}
+                  />
+                </div>
               </div>
-            )}
 
-            {/* City */}
-            {formData.state && (
-              <div>
-                <Label className="text-sm font-medium mb-2 block">City</Label>
-                <Popover open={cityOpen} onOpenChange={setCityOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={cityOpen}
-                      className="w-full justify-between"
-                      disabled={!formData.state}
-                    >
-                      {formData.city || "Select City..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
-                    <Command className="max-h-96">
-                      <CommandInput placeholder="Search cities..." />
-                      <CommandEmpty>No city found.</CommandEmpty>
-                      <div className="max-h-80 overflow-y-auto">
-                        <CommandGroup>
-                          {cities.map((city) => (
-                            <CommandItem
-                              key={city}
-                              value={city}
-                              onSelect={(currentValue) => {
-                                setFormData({
-                                  ...formData,
-                                  city: currentValue,
-                                });
-                                setCityOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  formData.city === city ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {city}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </div>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+              {/* Source & Client Name */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Source *</Label>
+                  <Select value={formData.source || ""} onValueChange={(val) => setFormData({ ...formData, source: val })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SOURCES.map((src) => (
+                        <SelectItem key={src} value={src}>
+                          {src}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Client Name</Label>
+                  <Input
+                    value={formData.client_name || ""}
+                    onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
+                    placeholder="Client name"
+                  />
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Website & Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Website</Label>
-              <Input
-                type="url"
-                value={formData.company_website || ""}
-                onChange={(e) => setFormData({ ...formData, company_website: e.target.value })}
+              {/* Industry & Client Type */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Industry *</Label>
+                  <Select value={formData.industry || ""} onValueChange={(val) => setFormData({ ...formData, industry: val })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDUSTRIES.map((ind) => (
+                        <SelectItem key={ind} value={ind}>
+                          {ind}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Client Type *</Label>
+                  <Select value={formData.client_type || ""} onValueChange={(val) => setFormData({ ...formData, client_type: val })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLIENT_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* PA License & Fully Approved */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>PA License</Label>
+                  <Select value={formData.pa_license || ""} onValueChange={(val) => setFormData({ ...formData, pa_license: val })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select license" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PA_LICENSES.map((lic) => (
+                        <SelectItem key={lic} value={lic}>
+                          {lic}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Fully Approved</Label>
+                  <Select value={formData.fully_approved || ""} onValueChange={(val) => setFormData({ ...formData, fully_approved: val })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Payment Offerings & Website */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Payment Offering (multi-select) *</Label>
+                  <MultiSelect
+                    options={PAYMENT_OFFERINGS.map((p) => ({ label: p, value: p }))}
+                    value={formData.payment_offerings || []}
+                    onValueChange={(val) => setFormData({ ...formData, payment_offerings: val })}
+                    placeholder="Select payment offerings"
+                  />
+                </div>
+                <div>
+                  <Label>Website</Label>
+                  <Input
+                    value={formData.website || ""}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    placeholder="https://example.com"
+                    type="url"
+                  />
+                </div>
+              </div>
+
+              {/* Geography & Txn Volume */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Client Geography *</Label>
+                  <Select value={formData.geography || ""} onValueChange={(val) => setFormData({ ...formData, geography: val })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select geography" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GEOGRAPHY.map((geo) => (
+                        <SelectItem key={geo} value={geo}>
+                          {geo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Txn Volume / per day in million</Label>
+                  <Select value={formData.txn_volume || ""} onValueChange={(val) => setFormData({ ...formData, txn_volume: val })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select volume" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TXN_VOLUMES.map((vol) => (
+                        <SelectItem key={vol} value={vol}>
+                          {vol}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Product Tags */}
+              <div>
+                <Label>Product Tag Info</Label>
+                <Input
+                  value={formData.product_tags || ""}
+                  onChange={(e) => setFormData({ ...formData, product_tags: e.target.value })}
+                  placeholder="Enter product tags"
+                />
+              </div>
+
+              {/* Company Size & Revenue */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Company Size *</Label>
+                  <Select value={formData.company_size || ""} onValueChange={(val) => setFormData({ ...formData, company_size: val })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SIZES.map((size) => (
+                        <SelectItem key={size} value={size}>
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Annual Revenue Band</Label>
+                  <Select value={formData.annual_revenue_band || ""} onValueChange={(val) => setFormData({ ...formData, annual_revenue_band: val })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REVENUES.map((rev) => (
+                        <SelectItem key={rev} value={rev}>
+                          {rev}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <Label>Status</Label>
+                <Select value={formData.status || "New"} onValueChange={(val) => setFormData({ ...formData, status: val })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map((st) => (
+                      <SelectItem key={st} value={st}>
+                        {st}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
+
+            {/* Tab 2: Address & Details */}
+            <TabsContent value="address" className="space-y-6">
+              <div className="text-sm text-gray-500 mb-4">All address and contact fields are optional</div>
+
+              {/* Street Address */}
+              <div>
+                <Label>Street Address</Label>
+                <Textarea
+                  value={formData.street_address || ""}
+                  onChange={(e) => setFormData({ ...formData, street_address: e.target.value })}
+                  placeholder="Building, street, area"
+                  rows={3}
+                />
+              </div>
+
+              {/* Location - Cascading Searchable Dropdowns */}
+              <div className="space-y-4">
+                {/* Country */}
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Country</Label>
+                  <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={countryOpen}
+                        className="w-full justify-between"
+                      >
+                        {formData.country || "Select Country..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
+                      <Command className="max-h-96">
+                        <CommandInput placeholder="Search countries..." />
+                        <CommandEmpty>No country found.</CommandEmpty>
+                        <div className="max-h-80 overflow-y-auto">
+                          <CommandGroup>
+                            {countries.map((country) => (
+                              <CommandItem
+                                key={country}
+                                value={country}
+                                onSelect={(currentValue) => {
+                                  setFormData({
+                                    ...formData,
+                                    country: currentValue,
+                                    state: "",
+                                    city: "",
+                                  });
+                                  setCountryOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    formData.country === country ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {country}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </div>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* State/Province */}
+                {formData.country && (
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">State/Province</Label>
+                    <Popover open={stateOpen} onOpenChange={setStateOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={stateOpen}
+                          className="w-full justify-between"
+                          disabled={!formData.country}
+                        >
+                          {formData.state || "Select State..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
+                        <Command className="max-h-96">
+                          <CommandInput placeholder="Search states..." />
+                          <CommandEmpty>No state found.</CommandEmpty>
+                          <div className="max-h-80 overflow-y-auto">
+                            <CommandGroup>
+                              {states.map((state) => (
+                                <CommandItem
+                                  key={state}
+                                  value={state}
+                                  onSelect={(currentValue) => {
+                                    setFormData({
+                                      ...formData,
+                                      state: currentValue,
+                                      city: "",
+                                    });
+                                    setStateOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      formData.state === state ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {state}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+
+                {/* City */}
+                {formData.state && (
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">City</Label>
+                    <Popover open={cityOpen} onOpenChange={setCityOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={cityOpen}
+                          className="w-full justify-between"
+                          disabled={!formData.state}
+                        >
+                          {formData.city || "Select City..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full max-h-96 p-0 overflow-hidden">
+                        <Command className="max-h-96">
+                          <CommandInput placeholder="Search cities..." />
+                          <CommandEmpty>No city found.</CommandEmpty>
+                          <div className="max-h-80 overflow-y-auto">
+                            <CommandGroup>
+                              {cities.map((city) => (
+                                <CommandItem
+                                  key={city}
+                                  value={city}
+                                  onSelect={(currentValue) => {
+                                    setFormData({
+                                      ...formData,
+                                      city: currentValue,
+                                    });
+                                    setCityOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      formData.city === city ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {city}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </div>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Tab 3: Contact Information */}
+            <TabsContent value="contacts">
+              <ClientContactInformationSection
+                contacts={formData.contacts || []}
+                onContactsChange={(contacts) => setFormData({ ...formData, contacts })}
               />
-            </div>
-            <div>
-              <Label>Status</Label>
-              <Select value={formData.status || "New"} onValueChange={(val) => setFormData({ ...formData, status: val })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUSES.map((st) => (
-                    <SelectItem key={st} value={st}>
-                      {st}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
 
           {/* Actions */}
-          <div className="flex gap-3 justify-end pt-4">
+          <div className="flex gap-3 justify-end pt-4 border-t">
             <Button
               variant="outline"
               onClick={() => navigate("/lead-management")}

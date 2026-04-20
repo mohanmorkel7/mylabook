@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus, Video, Calendar } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FollowUpForm } from "@/components/FollowUpForm";
 import { FollowUpDetail } from "@/components/FollowUpDetail";
@@ -39,6 +39,12 @@ async function fetchFollowUps(id: string) {
   return res.json();
 }
 
+async function fetchDemosForLead(leadId: string) {
+  const res = await fetch(`/api/demos?lead_id=${leadId}`);
+  if (!res.ok) throw new Error("Failed to fetch demos");
+  return res.json();
+}
+
 export default function LeadOverview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -57,6 +63,12 @@ export default function LeadOverview() {
     enabled: !!id,
   });
 
+  const { data: demosData } = useQuery({
+    queryKey: ["demos-by-lead", id],
+    queryFn: () => fetchDemosForLead(id!),
+    enabled: !!id,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => deleteLead(id!),
     onSuccess: () => {
@@ -69,6 +81,7 @@ export default function LeadOverview() {
 
   const lead = leadData?.lead;
   const followUps = followUpsData?.follow_ups || [];
+  const demos = demosData?.demos || [];
 
   if (!lead) return <div className="p-6">Lead not found</div>;
 
@@ -92,6 +105,13 @@ export default function LeadOverview() {
           </div>
           <div className="flex gap-2">
             <Badge className={STATUS_COLORS[lead.status]}>{lead.status}</Badge>
+            <Button
+              onClick={() => navigate(`/demo-workshop/new?lead_id=${id}`)}
+              className="gap-2"
+            >
+              <Video className="h-4 w-4" />
+              Schedule Demo
+            </Button>
             <Button
               variant="outline"
               onClick={() => navigate(`/lead-management/${id}/edit`)}
@@ -187,6 +207,54 @@ export default function LeadOverview() {
                       onUpdate={() => qc.invalidateQueries({ queryKey: ["lead-followups", id] })}
                       onDelete={() => qc.invalidateQueries({ queryKey: ["lead-followups", id] })}
                     />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Demos */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Demos ({demos.length})</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => navigate(`/demo-workshop/new?lead_id=${id}`)}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Schedule Demo
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {demos.length === 0 ? (
+                <p className="text-gray-500">No demos scheduled</p>
+              ) : (
+                <div className="space-y-3">
+                  {demos.map((demo: any) => (
+                    <div
+                      key={demo.id}
+                      className="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer transition"
+                      onClick={() => navigate(`/demo-workshop/${demo.id}`)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">{demo.title}</h4>
+                        <Badge variant="outline">{demo.status}</Badge>
+                      </div>
+                      {demo.demo_date && (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Calendar className="h-4 w-4" />
+                          {new Date(demo.demo_date).toLocaleDateString()} at{" "}
+                          {new Date(demo.demo_date).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      )}
+                      {demo.description && (
+                        <p className="text-sm text-gray-600 mt-2">{demo.description}</p>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

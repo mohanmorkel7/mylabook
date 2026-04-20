@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -142,40 +143,205 @@ export default function LeadOverview() {
             <CardHeader>
               <CardTitle>Company Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <CardContent className="space-y-6">
+              {/* Basic Company Info */}
+              <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Company Size</label>
-                  <p className="mt-1">{lead.company_size}</p>
+                  <label className="text-sm font-medium text-gray-500">Legal Name</label>
+                  <p className="mt-1">{lead.company_legal_name || "—"}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Revenue Band</label>
-                  <p className="mt-1">{lead.annual_revenue_band || "—"}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Country</label>
-                  <p className="mt-1">{lead.country}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Years in Business</label>
-                  <p className="mt-1">{lead.years_in_business || "—"}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Industry</label>
+                    <p className="mt-1">{lead.industry}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Sub Industry</label>
+                    <p className="mt-1">{lead.sub_industry || "—"}</p>
+                  </div>
                 </div>
               </div>
 
-              {lead.company_website && (
-                <div className="pt-4 border-t">
-                  <label className="text-sm font-medium text-gray-500">Website</label>
-                  <p className="mt-1">
-                    <a
-                      href={lead.company_website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      <Globe className="h-4 w-4" />
-                      {lead.company_website}
-                    </a>
-                  </p>
+              {/* Company Metrics */}
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Company Metrics</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Company Size</label>
+                    <p className="mt-1">{lead.company_size}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Revenue Band</label>
+                    <p className="mt-1">{lead.annual_revenue_band || "—"}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Years in Business</label>
+                    <p className="mt-1">{lead.years_in_business || "—"}</p>
+                  </div>
+                  {lead.timezone && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Timezone</label>
+                      <p className="mt-1">{lead.timezone}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Client Classification */}
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Client Classification</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {lead.client_type && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Client Type</label>
+                      <p className="mt-1">{lead.client_type}</p>
+                    </div>
+                  )}
+                  {lead.pa_license && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">PA License</label>
+                      <p className="mt-1">{lead.pa_license}</p>
+                    </div>
+                  )}
+                  {lead.fully_approved && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Fully Approved</label>
+                      <p className="mt-1 capitalize">{lead.fully_approved}</p>
+                    </div>
+                  )}
+                  {lead.geography && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Geography</label>
+                      <p className="mt-1">{lead.geography}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment & Transaction */}
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Offerings & Volume</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {lead.payment_offerings && Array.isArray(lead.payment_offerings) && lead.payment_offerings.length > 0 && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Payment Offerings</label>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {lead.payment_offerings.map((offering: string, idx: number) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {offering}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {lead.txn_volume && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Txn Volume / Day (M)</label>
+                      <p className="mt-1">{lead.txn_volume}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Location */}
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Location</h3>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Country</label>
+                      <p className="mt-1">{lead.country}</p>
+                    </div>
+                    {lead.state && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">State</label>
+                        <p className="mt-1">{lead.state}</p>
+                      </div>
+                    )}
+                    {lead.city && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">City</label>
+                        <p className="mt-1">{lead.city}</p>
+                      </div>
+                    )}
+                  </div>
+                  {lead.street_address && (
+                    <div className="pt-2">
+                      <label className="text-sm font-medium text-gray-500">Street Address</label>
+                      <p className="mt-1 text-sm">{lead.street_address}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Web & Contact */}
+              <div className="border-t pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Web & Contact</h3>
+                <div className="space-y-3">
+                  {lead.website && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Website</label>
+                      <p className="mt-1">
+                        <a
+                          href={lead.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          <Globe className="h-4 w-4" />
+                          {lead.website}
+                        </a>
+                      </p>
+                    </div>
+                  )}
+                  {lead.linkedin_profile_link && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">LinkedIn Profile</label>
+                      <p className="mt-1">
+                        <a
+                          href={lead.linkedin_profile_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline text-sm"
+                        >
+                          View on LinkedIn
+                        </a>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Source Information */}
+              {lead.source && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Lead Source</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Source</label>
+                      <p className="mt-1">{lead.source}</p>
+                    </div>
+                    {lead.source_notes && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Source Notes</label>
+                        <p className="mt-1 text-sm">{lead.source_notes}</p>
+                      </div>
+                    )}
+                    {lead.email_subject && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Email Subject</label>
+                        <p className="mt-1 text-sm">{lead.email_subject}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Product Tags */}
+              {lead.product_tags && (
+                <div className="border-t pt-4">
+                  <label className="text-sm font-medium text-gray-500">Product Tags</label>
+                  <p className="mt-1 text-sm">{lead.product_tags}</p>
                 </div>
               )}
             </CardContent>

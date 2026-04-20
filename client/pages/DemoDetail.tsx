@@ -85,7 +85,7 @@ async function fetchMaterials() {
 }
 
 async function fetchLinkedMaterials(demoId: string) {
-  const res = await fetch(`/api/demos/${demoId}/materials`);
+  const res = await fetch(`/api/materials/demo/${demoId}/materials`);
   if (!res.ok) throw new Error("Failed to fetch linked materials");
   return res.json();
 }

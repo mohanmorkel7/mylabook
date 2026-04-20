@@ -70,9 +70,10 @@ export default function DemoCreate() {
   const qc = useQueryClient();
   const isEditing = !!id;
 
-  // Get lead_id from URL params if creating new demo from lead dashboard
+  // Get lead_id and return_to from URL params if creating new demo from lead dashboard
   const queryParams = new URLSearchParams(location.search);
   const leadIdFromQuery = queryParams.get("lead_id") || "";
+  const returnTo = queryParams.get("return_to") || "/demo-workshop";
 
   const [formData, setFormData] = useState<DemoFormData>({
     title: "",
@@ -141,10 +142,12 @@ export default function DemoCreate() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["demos"] });
+      qc.invalidateQueries({ queryKey: ["demos-by-lead"] });
       toast({
         title: isEditing ? "Demo updated" : "Demo created",
       });
-      navigate(`/demo-workshop/${data.id}`);
+      // If there's a return_to param, redirect there; otherwise go to demo details
+      navigate(isEditing ? `/demo-workshop/${data.id}` : returnTo);
     },
     onError: () => {
       toast({
@@ -180,7 +183,7 @@ export default function DemoCreate() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate("/demo-workshop")}
+            onClick={() => navigate(returnTo)}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>

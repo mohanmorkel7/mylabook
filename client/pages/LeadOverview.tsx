@@ -106,7 +106,7 @@ export default function LeadOverview() {
           <div className="flex gap-2">
             <Badge className={STATUS_COLORS[lead.status]}>{lead.status}</Badge>
             <Button
-              onClick={() => navigate(`/demo-workshop/new?lead_id=${id}`)}
+              onClick={() => navigate(`/demo-workshop/new?lead_id=${id}&return_to=${encodeURIComponent(`/lead-management/${id}/overview`)}`)}
               className="gap-2"
             >
               <Video className="h-4 w-4" />
@@ -238,7 +238,7 @@ export default function LeadOverview() {
               <CardTitle className="text-base">Demos ({demos.length})</CardTitle>
               <Button
                 size="sm"
-                onClick={() => navigate(`/demo-workshop/new?lead_id=${id}`)}
+                onClick={() => navigate(`/demo-workshop/new?lead_id=${id}&return_to=${encodeURIComponent(`/lead-management/${id}/overview`)}`)}
                 className="gap-1"
               >
                 <Plus className="h-3 w-3" />

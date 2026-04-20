@@ -255,7 +255,7 @@ export default function DemoPublicViewer() {
                     <Badge variant="outline">{selectedMaterial.file_type.toUpperCase()}</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 p-6 max-h-[calc(100vh-260px)] overflow-y-scroll pr-3" style={{ scrollbarGutter: "stable" }}>
+                <CardContent className="space-y-4 p-6">
                   {selectedMaterial.file_type === "video" ? (
                     <div className="space-y-4">
                       <div className="bg-black rounded-lg overflow-hidden">
@@ -270,7 +270,7 @@ export default function DemoPublicViewer() {
                       <iframe
                         src={selectedMaterial.file_url}
                         title={selectedMaterial.title || selectedMaterial.filename}
-                        className="w-full h-[75vh] rounded-lg border bg-white"
+                        className="w-full min-h-[85vh] rounded-lg border bg-white"
                       />
                     </div>
                   ) : (
@@ -289,7 +289,7 @@ export default function DemoPublicViewer() {
                       <iframe
                         src={selectedMaterial.file_url}
                         title={selectedMaterial.title || selectedMaterial.filename}
-                        className="w-full h-[75vh] rounded-lg border bg-white"
+                        className="w-full min-h-[85vh] rounded-lg border bg-white"
                       />
                     </div>
                   )}

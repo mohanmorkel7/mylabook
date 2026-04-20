@@ -92,6 +92,75 @@ async function ensureTablesExist() {
   }
 }
 
+// ── Schema migration to add missing columns ────────────────────────────
+let schemaMigrationInProgress = false;
+let schemaMigrationSuccess = false;
+
+async function ensureSchemaUpdated() {
+  // Return early if already successfully migrated
+  if (schemaMigrationSuccess) return;
+
+  // Prevent concurrent migration attempts
+  if (schemaMigrationInProgress) return;
+  schemaMigrationInProgress = true;
+
+  try {
+    console.log("[Lead Management] Checking if schema needs updating...");
+
+    // List of columns to add if they don't exist
+    const columnsToAdd = [
+      { name: "state", type: "TEXT" },
+      { name: "street_address", type: "TEXT" },
+      { name: "client_name", type: "TEXT" },
+      { name: "email_subject", type: "TEXT" },
+      { name: "source_notes", type: "TEXT" },
+      { name: "website", type: "TEXT" },
+      { name: "fully_approved", type: "TEXT" },
+      { name: "product_tags", type: "TEXT" },
+      { name: "is_draft", type: "BOOLEAN DEFAULT FALSE" },
+    ];
+
+    for (const column of columnsToAdd) {
+      try {
+        // Check if column exists
+        const checkResult = await pool.query(
+          `SELECT EXISTS (
+            SELECT FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name = 'sales_leads'
+            AND column_name = $1
+          ) as exists`,
+          [column.name]
+        );
+
+        if (!checkResult.rows[0].exists) {
+          console.log(`[Lead Management] Adding missing column: ${column.name}`);
+          await pool.query(
+            `ALTER TABLE sales_leads ADD COLUMN ${column.name} ${column.type}`
+          );
+          console.log(`[Lead Management] Column ${column.name} added successfully`);
+        }
+      } catch (colErr: any) {
+        const errMsg = String(colErr.message || "");
+        // Ignore "already exists" errors
+        if (errMsg.includes("already exists") || errMsg.includes("duplicate")) {
+          console.log(`[Lead Management] Column ${column.name} already exists`);
+        } else {
+          console.warn(`[Lead Management] Error adding column ${column.name}:`, errMsg);
+        }
+      }
+    }
+
+    console.log("[Lead Management] Schema migration complete");
+    schemaMigrationSuccess = true;
+  } catch (error: any) {
+    console.error("[Lead Management] Schema migration error:", error.message);
+    schemaMigrationSuccess = false;
+  } finally {
+    schemaMigrationInProgress = false;
+  }
+}
+
 // ── AES-256-CBC encryption (same as finance-management) ─────────────────
 const RAW_KEY = process.env.LEAD_ENCRYPTION_KEY ?? process.env.FINANCE_ENCRYPTION_KEY ?? "lead-management-aes-key-secure!";
 const ENC_KEY = Buffer.from(RAW_KEY.padEnd(32, "0").slice(0, 32));
@@ -229,6 +298,11 @@ router.get("/", async (req: Request, res: Response) => {
 // ── GET /api/leads/:id - Get a single lead with follow-ups ──────────────
 router.get("/:id", async (req: Request, res: Response) => {
   try {
+    // Ensure schema is updated
+    await ensureSchemaUpdated().catch(() => {
+      // Continue even if schema migration fails
+    });
+
     const { id } = req.params;
     const leadResult = await queryWithRetry(() => pool.query("SELECT * FROM sales_leads WHERE id = $1", [id]));
 
@@ -295,6 +369,11 @@ router.post("/", async (req: Request, res: Response) => {
     // Ensure tables exist before inserting
     await ensureTablesExist().catch((err) => {
       console.warn("[Lead Management] Table initialization failed on POST, continuing:", err.message);
+    });
+
+    // Ensure schema is updated with missing columns
+    await ensureSchemaUpdated().catch((err) => {
+      console.warn("[Lead Management] Schema migration failed on POST, continuing:", err.message);
     });
 
     const {

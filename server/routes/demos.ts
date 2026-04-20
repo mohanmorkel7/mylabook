@@ -612,7 +612,19 @@ router.get("/public/:token", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Demo not found" });
     }
 
-    // Get all published files
+    // Get linked published materials only (not all materials)
+    const materialsResult = await queryWithRetry(() =>
+      pool.query(
+        `SELECT m.id, m.file_type, m.filename, m.file_url, m.title, m.description, dm.display_order
+         FROM demo_materials dm
+         INNER JOIN materials m ON m.id = dm.material_id
+         WHERE dm.demo_id = $1 AND m.is_published = true
+         ORDER BY dm.display_order ASC, m.created_at DESC`,
+        [link.demo_id]
+      )
+    );
+
+    // Keep demo_files in the response for backward compatibility if needed
     const filesResult = await queryWithRetry(() =>
       pool.query(
         `SELECT id, file_type, filename, file_url, title, description FROM demo_files
@@ -633,6 +645,7 @@ router.get("/public/:token", async (req: Request, res: Response) => {
 
     res.json({
       demo: demoResult.rows[0],
+      materials: materialsResult.rows,
       files: filesResult.rows,
     });
   } catch (error: any) {

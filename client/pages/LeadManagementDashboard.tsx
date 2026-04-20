@@ -204,12 +204,14 @@ export default function LeadManagementDashboard() {
 
   // Prepare chart data
   const statusChartData = useMemo(() => {
-    if (!stats.by_status) return [];
+    if (!Array.isArray(stats.by_status)) return [];
     return stats.by_status.map((item: any) => ({
-      name: item.status,
-      value: item.count,
+      name: item.status || "Unknown",
+      value: Number(item.count) || 0,
     }));
   }, [stats.by_status]);
+
+  const hasStatusChartData = statusChartData.some((item: any) => item.value > 0);
 
   const industryChartData = useMemo(() => {
     if (!stats.by_industry) return [];
@@ -293,25 +295,34 @@ export default function LeadManagementDashboard() {
             <CardTitle>Leads by Status</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={statusChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {statusChartData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="h-[320px]">
+              {hasStatusChartData ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={90}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {statusChartData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
+                  No status data available yet
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

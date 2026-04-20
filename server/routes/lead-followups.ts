@@ -284,13 +284,14 @@ router.get("/dashboard/summary", async (req: Request, res: Response) => {
       )
     );
 
-    // Get overdue follow-ups (any status with date in the past)
+    // Get overdue follow-ups (exclude completed, with date in the past)
     const overdueResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
          LEFT JOIN sales_leads l ON lfu.lead_id = l.id
          WHERE DATE(lfu.follow_up_date) < $1::DATE
+         AND lfu.status != 'Completed'
          ORDER BY lfu.follow_up_date DESC`,
         [istNow]
       )

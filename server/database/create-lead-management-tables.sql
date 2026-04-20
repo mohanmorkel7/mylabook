@@ -7,20 +7,20 @@
 -- Create Sales Leads table
 CREATE TABLE IF NOT EXISTS sales_leads (
   id SERIAL PRIMARY KEY,
-  
+
   -- Company Information (encrypted)
   company_name TEXT NOT NULL,
   company_legal_name TEXT,
   company_website TEXT,
   company_logo_url TEXT,
-  
+
   -- Business Classification (encrypted)
   industry TEXT NOT NULL CHECK (industry IN ('Banking', 'Fintech', 'Payments', 'Insurance', 'Retail', 'Telecom', 'Government', 'Other')),
   sub_industry TEXT,
   company_size TEXT NOT NULL CHECK (company_size IN ('1-50', '51-200', '201-1000', '1001-5000', '5000+')),
   annual_revenue_band TEXT CHECK (annual_revenue_band IN ('<1M', '1-10M', '10-50M', '50-250M', '250M-1B', '1B+')),
   years_in_business INTEGER,
-  
+
   -- Location (encrypted)
   country TEXT NOT NULL,
   state_region TEXT,
@@ -28,10 +28,25 @@ CREATE TABLE IF NOT EXISTS sales_leads (
   address TEXT,
   timezone TEXT,
   preferred_language TEXT CHECK (preferred_language IN ('English', 'Hindi', 'Tamil', 'Kannada', 'Malayalam', 'Telugu', 'Marathi', 'Gujarati', 'Bengali', 'Punjabi', 'Urdu', 'Other')),
-  
+
+  -- Lead Source & Type (encrypted)
+  source TEXT,
+  client_type TEXT,
+  pa_license TEXT,
+  geography TEXT,
+  txn_volume TEXT,
+
+  -- Lead Source Details (encrypted)
+  linkedin_profile_link TEXT,
+
+  -- Payment Offerings & Contacts (JSON, encrypted)
+  payment_offerings TEXT,
+  contacts TEXT,
+
   -- Lead Status
   status TEXT NOT NULL DEFAULT 'New' CHECK (status IN ('New', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost')),
-  
+  is_draft BOOLEAN DEFAULT FALSE,
+
   -- Metadata
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()

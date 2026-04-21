@@ -92,7 +92,7 @@ const FOLLOW_UP_STATUS_COLORS: Record<string, string> = {
 async function fetchLeads(params: Record<string, any>) {
   const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value) queryParams.append(key, String(value));
+    if (value && value !== "all") queryParams.append(key, String(value));
   });
   const res = await fetch(`/api/lead-management?${queryParams}`);
   if (!res.ok) throw new Error("Failed to fetch leads");
@@ -178,8 +178,8 @@ export default function LeadManagementDashboard() {
 
   // State
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterIndustry, setFilterIndustry] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterIndustry, setFilterIndustry] = useState("all");
 
   // Fetch data
   const { data: statsData } = useQuery({
@@ -489,7 +489,7 @@ export default function LeadManagementDashboard() {
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Statuses</SelectItem>
+            <SelectItem value="all">All Statuses</SelectItem>
             {STATUSES.map((st) => (
               <SelectItem key={st} value={st}>
                 {st}
@@ -503,7 +503,7 @@ export default function LeadManagementDashboard() {
             <SelectValue placeholder="Filter by industry" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Industries</SelectItem>
+            <SelectItem value="all">All Industries</SelectItem>
             {INDUSTRIES.map((ind) => (
               <SelectItem key={ind} value={ind}>
                 {ind}

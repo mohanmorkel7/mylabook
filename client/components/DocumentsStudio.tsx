@@ -902,8 +902,8 @@ export function DocumentsStudio() {
       </div>
 
       <Dialog open={builderOpen} onOpenChange={setBuilderOpen}>
-        <DialogContent className="max-w-7xl h-[92vh] overflow-hidden p-0">
-          <div className="flex h-full flex-col">
+        <DialogContent className="!left-1/2 !top-1/2 !h-[96vh] !w-[98vw] !max-w-[98vw] overflow-hidden p-0 sm:rounded-2xl">
+          <div className="flex h-full min-h-0 flex-col">
             <DialogHeader className="border-b px-6 py-5">
               <DialogTitle>{editingTemplateId ? "Edit Template" : "Create New Template"}</DialogTitle>
               <DialogDescription>
@@ -911,7 +911,7 @@ export function DocumentsStudio() {
               </DialogDescription>
             </DialogHeader>
             {currentTemplate && (
-              <div className="grid flex-1 grid-cols-1 gap-4 overflow-hidden px-6 py-4 xl:grid-cols-[260px_1fr_320px]">
+              <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-hidden px-6 py-4 xl:grid-cols-[260px_1fr_320px]">
                 <div className="space-y-4 overflow-y-auto pr-1">
                   <Card className="border-slate-200">
                     <CardHeader className="pb-3">

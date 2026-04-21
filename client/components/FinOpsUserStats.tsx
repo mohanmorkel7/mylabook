@@ -336,8 +336,6 @@ export default function FinOpsUserStats() {
 
     const hours = durationMinutes / 60;
     if (hours <= 1) return { category: 'green', bgColor: 'bg-green-700', borderColor: 'border-green-900' };
-    if (hours <= 2) return { category: 'amber', bgColor: 'bg-amber-700', borderColor: 'border-amber-900' };
-    if (hours <= 3) return { category: 'orange', bgColor: 'bg-orange-700', borderColor: 'border-orange-900' };
     return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
   };
 
@@ -631,6 +629,13 @@ export default function FinOpsUserStats() {
 
     return hourlyData;
   }, [hourlySubtasksData, fromDate, toDate]);
+
+  const hourlyDurationChartData = useMemo(() => {
+    return getHourlyTaskData.map((hourData: any) => ({
+      ...hourData,
+      moreThan1h: (hourData["1to2h"] || 0) + (hourData["2to3h"] || 0) + (hourData.moreThan3h || 0),
+    }));
+  }, [getHourlyTaskData]);
 
   // Helper: Parse managers field (handles string, JSON array, or null)
   const parseManagers = (value: any): string => {
@@ -1129,7 +1134,7 @@ export default function FinOpsUserStats() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
-                  <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
+                  <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Red: &gt;1h)</p>
                 </div>
                 <button
                   onClick={exportHourlyTaskDurationToExcel}
@@ -1178,7 +1183,7 @@ export default function FinOpsUserStats() {
           <CardContent className="pt-6">
             {isLoadingAllTasks ? (
               <div className="text-center py-12 text-gray-500">Loading task data...</div>
-            ) : getHourlyTaskData.some(d => d.total > 0) ? (
+            ) : hourlyDurationChartData.some(d => d.total > 0) ? (
               <div className="w-full overflow-auto">
                 <div style={{ minHeight: 400, width: "100%" }}>
                   <ChartContainer
@@ -1193,7 +1198,7 @@ export default function FinOpsUserStats() {
                   >
                     <Recharts.ResponsiveContainer width="100%" height={400}>
                       <Recharts.BarChart
-                        data={getHourlyTaskData}
+                        data={hourlyDurationChartData}
                         margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
                       >
                         <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -1216,7 +1221,7 @@ export default function FinOpsUserStats() {
                             // When locked, ALWAYS show locked hour and NEVER update on hover
                             let dataToShow = null;
                             if (lockedHour !== null) {
-                              dataToShow = getHourlyTaskData.find((d: any) => d.hour === lockedHour);
+                              dataToShow = hourlyDurationChartData.find((d: any) => d.hour === lockedHour);
                               // Don't rely on active/payload when locked - always show locked data
                             } else if (active && payload && payload.length > 0) {
                               // Only when NOT locked, show hovered data
@@ -1280,22 +1285,10 @@ export default function FinOpsUserStats() {
                                         <p className="text-2xl font-bold text-green-600">{dataToShow.lessThan1h}</p>
                                       </div>
                                     )}
-                                    {dataToShow["1to2h"] > 0 && (
-                                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200">
-                                        <p className="text-xs font-semibold text-amber-700">🟡 1-2 Hours</p>
-                                        <p className="text-2xl font-bold text-amber-600">{dataToShow["1to2h"]}</p>
-                                      </div>
-                                    )}
-                                    {dataToShow["2to3h"] > 0 && (
-                                      <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
-                                        <p className="text-xs font-semibold text-orange-700">🟠 2-3 Hours</p>
-                                        <p className="text-2xl font-bold text-orange-600">{dataToShow["2to3h"]}</p>
-                                      </div>
-                                    )}
-                                    {dataToShow.moreThan3h > 0 && (
+                                    {dataToShow.moreThan1h > 0 && (
                                       <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-3 border border-red-200">
-                                        <p className="text-xs font-semibold text-red-700">🔴 {"\u003e"}3 Hours</p>
-                                        <p className="text-2xl font-bold text-red-600">{dataToShow.moreThan3h}</p>
+                                        <p className="text-xs font-semibold text-red-700">🔴 {'>'}1 Hour</p>
+                                        <p className="text-2xl font-bold text-red-600">{dataToShow.moreThan1h}</p>
                                       </div>
                                     )}
                                   </div>
@@ -1308,15 +1301,11 @@ export default function FinOpsUserStats() {
                                       tasks.map((task: any, idx: number) => (
                                         <div key={idx} className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow border-l-4 ${
                                           task.durationCategory === 'green' ? 'border-green-500' :
-                                          task.durationCategory === 'amber' ? 'border-amber-500' :
-                                          task.durationCategory === 'orange' ? 'border-orange-500' :
                                           'border-red-500'
                                         }`}>
                                           <div className="flex items-start justify-between mb-3">
                                             <p className={`font-bold text-white text-xs px-3 py-1 rounded-full ${
                                               task.durationCategory === 'green' ? 'bg-green-500' :
-                                              task.durationCategory === 'amber' ? 'bg-amber-500' :
-                                              task.durationCategory === 'orange' ? 'bg-orange-500' :
                                               'bg-red-500'
                                             }`}>Task {idx + 1}</p>
                                             <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
@@ -1372,12 +1361,10 @@ export default function FinOpsUserStats() {
                           contentStyle={{ borderRadius: "8px", position: "relative", zIndex: 50 }}
                         />
                         <Recharts.Legend />
-                        <Recharts.Bar dataKey="upcoming" name="Empty Upcoming Hour" stackId="duration" fill="#0EA5E9" />
-                        <Recharts.Bar dataKey="upcomingHourTasks" name="Upcoming Hour Tasks" stackId="duration" fill="#0EA5E9" />
+                        <Recharts.Bar dataKey="upcoming" name="Empty Upcoming Hour" stackId="duration" fill="#0EA5E9" legendType="none" />
+                        <Recharts.Bar dataKey="upcomingHourTasks" name="Upcoming Hour Tasks" stackId="duration" fill="#0EA5E9" legendType="none" />
                         <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />
-                        <Recharts.Bar dataKey="1to2h" name="1-2 Hours" stackId="duration" fill="#FBBF24" />
-                        <Recharts.Bar dataKey="2to3h" name="2-3 Hours" stackId="duration" fill="#F97316" />
-                        <Recharts.Bar dataKey="moreThan3h" name="More than 3h (Active)" stackId="duration" fill="#EF4444" />
+                        <Recharts.Bar dataKey="moreThan1h" name=">1 Hour" stackId="duration" fill="#EF4444" />
                       </Recharts.BarChart>
                     </Recharts.ResponsiveContainer>
                   </ChartContainer>

@@ -416,14 +416,15 @@ export default function LeadManagementDashboard() {
                 {hasStatusChartData ? (
                   <>
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
+                      <PieChart margin={{ top: 12, right: 12, bottom: 28, left: 12 }}>
                         <Pie
                           data={statusChartData}
                           cx="50%"
-                          cy="50%"
-                          innerRadius={72}
-                          outerRadius={112}
-                          paddingAngle={3}
+                          cy="47%"
+                          innerRadius={58}
+                          outerRadius={96}
+                          paddingAngle={4}
+                          minAngle={8}
                           dataKey="value"
                           stroke="#fff"
                           strokeWidth={2}
@@ -433,14 +434,18 @@ export default function LeadManagementDashboard() {
                           ))}
                         </Pie>
                         <Tooltip content={<ChartTooltip />} />
-                        <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ paddingTop: 16 }} />
+                        <Legend
+                          verticalAlign="bottom"
+                          iconType="circle"
+                          wrapperStyle={{ paddingTop: 12, fontSize: 12 }}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <div className="rounded-full border border-slate-200 bg-white/90 px-6 py-5 text-center shadow-xl backdrop-blur-md">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">Total</p>
-                        <p className="mt-1 text-4xl font-bold leading-none text-slate-900">{totalLeads}</p>
-                        <p className="mt-2 text-xs text-slate-500">Leads in pipeline</p>
+                      <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border border-slate-200 bg-white/95 text-center shadow-2xl shadow-slate-200/70 backdrop-blur-md">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">Total</p>
+                        <p className="mt-1 text-3xl font-bold leading-none text-slate-900">{totalLeads}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">Leads in pipeline</p>
                       </div>
                     </div>
                   </>

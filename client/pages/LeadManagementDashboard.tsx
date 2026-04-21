@@ -441,11 +441,11 @@ export default function LeadManagementDashboard() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full border border-slate-200 bg-white/95 text-center shadow-2xl shadow-slate-200/70 backdrop-blur-md">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">Total</p>
-                        <p className="mt-1 text-3xl font-bold leading-none text-slate-900">{totalLeads}</p>
-                        <p className="mt-1 text-[11px] text-slate-500">Leads in pipeline</p>
+                    <div className="pointer-events-none absolute left-1/2 top-[46%] z-10 -translate-x-1/2 -translate-y-1/2">
+                      <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full border border-slate-200 bg-white/95 text-center shadow-2xl shadow-slate-200/70 backdrop-blur-md sm:h-28 sm:w-28">
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-slate-400 sm:text-[10px]">Total</p>
+                        <p className="mt-1 text-2xl font-bold leading-none text-slate-900 sm:text-3xl">{totalLeads}</p>
+                        <p className="mt-1 px-2 text-[10px] leading-tight text-slate-500 sm:text-[11px]">Leads in pipeline</p>
                       </div>
                     </div>
                   </>

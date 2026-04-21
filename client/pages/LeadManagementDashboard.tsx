@@ -140,13 +140,11 @@ function FollowUpTimer({ followUpDate, isOverdue }: { followUpDate: string; isOv
       const now = new Date();
 
       if (isOverdue) {
-        // Show overdue duration
         const diffMs = now.getTime() - followUpTime.getTime();
         const hours = Math.floor(diffMs / (1000 * 60 * 60));
         const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
         setTimeDisplay(`Overdue: ${hours}h ${minutes}m`);
       } else {
-        // Show remaining time
         const diffMs = followUpTime.getTime() - now.getTime();
         if (diffMs > 0) {
           const hours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -159,7 +157,7 @@ function FollowUpTimer({ followUpDate, isOverdue }: { followUpDate: string; isOv
     };
 
     calculateTime();
-    const interval = setInterval(calculateTime, 60000); // Update every minute
+    const interval = setInterval(calculateTime, 60000);
 
     return () => clearInterval(interval);
   }, [followUpDate, isOverdue]);
@@ -168,6 +166,26 @@ function FollowUpTimer({ followUpDate, isOverdue }: { followUpDate: string; isOv
     <span className={`text-xs font-semibold ${isOverdue ? "text-red-600" : "text-blue-600"}`}>
       {timeDisplay}
     </span>
+  );
+}
+
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-xl backdrop-blur-md">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+        {label || payload[0]?.name || "Metric"}
+      </p>
+      <div className="mt-1 space-y-1">
+        {payload.map((entry: any) => (
+          <div key={entry.dataKey || entry.name} className="flex items-center justify-between gap-4 text-sm">
+            <span className="font-medium text-slate-600">{entry.name}</span>
+            <span className="font-semibold text-slate-900">{entry.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -249,6 +267,11 @@ export default function LeadManagementDashboard() {
     }));
   }, [stats.by_industry]);
 
+  const topStatus = statusChartData[0]?.name || "No data";
+  const topIndustry = industryChartData[0]?.name || "No data";
+  const statusTotal = statusChartData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0);
+  const industryTotal = industryChartData.reduce((sum: number, item: any) => sum + (Number(item.count) || 0), 0);
+
   // Calculate summary metrics
   const totalLeads = stats.total_leads || 0;
   const todayFollowups = leads.filter((l: Lead) => {
@@ -316,61 +339,179 @@ export default function LeadManagementDashboard() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Status Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Leads by Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[320px]">
-              {hasStatusChartData ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={statusChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      outerRadius={90}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {statusChartData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
-                  No status data available yet
-                </div>
-              )}
+      <div className="mb-8 overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-xl shadow-slate-200/50">
+        <div className="border-b border-slate-200/70 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 px-6 py-5 text-white">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-sky-300">Live pipeline intelligence</p>
+              <h2 className="mt-2 text-2xl font-semibold">Lead analytics</h2>
+              <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                A richer snapshot of your pipeline with polished charts, live totals, and visual context.
+              </p>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Industry Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Leads by Industry</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={industryChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="#8884d8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            <div className="grid grid-cols-2 gap-3 text-left">
+              <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                <p className="text-xs text-slate-300">Total leads</p>
+                <p className="mt-1 text-2xl font-bold leading-none">{totalLeads}</p>
+                <p className="mt-1 text-xs text-slate-400">Across all stages</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                <p className="text-xs text-slate-300">Win rate</p>
+                <p className="mt-1 text-2xl font-bold leading-none">{winRate}%</p>
+                <p className="mt-1 text-xs text-slate-400">Conversion trend</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-2">
+          <Card className="overflow-hidden border-slate-200/70 bg-gradient-to-br from-white via-slate-50 to-sky-50/40 shadow-lg shadow-slate-200/50">
+            <CardHeader className="space-y-4 border-b border-slate-100 bg-white/80">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg">Leads by Status</CardTitle>
+                  <CardDescription className="mt-1 text-sm">
+                    Pipeline distribution with a modern doughnut view.
+                  </CardDescription>
+                </div>
+                <Badge className="rounded-full bg-sky-50 px-3 py-1 text-sky-700 hover:bg-sky-50">
+                  {hasStatusChartData ? `${statusChartData.length} statuses` : "No data"}
+                </Badge>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/70">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Top status</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{topStatus}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/70">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Total stages</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{statusChartData.length}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/70">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Leads shown</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{statusTotal}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {statusChartData.slice(0, 4).map((item: any, index: number) => (
+                  <div
+                    key={item.name}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                    />
+                    {item.name}
+                  </div>
+                ))}
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-4">
+              <div className="relative h-[340px] rounded-3xl bg-gradient-to-br from-slate-50 via-white to-sky-50/60 p-3 ring-1 ring-slate-200/60">
+                {hasStatusChartData ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={statusChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={72}
+                          outerRadius={112}
+                          paddingAngle={3}
+                          dataKey="value"
+                          stroke="#fff"
+                          strokeWidth={2}
+                        >
+                          {statusChartData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ paddingTop: 16 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <div className="rounded-full border border-slate-200 bg-white/90 px-6 py-5 text-center shadow-xl backdrop-blur-md">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">Total</p>
+                        <p className="mt-1 text-4xl font-bold leading-none text-slate-900">{totalLeads}</p>
+                        <p className="mt-2 text-xs text-slate-500">Leads in pipeline</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+                    No status data available yet
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden border-slate-200/70 bg-gradient-to-br from-white via-slate-50 to-indigo-50/40 shadow-lg shadow-slate-200/50">
+            <CardHeader className="space-y-4 border-b border-slate-100 bg-white/80">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg">Leads by Industry</CardTitle>
+                  <CardDescription className="mt-1 text-sm">
+                    A cleaner industry mix with stronger visual hierarchy.
+                  </CardDescription>
+                </div>
+                <Badge className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700 hover:bg-indigo-50">
+                  {industryChartData.length} sectors
+                </Badge>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/70">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Top industry</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{topIndustry}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/70">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Tracked sectors</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{industryChartData.length}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/70">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Total leads</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{industryTotal}</p>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-4">
+              <div className="relative h-[340px] rounded-3xl bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 p-3 ring-1 ring-slate-200/60">
+                {industryChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={industryChartData} barCategoryGap={18}>
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 8" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        angle={-18}
+                        textAnchor="end"
+                        height={70}
+                      />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Bar dataKey="count" fill="#6366f1" radius={[12, 12, 0, 0]} barSize={42} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+                    No industry data available yet
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Follow-ups Summary */}

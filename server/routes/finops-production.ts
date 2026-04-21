@@ -2025,15 +2025,35 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
       // For date range queries, include all statuses
       // Convert run_date to IST timezone before comparing with date range
       if (fromDate && typeof fromDate === "string") {
-        whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date >= '${fromDate}'::date`;
+        whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date >= '${fromDate}'::date
+        
+        AND (
+  t.effective_from IS NULL 
+  OR (t.effective_from AT TIME ZONE 'Asia/Kolkata')::date 
+     <= (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date
+)
+     
+`;
       }
       if (toDate && typeof toDate === "string") {
-        whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date <= '${toDate}'::date`;
+        whereConditions += ` AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date <= '${toDate}'::date
+        AND (
+            t.effective_from IS NULL 
+            OR (t.effective_from AT TIME ZONE 'Asia/Kolkata')::date 
+              <= (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date
+          )
+        `;
       }
     } else {
       // Default cumulative: only pending/overdue/open/delayed before today
       whereConditions += ` AND ft.status IN ('pending','overdue','open','delayed')
         AND (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
+
+        AND (
+          t.effective_from IS NULL 
+          OR (t.effective_from AT TIME ZONE 'Asia/Kolkata')::date 
+            <= (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date
+        )
       `;
     }
 

@@ -184,7 +184,8 @@ export default function LeadManagementDashboard() {
   const { data: followUpSummary } = useQuery({
     queryKey: ["lead-followup-summary"],
     queryFn: fetchFollowUpSummary,
-    staleTime: 2 * 60_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data, isLoading } = useQuery({

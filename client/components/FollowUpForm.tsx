@@ -119,6 +119,8 @@ export function FollowUpForm({ leadId, leadName, open, onOpenChange, onSuccess }
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
       qc.invalidateQueries({ queryKey: ["lead", String(leadId)] });
+      qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+      qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
       toast({ title: "Follow-up created successfully" });
       onOpenChange(false);
       onSuccess?.();

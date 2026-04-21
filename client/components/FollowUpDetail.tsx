@@ -200,6 +200,7 @@ export function FollowUpDetail({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const autoOverdueTriggeredRef = useRef(false);
 
   // Edit state
   const [editData, setEditData] = useState({
@@ -289,9 +290,25 @@ export function FollowUpDetail({
       });
     },
     onSuccess: () => {
+      autoOverdueTriggeredRef.current = false;
       qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
+      qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+      qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
       toast({ title: "Follow-up updated successfully" });
       setIsEditing(false);
+      onUpdate?.();
+    },
+  });
+
+  const autoOverdueMutation = useMutation({
+    mutationFn: () => updateFollowUp(followUp.id, { status: "Overdue" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
+      qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+      qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
+      setChangedStatus("Overdue");
+      setShowSLAAlert(true);
+      autoOverdueTriggeredRef.current = true;
       onUpdate?.();
     },
   });
@@ -301,6 +318,8 @@ export function FollowUpDetail({
     mutationFn: () => deleteFollowUp(followUp.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-followups", String(leadId)] });
+      qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+      qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
       toast({ title: "Follow-up deleted successfully" });
       onDelete?.();
     },
@@ -642,6 +661,7 @@ export function FollowUpDetail({
       console.log("[Timer] Status is not Pending, hiding timer");
       setSlaTimeRemaining("");
       setShowSLAAlert(false);
+      autoOverdueTriggeredRef.current = false;
       return; // Don't run timer for other statuses
     }
 
@@ -679,6 +699,11 @@ export function FollowUpDetail({
         setSlaTimeRemaining(timeStr);
         setShowSLAAlert(true); // Always show red alert when overdue
         console.log("[Timer] Overdue:", timeStr);
+
+        if (!autoOverdueTriggeredRef.current) {
+          autoOverdueTriggeredRef.current = true;
+          autoOverdueMutation.mutate();
+        }
       }
       setCurrentTime(now);
     };
@@ -697,6 +722,7 @@ export function FollowUpDetail({
 
   // Change status inline
   const changeStatusInline = async (newStatus: string) => {
+    autoOverdueTriggeredRef.current = newStatus === "Pending" ? false : autoOverdueTriggeredRef.current;
     console.log("[Status Change] Changing status to:", newStatus);
     try {
       // Update UI immediately
@@ -706,6 +732,10 @@ export function FollowUpDetail({
       const response = await updateFollowUp(followUp.id, {
         status: newStatus,
       });
+
+      if (newStatus !== "Pending") {
+        autoOverdueTriggeredRef.current = false;
+      }
       console.log("[Status Change] Response:", response);
 
       // Add system message to chat with username

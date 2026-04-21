@@ -35,6 +35,27 @@ const audioUpload = multer({
 
 const router = Router();
 
+async function markOverdueFollowUps(leadId?: string) {
+  const params: any[] = [];
+  let leadClause = "";
+
+  if (leadId) {
+    params.push(leadId);
+    leadClause = ` AND lead_id = $${params.length}`;
+  }
+
+  await queryWithRetry(() =>
+    pool.query(
+      `UPDATE sales_leads_follow_ups
+       SET status = 'Overdue', updated_at = NOW()
+       WHERE status IN ('Pending', 'Delayed')
+         AND COALESCE(delayed_until, follow_up_date) < NOW()
+         ${leadClause}`,
+      params
+    )
+  );
+}
+
 // ── AES-256-CBC encryption ────────────────────────────────────────────────
 const RAW_KEY = process.env.LEAD_ENCRYPTION_KEY ?? process.env.FINANCE_ENCRYPTION_KEY ?? "lead-management-aes-key-secure!";
 const ENC_KEY = Buffer.from(RAW_KEY.padEnd(32, "0").slice(0, 32));
@@ -65,6 +86,8 @@ router.get("/lead/:leadId", async (req: Request, res: Response) => {
   try {
     const { leadId } = req.params;
     const { status, sortBy = "follow_up_date", sortOrder = "DESC" } = req.query;
+
+    await markOverdueFollowUps(leadId);
 
     let query = "SELECT * FROM sales_leads_follow_ups WHERE lead_id = $1";
     const params: any[] = [leadId];
@@ -272,28 +295,31 @@ router.get("/dashboard/summary", async (req: Request, res: Response) => {
 
     const istNow = formatter.format(new Date());
 
-    // Get today's follow-ups (any status scheduled for today)
+    await markOverdueFollowUps();
+
+    // Get today's follow-ups (active items scheduled for today)
     const todayResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
          LEFT JOIN sales_leads l ON lfu.lead_id = l.id
-         WHERE DATE(lfu.follow_up_date) = $1::DATE
-         ORDER BY lfu.follow_up_date ASC`,
+         WHERE DATE(COALESCE(lfu.delayed_until, lfu.follow_up_date)) = $1::DATE
+         AND lfu.status NOT IN ('Completed', 'Cancelled')
+         ORDER BY COALESCE(lfu.delayed_until, lfu.follow_up_date) ASC`,
         [istNow]
       )
     );
 
-    // Get overdue follow-ups (exclude completed, with date in the past)
+    // Get overdue follow-ups (exclude completed/cancelled, based on due timestamp)
     const overdueResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
          LEFT JOIN sales_leads l ON lfu.lead_id = l.id
-         WHERE DATE(lfu.follow_up_date) < $1::DATE
-         AND lfu.status != 'Completed'
-         ORDER BY lfu.follow_up_date DESC`,
-        [istNow]
+         WHERE COALESCE(lfu.delayed_until, lfu.follow_up_date) < NOW()
+         AND lfu.status NOT IN ('Completed', 'Cancelled')
+         ORDER BY COALESCE(lfu.delayed_until, lfu.follow_up_date) DESC`,
+        []
       )
     );
 

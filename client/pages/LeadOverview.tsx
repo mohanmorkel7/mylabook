@@ -82,6 +82,8 @@ export default function LeadOverview() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteLead(id!),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+      qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
       toast({ title: "Lead deleted successfully" });
       navigate("/lead-management");
     },
@@ -100,6 +102,8 @@ export default function LeadOverview() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead", id] });
       qc.invalidateQueries({ queryKey: ["lead-management"] });
+      qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+      qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
       toast({ title: "Lead status updated" });
     },
   });
@@ -444,8 +448,16 @@ export default function LeadOverview() {
                       key={fu.id}
                       followUp={fu}
                       leadId={lead.id}
-                      onUpdate={() => qc.invalidateQueries({ queryKey: ["lead-followups", id] })}
-                      onDelete={() => qc.invalidateQueries({ queryKey: ["lead-followups", id] })}
+                      onUpdate={() => {
+                        qc.invalidateQueries({ queryKey: ["lead-followups", id] });
+                        qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+                        qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
+                      }}
+                      onDelete={() => {
+                        qc.invalidateQueries({ queryKey: ["lead-followups", id] });
+                        qc.invalidateQueries({ queryKey: ["lead-followup-summary"] });
+                        qc.invalidateQueries({ queryKey: ["lead-dashboard-stats"] });
+                      }}
                     />
                   ))}
                 </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus, Video, Calendar } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus, Video, Calendar, Eye, EyeOff, Mail, Phone, Users } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FollowUpForm } from "@/components/FollowUpForm";
 import { FollowUpDetail } from "@/components/FollowUpDetail";
@@ -27,6 +28,19 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_OPTIONS = ["New", "Contacted", "Qualified", "Proposal Sent", "Won", "Lost"] as const;
+
+function maskPhoneNumber(prefix: string, phone: string) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "—";
+  const last4 = digits.slice(-4);
+  return `${prefix || ""} ${digits.length > 4 ? "•••• " : ""}${last4}`.trim();
+}
+
+function formatPhoneNumber(prefix: string, phone: string) {
+  const trimmedPhone = String(phone || "").trim();
+  if (!trimmedPhone) return "—";
+  return `${prefix || ""} ${trimmedPhone}`.trim();
+}
 
 async function fetchLead(id: string) {
   const res = await fetch(`/api/lead-management/${id}`);
@@ -59,7 +73,9 @@ export default function LeadOverview() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
+  const [visiblePhoneContacts, setVisiblePhoneContacts] = useState<Record<number, boolean>>({});
 
   const { data: leadData, isLoading } = useQuery({
     queryKey: ["lead", id],
@@ -113,6 +129,10 @@ export default function LeadOverview() {
   const lead = leadData?.lead;
   const followUps = followUpsData?.follow_ups || [];
   const demos = demosData?.demos || [];
+  const contacts = Array.isArray(lead?.contacts) ? lead.contacts : [];
+  const primaryContact = contacts[0] || null;
+  const additionalContacts = contacts.slice(1);
+  const canViewContactPhones = user?.role === "product";
 
   if (!lead) return <div className="p-6">Lead not found</div>;
 
@@ -494,6 +514,182 @@ export default function LeadOverview() {
                   </Select>
                 </div>
               </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Contact Information</p>
+                    <p className="text-sm text-slate-600">Primary member information and client contacts</p>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {contacts.length}
+                  </Badge>
+                </div>
+
+                {primaryContact ? (
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-white bg-white p-3 shadow-sm">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Primary member information</p>
+                          <p className="text-sm font-semibold text-slate-900">Contact #1</p>
+                        </div>
+                        <Badge className="bg-sky-50 text-sky-700 hover:bg-sky-50">Primary</Badge>
+                      </div>
+
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Contact Name</p>
+                          <p className="mt-1 font-medium text-slate-900">{primaryContact.contact_name || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Designation</p>
+                          <p className="mt-1 font-medium text-slate-900">{primaryContact.designation || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Email</p>
+                          <p className="mt-1 flex items-center gap-2 font-medium text-slate-900">
+                            <Mail className="h-3.5 w-3.5 text-slate-400" />
+                            {primaryContact.email || "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Phone</p>
+                          <div className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                {primaryContact.phone_prefix || "+91"}
+                              </p>
+                              <p className="mt-1 flex items-center gap-2 font-semibold text-slate-900">
+                                <Phone className="h-3.5 w-3.5 text-slate-400" />
+                                {canViewContactPhones && visiblePhoneContacts[0]
+                                  ? formatPhoneNumber(primaryContact.phone_prefix || "+91", primaryContact.phone)
+                                  : maskPhoneNumber(primaryContact.phone_prefix || "+91", primaryContact.phone)}
+                              </p>
+                            </div>
+                            {canViewContactPhones && primaryContact.phone && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 shrink-0"
+                                onClick={() =>
+                                  setVisiblePhoneContacts((prev) => ({
+                                    ...prev,
+                                    0: !prev[0],
+                                  }))
+                                }
+                                title={visiblePhoneContacts[0] ? "Hide phone number" : "Show phone number"}
+                              >
+                                {visiblePhoneContacts[0] ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        {primaryContact.linkedin_profile_link && (
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">LinkedIn Profile Link</p>
+                            <a
+                              href={primaryContact.linkedin_profile_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 block break-all text-sm font-medium text-blue-600 hover:underline"
+                            >
+                              {primaryContact.linkedin_profile_link}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {additionalContacts.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Additional contacts ({additionalContacts.length})</p>
+                        {additionalContacts.map((contact: any, contactIndex: number) => {
+                          const actualIndex = contactIndex + 1;
+                          const isVisible = Boolean(visiblePhoneContacts[actualIndex]);
+                          return (
+                            <div key={`${contact.contact_name || actualIndex}-${actualIndex}`} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                              <div className="mb-3 flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">Contact #{actualIndex + 1}</p>
+                                  <p className="text-xs text-slate-500">Secondary contact</p>
+                                </div>
+                                <Badge variant="outline">Additional</Badge>
+                              </div>
+                              <div className="space-y-2 text-sm">
+                                <div>
+                                  <p className="text-xs uppercase tracking-wide text-slate-500">Contact Name</p>
+                                  <p className="mt-1 font-medium text-slate-900">{contact.contact_name || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs uppercase tracking-wide text-slate-500">Designation</p>
+                                  <p className="mt-1 font-medium text-slate-900">{contact.designation || "—"}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs uppercase tracking-wide text-slate-500">Email</p>
+                                  <p className="mt-1 font-medium text-slate-900">{contact.email || "—"}</p>
+                                </div>
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="text-xs uppercase tracking-wide text-slate-500">Phone</p>
+                                      <p className="mt-1 flex items-center gap-2 font-semibold text-slate-900">
+                                        <Phone className="h-3.5 w-3.5 text-slate-400" />
+                                        {canViewContactPhones && isVisible
+                                          ? formatPhoneNumber(contact.phone_prefix || "+91", contact.phone)
+                                          : maskPhoneNumber(contact.phone_prefix || "+91", contact.phone)}
+                                      </p>
+                                    </div>
+                                    {canViewContactPhones && contact.phone && (
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8 shrink-0"
+                                        onClick={() =>
+                                          setVisiblePhoneContacts((prev) => ({
+                                            ...prev,
+                                            [actualIndex]: !prev[actualIndex],
+                                          }))
+                                        }
+                                        title={isVisible ? "Hide phone number" : "Show phone number"}
+                                      >
+                                        {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                                {contact.linkedin_profile_link && (
+                                  <div>
+                                    <p className="text-xs uppercase tracking-wide text-slate-500">LinkedIn Profile Link</p>
+                                    <a
+                                      href={contact.linkedin_profile_link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="mt-1 block break-all text-sm font-medium text-blue-600 hover:underline"
+                                    >
+                                      {contact.linkedin_profile_link}
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">No contact information available.</p>
+                )}
+              </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-500">Created</label>
                 <p className="text-sm">{new Date(lead.created_at).toLocaleDateString()}</p>

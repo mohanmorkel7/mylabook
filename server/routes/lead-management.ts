@@ -196,6 +196,8 @@ router.get("/", async (req: Request, res: Response) => {
     const normalizedIndustry = normalizeFilterValue(industry);
     const normalizedCountry = normalizeFilterValue(country);
     const normalizedSearch = typeof search === "string" ? search.trim() : "";
+    const normalizedLimit = Math.max(1, parseInt(String(limit)) || 100);
+    const normalizedOffset = Math.max(0, parseInt(String(offset)) || 0);
 
     let query = "SELECT * FROM sales_leads WHERE 1=1";
     const params: any[] = [];
@@ -216,21 +218,16 @@ router.get("/", async (req: Request, res: Response) => {
       params.push(normalizedCountry);
     }
 
-    if (normalizedSearch) {
-      const searchTerm = `%${normalizedSearch}%`;
-      query += ` AND (company_name ILIKE $${paramIndex++} OR company_legal_name ILIKE $${paramIndex++} OR company_website ILIKE $${paramIndex++})`;
-      params.push(searchTerm, searchTerm, searchTerm);
-    }
-
     // Add sorting
     const validSortFields = ["created_at", "updated_at", "company_name", "status"];
     const sortField = validSortFields.includes(String(sortBy)) ? sortBy : "created_at";
     const sortDir = String(sortOrder).toUpperCase() === "ASC" ? "ASC" : "DESC";
     query += ` ORDER BY ${sortField} ${sortDir}`;
 
-    // Add pagination
-    query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-    params.push(limit, offset);
+    if (!normalizedSearch) {
+      query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+      params.push(normalizedLimit, normalizedOffset);
+    }
 
     const result = await queryWithRetry(() => pool.query(query, params));
 
@@ -263,33 +260,19 @@ router.get("/", async (req: Request, res: Response) => {
       contacts: lead.contacts ? JSON.parse(decrypt(lead.contacts)) : [],
     }));
 
-    // Get total count
-    let countQuery = "SELECT COUNT(*) as count FROM sales_leads WHERE 1=1";
-    const countParams: any[] = [];
-    let countParamIndex = 1;
+    const filteredLeads = normalizedSearch
+      ? leads.filter((lead: any) => {
+          const searchLower = normalizedSearch.toLowerCase();
+          return [lead.company_name, lead.company_legal_name, lead.company_website, lead.industry, lead.country, lead.status]
+            .some((value) => String(value ?? "").toLowerCase().includes(searchLower));
+        })
+      : leads;
 
-    if (normalizedStatus) {
-      countQuery += ` AND status = $${countParamIndex++}`;
-      countParams.push(normalizedStatus);
-    }
-    if (normalizedIndustry) {
-      countQuery += ` AND industry = $${countParamIndex++}`;
-      countParams.push(normalizedIndustry);
-    }
-    if (normalizedCountry) {
-      countQuery += ` AND country = $${countParamIndex++}`;
-      countParams.push(normalizedCountry);
-    }
-    if (normalizedSearch) {
-      const searchTerm = `%${normalizedSearch}%`;
-      countQuery += ` AND (company_name ILIKE $${countParamIndex++} OR company_legal_name ILIKE $${countParamIndex++} OR company_website ILIKE $${countParamIndex++})`;
-      countParams.push(searchTerm, searchTerm, searchTerm);
-    }
+    const paginatedLeads = normalizedSearch
+      ? filteredLeads.slice(normalizedOffset, normalizedOffset + normalizedLimit)
+      : filteredLeads;
 
-    const countResult = await queryWithRetry(() => pool.query(countQuery, countParams));
-    const total = parseInt(countResult.rows[0].count);
-
-    res.json({ leads, total, limit: parseInt(String(limit)), offset: parseInt(String(offset)) });
+    res.json({ leads: paginatedLeads, total: filteredLeads.length, limit: normalizedLimit, offset: normalizedOffset });
   } catch (error: any) {
     console.error("Failed to fetch leads:", error.message);
     res.status(500).json({ error: "Failed to fetch leads" });

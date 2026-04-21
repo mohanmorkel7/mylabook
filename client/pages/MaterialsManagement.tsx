@@ -22,6 +22,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Upload, Edit2, Trash2, Download, Eye, FilePlus } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DocumentsStudio } from "@/components/DocumentsStudio";
 import { toast } from "@/components/ui/use-toast";
 
 interface Material {
@@ -106,6 +108,7 @@ export default function MaterialsManagement() {
   const [filterFileType, setFilterFileType] = useState<"all" | "video" | "pdf" | "ppt" | "word">("all");
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<"materials" | "documents">("materials");
 
   const { data: materialsData = { materials: [] }, isLoading } = useQuery({
     queryKey: ["materials", filterFileType],
@@ -183,7 +186,7 @@ export default function MaterialsManagement() {
   return (
     <div className="min-h-screen bg-gray-50/50 p-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 space-y-5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Materials Library</h1>
@@ -196,8 +199,17 @@ export default function MaterialsManagement() {
             Upload New Material
           </Button>
         </div>
+
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "materials" | "documents") }>
+          <TabsList className="grid w-full max-w-2xl grid-cols-2">
+            <TabsTrigger value="materials">Materials</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
+      {activeTab === "materials" ? (
+        <>
       {/* Filter Section */}
       {materials.length > 0 && (
         <Card className="mb-6">
@@ -479,6 +491,10 @@ export default function MaterialsManagement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+        </>
+      ) : (
+        <DocumentsStudio />
       )}
     </div>
   );

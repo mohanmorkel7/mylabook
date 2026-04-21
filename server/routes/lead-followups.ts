@@ -297,27 +297,26 @@ router.get("/dashboard/summary", async (req: Request, res: Response) => {
 
     await markOverdueFollowUps();
 
-    // Get today's follow-ups (active items scheduled for today)
+    // Get today's follow-ups (active items scheduled for today, excluding overdue)
     const todayResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
          LEFT JOIN sales_leads l ON lfu.lead_id = l.id
          WHERE DATE(COALESCE(lfu.delayed_until, lfu.follow_up_date)) = $1::DATE
-         AND lfu.status NOT IN ('Completed', 'Cancelled')
+         AND lfu.status IN ('Pending', 'Delayed')
          ORDER BY COALESCE(lfu.delayed_until, lfu.follow_up_date) ASC`,
         [istNow]
       )
     );
 
-    // Get overdue follow-ups (exclude completed/cancelled, based on due timestamp)
+    // Get overdue follow-ups (status already normalized to Overdue)
     const overdueResult = await queryWithRetry(() =>
       pool.query(
         `SELECT lfu.*, COALESCE(l.company_name, 'Unknown Lead') as company_name
          FROM sales_leads_follow_ups lfu
          LEFT JOIN sales_leads l ON lfu.lead_id = l.id
-         WHERE COALESCE(lfu.delayed_until, lfu.follow_up_date) < NOW()
-         AND lfu.status NOT IN ('Completed', 'Cancelled')
+         WHERE lfu.status = 'Overdue'
          ORDER BY COALESCE(lfu.delayed_until, lfu.follow_up_date) DESC`,
         []
       )

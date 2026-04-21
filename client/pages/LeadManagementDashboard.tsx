@@ -61,7 +61,7 @@ interface FollowUp {
   id: number;
   lead_id: number;
   follow_up_date: string;
-  status: "Pending" | "Completed";
+  status: "Pending" | "Completed" | "Cancelled" | "Delayed" | "Overdue";
   notes: string;
   title?: string;
   company_name: string;
@@ -80,6 +80,13 @@ const STATUS_COLORS: Record<string, string> = {
 const CHART_COLORS = ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444"];
 const INDUSTRIES = ["Banking", "Fintech", "Payments", "Insurance", "Retail", "Telecom", "Government", "Other"];
 const STATUSES = ["New", "Contacted", "Qualified", "Proposal Sent", "Won", "Lost"];
+const FOLLOW_UP_STATUS_COLORS: Record<string, string> = {
+  Pending: "bg-yellow-100 text-yellow-800",
+  Completed: "bg-green-100 text-green-800",
+  Cancelled: "bg-gray-100 text-gray-800",
+  Delayed: "bg-orange-100 text-orange-800",
+  Overdue: "bg-red-100 text-red-800",
+};
 
 // API
 async function fetchLeads(params: Record<string, any>) {
@@ -178,14 +185,20 @@ export default function LeadManagementDashboard() {
   const { data: statsData } = useQuery({
     queryKey: ["lead-dashboard-stats"],
     queryFn: fetchDashboardStats,
-    staleTime: 5 * 60_000,
+    staleTime: 0,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   const { data: followUpSummary } = useQuery({
     queryKey: ["lead-followup-summary"],
     queryFn: fetchFollowUpSummary,
     staleTime: 0,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
     refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const { data, isLoading } = useQuery({
@@ -374,6 +387,9 @@ export default function LeadManagementDashboard() {
                             <p className="text-xs text-gray-600">{fu.company_name}</p>
                             {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
                           </div>
+                          <Badge className={`shrink-0 ${FOLLOW_UP_STATUS_COLORS[fu.status] || "bg-gray-100 text-gray-800"}`}>
+                            {fu.status}
+                          </Badge>
                         </div>
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-xs text-gray-700 font-medium">
@@ -383,7 +399,7 @@ export default function LeadManagementDashboard() {
                               timeZone: 'Asia/Kolkata',
                             })}
                           </span>
-                          <FollowUpTimer followUpDate={fu.follow_up_date} isOverdue={false} />
+                          <FollowUpTimer followUpDate={fu.follow_up_date} isOverdue={fu.status === "Overdue"} />
                         </div>
                       </div>
                     ))}
@@ -426,6 +442,9 @@ export default function LeadManagementDashboard() {
                             <p className="text-xs text-gray-600">{fu.company_name}</p>
                             {fu.notes && <p className="text-xs text-gray-500 mt-1">{fu.notes.substring(0, 50)}...</p>}
                           </div>
+                          <Badge className={`shrink-0 ${FOLLOW_UP_STATUS_COLORS[fu.status] || "bg-gray-100 text-gray-800"}`}>
+                            {fu.status}
+                          </Badge>
                         </div>
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-xs text-gray-700 font-medium">
@@ -435,7 +454,7 @@ export default function LeadManagementDashboard() {
                               timeZone: 'Asia/Kolkata',
                             })}
                           </span>
-                          <FollowUpTimer followUpDate={fu.follow_up_date} isOverdue={true} />
+                          <FollowUpTimer followUpDate={fu.follow_up_date} isOverdue={fu.status === "Overdue"} />
                         </div>
                       </div>
                     ))}

@@ -185,27 +185,39 @@ router.get("/", async (req: Request, res: Response) => {
 
     const { status, industry, country, search, sortBy = "created_at", sortOrder = "DESC", limit = 100, offset = 0 } = req.query;
 
+    const normalizeFilterValue = (value: unknown) => {
+      if (typeof value !== "string") return undefined;
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.toLowerCase() === "all") return undefined;
+      return trimmed;
+    };
+
+    const normalizedStatus = normalizeFilterValue(status);
+    const normalizedIndustry = normalizeFilterValue(industry);
+    const normalizedCountry = normalizeFilterValue(country);
+    const normalizedSearch = typeof search === "string" ? search.trim() : "";
+
     let query = "SELECT * FROM sales_leads WHERE 1=1";
     const params: any[] = [];
     let paramIndex = 1;
 
-    if (status) {
+    if (normalizedStatus) {
       query += ` AND status = $${paramIndex++}`;
-      params.push(status);
+      params.push(normalizedStatus);
     }
 
-    if (industry) {
+    if (normalizedIndustry) {
       query += ` AND industry = $${paramIndex++}`;
-      params.push(industry);
+      params.push(normalizedIndustry);
     }
 
-    if (country) {
+    if (normalizedCountry) {
       query += ` AND country = $${paramIndex++}`;
-      params.push(country);
+      params.push(normalizedCountry);
     }
 
-    if (search) {
-      const searchTerm = `%${search}%`;
+    if (normalizedSearch) {
+      const searchTerm = `%${normalizedSearch}%`;
       query += ` AND (company_name ILIKE $${paramIndex++} OR company_legal_name ILIKE $${paramIndex++} OR company_website ILIKE $${paramIndex++})`;
       params.push(searchTerm, searchTerm, searchTerm);
     }
@@ -256,20 +268,20 @@ router.get("/", async (req: Request, res: Response) => {
     const countParams: any[] = [];
     let countParamIndex = 1;
 
-    if (status) {
+    if (normalizedStatus) {
       countQuery += ` AND status = $${countParamIndex++}`;
-      countParams.push(status);
+      countParams.push(normalizedStatus);
     }
-    if (industry) {
+    if (normalizedIndustry) {
       countQuery += ` AND industry = $${countParamIndex++}`;
-      countParams.push(industry);
+      countParams.push(normalizedIndustry);
     }
-    if (country) {
+    if (normalizedCountry) {
       countQuery += ` AND country = $${countParamIndex++}`;
-      countParams.push(country);
+      countParams.push(normalizedCountry);
     }
-    if (search) {
-      const searchTerm = `%${search}%`;
+    if (normalizedSearch) {
+      const searchTerm = `%${normalizedSearch}%`;
       countQuery += ` AND (company_name ILIKE $${countParamIndex++} OR company_legal_name ILIKE $${countParamIndex++} OR company_website ILIKE $${countParamIndex++})`;
       countParams.push(searchTerm, searchTerm, searchTerm);
     }

@@ -216,6 +216,20 @@ export default function LeadManagementDashboard() {
   const leads = data?.leads || [];
   const stats = statsData || {};
 
+  const statusFilterOptions = useMemo(() => {
+    const apiStatuses = Array.isArray(statsData?.by_status)
+      ? statsData.by_status.map((item: any) => item.status).filter(Boolean)
+      : [];
+    return apiStatuses.length ? Array.from(new Set([...STATUSES, ...apiStatuses])) : STATUSES;
+  }, [statsData?.by_status]);
+
+  const industryFilterOptions = useMemo(() => {
+    const apiIndustries = Array.isArray(statsData?.by_industry)
+      ? statsData.by_industry.map((item: any) => item.industry).filter(Boolean)
+      : [];
+    return apiIndustries.length ? Array.from(new Set([...INDUSTRIES, ...apiIndustries])) : INDUSTRIES;
+  }, [statsData?.by_industry]);
+
   // Prepare chart data
   const statusChartData = useMemo(() => {
     if (!Array.isArray(stats.by_status)) return [];
@@ -490,7 +504,7 @@ export default function LeadManagementDashboard() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            {STATUSES.map((st) => (
+            {statusFilterOptions.map((st) => (
               <SelectItem key={st} value={st}>
                 {st}
               </SelectItem>
@@ -504,7 +518,7 @@ export default function LeadManagementDashboard() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Industries</SelectItem>
-            {INDUSTRIES.map((ind) => (
+            {industryFilterOptions.map((ind) => (
               <SelectItem key={ind} value={ind}>
                 {ind}
               </SelectItem>

@@ -215,12 +215,19 @@ async function ensureCommercialWorkflowSchema() {
           signed_copy_path TEXT,
           signed_copy_size TEXT,
           signed_copy_type TEXT,
+          scope_finalization TEXT,
           created_by TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           signed_at TIMESTAMP
         )
       `),
+    );
+
+    await queryWithRetry(() =>
+      pool.query(
+        `ALTER TABLE lead_commercial_records ADD COLUMN IF NOT EXISTS scope_finalization TEXT`,
+      ),
     );
 
     await queryWithRetry(() =>
@@ -251,6 +258,7 @@ function mapCommercialRecord(row: any) {
     signed_copy_path: decrypt(row.signed_copy_path),
     signed_copy_size: decryptNumber(row.signed_copy_size),
     signed_copy_type: decrypt(row.signed_copy_type),
+    scope_finalization: parseEncryptedJson(row.scope_finalization, {} as any),
     created_by: decrypt(row.created_by),
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -788,6 +796,7 @@ router.post("/:id/commercials", async (req: Request, res: Response) => {
       signed_copy_path = "",
       signed_copy_size = null,
       signed_copy_type = "",
+      scope_finalization = {},
       created_by = "",
     } = req.body || {};
 
@@ -813,11 +822,12 @@ router.post("/:id/commercials", async (req: Request, res: Response) => {
           signed_copy_path,
           signed_copy_size,
           signed_copy_type,
+          scope_finalization,
           created_by,
           signed_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-          CASE WHEN $13 = 'signed' THEN CURRENT_TIMESTAMP ELSE NULL END,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+          CASE WHEN $14 = 'signed' THEN CURRENT_TIMESTAMP ELSE NULL END,
           CURRENT_TIMESTAMP
         ) RETURNING *`,
         [
@@ -832,6 +842,7 @@ router.post("/:id/commercials", async (req: Request, res: Response) => {
           encrypt(signed_copy_path || ""),
           encrypt(signed_copy_size == null ? "" : String(signed_copy_size)),
           encrypt(signed_copy_type || ""),
+          encrypt(JSON.stringify(scope_finalization && typeof scope_finalization === "object" ? scope_finalization : {})),
           encrypt(created_by || ""),
           signed_status,
         ],
@@ -868,6 +879,7 @@ router.put("/:id/commercials/:recordId", async (req: Request, res: Response) => 
       signed_copy_path = "",
       signed_copy_size = null,
       signed_copy_type = "",
+      scope_finalization = {},
       created_by = "",
     } = req.body || {};
 
@@ -884,14 +896,15 @@ router.put("/:id/commercials/:recordId", async (req: Request, res: Response) => 
              signed_copy_path = $8,
              signed_copy_size = $9,
              signed_copy_type = $10,
-             created_by = $11,
+             scope_finalization = $11,
+             created_by = $12,
              signed_at = CASE
-               WHEN $12 = 'signed' AND signed_at IS NULL THEN CURRENT_TIMESTAMP
-               WHEN $12 <> 'signed' THEN NULL
+               WHEN $13 = 'signed' AND signed_at IS NULL THEN CURRENT_TIMESTAMP
+               WHEN $13 <> 'signed' THEN NULL
                ELSE signed_at
              END,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $13 AND lead_id = $14
+         WHERE id = $14 AND lead_id = $15
          RETURNING *`,
         [
           encrypt(nda_mode || ""),
@@ -904,6 +917,7 @@ router.put("/:id/commercials/:recordId", async (req: Request, res: Response) => 
           encrypt(signed_copy_path || ""),
           encrypt(signed_copy_size == null ? "" : String(signed_copy_size)),
           encrypt(signed_copy_type || ""),
+          encrypt(JSON.stringify(scope_finalization && typeof scope_finalization === "object" ? scope_finalization : {})),
           encrypt(created_by || ""),
           signed_status,
           recordId,

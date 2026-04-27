@@ -1691,7 +1691,7 @@ export default function LeadOverview() {
 
                     <div className="mt-4 grid gap-4 lg:grid-cols-3">
                       <div className="rounded-xl border bg-slate-50 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Materials from master</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Commercial + NDA files</p>
                         <div className="mt-3 space-y-2">
                           {record.selected_materials?.length ? (
                             record.selected_materials.map((material) => (
@@ -1745,17 +1745,29 @@ export default function LeadOverview() {
                       </div>
                     </div>
 
-                    <div className="mt-4 flex flex-col gap-2 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+                    <div className="mt-4 flex flex-col gap-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
                       <div>
                         Signed at: {record.signed_at ? new Date(record.signed_at).toLocaleString() : "Not signed yet"}
                       </div>
-                      <div>
-                        Signed copy: {record.signed_copy_path ? (
-                          <a href={record.signed_copy_path} target="_blank" rel="noreferrer" className="font-medium text-blue-600 hover:underline">
-                            {record.signed_copy_name || "View file"}
-                          </a>
-                        ) : (
-                          "Not uploaded"
+                      <div className="flex flex-col gap-2 md:items-end">
+                        <div>
+                          Signed copy: <span className="font-medium text-slate-900">{record.signed_copy_name || "Not uploaded"}</span>
+                        </div>
+                        {record.signed_copy_path && (
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline" asChild>
+                              <a href={record.signed_copy_path} target="_blank" rel="noreferrer">
+                                <Eye className="mr-2 h-4 w-4" />
+                                View
+                              </a>
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" asChild>
+                              <a href={record.signed_copy_path} download={record.signed_copy_name || `signed-copy-${record.id}`}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Download
+                              </a>
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>

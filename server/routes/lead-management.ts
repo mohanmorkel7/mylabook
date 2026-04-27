@@ -175,6 +175,89 @@ function decrypt(text: string | null | undefined): string {
   } catch { return ""; }
 }
 
+function parseEncryptedJson<T>(value: string | null | undefined, fallback: T): T {
+  const decryptedValue = decrypt(value);
+  if (!decryptedValue) return fallback;
+  try {
+    return JSON.parse(decryptedValue) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function decryptNumber(value: string | null | undefined): number | null {
+  const decryptedValue = decrypt(value);
+  if (!decryptedValue) return null;
+  const parsed = Number(decryptedValue);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+let commercialWorkflowSchemaReady = false;
+let commercialWorkflowSchemaInProgress = false;
+
+async function ensureCommercialWorkflowSchema() {
+  if (commercialWorkflowSchemaReady || commercialWorkflowSchemaInProgress) return;
+  commercialWorkflowSchemaInProgress = true;
+
+  try {
+    await queryWithRetry(() =>
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS lead_commercial_records (
+          id SERIAL PRIMARY KEY,
+          lead_id INTEGER REFERENCES sales_leads(id) ON DELETE CASCADE,
+          nda_mode TEXT,
+          signed_status TEXT,
+          document_name_template TEXT,
+          generated_document_name TEXT,
+          selected_materials TEXT,
+          document_fields TEXT,
+          signed_copy_name TEXT,
+          signed_copy_path TEXT,
+          signed_copy_size TEXT,
+          signed_copy_type TEXT,
+          created_by TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          signed_at TIMESTAMP
+        )
+      `),
+    );
+
+    await queryWithRetry(() =>
+      pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_lead_commercial_records_lead_id ON lead_commercial_records(lead_id)`,
+      ),
+    );
+
+    commercialWorkflowSchemaReady = true;
+  } catch (error: any) {
+    console.error("[Lead Management] Failed to ensure commercial workflow schema:", error.message);
+  } finally {
+    commercialWorkflowSchemaInProgress = false;
+  }
+}
+
+function mapCommercialRecord(row: any) {
+  return {
+    id: row.id,
+    lead_id: row.lead_id,
+    nda_mode: decrypt(row.nda_mode) || null,
+    signed_status: decrypt(row.signed_status) || "not_signed",
+    document_name_template: decrypt(row.document_name_template),
+    generated_document_name: decrypt(row.generated_document_name),
+    selected_materials: parseEncryptedJson(row.selected_materials, [] as any[]),
+    document_fields: parseEncryptedJson(row.document_fields, [] as any[]),
+    signed_copy_name: decrypt(row.signed_copy_name),
+    signed_copy_path: decrypt(row.signed_copy_path),
+    signed_copy_size: decryptNumber(row.signed_copy_size),
+    signed_copy_type: decrypt(row.signed_copy_type),
+    created_by: decrypt(row.created_by),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    signed_at: row.signed_at,
+  };
+}
+
 // ── GET /api/leads - List all leads with filters and search ──────────────
 router.get("/", async (req: Request, res: Response) => {
   try {
@@ -653,6 +736,220 @@ router.delete("/:id", async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("Failed to delete lead:", error.message);
     res.status(500).json({ error: "Failed to delete lead" });
+  }
+});
+
+// ── GET /api/leads/:id/commercials - Get commercial workflow records ───
+router.get("/:id/commercials", async (req: Request, res: Response) => {
+  try {
+    await ensureTablesExist();
+    await ensureCommercialWorkflowSchema();
+
+    const leadId = parseInt(req.params.id);
+    if (isNaN(leadId)) {
+      return res.status(400).json({ error: "Invalid lead ID" });
+    }
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `SELECT * FROM lead_commercial_records WHERE lead_id = $1 ORDER BY created_at DESC, id DESC`,
+        [leadId],
+      ),
+    );
+
+    res.json({
+      records: result.rows.map(mapCommercialRecord),
+    });
+  } catch (error: any) {
+    console.error("Failed to fetch commercial records:", error.message);
+    res.status(500).json({ error: "Failed to fetch commercial records" });
+  }
+});
+
+// ── POST /api/leads/:id/commercials - Create commercial workflow record ──
+router.post("/:id/commercials", async (req: Request, res: Response) => {
+  try {
+    await ensureTablesExist();
+    await ensureCommercialWorkflowSchema();
+
+    const leadId = parseInt(req.params.id);
+    if (isNaN(leadId)) {
+      return res.status(400).json({ error: "Invalid lead ID" });
+    }
+
+    const {
+      nda_mode,
+      signed_status = "not_signed",
+      document_name_template = "",
+      generated_document_name = "",
+      selected_materials = [],
+      document_fields = [],
+      signed_copy_name = "",
+      signed_copy_path = "",
+      signed_copy_size = null,
+      signed_copy_type = "",
+      created_by = "",
+    } = req.body || {};
+
+    const leadExists = await queryWithRetry(() =>
+      pool.query(`SELECT id FROM sales_leads WHERE id = $1`, [leadId]),
+    );
+
+    if (leadExists.rows.length === 0) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO lead_commercial_records (
+          lead_id,
+          nda_mode,
+          signed_status,
+          document_name_template,
+          generated_document_name,
+          selected_materials,
+          document_fields,
+          signed_copy_name,
+          signed_copy_path,
+          signed_copy_size,
+          signed_copy_type,
+          created_by,
+          signed_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+          CASE WHEN $13 = 'signed' THEN CURRENT_TIMESTAMP ELSE NULL END,
+          CURRENT_TIMESTAMP
+        ) RETURNING *`,
+        [
+          leadId,
+          encrypt(nda_mode || ""),
+          encrypt(signed_status),
+          encrypt(document_name_template),
+          encrypt(generated_document_name),
+          encrypt(JSON.stringify(Array.isArray(selected_materials) ? selected_materials : [])),
+          encrypt(JSON.stringify(Array.isArray(document_fields) ? document_fields : [])),
+          encrypt(signed_copy_name || ""),
+          encrypt(signed_copy_path || ""),
+          encrypt(signed_copy_size == null ? "" : String(signed_copy_size)),
+          encrypt(signed_copy_type || ""),
+          encrypt(created_by || ""),
+          signed_status,
+        ],
+      ),
+    );
+
+    res.status(201).json({ record: mapCommercialRecord(result.rows[0]) });
+  } catch (error: any) {
+    console.error("Failed to create commercial record:", error.message);
+    res.status(500).json({ error: "Failed to create commercial record" });
+  }
+});
+
+// ── PUT /api/leads/:id/commercials/:recordId - Update workflow record ────
+router.put("/:id/commercials/:recordId", async (req: Request, res: Response) => {
+  try {
+    await ensureTablesExist();
+    await ensureCommercialWorkflowSchema();
+
+    const leadId = parseInt(req.params.id);
+    const recordId = parseInt(req.params.recordId);
+    if (isNaN(leadId) || isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid lead or record ID" });
+    }
+
+    const {
+      nda_mode,
+      signed_status = "not_signed",
+      document_name_template = "",
+      generated_document_name = "",
+      selected_materials = [],
+      document_fields = [],
+      signed_copy_name = "",
+      signed_copy_path = "",
+      signed_copy_size = null,
+      signed_copy_type = "",
+      created_by = "",
+    } = req.body || {};
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `UPDATE lead_commercial_records
+         SET nda_mode = $1,
+             signed_status = $2,
+             document_name_template = $3,
+             generated_document_name = $4,
+             selected_materials = $5,
+             document_fields = $6,
+             signed_copy_name = $7,
+             signed_copy_path = $8,
+             signed_copy_size = $9,
+             signed_copy_type = $10,
+             created_by = $11,
+             signed_at = CASE
+               WHEN $12 = 'signed' AND signed_at IS NULL THEN CURRENT_TIMESTAMP
+               WHEN $12 <> 'signed' THEN NULL
+               ELSE signed_at
+             END,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $13 AND lead_id = $14
+         RETURNING *`,
+        [
+          encrypt(nda_mode || ""),
+          encrypt(signed_status),
+          encrypt(document_name_template),
+          encrypt(generated_document_name),
+          encrypt(JSON.stringify(Array.isArray(selected_materials) ? selected_materials : [])),
+          encrypt(JSON.stringify(Array.isArray(document_fields) ? document_fields : [])),
+          encrypt(signed_copy_name || ""),
+          encrypt(signed_copy_path || ""),
+          encrypt(signed_copy_size == null ? "" : String(signed_copy_size)),
+          encrypt(signed_copy_type || ""),
+          encrypt(created_by || ""),
+          signed_status,
+          recordId,
+          leadId,
+        ],
+      ),
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Commercial record not found" });
+    }
+
+    res.json({ record: mapCommercialRecord(result.rows[0]) });
+  } catch (error: any) {
+    console.error("Failed to update commercial record:", error.message);
+    res.status(500).json({ error: "Failed to update commercial record" });
+  }
+});
+
+// ── DELETE /api/leads/:id/commercials/:recordId - Delete workflow record ─
+router.delete("/:id/commercials/:recordId", async (req: Request, res: Response) => {
+  try {
+    await ensureTablesExist();
+    await ensureCommercialWorkflowSchema();
+
+    const leadId = parseInt(req.params.id);
+    const recordId = parseInt(req.params.recordId);
+    if (isNaN(leadId) || isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid lead or record ID" });
+    }
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `DELETE FROM lead_commercial_records WHERE id = $1 AND lead_id = $2 RETURNING id`,
+        [recordId, leadId],
+      ),
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Commercial record not found" });
+    }
+
+    res.json({ message: "Commercial record deleted successfully", id: result.rows[0].id });
+  } catch (error: any) {
+    console.error("Failed to delete commercial record:", error.message);
+    res.status(500).json({ error: "Failed to delete commercial record" });
   }
 });
 

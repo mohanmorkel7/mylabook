@@ -1031,6 +1031,42 @@ function SortableSubTaskItem({
                     </div>
                   )}
 
+                {((subtask as any).rejected_by ||
+                  (subtask as any).reject_reason ||
+                  (subtask as any).rejected_at) && (
+                  <div className="mt-2">
+                    <Badge
+                      variant="destructive"
+                      className="flex w-full flex-col items-start gap-1 rounded-xl px-3 py-2 text-left whitespace-normal leading-relaxed"
+                    >
+                      <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.12em] opacity-90">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Rejected
+                      </div>
+                      <div className="text-xs font-medium">
+                        Rejected by: {(subtask as any).rejected_by || "Unknown"}
+                      </div>
+                      {(subtask as any).rejected_at && (
+                        <div className="text-xs">
+                          Rejected at: {formatToISTDateTime((subtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)
+                        </div>
+                      )}
+                      <div className="text-xs">
+                        Completed by: {(subtask as any).completed_by || (subtask as any).rejected_by || "Unknown"}
+                      </div>
+                      {(subtask as any).completed_at && (
+                        <div className="text-xs">
+                          Completed at: {formatToISTDateTime((subtask as any).completed_at, { second: "2-digit" })} IST (+05:30)
+                        </div>
+                      )}
+                      {(subtask as any).reject_reason && (
+                        <div className="text-xs">
+                          Reason: {(subtask as any).reject_reason}
+                        </div>
+                      )}
+                    </Badge>
+                  </div>
+                )}
 
                 {/* Show delay information if present */}
                 {subtask.status === "delayed" && subtask.delay_reason && (
@@ -4160,53 +4196,6 @@ export default function ClientBasedFinOpsTaskManager() {
                     </div>
                   </div>
                 </CardHeader>
-                {task.subtasks?.some(
-                  (st) => st.rejected_by || st.reject_reason || st.rejected_at,
-                ) && (
-                  <CardContent className="pt-0 pb-4">
-                    {(() => {
-                      const rejectedSubtask = [...(task.subtasks || [])]
-                        .reverse()
-                        .find(
-                          (st) => st.rejected_by || st.reject_reason || st.rejected_at,
-                        );
-                      if (!rejectedSubtask) return null;
-                      const rejectedBy =
-                        (rejectedSubtask as any).rejected_by || "Unknown";
-                      const completedBy =
-                        (rejectedSubtask as any).completed_by || rejectedBy;
-                      const rejectedAt = (rejectedSubtask as any).rejected_at
-                        ? formatToISTDateTime((rejectedSubtask as any).rejected_at, {
-                            second: "2-digit",
-                          })
-                        : "";
-                      const completedAt = (rejectedSubtask as any).completed_at
-                        ? formatToISTDateTime((rejectedSubtask as any).completed_at, {
-                            second: "2-digit",
-                          })
-                        : "";
-                      const reason =
-                        (rejectedSubtask as any).reject_reason || "No reason";
-
-                      return (
-                        <Badge
-                          variant="destructive"
-                          className="flex w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-full px-3 py-2 text-[11px] font-medium leading-none"
-                          title={`Rejected by ${rejectedBy}${rejectedAt ? ` on ${rejectedAt} IST (+05:30)` : ""}; Completed by ${completedBy}${completedAt ? ` on ${completedAt} IST (+05:30)` : ""}; Reason: ${reason}`}
-                        >
-                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">
-                            Rejected by {rejectedBy}
-                            {rejectedAt ? ` • Rejected at ${rejectedAt} IST (+05:30)` : ""}
-                            {completedBy ? ` • Completed by ${completedBy}` : ""}
-                            {completedAt ? ` • Completed at ${completedAt} IST (+05:30)` : ""}
-                            {reason ? ` • Reason: ${reason}` : ""}
-                          </span>
-                        </Badge>
-                      );
-                    })()}
-                  </CardContent>
-                )}
                 {/* Inline Subtasks Management */}
                 {task.subtasks && task.subtasks.length > 0 && (
                   <CardContent className="pt-0">

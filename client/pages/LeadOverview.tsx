@@ -72,12 +72,31 @@ async function fetchDemosForLead(leadId: string) {
   return res.json();
 }
 
+type CommercialMaterialSource = "material" | "document";
+
+interface CommercialDocumentTemplateField {
+  key: string;
+  label?: string;
+  sampleValue?: string;
+}
+
+interface CommercialDocumentTemplateBlock {
+  type: string;
+  content: string;
+}
+
 interface CommercialMaterial {
-  id: number;
+  id: string | number;
   title: string;
   description?: string;
   file_type: string;
-  file_url: string;
+  file_url?: string;
+  filename?: string;
+  source_type?: CommercialMaterialSource;
+  document_category?: "commercial" | "nda" | "invoice";
+  nda_mode?: "one-sided" | "mutual" | null;
+  template_fields?: CommercialDocumentTemplateField[];
+  template_blocks?: CommercialDocumentTemplateBlock[];
 }
 
 interface CommercialField {
@@ -119,6 +138,60 @@ interface CommercialFormState {
 }
 
 const DEFAULT_COMMERCIAL_TEMPLATE = "Commercial_{{company_name}}_{{date}}";
+const DOCUMENT_STORAGE_KEY = "materials_documents_templates_v1";
+const FALLBACK_DOCUMENT_TEMPLATES = [
+  {
+    id: "commercial-proposal",
+    name: "Commercial Proposal",
+    description: "Commercial proposal for client engagement and scope approval.",
+    category: "commercial",
+    mode: null,
+    fields: [
+      { key: "company_name", sampleValue: "Mylapay" },
+      { key: "client_name", sampleValue: "Client" },
+      { key: "date", sampleValue: new Date().toISOString().slice(0, 10) },
+    ],
+    blocks: [
+      { type: "header", content: "Commercial Proposal" },
+      { type: "text", content: "Prepared for {{client_name}} by {{company_name}} on {{date}}." },
+      { type: "clause", content: "Scope of work, commercial terms, and timelines are included." },
+    ],
+  },
+  {
+    id: "one-sided-nda",
+    name: "One-Sided NDA",
+    description: "Protect information shared by one party with standard confidentiality clauses.",
+    category: "nda",
+    mode: "one-sided",
+    fields: [
+      { key: "company_name", sampleValue: "Mylapay" },
+      { key: "client_name", sampleValue: "Client" },
+      { key: "date", sampleValue: new Date().toISOString().slice(0, 10) },
+    ],
+    blocks: [
+      { type: "header", content: "One-Sided NDA" },
+      { type: "clause", content: "{{company_name}} agrees to keep confidential information shared by {{client_name}} private." },
+      { type: "signature", content: "Authorized Signatory" },
+    ],
+  },
+  {
+    id: "mutual-nda",
+    name: "Mutual NDA",
+    description: "Shared mutual confidentiality agreement between both parties.",
+    category: "nda",
+    mode: "mutual",
+    fields: [
+      { key: "company_name", sampleValue: "Mylapay" },
+      { key: "client_name", sampleValue: "Client" },
+      { key: "date", sampleValue: new Date().toISOString().slice(0, 10) },
+    ],
+    blocks: [
+      { type: "header", content: "Mutual NDA" },
+      { type: "clause", content: "Both {{company_name}} and {{client_name}} agree to protect each other's confidential information." },
+      { type: "signature", content: "Authorized Signatory" },
+    ],
+  },
+] as const;
 
 function makeCommercialField(key = "", label = "", value = ""): CommercialField {
   return {
@@ -187,6 +260,149 @@ function renderCommercialDocumentName(template: string, fields: CommercialField[
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_")
     .trim();
+}
+
+function replaceTemplateTokens(content: string, values: Record<string, string>) {
+  return content.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, key) => {
+    const normalizedKey = String(key).trim();
+    return values[normalizedKey] ?? `{{${normalizedKey}}}`;
+  });
+}
+
+function mapDocumentTemplatesToMaterials(templates: any[]): CommercialMaterial[] {
+  return templates.map((template: any) => ({
+    id: `doc:${template.id}`,
+    title: template.name || "Untitled document",
+    description: template.description || "",
+    file_type: "document",
+    source_type: "document" as const,
+    document_category: template.category || "commercial",
+    nda_mode: template.mode || null,
+    template_fields: Array.isArray(template.fields) ? template.fields : [],
+    template_blocks: Array.isArray(template.blocks) ? template.blocks : [],
+    filename: `${String(template.name || "document").replace(/\s+/g, "_")}.doc`,
+  }));
+}
+
+function getStoredDocumentTemplates(): CommercialMaterial[] {
+  if (typeof window === "undefined") {
+    return mapDocumentTemplatesToMaterials([...FALLBACK_DOCUMENT_TEMPLATES]);
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(DOCUMENT_STORAGE_KEY);
+    if (!rawValue) {
+      return mapDocumentTemplatesToMaterials([...FALLBACK_DOCUMENT_TEMPLATES]);
+    }
+
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return mapDocumentTemplatesToMaterials([...FALLBACK_DOCUMENT_TEMPLATES]);
+    }
+
+    return mapDocumentTemplatesToMaterials(parsed);
+  } catch {
+    return mapDocumentTemplatesToMaterials([...FALLBACK_DOCUMENT_TEMPLATES]);
+  }
+}
+
+function buildDocumentValues(
+  material: CommercialMaterial,
+  recordFields: CommercialField[] = [],
+) {
+  const templateValues = (material.template_fields || []).reduce<Record<string, string>>(
+    (acc, field) => {
+      if (field.key) {
+        acc[field.key] = field.sampleValue || "";
+      }
+      return acc;
+    },
+    {},
+  );
+
+  const recordValues = recordFields.reduce<Record<string, string>>((acc, field) => {
+    if (field.key) {
+      acc[field.key] = field.value || "";
+    }
+    return acc;
+  }, {});
+
+  return { ...templateValues, ...recordValues };
+}
+
+function buildDocumentHtml(material: CommercialMaterial, recordFields: CommercialField[] = []) {
+  const values = buildDocumentValues(material, recordFields);
+  const renderedContent = (material.template_blocks || [])
+    .map((block) => {
+      const rendered = replaceTemplateTokens(block.content || "", values);
+      if (block.type === "header") return `<h1>${rendered}</h1>`;
+      if (block.type === "clause") return `<p><strong>Clause:</strong> ${rendered}</p>`;
+      if (block.type === "signature") return `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #cbd5e1;"><strong>Signature:</strong> ${rendered}</div>`;
+      if (block.type === "footer") return `<div style="margin-top:24px;font-size:12px;color:#64748b;">${rendered}</div>`;
+      return `<p>${rendered}</p>`;
+    })
+    .join("");
+
+  return `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${material.title}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+          .sheet { max-width: 900px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; }
+          h1 { margin: 0 0 20px; }
+          p { line-height: 1.7; white-space: pre-wrap; }
+        </style>
+      </head>
+      <body>
+        <div class="sheet">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+            <div>
+              <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.18em;">${material.document_category || "document"}</div>
+              <h2 style="margin:8px 0 0;">${material.title}</h2>
+            </div>
+            ${material.nda_mode ? `<div style="font-size:12px;color:#64748b;">${material.nda_mode === "mutual" ? "Mutual NDA" : "One-Sided NDA"}</div>` : ""}
+          </div>
+          ${renderedContent || "<p>No preview available.</p>"}
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+function viewCommercialMaterial(material: CommercialMaterial, recordFields: CommercialField[] = []) {
+  if (material.source_type === "document") {
+    const previewWindow = window.open("", "_blank", "width=1024,height=900");
+    if (!previewWindow) return;
+    previewWindow.document.write(buildDocumentHtml(material, recordFields));
+    previewWindow.document.close();
+    return;
+  }
+
+  if (material.file_url) {
+    window.open(material.file_url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function downloadCommercialMaterial(material: CommercialMaterial, recordFields: CommercialField[] = []) {
+  if (material.source_type === "document") {
+    const blob = new Blob([buildDocumentHtml(material, recordFields)], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = material.filename || `${material.title.replace(/\s+/g, "_")}.doc`;
+    link.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  if (material.file_url) {
+    const link = document.createElement("a");
+    link.href = material.file_url;
+    link.download = material.filename || material.title;
+    link.click();
+  }
 }
 
 async function fetchMaterials() {
@@ -406,7 +622,14 @@ export default function LeadOverview() {
   const followUps = followUpsData?.follow_ups || [];
   const demos = demosData?.demos || [];
   const commercialRecords: CommercialRecord[] = commercialRecordsData?.records || [];
-  const masterMaterials: CommercialMaterial[] = materialsData?.materials || [];
+  const uploadedMaterials: CommercialMaterial[] = (materialsData?.materials || []).map((material: any) => ({
+    ...material,
+    source_type: "material" as const,
+  }));
+  const masterMaterials: CommercialMaterial[] = [
+    ...uploadedMaterials,
+    ...getStoredDocumentTemplates(),
+  ];
   const contacts = Array.isArray(lead?.contacts) ? lead.contacts : [];
   const primaryContact = contacts[0] || null;
   const additionalContacts = contacts.slice(1);
@@ -455,7 +678,7 @@ export default function LeadOverview() {
     setSelectedCommercialMaterialId("");
   };
 
-  const removeCommercialMaterial = (materialId: number) => {
+  const removeCommercialMaterial = (materialId: string | number) => {
     setCommercialForm((prev) => ({
       ...prev,
       selected_materials: prev.selected_materials.filter(
@@ -1246,7 +1469,7 @@ export default function LeadOverview() {
                       <SelectContent>
                         {masterMaterials.map((material) => (
                           <SelectItem key={material.id} value={String(material.id)}>
-                            {material.title} ({material.file_type.toUpperCase()})
+                            {material.title} ({material.source_type === "document" ? `${material.document_category || "document"} document` : material.file_type.toUpperCase()})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1269,20 +1492,45 @@ export default function LeadOverview() {
                       No materials added yet.
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-2 rounded-xl border bg-white p-3">
+                    <div className="space-y-2 rounded-xl border bg-white p-3">
                       {commercialForm.selected_materials.map((material) => (
-                        <div key={material.id} className="flex items-center gap-2 rounded-full border bg-slate-50 px-3 py-1.5 text-sm">
-                          <span className="font-medium text-slate-800">{material.title}</span>
-                          <Badge variant="outline" className="text-[10px] uppercase">
-                            {material.file_type}
-                          </Badge>
-                          <button
-                            type="button"
-                            className="text-slate-500 hover:text-red-600"
-                            onClick={() => removeCommercialMaterial(material.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                        <div key={material.id} className="flex flex-col gap-3 rounded-xl border bg-slate-50 px-3 py-3 text-sm md:flex-row md:items-center md:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-slate-800">{material.title}</span>
+                              <Badge variant="outline" className="text-[10px] uppercase">
+                                {material.source_type === "document" ? material.document_category || "document" : material.file_type}
+                              </Badge>
+                              {material.nda_mode && (
+                                <Badge variant="secondary" className="text-[10px] uppercase">
+                                  {material.nda_mode === "mutual" ? "Mutual NDA" : "One-Sided NDA"}
+                                </Badge>
+                              )}
+                            </div>
+                            {material.description && (
+                              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{material.description}</p>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, commercialForm.document_fields)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, commercialForm.document_fields)}>
+                              <Download className="mr-2 h-4 w-4" />
+                              Download
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => removeCommercialMaterial(material.id)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Remove
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1444,12 +1692,34 @@ export default function LeadOverview() {
                     <div className="mt-4 grid gap-4 lg:grid-cols-3">
                       <div className="rounded-xl border bg-slate-50 p-4">
                         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Materials from master</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-3 space-y-2">
                           {record.selected_materials?.length ? (
                             record.selected_materials.map((material) => (
-                              <Badge key={`${record.id}-${material.id}`} variant="secondary" className="whitespace-normal text-left">
-                                {material.title}
-                              </Badge>
+                              <div key={`${record.id}-${material.id}`} className="rounded-xl border bg-white p-3">
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-medium text-slate-900">{material.title}</span>
+                                      <Badge variant="secondary">
+                                        {material.source_type === "document" ? material.document_category || "document" : material.file_type}
+                                      </Badge>
+                                    </div>
+                                    {material.description && (
+                                      <p className="mt-1 text-xs text-slate-500">{material.description}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, record.document_fields)}>
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      View
+                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, record.document_fields)}>
+                                      <Download className="mr-2 h-4 w-4" />
+                                      Download
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
                             ))
                           ) : (
                             <p className="text-sm text-slate-500">No materials selected</p>

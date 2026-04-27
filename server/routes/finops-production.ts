@@ -1430,10 +1430,20 @@ router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
     try {
       await client.query("BEGIN");
 
-      const trackerRes = await client.query(
-        `SELECT id, status FROM finops_tracker WHERE task_id = $1 AND subtask_id = $2 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,
-        [row.task_id, subtaskId],
-      );
+      let trackerRes;
+      if (tracker_id && !Number.isNaN(Number(tracker_id))) {
+        trackerRes = await client.query(
+          `SELECT id, status FROM finops_tracker WHERE id = $1 LIMIT 1`,
+          [Number(tracker_id)],
+        );
+      }
+
+      if (!trackerRes || !trackerRes.rows.length) {
+        trackerRes = await client.query(
+          `SELECT id, status FROM finops_tracker WHERE task_id = $1 AND subtask_id = $2 ORDER BY run_date DESC, id DESC LIMIT 1`,
+          [row.task_id, subtaskId],
+        );
+      }
 
       if (!trackerRes.rows.length) {
         await client.query("ROLLBACK");

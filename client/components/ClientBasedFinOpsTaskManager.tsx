@@ -896,7 +896,11 @@ function SortableSubTaskItem({
                                     description: `Approved by ${approverName}`,
                                   });
                                 } catch (e) {
-                                  alert("Failed to approve");
+                                  const message =
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Failed to approve";
+                                  alert(message);
                                 }
                               }}
                             >
@@ -931,9 +935,9 @@ function SortableSubTaskItem({
                     <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Are You sure &amp; Reason for reject</DialogTitle>
+                          <DialogTitle>Confirm reject</DialogTitle>
                           <DialogDescription>
-                            Enter the reject reason before moving the subtask back to In-progress.
+                            Are you sure? Please provide a reason before moving the subtask back to In-progress.
                           </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-2 py-2">
@@ -980,7 +984,11 @@ function SortableSubTaskItem({
                                   description: `Rejected by ${rejectorName}`,
                                 });
                               } catch (e) {
-                                alert("Failed to reject");
+                                const message =
+                                  e instanceof Error
+                                    ? e.message
+                                    : "Failed to reject";
+                                alert(message);
                               } finally {
                                 setIsRejecting(false);
                               }

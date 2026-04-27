@@ -1032,7 +1032,9 @@ function SortableSubTaskItem({
                   )}
 
                 {subtask.status === "in_progress" &&
-                  ((subtask as any).rejected_by || (subtask as any).reject_reason) && (
+                  ((subtask as any).rejected_by ||
+                    (subtask as any).reject_reason ||
+                    (subtask as any).rejected_at) && (
                     <div className="mt-2">
                       <Alert className="border-red-200 bg-red-50">
                         <AlertCircle className="h-4 w-4 text-red-600" />
@@ -1044,14 +1046,12 @@ function SortableSubTaskItem({
                               ? ` on ${formatToISTDateTime((subtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)`
                               : ""}
                           </div>
-                          {(subtask as any).completed_by && (
-                            <div>
-                              <strong>Completed by:</strong> {(subtask as any).completed_by}
-                              {(subtask as any).completed_at
-                                ? ` on ${formatToISTDateTime((subtask as any).completed_at, { second: "2-digit" })} IST (+05:30)`
-                                : ""}
-                            </div>
-                          )}
+                          <div>
+                            <strong>Completed by:</strong> {(subtask as any).completed_by || (subtask as any).rejected_by || "Unknown"}
+                            {(subtask as any).completed_at
+                              ? ` on ${formatToISTDateTime((subtask as any).completed_at, { second: "2-digit" })} IST (+05:30)`
+                              : ""}
+                          </div>
                           {(subtask as any).reject_reason && (
                             <div>
                               <strong>Reason:</strong> {(subtask as any).reject_reason}
@@ -4190,6 +4190,45 @@ export default function ClientBasedFinOpsTaskManager() {
                     </div>
                   </div>
                 </CardHeader>
+                {task.subtasks?.some(
+                  (st) => st.rejected_by || st.reject_reason || st.rejected_at,
+                ) && (
+                  <CardContent className="pt-0 pb-4">
+                    {(() => {
+                      const rejectedSubtask = [...(task.subtasks || [])]
+                        .reverse()
+                        .find(
+                          (st) => st.rejected_by || st.reject_reason || st.rejected_at,
+                        );
+                      if (!rejectedSubtask) return null;
+                      return (
+                        <Alert className="border-red-200 bg-red-50">
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                          <AlertTitle className="text-red-800">Rejected</AlertTitle>
+                          <AlertDescription className="text-red-700 space-y-1">
+                            <div>
+                              <strong>Rejected by:</strong> {(rejectedSubtask as any).rejected_by || "Unknown"}
+                              {(rejectedSubtask as any).rejected_at
+                                ? ` on ${formatToISTDateTime((rejectedSubtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)`
+                                : ""}
+                            </div>
+                            <div>
+                              <strong>Completed by:</strong> {(rejectedSubtask as any).completed_by || (rejectedSubtask as any).rejected_by || "Unknown"}
+                              {(rejectedSubtask as any).completed_at
+                                ? ` on ${formatToISTDateTime((rejectedSubtask as any).completed_at, { second: "2-digit" })} IST (+05:30)`
+                                : ""}
+                            </div>
+                            {(rejectedSubtask as any).reject_reason && (
+                              <div>
+                                <strong>Reason:</strong> {(rejectedSubtask as any).reject_reason}
+                              </div>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      );
+                    })()}
+                  </CardContent>
+                )}
                 {/* Inline Subtasks Management */}
                 {task.subtasks && task.subtasks.length > 0 && (
                   <CardContent className="pt-0">

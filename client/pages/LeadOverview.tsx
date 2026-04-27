@@ -202,42 +202,96 @@ function makeCommercialField(key = "", label = "", value = ""): CommercialField 
   };
 }
 
-function buildCommercialForm(lead: any, record?: CommercialRecord): CommercialFormState {
-  if (record) {
+function getCommercialDefaultFields(lead: any): Array<{ key: string; label: string; value: string }> {
+  return [
+    {
+      key: "company_name",
+      label: "Company Name",
+      value: lead?.company_name || "",
+    },
+    {
+      key: "client_name",
+      label: "Client Name",
+      value: lead?.client_name || "",
+    },
+    {
+      key: "date",
+      label: "Date",
+      value: new Date().toISOString().slice(0, 10),
+    },
+  ];
+}
+
+function formatCommercialFieldLabel(key: string) {
+  return String(key || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
+
+function syncCommercialDocumentFields(
+  lead: any,
+  selectedMaterials: CommercialMaterial[] = [],
+  existingFields: CommercialField[] = [],
+) {
+  const definitionMap = new Map<string, { key: string; label: string; value: string }>();
+
+  getCommercialDefaultFields(lead).forEach((field) => {
+    definitionMap.set(field.key, field);
+  });
+
+  selectedMaterials.forEach((material) => {
+    (material.template_fields || []).forEach((field) => {
+      const normalizedKey = String(field.key || "").trim();
+      if (!normalizedKey) return;
+
+      definitionMap.set(normalizedKey, {
+        key: normalizedKey,
+        label: field.label || formatCommercialFieldLabel(normalizedKey),
+        value: field.sampleValue || "",
+      });
+    });
+  });
+
+  const existingByKey = new Map<string, CommercialField>();
+  existingFields.forEach((field) => {
+    const normalizedKey = String(field.key || "").trim();
+    if (!normalizedKey || existingByKey.has(normalizedKey)) return;
+    existingByKey.set(normalizedKey, field);
+  });
+
+  const syncedFields = Array.from(definitionMap.values()).map((definition) => {
+    const existingField = existingByKey.get(definition.key);
     return {
-      nda_mode: record.nda_mode || "one-sided",
-      signed_status: record.signed_status || "not_signed",
-      document_name_template: record.document_name_template || DEFAULT_COMMERCIAL_TEMPLATE,
-      selected_materials: Array.isArray(record.selected_materials) ? record.selected_materials : [],
-      document_fields:
-        Array.isArray(record.document_fields) && record.document_fields.length > 0
-          ? record.document_fields
-          : [
-              makeCommercialField("company_name", "Company Name", lead?.company_name || ""),
-              makeCommercialField("client_name", "Client Name", lead?.client_name || ""),
-              makeCommercialField("date", "Date", new Date().toISOString().slice(0, 10)),
-            ],
-      signed_copy_name: record.signed_copy_name || "",
-      signed_copy_path: record.signed_copy_path || "",
-      signed_copy_size: record.signed_copy_size ?? null,
-      signed_copy_type: record.signed_copy_type || "",
+      id: existingField?.id || makeCommercialField().id,
+      key: definition.key,
+      label: existingField?.label || definition.label,
+      value: existingField?.value ?? definition.value,
     };
-  }
+  });
+
+  const customFields = existingFields.filter((field) => {
+    const normalizedKey = String(field.key || "").trim();
+    return !normalizedKey || !definitionMap.has(normalizedKey);
+  });
+
+  return [...syncedFields, ...customFields];
+}
+
+function buildCommercialForm(lead: any, record?: CommercialRecord): CommercialFormState {
+  const selectedMaterials = record && Array.isArray(record.selected_materials) ? record.selected_materials : [];
+  const existingFields = record && Array.isArray(record.document_fields) ? record.document_fields : [];
 
   return {
-    nda_mode: "one-sided",
-    signed_status: "not_signed",
-    document_name_template: DEFAULT_COMMERCIAL_TEMPLATE,
-    selected_materials: [],
-    document_fields: [
-      makeCommercialField("company_name", "Company Name", lead?.company_name || ""),
-      makeCommercialField("client_name", "Client Name", lead?.client_name || ""),
-      makeCommercialField("date", "Date", new Date().toISOString().slice(0, 10)),
-    ],
-    signed_copy_name: "",
-    signed_copy_path: "",
-    signed_copy_size: null,
-    signed_copy_type: "",
+    nda_mode: record?.nda_mode || "one-sided",
+    signed_status: record?.signed_status || "not_signed",
+    document_name_template: record?.document_name_template || DEFAULT_COMMERCIAL_TEMPLATE,
+    selected_materials: selectedMaterials,
+    document_fields: syncCommercialDocumentFields(lead, selectedMaterials, existingFields),
+    signed_copy_name: record?.signed_copy_name || "",
+    signed_copy_path: record?.signed_copy_path || "",
+    signed_copy_size: record?.signed_copy_size ?? null,
+    signed_copy_type: record?.signed_copy_type || "",
   };
 }
 
@@ -670,21 +724,29 @@ export default function LeadOverview() {
       if (prev.selected_materials.some((item) => item.id === material.id)) {
         return prev;
       }
+
+      const nextSelectedMaterials = [...prev.selected_materials, material];
       return {
         ...prev,
-        selected_materials: [...prev.selected_materials, material],
+        selected_materials: nextSelectedMaterials,
+        document_fields: syncCommercialDocumentFields(lead, nextSelectedMaterials, prev.document_fields),
       };
     });
     setSelectedCommercialMaterialId("");
   };
 
   const removeCommercialMaterial = (materialId: string | number) => {
-    setCommercialForm((prev) => ({
-      ...prev,
-      selected_materials: prev.selected_materials.filter(
+    setCommercialForm((prev) => {
+      const nextSelectedMaterials = prev.selected_materials.filter(
         (item) => item.id !== materialId,
-      ),
-    }));
+      );
+
+      return {
+        ...prev,
+        selected_materials: nextSelectedMaterials,
+        document_fields: syncCommercialDocumentFields(lead, nextSelectedMaterials, prev.document_fields),
+      };
+    });
   };
 
   const updateCommercialField = (
@@ -1563,7 +1625,7 @@ export default function LeadOverview() {
                     <div>
                       <Label>Document fields</Label>
                       <p className="text-xs text-slate-500 mt-1">
-                        Add fields that will be filled into the commercial or NDA document.
+                        Dynamic fields from the selected commercial and NDA files are listed here. Update the values before saving the workflow.
                       </p>
                     </div>
                     <Button type="button" variant="outline" size="sm" onClick={addCommercialFieldRow}>

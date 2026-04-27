@@ -1302,7 +1302,7 @@ export default function LeadOverview() {
                     placeholder="Commercial_{{company_name}}_{{date}}"
                   />
                   <p className="text-xs text-slate-500">
-                    Use tokens like {{company_name}}, {{client_name}}, {{date}}.
+                    Use tokens like <code>{'{{company_name}}'}</code>, <code>{'{{client_name}}'}</code>, <code>{'{{date}}'}</code>.
                   </p>
                   <div className="rounded-xl border bg-white px-4 py-3 text-sm">
                     <span className="text-slate-500">Generated name: </span>

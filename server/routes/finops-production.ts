@@ -390,6 +390,7 @@ router.get("/tasks", async (req: Request, res: Response) => {
               ft.status,
               ft.started_at,
               ft.completed_at,
+              ft.completed_by,
               NULL::timestamp AS due_at,
               ft.scheduled_time AS start_time,
               ft.subtask_scheduled_date AS scheduled_date,
@@ -401,6 +402,9 @@ router.get("/tasks", async (req: Request, res: Response) => {
               ft.assigned_to::jsonb AS assigned_to,
               COALESCE(t.reporting_managers::jsonb, '[]'::jsonb) AS reporting_managers,
               COALESCE(t.escalation_managers::jsonb, '[]'::jsonb) AS escalation_managers,
+              ft.rejected_by,
+              ft.rejected_at,
+              ft.reject_reason,
               (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_by,
               (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_at
             FROM finops_tracker ft
@@ -426,6 +430,7 @@ router.get("/tasks", async (req: Request, res: Response) => {
               END AS status,
               st.started_at,
               st.completed_at,
+              NULL::text AS completed_by,
               NULL::timestamp AS due_at,
               st.start_time AS start_time,
               st.scheduled_date AS scheduled_date,
@@ -437,6 +442,9 @@ router.get("/tasks", async (req: Request, res: Response) => {
               COALESCE(st.assigned_to::jsonb, t.assigned_to::jsonb, '[]'::jsonb) AS assigned_to,
               COALESCE(t.reporting_managers::jsonb, '[]'::jsonb) AS reporting_managers,
               COALESCE(t.escalation_managers::jsonb, '[]'::jsonb) AS escalation_managers,
+              NULL::text AS rejected_by,
+              NULL::timestamp AS rejected_at,
+              NULL::text AS reject_reason,
               (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = st.id LIMIT 1) AS approved_by,
               (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = st.id LIMIT 1) AS approved_at
             FROM finops_subtasks st
@@ -505,6 +513,7 @@ router.get("/tasks", async (req: Request, res: Response) => {
                 'status', ft.status,
                 'started_at', ft.started_at,
                 'completed_at', ft.completed_at,
+                'completed_by', ft.completed_by,
                 'due_at', NULL,
                 'start_time', ft.scheduled_time,
                 'scheduled_date', ft.subtask_scheduled_date,
@@ -516,6 +525,9 @@ router.get("/tasks", async (req: Request, res: Response) => {
                 'assigned_to', ft.assigned_to::jsonb,
                 'reporting_managers', ft.reporting_managers,
                 'escalation_managers', ft.escalation_managers,
+                'rejected_by', ft.rejected_by,
+                'rejected_at', ft.rejected_at,
+                'reject_reason', ft.reject_reason,
                 'approved_by', (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1),
                 'approved_at', (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1)
               ) ORDER BY ft.order_position

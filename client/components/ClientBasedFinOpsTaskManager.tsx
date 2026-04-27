@@ -791,7 +791,9 @@ function SortableSubTaskItem({
 
                         if (!activeUser || !activeUser.name) return null;
 
-                        const isAdmin = activeUser?.role === "admin";
+                        const isAdmin =
+                          String(activeUser?.role || "").toLowerCase() ===
+                          "admin";
 
                         // Use the same robust parsing as canEditFinOpsTasks
                         const parseManagersArray = (managers: any): string[] => {
@@ -860,14 +862,17 @@ function SortableSubTaskItem({
                           ["completed", "approved"].includes(subtask.status) &&
                           !isApproved;
                         const canSeeRejectButton =
-                          (isReporting || isEscalation) &&
+                          (isReporting || isEscalation || isAdmin) &&
                           !isAssigned &&
                           ["completed", "approved"].includes(subtask.status) &&
                           !isApproved;
 
+                        const actionButtons: any[] = [];
+
                         if (canSeeApproveButton) {
-                          return (
+                          actionButtons.push(
                             <Button
+                              key="approve"
                               size="sm"
                               variant="outline"
                               onClick={async () => {
@@ -896,20 +901,25 @@ function SortableSubTaskItem({
                               }}
                             >
                               Approve
-                            </Button>
+                            </Button>,
                           );
                         }
 
                         if (canSeeRejectButton) {
-                          return (
+                          actionButtons.push(
                             <Button
+                              key="reject"
                               size="sm"
                               variant="destructive"
                               onClick={() => setShowRejectDialog(true)}
                             >
                               Reject
-                            </Button>
+                            </Button>,
                           );
+                        }
+
+                        if (actionButtons.length) {
+                          return <>{actionButtons}</>;
                         }
                       } catch {
                         // safely ignore any runtime errors

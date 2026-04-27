@@ -589,6 +589,7 @@ function SortableSubTaskItem({
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
+  const activeUser = currentUser || null;
 
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: subtask.id });

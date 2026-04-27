@@ -278,8 +278,36 @@ function syncCommercialDocumentFields(
   return [...syncedFields, ...customFields];
 }
 
-function buildCommercialForm(lead: any, record?: CommercialRecord): CommercialFormState {
-  const selectedMaterials = record && Array.isArray(record.selected_materials) ? record.selected_materials : [];
+function hydrateCommercialMaterials(
+  selectedMaterials: CommercialMaterial[] = [],
+  masterMaterials: CommercialMaterial[] = [],
+) {
+  return selectedMaterials.map((material) => {
+    const latestMaterial = masterMaterials.find(
+      (item) => String(item.id) === String(material.id),
+    );
+
+    if (!latestMaterial) {
+      return material;
+    }
+
+    return {
+      ...material,
+      ...latestMaterial,
+      id: material.id,
+    };
+  });
+}
+
+function buildCommercialForm(
+  lead: any,
+  masterMaterials: CommercialMaterial[] = [],
+  record?: CommercialRecord,
+): CommercialFormState {
+  const selectedMaterials = hydrateCommercialMaterials(
+    record && Array.isArray(record.selected_materials) ? record.selected_materials : [],
+    masterMaterials,
+  );
   const existingFields = record && Array.isArray(record.document_fields) ? record.document_fields : [];
 
   return {
@@ -530,7 +558,7 @@ export default function LeadOverview() {
   const [editingCommercial, setEditingCommercial] = useState<CommercialRecord | null>(null);
   const [selectedCommercialMaterialId, setSelectedCommercialMaterialId] = useState("");
   const [signedCopyFile, setSignedCopyFile] = useState<File | null>(null);
-  const [commercialForm, setCommercialForm] = useState<CommercialFormState>(() => buildCommercialForm(null));
+  const [commercialForm, setCommercialForm] = useState<CommercialFormState>(() => buildCommercialForm(null, []));
 
   const { data: leadData, isLoading } = useQuery({
     queryKey: ["lead", id],
@@ -638,7 +666,7 @@ export default function LeadOverview() {
       setEditingCommercial(null);
       setSelectedCommercialMaterialId("");
       setSignedCopyFile(null);
-      setCommercialForm(buildCommercialForm(lead));
+      setCommercialForm(buildCommercialForm(lead, masterMaterials));
       toast({
         title: editingCommercial ? "Commercial workflow updated" : "Commercial workflow created",
       });
@@ -684,6 +712,15 @@ export default function LeadOverview() {
     ...uploadedMaterials,
     ...getStoredDocumentTemplates(),
   ];
+  const hydratedCommercialRecords: CommercialRecord[] = commercialRecords.map((record) => {
+    const selectedMaterials = hydrateCommercialMaterials(record.selected_materials, masterMaterials);
+
+    return {
+      ...record,
+      selected_materials: selectedMaterials,
+      document_fields: syncCommercialDocumentFields(lead, selectedMaterials, record.document_fields),
+    };
+  });
   const contacts = Array.isArray(lead?.contacts) ? lead.contacts : [];
   const primaryContact = contacts[0] || null;
   const additionalContacts = contacts.slice(1);
@@ -699,7 +736,7 @@ export default function LeadOverview() {
 
   const openCommercialForm = (record?: CommercialRecord) => {
     setEditingCommercial(record || null);
-    setCommercialForm(buildCommercialForm(lead, record));
+    setCommercialForm(buildCommercialForm(lead, masterMaterials, record));
     setSignedCopyFile(null);
     setSelectedCommercialMaterialId("");
     setShowCommercialForm(true);
@@ -710,7 +747,7 @@ export default function LeadOverview() {
     setEditingCommercial(null);
     setSignedCopyFile(null);
     setSelectedCommercialMaterialId("");
-    setCommercialForm(buildCommercialForm(lead));
+    setCommercialForm(buildCommercialForm(lead, masterMaterials));
   };
 
   const addSelectedCommercialMaterial = () => {
@@ -1703,13 +1740,13 @@ export default function LeadOverview() {
               </div>
             )}
 
-            {commercialRecords.length === 0 ? (
+            {hydratedCommercialRecords.length === 0 ? (
               <div className="rounded-2xl border border-dashed px-6 py-8 text-center text-sm text-slate-500">
                 No commercial shares created yet.
               </div>
             ) : (
               <div className="grid gap-4">
-                {commercialRecords.map((record) => (
+                {hydratedCommercialRecords.map((record) => (
                   <div key={record.id} className="rounded-2xl border bg-white p-5 shadow-sm">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-2">

@@ -1031,36 +1031,6 @@ function SortableSubTaskItem({
                     </div>
                   )}
 
-                {subtask.status === "in_progress" &&
-                  ((subtask as any).rejected_by ||
-                    (subtask as any).reject_reason ||
-                    (subtask as any).rejected_at) && (
-                    <div className="mt-2">
-                      <Alert className="border-red-200 bg-red-50">
-                        <AlertCircle className="h-4 w-4 text-red-600" />
-                        <AlertTitle className="text-red-800">Rejected</AlertTitle>
-                        <AlertDescription className="text-red-700 space-y-1">
-                          <div>
-                            <strong>Rejected by:</strong> {(subtask as any).rejected_by || "Unknown"}
-                            {(subtask as any).rejected_at
-                              ? ` on ${formatToISTDateTime((subtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)`
-                              : ""}
-                          </div>
-                          <div>
-                            <strong>Completed by:</strong> {(subtask as any).completed_by || (subtask as any).rejected_by || "Unknown"}
-                            {(subtask as any).completed_at
-                              ? ` on ${formatToISTDateTime((subtask as any).completed_at, { second: "2-digit" })} IST (+05:30)`
-                              : ""}
-                          </div>
-                          {(subtask as any).reject_reason && (
-                            <div>
-                              <strong>Reason:</strong> {(subtask as any).reject_reason}
-                            </div>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    </div>
-                  )}
 
                 {/* Show delay information if present */}
                 {subtask.status === "delayed" && subtask.delay_reason && (
@@ -4201,30 +4171,38 @@ export default function ClientBasedFinOpsTaskManager() {
                           (st) => st.rejected_by || st.reject_reason || st.rejected_at,
                         );
                       if (!rejectedSubtask) return null;
+                      const rejectedBy =
+                        (rejectedSubtask as any).rejected_by || "Unknown";
+                      const completedBy =
+                        (rejectedSubtask as any).completed_by || rejectedBy;
+                      const rejectedAt = (rejectedSubtask as any).rejected_at
+                        ? formatToISTDateTime((rejectedSubtask as any).rejected_at, {
+                            second: "2-digit",
+                          })
+                        : "";
+                      const completedAt = (rejectedSubtask as any).completed_at
+                        ? formatToISTDateTime((rejectedSubtask as any).completed_at, {
+                            second: "2-digit",
+                          })
+                        : "";
+                      const reason =
+                        (rejectedSubtask as any).reject_reason || "No reason";
+
                       return (
-                        <Alert className="border-red-200 bg-red-50">
-                          <AlertCircle className="h-4 w-4 text-red-600" />
-                          <AlertTitle className="text-red-800">Rejected</AlertTitle>
-                          <AlertDescription className="text-red-700 space-y-1">
-                            <div>
-                              <strong>Rejected by:</strong> {(rejectedSubtask as any).rejected_by || "Unknown"}
-                              {(rejectedSubtask as any).rejected_at
-                                ? ` on ${formatToISTDateTime((rejectedSubtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)`
-                                : ""}
-                            </div>
-                            <div>
-                              <strong>Completed by:</strong> {(rejectedSubtask as any).completed_by || (rejectedSubtask as any).rejected_by || "Unknown"}
-                              {(rejectedSubtask as any).completed_at
-                                ? ` on ${formatToISTDateTime((rejectedSubtask as any).completed_at, { second: "2-digit" })} IST (+05:30)`
-                                : ""}
-                            </div>
-                            {(rejectedSubtask as any).reject_reason && (
-                              <div>
-                                <strong>Reason:</strong> {(rejectedSubtask as any).reject_reason}
-                              </div>
-                            )}
-                          </AlertDescription>
-                        </Alert>
+                        <Badge
+                          variant="destructive"
+                          className="flex w-full items-center gap-2 overflow-hidden whitespace-nowrap rounded-full px-3 py-2 text-[11px] font-medium leading-none"
+                          title={`Rejected by ${rejectedBy}${rejectedAt ? ` on ${rejectedAt} IST (+05:30)` : ""}; Completed by ${completedBy}${completedAt ? ` on ${completedAt} IST (+05:30)` : ""}; Reason: ${reason}`}
+                        >
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">
+                            Rejected by {rejectedBy}
+                            {rejectedAt ? ` • Rejected at ${rejectedAt} IST (+05:30)` : ""}
+                            {completedBy ? ` • Completed by ${completedBy}` : ""}
+                            {completedAt ? ` • Completed at ${completedAt} IST (+05:30)` : ""}
+                            {reason ? ` • Reason: ${reason}` : ""}
+                          </span>
+                        </Badge>
                       );
                     })()}
                   </CardContent>

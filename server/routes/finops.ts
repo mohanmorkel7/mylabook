@@ -121,6 +121,9 @@ export async function initializeFinOpsSchema() {
         completed_by TEXT,
         approved_at TIMESTAMP,
         approved_by TEXT,
+        rejected_at TIMESTAMP,
+        rejected_by TEXT,
+        reject_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(run_date, period, task_id, subtask_id)
@@ -145,7 +148,10 @@ export async function initializeFinOpsSchema() {
         ADD COLUMN IF NOT EXISTS escalation_managers TEXT,
         ADD COLUMN IF NOT EXISTS completed_by TEXT,
         ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS approved_by TEXT
+        ADD COLUMN IF NOT EXISTS approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS rejected_by TEXT,
+        ADD COLUMN IF NOT EXISTS reject_reason TEXT
     `);
 
     // Ensure finops_settings has at least one row
@@ -647,7 +653,10 @@ router.get("/tasks", async (req: Request, res: Response) => {
                   'notification_sent_escalation', ft.notification_sent_escalation,
                   'assigned_to', ft.assigned_to,
                   'reporting_managers', ft.reporting_managers,
-                  'escalation_managers', ft.escalation_managers
+                  'escalation_managers', ft.escalation_managers,
+                  'rejected_by', ft.rejected_by,
+                  'rejected_at', ft.rejected_at,
+                  'reject_reason', ft.reject_reason
                 ) ORDER BY ft.order_position
               ) FILTER (WHERE ft.subtask_id IS NOT NULL),
               '[]'::json
@@ -698,7 +707,10 @@ router.get("/tasks", async (req: Request, res: Response) => {
                   'notification_sent_escalation', ft.notification_sent_escalation,
                   'assigned_to', ft.assigned_to,
                   'reporting_managers', ft.reporting_managers,
-                  'escalation_managers', ft.escalation_managers
+                  'escalation_managers', ft.escalation_managers,
+                  'rejected_by', ft.rejected_by,
+                  'rejected_at', ft.rejected_at,
+                  'reject_reason', ft.reject_reason
                 ) ORDER BY ft.order_position
               ) FILTER (WHERE ft.subtask_id IS NOT NULL),
               '[]'::json
@@ -3110,6 +3122,9 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
         ft.completed_by,
         ft.approved_by,
         ft.approved_at,
+        ft.rejected_by,
+        ft.rejected_at,
+        ft.reject_reason,
         ft.created_at,
         ft.updated_at,
         COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name

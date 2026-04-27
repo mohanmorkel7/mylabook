@@ -566,6 +566,8 @@ interface SortableSubTaskItemProps {
     delayReason?: string,
     delayNotes?: string,
   ) => void;
+  currentUser?: any;
+  onRefresh?: () => void;
   isInline?: boolean;
 }
 
@@ -576,12 +578,17 @@ function SortableSubTaskItem({
   onUpdate,
   onRemove,
   onStatusChange,
+  currentUser,
+  onRefresh,
   isInline = false,
 }: SortableSubTaskItemProps) {
   // console.log("Tasks : " , subtask)
   const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [delayReason, setDelayReason] = useState("");
   const [delayNotes, setDelayNotes] = useState("");
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: subtask.id });
@@ -777,67 +784,59 @@ function SortableSubTaskItem({
                         </Select>
                       );
                     })()}
-                    {/* Approve button: visible to admin, reporting managers, or escalation managers when subtask completed */}
+                    {/* Approve/Reject buttons: visible to managers when subtask completed */}
                     {(() => {
                       try {
-                        const currentUser = (useAuth() as any)?.user || null;
+                        const activeUser = currentUser || null;
 
-                        if (!currentUser || !currentUser.name) return null;
+                        if (!activeUser || !activeUser.name) return null;
 
-                        const isAdmin = currentUser?.role === "admin";
+                        const isAdmin = activeUser?.role === "admin";
 
                         // Use the same robust parsing as canEditFinOpsTasks
                         const parseManagersArray = (managers: any): string[] => {
                           if (!managers) return [];
 
-                          // Already an array
                           if (Array.isArray(managers)) {
-                            return managers.filter(Boolean).map(m => String(m).trim());
+                            return managers.filter(Boolean).map((m) => String(m).trim());
                           }
 
-                          // String that might be JSON
                           if (typeof managers === "string") {
                             const trimmed = managers.trim();
                             if (!trimmed) return [];
 
-                            // Try to parse as JSON array
                             try {
                               const parsed = JSON.parse(trimmed);
                               if (Array.isArray(parsed)) {
-                                return parsed.filter(Boolean).map(m => String(m).trim());
+                                return parsed.filter(Boolean).map((m) => String(m).trim());
                               }
                             } catch {}
 
-                            // Might be a single name or "name (email)" format
                             return [trimmed];
                           }
 
                           return [];
                         };
 
-                        // Helper to check if user matches a manager entry
                         const userMatchesManager = (manager: string): boolean => {
-                          if (!manager || !currentUser.name) return false;
+                          if (!manager || !activeUser.name) return false;
 
                           const managerName = extractNameFromValue(manager);
-                          const userNameLower = currentUser.name.toLowerCase().trim();
+                          const userNameLower = activeUser.name.toLowerCase().trim();
 
-                          // Check name match (case-insensitive and trim)
                           if (managerName) {
                             const managerNameLower = managerName.toLowerCase().trim();
                             if (managerNameLower === userNameLower) {
                               return true;
                             }
-                            // Also check if manager name contains user name (for partial matches)
                             if (managerNameLower.includes(userNameLower)) {
                               return true;
                             }
                           }
 
-                          // Check email match (case-insensitive)
-                          if (currentUser.email) {
+                          if (activeUser.email) {
                             const managerStr = manager.toLowerCase();
-                            const userEmailLower = currentUser.email.toLowerCase();
+                            const userEmailLower = activeUser.email.toLowerCase();
                             if (managerStr.includes(userEmailLower)) {
                               return true;
                             }
@@ -854,14 +853,14 @@ function SortableSubTaskItem({
                         const isEscalation = escalationManagers.some(userMatchesManager);
                         const isAssigned = assignedTo.some(userMatchesManager);
 
-                        const isApproved = Boolean(
-                          (subtask as any)?.approved_by,
-                        );
-
-                        // ✅ Only allow reporting, escalation, or admin users (not assigned ones)
-
+                        const isApproved = Boolean((subtask as any)?.approved_by);
                         const canSeeApproveButton =
                           (isReporting || isEscalation || isAdmin) &&
+                          !isAssigned &&
+                          ["completed", "approved"].includes(subtask.status) &&
+                          !isApproved;
+                        const canSeeRejectButton =
+                          (isReporting || isEscalation) &&
                           !isAssigned &&
                           ["completed", "approved"].includes(subtask.status) &&
                           !isApproved;
@@ -876,9 +875,7 @@ function SortableSubTaskItem({
 
                                 try {
                                   const approverName =
-                                    currentUser?.name ||
-                                    currentUser?.email ||
-                                    "";
+                                    activeUser?.name || activeUser?.email || "";
 
                                   await apiClient.approveFinOpsSubtask(
                                     Number(subtask.id),
@@ -887,15 +884,10 @@ function SortableSubTaskItem({
                                     (subtask as any)?.tracker_id,
                                   );
 
-                                  try {
-                                    queryClient.invalidateQueries({
-                                      queryKey: ["client-finops-tasks"],
-                                    });
-                                  } catch {}
+                                  onRefresh?.();
 
                                   toast({
                                     title: "Approved",
-
                                     description: `Approved by ${approverName}`,
                                   });
                                 } catch (e) {
@@ -907,12 +899,88 @@ function SortableSubTaskItem({
                             </Button>
                           );
                         }
+
+                        if (canSeeRejectButton) {
+                          return (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setShowRejectDialog(true)}
+                            >
+                              Reject
+                            </Button>
+                          );
+                        }
                       } catch {
                         // safely ignore any runtime errors
                       }
 
                       return null;
                     })()}
+
+                    <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Are You sure &amp; Reason for reject</DialogTitle>
+                          <DialogDescription>
+                            Enter the reject reason before moving the subtask back to In-progress.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-2 py-2">
+                          <Label htmlFor={`reject-reason-${subtask.id}`}>Reason for reject *</Label>
+                          <Textarea
+                            id={`reject-reason-${subtask.id}`}
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            placeholder="Type the reject reason"
+                            rows={4}
+                          />
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setShowRejectDialog(false);
+                              setRejectReason("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            disabled={!rejectReason.trim() || isRejecting}
+                            onClick={async () => {
+                              try {
+                                setIsRejecting(true);
+                                const rejectorName =
+                                  activeUser?.name || activeUser?.email || "";
+                                await apiClient.rejectFinOpsSubtask(
+                                  Number(subtask.id),
+                                  rejectorName,
+                                  rejectReason.trim(),
+                                  (subtask as any)?.tracker_id,
+                                );
+                                setShowRejectDialog(false);
+                                setRejectReason("");
+                                onRefresh?.();
+                                toast({
+                                  title: "Rejected",
+                                  description: `Rejected by ${rejectorName}`,
+                                });
+                              } catch (e) {
+                                alert("Failed to reject");
+                              } finally {
+                                setIsRejecting(false);
+                              }
+                            }}
+                          >
+                            {isRejecting ? "Rejecting..." : "Reject"}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
 
@@ -941,6 +1009,29 @@ function SortableSubTaskItem({
                           ? ` on ${formatToISTDateTime((subtask as any).approved_at, { second: "2-digit" })} IST (+05:30)`
                           : ""}
                       </Badge>
+                    </div>
+                  )}
+
+                {subtask.status === "in_progress" &&
+                  ((subtask as any).rejected_by || (subtask as any).reject_reason) && (
+                    <div className="mt-2">
+                      <Alert className="border-red-200 bg-red-50">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertTitle className="text-red-800">Rejected</AlertTitle>
+                        <AlertDescription className="text-red-700 space-y-1">
+                          <div>
+                            <strong>Rejected by:</strong> {(subtask as any).rejected_by || "Unknown"}
+                            {(subtask as any).rejected_at
+                              ? ` on ${formatToISTDateTime((subtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)`
+                              : ""}
+                          </div>
+                          {(subtask as any).reject_reason && (
+                            <div>
+                              <strong>Reason:</strong> {(subtask as any).reject_reason}
+                            </div>
+                          )}
+                        </AlertDescription>
+                      </Alert>
                     </div>
                   )}
 
@@ -4135,6 +4226,12 @@ export default function ClientBasedFinOpsTaskManager() {
                                       delayNotes,
                                     )
                                   }
+                                  currentUser={user}
+                                  onRefresh={() =>
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["client-finops-tasks"],
+                                    })
+                                  }
                                   isInline={true}
                                 />
                                 {(slaWarning || subtask.start_time) &&
@@ -4988,6 +5085,12 @@ export default function ClientBasedFinOpsTaskManager() {
                         index={index}
                         onUpdate={updateSubTask}
                         onRemove={removeSubTask}
+                        currentUser={user}
+                        onRefresh={() =>
+                          queryClient.invalidateQueries({
+                            queryKey: ["client-finops-tasks"],
+                          })
+                        }
                         isInline={false}
                       />
                     ))}

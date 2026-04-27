@@ -789,6 +789,9 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
         started_at TIMESTAMP NULL,
         completed_at TIMESTAMP NULL,
         completed_by TEXT,
+        rejected_at TIMESTAMP,
+        rejected_by TEXT,
+        reject_reason TEXT,
         scheduled_time TIME NULL,
         subtask_scheduled_date DATE NULL,
         description TEXT,
@@ -815,7 +818,10 @@ router.put("/subtasks/:id", async (req: Request, res: Response) => {
       ALTER TABLE finops_tracker
         ADD COLUMN IF NOT EXISTS completed_by TEXT,
         ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS approved_by TEXT;
+        ADD COLUMN IF NOT EXISTS approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS rejected_by TEXT,
+        ADD COLUMN IF NOT EXISTS reject_reason TEXT;
     `);
 
       // Try to find existing tracker row for the specified date
@@ -1280,6 +1286,237 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     res
       .status(500)
       .json({ error: "Failed to approve subtask", message: e.message });
+  }
+});
+
+// Reject subtask (reporting managers, escalation managers, or admin)
+router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
+  try {
+    await requireDatabase();
+    const subtaskId = parseInt(req.params.id);
+    let { rejector_name, reason, tracker_id } = req.body || {};
+
+    if (!rejector_name || /undefined|null/i.test(String(rejector_name))) {
+      const headerName = (req.headers["x-user-name"] as string) || "";
+      const headerUserId = (req.headers["x-user-id"] as string) || "";
+      if (
+        headerName &&
+        typeof headerName === "string" &&
+        headerName.trim() !== ""
+      ) {
+        rejector_name = headerName.trim();
+      } else if (headerUserId && String(headerUserId).trim() !== "") {
+        try {
+          const uid = String(headerUserId).trim();
+          let userRes;
+          if (/^\d+$/.test(uid)) {
+            userRes = await pool.query(
+              `SELECT first_name, last_name, email FROM users WHERE id = $1 LIMIT 1`,
+              [Number(uid)],
+            );
+          } else {
+            userRes = await pool.query(
+              `SELECT first_name, last_name, email FROM users WHERE azure_object_id = $1 OR LOWER(email) = LOWER($1) LIMIT 1`,
+              [uid],
+            );
+          }
+          if (userRes && userRes.rows.length > 0) {
+            const u = userRes.rows[0];
+            rejector_name =
+              `${String(u.first_name || "").trim()} ${String(u.last_name || "").trim()}`.trim() ||
+              u.email ||
+              rejector_name;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
+    if (!rejector_name) {
+      return res.status(400).json({ error: "rejector_name is required" });
+    }
+
+    const rejectReason = typeof reason === "string" ? reason.trim() : "";
+    if (!rejectReason) {
+      return res.status(400).json({ error: "reason is required" });
+    }
+
+    const stRes = await pool.query(
+      `SELECT st.id, st.task_id, st.name as subtask_name, ft.task_name, ft.reporting_managers, ft.escalation_managers, ft.created_by
+       FROM finops_subtasks st
+       JOIN finops_tasks ft ON st.task_id = ft.id
+       WHERE st.id = $1 LIMIT 1`,
+      [subtaskId],
+    );
+    if (stRes.rows.length === 0) {
+      return res.status(404).json({ error: "Subtask not found" });
+    }
+    const row = stRes.rows[0];
+
+    const parseManagers = (val: any): string[] => {
+      if (!val) return [];
+      if (Array.isArray(val)) {
+        return val
+          .map(String)
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      try {
+        const p = JSON.parse(val);
+        return Array.isArray(p)
+          ? p
+              .map(String)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+      } catch {}
+      return String(val)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    };
+
+    const normalizedRejector = String(rejector_name)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+    let isAdmin = false;
+    try {
+      const adminCheck = await pool.query(
+        `SELECT 1 FROM users WHERE (LOWER(CONCAT(first_name,' ',last_name)) = $1 OR LOWER(email) = $1) AND role = 'admin' LIMIT 1`,
+        [normalizedRejector],
+      );
+      isAdmin = adminCheck.rows.length > 0;
+    } catch (e) {
+      console.warn("Failed to check admin role:", (e as Error).message);
+    }
+
+    const reporters = parseManagers(row.reporting_managers);
+    const escalators = parseManagers(row.escalation_managers);
+
+    const matchesManager = (rejectorStr: string, managerStr: string): boolean => {
+      const appLower = rejectorStr.toLowerCase().replace(/\s+/g, " ").trim();
+      const mgLower = managerStr.toLowerCase().replace(/\s+/g, " ").trim();
+      if (appLower === mgLower) return true;
+      if (mgLower.includes(appLower) || appLower.includes(mgLower)) return true;
+      const appParts = appLower.split(/\s+/);
+      const mgParts = mgLower.split(/\s+/);
+      if (appParts.length >= 2) {
+        if (appParts.every((part) => mgParts.includes(part))) return true;
+      }
+      if (mgParts.length >= 2) {
+        if (mgParts.every((part) => appParts.includes(part))) return true;
+      }
+      return false;
+    };
+
+    const isReporter = reporters.some((managerName) =>
+      matchesManager(normalizedRejector, managerName),
+    );
+    const isEscalator = escalators.some((managerName) =>
+      matchesManager(normalizedRejector, managerName),
+    );
+
+    if (!isAdmin && !isReporter && !isEscalator) {
+      return res.status(403).json({
+        error:
+          "Only admin, reporting managers, or escalation managers can reject",
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const trackerRes = await client.query(
+        `SELECT id, status FROM finops_tracker WHERE task_id = $1 AND subtask_id = $2 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,
+        [row.task_id, subtaskId],
+      );
+
+      if (!trackerRes.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Tracker row not found" });
+      }
+
+      const trackerRow = trackerRes.rows[0];
+      if (trackerRow.status !== "completed") {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          error: "Only completed subtasks can be rejected",
+        });
+      }
+
+      const existingApproval = await client.query(
+        `SELECT 1 FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 AND tracker_id = $3 LIMIT 1`,
+        [row.task_id, subtaskId, tracker_id || trackerRow.id],
+      );
+      if (existingApproval.rows.length) {
+        await client.query("ROLLBACK");
+        return res
+          .status(409)
+          .json({ error: "Already approved for this tracker" });
+      }
+
+      const updateRes = await client.query(
+        `UPDATE finops_tracker
+         SET status = 'in_progress',
+             completed_at = NULL,
+             completed_by = NULL,
+             rejected_by = $1,
+             rejected_at = NOW(),
+             reject_reason = $2,
+             updated_at = NOW()
+         WHERE id = $3
+         RETURNING id, status, rejected_by, rejected_at, reject_reason`,
+        [rejector_name, rejectReason, trackerRow.id],
+      );
+
+      if (!updateRes.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Tracker row not found" });
+      }
+
+      try {
+        const deleteRes = await client.query(
+          `DELETE FROM finops_external_alerts WHERE task_id = $1 AND subtask_id = $2 AND alert_group = 'pending_approval_reporting'
+           RETURNING id`,
+          [row.task_id, subtaskId],
+        );
+        console.log(
+          `[Reject] Cleaned up ${deleteRes.rows.length} pending approval alerts`,
+        );
+      } catch (e) {
+        console.warn(
+          "[Reject] Failed to clean up alerts:",
+          (e as Error).message,
+        );
+      }
+
+      await client.query("COMMIT");
+
+      res.json({
+        ok: true,
+        rejected: true,
+        status: "in_progress",
+        rejected_by: updateRes.rows[0].rejected_by,
+        rejected_at: updateRes.rows[0].rejected_at,
+        reject_reason: updateRes.rows[0].reject_reason,
+      });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {
+        // ignore rollback errors
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (e: any) {
+    console.error("Reject subtask failed:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to reject subtask", message: e.message });
   }
 });
 

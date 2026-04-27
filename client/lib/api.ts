@@ -1595,6 +1595,18 @@ export class ApiClient {
     });
   }
 
+  async rejectFinOpsSubtask(
+    subtaskId: number,
+    rejector_name: string,
+    reason: string,
+    tracker_id?: number,
+  ) {
+    return this.request(`/finops-production/subtasks/${subtaskId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ rejector_name, reason, tracker_id }),
+    });
+  }
+
   async getTodaysPendingApprovals() {
     return this.request("/finops-production/public/today-pending-approvals");
   }

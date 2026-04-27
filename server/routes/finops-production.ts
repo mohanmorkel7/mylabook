@@ -1472,14 +1472,12 @@ router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
       const updateRes = await client.query(
         `UPDATE finops_tracker
          SET status = 'in_progress',
-             completed_at = NULL,
-             completed_by = NULL,
              rejected_by = $1,
              rejected_at = NOW(),
              reject_reason = $2,
              updated_at = NOW()
          WHERE id = $3
-         RETURNING id, status, rejected_by, rejected_at, reject_reason`,
+         RETURNING id, status, completed_by, completed_at, rejected_by, rejected_at, reject_reason`,
         [rejector_name, rejectReason, trackerRow.id],
       );
 

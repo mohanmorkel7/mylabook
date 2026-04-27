@@ -938,7 +938,7 @@ function SortableSubTaskItem({
                         <DialogHeader>
                           <DialogTitle>Confirm reject</DialogTitle>
                           <DialogDescription>
-                            Are you sure? Please provide a reason before moving the subtask back to In-progress.
+                            Are you sure? Please provide a reason before marking the subtask as In-progress again.
                           </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-2 py-2">
@@ -1044,6 +1044,14 @@ function SortableSubTaskItem({
                               ? ` on ${formatToISTDateTime((subtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)`
                               : ""}
                           </div>
+                          {(subtask as any).completed_by && (
+                            <div>
+                              <strong>Completed by:</strong> {(subtask as any).completed_by}
+                              {(subtask as any).completed_at
+                                ? ` on ${formatToISTDateTime((subtask as any).completed_at, { second: "2-digit" })} IST (+05:30)`
+                                : ""}
+                            </div>
+                          )}
                           {(subtask as any).reject_reason && (
                             <div>
                               <strong>Reason:</strong> {(subtask as any).reject_reason}

@@ -1036,6 +1036,11 @@ export default function LeadOverview() {
     },
   });
 
+  const scopeWorkflowSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   if (isLoading) return <div className="p-6">Loading...</div>;
 
   const lead = leadData?.lead;
@@ -1099,10 +1104,6 @@ export default function LeadOverview() {
     .map((item) => item.name)
     .filter((name) => Boolean(getScopeFeatureDefinition(name)));
   const scopeAssignmentSummary = buildScopeAssignmentSummary(commercialForm.scope_finalization.feature_items);
-  const scopeWorkflowSensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
 
   const openCommercialForm = (record?: CommercialRecord) => {
     setEditingCommercial(record || null);

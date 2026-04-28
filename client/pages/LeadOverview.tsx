@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus, Video, Calendar, Eye, EyeOff, Mail, Phone, Users, Download, GripVertical, Lock, Upload } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FollowUpForm } from "@/components/FollowUpForm";
@@ -162,10 +163,36 @@ interface ScopeFeatureItem {
   notes?: string;
 }
 
+interface CommercialPricingRow {
+  id: string;
+  item: string;
+  inr: string;
+  usd: string;
+}
+
+interface CommercialPricingPlan {
+  id: string;
+  label: string;
+  items: string[];
+}
+
+interface CommercialProductBase {
+  id: string;
+  label: string;
+  plans: CommercialPricingPlan[];
+}
+
+interface CommercialPricingWorkbenchState {
+  product_base_id: string;
+  plan_id: string;
+  rows: CommercialPricingRow[];
+}
+
 interface ScopeFinalizationState {
   selected_product_ids: string[];
   additional_features: string;
   feature_items: ScopeFeatureItem[];
+  commercial_pricing_workbench: CommercialPricingWorkbenchState;
   architecture_file_name: string;
   architecture_file_path: string;
   architecture_file_size: number | null;
@@ -186,6 +213,18 @@ interface CommercialFormState {
 }
 
 const DEFAULT_COMMERCIAL_TEMPLATE = "Commercial_{{company_name}}_{{date}}";
+const COMMERCIAL_PRODUCT_BASES: CommercialProductBase[] = [
+  {
+    id: "product-catalog",
+    label: "Product Catalog",
+    plans: [
+      { id: "plan-1", label: "Plan-1", items: ["Intelle-360", "Intelle-settle"] },
+      { id: "plan-2", label: "Plan-2", items: ["3DS", "Switch", "Clearing", "Solve"] },
+      { id: "plan-3", label: "Plan-3", items: ["3DS", "Tokenization", "ACS"] },
+      { id: "plan-4", label: "Plan-4", items: ["UPI Switch + Recon", "UPI Recon"] },
+    ],
+  },
+];
 const DOCUMENT_STORAGE_KEY = "materials_documents_templates_v1";
 const SCOPE_TEAMS: ScopeAssignmentTeam[] = [
   "Development Team",
@@ -234,6 +273,7 @@ const FALLBACK_DOCUMENT_TEMPLATES = [
       { type: "header", content: "Commercial Proposal" },
       { type: "text", content: "Prepared for {{client_name}} by {{company_name}} on {{date}}." },
       { type: "clause", content: "Scope of work, commercial terms, and timelines are included." },
+      { type: "text", content: "{{commercials_table}}" },
     ],
   },
   {
@@ -250,6 +290,7 @@ const FALLBACK_DOCUMENT_TEMPLATES = [
     blocks: [
       { type: "header", content: "One-Sided NDA" },
       { type: "clause", content: "{{company_name}} agrees to keep confidential information shared by {{client_name}} private." },
+      { type: "text", content: "{{commercials_table}}" },
       { type: "signature", content: "Authorized Signatory" },
     ],
   },
@@ -267,6 +308,7 @@ const FALLBACK_DOCUMENT_TEMPLATES = [
     blocks: [
       { type: "header", content: "Mutual NDA" },
       { type: "clause", content: "Both {{company_name}} and {{client_name}} agree to protect each other's confidential information." },
+      { type: "text", content: "{{commercials_table}}" },
       { type: "signature", content: "Authorized Signatory" },
     ],
   },
@@ -303,11 +345,112 @@ function buildDefaultScopeFinalization(): ScopeFinalizationState {
     selected_product_ids: [],
     additional_features: "",
     feature_items: [],
+    commercial_pricing_workbench: buildCommercialPricingWorkbench(null, null),
     architecture_file_name: "",
     architecture_file_path: "",
     architecture_file_size: null,
     architecture_file_type: "",
   };
+}
+
+function makeCommercialPricingRow(item: string, inr = "", usd = ""): CommercialPricingRow {
+  return {
+    id: `pricing_${Math.random().toString(36).slice(2, 10)}`,
+    item,
+    inr,
+    usd,
+  };
+}
+
+function getCommercialProductBase(baseId?: string | null) {
+  return COMMERCIAL_PRODUCT_BASES.find((base) => base.id === baseId) || COMMERCIAL_PRODUCT_BASES[0];
+}
+
+function getCommercialPlan(baseId?: string | null, planId?: string | null) {
+  const base = getCommercialProductBase(baseId);
+  return base?.plans.find((plan) => plan.id === planId) || base?.plans[0];
+}
+
+function normalizeLeadCommercialPricing(lead: any) {
+  return Array.isArray(lead?.commercial_pricing)
+    ? lead.commercial_pricing
+        .map((item: any) => ({
+          solution: String(item?.solution || "").trim(),
+          value: item?.value === null || item?.value === undefined ? "" : String(item.value),
+          currency: String(item?.currency || "").trim().toUpperCase(),
+        }))
+        .filter((item: any) => Boolean(item.solution))
+    : [];
+}
+
+function buildCommercialPricingWorkbench(
+  lead: any,
+  existingWorkbench: CommercialPricingWorkbenchState | null,
+  baseId?: string,
+  planId?: string,
+): CommercialPricingWorkbenchState {
+  const selectedBaseId = baseId || existingWorkbench?.product_base_id || COMMERCIAL_PRODUCT_BASES[0]?.id || "";
+  const selectedBase = getCommercialProductBase(selectedBaseId);
+  const selectedPlanId = planId || existingWorkbench?.plan_id || selectedBase?.plans[0]?.id || "";
+  const selectedPlan = getCommercialPlan(selectedBase?.id, selectedPlanId);
+  const existingRows = Array.isArray(existingWorkbench?.rows) ? existingWorkbench.rows : [];
+  const leadCommercialPricing = normalizeLeadCommercialPricing(lead);
+
+  const rows = (selectedPlan?.items || []).map((item) => {
+    const normalizedItem = String(item || "").trim().toLowerCase();
+    const existingRow = existingRows.find((row) => String(row.item || "").trim().toLowerCase() === normalizedItem);
+    const leadPrice = leadCommercialPricing.find((price) => price.solution.toLowerCase() === normalizedItem);
+
+    return {
+      id: existingRow?.id || makeCommercialPricingRow(item).id,
+      item,
+      inr: existingRow?.inr ?? (leadPrice?.currency === "INR" ? leadPrice.value : ""),
+      usd: existingRow?.usd ?? (leadPrice?.currency === "USD" ? leadPrice.value : ""),
+    };
+  });
+
+  return {
+    product_base_id: selectedBase?.id || COMMERCIAL_PRODUCT_BASES[0]?.id || "",
+    plan_id: selectedPlan?.id || "",
+    rows,
+  };
+}
+
+function buildCommercialPricingTableHtml(workbench: CommercialPricingWorkbenchState) {
+  const base = getCommercialProductBase(workbench.product_base_id);
+  const plan = getCommercialPlan(workbench.product_base_id, workbench.plan_id);
+  const rows = Array.isArray(workbench.rows) ? workbench.rows : [];
+  const renderedRows = rows.length
+    ? rows
+        .map(
+          (row) => `
+            <tr>
+              <td style="border-top:1px solid #e2e8f0;padding:10px;">${row.item || "—"}</td>
+              <td style="border-top:1px solid #e2e8f0;padding:10px;">${row.inr || "—"}</td>
+              <td style="border-top:1px solid #e2e8f0;padding:10px;">${row.usd || "—"}</td>
+            </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="3" style="border-top:1px solid #e2e8f0;padding:10px;">No plan selected.</td></tr>`;
+
+  return `
+    <div style="margin-top:20px;">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.14em;">${base?.label || "Product catalog"}</div>
+      <h3 style="margin:8px 0 12px;">${plan?.label || "Selected plan"}</h3>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;">
+        <thead>
+          <tr>
+            <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:10px;">Product</th>
+            <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:10px;">INR</th>
+            <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:10px;">USD</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${renderedRows}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function getScopeFeatureDefinition(featureName: string) {
@@ -619,6 +762,10 @@ function buildCommercialForm(
       feature_items: Array.isArray(record?.scope_finalization?.feature_items)
         ? record?.scope_finalization?.feature_items
         : [],
+      commercial_pricing_workbench: buildCommercialPricingWorkbench(
+        lead,
+        record?.scope_finalization?.commercial_pricing_workbench || null,
+      ),
     },
   };
 }
@@ -691,6 +838,7 @@ function getStoredDocumentTemplates(): CommercialMaterial[] {
 function buildDocumentValues(
   material: CommercialMaterial,
   recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
 ) {
   const templateValues = (material.template_fields || []).reduce<Record<string, string>>(
     (acc, field) => {
@@ -709,14 +857,19 @@ function buildDocumentValues(
     return acc;
   }, {});
 
-  return { ...templateValues, ...recordValues };
+  return { ...templateValues, ...recordValues, ...extraValues };
 }
 
-function buildDocumentHtml(material: CommercialMaterial, recordFields: CommercialField[] = []) {
-  const values = buildDocumentValues(material, recordFields);
+function buildDocumentHtml(
+  material: CommercialMaterial,
+  recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
+) {
+  const values = buildDocumentValues(material, recordFields, extraValues);
   const renderedContent = (material.template_blocks || [])
     .map((block) => {
       const rendered = replaceTemplateTokens(block.content || "", values);
+      if (rendered.includes("<table") || String(block.content || "").trim() === "{{commercials_table}}") return rendered;
       if (block.type === "header") return `<h1>${rendered}</h1>`;
       if (block.type === "clause") return `<p><strong>Clause:</strong> ${rendered}</p>`;
       if (block.type === "signature") return `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #cbd5e1;"><strong>Signature:</strong> ${rendered}</div>`;
@@ -753,11 +906,15 @@ function buildDocumentHtml(material: CommercialMaterial, recordFields: Commercia
   `;
 }
 
-function viewCommercialMaterial(material: CommercialMaterial, recordFields: CommercialField[] = []) {
+function viewCommercialMaterial(
+  material: CommercialMaterial,
+  recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
+) {
   if (material.source_type === "document") {
     const previewWindow = window.open("", "_blank", "width=1024,height=900");
     if (!previewWindow) return;
-    previewWindow.document.write(buildDocumentHtml(material, recordFields));
+    previewWindow.document.write(buildDocumentHtml(material, recordFields, extraValues));
     previewWindow.document.close();
     return;
   }
@@ -767,9 +924,13 @@ function viewCommercialMaterial(material: CommercialMaterial, recordFields: Comm
   }
 }
 
-function downloadCommercialMaterial(material: CommercialMaterial, recordFields: CommercialField[] = []) {
+function downloadCommercialMaterial(
+  material: CommercialMaterial,
+  recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
+) {
   if (material.source_type === "document") {
-    const blob = new Blob([buildDocumentHtml(material, recordFields)], { type: "application/msword" });
+    const blob = new Blob([buildDocumentHtml(material, recordFields, extraValues)], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -865,6 +1026,7 @@ export default function LeadOverview() {
   const [selectedCommercialMaterialId, setSelectedCommercialMaterialId] = useState("");
   const [signedCopyFile, setSignedCopyFile] = useState<File | null>(null);
   const [architectureDiagramFile, setArchitectureDiagramFile] = useState<File | null>(null);
+  const [editingCommercialPricingCell, setEditingCommercialPricingCell] = useState<{ rowId: string; field: "inr" | "usd" } | null>(null);
   const [commercialForm, setCommercialForm] = useState<CommercialFormState>(() => buildCommercialForm(null, []));
 
   const { data: leadData, isLoading } = useQuery({
@@ -1004,6 +1166,7 @@ export default function LeadOverview() {
       setSelectedCommercialMaterialId("");
       setSignedCopyFile(null);
       setArchitectureDiagramFile(null);
+      setEditingCommercialPricingCell(null);
       setCommercialForm(buildCommercialForm(lead, masterMaterials));
       toast({
         title: editingCommercial ? "Commercial workflow updated" : "Commercial workflow created",
@@ -1059,9 +1222,24 @@ export default function LeadOverview() {
     label: getProductLabel(product),
     value: String(product.id),
   }));
-  const productNameMap = new Map(
+  const productNameMap = new Map<string, string>(
     productMasters.map((product: any) => [String(product.id), getProductLabel(product)]),
   );
+  const commercialPricingWorkbench = commercialForm.scope_finalization.commercial_pricing_workbench;
+  const commercialPricingBase = getCommercialProductBase(commercialPricingWorkbench.product_base_id);
+  const commercialPricingPlan = getCommercialPlan(
+    commercialPricingWorkbench.product_base_id,
+    commercialPricingWorkbench.plan_id,
+  );
+  const commercialPricingTableHtml = buildCommercialPricingTableHtml(commercialPricingWorkbench);
+  const commercialPricingBaseOptions = COMMERCIAL_PRODUCT_BASES.map((base) => ({
+    label: base.label,
+    value: base.id,
+  }));
+  const commercialPricingPlanOptions = (commercialPricingBase?.plans || []).map((plan) => ({
+    label: plan.label,
+    value: plan.id,
+  }));
   const hydratedCommercialRecords: CommercialRecord[] = commercialRecords.map((record) => {
     const selectedMaterials = hydrateCommercialMaterials(record.selected_materials, masterMaterials);
 
@@ -1111,6 +1289,7 @@ export default function LeadOverview() {
     setSignedCopyFile(null);
     setArchitectureDiagramFile(null);
     setSelectedCommercialMaterialId("");
+    setEditingCommercialPricingCell(null);
     setShowCommercialForm(true);
   };
 
@@ -1120,6 +1299,7 @@ export default function LeadOverview() {
     setSignedCopyFile(null);
     setArchitectureDiagramFile(null);
     setSelectedCommercialMaterialId("");
+    setEditingCommercialPricingCell(null);
     setCommercialForm(buildCommercialForm(lead, masterMaterials));
   };
 
@@ -1176,6 +1356,31 @@ export default function LeadOverview() {
     setCommercialForm((prev) => ({
       ...prev,
       scope_finalization: updater(prev.scope_finalization),
+    }));
+  };
+
+  const updateCommercialPricingWorkbench = (baseId: string, planId?: string) => {
+    updateScopeFinalization((scope) => ({
+      ...scope,
+      commercial_pricing_workbench: buildCommercialPricingWorkbench(
+        lead,
+        scope.commercial_pricing_workbench,
+        baseId,
+        planId,
+      ),
+    }));
+    setEditingCommercialPricingCell(null);
+  };
+
+  const updateCommercialPricingCell = (rowId: string, field: "inr" | "usd", value: string) => {
+    updateScopeFinalization((scope) => ({
+      ...scope,
+      commercial_pricing_workbench: {
+        ...scope.commercial_pricing_workbench,
+        rows: scope.commercial_pricing_workbench.rows.map((row) =>
+          row.id === rowId ? { ...row, [field]: value } : row,
+        ),
+      },
     }));
   };
 
@@ -2019,6 +2224,149 @@ export default function LeadOverview() {
                   </div>
                 </div>
 
+                <div className="rounded-2xl border bg-white p-5 space-y-5">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <Label className="text-base font-semibold text-slate-900">Product base and plan pricing</Label>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Choose a product base, pick a plan, then double-click INR or USD cells to finalize transaction pricing.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="self-start md:self-auto">
+                      {commercialPricingPlan?.label || "No plan selected"}
+                    </Badge>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Product base</Label>
+                      <Select
+                        value={commercialPricingWorkbench.product_base_id}
+                        onValueChange={(value) => updateCommercialPricingWorkbench(value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select product base" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {commercialPricingBaseOptions.map((base) => (
+                            <SelectItem key={base.value} value={base.value}>
+                              {base.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Plan</Label>
+                      <Select
+                        value={commercialPricingWorkbench.plan_id}
+                        onValueChange={(value) => updateCommercialPricingWorkbench(commercialPricingWorkbench.product_base_id, value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select plan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {commercialPricingPlanOptions.map((plan) => (
+                            <SelectItem key={plan.value} value={plan.value}>
+                              {plan.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-slate-50 p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {commercialPricingPlan?.label || "Selected plan"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {commercialPricingPlan?.items?.length || 0} item{(commercialPricingPlan?.items?.length || 0) === 1 ? "" : "s"} attached to this plan.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                        {(commercialPricingPlan?.items || []).map((item) => (
+                          <Badge key={item} variant="secondary" className="px-2 py-1 text-[11px]">
+                            {item}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead>INR</TableHead>
+                          <TableHead>USD</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {commercialPricingWorkbench.rows.length > 0 ? (
+                          commercialPricingWorkbench.rows.map((row) => (
+                            <TableRow key={row.id}>
+                              <TableCell className="font-medium text-slate-900">{row.item}</TableCell>
+                              <TableCell
+                                className="cursor-text"
+                                onDoubleClick={() => setEditingCommercialPricingCell({ rowId: row.id, field: "inr" })}
+                              >
+                                {editingCommercialPricingCell?.rowId === row.id && editingCommercialPricingCell?.field === "inr" ? (
+                                  <Input
+                                    autoFocus
+                                    value={row.inr}
+                                    onChange={(e) => updateCommercialPricingCell(row.id, "inr", e.target.value)}
+                                    onBlur={() => setEditingCommercialPricingCell(null)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === "Escape") {
+                                        setEditingCommercialPricingCell(null);
+                                      }
+                                    }}
+                                    placeholder="Enter INR"
+                                    className="h-9"
+                                  />
+                                ) : (
+                                  <span className="block min-h-6 text-slate-700">{row.inr || "—"}</span>
+                                )}
+                              </TableCell>
+                              <TableCell
+                                className="cursor-text"
+                                onDoubleClick={() => setEditingCommercialPricingCell({ rowId: row.id, field: "usd" })}
+                              >
+                                {editingCommercialPricingCell?.rowId === row.id && editingCommercialPricingCell?.field === "usd" ? (
+                                  <Input
+                                    autoFocus
+                                    value={row.usd}
+                                    onChange={(e) => updateCommercialPricingCell(row.id, "usd", e.target.value)}
+                                    onBlur={() => setEditingCommercialPricingCell(null)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === "Escape") {
+                                        setEditingCommercialPricingCell(null);
+                                      }
+                                    }}
+                                    placeholder="Enter USD"
+                                    className="h-9"
+                                  />
+                                ) : (
+                                  <span className="block min-h-6 text-slate-700">{row.usd || "—"}</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="py-6 text-center text-sm text-slate-500">
+                              No products attached to the selected plan.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                   <div className="space-y-2">
                     <Label>Select commercial from master</Label>
@@ -2075,11 +2423,11 @@ export default function LeadOverview() {
                             )}
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, commercialForm.document_fields)}>
+                            <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, commercialForm.document_fields, { commercials_table: commercialPricingTableHtml })}>
                               <Eye className="mr-2 h-4 w-4" />
                               View
                             </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, commercialForm.document_fields)}>
+                            <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, commercialForm.document_fields, { commercials_table: commercialPricingTableHtml })}>
                               <Download className="mr-2 h-4 w-4" />
                               Download
                             </Button>
@@ -2240,7 +2588,7 @@ export default function LeadOverview() {
                             {commercialForm.scope_finalization.selected_product_ids.length > 0 ? (
                               commercialForm.scope_finalization.selected_product_ids.map((productId) => (
                                 <Badge key={productId} variant="secondary" className="px-3 py-1 text-xs">
-                                  {productNameMap.get(productId) || `Product #${productId}`}
+                                  {productNameMap.get(String(productId)) || `Product #${productId}`}
                                 </Badge>
                               ))
                             ) : (
@@ -2469,11 +2817,11 @@ export default function LeadOverview() {
                                     )}
                                   </div>
                                   <div className="flex flex-wrap gap-2">
-                                    <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, record.document_fields)}>
+                                    <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, record.document_fields, { commercials_table: buildCommercialPricingTableHtml(record.scope_finalization?.commercial_pricing_workbench || buildCommercialPricingWorkbench(lead, null)) })}>
                                       <Eye className="mr-2 h-4 w-4" />
                                       View
                                     </Button>
-                                    <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, record.document_fields)}>
+                                    <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, record.document_fields, { commercials_table: buildCommercialPricingTableHtml(record.scope_finalization?.commercial_pricing_workbench || buildCommercialPricingWorkbench(lead, null)) })}>
                                       <Download className="mr-2 h-4 w-4" />
                                       Download
                                     </Button>

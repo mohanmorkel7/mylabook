@@ -42,10 +42,17 @@ interface TrackerRow {
 export default function FinOpsUserStats() {
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("monthly");
 
-  // Get today's date in YYYY-MM-DD format
+  // Get today's date in IST timezone (Asia/Kolkata) in YYYY-MM-DD format
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toLocaleDateString("en-CA"); // YYYY-MM-DD format
+    const now = new Date();
+    // Convert to IST (UTC+5:30) for consistent date filtering
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "Asia/Kolkata",
+    });
+    return formatter.format(now); // Returns YYYY-MM-DD format
   };
 
   const [fromDate, setFromDate] = useState<string>(getTodayDate());
@@ -129,22 +136,23 @@ export default function FinOpsUserStats() {
     staleTime: 30_000,
   });
 
-  // Fetch hourly subtask data (from finops_subtasks) for hourly status chart
+  // Fetch hourly tracker data (from finops_tracker) for hourly status chart
+  // Uses started_at field to group tasks by hour (12:00 AM to 11:59 PM IST)
   const { data: hourlySubtasksData = [] } = useQuery({
-    queryKey: ["finops-subtasks-hourly", fromDate, toDate],
+    queryKey: ["finops-tracker-hourly", fromDate, toDate],
     queryFn: async () => {
       try {
-        const url = `/finops/subtasks/hourly?from_date=${fromDate || ""}&to_date=${toDate || ""}`;
-        console.log("Fetching hourly subtask data from:", url);
+        const url = `/finops/tracker/hourly?from_date=${fromDate || ""}&to_date=${toDate || ""}`;
+        console.log("Fetching hourly tracker data from:", url);
         const resp = await apiClient.request(url);
         const data = Array.isArray(resp) ? resp : resp?.data || [];
-        console.log("Hourly subtask response received - count:", data.length);
+        console.log("Hourly tracker response received - count:", data.length);
         if (data.length > 0) {
           console.log("Sample response rows:", data.slice(0, 2));
         }
         return data;
       } catch (e) {
-        console.error("Failed to fetch hourly subtask data:", e);
+        console.error("Failed to fetch hourly tracker data:", e);
         return [];
       }
     },
@@ -181,18 +189,24 @@ export default function FinOpsUserStats() {
     return `${wholeHours}h ${minutes}m`;
   };
 
-  // Helper: Check if duration is reasonable (has valid timestamps)
-  const isReasonableDuration = (row: TrackerRow): boolean => {
+  // Helper: Check if duration is valid (has timestamps) - for tracking filtered records
+  const hasValidDuration = (row: TrackerRow): boolean => {
     const duration = calculateDuration(row.started_at, row.completed_at);
-    // Only filter out records with no duration (null values)
-    // Allow all positive durations regardless of period type
     return duration !== null && duration > 0;
   };
 
-  // Filter productivity data to only include records with valid durations
+  // Show ALL productivity data without filtering by duration
+  // (Previously was filtering by duration, now we show everything)
   const validProductivityData = useMemo(() => {
     if (!Array.isArray(productivityData)) return [];
-    return productivityData.filter(isReasonableDuration);
+    // Return ALL records - no duration filtering
+    return productivityData;
+  }, [productivityData]);
+
+  // Calculate how many records were skipped (for the warning message)
+  const filteredOutCount = useMemo(() => {
+    if (!Array.isArray(productivityData)) return 0;
+    return productivityData.filter(row => !hasValidDuration(row)).length;
   }, [productivityData]);
 
   // Calculate unique user count based on filter type
@@ -300,16 +314,32 @@ export default function FinOpsUserStats() {
     }
   };
 
+  // Helper: Extract hour from scheduled_time (HH:MM:SS format)
+  const getHourFromScheduledTime = (scheduledTime: string | null): number | null => {
+    if (!scheduledTime) return null;
+    try {
+      // scheduledTime is in HH:MM:SS format (TIME type from database)
+      const parts = scheduledTime.split(':');
+      if (parts.length < 1) return null;
+      const hour = parseInt(parts[0], 10);
+      if (isNaN(hour) || hour < 0 || hour > 23) return null;
+      return hour;
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Helper: Get duration category and styling for a task
-  const getDurationCategoryForTask = (durationMinutes: number): { category: string; bgColor: string; borderColor: string } => {
+  const getDurationCategoryForTask = (durationMinutes: number, isActive: boolean = false): { category: string; bgColor: string; borderColor: string } => {
+    // Active/ongoing tasks (pending, in_progress, delayed with null completed_at) are always RED
+    if (isActive) return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
+
     const hours = durationMinutes / 60;
     if (hours <= 1) return { category: 'green', bgColor: 'bg-green-700', borderColor: 'border-green-900' };
-    if (hours <= 2) return { category: 'amber', bgColor: 'bg-amber-700', borderColor: 'border-amber-900' };
-    if (hours <= 3) return { category: 'orange', bgColor: 'bg-orange-700', borderColor: 'border-orange-900' };
     return { category: 'red', bgColor: 'bg-red-700', borderColor: 'border-red-900' };
   };
 
-  // Helper: Get hourly task data from finops_subtasks (based on duration from start_time to completed_at)
+  // Helper: Get hourly task data from finops_tracker (based on scheduled_time hour and duration)
   const getHourlyTaskData = useMemo(() => {
     console.log("=== getHourlyTaskData calculation started ===");
     console.log("hourlySubtasksData length:", hourlySubtasksData?.length || 0);
@@ -319,6 +349,19 @@ export default function FinOpsUserStats() {
       return [];
     }
 
+    // Get current date and hour in IST for future hour detection
+    const currentISTDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const currentHour = currentISTDate.getHours();
+    const todayIST = currentISTDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+
+    // Get the selected date (use fromDate if available, otherwise today)
+    const selectedDateStr = fromDate || toDate || todayIST;
+    console.log("Today IST:", todayIST, "Selected Date:", selectedDateStr, "Current Hour:", currentHour);
+
+    // Only mark hours as future if selected date is TODAY
+    const isSelectedDateToday = selectedDateStr === todayIST;
+    console.log("Is selected date today?:", isSelectedDateToday);
+
     // Initialize 24 hours with duration categories
     const hourlyData = Array.from({ length: 24 }, (_, hour) => ({
       hour: `${String(hour).padStart(2, "0")}:00`,
@@ -326,7 +369,10 @@ export default function FinOpsUserStats() {
       "1to2h": 0,         // >1h to ≤2h (AMBER)
       "2to3h": 0,         // >2h to ≤3h (ORANGE)
       "moreThan3h": 0,    // >3h (RED)
+      "upcomingHourTasks": 0,  // Tasks in upcoming/future hours (SKY BLUE)
+      "upcoming": 0,      // Empty upcoming/future hours indicator (SKY BLUE)
       total: 0,
+      isFutureHour: isSelectedDateToday && hour > currentHour, // Mark future hours only if today
       // Store detailed task info for tooltip
       tasks: [] as Array<{
         name: string;
@@ -343,83 +389,143 @@ export default function FinOpsUserStats() {
 
     let processedCount = 0;
     let skippedCount = 0;
+    const skipReasons: { [key: string]: number } = {};
 
-    // Group tasks by start time hour and categorize by duration
+    // Group tasks by scheduled_time hour (from finops_tracker) and categorize by duration
     hourlySubtasksData.forEach((row: any, idx: number) => {
-      if (idx < 2) {
+      if (idx < 3) {
         console.log(`[Data Check] Row ${idx}:`, {
-          start_time: row.start_time,
+          scheduled_time: row.scheduled_time,
           started_at: row.started_at,
           completed_at: row.completed_at,
-          name: row.name,
+          subtask_name: row.subtask_name,
+          task_name: row.task_name,
+          assigned_to: row.assigned_to,
         });
       }
 
-      // Extract hour from start_time (HH:MM:SS format)
-      const startHour = getHourFromTimeString(row.start_time);
+      // Extract hour from scheduled_time (HH:MM:SS format)
+      // If scheduled_time is null, try to use started_at, otherwise use hour 0
+      let startHour = getHourFromScheduledTime(row.scheduled_time);
+      if (startHour === null && row.started_at) {
+        // Fallback: try to extract hour from started_at if scheduled_time is missing
+        try {
+          const date = new Date(row.started_at);
+          if (!isNaN(date.getTime())) {
+            const istFormatter = new Intl.DateTimeFormat("en-US", {
+              hour: "2-digit",
+              hour12: false,
+              timeZone: "Asia/Kolkata"
+            });
+            const istHour = istFormatter.format(date);
+            startHour = parseInt(istHour, 10);
+            if (isNaN(startHour) || startHour < 0 || startHour > 23) {
+              startHour = 0;
+            }
+          }
+        } catch (e) {
+          startHour = 0;
+        }
+      }
+      // If still null, use hour 0 as default
       if (startHour === null) {
-        if (idx < 3) console.warn(`Row ${idx}: startHour is null, skipping`);
-        skippedCount++;
-        return;
+        startHour = 0;
       }
 
-      // Only count completed tasks (need completed_at timestamp)
-      if (!row.completed_at) {
-        if (idx < 3) console.warn(`Row ${idx}: missing completed_at, skipping`);
-        skippedCount++;
-        return;
+      // Calculate duration based on task state
+      // If completed_at is null and status is pending/in_progress/delayed: calculate from started_at to NOW (RED)
+      // Otherwise: calculate from started_at to completed_at
+      let durationHours = 0;
+      let durationMinutes = 0;
+      let durationSeconds = 0;
+      let startedDate: Date | null = null;
+      let completedDate: Date | null = null;
+      let isActiveTask = false;
+
+      // Check if this is an active/ongoing task (no completed_at and status is not completed)
+      const activeStatuses = ['pending', 'in_progress', 'delayed', 'overdue'];
+      if (!row.completed_at && activeStatuses.includes(row.status?.toLowerCase())) {
+        isActiveTask = true;
       }
 
-      // Calculate duration using start_time (HH:MM:SS) + completion date
-      // This gives us realistic task duration (20 min instead of 100+ hours)
-      const completedDate = new Date(row.completed_at);
-      const completedHour = completedDate.getHours();
-      const completedMinutes = completedDate.getMinutes();
-      const completedSeconds = completedDate.getSeconds();
+      // For active/overdue tasks without started_at, use a default high duration (>3h indicator)
+      if (!row.started_at && isActiveTask) {
+        // No started_at but task is active/overdue - mark as very long duration
+        durationHours = 5; // 5+ hours (will show as >3h / RED)
+        durationMinutes = 300;
+        durationSeconds = 18000;
+      } else if (row.started_at) {
+        try {
+          startedDate = new Date(row.started_at);
 
-      // Build start timestamp from start_time (HH:MM:SS) on the same day as completion
-      const [hourStr, minStr, secStr] = row.start_time.split(':');
-      const startHourNum = parseInt(hourStr, 10);
-      const startMinNum = parseInt(minStr, 10);
-      const startSecNum = parseInt(secStr, 10);
+          // If active task, use current time; otherwise use completed_at
+          let endTime: Date;
+          if (isActiveTask) {
+            endTime = new Date(); // Current time
+            completedDate = null; // No completion time yet
+          } else if (row.completed_at) {
+            completedDate = new Date(row.completed_at);
+            endTime = completedDate;
+          } else {
+            // No completion time and not active, use 0 duration
+            endTime = startedDate;
+          }
 
-      // Create start time on the completion date
-      const startTime = new Date(completedDate);
-      startTime.setHours(startHourNum, startMinNum, startSecNum, 0);
+          const startTimeMs = startedDate.getTime();
+          const endTimeMs = endTime.getTime();
 
-      // Handle case where task completed after midnight (if start_time is later than completion time)
-      // This means the task started yesterday
-      if (startTime > completedDate) {
-        startTime.setDate(startTime.getDate() - 1);
+          if (!isNaN(startTimeMs) && !isNaN(endTimeMs)) {
+            const durationMs = endTimeMs - startTimeMs;
+            if (durationMs >= 0) {
+              // Valid duration calculation
+              durationHours = durationMs / (1000 * 60 * 60);
+              durationMinutes = durationMs / (1000 * 60);
+              durationSeconds = durationMs / 1000;
+            } else {
+              // Invalid sequence, use 0
+              durationHours = 0;
+              durationMinutes = 0;
+              durationSeconds = 0;
+            }
+          }
+        } catch (e: any) {
+          // Timestamp parse error, use 0 duration (unless active task)
+          if (isActiveTask) {
+            // Active tasks should show as long duration even on error
+            durationHours = 5;
+            durationMinutes = 300;
+            durationSeconds = 18000;
+          } else {
+            durationHours = 0;
+            durationMinutes = 0;
+            durationSeconds = 0;
+          }
+        }
       }
 
-      const startTimeMs = startTime.getTime();
-      const endTimeMs = completedDate.getTime();
-
-      if (isNaN(startTimeMs) || isNaN(endTimeMs) || startTimeMs > endTimeMs) {
-        if (idx < 3) console.warn(`Row ${idx}: invalid time calculation, skipping`);
-        skippedCount++;
-        return;
+      // Debug: Log sample tasks and overdue tasks
+      if (idx < 5 || row.status?.toLowerCase() === 'overdue') {
+        const startStr = row.started_at ? new Date(row.started_at).toISOString() : 'N/A';
+        const completedStr = row.completed_at ? new Date(row.completed_at).toISOString() : 'N/A';
+        console.log(`Task ${idx}: ${row.subtask_name || row.task_name} [${row.status}] - Scheduled: ${row.scheduled_time}, Started: ${startStr}, Completed: ${completedStr} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Active: ${isActiveTask} - Hour: ${startHour}`);
       }
 
-      const durationMs = endTimeMs - startTimeMs;
-      const durationHours = durationMs / (1000 * 60 * 60);
-      const durationMinutes = durationMs / (1000 * 60);
-      const durationSeconds = durationMs / 1000;
+      // Categorize by duration, but use "upcomingHourTasks" for tasks in future hours
+      let durationCategory: string;
 
-      // Debug: Log sample tasks to verify duration calculation
-      if (idx < 5) {
-        console.log(`Task ${idx}: ${row.name || row.subtask_name} - Start: ${row.start_time}, Completed: ${completedDate.toISOString()} - Duration=${durationSeconds.toFixed(0)}s / ${durationMinutes.toFixed(1)}min / ${durationHours.toFixed(2)}h - Hour: ${startHour}`);
-      }
-
-      // Categorize by duration
-      let durationCategory = "lessThan1h";
-      if (durationHours > 3) {
-        durationCategory = "moreThan3h";
-      } else if (durationHours > 2) {
-        durationCategory = "2to3h";
-      } else if (durationHours > 1) {
-        durationCategory = "1to2h";
+      if (hourlyData[startHour].isFutureHour) {
+        // Tasks in upcoming/future hours - show all in sky blue
+        durationCategory = "upcomingHourTasks";
+      } else {
+        // Tasks in past/current hours - categorize by actual duration
+        durationCategory = "lessThan1h";
+        if (durationHours > 3) {
+          durationCategory = "moreThan3h";
+        } else if (durationHours > 2) {
+          durationCategory = "2to3h";
+        } else if (durationHours > 1) {
+          durationCategory = "1to2h";
+        }
       }
 
       // Increment the counter for this duration category at this hour
@@ -428,22 +534,75 @@ export default function FinOpsUserStats() {
 
       // Store task details for tooltip
       const roundedDurationMinutes = Math.round(durationMinutes);
-      const durationCat = getDurationCategoryForTask(roundedDurationMinutes);
+      const durationCat = getDurationCategoryForTask(roundedDurationMinutes, isActiveTask);
+
+      // Parse assigned_to - could be array, JSON, or plain text
+      const parseAssignedTo = (value: any): string => {
+        if (!value) return "N/A";
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          // Try to parse if it looks like JSON
+          if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (Array.isArray(parsed)) {
+                return parsed.filter(p => p && String(p).trim()).join(", ");
+              }
+              return String(parsed);
+            } catch (e) {
+              return trimmed;
+            }
+          }
+          return trimmed || "N/A";
+        }
+        if (Array.isArray(value)) {
+          return value.filter(v => v && String(v).trim()).join(", ") || "N/A";
+        }
+        return String(value) || "N/A";
+      };
+
+      // Format start time (handle missing started_at)
+      let startTimeStr = "N/A";
+      if (row.started_at) {
+        try {
+          startTimeStr = new Date(row.started_at).toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+            timeZone: "Asia/Kolkata"
+          });
+        } catch (e) {
+          startTimeStr = "N/A";
+        }
+      }
+
+      // Format completed time (handle missing completed_at)
+      let completedAtStr = "N/A";
+      if (row.completed_at) {
+        try {
+          completedAtStr = new Date(row.completed_at).toLocaleString("en-US", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+            timeZone: "Asia/Kolkata"
+          });
+        } catch (e) {
+          completedAtStr = "N/A";
+        }
+      }
+
       hourlyData[startHour].tasks.push({
-        name: row.name || "N/A",
+        name: row.subtask_name || row.task_name || "N/A",
         clientName: row.client_name || "N/A",
-        assignedTo: row.assigned_to || "N/A",
+        assignedTo: parseAssignedTo(row.assigned_to),
         completedBy: row.completed_by || "N/A",
-        startTime: row.start_time,
-        completedAt: new Date(row.completed_at).toLocaleString("en-US", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: true,
-        }),
+        startTime: startTimeStr,
+        completedAt: completedAtStr,
         status: row.status,
         durationMinutes: roundedDurationMinutes,
         durationCategory: durationCat.category,
@@ -452,12 +611,31 @@ export default function FinOpsUserStats() {
       processedCount++;
     });
 
+    // Mark ALL future hours with "upcoming" indicator (sky blue color) for visual distinction
+    hourlyData.forEach((hourData, hourIndex) => {
+      if (hourData.isFutureHour) {
+        hourData.upcoming = 1; // Add small sky blue segment to ALL future hours for visual distinction
+        console.log(`Future hour ${hourData.hour} marked with upcoming indicator`);
+      }
+    });
+
     console.log("=== Processing complete ===");
-    console.log(`Processed: ${processedCount}, Skipped: ${skippedCount}, Total: ${hourlySubtasksData.length}`);
-    console.log("Hour with data:", hourlyData.filter(d => d.total > 0));
+    console.log(`Current IST Hour for detection: ${currentHour}`);
+    console.log(`Processed: ${processedCount} out of ${hourlySubtasksData.length} records`);
+    const hoursWithData = hourlyData.filter(d => d.total > 0 || d.upcoming > 0);
+    console.log(`Hours with data: ${hoursWithData.length}/24`);
+    console.log("Full hour breakdown:", hourlyData.map(h => ({ hour: h.hour, total: h.total, upcoming: h.upcoming, isFuture: h.isFutureHour, tasks: h.tasks.length })));
+    console.log("Hour breakdown (with data only):", hoursWithData.map(h => ({ hour: h.hour, total: h.total, upcoming: h.upcoming, tasks: h.tasks.length })));
 
     return hourlyData;
-  }, [hourlySubtasksData]);
+  }, [hourlySubtasksData, fromDate, toDate]);
+
+  const hourlyDurationChartData = useMemo(() => {
+    return getHourlyTaskData.map((hourData: any) => ({
+      ...hourData,
+      moreThan1h: (hourData["1to2h"] || 0) + (hourData["2to3h"] || 0) + (hourData.moreThan3h || 0),
+    }));
+  }, [getHourlyTaskData]);
 
   // Helper: Parse managers field (handles string, JSON array, or null)
   const parseManagers = (value: any): string => {
@@ -628,29 +806,80 @@ export default function FinOpsUserStats() {
       return;
     }
 
-    // Sheet 1: Hourly Summary Pivot
+    // Sheet 1: Summary Statistics
+    const summaryStats: any[] = [];
+    const totalTasks = getHourlyTaskData.reduce((sum, h) => sum + h.total, 0);
+    const totalLessThan1h = getHourlyTaskData.reduce((sum, h) => sum + h.lessThan1h, 0);
+    const total1to2h = getHourlyTaskData.reduce((sum, h) => sum + h["1to2h"], 0);
+    const total2to3h = getHourlyTaskData.reduce((sum, h) => sum + h["2to3h"], 0);
+    const totalMoreThan3h = getHourlyTaskData.reduce((sum, h) => sum + h.moreThan3h, 0);
+
+    summaryStats.push(
+      { "Metric": "Report Date", "Value": new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
+      { "Metric": "Date Range", "Value": `${fromDate} to ${toDate}` },
+      { "Metric": "Total Tasks", "Value": totalTasks },
+      { "Metric": "", "Value": "" }, // Blank row
+      { "Metric": "Duration Category", "Value": "Count", "Percentage": "%" },
+      { "Metric": "≤1 Hour (On Time)", "Value": totalLessThan1h, "Percentage": totalTasks > 0 ? ((totalLessThan1h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+      { "Metric": "1-2 Hours (Amber)", "Value": total1to2h, "Percentage": totalTasks > 0 ? ((total1to2h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+      { "Metric": "2-3 Hours (Orange)", "Value": total2to3h, "Percentage": totalTasks > 0 ? ((total2to3h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+      { "Metric": ">3 Hours (Red)", "Value": totalMoreThan3h, "Percentage": totalTasks > 0 ? ((totalMoreThan3h / totalTasks) * 100).toFixed(1) + "%" : "0%" },
+    );
+
+    // Sheet 2: Hourly Summary Pivot
     const pivotData: any[] = [];
-    pivotData.push({
-      "Hour": "Hour (IST)",
-      "≤1 Hour": "≤1 Hour",
-      "1-2 Hours": "1-2 Hours",
-      "2-3 Hours": "2-3 Hours",
-      ">3 Hours": ">3 Hours",
-      "Total": "Total",
-    });
 
     getHourlyTaskData.forEach((hourData: any) => {
+      const hourTotal = hourData.total || 0;
+      const onTimePercentage = hourTotal > 0 ? ((hourData.lessThan1h / hourTotal) * 100).toFixed(1) : "0";
       pivotData.push({
         "Hour": hourData.hour,
+        "Empty Upcoming": hourData.upcoming || 0,
+        "Upcoming Tasks": hourData.upcomingHourTasks || 0,
         "≤1 Hour": hourData.lessThan1h || 0,
         "1-2 Hours": hourData["1to2h"] || 0,
         "2-3 Hours": hourData["2to3h"] || 0,
-        ">3 Hours": hourData.moreThan3h || 0,
-        "Total": hourData.total || 0,
+        ">3 Hours (Active)": hourData.moreThan3h || 0,
+        "Total": hourTotal,
+        "On-Time %": onTimePercentage + "%",
       });
     });
 
-    // Sheet 2: Detailed Task Data
+    // Sheet 3: Client-wise Breakdown by Duration
+    const clientBreakdown: { [key: string]: { lessThan1h: number; "1to2h": number; "2to3h": number; moreThan3h: number; total: number } } = {};
+    getHourlyTaskData.forEach((hourData: any) => {
+      if (hourData.tasks && hourData.tasks.length > 0) {
+        hourData.tasks.forEach((task: any) => {
+          const client = task.clientName || "Unknown";
+          if (!clientBreakdown[client]) {
+            clientBreakdown[client] = { lessThan1h: 0, "1to2h": 0, "2to3h": 0, moreThan3h: 0, total: 0 };
+          }
+          const category = task.durationCategory === 'green' ? 'lessThan1h' :
+                          task.durationCategory === 'amber' ? '1to2h' :
+                          task.durationCategory === 'orange' ? '2to3h' :
+                          'moreThan3h';
+          clientBreakdown[client][category]++;
+          clientBreakdown[client].total++;
+        });
+      }
+    });
+
+    const clientBreakdownData: any[] = [];
+
+    Object.entries(clientBreakdown).forEach(([client, data]) => {
+      clientBreakdownData.push({
+        "Client Name": client,
+        "Upcoming": data.upcoming || 0,
+        "≤1 Hour": data.lessThan1h,
+        "1-2 Hours": data["1to2h"],
+        "2-3 Hours": data["2to3h"],
+        ">3 Hours (Active)": data.moreThan3h,
+        "Total": data.total,
+        "On-Time %": data.total > 0 ? ((data.lessThan1h / data.total) * 100).toFixed(1) + "%" : "0%",
+      });
+    });
+
+    // Sheet 4: Detailed Task Data
     const detailedData: any[] = [];
     getHourlyTaskData.forEach((hourData: any) => {
       if (hourData.tasks && hourData.tasks.length > 0) {
@@ -663,7 +892,8 @@ export default function FinOpsUserStats() {
             "Completed By": task.completedBy || "N/A",
             "Start Time": task.startTime || "N/A",
             "Completed At": task.completedAt || "N/A",
-            "Duration": formatDurationMinutes(task.durationMinutes),
+            "Duration (Minutes)": task.durationMinutes,
+            "Duration (Formatted)": formatDurationMinutes(task.durationMinutes),
             "Duration Category":
               task.durationCategory === 'green' ? '≤1 Hour' :
               task.durationCategory === 'amber' ? '1-2 Hours' :
@@ -675,8 +905,17 @@ export default function FinOpsUserStats() {
       }
     });
 
-    // Create workbook with two sheets
+    // Create workbook with multiple sheets
     const wb = XLSX.utils.book_new();
+
+    // Summary Statistics Sheet
+    const summaryWs = XLSX.utils.json_to_sheet(summaryStats);
+    summaryWs["!cols"] = [
+      { wch: 25 }, // Metric
+      { wch: 30 }, // Value
+      { wch: 12 }, // Percentage
+    ];
+    XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
 
     // Pivot Summary Sheet
     const pivotWs = XLSX.utils.json_to_sheet(pivotData);
@@ -687,8 +926,22 @@ export default function FinOpsUserStats() {
       { wch: 12 }, // 2-3 Hours
       { wch: 12 }, // >3 Hours
       { wch: 10 }, // Total
+      { wch: 12 }, // On-Time %
     ];
-    XLSX.utils.book_append_sheet(wb, pivotWs, "Summary Pivot");
+    XLSX.utils.book_append_sheet(wb, pivotWs, "Hourly Pivot");
+
+    // Client-wise Breakdown Sheet
+    const clientWs = XLSX.utils.json_to_sheet(clientBreakdownData);
+    clientWs["!cols"] = [
+      { wch: 25 }, // Client Name
+      { wch: 12 }, // ≤1 Hour
+      { wch: 12 }, // 1-2 Hours
+      { wch: 12 }, // 2-3 Hours
+      { wch: 12 }, // >3 Hours
+      { wch: 10 }, // Total
+      { wch: 12 }, // On-Time %
+    ];
+    XLSX.utils.book_append_sheet(wb, clientWs, "Client Breakdown");
 
     // Detailed Data Sheet
     const detailedWs = XLSX.utils.json_to_sheet(detailedData);
@@ -700,13 +953,15 @@ export default function FinOpsUserStats() {
       { wch: 20 }, // Completed By
       { wch: 12 }, // Start Time
       { wch: 20 }, // Completed At
-      { wch: 12 }, // Duration
+      { wch: 15 }, // Duration (Minutes)
+      { wch: 15 }, // Duration (Formatted)
       { wch: 15 }, // Duration Category
       { wch: 12 }, // Status
     ];
-    XLSX.utils.book_append_sheet(wb, detailedWs, "Detailed Data");
+    XLSX.utils.book_append_sheet(wb, detailedWs, "Task Details");
 
-    const filename = `hourly-task-duration-${new Date().toISOString().split('T')[0]}.xlsx`;
+    const dateRange = fromDate === toDate ? fromDate : `${fromDate}_to_${toDate}`;
+    const filename = `hourly-task-duration-${dateRange}-${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(wb, filename);
   };
 
@@ -810,10 +1065,10 @@ export default function FinOpsUserStats() {
             <CardTitle className="text-base font-semibold text-gray-800">Client-wise Subtask Count</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            {/* Show warning if data was filtered */}
-            {productivityData.length > validProductivityData.length && (
+            {/* Show warning if records were filtered out due to missing duration */}
+            {filteredOutCount > 0 && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                ⚠️ Filtered {productivityData.length - validProductivityData.length} record(s) with unreasonably long durations (data quality issue)
+                ℹ️ Filtered {filteredOutCount} record(s) with missing or zero durations (data quality issue) - showing all {productivityData.length} records
               </div>
             )}
             {isLoadingProductivity ? (
@@ -875,26 +1130,60 @@ export default function FinOpsUserStats() {
         {/* Hourly Task Status Timeline Chart */}
         <Card className="border border-gray-200 shadow-sm">
           <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
-                <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Amber: 1-2h, Orange: 2-3h, Red: More than 3h)</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="text-base font-semibold text-gray-800">Hourly Task Duration (12 AM - 11:59 PM IST)</CardTitle>
+                  <p className="text-xs text-gray-500 mt-2">Completed tasks grouped by start time - Shows duration breakdown (Green: ≤1h, Red: &gt;1h)</p>
+                </div>
+                <button
+                  onClick={exportHourlyTaskDurationToExcel}
+                  disabled={!getHourlyTaskData.some(d => d.total > 0)}
+                  className="ml-4 flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                  title="Export hourly task data to Excel"
+                >
+                  <Download size={16} />
+                  Export
+                </button>
               </div>
-              <button
-                onClick={exportHourlyTaskDurationToExcel}
-                disabled={!getHourlyTaskData.some(d => d.total > 0)}
-                className="ml-4 flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                title="Export hourly task data to Excel"
-              >
-                <Download size={16} />
-                Export
-              </button>
+
+              {/* Date Picker Controls */}
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <span className="text-xs font-semibold text-gray-700">Select Date Range:</span>
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1">
+                  <div className="flex-1 min-w-[150px]">
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">From Date</label>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[150px]">
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">To Date</label>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500 sm:mt-6">
+                    {fromDate && toDate && fromDate === toDate ? (
+                      <span className="font-semibold text-green-600">Selected: {new Date(fromDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    ) : fromDate && toDate ? (
+                      <span className="font-semibold text-green-600">Selected: {new Date(fromDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(toDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
             {isLoadingAllTasks ? (
               <div className="text-center py-12 text-gray-500">Loading task data...</div>
-            ) : getHourlyTaskData.some(d => d.total > 0) ? (
+            ) : hourlyDurationChartData.some(d => d.total > 0) ? (
               <div className="w-full overflow-auto">
                 <div style={{ minHeight: 400, width: "100%" }}>
                   <ChartContainer
@@ -909,14 +1198,18 @@ export default function FinOpsUserStats() {
                   >
                     <Recharts.ResponsiveContainer width="100%" height={400}>
                       <Recharts.BarChart
-                        data={getHourlyTaskData}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                        data={hourlyDurationChartData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
                       >
                         <Recharts.CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <Recharts.XAxis
                           dataKey="hour"
                           tick={{ fontSize: 11, fill: "#6b7280" }}
                           label={{ value: "Hour (IST) - Click to Lock/Unlock Tooltip", position: "insideBottomRight", offset: -10 }}
+                          interval={0}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
                         />
                         <Recharts.YAxis
                           type="number"
@@ -928,7 +1221,7 @@ export default function FinOpsUserStats() {
                             // When locked, ALWAYS show locked hour and NEVER update on hover
                             let dataToShow = null;
                             if (lockedHour !== null) {
-                              dataToShow = getHourlyTaskData.find((d: any) => d.hour === lockedHour);
+                              dataToShow = hourlyDurationChartData.find((d: any) => d.hour === lockedHour);
                               // Don't rely on active/payload when locked - always show locked data
                             } else if (active && payload && payload.length > 0) {
                               // Only when NOT locked, show hovered data
@@ -974,28 +1267,28 @@ export default function FinOpsUserStats() {
                                 {/* Duration Summary Boxes */}
                                 <div className="bg-gray-50 px-5 py-3 border-b border-gray-200">
                                   <div className="grid grid-cols-2 gap-2">
+                                    {dataToShow.upcoming > 0 && (
+                                      <div className="bg-gradient-to-br from-sky-50 to-sky-100 rounded-lg p-3 border border-sky-200">
+                                        <p className="text-xs font-semibold text-sky-700">🔵 Empty Upcoming</p>
+                                        <p className="text-2xl font-bold text-sky-600">{dataToShow.upcoming}</p>
+                                      </div>
+                                    )}
+                                    {dataToShow.upcomingHourTasks > 0 && (
+                                      <div className="bg-gradient-to-br from-sky-50 to-sky-100 rounded-lg p-3 border border-sky-200">
+                                        <p className="text-xs font-semibold text-sky-700">🔵 Upcoming Tasks</p>
+                                        <p className="text-2xl font-bold text-sky-600">{dataToShow.upcomingHourTasks}</p>
+                                      </div>
+                                    )}
                                     {dataToShow.lessThan1h > 0 && (
                                       <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
                                         <p className="text-xs font-semibold text-green-700">🟢 ≤1 Hour</p>
                                         <p className="text-2xl font-bold text-green-600">{dataToShow.lessThan1h}</p>
                                       </div>
                                     )}
-                                    {dataToShow["1to2h"] > 0 && (
-                                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200">
-                                        <p className="text-xs font-semibold text-amber-700">🟡 1-2 Hours</p>
-                                        <p className="text-2xl font-bold text-amber-600">{dataToShow["1to2h"]}</p>
-                                      </div>
-                                    )}
-                                    {dataToShow["2to3h"] > 0 && (
-                                      <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
-                                        <p className="text-xs font-semibold text-orange-700">🟠 2-3 Hours</p>
-                                        <p className="text-2xl font-bold text-orange-600">{dataToShow["2to3h"]}</p>
-                                      </div>
-                                    )}
-                                    {dataToShow.moreThan3h > 0 && (
+                                    {dataToShow.moreThan1h > 0 && (
                                       <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-3 border border-red-200">
-                                        <p className="text-xs font-semibold text-red-700">🔴 {"\u003e"}3 Hours</p>
-                                        <p className="text-2xl font-bold text-red-600">{dataToShow.moreThan3h}</p>
+                                        <p className="text-xs font-semibold text-red-700">🔴 {'>'}1 Hour</p>
+                                        <p className="text-2xl font-bold text-red-600">{dataToShow.moreThan1h}</p>
                                       </div>
                                     )}
                                   </div>
@@ -1008,15 +1301,11 @@ export default function FinOpsUserStats() {
                                       tasks.map((task: any, idx: number) => (
                                         <div key={idx} className={`bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow border-l-4 ${
                                           task.durationCategory === 'green' ? 'border-green-500' :
-                                          task.durationCategory === 'amber' ? 'border-amber-500' :
-                                          task.durationCategory === 'orange' ? 'border-orange-500' :
                                           'border-red-500'
                                         }`}>
                                           <div className="flex items-start justify-between mb-3">
                                             <p className={`font-bold text-white text-xs px-3 py-1 rounded-full ${
                                               task.durationCategory === 'green' ? 'bg-green-500' :
-                                              task.durationCategory === 'amber' ? 'bg-amber-500' :
-                                              task.durationCategory === 'orange' ? 'bg-orange-500' :
                                               'bg-red-500'
                                             }`}>Task {idx + 1}</p>
                                             <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
@@ -1072,10 +1361,10 @@ export default function FinOpsUserStats() {
                           contentStyle={{ borderRadius: "8px", position: "relative", zIndex: 50 }}
                         />
                         <Recharts.Legend />
+                        <Recharts.Bar dataKey="upcoming" name="Empty Upcoming Hour" stackId="duration" fill="#0EA5E9" legendType="none" />
+                        <Recharts.Bar dataKey="upcomingHourTasks" name="Upcoming Hour Tasks" stackId="duration" fill="#0EA5E9" legendType="none" />
                         <Recharts.Bar dataKey="lessThan1h" name="≤1 Hour" stackId="duration" fill="#10B981" />
-                        <Recharts.Bar dataKey="1to2h" name="1-2 Hours" stackId="duration" fill="#FBBF24" />
-                        <Recharts.Bar dataKey="2to3h" name="2-3 Hours" stackId="duration" fill="#F97316" />
-                        <Recharts.Bar dataKey="moreThan3h" name="More than 3h" stackId="duration" fill="#EF4444" />
+                        <Recharts.Bar dataKey="moreThan1h" name=">1 Hour" stackId="duration" fill="#EF4444" />
                       </Recharts.BarChart>
                     </Recharts.ResponsiveContainer>
                   </ChartContainer>

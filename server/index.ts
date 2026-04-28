@@ -2,6 +2,7 @@ import "dotenv/config";
 // Force Vite rebuild - emailProcessorService hotfix applied
 import express from "express";
 import cors from "cors";
+import path from "path";
 
 // Extend Express Request interface for raw body
 declare global {
@@ -38,6 +39,13 @@ import connectionsRouter from "./routes/connections";
 import mailConfigsRouter from "./routes/mail-configs";
 import emailProcessingRouter from "./routes/email-processing";
 import slackImportRouter from "./routes/slack-import";
+import leadManagementRouter from "./routes/lead-management";
+import leadFollowupsRouter from "./routes/lead-followups";
+import leadInitRouter from "./routes/lead-init";
+import salesLeadsNotificationsRouter from "./routes/sales-leads-notifications";
+import audioTranscriptionRouter from "./routes/audio-transcription";
+import demosRouter from "./routes/demos";
+import materialsRouter from "./routes/materials";
 import { initialize as initializeEmailProcessingJob } from "./jobs/emailProcessingJob";
 import { runMarkOverdueTickets } from "./jobs/markOverdueTickets";
 import { initialize as initializeSlackProcessingJob } from "./jobs/slackProcessingJob";
@@ -317,6 +325,11 @@ export function createServer() {
     next();
   });
 
+  // Serve static files (uploads directory)
+  const uploadsPath = path.join(process.cwd(), "public", "uploads");
+  app.use("/uploads", express.static(uploadsPath));
+  console.log("Static file serving configured for uploads directory");
+
   // API routes
   app.get("/api/ping", (_req, res) => {
     const ping = process.env.PING_MESSAGE ?? "ping";
@@ -478,6 +491,22 @@ export function createServer() {
     );
   } catch (error) {
     console.error("Error loading Slack import route:", error);
+  }
+
+  try {
+    app.use("/api/lead-management", leadManagementRouter);
+    app.use("/api/lead-followups", leadFollowupsRouter);
+    app.use("/api/lead-init", leadInitRouter);
+    app.use("/api/sales-leads-notifications", salesLeadsNotificationsRouter);
+    app.use("/api/audio-transcription", audioTranscriptionRouter);
+    app.use("/api/demos", demosRouter);
+    app.use("/api/materials", materialsRouter);
+    console.log("Lead Management router loaded successfully");
+    console.log("Demo/Workshop router loaded successfully");
+    console.log("Audio transcription router loaded successfully");
+    console.log("Materials router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Lead Management router:", error);
   }
 
   try {

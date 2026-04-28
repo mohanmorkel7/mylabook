@@ -124,6 +124,15 @@ import LeadDashboard from "@/pages/LeadDashboard";
 import CreateLead from "@/pages/CreateLead";
 import LeadDetails from "@/pages/LeadDetails";
 import LeadEdit from "@/pages/LeadEdit";
+import LeadManagementDashboard from "@/pages/LeadManagementDashboard";
+import LeadOverviewPage from "@/pages/LeadOverview";
+import LeadEditPage from "@/pages/LeadEditPage";
+import DemoWorkshopDashboard from "@/pages/DemoWorkshopDashboard";
+import DemoDetail from "@/pages/DemoDetail";
+import DemoCreate from "@/pages/DemoCreate";
+import DemoPublicViewer from "@/pages/DemoPublicViewer";
+import DemoMaterialsManagement from "@/pages/DemoMaterialsManagement";
+import MaterialsManagement from "@/pages/MaterialsManagement";
 import VCDashboard from "@/pages/VCDashboard";
 import CreateVC from "@/pages/CreateVC";
 import VCDetails from "@/pages/VCDetails";
@@ -724,6 +733,125 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "sales"]}>
             <DashboardLayout>
               <LeadEdit />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Lead Generation Management - New System */}
+      <Route
+        path="/lead-management"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadManagementDashboard />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/lead-management/new"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadEditPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/lead-management/:id/overview"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadOverviewPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/lead-management/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <LeadEditPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Demo/Workshop Routes */}
+      <Route
+        path="/demo-workshop"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoWorkshopDashboard />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/new"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoCreate />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoDetail />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/:id/materials"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoMaterialsManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/demo-workshop/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <DemoCreate />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Public Demo Viewer - No authentication required */}
+      <Route
+        path="/demo/view/:token"
+        element={<DemoPublicViewer />}
+      />
+
+      {/* Materials Library Routes */}
+      <Route
+        path="/materials"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "sales", "product"]}>
+            <DashboardLayout>
+              <MaterialsManagement />
             </DashboardLayout>
           </ProtectedRoute>
         }

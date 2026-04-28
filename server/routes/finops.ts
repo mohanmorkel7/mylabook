@@ -121,6 +121,9 @@ export async function initializeFinOpsSchema() {
         completed_by TEXT,
         approved_at TIMESTAMP,
         approved_by TEXT,
+        rejected_at TIMESTAMP,
+        rejected_by TEXT,
+        reject_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(run_date, period, task_id, subtask_id)
@@ -145,7 +148,10 @@ export async function initializeFinOpsSchema() {
         ADD COLUMN IF NOT EXISTS escalation_managers TEXT,
         ADD COLUMN IF NOT EXISTS completed_by TEXT,
         ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS approved_by TEXT
+        ADD COLUMN IF NOT EXISTS approved_by TEXT,
+        ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS rejected_by TEXT,
+        ADD COLUMN IF NOT EXISTS reject_reason TEXT
     `);
 
     // Ensure finops_settings has at least one row
@@ -647,7 +653,10 @@ router.get("/tasks", async (req: Request, res: Response) => {
                   'notification_sent_escalation', ft.notification_sent_escalation,
                   'assigned_to', ft.assigned_to,
                   'reporting_managers', ft.reporting_managers,
-                  'escalation_managers', ft.escalation_managers
+                  'escalation_managers', ft.escalation_managers,
+                  'rejected_by', ft.rejected_by,
+                  'rejected_at', ft.rejected_at,
+                  'reject_reason', ft.reject_reason
                 ) ORDER BY ft.order_position
               ) FILTER (WHERE ft.subtask_id IS NOT NULL),
               '[]'::json
@@ -698,7 +707,10 @@ router.get("/tasks", async (req: Request, res: Response) => {
                   'notification_sent_escalation', ft.notification_sent_escalation,
                   'assigned_to', ft.assigned_to,
                   'reporting_managers', ft.reporting_managers,
-                  'escalation_managers', ft.escalation_managers
+                  'escalation_managers', ft.escalation_managers,
+                  'rejected_by', ft.rejected_by,
+                  'rejected_at', ft.rejected_at,
+                  'reject_reason', ft.reject_reason
                 ) ORDER BY ft.order_position
               ) FILTER (WHERE ft.subtask_id IS NOT NULL),
               '[]'::json
@@ -2685,7 +2697,10 @@ router.get("/daily-tasks", async (req: Request, res: Response) => {
               'completed_at', COALESCE(ft.completed_at, st.completed_at),
               'completed_by', ft.completed_by,
               'approved_by', ft.approved_by,
-              'approved_at', COALESCE(ft.approved_at, st.approved_at),
+              'approved_at', ft.approved_at,
+              'rejected_by', ft.rejected_by,
+              'rejected_at', ft.rejected_at,
+              'reject_reason', ft.reject_reason,
               'delay_reason', COALESCE(ft.delay_reason, st.delay_reason),
               'delay_notes', COALESCE(ft.delay_notes, st.delay_notes)
             ) ORDER BY st.order_position
@@ -3104,10 +3119,15 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
         ft.order_position,
         ft.delay_reason,
         ft.delay_notes,
-        ft.assigned_to,
-        ft.reporting_managers,
-        ft.escalation_managers,
+        COALESCE(ft.assigned_to, fts.assigned_to::text) as assigned_to,
+        COALESCE(ft.reporting_managers, fts.reporting_managers::text) as reporting_managers,
+        COALESCE(ft.escalation_managers, fts.escalation_managers::text) as escalation_managers,
         ft.completed_by,
+        ft.approved_by,
+        ft.approved_at,
+        ft.rejected_by,
+        ft.rejected_at,
+        ft.reject_reason,
         ft.created_at,
         ft.updated_at,
         COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name
@@ -3119,6 +3139,17 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
     `;
 
     const result = await pool.query(query, params);
+    console.log(`Tracker/all query returned ${result.rows.length} rows`);
+    if (result.rows.length > 0) {
+      console.log("Sample tracker row columns:", Object.keys(result.rows[0]));
+      console.log("Sample tracker row data:", {
+        task_name: result.rows[0].task_name,
+        subtask_name: result.rows[0].subtask_name,
+        completed_by: result.rows[0].completed_by,
+        approved_by: result.rows[0].approved_by,
+        client_name: result.rows[0].client_name,
+      });
+    }
     res.json(result.rows);
   } catch (e: any) {
     console.error("Error fetching all tracker data:", e);
@@ -3128,43 +3159,85 @@ router.get("/tracker/all", async (req: Request, res: Response) => {
   }
 });
 
+// Get diagnostic info about available dates in finops_subtasks
+router.get("/subtasks/dates-available", async (req: Request, res: Response) => {
+  try {
+    if (await isDatabaseAvailable()) {
+      const query = `
+        SELECT
+          DATE(st.completed_at) as completion_date,
+          COUNT(*) as record_count,
+          COUNT(DISTINCT st.task_id) as unique_tasks,
+          COUNT(DISTINCT fc.id) as unique_clients
+        FROM finops_subtasks st
+        LEFT JOIN finops_tasks ft ON st.task_id = ft.id
+        LEFT JOIN finops_clients fc ON ft.client_id = fc.id
+        WHERE st.completed_at IS NOT NULL
+        GROUP BY DATE(st.completed_at)
+        ORDER BY DATE(st.completed_at) DESC
+        LIMIT 30
+      `;
+
+      const result = await pool.query(query);
+      console.log("Available dates with data:", result.rows);
+      res.json(result.rows);
+    } else {
+      res.json([]);
+    }
+  } catch (e: any) {
+    console.error("Error fetching available dates:", e);
+    res.status(500).json({ error: "Failed to fetch available dates" });
+  }
+});
+
 // Get hourly task data from finops_subtasks (for hourly status chart)
 // Filters by completion date (when tasks were actually completed)
 router.get("/subtasks/hourly", async (req: Request, res: Response) => {
   try {
     const fromDate = (req.query.from_date as string) || null;
     const toDate = (req.query.to_date as string) || null;
+    const filterBy = (req.query.filter_by as string) || "completion"; // "completion" or "scheduled"
 
     console.log("Subtasks/hourly request - fromDate:", fromDate, "toDate:", toDate);
+    console.log("Filtering by:", filterBy, "(completion date in IST, or scheduled date in IST)");
 
     const params: any[] = [];
     let whereClause = "";
 
-    // Build WHERE clause filtering by COMPLETION date
-    // We want tasks that were completed on the specified date
-    // Note: Some tasks may have long durations if they started on earlier dates
-    const completionDateExpr = "DATE(st.completed_at)";
+    // Choose filter: completion_date or scheduled_date (both in IST timezone)
+    let dateExpr: string;
+    if (filterBy === "scheduled") {
+      // Filter by when the task was SCHEDULED (use scheduled_date in IST)
+      dateExpr = "DATE(st.scheduled_date AT TIME ZONE 'Asia/Kolkata')";
+      console.log("Using SCHEDULED date for filtering");
+    } else {
+      // Filter by when the task was actually COMPLETED (use completed_at in IST)
+      dateExpr = "DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')";
+      console.log("Using COMPLETION date for filtering");
+    }
 
     const whereParts: string[] = [];
     if (fromDate) {
       params.push(fromDate);
-      whereParts.push(`${completionDateExpr} >= $${params.length}`);
+      whereParts.push(`${dateExpr} >= $${params.length}`);
     }
     if (toDate) {
       params.push(toDate);
-      whereParts.push(`${completionDateExpr} <= $${params.length}`);
+      whereParts.push(`${dateExpr} <= $${params.length}`);
     }
 
-    // Also filter to only include tasks with both started_at and completed_at
-    // to ensure we have valid duration data
-    whereParts.push("st.started_at IS NOT NULL");
+    // Filter to include only completed tasks (we need valid completion data for the chart)
     whereParts.push("st.completed_at IS NOT NULL");
+
+    // Also ensure the task has a valid start_time for hourly grouping
+    whereParts.push("st.start_time IS NOT NULL");
 
     if (whereParts.length > 0) {
       whereClause = "WHERE " + whereParts.join(" AND ");
     }
 
     // Query finops_subtasks directly to get hourly task data with actual status
+    // Ensure we get ALL tasks for the specified date range
     const query = `
       SELECT
         st.id,
@@ -3182,24 +3255,50 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
         st.delay_reason,
         st.delay_notes,
         ft.task_name,
-        ft.assigned_to,
+        COALESCE(ftr.assigned_to, ft.assigned_to::text) as assigned_to,
         fc.company_name as client_name,
-        ftr.completed_by
+        COALESCE(ftr.completed_by, '') as completed_by
       FROM finops_subtasks st
       LEFT JOIN finops_tasks ft ON st.task_id = ft.id
       LEFT JOIN finops_clients fc ON ft.client_id = fc.id
-      LEFT JOIN finops_tracker ftr ON st.id = ftr.subtask_id AND DATE(ftr.run_date) = DATE(st.completed_at)
+      LEFT JOIN finops_tracker ftr ON st.id = ftr.subtask_id AND DATE(ftr.run_date) = DATE(st.completed_at AT TIME ZONE 'Asia/Kolkata')
       ${whereClause}
       ORDER BY st.completed_at DESC, st.task_id ASC, st.order_position ASC
     `;
 
+    console.log("Subtasks/hourly request - filtering by COMPLETION date in IST timezone");
+    console.log("Date range (IST): ", fromDate, "to", toDate);
     console.log("Subtasks/hourly query:", query);
     console.log("Subtasks/hourly params:", params);
 
     const result = await pool.query(query, params);
     console.log("Subtasks/hourly result count:", result.rows.length);
+    console.log("Query returned", result.rows.length, "rows for date range:", fromDate, "to", toDate);
+
     if (result.rows.length > 0) {
       console.log("Sample row:", result.rows[0]);
+      console.log("Sample completed_at values:", result.rows.slice(0, 5).map((r: any) => r.completed_at));
+
+      // Group by hour to show distribution
+      const hourlyDistribution: any = {};
+      result.rows.forEach((row: any) => {
+        if (row.start_time) {
+          const hour = row.start_time.split(':')[0];
+          hourlyDistribution[hour] = (hourlyDistribution[hour] || 0) + 1;
+        }
+      });
+
+      // Check for missing hours
+      const allHours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+      const presentHours = Object.keys(hourlyDistribution).map((h: string) => String(h).padStart(2, '0'));
+      const missingHours = allHours.filter(h => !presentHours.includes(h));
+
+      console.log("✅ Hourly distribution:", hourlyDistribution);
+      console.log(`📊 Present hours: ${presentHours.sort().join(', ')}`);
+      console.log(`❌ Missing hours: ${missingHours.length > 0 ? missingHours.join(', ') : 'None'}`);
+      console.log(`📈 Total tasks returned: ${result.rows.length}`);
+    } else {
+      console.log("⚠️  No data found for date range:", fromDate, "to", toDate);
     }
 
     res.json(result.rows);
@@ -3208,6 +3307,117 @@ router.get("/subtasks/hourly", async (req: Request, res: Response) => {
     res
       .status(500)
       .json({ error: "Failed to fetch hourly subtask data", message: e.message });
+  }
+});
+
+// Get hourly task data from finops_tracker (using started_at field)
+// Filters by run_date and groups by the hour of started_at
+router.get("/tracker/hourly", async (req: Request, res: Response) => {
+  try {
+    const fromDate = (req.query.from_date as string) || null;
+    const toDate = (req.query.to_date as string) || null;
+
+    console.log("Tracker/hourly request - fromDate:", fromDate, "toDate:", toDate);
+
+    const params: any[] = [];
+    let whereClause = "";
+
+    // Filter by run_date (which represents the date in IST)
+    const whereParts: string[] = [];
+    if (fromDate) {
+      params.push(fromDate);
+      whereParts.push(`DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') >= $${params.length}`);
+    }
+    if (toDate) {
+      params.push(toDate);
+      whereParts.push(`DATE(ft.run_date AT TIME ZONE 'Asia/Kolkata') <= $${params.length}`);
+    }
+
+    // Ensure we have valid timestamps for hourly grouping
+    // Filter by date range only - get all task records
+
+    if (whereParts.length > 0) {
+      whereClause = "WHERE " + whereParts.join(" AND ");
+    }
+
+    // Query finops_tracker to get hourly task data based on scheduled_time
+    // Join with finops_tasks and finops_clients to get client_name
+    const query = `
+      SELECT
+        ft.id,
+        ft.task_id,
+        ft.task_name,
+        ft.subtask_id,
+        ft.subtask_name,
+        ft.status,
+        ft.scheduled_time,
+        ft.started_at,
+        ft.completed_at,
+        ft.completed_by,
+        COALESCE(ft.assigned_to, fts.assigned_to::text) as assigned_to,
+        ft.reporting_managers,
+        ft.escalation_managers,
+        ft.approved_by,
+        ft.approved_at,
+        ft.delay_reason,
+        ft.delay_notes,
+        COALESCE(fc.company_name, ft.task_name, 'Unknown') as client_name,
+        ft.sla_hours,
+        ft.sla_minutes,
+        ft.period
+      FROM finops_tracker ft
+      LEFT JOIN finops_tasks fts ON ft.task_id = fts.id
+      LEFT JOIN finops_clients fc ON fts.client_id = fc.id
+      ${whereClause}
+      ORDER BY ft.scheduled_time DESC, ft.task_id ASC
+    `;
+
+    console.log("Tracker/hourly query:", query);
+    console.log("Tracker/hourly params:", params);
+
+    const result = await pool.query(query, params);
+    console.log("Tracker/hourly result count:", result.rows.length);
+    console.log("Query returned", result.rows.length, "rows for date range:", fromDate, "to", toDate);
+
+    if (result.rows.length > 0) {
+      console.log("Sample row:", result.rows[0]);
+      console.log("Sample started_at values:", result.rows.slice(0, 5).map((r: any) => r.started_at));
+
+      // Group by hour based on started_at (in IST timezone)
+      const hourlyDistribution: any = {};
+      result.rows.forEach((row: any) => {
+        if (row.started_at) {
+          const startDate = new Date(row.started_at);
+          // Convert to IST to get the hour
+          const istFormatter = new Intl.DateTimeFormat("en-US", {
+            hour: "2-digit",
+            hour12: false,
+            timeZone: "Asia/Kolkata"
+          });
+          const istHour = String(istFormatter.format(startDate)).padStart(2, '0');
+          hourlyDistribution[istHour] = (hourlyDistribution[istHour] || 0) + 1;
+        }
+      });
+
+      // Check for missing hours
+      const allHours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+      const presentHours = Object.keys(hourlyDistribution).map((h: string) => String(h).padStart(2, '0'));
+      const missingHours = allHours.filter(h => !presentHours.includes(h));
+
+      console.log("✅ Hourly distribution (by started_at):", hourlyDistribution);
+      console.log(`📊 Present hours: ${presentHours.sort().join(', ')}`);
+      console.log(`❌ Missing hours: ${missingHours.length > 0 ? missingHours.join(', ') : 'None'}`);
+      console.log(`📈 Total tasks returned: ${result.rows.length}`);
+    } else {
+      console.log("⚠️  No data found for date range:", fromDate, "to", toDate);
+    }
+
+    res.json(result.rows);
+  } catch (e: any) {
+    console.error("Error fetching hourly tracker data:", e);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch hourly tracker data", message: e.message });
   }
 });
 

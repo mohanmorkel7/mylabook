@@ -116,7 +116,6 @@ const ACTIVITY_CATEGORIES = [
   "taxation",
   "secretarial",
   "hr_compliance",
-  "legal_contracts",
   "admin",
 ] as const;
 
@@ -363,14 +362,13 @@ function dashboardSummaryRows(data: any) {
 }
 
 async function exportAllFinanceTabsToExcel() {
-  const today = getISTDateStr();
   const activityCategories = [...ACTIVITY_CATEGORIES];
 
-  const [dashboard, recruitment, agreement, history, management, ...activityResponses] = await Promise.all([
+  const [dashboard, recruitment, agreement, legalContracts, management, ...activityResponses] = await Promise.all([
     apiFetch("/dashboard"),
     apiFetch("/recruitment"),
     apiFetch("/agreement-summary"),
-    apiFetch(`/history?date=${today}`),
+    apiFetch("/legal-contracts"),
     apiFetch("/management-tasks"),
     ...activityCategories.map((category) => apiFetch(`/activities?category=${category}`)),
   ]);
@@ -394,8 +392,8 @@ async function exportAllFinanceTabsToExcel() {
       rows: ((agreement?.rows ?? []) as AgreementRow[]).map((row, index) => agreementRowToExcel(row, agreement?.cols ?? [], index)),
     },
     {
-      name: "History",
-      rows: ((history?.history ?? []) as HistoryRecord[]).map((row) => historyRowToExcel(row)),
+      name: "Legal Contracts",
+      rows: ((legalContracts?.rows ?? []) as LegalContractRow[]).map((row, index) => agreementRowToExcel(row, legalContracts?.cols ?? [], index)),
     },
   ];
 
@@ -1183,11 +1181,24 @@ function ActivityTab({
   });
 
   const statusPatchMut = useMutation({
-    mutationFn: ({ id, status, reason }: { id: number; status: string; reason?: string }) =>
-      apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, reason_non_completion: reason }) }),
+    mutationFn: async ({ id, status, reason }: { id: number; status: string; reason?: string }) => {
+      // Update activity status
+      await apiFetch(`/activities/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, reason_non_completion: reason }) });
+      // Automatically create snapshot for today
+      const ist = getISTNow();
+      const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+      await apiFetch("/history/snapshot", {
+        method: "POST",
+        body: JSON.stringify({ date: todayStr }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-activities", category] });
       qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+      // Also invalidate today's history
+      const ist = getISTNow();
+      const todayStr = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
+      qc.invalidateQueries({ queryKey: ["finance-activities-history", todayStr] });
     },
   });
 
@@ -1201,17 +1212,22 @@ function ActivityTab({
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => apiFetch(`/activities/${id}`, { method: "DELETE" }),
+    mutationFn: (id: number) => {
+      const endpoint = isToday ? `/activities/${id}` : `/history/${id}`;
+      return apiFetch(endpoint, { method: "DELETE" });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-activities", category] });
       qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+      if (!isToday) qc.invalidateQueries({ queryKey: ["finance-history", selectedDate, category] });
       setDeleteId(null);
     },
   });
 
-  const allActivities: Activity[] = data?.activities ?? [];
+  // For live view (today): use live activities
+  const allActivities: Activity[] = isToday ? (data?.activities ?? []) : [];
 
-  // For live view: role-based filter
+  // Role-based filter for live view
   const activitiesBase = canEditAll
     ? allActivities
     : allActivities.filter((a) =>
@@ -1219,28 +1235,45 @@ function ActivityTab({
         a.approval_users.some((v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase()),
       );
 
-  // Today view: only show activities that are actually due today,
-  // and if the status was last recorded on a PREVIOUS day (midnight cron may have missed),
-  // treat it as "pending" so stale statuses never carry over to the next day.
-  const activities = isToday
-    ? activitiesBase
-        .filter((a) => isActivityDueOnDate(a, todayStr))
-        .map((a) => {
-          const updatedIST = a.updated_at
-            ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
-            : null;
-          if (updatedIST && updatedIST < todayStr) {
-            // Status is stale from a previous day — show fresh pending for today
-            return { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
-          }
-          return a;
-        })
-    : activitiesBase;
-
   // For history view: filter snapshot records by category
   const histRecords: any[] = (histData?.history ?? []).filter(
     (r: any) => r.category === category,
   );
+
+  // Today view:
+  // - For admins (canEditAll): show ALL activities regardless of scheduled start date
+  // - For regular users: only show activities actually due today
+  // If the status was last recorded on a PREVIOUS day (midnight cron may have missed),
+  // treat it as "pending" so stale statuses never carry over to the next day.
+  const activities = isToday
+    ? activitiesBase
+        .filter((a) => canEditAll || isActivityDueOnDate(a, todayStr))
+        .map((a) => {
+          const updatedIST = a.updated_at
+            ? new Date(a.updated_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+            : null;
+
+          // If status is stale from a previous day, reset to pending
+          let activity = a;
+          if (updatedIST && updatedIST < todayStr) {
+            // Status is stale from a previous day — show fresh pending for today
+            activity = { ...a, status: "pending", pending_approval: false, reason_non_completion: "" };
+          }
+
+          // Auto-mark as overdue after 5:00 PM IST if still pending (applies to all durations including daily)
+          const ist = getISTNow();
+          const istHour = ist.getHours();
+          const istMin = ist.getMinutes();
+          const isAfter5PM = istHour > 17 || (istHour === 17 && istMin >= 0);
+
+          if (isAfter5PM && activity.status === "pending" && isActivityDueOnDate(activity, todayStr)) {
+            // Activity is pending but it's past 5:00 PM and it was due today
+            return { ...activity, status: "overdue" };
+          }
+
+          return activity;
+        })
+    : activitiesBase;
 
   const counts = Object.fromEntries(STATUSES.map((s) => [s.value, 0]));
   if (isToday) {
@@ -1313,7 +1346,7 @@ function ActivityTab({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900">{CAT_LABEL[category] ?? category}</h2>
-          <p className="text-xs text-gray-500">{isToday ? `${filtered.length} visible ${filtered.length === 1 ? "activity" : "activities"}` : `${filteredHist.length} historical ${filteredHist.length === 1 ? "record" : "records"}`}</p>
+          <p className="text-xs text-gray-500">{filtered.length} visible {filtered.length === 1 ? "activity" : "activities"}</p>
         </div>
         <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
           <FileText className="w-4 h-4" /> Export to Excel
@@ -1341,7 +1374,7 @@ function ActivityTab({
         )}
         {!isToday && (
           <span className="ml-auto text-xs text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
-            Historical Snapshot — {new Date(selectedDate + "T00:00:00+05:30").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+            Past Date — {new Date(selectedDate + "T00:00:00+05:30").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
           </span>
         )}
         {isToday && (
@@ -1461,43 +1494,32 @@ function ActivityTab({
         {isToday && !canEditAll && <span className="ml-1 text-blue-600 font-medium">(filtered to your assigned activities)</span>}
       </p>
 
-      {/* Historical view for past dates */}
+      {/* Historical view for past dates - with editable cards */}
       {!isToday && (
         isLoadingAny ? (
           <div className="h-48 flex items-center justify-center">
             <div className="text-center text-gray-400">
               <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
-              <p className="text-sm">Loading snapshot…</p>
+              <p className="text-sm">Loading records…</p>
             </div>
           </div>
         ) : filteredHist.length === 0 ? (
           <div className="h-48 flex flex-col items-center justify-center text-gray-400 gap-3">
             <History className="w-10 h-10 opacity-20" />
-            <p className="text-sm">No snapshot recorded for {selectedDate}</p>
-            <p className="text-xs text-gray-400">Snapshots are taken automatically at midnight IST or via the History tab.</p>
+            <p className="text-sm">No records for {selectedDate}</p>
           </div>
         ) : (
           <div className="space-y-3">
             {filteredHist.map((r: any) => {
-              const st = STATUS_MAP[r.status] ?? { color: "#9CA3AF", bg: "#F9FAFB", label: r.status, icon: FileText };
-              const Icon = st.icon;
               return (
-                <div key={r.id} className="bg-white rounded-2xl border-2 border-gray-100 relative overflow-hidden">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: st.color }} />
-                  <div className="pl-4 pr-4 py-4 flex items-start gap-3">
-                    <div className="flex-shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: st.bg }}>
-                      <Icon className="w-4 h-4" style={{ color: st.color }} />
-                    </div>
+                <div key={r.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+                  <div className="p-4 flex items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="font-bold text-gray-900 text-sm">{r.activity_name}</span>
-                        <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md">{r.activity_id}</span>
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border"
-                          style={{ backgroundColor: st.bg, color: st.color, borderColor: st.color + "40" }}>
-                          <Icon className="w-3 h-3" />{st.label}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="font-bold text-gray-900">{r.activity_name}</span>
+                        <span className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{r.activity_id}</span>
                       </div>
-                      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {DURATIONS.find((d) => d.value === r.duration)?.label || r.duration}
@@ -1510,15 +1532,35 @@ function ActivityTab({
                         )}
                       </div>
                       {r.reason_non_completion && (
-                        <div className="flex items-start gap-1.5 bg-orange-50 rounded-lg px-2 py-1.5 mt-2 border border-orange-100">
+                        <div className="flex items-start gap-1.5 bg-orange-50 rounded-lg px-2 py-1.5 border border-orange-100">
                           <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
                           <p className="text-xs text-orange-700">{r.reason_non_completion}</p>
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] text-gray-400 flex-shrink-0">
-                      {new Date(r.recorded_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })}
-                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <select
+                        value={r.status}
+                        onChange={(e) => {
+                          apiFetch(`/history/${r.id}/status`, {
+                            method: "PATCH",
+                            body: JSON.stringify({ status: e.target.value }),
+                          }).then(() => refresh());
+                        }}
+                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        {STATUSES.map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => setDeleteId(r.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1546,7 +1588,7 @@ function ActivityTab({
             </Button>
           )}
         </div>
-      ) : (
+      ) : isToday && (
         <div className="space-y-3">
           {filtered.map((act) => {
             const isApproverForThis = act.approval_users.some(
@@ -1555,6 +1597,8 @@ function ActivityTab({
             const isAssignedToThis = act.assigned_to.some(
               (v) => extractEmail(v).toLowerCase() === userEmail.toLowerCase(),
             );
+            // Department admins can also approve, plus anyone listed in approval_users
+            const canApproveThis = isApproverForThis || canEditAll;
             const canEditThis = canEditAll || isApproverForThis;
             return (
               <ActivityCard
@@ -1562,7 +1606,7 @@ function ActivityTab({
                 act={act}
                 canEdit={canEditThis}
                 canDelete={canEditThis}
-                canApprove={isApproverForThis}
+                canApprove={canApproveThis}
                 isAdmin={canEditAll}
                 isFinance={!canEditAll}
                 userEmail={userEmail}
@@ -1647,7 +1691,11 @@ function ActivityTab({
               <Trash2 className="w-6 h-6 text-red-600" />
             </div>
             <h3 className="font-bold text-gray-900 text-center mb-1">Delete Activity?</h3>
-            <p className="text-sm text-gray-500 text-center mb-5">This action is permanent and cannot be undone.</p>
+            <p className="text-sm text-gray-500 text-center mb-5">
+              {isToday
+                ? "This action is permanent and cannot be undone."
+                : `This will delete the activity record for ${selectedDate}. This action is permanent and cannot be undone.`}
+            </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setDeleteId(null)} className="flex-1 rounded-xl h-11">Cancel</Button>
               <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl h-11 font-semibold"
@@ -2478,6 +2526,295 @@ function AgreementSummaryTab({ canCreate }: { canCreate: boolean }) {
   );
 }
 
+// ─── Legal Contracts Tab ──────────────────────────────────────────────────────
+interface LegalContractCol { id: number; label: string; position: number; }
+interface LegalContractRow { id: number; category: string; extra_data: Record<string, string>; position: number; }
+
+function LegalContractsTab({ canCreate }: { canCreate: boolean }) {
+  const qc = useQueryClient();
+  const [editingCell, setEditingCell] = useState<{ rowId: number; colKey: string } | null>(null);
+  const [editingColId, setEditingColId] = useState<number | null>(null);
+  const [deleteColId, setDeleteColId] = useState<number | null>(null);
+  const [deleteRowId, setDeleteRowId] = useState<number | null>(null);
+  const [newColName, setNewColName] = useState("");
+  const [showAddCol, setShowAddCol] = useState(false);
+  const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["finance-legal-contracts"],
+    queryFn: () => apiFetch("/legal-contracts"),
+    staleTime: 30_000,
+  });
+  const cols: LegalContractCol[] = data?.cols ?? [];
+  const rows: LegalContractRow[] = data?.rows ?? [];
+
+  const addColMut = useMutation({
+    mutationFn: (label: string) => apiFetch("/legal-contracts-cols", { method: "POST", body: JSON.stringify({ label }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setNewColName(""); setShowAddCol(false); },
+  });
+  const renameColMut = useMutation({
+    mutationFn: ({ id, label }: { id: number; label: string }) => apiFetch(`/legal-contracts-cols/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setEditingColId(null); },
+  });
+  const deleteColMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/legal-contracts-cols/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setDeleteColId(null); },
+  });
+  const addRowMut = useMutation({
+    mutationFn: () => apiFetch("/legal-contracts-rows", { method: "POST", body: JSON.stringify({ category: "", extra_data: {} }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }),
+  });
+  const updateRowMut = useMutation({
+    mutationFn: ({ id, category, extra_data }: { id: number; category: string; extra_data: Record<string, string> }) =>
+      apiFetch(`/legal-contracts-rows/${id}`, { method: "PATCH", body: JSON.stringify({ category, extra_data }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }),
+  });
+  const deleteRowMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/legal-contracts-rows/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["finance-legal-contracts"] }); setDeleteRowId(null); },
+  });
+
+  const cellKey = (rowId: number, colKey: string) => `${rowId}::${colKey}`;
+
+  const startEdit = (rowId: number, colKey: string, cur: string) => {
+    if (!canCreate) return;
+    setLocalEdits((p) => ({ ...p, [cellKey(rowId, colKey)]: cur }));
+    setEditingCell({ rowId, colKey });
+  };
+
+  const commitEdit = (row: LegalContractRow, colKey: string) => {
+    const val = localEdits[cellKey(row.id, colKey)] ?? "";
+    const newCat = colKey === "category" ? val : row.category;
+    const newExtra = colKey === "category" ? row.extra_data : { ...row.extra_data, [colKey]: val };
+    updateRowMut.mutate({ id: row.id, category: newCat, extra_data: newExtra });
+    setEditingCell(null);
+  };
+
+  // Column widths: Sno=48px, Category=160px, dynamic cols=180px
+  const SNO_W = 48;
+  const CAT_W = 160;
+  const COL_W = 180; // first dynamic col — frozen as 3rd column
+
+  const handleExport = () => {
+    exportSingleSheet("finance-legal-contracts.xlsx", "Legal Contracts", rows.map((row, index) => agreementRowToExcel(row, cols, index)));
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Legal Contracts</h2>
+            <p className="text-xs text-gray-500">{rows.length} rows · {cols.length + 2} columns (Sno + Category + {cols.length} custom)</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleExport} className="rounded-xl gap-2">
+            <FileText className="w-4 h-4" /> Export to Excel
+          </Button>
+          {canCreate && (
+            <>
+              <button onClick={() => addRowMut.mutate()} disabled={addRowMut.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition shadow-sm">
+                <Plus className="w-4 h-4" /> Add Row
+              </button>
+              <button onClick={() => setShowAddCol(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">
+                <Plus className="w-4 h-4" /> Add Column
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Add column modal */}
+      {showAddCol && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+            <h3 className="font-bold text-gray-900 mb-4">New Column Title</h3>
+            <input autoFocus type="text" placeholder="e.g. Contract Type, Status, Notes…" value={newColName}
+              onChange={(e) => setNewColName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && newColName.trim()) addColMut.mutate(newColName.trim()); if (e.key === "Escape") setShowAddCol(false); }}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setShowAddCol(false); setNewColName(""); }} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => newColName.trim() && addColMut.mutate(newColName.trim())} disabled={!newColName.trim() || addColMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-white">
+        {isLoading ? (
+          <div className="h-40 flex items-center justify-center text-gray-400 text-sm">Loading…</div>
+        ) : (
+          <div style={{ overflowX: "auto", maxHeight: "65vh", overflowY: "auto" }}>
+            <table className="text-sm" style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed", minWidth: SNO_W + CAT_W + cols.length * 180 + (canCreate ? 52 : 0) }}>
+              <colgroup>
+                <col style={{ width: SNO_W }} />
+                <col style={{ width: CAT_W }} />
+                {cols.map((c) => <col key={c.id} style={{ width: 180 }} />)}
+                {canCreate && <col style={{ width: 52 }} />}
+              </colgroup>
+              <thead>
+                <tr style={{ position: "sticky", top: 0, zIndex: 4 }}>
+                  {/* Sno - double-frozen */}
+                  <th style={{ position: "sticky", left: 0, top: 0, zIndex: 5, background: "#F1F5F9", width: SNO_W, minWidth: SNO_W }}
+                    className="px-3 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wide border-b-2 border-r border-gray-200">
+                    Sno
+                  </th>
+                  {/* Category - double-frozen */}
+                  <th style={{ position: "sticky", left: SNO_W, top: 0, zIndex: 5, background: "#F1F5F9", width: CAT_W, minWidth: CAT_W }}
+                    className="px-3 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wide border-b-2 border-r border-gray-200">
+                    Category
+                  </th>
+                  {/* Dynamic column headers — first one is also frozen (3rd column) */}
+                  {cols.map((col, colIdx) => (
+                    <th key={col.id}
+                      style={colIdx === 0
+                        ? { background: "#F1F5F9", position: "sticky", left: SNO_W + CAT_W, top: 0, zIndex: 5, width: COL_W, minWidth: COL_W }
+                        : { background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }}
+                      className="px-3 py-3 text-left border-b-2 border-r border-gray-200 group">
+                      {editingColId === col.id ? (
+                        <input autoFocus
+                          className="w-full text-xs font-bold text-gray-700 uppercase tracking-wide bg-white border border-indigo-300 rounded px-1 py-0.5 focus:outline-none"
+                          defaultValue={col.label}
+                          onBlur={(e) => renameColMut.mutate({ id: col.id, label: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") renameColMut.mutate({ id: col.id, label: (e.target as HTMLInputElement).value });
+                            if (e.key === "Escape") setEditingColId(null);
+                          }} />
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-bold text-gray-600 uppercase tracking-wide flex-1 truncate">{col.label}</span>
+                          {canCreate && (
+                            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
+                              <button onClick={() => setEditingColId(col.id)} className="p-0.5 text-gray-400 hover:text-blue-600 rounded"><Pencil className="w-3 h-3" /></button>
+                              <button onClick={() => setDeleteColId(col.id)} className="p-0.5 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </th>
+                  ))}
+                  {canCreate && <th style={{ background: "#F1F5F9", position: "sticky", top: 0, zIndex: 4 }} className="border-b-2 border-gray-200" />}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={cols.length + 3} className="px-4 py-16 text-center text-gray-400 text-sm">
+                      <ShieldCheck className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                      No contracts yet. Click "Add Row" to start.
+                    </td>
+                  </tr>
+                ) : rows.map((row, idx) => (
+                  <tr key={row.id} className="group/row hover:bg-indigo-50/30 transition-colors">
+                    {/* Sno - frozen */}
+                    <td style={{ position: "sticky", left: 0, zIndex: 2, background: "#F8FAFC", width: SNO_W, minWidth: SNO_W }}
+                      className="px-3 py-2 text-gray-400 font-mono text-xs border-r border-b border-gray-100 text-center">
+                      {idx + 1}
+                    </td>
+                    {/* Category - frozen */}
+                    <td style={{ position: "sticky", left: SNO_W, zIndex: 2, background: "white", width: CAT_W, minWidth: CAT_W }}
+                      className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text"
+                      onClick={() => startEdit(row.id, "category", row.category)}>
+                      {editingCell?.rowId === row.id && editingCell?.colKey === "category" ? (
+                        <input autoFocus
+                          className="w-full px-1.5 py-0.5 text-sm font-medium text-gray-800 bg-white border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          value={localEdits[cellKey(row.id, "category")] ?? ""}
+                          onChange={(e) => setLocalEdits((p) => ({ ...p, [cellKey(row.id, "category")]: e.target.value }))}
+                          onBlur={() => commitEdit(row, "category")}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commitEdit(row, "category"); } if (e.key === "Escape") setEditingCell(null); }} />
+                      ) : (
+                        <span className={`block px-1.5 py-0.5 text-sm font-medium min-h-[26px] rounded hover:bg-indigo-50 ${row.category ? "text-gray-800" : "text-gray-300 italic"}`}>
+                          {row.category || (canCreate ? "Click to edit" : "—")}
+                        </span>
+                      )}
+                    </td>
+                    {/* Dynamic cells — first one also frozen as 3rd column */}
+                    {cols.map((col, colIdx) => {
+                      const colKey = String(col.id);
+                      const val = row.extra_data[colKey] ?? "";
+                      const isEditing = editingCell?.rowId === row.id && editingCell?.colKey === colKey;
+                      const isThirdFrozen = colIdx === 0;
+                      return (
+                        <td key={col.id}
+                          style={isThirdFrozen ? { position: "sticky", left: SNO_W + CAT_W, zIndex: 2, background: "white", width: COL_W, minWidth: COL_W } : {}}
+                          className="px-2 py-1.5 border-r border-b border-gray-100 cursor-text" onClick={() => startEdit(row.id, colKey, val)}>
+                          {isEditing ? (
+                            <input autoFocus
+                              className="w-full px-1.5 py-0.5 text-sm text-gray-700 bg-white border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                              value={localEdits[cellKey(row.id, colKey)] ?? ""}
+                              onChange={(e) => setLocalEdits((p) => ({ ...p, [cellKey(row.id, colKey)]: e.target.value }))}
+                              onBlur={() => commitEdit(row, colKey)}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commitEdit(row, colKey); } if (e.key === "Escape") setEditingCell(null); }} />
+                          ) : (
+                            <span className={`block px-1.5 py-0.5 text-sm min-h-[26px] rounded hover:bg-indigo-50 ${val ? "text-gray-700" : "text-gray-200"}`}>
+                              {val}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    {/* Delete row button */}
+                    {canCreate && (
+                      <td className="px-2 py-1.5 border-b border-gray-100 text-center">
+                        <button onClick={() => setDeleteRowId(row.id)}
+                          className="opacity-0 group-hover/row:opacity-100 p-1 text-gray-300 hover:text-red-500 rounded transition-all">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Delete column confirm */}
+      {deleteColId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 className="w-6 h-6 text-red-600" /></div>
+            <h3 className="font-bold text-gray-900 text-center mb-1">Delete Column?</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">All cell data in this column will be lost.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteColId(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => deleteColMut.mutate(deleteColId)} disabled={deleteColMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete row confirm */}
+      {deleteRowId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 className="w-6 h-6 text-red-600" /></div>
+            <h3 className="font-bold text-gray-900 text-center mb-1">Delete Row?</h3>
+            <p className="text-sm text-gray-500 text-center mb-5">This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteRowId(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => deleteRowMut.mutate(deleteRowId)} disabled={deleteRowMut.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── History Tab ──────────────────────────────────────────────────────────────
 interface HistoryRecord {
   id: number;
@@ -2498,32 +2835,48 @@ function HistoryTab() {
   const ist = getISTNow();
   const todayIST = `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}-${String(ist.getDate()).padStart(2, "0")}`;
   const [selectedDate, setSelectedDate] = useState(todayIST);
-  const [snapping, setSnapping] = useState(false);
+  const isToday = selectedDate === todayIST;
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["finance-history", selectedDate] as [string, string],
-    queryFn: ({ queryKey }) => apiFetch(`/history?date=${queryKey[1]}`),
-    staleTime: 0,
-    refetchOnMount: true,
+  // For today: fetch live activities
+  const { data: liveData, isLoading: liveLoading } = useQuery({
+    queryKey: ["finance-activities-live"],
+    queryFn: () => apiFetch(`/activities`),
+    staleTime: 30_000,
+    enabled: isToday,
   });
 
-  const takeSnapshot = async () => {
-    setSnapping(true);
-    try {
-      await apiFetch("/history/snapshot", {
-        method: "POST",
-        body: JSON.stringify({ date: selectedDate }),
-      });
-      qc.invalidateQueries({ queryKey: ["finance-history", selectedDate] });
-    } catch { /* ignore */ } finally {
-      setSnapping(false);
-    }
-  };
+  // For past dates: fetch historical snapshots (auto-created when status changes)
+  const { data: histData, isLoading: histLoading } = useQuery({
+    queryKey: ["finance-activities-history", selectedDate],
+    queryFn: ({ queryKey }) => apiFetch(`/history?date=${queryKey[1]}`),
+    staleTime: 60_000,
+    enabled: !isToday,
+  });
 
-  const records: HistoryRecord[] = data?.history ?? [];
+  const isLoading = isToday ? liveLoading : histLoading;
+
+  // Combine data from either live activities or history
+  let records: Activity[] = [];
+  if (isToday) {
+    records = liveData?.activities ?? [];
+  } else {
+    // Convert history records to Activity format for display
+    records = (histData?.history ?? []).map((h: any) => ({
+      id: h.activity_ref_id,
+      activity_id: h.activity_id,
+      activity_name: h.activity_name,
+      category: h.category,
+      duration: h.duration,
+      status: h.status,
+      reason_non_completion: h.reason_non_completion,
+      assigned_to: h.assigned_to || [],
+      due_date: h.history_date?.split('T')[0],
+      recorded_at: h.recorded_at,
+    })) as Activity[];
+  }
 
   // Group by category
-  const grouped = records.reduce<Record<string, HistoryRecord[]>>((acc, r) => {
+  const grouped = records.reduce<Record<string, Activity[]>>((acc, r) => {
     if (!acc[r.category]) acc[r.category] = [];
     acc[r.category].push(r);
     return acc;
@@ -2535,7 +2888,17 @@ function HistoryTab() {
   }, {});
 
   const handleExport = () => {
-    exportSingleSheet(`finance-history-${selectedDate}.xlsx`, `History ${selectedDate}`, records.map(historyRowToExcel));
+    const excelRows = records.map((r) => ({
+      "Activity ID": r.activity_id || r.id,
+      "Activity Name": r.activity_name,
+      "Category": CAT_LABEL[r.category] ?? r.category,
+      "Status": r.status,
+      "Duration": r.duration,
+      "Due Date": r.due_date,
+      "Assigned To": r.assigned_to?.join("; ") ?? "",
+      "Recorded At": r.recorded_at ? new Date(r.recorded_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "",
+    }));
+    exportSingleSheet(`finance-activities-${selectedDate}.xlsx`, `Activities ${selectedDate}`, excelRows);
   };
 
   return (
@@ -2548,8 +2911,8 @@ function HistoryTab() {
               <History className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900 text-lg">Activity History</h2>
-              <p className="text-xs text-gray-500">End-of-day status snapshots per activity</p>
+              <h2 className="font-bold text-gray-900 text-lg">Activity Status</h2>
+              <p className="text-xs text-gray-500">Finance activities status for selected date</p>
             </div>
           </div>
           <div className="sm:ml-auto flex items-center gap-3 flex-wrap">
@@ -2564,19 +2927,6 @@ function HistoryTab() {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
             />
-            <button
-              onClick={takeSnapshot}
-              disabled={snapping}
-              title="Record current status of all activities for this date"
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            >
-              {snapping ? (
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <History className="w-3.5 h-3.5" />
-              )}
-              Snapshot Now
-            </button>
           </div>
         </div>
 
@@ -2606,8 +2956,12 @@ function HistoryTab() {
       ) : records.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">
           <History className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">No history for this date</p>
-          <p className="text-xs text-gray-400 mt-1">Status snapshots are recorded when activities are updated or at midnight IST reset</p>
+          <p className="text-gray-500 font-medium">No activities found for {selectedDate}</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {isToday
+              ? "Activities will appear here once they are created today"
+              : "Status snapshots are automatically saved when activity status is changed"}
+          </p>
         </div>
       ) : (
         Object.entries(grouped).map(([category, recs]) => (
@@ -2639,7 +2993,7 @@ function HistoryTab() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-gray-900 text-sm">{r.activity_name}</p>
-                        <span className="text-[10px] text-gray-400 font-mono">{r.activity_id}</span>
+                        <span className="text-[10px] text-gray-400 font-mono">FA-{String(r.id).padStart(4, "0")}</span>
                         {dur && (
                           <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-semibold border border-indigo-100">
                             {dur.label}
@@ -2652,15 +3006,17 @@ function HistoryTab() {
                           <p className="text-xs text-orange-700 line-clamp-1">{r.reason_non_completion}</p>
                         </div>
                       )}
-                      {r.assigned_to.length > 0 && (
+                      {r.assigned_to && r.assigned_to.length > 0 && (
                         <div className="flex items-center gap-1.5 mt-1">
                           <UserCheck className="w-3 h-3 text-blue-400" />
                           <p className="text-xs text-gray-500">{r.assigned_to.map(extractName).join(", ")}</p>
                         </div>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-1">
-                        Recorded: {new Date(r.recorded_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })} IST
-                      </p>
+                      {r.due_date && (
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          Due: {new Date(r.due_date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
+                        </p>
+                      )}
                     </div>
 
                     {/* Status badge */}
@@ -2939,12 +3295,14 @@ export default function FinanceManagement() {
   const role = (user as any)?.role ?? "";
   const userEmail = (user as any)?.email ?? (user as any)?.username ?? "";
   const isAdmin = role === "admin";
-  const isDeptAdmin = role === "department_admin";
+  const isDeptAdmin = (user as any)?.department_admin === true;
+  const isFinanceDeptAdmin = isDeptAdmin && (user as any)?.admin_for_department?.toLowerCase() === "finance";
   const isFinance = role === "finance";
 
-  // Admin or dept_admin with finance context → see everything
-  const canCreate = isAdmin || isFinance;
-  const canEditAll = isAdmin || isDeptAdmin;
+  // Admin or finance role or finance dept_admin → can create/manage activities
+  const canCreate = isAdmin || isFinance || isFinanceDeptAdmin;
+  // Admin or finance role or finance dept_admin → see and edit everything
+  const canEditAll = isAdmin || isFinance || isFinanceDeptAdmin;
 
   // Fetch users for dropdowns
   const { data: users = [] } = useQuery({
@@ -2965,27 +3323,40 @@ export default function FinanceManagement() {
         .then(() => {
           qcMain.invalidateQueries({ queryKey: ["finance-activities"] });
           qcMain.invalidateQueries({ queryKey: ["finance-dashboard"] });
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.log("[Auto-Overdue] Activities updated at", new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }));
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+            console.error("[Auto-Overdue] Failed:", err);
+        });
     };
 
     const startPolling = () => {
       runAutoOverdue();
-      intervalId = setInterval(runAutoOverdue, 60_000);
+      intervalId = setInterval(runAutoOverdue, 60_000); // Check every minute
     };
 
     const ist = getISTNow();
     const istHour = ist.getHours();
     const istMin = ist.getMinutes();
+    const istSec = ist.getSeconds();
 
-    if (istHour > 17 || (istHour === 17 && istMin >= 0)) {
+    // Check if current time is >= 5:00 PM IST (17:00)
+    const isAtOrPast5PM = istHour > 17 || (istHour === 17 && (istMin > 0 || (istMin === 0 && istSec >= 0)));
+
+    if (isAtOrPast5PM) {
       // Already at or past 5:00 PM IST — start immediately
+      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+        console.log("[Auto-Overdue] Current time is past 5:00 PM IST, starting auto-overdue");
       startPolling();
     } else {
       // Schedule to fire exactly at 17:00:00 IST
       const target = new Date(ist);
       target.setHours(17, 0, 0, 0);
       const msUntil5PM = target.getTime() - ist.getTime();
+      if (typeof window !== "undefined" && (window as any).__APP_DEBUG)
+        console.log(`[Auto-Overdue] Scheduled to run in ${Math.round(msUntil5PM / 1000)} seconds at 5:00 PM IST`);
       timeoutId = setTimeout(startPolling, msUntil5PM);
     }
 
@@ -3109,6 +3480,7 @@ export default function FinanceManagement() {
         {activeTab === "history" && <HistoryTab />}
         {activeTab === "management" && <ManagementTab canCreate={canCreate} />}
         {activeTab === "agreement_summary" && <AgreementSummaryTab canCreate={canCreate} />}
+        {activeTab === "legal_contracts" && <LegalContractsTab canCreate={canCreate} />}
         {ACTIVITY_CATEGORIES.includes(activeTab as (typeof ACTIVITY_CATEGORIES)[number]) && (
           <ActivityTab
             key={activeTab}

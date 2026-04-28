@@ -33,6 +33,8 @@ import {
   Briefcase,
   UserPlus,
   Layers,
+  Video,
+  Library,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
@@ -97,6 +99,27 @@ const navigationItems: NavigationItem[] = [
     href: "/clients",
     icon: Building,
     roles: ["admin", "sales", "product", "business_analyst"],
+  },
+  // f2) Lead Management
+  {
+    name: "Lead Management",
+    href: "/lead-management",
+    icon: Megaphone,
+    roles: ["admin", "sales", "product"],
+  },
+  // f3) Demo/Workshop
+  {
+    name: "Demo/Workshop",
+    href: "/demo-workshop",
+    icon: Video,
+    roles: ["admin", "sales", "product"],
+  },
+  // f4) Materials Library
+  {
+    name: "Materials",
+    href: "/materials",
+    icon: Library,
+    roles: ["admin", "sales", "product"],
   },
   // g) Sales (was Business Offerings)
   {
@@ -184,7 +207,8 @@ const navigationItems: NavigationItem[] = [
 
 interface Notification {
   id: number;
-  type:
+  notification_type:
+    | "follow_up_due"
     | "follow_up_assigned"
     | "follow_up_mentioned"
     | "follow_up_overdue"
@@ -194,23 +218,23 @@ interface Notification {
     | "lead_updated";
   title: string;
   message: string;
-  entity_id: number;
-  entity_type: "follow_up" | "finops_task" | "ticket" | "lead";
+  entity_id?: number;
+  follow_up_id?: number;
+  lead_id?: number;
+  entity_type?: "follow_up" | "finops_task" | "ticket" | "lead";
   created_at: string;
-  read: boolean;
+  is_read: boolean;
+  scheduled_for?: string;
 }
 
-// Get real notifications based on follow-ups data
-const getNotificationsFromFollowUps = async (
-  userId: string,
-  userName: string,
+// Get real notifications from sales_leads_notifications API
+const getLeadManagementNotifications = async (
+  userEmail: string,
 ): Promise<Notification[]> => {
   try {
     console.log(
-      "Fetching follow-ups for notifications, userId:",
-      userId,
-      "userName:",
-      userName,
+      "Fetching lead management notifications for email:",
+      userEmail,
     );
 
     // Add timeout to prevent hanging requests - increased to 10 seconds
@@ -218,11 +242,8 @@ const getNotificationsFromFollowUps = async (
       setTimeout(() => reject(new Error("Request timeout")), 10000);
     });
 
-    const followUpsPromise = apiClient
-      .getAllFollowUps({
-        userId,
-        userRole: "all",
-      })
+    const notificationsPromise = apiClient
+      .getLeadManagementNotifications(userEmail)
       .catch((error) => {
         // Better error classification
         if (
@@ -230,93 +251,54 @@ const getNotificationsFromFollowUps = async (
           error.message.includes("Failed to fetch")
         ) {
           console.warn(
-            "Network connectivity issue - follow-ups API unreachable:",
+            "Network connectivity issue - notifications API unreachable:",
             error.message,
           );
         } else if (error.message.includes("timeout")) {
           console.warn(
-            "Follow-ups API timeout (network or database slow):",
+            "Notifications API timeout (network or database slow):",
             error.message,
           );
         } else if (error.message.includes("Offline mode")) {
-          console.warn("Follow-ups API blocked - app is in offline mode");
+          console.warn("Notifications API blocked - app is in offline mode");
         } else {
-          console.warn("Follow-ups API call failed:", error.message);
+          console.warn("Notifications API call failed:", error.message);
         }
-        return []; // Return empty array as fallback
+        return { notifications: [] }; // Return empty array as fallback
       });
 
-    let followUps;
+    let response;
     try {
-      followUps = await Promise.race([followUpsPromise, timeoutPromise]);
+      response = await Promise.race([notificationsPromise, timeoutPromise]);
     } catch (error) {
       if (error.message === "Request timeout") {
         console.warn(
-          "Follow-ups API request timed out after 10 seconds - using empty fallback",
+          "Notifications API request timed out after 10 seconds - using empty fallback",
         );
         return [];
       }
       throw error; // Re-throw other errors
     }
 
-    if (!Array.isArray(followUps)) {
-      console.warn("Follow-ups response is not an array:", followUps);
+    if (!response || !Array.isArray(response.notifications)) {
+      console.warn("Notifications response is not valid:", response);
       return [];
     }
 
-    const notifications: Notification[] = [];
-    const currentDate = new Date();
-
-    const myId = parseInt(userId || "0");
-    followUps.forEach((followUp: any) => {
-      const myNameAssigned = followUp.assigned_user_name === userName;
-      const byId =
-        (followUp.assigned_to &&
-          myId &&
-          parseInt(followUp.assigned_to) === myId) ||
-        false;
-      const list = followUp.assigned_to_list;
-      const inList = Array.isArray(list)
-        ? list.some((x: any) => parseInt(String(x)) === myId)
-        : false;
-      const names = followUp.assigned_users_names || "";
-      const inNames =
-        typeof names === "string" && names.split(", ").includes(userName);
-      const isMine = myNameAssigned || byId || inList || inNames;
-
-      // Assigned notification
-      if (isMine && followUp.status === "pending") {
-        notifications.push({
-          id: followUp.id,
-          type: "follow_up_assigned",
-          title: "Follow-up Assigned",
-          message: `You have been assigned: ${followUp.title}`,
-          entity_id: followUp.id,
-          entity_type: "follow_up",
-          created_at: followUp.created_at,
-          read: false,
-        });
-      }
-
-      // Overdue notification
-      if (
-        isMine &&
-        followUp.status !== "completed" &&
-        followUp.due_date &&
-        new Date(followUp.due_date) < currentDate
-      ) {
-        notifications.push({
-          id: followUp.id + 1000, // Offset to avoid ID conflicts
-          type: "follow_up_overdue",
-          title: "Follow-up Overdue",
-          message: `Overdue: ${followUp.title}`,
-          entity_id: followUp.id,
-          entity_type: "follow_up",
-          created_at: followUp.updated_at,
-          read: false,
-        });
-      }
-    });
+    // Map the API response to the Notification interface
+    const notifications: Notification[] = response.notifications.map((n: any) => ({
+      id: n.id,
+      notification_type: n.notification_type,
+      title: n.title,
+      message: n.message,
+      follow_up_id: n.follow_up_id,
+      lead_id: n.lead_id,
+      entity_type: "follow_up",
+      entity_id: n.follow_up_id,
+      created_at: n.created_at,
+      is_read: n.is_read,
+      scheduled_for: n.scheduled_for,
+    }));
 
     return notifications.sort(
       (a, b) =>
@@ -430,17 +412,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [networkIssueDetected, setNetworkIssueDetected] = React.useState(false);
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   // Fetch real notifications on component mount
   React.useEffect(() => {
     const fetchNotifications = async () => {
-      if (user && notificationsEnabled) {
+      if (user && user.email && notificationsEnabled) {
         try {
-          console.log("Fetching notifications for user:", user.name);
-          const realNotifications = await getNotificationsFromFollowUps(
-            user.id,
-            user.name,
+          console.log("Fetching notifications for user email:", user.email);
+          const realNotifications = await getLeadManagementNotifications(
+            user.email,
           );
           console.log(
             "Successfully fetched",
@@ -542,26 +523,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     };
   }, [user, notificationsEnabled]);
 
-  const handleNotificationClick = (notification: Notification) => {
-    // Mark as read (in a real app, this would make an API call)
-    notification.read = true;
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read via API
+    if (!notification.is_read) {
+      try {
+        await apiClient.markLeadNotificationAsRead(notification.id);
+        // Update local state
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === notification.id ? { ...n, is_read: true } : n
+          )
+        );
+      } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+      }
+    }
 
     // Navigate based on notification type
-    switch (notification.entity_type) {
-      case "follow_up":
-        navigate(`/follow-ups?id=${notification.entity_id}`);
-        break;
-      case "finops_task":
-        navigate(`/finops`);
-        break;
-      case "ticket":
-        navigate(`/tickets`);
-        break;
-      case "lead":
-        navigate(`/leads/${notification.entity_id}`);
-        break;
-      default:
-        navigate(`/dashboard`);
+    if (notification.lead_id) {
+      navigate(`/lead-management/${notification.lead_id}/overview`);
+    } else if (notification.follow_up_id) {
+      navigate(`/follow-ups?id=${notification.follow_up_id}`);
+    } else {
+      navigate(`/dashboard`);
     }
   };
 
@@ -718,7 +702,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div
                       key={notification.id}
                       className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition-colors ${
-                        !notification.read
+                        !notification.is_read
                           ? "bg-blue-50 border-l-4 border-l-blue-500"
                           : ""
                       }`}
@@ -727,24 +711,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       <div className="flex items-start space-x-3">
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            notification.type === "follow_up_assigned"
+                            notification.notification_type === "follow_up_assigned"
                               ? "bg-blue-100"
-                              : notification.type === "follow_up_mentioned"
+                              : notification.notification_type === "follow_up_mentioned"
                                 ? "bg-red-100"
                                 : "bg-yellow-100"
                           }`}
                         >
-                          {notification.type === "follow_up_assigned" ||
-                          notification.type === "follow_up_mentioned" ? (
+                          {notification.notification_type === "follow_up_assigned" ||
+                          notification.notification_type === "follow_up_mentioned" ? (
                             <MessageCircle className="w-4 h-4 text-blue-600" />
-                          ) : notification.type === "follow_up_overdue" ? (
+                          ) : notification.notification_type === "follow_up_overdue" ||
+                            notification.notification_type === "follow_up_due" ? (
                             <AlertCircle className="w-4 h-4 text-yellow-600" />
-                          ) : notification.type === "finops_sla_warning" ||
-                            notification.type === "finops_overdue" ? (
+                          ) : notification.notification_type === "finops_sla_warning" ||
+                            notification.notification_type === "finops_overdue" ? (
                             <DollarSign className="w-4 h-4 text-orange-600" />
-                          ) : notification.type === "ticket_assigned" ? (
+                          ) : notification.notification_type === "ticket_assigned" ? (
                             <Ticket className="w-4 h-4 text-green-600" />
-                          ) : notification.type === "lead_updated" ? (
+                          ) : notification.notification_type === "lead_updated" ? (
                             <Target className="w-4 h-4 text-purple-600" />
                           ) : (
                             <Bell className="w-4 h-4 text-gray-600" />
@@ -769,7 +754,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                             })}
                           </p>
                         </div>
-                        {!notification.read && (
+                        {!notification.is_read && (
                           <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
                         )}
                       </div>

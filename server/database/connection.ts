@@ -920,6 +920,114 @@ export async function initializeDatabase() {
       );
     }
 
+    // Lead Management tables migration
+    try {
+      const leadManagementPath = path.join(
+        __dirname,
+        "create-lead-management-tables.sql",
+      );
+      if (fs.existsSync(leadManagementPath)) {
+        const leadMgmtSql = fs.readFileSync(leadManagementPath, "utf8");
+        await client.query(leadMgmtSql);
+        console.log("Lead Management tables migration applied successfully");
+      }
+    } catch (leadMgmtErr) {
+      console.log(
+        "Lead Management tables migration already applied or error:",
+        (leadMgmtErr as any).message,
+      );
+    }
+
+    // Migrate leads to sales_leads (rename to avoid conflicts)
+    try {
+      const migrateLeadsPath = path.join(
+        __dirname,
+        "migrate-leads-to-sales-leads.sql",
+      );
+      if (fs.existsSync(migrateLeadsPath)) {
+        const migrateSql = fs.readFileSync(migrateLeadsPath, "utf8");
+        await client.query(migrateSql);
+        console.log("Lead tables migration (leads -> sales_leads) applied successfully");
+      }
+    } catch (leadsRenameErr) {
+      console.log(
+        "Lead tables migration already applied or error:",
+        (leadsRenameErr as any).message,
+      );
+    }
+
+    // Add notifications support to sales leads
+    try {
+      const notifPath = path.join(
+        __dirname,
+        "add-sales-leads-notifications.sql",
+      );
+      if (fs.existsSync(notifPath)) {
+        const notifSql = fs.readFileSync(notifPath, "utf8");
+        await client.query(notifSql);
+        console.log("Sales leads notifications migration applied successfully");
+      }
+    } catch (notifErr) {
+      console.log(
+        "Sales leads notifications migration already applied or error:",
+        (notifErr as any).message,
+      );
+    }
+
+    // Add team chat messages table for follow-ups
+    try {
+      const chatPath = path.join(
+        __dirname,
+        "add-team-chat-messages.sql",
+      );
+      if (fs.existsSync(chatPath)) {
+        const chatSql = fs.readFileSync(chatPath, "utf8");
+        await client.query(chatSql);
+        console.log("Team chat messages migration applied successfully");
+      }
+    } catch (chatErr) {
+      console.log(
+        "Team chat messages migration already applied or error:",
+        (chatErr as any).message,
+      );
+    }
+
+    // Add Cancelled status support to follow-ups
+    try {
+      const cancelledStatusPath = path.join(
+        __dirname,
+        "add-cancelled-status.sql",
+      );
+      if (fs.existsSync(cancelledStatusPath)) {
+        const cancelledStatusSql = fs.readFileSync(cancelledStatusPath, "utf8");
+        await client.query(cancelledStatusSql);
+        console.log("Cancelled status migration applied successfully");
+      }
+    } catch (cancelledStatusErr) {
+      console.log(
+        "Cancelled status migration already applied or error:",
+        (cancelledStatusErr as any).message,
+      );
+    }
+
+    // Extend follow-up statuses to include Delayed, Overdue and add delay tracking
+    try {
+      const extendStatusPath = path.join(
+        __dirname,
+        "extend-follow-up-statuses.sql",
+      );
+      if (fs.existsSync(extendStatusPath)) {
+        const extendStatusSql = fs.readFileSync(extendStatusPath, "utf8");
+        await client.query(extendStatusSql);
+        console.log("Extended follow-up statuses migration applied successfully");
+      }
+    } catch (extendStatusErr) {
+      console.log(
+        "Extended follow-up statuses migration already applied or error:",
+        (extendStatusErr as any).message,
+      );
+    }
+
     // Ensure finops_tracker table exists for daily tracking
     try {
       await pool.query(`
@@ -1003,6 +1111,60 @@ export async function initializeDatabase() {
       console.log(
         "Mail configs table migration already applied or error:",
         (mailConfigsErr as any).message,
+      );
+    }
+
+    // Demo/Workshop tables for product demonstrations
+    try {
+      const demoPath = path.join(
+        __dirname,
+        "create-demo-workshop-tables.sql",
+      );
+      if (fs.existsSync(demoPath)) {
+        const sql = fs.readFileSync(demoPath, "utf8");
+        await client.query(sql);
+        console.log("Demo/Workshop tables migration applied successfully");
+      }
+    } catch (demoErr) {
+      console.log(
+        "Demo/Workshop tables migration already applied or error:",
+        (demoErr as any).message,
+      );
+    }
+
+    // Demo Files (multi-format support: video, PDF, PPT, Word)
+    try {
+      const demoFilesPath = path.join(
+        __dirname,
+        "add-demo-files.sql",
+      );
+      if (fs.existsSync(demoFilesPath)) {
+        const sql = fs.readFileSync(demoFilesPath, "utf8");
+        await client.query(sql);
+        console.log("Demo Files multi-format migration applied successfully");
+      }
+    } catch (demoFilesErr) {
+      console.log(
+        "Demo Files migration already applied or error:",
+        (demoFilesErr as any).message,
+      );
+    }
+
+    // Materials Module (independent CRUD for reusable materials)
+    try {
+      const materialsPath = path.join(
+        __dirname,
+        "create-materials-module.sql",
+      );
+      if (fs.existsSync(materialsPath)) {
+        const sql = fs.readFileSync(materialsPath, "utf8");
+        await client.query(sql);
+        console.log("Materials module migration applied successfully");
+      }
+    } catch (materialsErr) {
+      console.log(
+        "Materials module migration already applied or error:",
+        (materialsErr as any).message,
       );
     }
 

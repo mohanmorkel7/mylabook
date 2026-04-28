@@ -148,6 +148,22 @@ export async function initializeFinanceSchema() {
         created_at      TIMESTAMPTZ DEFAULT NOW(),
         updated_at      TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS finance_legal_contracts_cols (
+        id        SERIAL PRIMARY KEY,
+        label     TEXT NOT NULL,
+        position  INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS finance_legal_contracts_rows (
+        id         SERIAL PRIMARY KEY,
+        category   TEXT NOT NULL DEFAULT '',
+        extra_data TEXT NOT NULL DEFAULT '{}',
+        position   INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
 
     // ── Migrations: convert existing typed columns to TEXT ────────────────
@@ -977,11 +993,72 @@ router.post("/history/snapshot", async (req: Request, res: Response) => {
   }
 });
 
+// PATCH: update a specific history record's status
+router.patch("/history/:id/status", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, reason_non_completion } = req.body;
+    if (!status) return res.status(400).json({ error: "status is required" });
+
+    const result = await pool.query(
+      `UPDATE finance_activity_history
+       SET status=$1, reason_non_completion=$2
+       WHERE id=$3 RETURNING *`,
+      [
+        encrypt(status),
+        encrypt(reason_non_completion ?? ""),
+        id,
+      ],
+    );
+    if (!result.rows.length) return res.status(404).json({ error: "History record not found" });
+
+    const row = result.rows[0];
+    const updated = {
+      id: row.id,
+      activity_ref_id: row.activity_ref_id,
+      history_date: row.history_date,
+      activity_id: decrypt(row.activity_id),
+      category: decrypt(row.category),
+      activity_name: decrypt(row.activity_name),
+      duration: decrypt(row.duration),
+      status: decrypt(row.status),
+      reason_non_completion: decrypt(row.reason_non_completion),
+      assigned_to: decryptArr(row.assigned_to),
+      recorded_at: row.recorded_at,
+    };
+    res.json({ history: updated });
+  } catch (err: any) {
+    console.error("PATCH /finance/history/status:", err.message);
+    res.status(500).json({ error: "Failed to update history record" });
+  }
+});
+
+// DELETE: remove a specific history record
+router.delete("/history/:id", async (req: Request, res: Response) => {
+  try {
+    await pool.query("DELETE FROM finance_activity_history WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("DELETE /finance/history:", err.message);
+    res.status(500).json({ error: "Failed to delete history record" });
+  }
+});
+
 // ── Agreement Summary CRUD ────────────────────────────────────────────────────
 function decryptAgreementCol(row: any) {
   return { id: row.id, label: decrypt(row.label), position: row.position, created_at: row.created_at };
 }
 function decryptAgreementRow(row: any) {
+  const raw = decrypt(row.extra_data || "") || "{}";
+  let extra: Record<string, string> = {};
+  try { extra = JSON.parse(raw); } catch {}
+  return { id: row.id, category: decrypt(row.category) || "", extra_data: extra, position: row.position, created_at: row.created_at, updated_at: row.updated_at };
+}
+
+function decryptLegalContractCol(row: any) {
+  return { id: row.id, label: decrypt(row.label), position: row.position, created_at: row.created_at };
+}
+function decryptLegalContractRow(row: any) {
   const raw = decrypt(row.extra_data || "") || "{}";
   let extra: Record<string, string> = {};
   try { extra = JSON.parse(raw); } catch {}
@@ -1043,6 +1120,65 @@ router.patch("/agreement-rows/:id", async (req: Request, res: Response) => {
 
 router.delete("/agreement-rows/:id", async (req: Request, res: Response) => {
   try { await pool.query("DELETE FROM finance_agreement_rows WHERE id=$1", [req.params.id]); res.json({ success: true }); }
+  catch { res.status(500).json({ error: "Failed to delete row" }); }
+});
+
+// ── Legal Contracts Tab (similar to Agreement Summary) ──────────────────────
+router.get("/legal-contracts", async (_req: Request, res: Response) => {
+  try {
+    const [colsRes, rowsRes] = await Promise.all([
+      pool.query("SELECT * FROM finance_legal_contracts_cols ORDER BY position, id"),
+      pool.query("SELECT * FROM finance_legal_contracts_rows ORDER BY position, id"),
+    ]);
+    res.json({ cols: colsRes.rows.map(decryptLegalContractCol), rows: rowsRes.rows.map(decryptLegalContractRow) });
+  } catch { res.status(500).json({ error: "Failed to fetch legal contracts" }); }
+});
+
+router.post("/legal-contracts-cols", async (req: Request, res: Response) => {
+  try {
+    const { label } = req.body;
+    if (!label) return res.status(400).json({ error: "label required" });
+    const pos = await pool.query("SELECT COALESCE(MAX(position),0)+1 AS next FROM finance_legal_contracts_cols");
+    const result = await pool.query("INSERT INTO finance_legal_contracts_cols (label,position) VALUES ($1,$2) RETURNING *", [encrypt(label), pos.rows[0].next]);
+    res.status(201).json({ col: decryptLegalContractCol(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to create column" }); }
+});
+
+router.patch("/legal-contracts-cols/:id", async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query("UPDATE finance_legal_contracts_cols SET label=$1 WHERE id=$2 RETURNING *", [encrypt(req.body.label || ""), req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: "Column not found" });
+    res.json({ col: decryptLegalContractCol(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to update column" }); }
+});
+
+router.delete("/legal-contracts-cols/:id", async (req: Request, res: Response) => {
+  try { await pool.query("DELETE FROM finance_legal_contracts_cols WHERE id=$1", [req.params.id]); res.json({ success: true }); }
+  catch { res.status(500).json({ error: "Failed to delete column" }); }
+});
+
+router.post("/legal-contracts-rows", async (req: Request, res: Response) => {
+  try {
+    const { category = "", extra_data = {} } = req.body;
+    const pos = await pool.query("SELECT COALESCE(MAX(position),0)+1 AS next FROM finance_legal_contracts_rows");
+    const result = await pool.query("INSERT INTO finance_legal_contracts_rows (category,extra_data,position) VALUES ($1,$2,$3) RETURNING *",
+      [encrypt(category), encrypt(JSON.stringify(extra_data)), pos.rows[0].next]);
+    res.status(201).json({ row: decryptLegalContractRow(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to create row" }); }
+});
+
+router.patch("/legal-contracts-rows/:id", async (req: Request, res: Response) => {
+  try {
+    const { category = "", extra_data = {} } = req.body;
+    const result = await pool.query("UPDATE finance_legal_contracts_rows SET category=$1,extra_data=$2,updated_at=NOW() WHERE id=$3 RETURNING *",
+      [encrypt(category), encrypt(JSON.stringify(extra_data)), req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: "Row not found" });
+    res.json({ row: decryptLegalContractRow(result.rows[0]) });
+  } catch { res.status(500).json({ error: "Failed to update row" }); }
+});
+
+router.delete("/legal-contracts-rows/:id", async (req: Request, res: Response) => {
+  try { await pool.query("DELETE FROM finance_legal_contracts_rows WHERE id=$1", [req.params.id]); res.json({ success: true }); }
   catch { res.status(500).json({ error: "Failed to delete row" }); }
 });
 

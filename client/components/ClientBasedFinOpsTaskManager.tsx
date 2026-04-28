@@ -242,9 +242,9 @@ const PendingApprovalTimer = ({
 
       // Debug: Log the timer state every second
       if (cycleNumber > 0) {
-        console.log(
-          `⏱️ Subtask ${subtaskId} - Cycle ${cycleNumber}: ${minutes}m ${seconds}s remaining`,
-        );
+        // console.log(
+        //   `⏱️ Subtask ${subtaskId} - Cycle ${cycleNumber}: ${minutes}m ${seconds}s remaining`,
+        // );
       }
 
       // Trigger API call when countdown reaches 00m 00s or 00m 01s (only once per cycle)
@@ -566,6 +566,8 @@ interface SortableSubTaskItemProps {
     delayReason?: string,
     delayNotes?: string,
   ) => void;
+  currentUser?: any;
+  onRefresh?: () => void;
   isInline?: boolean;
 }
 
@@ -576,12 +578,18 @@ function SortableSubTaskItem({
   onUpdate,
   onRemove,
   onStatusChange,
+  currentUser,
+  onRefresh,
   isInline = false,
 }: SortableSubTaskItemProps) {
   // console.log("Tasks : " , subtask)
   const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [delayReason, setDelayReason] = useState("");
   const [delayNotes, setDelayNotes] = useState("");
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
+  const activeUser = currentUser || null;
 
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: subtask.id });
@@ -777,67 +785,61 @@ function SortableSubTaskItem({
                         </Select>
                       );
                     })()}
-                    {/* Approve button: visible to admin, reporting managers, or escalation managers when subtask completed */}
+                    {/* Approve/Reject buttons: visible to managers when subtask completed */}
                     {(() => {
                       try {
-                        const currentUser = (useAuth() as any)?.user || null;
+                        const activeUser = currentUser || null;
 
-                        if (!currentUser || !currentUser.name) return null;
+                        if (!activeUser || !activeUser.name) return null;
 
-                        const isAdmin = currentUser?.role === "admin";
+                        const isAdmin =
+                          String(activeUser?.role || "").toLowerCase() ===
+                          "admin";
 
                         // Use the same robust parsing as canEditFinOpsTasks
                         const parseManagersArray = (managers: any): string[] => {
                           if (!managers) return [];
 
-                          // Already an array
                           if (Array.isArray(managers)) {
-                            return managers.filter(Boolean).map(m => String(m).trim());
+                            return managers.filter(Boolean).map((m) => String(m).trim());
                           }
 
-                          // String that might be JSON
                           if (typeof managers === "string") {
                             const trimmed = managers.trim();
                             if (!trimmed) return [];
 
-                            // Try to parse as JSON array
                             try {
                               const parsed = JSON.parse(trimmed);
                               if (Array.isArray(parsed)) {
-                                return parsed.filter(Boolean).map(m => String(m).trim());
+                                return parsed.filter(Boolean).map((m) => String(m).trim());
                               }
                             } catch {}
 
-                            // Might be a single name or "name (email)" format
                             return [trimmed];
                           }
 
                           return [];
                         };
 
-                        // Helper to check if user matches a manager entry
                         const userMatchesManager = (manager: string): boolean => {
-                          if (!manager || !currentUser.name) return false;
+                          if (!manager || !activeUser.name) return false;
 
                           const managerName = extractNameFromValue(manager);
-                          const userNameLower = currentUser.name.toLowerCase().trim();
+                          const userNameLower = activeUser.name.toLowerCase().trim();
 
-                          // Check name match (case-insensitive and trim)
                           if (managerName) {
                             const managerNameLower = managerName.toLowerCase().trim();
                             if (managerNameLower === userNameLower) {
                               return true;
                             }
-                            // Also check if manager name contains user name (for partial matches)
                             if (managerNameLower.includes(userNameLower)) {
                               return true;
                             }
                           }
 
-                          // Check email match (case-insensitive)
-                          if (currentUser.email) {
+                          if (activeUser.email) {
                             const managerStr = manager.toLowerCase();
-                            const userEmailLower = currentUser.email.toLowerCase();
+                            const userEmailLower = activeUser.email.toLowerCase();
                             if (managerStr.includes(userEmailLower)) {
                               return true;
                             }
@@ -854,21 +856,24 @@ function SortableSubTaskItem({
                         const isEscalation = escalationManagers.some(userMatchesManager);
                         const isAssigned = assignedTo.some(userMatchesManager);
 
-                        const isApproved = Boolean(
-                          (subtask as any)?.approved_by,
-                        );
-
-                        // ✅ Only allow reporting, escalation, or admin users (not assigned ones)
-
+                        const isApproved = Boolean((subtask as any)?.approved_by);
                         const canSeeApproveButton =
                           (isReporting || isEscalation || isAdmin) &&
                           !isAssigned &&
                           ["completed", "approved"].includes(subtask.status) &&
                           !isApproved;
+                        const canSeeRejectButton =
+                          (isReporting || isEscalation || isAdmin) &&
+                          !isAssigned &&
+                          ["completed", "approved"].includes(subtask.status) &&
+                          !isApproved;
+
+                        const actionButtons: any[] = [];
 
                         if (canSeeApproveButton) {
-                          return (
+                          actionButtons.push(
                             <Button
+                              key="approve"
                               size="sm"
                               variant="outline"
                               onClick={async () => {
@@ -876,9 +881,7 @@ function SortableSubTaskItem({
 
                                 try {
                                   const approverName =
-                                    currentUser?.name ||
-                                    currentUser?.email ||
-                                    "";
+                                    activeUser?.name || activeUser?.email || "";
 
                                   await apiClient.approveFinOpsSubtask(
                                     Number(subtask.id),
@@ -887,25 +890,41 @@ function SortableSubTaskItem({
                                     (subtask as any)?.tracker_id,
                                   );
 
-                                  try {
-                                    queryClient.invalidateQueries({
-                                      queryKey: ["client-finops-tasks"],
-                                    });
-                                  } catch {}
+                                  onRefresh?.();
 
                                   toast({
                                     title: "Approved",
-
                                     description: `Approved by ${approverName}`,
                                   });
                                 } catch (e) {
-                                  alert("Failed to approve");
+                                  const message =
+                                    e instanceof Error
+                                      ? e.message
+                                      : "Failed to approve";
+                                  alert(message);
                                 }
                               }}
                             >
                               Approve
-                            </Button>
+                            </Button>,
                           );
+                        }
+
+                        if (canSeeRejectButton) {
+                          actionButtons.push(
+                            <Button
+                              key="reject"
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setShowRejectDialog(true)}
+                            >
+                              Reject
+                            </Button>,
+                          );
+                        }
+
+                        if (actionButtons.length) {
+                          return <>{actionButtons}</>;
                         }
                       } catch {
                         // safely ignore any runtime errors
@@ -913,6 +932,74 @@ function SortableSubTaskItem({
 
                       return null;
                     })()}
+
+                    <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Confirm reject</DialogTitle>
+                          <DialogDescription>
+                            Are you sure? Please provide a reason before marking the subtask as In-progress again.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-2 py-2">
+                          <Label htmlFor={`reject-reason-${subtask.id}`}>Reason for reject *</Label>
+                          <Textarea
+                            id={`reject-reason-${subtask.id}`}
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            placeholder="Type the reject reason"
+                            rows={4}
+                          />
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setShowRejectDialog(false);
+                              setRejectReason("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            disabled={!rejectReason.trim() || isRejecting}
+                            onClick={async () => {
+                              try {
+                                setIsRejecting(true);
+                                const rejectorName =
+                                  activeUser?.name || activeUser?.email || "";
+                                await apiClient.rejectFinOpsSubtask(
+                                  Number(subtask.id),
+                                  rejectorName,
+                                  rejectReason.trim(),
+                                  (subtask as any)?.tracker_id,
+                                );
+                                setShowRejectDialog(false);
+                                setRejectReason("");
+                                onRefresh?.();
+                                toast({
+                                  title: "Rejected",
+                                  description: `Rejected by ${rejectorName}`,
+                                });
+                              } catch (e) {
+                                const message =
+                                  e instanceof Error
+                                    ? e.message
+                                    : "Failed to reject";
+                                alert(message);
+                              } finally {
+                                setIsRejecting(false);
+                              }
+                            }}
+                          >
+                            {isRejecting ? "Rejecting..." : "Reject"}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
 
@@ -943,6 +1030,43 @@ function SortableSubTaskItem({
                       </Badge>
                     </div>
                   )}
+
+                {((subtask as any).rejected_by ||
+                  (subtask as any).reject_reason ||
+                  (subtask as any).rejected_at) && (
+                  <div className="mt-2">
+                    <Badge
+                      variant="destructive"
+                      className="flex w-full flex-col items-start gap-1 rounded-xl px-3 py-2 text-left whitespace-normal leading-relaxed"
+                    >
+                      <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.12em] opacity-90">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Rejected
+                      </div>
+                      <div className="text-xs font-medium">
+                        Rejected by: {(subtask as any).rejected_by || "Unknown"}
+                      </div>
+                      {(subtask as any).rejected_at && (
+                        <div className="text-xs">
+                          Rejected at: {formatToISTDateTime((subtask as any).rejected_at, { second: "2-digit" })} IST (+05:30)
+                        </div>
+                      )}
+                      <div className="text-xs">
+                        Completed by: {(subtask as any).completed_by || (subtask as any).rejected_by || "Unknown"}
+                      </div>
+                      {(subtask as any).completed_at && (
+                        <div className="text-xs">
+                          Completed at: {formatToISTDateTime((subtask as any).completed_at, { second: "2-digit" })} IST (+05:30)
+                        </div>
+                      )}
+                      {(subtask as any).reject_reason && (
+                        <div className="text-xs">
+                          Reason: {(subtask as any).reject_reason}
+                        </div>
+                      )}
+                    </Badge>
+                  </div>
+                )}
 
                 {/* Show delay information if present */}
                 {subtask.status === "delayed" && subtask.delay_reason && (
@@ -1159,6 +1283,8 @@ export default function ClientBasedFinOpsTaskManager() {
     if (!user || !user.name) return false;
     // Admin can edit everything
     if (user.role === "admin") return true;
+    // FinOps department admin can edit everything
+    if (user.department_admin && String(user.admin_for_department || "").toLowerCase() === "finops") return true;
 
     // Safely parse managers in case they come as strings or null/undefined
     const parseManagersArray = (managers: any): string[] => {
@@ -1333,9 +1459,9 @@ export default function ClientBasedFinOpsTaskManager() {
   // Real-time timer state
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Keep the "X min ago" labels updating in real time, independent of data fetching
+  // Keep the "X min ago" labels and timers updating in real time, independent of data fetching
   useEffect(() => {
-    const tick = setInterval(() => setCurrentTime(new Date()), 10000); // 10s cadence
+    const tick = setInterval(() => setCurrentTime(new Date()), 1000); // 1s cadence for accurate countdown
     return () => clearInterval(tick);
   }, []);
 
@@ -2294,6 +2420,11 @@ export default function ClientBasedFinOpsTaskManager() {
       return true;
     }
 
+    // FinOps department admin can edit any task
+    if (user.department_admin && String(user.admin_for_department || "").toLowerCase() === "finops") {
+      return true;
+    }
+
     // Creator can edit their own task
     if (
       task.created_by === user?.id?.toString() ||
@@ -2756,16 +2887,20 @@ export default function ClientBasedFinOpsTaskManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredTasks]);
 
-  // Countdown interval
+  // Countdown interval - only decrement if > 0
   useEffect(() => {
     const interval = setInterval(() => {
       setOverdueTimers((prev) => {
         const updated = { ...prev };
+        let hasChanges = false;
         Object.keys(updated).forEach((k) => {
           const id = Number(k);
-          updated[id] = Math.max(0, (updated[id] || 0) - 1);
+          if ((updated[id] || 0) > 0) {
+            updated[id] = (updated[id] || 0) - 1;
+            hasChanges = true;
+          }
         });
-        return updated;
+        return hasChanges ? updated : prev;
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -3064,8 +3199,35 @@ export default function ClientBasedFinOpsTaskManager() {
                     "In-Progress",
                   ];
 
-                  // Fetch authoritative data from server once (tasks + summary)
+                  // Fetch tracker data for export (has all completed_by and assigned_to fields)
+                  let trackerResp: any[] = [];
                   let serverResp: any = null;
+                  try {
+                    // Get tracker data (has complete information including completed_by)
+                    const trackerUrl = `/finops/tracker/all?from_date=${dateFilter}&to_date=${dateFilter}`;
+                    trackerResp = Array.isArray(await apiClient.request(trackerUrl))
+                      ? await apiClient.request(trackerUrl)
+                      : [];
+                    console.log("Tracker data fetched for export:", trackerResp.length, "records");
+                    if (trackerResp.length > 0) {
+                      console.log("Sample tracker row:", {
+                        task_name: trackerResp[0].task_name,
+                        subtask_name: trackerResp[0].subtask_name,
+                        client_name: trackerResp[0].client_name,
+                        completed_by: trackerResp[0].completed_by,
+                        approved_by: trackerResp[0].approved_by,
+                        approved_at: trackerResp[0].approved_at,
+                        assigned_to: trackerResp[0].assigned_to,
+                      });
+                    }
+                  } catch (err) {
+                    console.warn(
+                      "Failed to fetch tracker data from server for export:",
+                      err,
+                    );
+                  }
+
+                  // Also fetch daily tasks for summary data
                   try {
                     serverResp =
                       await apiClient.getFinOpsDailyTasks(dateFilter);
@@ -3080,10 +3242,13 @@ export default function ClientBasedFinOpsTaskManager() {
                     serverResp && serverResp.summary
                       ? serverResp.summary
                       : null;
-                  const tasksForExport: any[] =
-                    serverResp && Array.isArray(serverResp.tasks)
+
+                  // Use tracker data if available, otherwise fall back to tasks
+                  const tasksForExport: any[] = trackerResp.length > 0
+                    ? trackerResp
+                    : (serverResp && Array.isArray(serverResp.tasks)
                       ? serverResp.tasks
-                      : filteredTasks;
+                      : filteredTasks);
 
                   const summaryRow = serverSummary
                     ? [
@@ -3114,6 +3279,9 @@ export default function ClientBasedFinOpsTaskManager() {
                   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
                   // Build client sheets based on server data
+                  // Handle both tracker format (flat) and task format (nested with subtasks)
+                  const isTrackerFormat = trackerResp.length > 0 && !tasksForExport[0]?.subtasks;
+
                   const clientNames = Array.from(
                     new Set(
                       tasksForExport.map(
@@ -3145,48 +3313,81 @@ export default function ClientBasedFinOpsTaskManager() {
                       "Reason",
                     ]);
 
-                    tasksForExport.forEach((task: any) => {
-                      const tClientName =
-                        task.client_name ||
-                        (task.client_id
-                          ? `Client ${task.client_id}`
-                          : "Unknown Client");
-                      if ((tClientName || "").toString() !== clientName) return;
-                      const period = task.duration || "daily";
-                      (task.subtasks || []).forEach((st: any) => {
-                        rows.push([
-                          task.task_name || "",
-                          st.name || "",
+                    if (isTrackerFormat) {
+                      // Tracker format: flat rows with all fields
+                      tasksForExport.forEach((row: any, idx: number) => {
+                        if ((row.client_name || "").toString() !== clientName) return;
+                        const rowData = [
+                          row.task_name || "",
+                          row.subtask_name || "",
                           clientName,
-                          period,
-                          st.start_time || "",
-                          formatDateTime(st.completed_at) || "",
-                          st.status || "",
-                          extractNameFromValue(
-                            st.completed_by ||
-                              st.completedBy ||
-                              st.completed_by ||
-                              "",
-                          ),
-                          extractNameFromValue(
-                            st.approved_by || st.approvedBy || "",
-                          ),
-                          st.approved_at
-                            ? formatToISTDateTime(st.approved_at)
-                            : "",
-                          Array.isArray(task.assigned_to)
-                            ? task.assigned_to.join(", ")
-                            : task.assigned_to || "",
-                          Array.isArray(task.reporting_managers)
-                            ? task.reporting_managers.join(", ")
-                            : task.reporting_managers || "",
-                          Array.isArray(task.escalation_managers)
-                            ? task.escalation_managers.join(", ")
-                            : task.escalation_managers || "",
-                          st.delay_reason || st.delay_notes || "",
-                        ]);
+                          row.period || "daily",
+                          row.scheduled_time || "",
+                          formatDateTime(row.completed_at) || "",
+                          row.status || "",
+                          extractNameFromValue(row.completed_by || ""),
+                          extractNameFromValue(row.approved_by || ""),
+                          row.approved_at ? formatToISTDateTime(row.approved_at) : "",
+                          extractNameFromValue(row.assigned_to || ""),
+                          extractNameFromValue(row.reporting_managers || ""),
+                          extractNameFromValue(row.escalation_managers || ""),
+                          row.delay_reason || row.delay_notes || "",
+                        ];
+                        if (idx === 0) {
+                          console.log("First exported row (tracker format):", {
+                            raw: row,
+                            processed: rowData,
+                            completed_by_raw: row.completed_by,
+                            completed_by_extracted: rowData[7],
+                          });
+                        }
+                        rows.push(rowData);
                       });
-                    });
+                    } else {
+                      // Task format: nested with subtasks
+                      tasksForExport.forEach((task: any) => {
+                        const tClientName =
+                          task.client_name ||
+                          (task.client_id
+                            ? `Client ${task.client_id}`
+                            : "Unknown Client");
+                        if ((tClientName || "").toString() !== clientName) return;
+                        const period = task.duration || "daily";
+                        (task.subtasks || []).forEach((st: any) => {
+                          rows.push([
+                            task.task_name || "",
+                            st.name || "",
+                            clientName,
+                            period,
+                            st.start_time || "",
+                            formatDateTime(st.completed_at) || "",
+                            st.status || "",
+                            extractNameFromValue(
+                              st.completed_by ||
+                                st.completedBy ||
+                                st.completed_by ||
+                                "",
+                            ),
+                            extractNameFromValue(
+                              st.approved_by || st.approvedBy || "",
+                            ),
+                            st.approved_at
+                              ? formatToISTDateTime(st.approved_at)
+                              : "",
+                            Array.isArray(task.assigned_to)
+                              ? task.assigned_to.join(", ")
+                              : task.assigned_to || "",
+                            Array.isArray(task.reporting_managers)
+                              ? task.reporting_managers.join(", ")
+                              : task.reporting_managers || "",
+                            Array.isArray(task.escalation_managers)
+                              ? task.escalation_managers.join(", ")
+                              : task.escalation_managers || "",
+                            st.delay_reason || st.delay_notes || "",
+                          ]);
+                        });
+                      });
+                    }
 
                     const ws = XLSX.utils.aoa_to_sheet(rows);
                     const safeName = (clientName || "Client")
@@ -3209,52 +3410,101 @@ export default function ClientBasedFinOpsTaskManager() {
                   ]);
 
                   const clientAgg: Record<string, any> = {};
-                  tasksForExport.forEach((task: any) => {
-                    const name =
-                      task.client_name ||
-                      (task.client_id
-                        ? `Client ${task.client_id}`
-                        : "Unknown Client");
-                    if (!clientAgg[name])
-                      clientAgg[name] = {
-                        total_tasks: 0,
-                        total_subtasks: 0,
-                        completed_subtasks: 0,
-                        delayed_subtasks: 0,
-                        overdue_subtasks: 0,
-                        pending_subtasks: 0,
-                        in_progress_subtasks: 0,
-                      };
-                    clientAgg[name].total_tasks += 1;
-                    clientAgg[name].total_subtasks += (
-                      task.subtasks || []
-                    ).length;
-                    (task.subtasks || []).forEach((st: any) => {
-                      if (st.status === "completed")
+
+                  if (isTrackerFormat) {
+                    // Tracker format: count unique tasks and each row represents a subtask
+                    const trackerSet = new Set<string>();
+                    tasksForExport.forEach((row: any) => {
+                      const name = row.client_name || "Unknown Client";
+                      const taskKey = `${row.task_id}-${row.subtask_id}`;
+
+                      if (!clientAgg[name])
+                        clientAgg[name] = {
+                          total_tasks: new Set<number>(),
+                          total_subtasks: 0,
+                          completed_subtasks: 0,
+                          delayed_subtasks: 0,
+                          overdue_subtasks: 0,
+                          pending_subtasks: 0,
+                          in_progress_subtasks: 0,
+                        };
+
+                      clientAgg[name].total_tasks.add(row.task_id);
+                      clientAgg[name].total_subtasks += 1;
+
+                      if (row.status === "completed")
                         clientAgg[name].completed_subtasks++;
-                      if (st.status === "delayed")
+                      if (row.status === "delayed")
                         clientAgg[name].delayed_subtasks++;
-                      if (st.status === "overdue")
+                      if (row.status === "overdue")
                         clientAgg[name].overdue_subtasks++;
-                      if (st.status === "pending")
+                      if (row.status === "pending")
                         clientAgg[name].pending_subtasks++;
-                      if (st.status === "in_progress")
+                      if (row.status === "in_progress")
                         clientAgg[name].in_progress_subtasks++;
                     });
-                  });
 
-                  Object.entries(clientAgg).forEach(([cName, sum]: any) => {
-                    clientSummaryRows.push([
-                      cName,
-                      sum.total_tasks || 0,
-                      sum.total_subtasks || 0,
-                      sum.completed_subtasks || 0,
-                      sum.delayed_subtasks || 0,
-                      sum.overdue_subtasks || 0,
-                      sum.pending_subtasks || 0,
-                      sum.in_progress_subtasks || 0,
-                    ]);
-                  });
+                    Object.entries(clientAgg).forEach(([cName, sum]: any) => {
+                      clientSummaryRows.push([
+                        cName,
+                        sum.total_tasks.size || 0,
+                        sum.total_subtasks || 0,
+                        sum.completed_subtasks || 0,
+                        sum.delayed_subtasks || 0,
+                        sum.overdue_subtasks || 0,
+                        sum.pending_subtasks || 0,
+                        sum.in_progress_subtasks || 0,
+                      ]);
+                    });
+                  } else {
+                    // Task format: original logic
+                    tasksForExport.forEach((task: any) => {
+                      const name =
+                        task.client_name ||
+                        (task.client_id
+                          ? `Client ${task.client_id}`
+                          : "Unknown Client");
+                      if (!clientAgg[name])
+                        clientAgg[name] = {
+                          total_tasks: 0,
+                          total_subtasks: 0,
+                          completed_subtasks: 0,
+                          delayed_subtasks: 0,
+                          overdue_subtasks: 0,
+                          pending_subtasks: 0,
+                          in_progress_subtasks: 0,
+                        };
+                      clientAgg[name].total_tasks += 1;
+                      clientAgg[name].total_subtasks += (
+                        task.subtasks || []
+                      ).length;
+                      (task.subtasks || []).forEach((st: any) => {
+                        if (st.status === "completed")
+                          clientAgg[name].completed_subtasks++;
+                        if (st.status === "delayed")
+                          clientAgg[name].delayed_subtasks++;
+                        if (st.status === "overdue")
+                          clientAgg[name].overdue_subtasks++;
+                        if (st.status === "pending")
+                          clientAgg[name].pending_subtasks++;
+                        if (st.status === "in_progress")
+                          clientAgg[name].in_progress_subtasks++;
+                      });
+                    });
+
+                    Object.entries(clientAgg).forEach(([cName, sum]: any) => {
+                      clientSummaryRows.push([
+                        cName,
+                        sum.total_tasks || 0,
+                        sum.total_subtasks || 0,
+                        sum.completed_subtasks || 0,
+                        sum.delayed_subtasks || 0,
+                        sum.overdue_subtasks || 0,
+                        sum.pending_subtasks || 0,
+                        sum.in_progress_subtasks || 0,
+                      ]);
+                    });
+                  }
 
                   const wsClient = XLSX.utils.aoa_to_sheet(clientSummaryRows);
                   XLSX.utils.book_append_sheet(wb, wsClient, "Client Summary");
@@ -3269,12 +3519,22 @@ export default function ClientBasedFinOpsTaskManager() {
                     delayed: 0,
                     overdue: 0,
                   };
-                  tasksForExport.forEach((task: any) => {
-                    (task.subtasks || []).forEach((st: any) => {
-                      statusCounts[st.status] =
-                        (statusCounts[st.status] || 0) + 1;
+
+                  if (isTrackerFormat) {
+                    // Tracker format: each row is a subtask
+                    tasksForExport.forEach((row: any) => {
+                      statusCounts[row.status] =
+                        (statusCounts[row.status] || 0) + 1;
                     });
-                  });
+                  } else {
+                    // Task format: subtasks are nested
+                    tasksForExport.forEach((task: any) => {
+                      (task.subtasks || []).forEach((st: any) => {
+                        statusCounts[st.status] =
+                          (statusCounts[st.status] || 0) + 1;
+                      });
+                    });
+                  }
 
                   Object.entries(statusCounts).forEach(([status, cnt]) => {
                     statusSummaryRows.push([status, cnt]);
@@ -3873,35 +4133,8 @@ export default function ClientBasedFinOpsTaskManager() {
                             <span className="text-red-600">
                               Next call in:{" "}
                               {(() => {
-                                // Prefer server-provided next_call_at if available
-                                let seconds = overdueTimers[task.id] || 15 * 60;
-                                try {
-                                  if ((task as any).next_call_at) {
-                                    const nextMs = new Date(
-                                      (task as any).next_call_at,
-                                    ).getTime();
-                                    const diff = Math.max(
-                                      0,
-                                      Math.ceil((nextMs - Date.now()) / 1000),
-                                    );
-                                    if (!isNaN(diff)) seconds = diff;
-                                  } else {
-                                    const stored =
-                                      typeof window !== "undefined"
-                                        ? localStorage.getItem(
-                                            `finops_next_call_${task.id}`,
-                                          )
-                                        : null;
-                                    if (stored) {
-                                      const nextMs = parseInt(stored, 10);
-                                      const diff = Math.max(
-                                        0,
-                                        Math.ceil((nextMs - Date.now()) / 1000),
-                                      );
-                                      if (!isNaN(diff)) seconds = diff;
-                                    }
-                                  }
-                                } catch {}
+                                // Use the countdown state from overdueTimers
+                                const seconds = overdueTimers[task.id] ?? 15 * 60;
                                 const mins = Math.floor(seconds / 60);
                                 const secs = seconds % 60;
                                 return `${mins}m ${secs.toString().padStart(2, "0")}s`;
@@ -4025,6 +4258,12 @@ export default function ClientBasedFinOpsTaskManager() {
                                       delayReason,
                                       delayNotes,
                                     )
+                                  }
+                                  currentUser={user}
+                                  onRefresh={() =>
+                                    queryClient.invalidateQueries({
+                                      queryKey: ["client-finops-tasks"],
+                                    })
                                   }
                                   isInline={true}
                                 />
@@ -4879,6 +5118,12 @@ export default function ClientBasedFinOpsTaskManager() {
                         index={index}
                         onUpdate={updateSubTask}
                         onRemove={removeSubTask}
+                        currentUser={user}
+                        onRefresh={() =>
+                          queryClient.invalidateQueries({
+                            queryKey: ["client-finops-tasks"],
+                          })
+                        }
                         isInline={false}
                       />
                     ))}

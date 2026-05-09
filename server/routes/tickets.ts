@@ -241,10 +241,10 @@ router.get("/", async (req: Request, res: Response) => {
           [effectiveLimit, offset],
         );
 
-        const countRes = await pool.query(
-          `SELECT COUNT(*) AS cnt FROM tickets`,
+        const estimateRes = await pool.query(
+          `SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'`,
         );
-        const totalCount = Number(countRes.rows[0]?.cnt || 0);
+        const totalCount = Number(estimateRes.rows[0]?.estimate || 0);
         const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
 
         // Map iso fields and reshape data for client

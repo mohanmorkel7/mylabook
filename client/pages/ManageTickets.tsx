@@ -2664,18 +2664,20 @@ export default function ManageTickets() {
                               }
                             }
 
+                            const derivedTags = (() => {
+                              try {
+                                const derived = normalizeTagForTicket(t);
+                                if (Array.isArray(derived) && derived.length > 0)
+                                  return derived;
+                                if (typeof derived === "string" && derived)
+                                  return [derived];
+                              } catch (e) {}
+                              return [];
+                            })();
+
+                            if (derivedTags.includes("Razorpay UPI")) return derivedTags;
                             if (parsedTags.length > 0) return parsedTags;
-
-                            // Fallback: derive tag(s) from description/mail config
-                            try {
-                              const derived = normalizeTagForTicket(t);
-                              if (Array.isArray(derived) && derived.length > 0)
-                                return derived;
-                              if (typeof derived === "string" && derived)
-                                return [derived];
-                            } catch (e) {}
-
-                            return [];
+                            return derivedTags;
                           })().map((tg: any, idx: number) => (
                             <Badge
                               key={`tag-${t.id}-${idx}`}
@@ -3001,18 +3003,20 @@ export default function ManageTickets() {
                               }
                             }
 
+                            const derivedTags = (() => {
+                              try {
+                                const derived = normalizeTagForTicket(t);
+                                if (Array.isArray(derived) && derived.length > 0)
+                                  return derived;
+                                if (typeof derived === "string" && derived)
+                                  return [derived];
+                              } catch (e) {}
+                              return [];
+                            })();
+
+                            if (derivedTags.includes("Razorpay UPI")) return derivedTags;
                             if (parsedTags.length > 0) return parsedTags;
-
-                            // Fallback: derive tag(s) from description/mail config
-                            try {
-                              const derived = normalizeTagForTicket(t);
-                              if (Array.isArray(derived) && derived.length > 0)
-                                return derived;
-                              if (typeof derived === "string" && derived)
-                                return [derived];
-                            } catch (e) {}
-
-                            return [];
+                            return derivedTags;
                           })().map((tg: any, idx: number) => (
                             <Badge
                               key={`tag-${t.id}-${idx}`}

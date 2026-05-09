@@ -291,6 +291,7 @@ export default function ManageTickets() {
   >([]);
   const serverFilteredRef = useRef(false);
   const ticketsFetchRequestRef = useRef(0);
+  const initialFiltersFetchDoneRef = useRef(false);
 
   // Expose getMailConfigProviderName on window for TicketCharts to use
   useEffect(() => {
@@ -515,10 +516,12 @@ export default function ManageTickets() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (!filtersInitialized) return;
+    if (!initialFiltersFetchDoneRef.current) return;
+
     fetchTickets(currentPage);
     fetchUsers();
     fetchTags();
-    fetchAssignedOptions();
     // Always refresh created tickets count so the tab displays an accurate value
     fetchCreatedTicketsCount();
     if (activeTab === "created") {
@@ -535,13 +538,25 @@ export default function ManageTickets() {
     return () => {
       window.removeEventListener("createdTicketsUpdated", handler);
     };
-  }, [activeTab, currentPage, pageSize]);
+  }, [activeTab, currentPage, pageSize, filtersInitialized]);
 
   // When filters change, fetch fresh results from server (reset to page 1)
   useEffect(() => {
+    if (!filtersInitialized) return;
+    if (!initialFiltersFetchDoneRef.current) {
+      initialFiltersFetchDoneRef.current = true;
+      fetchTickets(1);
+      fetchUsers();
+      fetchTags();
+      fetchCreatedTicketsCount();
+      if (activeTab === "created") {
+        fetchCreatedTickets();
+      }
+      return;
+    }
     setCurrentPage(1);
     fetchTickets(1);
-  }, [filters]);
+  }, [filters, filtersInitialized, activeTab]);
 
   // Keep URL search params in sync with filters so state survives refresh and navigation
   useEffect(() => {
@@ -638,51 +653,67 @@ export default function ManageTickets() {
       // Clear any server-provided overdue counts while loading fresh data to avoid stale summaries
       setServerOverdueCounts(null);
 
+      const hasFilters = Boolean(
+        filters.searchText ||
+          filters.priority ||
+          filters.status ||
+          filters.assignedTo ||
+          filters.source ||
+          filters.dateFrom ||
+          filters.dateTo,
+      );
+
       // Build server-side filters
       const serverFilters: any = {};
-      if (filters.searchText) serverFilters.search = filters.searchText;
-      if (
-        filters.priority !== undefined &&
-        String(filters.priority).trim() !== ""
-      ) {
-        const pid = Number.parseInt(String(filters.priority), 10);
-        if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
-      }
-      // Apply date filters for all tabs
-      if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
-      if (filters.dateTo) serverFilters.date_to = filters.dateTo;
+      if (hasFilters) {
+        if (filters.searchText) serverFilters.search = filters.searchText;
+        if (
+          filters.priority !== undefined &&
+          String(filters.priority).trim() !== ""
+        ) {
+          const pid = Number.parseInt(String(filters.priority), 10);
+          if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
+        }
+        // Apply date filters for all tabs
+        if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
+        if (filters.dateTo) serverFilters.date_to = filters.dateTo;
 
-      // status -> map to status_id using statusesMap
-      if (
-        filters.status !== undefined &&
-        String(filters.status).trim() !== ""
-      ) {
-        const key = String(filters.status || "").toLowerCase();
-        const normalizedKey = key
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, "");
-        const sid = statusesMap[normalizedKey];
-        if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid)))
-          serverFilters.status_id = Number(sid);
-      }
+        // status -> map to status_id using statusesMap
+        if (
+          filters.status !== undefined &&
+          String(filters.status).trim() !== ""
+        ) {
+          const key = String(filters.status || "").toLowerCase();
+          const normalizedKey = key
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+          const sid = statusesMap[normalizedKey];
+          if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid)))
+            serverFilters.status_id = Number(sid);
+        }
 
-      // assigned to
-      if (
-        filters.assignedTo !== undefined &&
-        String(filters.assignedTo).trim() !== ""
-      ) {
-        if (filters.assignedTo === "unassigned") {
-          serverFilters.unassigned = true;
-        } else {
-          const aid = Number.parseInt(String(filters.assignedTo), 10);
-          if (!Number.isNaN(aid)) serverFilters.assigned_to = aid;
+        // assigned to
+        if (
+          filters.assignedTo !== undefined &&
+          String(filters.assignedTo).trim() !== ""
+        ) {
+          if (filters.assignedTo === "unassigned") {
+            serverFilters.unassigned = true;
+          } else {
+            const aid = Number.parseInt(String(filters.assignedTo), 10);
+            if (!Number.isNaN(aid)) serverFilters.assigned_to = aid;
+          }
         }
       }
 
       // Note: source/tag filter is applied client-side based on description analysis
       // Don't apply to server filters
 
-      const response = await api.getTickets(serverFilters, page, pageSize);
+      const response = await api.getTickets(
+        { ...serverFilters, ...(hasFilters ? {} : { simple: "1" }) },
+        page,
+        pageSize,
+      );
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       console.debug("[ManageTickets] fetchTickets response data:", data);
@@ -1012,33 +1043,7 @@ export default function ManageTickets() {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      // Use only the regular users API
-      const resp = await api.get("/users");
-      const regular = resp.data?.users ?? resp.data ?? [];
-
-      // Normalize user fields so getAssignedUserName can handle various shapes
-      const normalized = (regular as any[]).map((u) => {
-        const fullName =
-          `${u.first_name || u.firstname || ""} ${u.last_name || u.lastname || ""}`.trim();
-        return {
-          id: Number(u.id),
-          name: u.name ?? (fullName || u.email),
-          first_name: u.first_name,
-          last_name: u.last_name,
-          firstname: u.firstname,
-          lastname: u.lastname,
-          email: u.email,
-          type: u.type,
-        };
-      });
-
-      setUsers(normalized as User[]);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
+  const fetchUsers = async () => fetchAssignedOptions();
 
   const fetchTags = async () => {
     // Initialize with Manual - actual tags will be extracted from tickets array via useEffect
@@ -1330,8 +1335,21 @@ export default function ManageTickets() {
     try {
       const resp = await api.get("/tickets/assigned-options");
       const data = resp?.data ?? resp;
-      if (Array.isArray(data?.options)) setAssignedOptionsState(data.options);
-      else setAssignedOptionsState([]);
+      const options = Array.isArray(data?.users) ? data.users : [];
+      if (options.length > 0) {
+        const normalized = options.map((u: any) => ({
+          id: Number(u.id),
+          name: u.name ?? u.email,
+          email: u.email,
+        }));
+        setUsers(normalized as User[]);
+        setAssignedOptionsState(
+          normalized.map((u: any) => ({
+            value: String(u.id),
+            label: u.name || u.email || `User #${u.id}`,
+          })),
+        );
+      }
     } catch (e) {
       console.error("Error fetching assigned options:", e);
       setAssignedOptionsState([]);

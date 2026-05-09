@@ -14,6 +14,15 @@ import { pool } from "../database/connection";
 const router = Router();
 import { authenticateToken } from "../middleware/auth";
 
+const metadataCache = new Map<string, { data: any; expiresAt: number }>();
+const assignedOptionsCache = new Map<
+  string,
+  { data: any; expiresAt: number }
+>();
+const ticketSummaryCache = new Map<string, { data: any; expiresAt: number }>();
+const ticketUserStatusCache = new Map<string, { data: any; expiresAt: number }>();
+const ticketTagSummaryCache = new Map<string, { data: any; expiresAt: number }>();
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -56,38 +65,38 @@ async function isDatabaseAvailable() {
 
 // Get ticket metadata (priorities, statuses, categories)
 router.get("/metadata", async (req: Request, res: Response) => {
+  const cacheKey = "ticket-metadata";
+  const cached = metadataCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
-    if (await isDatabaseAvailable()) {
-      const priorities = await TicketRepository.getPriorities();
-      const statuses = await TicketRepository.getStatuses();
-      const categories = await TicketRepository.getCategories();
-      // Fetch teams and buckets if available
-      let teams = [];
-      let buckets = [];
-      try {
-        const teamsRes = await pool.query("SELECT * FROM teams LIMIT 50");
-        teams = teamsRes.rows;
-      } catch (e) {
-        // Teams table may not exist
-      }
-      try {
-        const bucketsRes = await pool.query(
-          "SELECT * FROM ticket_buckets LIMIT 50",
-        );
-        buckets = bucketsRes.rows;
-      } catch (e) {
-        // Buckets table may not exist
-      }
-      res.json({
-        priorities,
-        statuses,
-        categories,
-        teams,
-        buckets,
-      });
-    } else {
-      res.status(503).json({ error: "Database unavailable" });
+    const [priorities, statuses, categories] = await Promise.all([
+      TicketRepository.getPriorities(),
+      TicketRepository.getStatuses(),
+      TicketRepository.getCategories(),
+    ]);
+
+    let teams: any[] = [];
+    let buckets: any[] = [];
+    try {
+      const [teamsRes, bucketsRes] = await Promise.all([
+        pool.query("SELECT * FROM teams LIMIT 50"),
+        pool.query("SELECT * FROM ticket_buckets LIMIT 50"),
+      ]);
+      teams = teamsRes.rows;
+      buckets = bucketsRes.rows;
+    } catch (e) {
+      // Teams/buckets tables may not exist
     }
+
+    const payload = { priorities, statuses, categories, teams, buckets };
+    metadataCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 5 * 60_000,
+    });
+    res.json(payload);
   } catch (error) {
     console.error("Error fetching ticket metadata:", error);
     res.status(500).json({ error: "Failed to fetch metadata" });
@@ -217,6 +226,12 @@ router.get("/", async (req: Request, res: Response) => {
       try {
         console.log("[GET /api/tickets] Using simple query mode");
         const offset = (page - 1) * effectiveLimit;
+        const simpleWhere = restrictToViewer && viewerId
+          ? `WHERE (t.assigned_to = $1 OR $1 = ANY(t.watcher_user_ids))`
+          : "";
+        const simpleParams = restrictToViewer && viewerId
+          ? [viewerId, effectiveLimit, offset]
+          : [effectiveLimit, offset];
         const rowsRes = await pool.query(
           `SELECT
               t.id, t.track_id, t.subject, t.description,
@@ -236,9 +251,10 @@ router.get("/", async (req: Request, res: Response) => {
              LEFT JOIN ticket_categories tc ON t.category_id = tc.id
              LEFT JOIN users creator ON t.created_by = creator.id
              LEFT JOIN users assignee ON t.assigned_to = assignee.id
+             ${simpleWhere}
              ORDER BY t.created_at DESC
-             LIMIT $1 OFFSET $2`,
-          [effectiveLimit, offset],
+             LIMIT $${restrictToViewer && viewerId ? 2 : 1} OFFSET $${restrictToViewer && viewerId ? 3 : 2}`,
+          simpleParams,
         );
 
         const estimateRes = await pool.query(
@@ -413,6 +429,15 @@ router.get("/", async (req: Request, res: Response) => {
 // GET /api/tickets/summary
 // Returns aggregated counts (assigned users, statuses, overdue stats)
 router.get("/summary", async (req: Request, res: Response) => {
+  const cacheKey = JSON.stringify({
+    date_from: req.query.date_from || null,
+    date_to: req.query.date_to || null,
+  });
+  const cached = ticketSummaryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
     // Parse and validate date filters
     let where = "WHERE 1=1";
@@ -543,7 +568,7 @@ router.get("/summary", async (req: Request, res: Response) => {
     const overdueClosed = Number(overdueClosedRes.rows[0]?.cnt || 0);
     const nonOverdueClosed = Math.max(0, totalClosed - overdueClosed);
 
-    res.json({
+    const payload = {
       assigned,
       statuses,
       overdue_counts: {
@@ -556,7 +581,12 @@ router.get("/summary", async (req: Request, res: Response) => {
         // historical ever-overdue open (for debugging/compatibility). May be undefined if computation failed.
         everOverdueOpen: (values as any)._everOverdueOpen,
       },
+    };
+    ticketSummaryCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 30_000,
     });
+    res.json(payload);
   } catch (err) {
     console.error("Error fetching ticket summary:", err);
     res.status(500).json({ error: "Failed to fetch summary" });
@@ -566,6 +596,17 @@ router.get("/summary", async (req: Request, res: Response) => {
 // GET /api/tickets/summary/user-status
 // Returns counts grouped by assigned user and by status for a date range
 router.get("/summary/user-status", async (req: Request, res: Response) => {
+  const cacheKey = JSON.stringify({
+    status_id: req.query.status_id || null,
+    assigned_to: req.query.assigned_to || null,
+    date_from: req.query.date_from || null,
+    date_to: req.query.date_to || null,
+  });
+  const cached = ticketUserStatusCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
     // Parse query
     const status_id = req.query.status_id
@@ -646,9 +687,14 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
     console.log(
       `[GET /api/tickets/summary/user-status] Returning ${responseData.length} rows`,
     );
-    res.json({
+    const payload = {
       data: responseData,
+    };
+    ticketUserStatusCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 30_000,
     });
+    res.json(payload);
   } catch (err) {
     console.error("Error fetching user-status summary:", err);
     res.status(500).json({ error: "Failed to fetch summary" });
@@ -658,10 +704,99 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
 // GET /api/tickets/summary/by-tag
 // Returns counts grouped by tags
 router.get("/summary/by-tag", async (req: Request, res: Response) => {
+  const cacheKey = JSON.stringify({
+    date_from: req.query.date_from || null,
+    date_to: req.query.date_to || null,
+    status_id: req.query.status_id || null,
+    assigned_to: req.query.assigned_to || null,
+  });
+  const cached = ticketTagSummaryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
-    // For now, return empty array since tags functionality may not be fully implemented
-    // This prevents the route from falling through to /:id and causing NaN errors
-    res.json([]);
+    let where = "WHERE 1=1";
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    const date_from = req.query.date_from as string;
+    const date_to = req.query.date_to as string;
+    const status_id = req.query.status_id ? parseInt(req.query.status_id as string) : null;
+    const assigned_to = req.query.assigned_to ? parseInt(req.query.assigned_to as string) : null;
+
+    if (date_from) {
+      where += ` AND t.created_at >= $${paramIndex}`;
+      const dateFromValue = date_from.includes("T")
+        ? date_from
+        : new Date(`${date_from}T00:00:00+05:30`).toISOString();
+      values.push(dateFromValue);
+      paramIndex++;
+    }
+
+    if (date_to) {
+      where += ` AND t.created_at <= $${paramIndex}`;
+      const dateToValue = date_to.includes("T")
+        ? date_to
+        : new Date(`${date_to}T23:59:59+05:30`).toISOString();
+      values.push(dateToValue);
+      paramIndex++;
+    }
+
+    if (status_id !== null && !Number.isNaN(status_id)) {
+      where += ` AND t.status_id = $${paramIndex}`;
+      values.push(status_id);
+      paramIndex++;
+    }
+
+    if (assigned_to !== null && !Number.isNaN(assigned_to)) {
+      where += ` AND t.assigned_to = $${paramIndex}`;
+      values.push(assigned_to);
+      paramIndex++;
+    }
+
+    const query = `
+      WITH tagged_tickets AS (
+        SELECT
+          t.id,
+          t.status_id,
+          CASE
+            WHEN t.tags IS NOT NULL AND array_length(t.tags, 1) > 0 THEN t.tags[1]
+            WHEN LOWER(COALESCE(t.description, '')) LIKE '%slack%' THEN 'Slack'
+            WHEN LOWER(COALESCE(t.description, '')) LIKE '%razorpay%' THEN 'Razorpay'
+            WHEN LOWER(COALESCE(t.description, '')) LIKE '%payswiff%' THEN 'Payswiff'
+            ELSE 'Manual'
+          END AS tag_name
+        FROM tickets t
+        ${where}
+      )
+      SELECT
+        tag_name AS tag,
+        COALESCE(ts.name, 'Unknown') AS status_name,
+        COUNT(*)::INT AS count
+      FROM tagged_tickets tt
+      LEFT JOIN ticket_statuses ts ON tt.status_id = ts.id
+      GROUP BY tag_name, ts.name
+      ORDER BY tag_name, status_name
+    `;
+
+    const result = await pool.query(query, values);
+    const grouped: Record<string, Record<string, number>> = {};
+    for (const row of result.rows as any[]) {
+      const tag = String(row.tag || 'Manual');
+      const statusName = String(row.status_name || 'Unknown');
+      if (!grouped[tag]) grouped[tag] = {};
+      grouped[tag][statusName] = Number(row.count || 0);
+    }
+
+    const payload = {
+      tags: Object.entries(grouped).map(([tag, counts]) => ({ tag, counts })),
+    };
+    ticketTagSummaryCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 30_000,
+    });
+    res.json(payload);
   } catch (err) {
     console.error("Error fetching by-tag summary:", err);
     res.status(500).json({ error: "Failed to fetch tag summary" });
@@ -1124,17 +1259,28 @@ router.post(
 
 // Get assigned options
 router.get("/assigned-options", async (req: Request, res: Response) => {
+  const cacheKey = "assigned-options";
+  const cached = assignedOptionsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
     const users = await pool.query(
       "SELECT id, first_name, last_name, email FROM users ORDER BY first_name, last_name",
     );
-    res.json({
+    const payload = {
       users: users.rows.map((user: any) => ({
         id: user.id,
-        name: `${user.first_name} ${user.last_name}`,
+        name: `${user.first_name} ${user.last_name}`.trim(),
         email: user.email,
       })),
+    };
+    assignedOptionsCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 5 * 60_000,
     });
+    res.json(payload);
   } catch (error) {
     console.error("Error fetching assigned options:", error);
     res.status(500).json({ error: "Failed to fetch options" });

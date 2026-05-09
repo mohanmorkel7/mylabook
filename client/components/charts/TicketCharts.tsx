@@ -123,39 +123,32 @@ export default function TicketCharts({
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
         const query = params.toString() ? `?${params.toString()}` : "";
-        const resp = await api.get(`/tickets/summary${query}`);
-        const payload = resp?.data ?? resp;
+        const [summaryResp, userStatusResp, tagResp] = await Promise.allSettled([
+          api.get(`/tickets/summary${query}`),
+          api.get(`/tickets/summary/user-status${query}`),
+          api.get(`/tickets/summary/by-tag${query}`),
+        ]);
+
         if (!mounted) return;
-        setAssigned(payload.assigned || []);
-        setStatuses(payload.statuses || []);
-        if (onSummaryFetched) {
-          try {
-            onSummaryFetched(payload);
-          } catch (e) {
-            console.warn("onSummaryFetched callback failed", e);
+
+        if (summaryResp.status === "fulfilled") {
+          const summaryPayload = summaryResp.value?.data ?? summaryResp.value;
+          setAssigned(summaryPayload.assigned || []);
+          setStatuses(summaryPayload.statuses || []);
+          if (onSummaryFetched) {
+            try {
+              onSummaryFetched(summaryPayload);
+            } catch (e) {
+              console.warn("onSummaryFetched callback failed", e);
+            }
           }
         }
 
-        // Fetch user-status summary in parallel
-        try {
-          console.log(
-            "[TicketCharts] Fetching user-status from:",
-            `/tickets/summary/user-status${query}`,
-          );
-          const resp2 = await api.get(`/tickets/summary/user-status${query}`);
-          console.log("[TicketCharts] user-status raw response:", resp2);
-          const p2 = resp2?.data ?? resp2;
-          console.log("[TicketCharts] user-status p2:", p2);
-          // p2 could be {data: [...]} or [...] depending on how api client unwraps response
-          const rawData = Array.isArray(p2) ? p2 : p2?.data || [];
-          console.log(
-            "[TicketCharts] user-status rawData:",
-            rawData,
-            "length:",
-            rawData.length,
-          );
-
-          // Transform flat data to grouped format: { user_id, name, counts: { statusName: count } }
+        if (userStatusResp.status === "fulfilled") {
+          const userStatusPayload = userStatusResp.value?.data ?? userStatusResp.value;
+          const rawData = Array.isArray(userStatusPayload)
+            ? userStatusPayload
+            : userStatusPayload?.data || [];
           const grouped: Record<
             number,
             { user_id: number; name: string; counts: Record<string, number> }
@@ -172,150 +165,13 @@ export default function TicketCharts({
             const statusName = row.status_name || "Unknown";
             grouped[userId].counts[statusName] = row.count || 0;
           });
-
-          const transformedData = Object.values(grouped);
-          console.log(
-            "[TicketCharts] user-status transformed data:",
-            transformedData,
-            "length:",
-            transformedData.length,
-          );
-          if (mounted) setUserStatus(transformedData);
-        } catch (e2) {
-          console.error(
-            "TicketCharts: failed to fetch user-status summary",
-            e2,
-          );
+          if (mounted) setUserStatus(Object.values(grouped));
         }
 
-        // Fetch tag-status summary (fallback to client-side classification if server data is unreliable)
-        try {
-          const resp3 = await api.get(`/tickets/summary/by-tag${query}`);
-          const p3 = resp3?.data ?? resp3;
-          console.log("TicketCharts: tag-status API response:", {
-            resp3,
-            p3,
-            tags: p3?.tags,
-          });
-          if (mounted) setTagStatus(p3?.tags || []);
-        } catch (e3) {
-          console.warn("TicketCharts: failed to fetch tag-status summary", e3);
-        }
-
-        // Additionally compute tag counts client-side using ticket descriptions to ensure Razorpay/Payswiff/Manual classification
-        try {
-          const computedTagCounts: Record<string, Record<string, number>> = {};
-          let page = 1;
-          let pages = 1;
-          let totalTicketsProcessed = 0;
-          do {
-            console.log("TicketCharts: fetching tickets page", page, {
-              useFrom,
-              useTo,
-            });
-            const respAll = await api.getTickets(
-              { date_from: useFrom, date_to: useTo },
-              page,
-              100,
-            );
-            const d = respAll?.data ?? respAll;
-            let ticketsArr = d?.tickets ?? (Array.isArray(d) ? d : []);
-            // Ensure ticketsArr is always an array
-            if (!Array.isArray(ticketsArr)) {
-              ticketsArr = [];
-            }
-            pages = d?.pages ?? 1;
-            // If pages is 0 but we got some tickets, set pages to 1 to avoid immediate exit
-            if (pages === 0 && ticketsArr.length > 0) pages = 1;
-            console.log("TicketCharts: fetched tickets page", page, {
-              ticketsCount: ticketsArr.length,
-              pages,
-              response: d,
-            });
-            totalTicketsProcessed += ticketsArr.length;
-            for (const t of ticketsArr) {
-              let tag = "Manual";
-              try {
-                // Normalize tags: support array, JSON-string, or Postgres-style '{A,B}' string
-                const rawTags = (t as any).tags;
-                let firstTag: string | null = null;
-                if (Array.isArray(rawTags) && rawTags.length > 0) {
-                  firstTag = String(rawTags[0]);
-                } else if (typeof rawTags === "string" && rawTags.trim()) {
-                  try {
-                    const parsed = JSON.parse(rawTags);
-                    if (Array.isArray(parsed) && parsed.length > 0)
-                      firstTag = String(parsed[0]);
-                  } catch (e) {
-                    // not JSON
-                  }
-                  if (!firstTag) {
-                    const m = rawTags.match(/^\{(.+)\}$/);
-                    if (m && m[1]) {
-                      const arr = m[1]
-                        .split(",")
-                        .map((s) => s.replace(/^\"|\"$/g, "").trim())
-                        .filter(Boolean);
-                      if (arr.length) firstTag = arr[0];
-                    }
-                  }
-                  if (!firstTag) firstTag = rawTags;
-                }
-
-                if (firstTag) {
-                  tag = String(firstTag);
-                } else {
-                  const desc = String(t.description || "").toLowerCase();
-                  if (
-                    desc.includes("@slack.com") ||
-                    desc.includes("slack from") ||
-                    desc.includes("from@slack.com") ||
-                    /\bslack\b/.test(desc)
-                  )
-                    tag = "Slack";
-                  else if (desc.includes("razorpay")) tag = "Razorpay";
-                  else if (desc.includes("payswiff")) tag = "Payswiff";
-                  else if (t.created_from_mail_config) {
-                    // prefer mail config provider name if available
-                    try {
-                      const prov = (window as any).getMailConfigProviderName
-                        ? (window as any).getMailConfigProviderName(
-                            t.mail_config_sources,
-                            t.description,
-                          )
-                        : null;
-                      if (prov) tag = prov;
-                    } catch (e) {}
-                  }
-                }
-              } catch (e) {}
-
-              const statusName =
-                (t.status && (t.status.name || t.status)) || "Unknown";
-              if (!computedTagCounts[tag]) computedTagCounts[tag] = {};
-              computedTagCounts[tag][statusName] =
-                (computedTagCounts[tag][statusName] || 0) + 1;
-            }
-            page += 1;
-          } while (page <= pages);
-
-          if (mounted) {
-            const arr = Object.entries(computedTagCounts).map(
-              ([tag, counts]) => ({ tag, counts }),
-            );
-            console.log("TicketCharts: computed tag status (client-side):", {
-              totalTicketsProcessed,
-              computedTagCounts,
-              arr,
-              arrayLength: arr.length,
-            });
-            setTagStatus(arr);
-          }
-        } catch (e) {
-          console.warn(
-            "TicketCharts: failed to compute client-side tag summary",
-            e,
-          );
+        if (tagResp.status === "fulfilled") {
+          const tagPayload = tagResp.value?.data ?? tagResp.value;
+          const tags = Array.isArray(tagPayload) ? tagPayload : tagPayload?.tags || [];
+          if (mounted) setTagStatus(tags);
         }
       } catch (e) {
         console.error("TicketCharts: failed to fetch summary", e);

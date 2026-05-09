@@ -442,13 +442,15 @@ export default function ManageTickets() {
   // Helper function to classify a ticket into a tag. Prefer mail_config_sources provider, then description_preview or description
   const getTicketTag = (ticket: any): string => {
     try {
-      // Prioritize explicit subject-based Razorpay UPI classification
+      // Prioritize explicit subject-based Razorpay UPI classification.
+      // Only match when the ticket title itself contains the exact word "UPI".
       const subject = String(ticket.subject || "").toLowerCase();
       const desc = String(
         ticket.description_preview || ticket.description || "",
       ).toLowerCase();
+      const subjectHasExactUpi = /\bupi\b/i.test(subject);
       if (
-        (subject.includes("upi") || desc.includes("upi")) &&
+        subjectHasExactUpi &&
         (subject.includes("@razorpay.com") || desc.includes("@razorpay.com") || subject.includes("razorpay") || desc.includes("razorpay"))
       ) {
         return "Razorpay UPI";

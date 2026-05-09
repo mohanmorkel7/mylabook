@@ -755,44 +755,146 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
       paramIndex++;
     }
 
+    const extractEmailFromText = (text: string | undefined): string | null => {
+      if (!text) return null;
+      try {
+        const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+        return match ? match[0].toLowerCase() : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const formatProviderNameFromDomain = (domain: string): string => {
+      const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
+      const main = stripped.split(".")[0] || stripped;
+      return main
+        .replace(/[^a-zA-Z0-9]/g, " ")
+        .split(" ")
+        .filter(Boolean)
+        .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+    };
+
+    const getMailConfigProviderName = (
+      sources: any,
+      sampleText?: string,
+    ): string | null => {
+      if (!sources) return null;
+      try {
+        const arr = Array.isArray(sources)
+          ? sources
+          : typeof sources === "string"
+            ? JSON.parse(sources)
+            : null;
+        if (!arr || !Array.isArray(arr) || arr.length === 0) return null;
+
+        const senderEmail = extractEmailFromText(sampleText || "") || null;
+        const senderDomain = senderEmail
+          ? senderEmail.split("@").slice(1).join("@").toLowerCase()
+          : null;
+
+        if (senderDomain) {
+          for (const src of arr) {
+            if (src && Array.isArray(src.emailRules)) {
+              for (const rule of src.emailRules) {
+                if (rule && rule.domain) {
+                  const ruleDomain = String(rule.domain || "").trim();
+                  const strippedRule = ruleDomain.startsWith("@")
+                    ? ruleDomain.slice(1).toLowerCase()
+                    : ruleDomain.toLowerCase();
+                  if (
+                    senderDomain === strippedRule ||
+                    senderDomain.endsWith("." + strippedRule)
+                  ) {
+                    return formatProviderNameFromDomain(strippedRule);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        for (const src of arr) {
+          if (src && Array.isArray(src.emailRules)) {
+            for (const rule of src.emailRules) {
+              if (rule && rule.domain) {
+                return formatProviderNameFromDomain(String(rule.domain));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        return null;
+      }
+      return null;
+    };
+
+    const classifyTicketTag = (ticket: any): string => {
+      const subject = String(ticket.subject || "").toLowerCase();
+      const desc = String(ticket.description_preview || ticket.description || "").toLowerCase();
+      const subjectHasUpi = subject.includes("upi");
+      if (
+        subjectHasUpi &&
+        (subject.includes("@razorpay.com") ||
+          subject.includes("razorpay") ||
+          desc.includes("@razorpay.com") ||
+          desc.includes("razorpay"))
+      ) {
+        return "Razorpay UPI";
+      }
+
+      const provider = getMailConfigProviderName(
+        ticket.mail_config_sources,
+        ticket.description_preview || ticket.description,
+      );
+      if (provider) return provider;
+
+      if (
+        subject.includes("razorpay") ||
+        desc.includes("razorpay") ||
+        subject.includes("@razorpay.com") ||
+        desc.includes("@razorpay.com")
+      ) {
+        return "Razorpay";
+      }
+      if (subject.includes("payswiff") || desc.includes("payswiff") || subject.includes("@payswiff.com") || desc.includes("@payswiff.com")) {
+        return "Payswiff";
+      }
+      if (subject.includes("slack") || desc.includes("slack")) {
+        return "Slack";
+      }
+      return "Manual";
+    };
+
     const query = `
-      WITH tagged_tickets AS (
-        SELECT
-          t.id,
-          t.status_id,
-          CASE
-            WHEN LOWER(COALESCE(t.subject, '')) LIKE '%upi%'
-              AND (LOWER(COALESCE(t.subject, '')) LIKE '%@razorpay.com%' OR LOWER(COALESCE(t.description, '')) LIKE '%@razorpay.com%' OR LOWER(COALESCE(t.subject, '')) LIKE '%razorpay%' OR LOWER(COALESCE(t.description, '')) LIKE '%razorpay%') THEN 'Razorpay UPI'
-            WHEN t.tags IS NOT NULL AND array_length(t.tags, 1) > 0 THEN t.tags[1]
-            WHEN LOWER(COALESCE(t.description, '')) LIKE '%slack%' OR LOWER(COALESCE(t.subject, '')) LIKE '%slack%' THEN 'Slack'
-            WHEN LOWER(COALESCE(t.subject, '')) LIKE '%razorpay%' OR LOWER(COALESCE(t.description, '')) LIKE '%razorpay%' OR LOWER(COALESCE(t.subject, '')) LIKE '%@razorpay.com%' OR LOWER(COALESCE(t.description, '')) LIKE '%@razorpay.com%' THEN 'Razorpay'
-            WHEN LOWER(COALESCE(t.description, '')) LIKE '%payswiff%' OR LOWER(COALESCE(t.subject, '')) LIKE '%payswiff%' THEN 'Payswiff'
-            ELSE 'Manual'
-          END AS tag_name
-        FROM tickets t
-        ${where}
-      )
       SELECT
-        tag_name AS tag,
-        COALESCE(ts.name, 'Unknown') AS status_name,
-        COUNT(*)::INT AS count
-      FROM tagged_tickets tt
-      LEFT JOIN ticket_statuses ts ON tt.status_id = ts.id
-      GROUP BY tag_name, ts.name
-      ORDER BY tag_name, status_name
+        t.id,
+        t.subject,
+        t.description,
+        t.status_id,
+        ts.name AS status_name,
+        mc.sources AS mail_config_sources
+      FROM tickets t
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN mail_configs mc ON t.mail_config_id = mc.id
+      ${where}
+      ORDER BY t.created_at DESC
     `;
 
     const result = await pool.query(query, values);
     const grouped: Record<string, Record<string, number>> = {};
     for (const row of result.rows as any[]) {
-      const tag = String(row.tag || 'Manual');
+      const tag = classifyTicketTag(row);
       const statusName = String(row.status_name || 'Unknown');
       if (!grouped[tag]) grouped[tag] = {};
-      grouped[tag][statusName] = Number(row.count || 0);
+      grouped[tag][statusName] = (grouped[tag][statusName] || 0) + 1;
     }
 
     const payload = {
-      tags: Object.entries(grouped).map(([tag, counts]) => ({ tag, counts })),
+      tags: Object.entries(grouped)
+        .map(([tag, counts]) => ({ tag, counts }))
+        .sort((a, b) => a.tag.localeCompare(b.tag)),
     };
     ticketTagSummaryCache.set(cacheKey, {
       data: payload,

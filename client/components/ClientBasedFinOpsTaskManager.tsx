@@ -569,6 +569,7 @@ interface SortableSubTaskItemProps {
   currentUser?: any;
   onRefresh?: () => void;
   isInline?: boolean;
+  selectedDate?: string;
 }
 
 function SortableSubTaskItem({
@@ -581,7 +582,12 @@ function SortableSubTaskItem({
   currentUser,
   onRefresh,
   isInline = false,
+  selectedDate,
 }: SortableSubTaskItemProps) {
+  const todayIST = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  });
+  const shouldLockPendingForSelection = !isInline || selectedDate === todayIST;
   // console.log("Tasks : " , subtask)
   const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [delayReason, setDelayReason] = useState("");
@@ -729,6 +735,7 @@ function SortableSubTaskItem({
                       let isEditable = true;
                       try {
                         if (
+                          shouldLockPendingForSelection &&
                           subtask.start_time &&
                           subtask.status === "pending"
                         ) {
@@ -4266,6 +4273,7 @@ export default function ClientBasedFinOpsTaskManager() {
                                     })
                                   }
                                   isInline={true}
+                                  selectedDate={dateFilter}
                                 />
                                 {(slaWarning || subtask.start_time) &&
                                   (() => {

@@ -1852,28 +1852,12 @@ export default function ManageTickets() {
   // server offset to compute a dynamic serverNowMs so values update each render.
   const computeSlaMsForTicket = (ticket: any): number | null => {
     try {
-      // Compute current server-aligned 'now' (ms). Prefer clientNow - offset when available
-      // so the value changes on every render (setNow interval triggers rerenders).
+      // Use the browser clock for SLA checks so overdue status is decided
+      // entirely on the client side.
       const clientNowMs = Date.now();
-      const serverNowMs =
-        typeof serverTimeOffsetRef.current === "number" &&
-        serverTimeOffsetRef.current !== 0
-          ? clientNowMs - serverTimeOffsetRef.current
-          : clientNowMs;
 
-      // If server provided a precomputed remaining ms, prefer using it and adjust
-      // for elapsed time since server computed it. This uses the server's authoritative
-      // SLA calculation and avoids mismatches due to server/client timezone handling.
-      if (
-        ticket.sla_remaining_ms !== undefined &&
-        ticket.sla_remaining_ms !== null
-      ) {
-        const baseTime = Number(
-          ticket.__server_time_ms ?? ticket.__fetched_at_ms ?? serverNowMs,
-        );
-        const elapsedSinceBase = serverNowMs - baseTime;
-        return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
-      }
+      // If server provided a precomputed remaining ms, ignore it here because it
+      // can be based on server time and may not reflect the client-side IST check.
 
       // Fallback to using sla_time timestamp if available. Interpret the incoming
       // sla_time as IST wall time when it lacks an explicit timezone (DB TIMESTAMP without tz).
@@ -1884,7 +1868,7 @@ export default function ManageTickets() {
           if (/[Tt].*Z$/.test(s) || /[+\-]\d{2}:?\d{2}$/.test(s)) {
             const parsed = new Date(s);
             if (isNaN(parsed.getTime())) return null;
-            return parsed.getTime() - serverNowMs;
+            return parsed.getTime() - clientNowMs;
           }
 
           // Otherwise treat as IST wall time (YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS)
@@ -1904,7 +1888,7 @@ export default function ManageTickets() {
           const IST_OFFSET_MS = 5.5 * 3600 * 1000;
           // Compute UTC epoch for the IST wall-time by subtracting IST offset
           const dueUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss) - IST_OFFSET_MS;
-          return dueUtcMs - serverNowMs;
+          return dueUtcMs - clientNowMs;
         } catch (e) {
           return null;
         }
@@ -1930,7 +1914,7 @@ export default function ManageTickets() {
         : NaN;
       if (isNaN(createdTs)) return null;
       const slaTs = createdTs + hours * 3600 * 1000;
-      return slaTs - serverNowMs;
+      return slaTs - clientNowMs;
     } catch (e) {
       console.error("SLA compute error", e);
       return null;

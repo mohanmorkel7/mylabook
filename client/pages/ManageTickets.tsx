@@ -442,6 +442,18 @@ export default function ManageTickets() {
   // Helper function to classify a ticket into a tag. Prefer mail_config_sources provider, then description_preview or description
   const getTicketTag = (ticket: any): string => {
     try {
+      // Prioritize explicit subject-based Razorpay UPI classification
+      const subject = String(ticket.subject || "").toLowerCase();
+      const desc = String(
+        ticket.description_preview || ticket.description || "",
+      ).toLowerCase();
+      if (
+        (subject.includes("upi") || desc.includes("upi")) &&
+        (subject.includes("@razorpay.com") || desc.includes("@razorpay.com") || subject.includes("razorpay") || desc.includes("razorpay"))
+      ) {
+        return "Razorpay UPI";
+      }
+
       // Prefer explicit provider derived from mail config sources
       const provider = getMailConfigProviderName(
         ticket.mail_config_sources || ticket.mail_config_sources,
@@ -449,11 +461,13 @@ export default function ManageTickets() {
       );
       if (provider) return provider;
 
-      // Fallback to scanning the description preview or full description
-      const desc = String(
-        ticket.description_preview || ticket.description || "",
-      ).toLowerCase();
-      if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
+      // Fallback to scanning the subject/description
+      if (
+        subject.includes("razorpay") ||
+        desc.includes("razorpay") ||
+        subject.includes("@razorpay.com") ||
+        desc.includes("@razorpay.com")
+      ) {
         return "Razorpay";
       }
       if (desc.includes("payswiff") || desc.includes("@payswiff.com")) {
@@ -1427,17 +1441,29 @@ export default function ManageTickets() {
       const createdEmailRows: any[] = [];
 
       const normalizeTagForTicket = (t: any): string[] => {
-        // Priority: explicit tags, description content (Slack, Razorpay, Payswiff), mail config provider, Manual
+        // Priority: subject-based Razorpay UPI, then explicit tags, then description content, then mail config provider, Manual
         try {
-          // 1) Explicit tags
+          const subject = String(t.subject || "").toLowerCase();
+          const desc = String(t.description || "").toLowerCase();
+          if (
+            (subject.includes("upi") || desc.includes("upi")) &&
+            (subject.includes("@razorpay.com") || desc.includes("@razorpay.com") || subject.includes("razorpay") || desc.includes("razorpay"))
+          )
+            return ["Razorpay UPI"];
+        } catch (e) {}
+
+        try {
+          // 2) Explicit tags
           if (Array.isArray(t.tags) && t.tags.length > 0) {
             return t.tags.map((x: any) => String(x).trim()).filter(Boolean);
           }
         } catch (e) {}
 
         try {
+          const subject = String(t.subject || "").toLowerCase();
           const desc = String(t.description || "").toLowerCase();
-          // 2) Slack detection: look for '@slack.com' or 'slack from' patterns
+
+          // 3) Slack detection: look for '@slack.com' or 'slack from' patterns
           if (
             desc.includes("@slack.com") ||
             desc.includes("slack from") ||
@@ -1446,8 +1472,13 @@ export default function ManageTickets() {
           )
             return ["Slack"];
 
-          // 3) Known providers by description
-          if (desc.includes("razorpay")) return ["Razorpay"];
+          // 4) Known providers by subject/description
+          if (
+            subject.includes("razorpay") ||
+            desc.includes("razorpay") ||
+            subject.includes("@razorpay.com") ||
+            desc.includes("@razorpay.com")
+          ) return ["Razorpay"];
           if (desc.includes("payswiff")) return ["Payswiff"];
         } catch (e) {}
 

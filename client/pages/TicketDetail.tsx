@@ -457,7 +457,7 @@ export default function TicketDetailPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => navigate(`/tickets/${ticket.id}/edit`)}
+            onClick={() => navigate(`/tickets/${ticket.id}/edit${location.search}`)}
           >
             <Edit className="w-4 h-4 mr-2" /> Edit
           </Button>

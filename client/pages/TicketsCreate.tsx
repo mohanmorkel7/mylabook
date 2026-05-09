@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import RichTextEditor from "@/components/RichTextEditor";
 
 export default function TicketsCreatePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
   const ticketIdParam = params.id ? Number(params.id) : undefined;
   const [meta, setMeta] = useState<any>({
@@ -339,7 +340,7 @@ export default function TicketsCreatePage() {
       if (ticketIdParam) {
         // Update existing ticket
         await apiClient.updateTicket(ticketIdParam, form);
-        navigate(`/tickets/${ticketIdParam}`);
+        navigate(`/tickets/${ticketIdParam}${location.search}`);
       } else {
         const created = await apiClient.createTicket(form, attachments);
         navigate(`/tickets/${created.id}`);
@@ -361,7 +362,7 @@ export default function TicketsCreatePage() {
         {ticketIdParam ? (
           <Button
             variant="ghost"
-            onClick={() => navigate('/tickets')}
+            onClick={() => navigate(`/tickets${location.search}`)}
             className="ml-4"
           >
             Back to tickets
@@ -811,7 +812,7 @@ export default function TicketsCreatePage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => navigate("/tickets")}
+                onClick={() => navigate(`/tickets${location.search}`)}
               >
                 Cancel
               </Button>

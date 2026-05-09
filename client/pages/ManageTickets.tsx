@@ -290,6 +290,7 @@ export default function ManageTickets() {
     { value: string; label: string }[]
   >([]);
   const serverFilteredRef = useRef(false);
+  const ticketsFetchRequestRef = useRef(0);
 
   // Expose getMailConfigProviderName on window for TicketCharts to use
   useEffect(() => {
@@ -631,6 +632,7 @@ export default function ManageTickets() {
   // }, [tickets]);
 
   const fetchTickets = async (page: number = 1) => {
+    const requestId = ++ticketsFetchRequestRef.current;
     try {
       setIsLoading(true);
       // Clear any server-provided overdue counts while loading fresh data to avoid stale summaries
@@ -760,6 +762,7 @@ export default function ManageTickets() {
         "tickets:",
         normalized.map((t: any) => ({ id: t.id, subject: t.subject })),
       );
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setTickets(normalized);
       let filtered = [...normalized];
       console.debug(
@@ -905,8 +908,11 @@ export default function ManageTickets() {
         );
         console.error("[ManageTickets] Current filters state:", filters);
       }
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setFilteredTickets(filtered);
       console.debug("[ManageTickets] setFilteredTickets called");
+
+      if (requestId !== ticketsFetchRequestRef.current) return;
 
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
       const localCreatedCount = normalized.filter(
@@ -970,6 +976,7 @@ export default function ManageTickets() {
         raw_data: data,
       });
 
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setTotalTickets(finalTotal);
 
       // Compute pages consistently from finalTotal and pageSize unless server explicitly provided pages
@@ -979,6 +986,7 @@ export default function ManageTickets() {
       const finalPages = hasClientSideFilters
         ? 1
         : (serverPages ?? pagesFromTotal);
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setTotalPages(finalPages);
       // Avoid overwriting statusCounts that may already be set by TicketCharts' summary
       const serverStatusCounts = data?.status_counts ?? {};
@@ -989,14 +997,18 @@ export default function ManageTickets() {
         return serverStatusCounts || {};
       });
     } catch (error) {
-      console.error("Error fetching tickets:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load tickets",
-        variant: "destructive",
-      });
+      if (requestId === ticketsFetchRequestRef.current) {
+        console.error("Error fetching tickets:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load tickets",
+          variant: "destructive",
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === ticketsFetchRequestRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

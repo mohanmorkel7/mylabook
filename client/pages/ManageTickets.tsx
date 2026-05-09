@@ -2282,6 +2282,8 @@ export default function ManageTickets() {
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
           onSummaryFetched={handleSummaryFetched}
+          tickets={tickets}
+          classifyTicketTag={getTicketTag}
         />
       )}
 

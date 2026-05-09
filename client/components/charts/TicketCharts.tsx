@@ -16,10 +16,14 @@ export default function TicketCharts({
   dateFrom,
   dateTo,
   onSummaryFetched,
+  tickets,
+  classifyTicketTag,
 }: {
   dateFrom?: string;
   dateTo?: string;
   onSummaryFetched?: (summary: any) => void;
+  tickets?: any[];
+  classifyTicketTag?: (ticket: any) => string;
 }) {
   const [assigned, setAssigned] = useState<AssignedCount[]>([]);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);
@@ -168,10 +172,31 @@ export default function TicketCharts({
           if (mounted) setUserStatus(Object.values(grouped));
         }
 
+        const buildTagSummaryFromTickets = () => {
+          const grouped: Record<string, Record<string, number>> = {};
+          const sourceTickets = Array.isArray(tickets) ? tickets : [];
+          for (const ticket of sourceTickets) {
+            const tag = classifyTicketTag ? classifyTicketTag(ticket) : "Manual";
+            const statusName =
+              ticket?.status?.name || ticket?.status_name || "Unknown";
+            if (!grouped[tag]) grouped[tag] = {};
+            grouped[tag][statusName] = (grouped[tag][statusName] || 0) + 1;
+          }
+          return Object.entries(grouped).map(([tag, counts]) => ({ tag, counts }));
+        };
+
         if (tagResp.status === "fulfilled") {
           const tagPayload = tagResp.value?.data ?? tagResp.value;
           const tags = Array.isArray(tagPayload) ? tagPayload : tagPayload?.tags || [];
-          if (mounted) setTagStatus(tags);
+          if (mounted) {
+            if (tags.length > 0) {
+              setTagStatus(tags);
+            } else {
+              setTagStatus(buildTagSummaryFromTickets());
+            }
+          }
+        } else if (mounted) {
+          setTagStatus(buildTagSummaryFromTickets());
         }
       } catch (e) {
         console.error("TicketCharts: failed to fetch summary", e);
@@ -186,7 +211,7 @@ export default function TicketCharts({
     return () => {
       mounted = false;
     };
-  }, [dateFrom, dateTo, range]);
+  }, [dateFrom, dateTo, range, tickets, classifyTicketTag]);
 
   // Vertical bar chart component
   const VerticalBarChart = ({

@@ -761,7 +761,7 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           t.id,
           t.status_id,
           CASE
-            WHEN (LOWER(COALESCE(t.subject, '')) LIKE '%upi%' OR LOWER(COALESCE(t.description, '')) LIKE '%upi%')
+            WHEN LOWER(COALESCE(t.subject, '')) LIKE '%upi%'
               AND (LOWER(COALESCE(t.subject, '')) LIKE '%@razorpay.com%' OR LOWER(COALESCE(t.description, '')) LIKE '%@razorpay.com%' OR LOWER(COALESCE(t.subject, '')) LIKE '%razorpay%' OR LOWER(COALESCE(t.description, '')) LIKE '%razorpay%') THEN 'Razorpay UPI'
             WHEN t.tags IS NOT NULL AND array_length(t.tags, 1) > 0 THEN t.tags[1]
             WHEN LOWER(COALESCE(t.description, '')) LIKE '%slack%' OR LOWER(COALESCE(t.subject, '')) LIKE '%slack%' THEN 'Slack'

@@ -131,12 +131,13 @@ const STATUS_META: Record<string, string> = {
 };
 
 const INVOICE_STATUS_META: Record<string, string> = {
-  Draft: "bg-slate-500/10 text-slate-700 border-slate-200",
+  "Waiting for approval": "bg-amber-500/10 text-amber-700 border-amber-200",
   Generated: "bg-indigo-500/10 text-indigo-700 border-indigo-200",
-  Approved: "bg-blue-500/10 text-blue-700 border-blue-200",
-  Sent: "bg-cyan-500/10 text-cyan-700 border-cyan-200",
+  Send: "bg-cyan-500/10 text-cyan-700 border-cyan-200",
   Paid: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
+  Rejected: "bg-rose-500/10 text-rose-700 border-rose-200",
   Overdue: "bg-red-500/10 text-red-700 border-red-200",
+  Closed: "bg-slate-500/10 text-slate-700 border-slate-200",
 };
 
 const MYLAPAY_LOGO_URL = "/mylapaylogo.png";
@@ -251,8 +252,8 @@ const CLIENTS = [
     notes: "Recon end-to-end with fixed commercial and stepped variable rate beyond 1M transactions.",
     invoiceHistory: [
       { invoiceId: "INV-2026-041", month: "Apr 2026", amount: 208000, status: "Paid", generatedDate: "2026-04-30" },
-      { invoiceId: "INV-2026-042", month: "May 2026", amount: 212500, status: "Sent", generatedDate: "2026-05-01" },
-      { invoiceId: "INV-2026-043", month: "Jun 2026", amount: 214800, status: "Draft", generatedDate: "2026-06-01" },
+      { invoiceId: "INV-2026-042", month: "May 2026", amount: 212500, status: "Send", generatedDate: "2026-05-01" },
+      { invoiceId: "INV-2026-043", month: "Jun 2026", amount: 214800, status: "Waiting for approval", generatedDate: "2026-06-01" },
     ],
   },
   {
@@ -322,7 +323,7 @@ const CLIENTS = [
     notes: "Tiered UPI commercial with minimum guarantee and new bank addition pass-through.",
     invoiceHistory: [
       { invoiceId: "INV-2026-201", month: "Apr 2026", amount: 945000, status: "Sent", generatedDate: "2026-04-30" },
-      { invoiceId: "INV-2026-202", month: "May 2026", amount: 975000, status: "Draft", generatedDate: "2026-05-01" },
+      { invoiceId: "INV-2026-202", month: "May 2026", amount: 975000, status: "Waiting for approval", generatedDate: "2026-05-01" },
       { invoiceId: "INV-2026-203", month: "Jun 2026", amount: 1003000, status: "Overdue", generatedDate: "2026-06-01" },
     ],
   },
@@ -357,7 +358,7 @@ const CLIENTS = [
     invoiceHistory: [
       { invoiceId: "INV-2026-301", month: "Apr 2026", amount: 870000, status: "Paid", generatedDate: "2026-04-28" },
       { invoiceId: "INV-2026-302", month: "May 2026", amount: 890000, status: "Generated", generatedDate: "2026-05-01" },
-      { invoiceId: "INV-2026-303", month: "Jun 2026", amount: 915000, status: "Draft", generatedDate: "2026-06-01" },
+      { invoiceId: "INV-2026-303", month: "Jun 2026", amount: 915000, status: "Waiting for approval", generatedDate: "2026-06-01" },
     ],
   },
   {
@@ -390,8 +391,8 @@ const CLIENTS = [
     notes: "FX / currency conversion led commercial with profitability and APB pass-through components.",
     invoiceHistory: [
       { invoiceId: "INV-2026-401", month: "Apr 2026", amount: 515000, status: "Paid", generatedDate: "2026-04-20" },
-      { invoiceId: "INV-2026-402", month: "May 2026", amount: 528000, status: "Approved", generatedDate: "2026-05-01" },
-      { invoiceId: "INV-2026-403", month: "Jun 2026", amount: 536000, status: "Sent", generatedDate: "2026-06-01" },
+      { invoiceId: "INV-2026-402", month: "May 2026", amount: 528000, status: "Generated", generatedDate: "2026-05-01" },
+      { invoiceId: "INV-2026-403", month: "Jun 2026", amount: 536000, status: "Send", generatedDate: "2026-06-01" },
     ],
   },
 ] as const;
@@ -403,24 +404,44 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   billingState?: string;
   billingEmail?: string;
   signatoryName?: string;
+  invoiceHistory?: InvoiceRecord[];
 };
 
-type InvoiceStatus = "Draft" | "Generated" | "Approved" | "Sent" | "Paid" | "Overdue";
+type InvoiceStatus =
+  | "Waiting for approval"
+  | "Generated"
+  | "Send"
+  | "Paid"
+  | "Rejected"
+  | "Overdue"
+  | "Closed";
 
-const INVOICES = [
-  { invoiceId: "INV-2026-041", month: "Apr 2026", client: "Payswiff", amount: 208000, status: "Paid" as InvoiceStatus, generatedDate: "2026-04-30" },
-  { invoiceId: "INV-2026-102", month: "May 2026", client: "Razorpay", amount: 1245000, status: "Generated" as InvoiceStatus, generatedDate: "2026-05-01" },
-  { invoiceId: "INV-2026-202", month: "May 2026", client: "RZPX Razorpay UPI", amount: 975000, status: "Draft" as InvoiceStatus, generatedDate: "2026-05-01" },
-  { invoiceId: "INV-2026-303", month: "Jun 2026", client: "Juspay", amount: 915000, status: "Sent" as InvoiceStatus, generatedDate: "2026-06-01" },
-  { invoiceId: "INV-2026-403", month: "Jun 2026", client: "PayU", amount: 536000, status: "Approved" as InvoiceStatus, generatedDate: "2026-06-01" },
-  { invoiceId: "INV-2026-500", month: "May 2026", client: "Razorpay", amount: 1310000, status: "Overdue" as InvoiceStatus, generatedDate: "2026-05-09" },
+interface InvoiceRecord {
+  invoiceId: string;
+  invoiceNumber?: string;
+  month: string;
+  client: string;
+  amount: number;
+  status: InvoiceStatus;
+  generatedDate: string;
+  serial?: number;
+  financialYear?: string;
+}
+
+const INVOICES: InvoiceRecord[] = [
+  { invoiceId: "INV-2026-041", month: "Apr 2026", client: "Payswiff", amount: 208000, status: "Paid", generatedDate: "2026-04-30" },
+  { invoiceId: "INV-2026-102", month: "May 2026", client: "Razorpay", amount: 1245000, status: "Generated", generatedDate: "2026-05-01" },
+  { invoiceId: "INV-2026-202", month: "May 2026", client: "RZPX Razorpay UPI", amount: 975000, status: "Waiting for approval", generatedDate: "2026-05-01" },
+  { invoiceId: "INV-2026-303", month: "Jun 2026", client: "Juspay", amount: 915000, status: "Send", generatedDate: "2026-06-01" },
+  { invoiceId: "INV-2026-403", month: "Jun 2026", client: "PayU", amount: 536000, status: "Closed", generatedDate: "2026-06-01" },
+  { invoiceId: "INV-2026-500", month: "May 2026", client: "Razorpay", amount: 1310000, status: "Overdue", generatedDate: "2026-05-09" },
 ];
 
 const NOTIFICATIONS = [
   { title: "Overdue invoice detected", description: "Razorpay invoice crossed due date and requires follow-up.", tone: "red", icon: AlertTriangle },
   { title: "AWS billing spike", description: "RZPX infra costs increased by 14% vs last month.", tone: "amber", icon: Warehouse },
   { title: "Slab threshold crossed", description: "PayU moved into the higher variable pricing slab.", tone: "blue", icon: Layers3 },
-  { title: "New invoice generated", description: "Juspay May invoice generated and queued for approval.", tone: "emerald", icon: FileText },
+  { title: "Invoice approval queue", description: "Waiting-for-approval invoices must be approved by FinOps admin before edit or send actions.", tone: "emerald", icon: FileText },
 ] as const;
 
 const MONTHLY_TREND = [
@@ -508,6 +529,26 @@ async function fetchImageDataUrl(url: string) {
 
 function getInvoiceDisplayNumber(invoice: any) {
   return invoice.invoiceNumber || invoice.invoice_id || invoice.invoiceId || "—";
+}
+
+function isInvoiceEditable(status: InvoiceStatus) {
+  return status === "Generated";
+}
+
+function isInvoiceAwaitingApproval(status: InvoiceStatus) {
+  return status === "Waiting for approval";
+}
+
+function updateInvoiceCollection(
+  invoices: InvoiceRecord[],
+  targetInvoiceNumber: string,
+  updater: (invoice: InvoiceRecord) => InvoiceRecord,
+) {
+  return invoices.map((invoice) => (getInvoiceDisplayNumber(invoice) === targetInvoiceNumber ? updater(invoice) : invoice));
+}
+
+function deleteInvoiceFromCollection(invoices: InvoiceRecord[], targetInvoiceNumber: string) {
+  return invoices.filter((invoice) => getInvoiceDisplayNumber(invoice) !== targetInvoiceNumber);
 }
 
 function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: number) {
@@ -994,6 +1035,73 @@ function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
   );
 }
 
+function InvoiceRowActions({
+  invoice,
+  onEdit,
+  onApprove,
+  onReject,
+  onSend,
+  onPaid,
+  onClose,
+  onDownload,
+  onDelete,
+}: {
+  invoice: InvoiceRecord;
+  onEdit: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onSend: () => void;
+  onPaid: () => void;
+  onClose: () => void;
+  onDownload: () => void;
+  onDelete: () => void;
+}) {
+  const waiting = isInvoiceAwaitingApproval(invoice.status);
+  const generated = invoice.status === "Generated";
+  const sent = invoice.status === "Send";
+  const paid = invoice.status === "Paid";
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {generated && (
+        <Button variant="ghost" size="sm" className="gap-2" onClick={onEdit}>
+          <Edit3 className="h-4 w-4" /> Edit
+        </Button>
+      )}
+      {waiting && (
+        <>
+          <Button variant="ghost" size="sm" className="gap-2 text-emerald-600" onClick={onApprove}>
+            <CheckCircle2 className="h-4 w-4" /> Approve
+          </Button>
+          <Button variant="ghost" size="sm" className="gap-2 text-rose-600" onClick={onReject}>
+            <Trash2 className="h-4 w-4" /> Reject
+          </Button>
+        </>
+      )}
+      {generated && (
+        <Button variant="ghost" size="sm" className="gap-2" onClick={onSend}>
+          <FileText className="h-4 w-4" /> Send
+        </Button>
+      )}
+      {(generated || sent) && (
+        <Button variant="ghost" size="sm" className="gap-2" onClick={onPaid}>
+          <CheckCircle2 className="h-4 w-4" /> Paid
+        </Button>
+      )}
+      {paid && (
+        <Button variant="ghost" size="sm" className="gap-2" onClick={onClose}>
+          <ShieldCheck className="h-4 w-4" /> Close
+        </Button>
+      )}
+      <Button variant="ghost" size="sm" className="gap-2" onClick={onDownload}>
+        <Download className="h-4 w-4" /> PDF
+      </Button>
+      <Button variant="ghost" size="sm" className="gap-2 text-rose-600" onClick={onDelete}>
+        <Trash2 className="h-4 w-4" /> Delete
+      </Button>
+    </div>
+  );
+}
+
 function ServiceChip({ label }: { label: string }) {
   return (
     <Badge
@@ -1460,14 +1568,17 @@ function ClientOverviewScreen({
                       <TableCell><InvoiceStatusBadge status={invoice.status} /></TableCell>
                       <TableCell>{invoice.generatedDate}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" className="gap-2" onClick={() => downloadInvoicePdf(invoice)}>
-                            <Download className="h-4 w-4" /> PDF
-                          </Button>
-                          <Button variant="ghost" size="sm" className="gap-2" onClick={() => sendInvoice(invoice)}>
-                            <FileText className="h-4 w-4" /> Send
-                          </Button>
-                        </div>
+                        <InvoiceRowActions
+                          invoice={invoice}
+                          onEdit={() => openInvoiceEditModal(invoice)}
+                          onApprove={() => approveInvoice(invoice)}
+                          onReject={() => rejectInvoice(invoice)}
+                          onSend={() => sendInvoice(invoice)}
+                          onPaid={() => markInvoicePaid(invoice)}
+                        onClose={() => closeInvoice(invoice)}
+                        onDownload={() => downloadInvoicePdf(invoice)}
+                        onDelete={() => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1480,11 +1591,11 @@ function ClientOverviewScreen({
         <Card>
           <CardHeader>
             <CardTitle>Commercial Notes & Status Workflow</CardTitle>
-            <CardDescription>Draft → Generated → Approved → Sent → Paid → Overdue</CardDescription>
+            <CardDescription>Waiting for approval → Generated → Send → Paid → Rejected → Overdue → Closed</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              {["Draft", "Generated", "Approved", "Sent", "Paid", "Overdue"].map((step) => (
+              {["Waiting for approval", "Generated", "Send", "Paid", "Rejected", "Overdue", "Closed"].map((step) => (
                 <InvoiceStatusBadge key={step} status={step as InvoiceStatus} />
               ))}
             </div>
@@ -1869,6 +1980,10 @@ export default function InvoiceManagement() {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceModalMode, setInvoiceModalMode] = useState<"create" | "edit">("create");
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
+  const [invoiceAmountDraft, setInvoiceAmountDraft] = useState(0);
+  const [invoiceMonthDraft, setInvoiceMonthDraft] = useState("");
   const [invoiceSerialConfig, setInvoiceSerialConfig] = useState<InvoiceSerialConfig>(() => {
     try {
       const raw = localStorage.getItem(INVOICE_SERIAL_CONFIG_KEY);
@@ -1907,6 +2022,35 @@ export default function InvoiceManagement() {
     [invoiceSerialConfig],
   );
 
+  const openInvoiceCreateModal = (client: ClientRecord) => {
+    setInvoiceModalMode("create");
+    setSelectedInvoice(null);
+    setInvoiceAmountDraft(Math.round(estimateInvoiceFromSlabs(
+      client.monthlyTransactionVolume,
+      client.fixedBilling,
+      client.transactionSlabs,
+      client.aws,
+      client.minimumGuarantee,
+      client.integrationFee,
+      client.additionalPlatformFee,
+    )));
+    setInvoiceMonthDraft(new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }));
+    setInvoiceModalOpen(true);
+  };
+
+  const openInvoiceEditModal = (invoice: InvoiceRecord) => {
+    if (!isInvoiceEditable(invoice.status)) {
+      toast({ title: "Invoice locked", description: "Approve the invoice first before editing it." });
+      return;
+    }
+    const matchedClient = clients.find((item) => item.name === invoice.client) || selectedClient;
+    setInvoiceModalMode("edit");
+    setSelectedInvoice(invoice);
+    setInvoiceAmountDraft(Number(invoice.amount || matchedClient?.monthlyInvoiceEstimate || 0));
+    setInvoiceMonthDraft(invoice.month);
+    setInvoiceModalOpen(true);
+  };
+
   useEffect(() => {
     if (isCreateRoute) {
       setEditingClientId(null);
@@ -1928,7 +2072,7 @@ export default function InvoiceManagement() {
 
   const metrics = useMemo(() => {
     const totalRevenue = clients.reduce((sum, client) => sum + client.monthlyInvoiceEstimate, 0);
-    const pendingInvoices = invoices.filter((invoice) => invoice.status === "Draft" || invoice.status === "Generated" || invoice.status === "Sent" || invoice.status === "Overdue").length;
+    const pendingInvoices = invoices.filter((invoice) => invoice.status === "Waiting for approval" || invoice.status === "Generated" || invoice.status === "Send" || invoice.status === "Overdue").length;
     const transactionVolume = clients.reduce((sum, client) => sum + client.monthlyTransactionVolume, 0);
     const variableRevenue = clients.reduce((sum, client) => sum + client.variableRevenueGenerated, 0);
     const awsRecovery = clients.reduce((sum, client) => sum + client.awsInfraRecovery, 0);
@@ -1989,7 +2133,7 @@ export default function InvoiceManagement() {
       invoiceNumber: serialInfo.invoiceNumber,
       generatedDate: new Date().toISOString().split("T")[0],
       amount: client.monthlyInvoiceEstimate,
-      status: "Draft",
+      status: "Waiting for approval",
       month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
       financialYear: serialInfo.financialYear,
       serial: serialInfo.serial,
@@ -2018,7 +2162,7 @@ export default function InvoiceManagement() {
       ),
     );
     const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
-    const nextInvoice = {
+    const nextInvoice: InvoiceRecord = {
       invoiceId: serialInfo.invoiceNumber,
       invoiceNumber: serialInfo.invoiceNumber,
       serial: serialInfo.serial,
@@ -2026,7 +2170,7 @@ export default function InvoiceManagement() {
       month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
       client: client.name,
       amount: generatedAmount,
-      status: "Generated" as InvoiceStatus,
+      status: "Waiting for approval",
       generatedDate,
     };
     setInvoices((prev) => [nextInvoice, ...prev]);
@@ -2046,22 +2190,75 @@ export default function InvoiceManagement() {
       serial: serialInfo.serial,
       lastIssuedAt: new Date().toISOString(),
     });
+    setInvoiceModalOpen(false);
     toast({
-      title: "Invoice generated",
-      description: `${client.name} invoice ${serialInfo.invoiceNumber} created successfully.`,
+      title: "Invoice sent for approval",
+      description: `${client.name} invoice ${serialInfo.invoiceNumber} is waiting for FinOps approval.`,
     });
-    if (clientId === client.id) {
-      await downloadInvoicePdfTemplate({
-        client,
-        invoiceNumber: serialInfo.invoiceNumber,
-        generatedDate,
-        amount: nextInvoice.amount,
-        status: nextInvoice.status,
-        month: nextInvoice.month,
-        financialYear: serialInfo.financialYear,
-        serial: serialInfo.serial,
-      });
-    }
+  };
+
+  const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {
+    setInvoices((prev) => updateInvoiceCollection(prev, invoiceNumber, updater));
+    setClients((prev) =>
+      prev.map((client) => ({
+        ...client,
+        invoiceHistory: updateInvoiceCollection((client.invoiceHistory || []) as InvoiceRecord[], invoiceNumber, updater),
+      })),
+    );
+  };
+
+  const deleteInvoiceByNumber = (invoiceNumber: string) => {
+    setInvoices((prev) => deleteInvoiceFromCollection(prev, invoiceNumber));
+    setClients((prev) =>
+      prev.map((client) => ({
+        ...client,
+        invoiceHistory: deleteInvoiceFromCollection((client.invoiceHistory || []) as InvoiceRecord[], invoiceNumber),
+      })),
+    );
+    toast({ title: "Invoice deleted", description: `${invoiceNumber} removed from history.` });
+  };
+
+  const approveInvoice = (invoice: InvoiceRecord) => {
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
+    updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status: "Generated" }));
+    toast({ title: "Invoice approved", description: `${invoiceNumber} moved to Generated.` });
+  };
+
+  const rejectInvoice = (invoice: InvoiceRecord) => {
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
+    updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status: "Rejected" }));
+    toast({ title: "Invoice rejected", description: `${invoiceNumber} was rejected by FinOps admin.` });
+  };
+
+  const markInvoiceSent = (invoice: InvoiceRecord) => {
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
+    updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status: "Send" }));
+    toast({ title: "Invoice sent", description: `${invoiceNumber} marked as Send.` });
+  };
+
+  const markInvoicePaid = (invoice: InvoiceRecord) => {
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
+    updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status: "Paid" }));
+    toast({ title: "Invoice paid", description: `${invoiceNumber} marked as Paid.` });
+  };
+
+  const closeInvoice = (invoice: InvoiceRecord) => {
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
+    updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status: "Closed" }));
+    toast({ title: "Invoice closed", description: `${invoiceNumber} moved to Closed.` });
+  };
+
+  const saveInvoiceUpdate = () => {
+    if (!selectedInvoice) return;
+    const invoiceNumber = getInvoiceDisplayNumber(selectedInvoice);
+    updateInvoiceByNumber(invoiceNumber, (item) => ({
+      ...item,
+      amount: invoiceAmountDraft,
+      month: invoiceMonthDraft,
+      status: "Generated",
+    }));
+    setInvoiceModalOpen(false);
+    toast({ title: "Invoice updated", description: `${invoiceNumber} has been updated.` });
   };
 
   const downloadInvoicePdf = async (invoice: any) => {
@@ -2083,24 +2280,11 @@ export default function InvoiceManagement() {
 
   const sendInvoice = (invoice: any) => {
     const invoiceNumber = getInvoiceDisplayNumber(invoice);
-    setInvoices((prev) =>
-      prev.map((item) =>
-        getInvoiceDisplayNumber(item) === invoiceNumber
-          ? { ...item, status: item.status === "Paid" ? item.status : "Sent" }
-          : item,
-      ),
-    );
-    setClients((prev) =>
-      prev.map((client) => ({
-        ...client,
-        invoiceHistory: (client.invoiceHistory || []).map((item) =>
-          getInvoiceDisplayNumber(item) === invoiceNumber
-            ? { ...item, status: item.status === "Paid" ? item.status : "Sent" }
-            : item,
-        ),
-      })),
-    );
-    toast({ title: "Invoice sent", description: `${invoiceNumber} marked as sent.` });
+    updateInvoiceByNumber(invoiceNumber, (item) => ({
+      ...item,
+      status: item.status === "Paid" ? item.status : "Send",
+    }));
+    toast({ title: "Invoice sent", description: `${invoiceNumber} marked as Send.` });
   };
 
   const saveConfig = (payload: any) => {
@@ -2190,7 +2374,7 @@ export default function InvoiceManagement() {
         onBack={() => navigate("/invoice-management")}
         onExportPdf={() => exportClientPdf(selectedClient)}
         onExportCsv={() => exportClientsCsv([selectedClient])}
-        onGenerateInvoice={() => generateInvoiceForClient(selectedClient)}
+        onGenerateInvoice={() => openInvoiceCreateModal(selectedClient)}
       />
     );
   }
@@ -2538,14 +2722,17 @@ export default function InvoiceManagement() {
                     <TableCell><InvoiceStatusBadge status={invoice.status} /></TableCell>
                     <TableCell>{invoice.generatedDate}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" className="gap-2" onClick={() => downloadInvoicePdf(invoice)}>
-                          <Download className="h-4 w-4" /> PDF
-                        </Button>
-                        <Button variant="ghost" size="sm" className="gap-2" onClick={() => sendInvoice(invoice)}>
-                          <FileText className="h-4 w-4" /> Send
-                        </Button>
-                      </div>
+                      <InvoiceRowActions
+                        invoice={invoice}
+                        onEdit={() => openInvoiceEditModal(invoice)}
+                        onApprove={() => approveInvoice(invoice)}
+                        onReject={() => rejectInvoice(invoice)}
+                        onSend={() => sendInvoice(invoice)}
+                        onPaid={() => markInvoicePaid(invoice)}
+                        onClose={() => closeInvoice(invoice)}
+                        onDownload={() => downloadInvoicePdf(invoice)}
+                        onDelete={() => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2584,21 +2771,58 @@ export default function InvoiceManagement() {
       <Dialog open={invoiceModalOpen} onOpenChange={setInvoiceModalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Invoice Generation Modal</DialogTitle>
+            <DialogTitle>
+              {invoiceModalMode === "edit" ? "Edit Invoice" : "Invoice Generation Modal"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2"><Label>Client</Label><Input value={selectedClient?.name || ""} readOnly /></div>
-              <div className="space-y-2"><Label>Amount</Label><Input value={currencyLabel(selectedClient?.monthlyInvoiceEstimate || 0)} readOnly /></div>
-              <div className="space-y-2"><Label>Invoice Month</Label><Input value={new Date().toLocaleString("en-IN", { month: "long", year: "numeric" })} readOnly /></div>
-              <div className="space-y-2"><Label>Status</Label><Input value="Draft" readOnly /></div>
+              <div className="space-y-2">
+                <Label>Client</Label>
+                <Input value={selectedInvoice?.client || selectedClient?.name || ""} readOnly />
+              </div>
+              <div className="space-y-2">
+                <Label>Amount</Label>
+                <Input
+                  type={invoiceModalMode === "edit" ? "number" : "text"}
+                  value={invoiceModalMode === "edit" ? invoiceAmountDraft : currencyLabel(invoiceAmountDraft || selectedClient?.monthlyInvoiceEstimate || 0)}
+                  onChange={(e) => setInvoiceAmountDraft(Number(e.target.value) || 0)}
+                  readOnly={invoiceModalMode !== "edit"}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Invoice Month</Label>
+                <Input
+                  value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
+                  onChange={(e) => setInvoiceMonthDraft(e.target.value)}
+                  readOnly={invoiceModalMode !== "edit"}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Input value={invoiceModalMode === "edit" ? "Generated" : "Waiting for approval"} readOnly />
+              </div>
+            </div>
+            <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+              {invoiceModalMode === "edit"
+                ? "Only invoices approved by the FinOps admin can be edited and updated."
+                : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>Close</Button>
-              <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white" onClick={() => {
-                generateInvoiceForClient(selectedClient);
-                setInvoiceModalOpen(false);
-              }}>Generate</Button>
+              <Button
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                onClick={() => {
+                  if (invoiceModalMode === "edit") {
+                    saveInvoiceUpdate();
+                  } else {
+                    generateInvoiceForClient(selectedClient);
+                  }
+                  setInvoiceModalOpen(false);
+                }}
+              >
+                {invoiceModalMode === "edit" ? "Update Invoice" : "Submit for approval"}
+              </Button>
             </div>
           </div>
         </DialogContent>

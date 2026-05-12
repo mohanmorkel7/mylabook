@@ -3,6 +3,20 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import {
+  AlignmentType,
+  BorderStyle,
+  Document,
+  HeadingLevel,
+  ImageRun,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+  WidthType,
+} from "docx";
+import {
   Area,
   AreaChart,
   Bar,
@@ -497,6 +511,11 @@ function downloadTextFile(filename: string, content: string, type = "text/plain"
   downloadBlob(filename, new Blob([content], { type }));
 }
 
+async function blobToUint8Array(blob: Blob) {
+  const buffer = await blob.arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
 function escapeCsv(value: any): string {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) {
@@ -549,101 +568,247 @@ async function downloadInvoiceDocxTemplate({
   financialYear: string;
   serial: number;
 }) {
-  const html = `
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <style>
-          body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; margin: 0; padding: 24px; }
-          .header { display:flex; justify-content:space-between; align-items:flex-start; border:1px solid #dbeafe; border-top:8px solid #2563eb; border-radius:16px; padding:18px 20px; background:#f8fbff; }
-          .brand { width: 160px; }
-          .title { font-size: 28px; font-weight: 700; color:#1d4ed8; margin:0; text-align:right; }
-          .meta { text-align:right; font-size: 13px; color:#475569; line-height:1.6; margin-top:6px; }
-          .panel { margin-top:16px; border:1px solid #e2e8f0; border-radius:16px; padding:16px 18px; background:#fff; }
-          .panel.blue { background:#eff6ff; border-color:#bfdbfe; }
-          .row { display:flex; gap:16px; }
-          .col { flex:1; }
-          .section-title { font-size: 16px; font-weight: 700; color:#1d4ed8; margin:0 0 10px 0; }
-          .label { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color:#64748b; margin-top:10px; }
-          .value { font-size: 14px; margin-top:4px; white-space: pre-wrap; }
-          table { width:100%; border-collapse: collapse; margin-top: 12px; }
-          thead th { background:#1d4ed8; color:white; text-align:left; padding:10px 12px; font-size:13px; }
-          tbody td { border-bottom:1px solid #e2e8f0; padding:10px 12px; font-size:13px; }
-          .summary { display:flex; justify-content:space-between; gap:12px; margin-top:14px; padding:12px 14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:14px; font-weight:600; }
-          .sign { margin-top:18px; display:flex; gap:18px; }
-          .box { flex:1; min-height:90px; border:1px solid #bfdbfe; border-radius:14px; padding:12px; }
-          .foot { margin-top:18px; border-top:1px solid #e2e8f0; padding-top:10px; color:#64748b; font-size:12px; line-height:1.6; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="brand"><img src="${MYLAPAY_LOGO_URL}" style="max-width:130px; max-height:44px; object-fit:contain" /></div>
-          <div>
-            <h1 class="title">Tax Invoice</h1>
-            <div class="meta">Invoice Number: ${invoiceNumber}<br/>Financial Year: ${financialYear} · Serial #${serial}<br/>Month: ${month}</div>
-          </div>
-        </div>
-        <div class="panel blue">
-          <div class="section-title">Invoice Summary</div>
-          <div style="display:flex; justify-content:space-between; gap:12px; font-size:14px;">
-            <div>Status: ${status}</div><div>Generated Date: ${generatedDate}</div><div>Amount: INR ${formatCurrency(amount)}</div>
-          </div>
-        </div>
-        <div class="panel row">
-          <div class="col">
-            <div class="section-title">Bill From</div>
-            <div class="label">Company</div><div class="value">${MYLAPAY_BRANDING.companyName}</div>
-            <div class="label">Address</div><div class="value">${MYLAPAY_BRANDING.address}</div>
-            <div class="label">Email</div><div class="value">${MYLAPAY_BRANDING.email}</div>
-            <div class="label">Phone</div><div class="value">${MYLAPAY_BRANDING.phone}</div>
-            <div class="label">GSTIN</div><div class="value">${MYLAPAY_BRANDING.gstin}</div>
-            <div class="label">LUT</div><div class="value">${MYLAPAY_BRANDING.lutNumber}</div>
-          </div>
-          <div class="col">
-            <div class="section-title">Bill To</div>
-            <div class="label">Client</div><div class="value">${getClientDisplayBillingName(client)}</div>
-            <div class="label">Client Code</div><div class="value">${client.code}</div>
-            <div class="label">GSTIN</div><div class="value">${getClientGstin(client)}</div>
-            <div class="label">LUT</div><div class="value">${getClientLut(client)}</div>
-            <div class="label">Billing Email</div><div class="value">${client.billingEmail || "—"}</div>
-            <div class="label">Billing Address</div><div class="value">${getClientBillToAddress(client)}</div>
-          </div>
-        </div>
-        <div class="panel blue">
-          <div class="section-title">Bill Details</div>
-          <div class="row">
-            <div class="col"><div class="label">Invoice Month</div><div class="value">${month}</div></div>
-            <div class="col"><div class="label">Transaction Volume</div><div class="value">${client.monthlyTransactionVolume.toLocaleString()}</div></div>
-          </div>
-          <div class="row">
-            <div class="col"><div class="label">Invoice Status</div><div class="value">${status}</div></div>
-            <div class="col"><div class="label">Last Invoice Generated</div><div class="value">${client.lastInvoiceGenerated}</div></div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="section-title">Statement of Charges</div>
-          <table>
-            <thead><tr><th>Particulars</th><th style="text-align:right">Amount</th></tr></thead>
-            <tbody>
-              ${getInvoiceHistoryLineItemSummary(client, amount)
-                .map((item) => `<tr><td>${item.description}</td><td style="text-align:right">INR ${formatCurrency(item.amount)}</td></tr>`)
-                .join("")}
-            </tbody>
-          </table>
-          <div class="summary"><span>Subtotal: INR ${formatCurrency(getInvoiceHistoryLineItemSummary(client, amount).reduce((sum, item) => sum + item.amount, 0))}</span><span>GST / Tax: ${client.lutNumber ? "LUT exempt" : `INR ${formatCurrency(getInvoiceHistoryLineItemSummary(client, amount).reduce((sum, item) => sum + item.amount, 0) * 0.18)}`}</span><span>Final Payable: INR ${formatCurrency(getInvoiceHistoryLineItemSummary(client, amount).reduce((sum, item) => sum + item.amount, 0) + (client.lutNumber ? 0 : getInvoiceHistoryLineItemSummary(client, amount).reduce((sum, item) => sum + item.amount, 0) * 0.18))}</span></div>
-        </div>
-        <div class="sign">
-          <div class="box"><div class="section-title">Company Seal</div><div class="value">Space reserved for seal</div></div>
-          <div class="box"><div class="section-title">Authority Signature Name</div><div class="value">${getClientSignatureName(client)}</div><div class="value" style="margin-top:18px;border-top:1px solid #bfdbfe;padding-top:8px">Authorized signatory · For ${MYLAPAY_BRANDING.companyName}</div></div>
-        </div>
-        <div class="foot">${MYLAPAY_BRANDING.footerLine}<br/>${MYLAPAY_BRANDING.companyName} · ${MYLAPAY_BRANDING.address} · ${MYLAPAY_BRANDING.email} · ${MYLAPAY_BRANDING.phone}</div>
-      </body>
-    </html>
-  `;
-  downloadBlob(
-    `${invoiceNumber}.docx`,
-    new Blob([html], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
-  );
+  const logoResponse = await fetch(MYLAPAY_LOGO_URL);
+  const logoBlob = logoResponse.ok ? await logoResponse.blob() : null;
+  const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
+  const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+  const gst = client.lutNumber ? 0 : subtotal * 0.18;
+  const totalPayable = subtotal + gst;
+
+  const title = (text: string) =>
+    new Paragraph({
+      children: [new TextRun({ text, bold: true, color: "1d4ed8", size: 24 })],
+      spacing: { after: 140 },
+    });
+
+  const labelValue = (label: string, value: string) =>
+    new Paragraph({
+      children: [
+        new TextRun({ text: `${label}: `, bold: true, color: "64748b", size: 18 }),
+        new TextRun({ text: value || "—", color: "0f172a", size: 18 }),
+      ],
+      spacing: { after: 80 },
+    });
+
+  const tableCell = (text: string, align: "left" | "right" = "left") =>
+    new TableCell({
+      children: [
+        new Paragraph({
+          alignment: align === "right" ? AlignmentType.RIGHT : AlignmentType.LEFT,
+          children: [new TextRun({ text, size: 18 })],
+        }),
+      ],
+      width: { size: 50, type: WidthType.PERCENTAGE },
+      margins: { top: 120, bottom: 120, left: 180, right: 180 },
+    });
+
+  const billFromRows = [
+    ["Company", MYLAPAY_BRANDING.companyName],
+    ["Address", MYLAPAY_BRANDING.address],
+    ["Email", MYLAPAY_BRANDING.email],
+    ["Phone", MYLAPAY_BRANDING.phone],
+    ["GSTIN", MYLAPAY_BRANDING.gstin],
+    ["LUT", MYLAPAY_BRANDING.lutNumber],
+  ];
+  const billToRows = [
+    ["Client", getClientDisplayBillingName(client)],
+    ["Client Code", client.code],
+    ["GSTIN", getClientGstin(client)],
+    ["LUT", getClientLut(client)],
+    ["Billing Email", client.billingEmail || "—"],
+    ["Billing Address", getClientBillToAddress(client)],
+  ];
+
+  const document = new Document({
+    sections: [
+      {
+        properties: {},
+        children: [
+          ...(logoData
+            ? [
+                new Paragraph({
+                  alignment: AlignmentType.LEFT,
+                  children: [
+                    new ImageRun({
+                      data: logoData,
+                      transformation: { width: 110, height: 40 },
+                    }),
+                  ],
+                }),
+              ]
+            : []),
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: [new TextRun({ text: "Tax Invoice", bold: true, color: "1d4ed8", size: 30 })],
+            spacing: { after: 60 },
+          }),
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: [
+              new TextRun({ text: `Invoice Number: ${invoiceNumber}`, size: 18 }),
+              new TextRun({ text: "\n", size: 18 }),
+              new TextRun({ text: `Financial Year: ${financialYear} · Serial #${serial}`, size: 18 }),
+              new TextRun({ text: "\n", size: 18 }),
+              new TextRun({ text: `Month: ${month}`, size: 18 }),
+            ],
+            spacing: { after: 160 },
+          }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              left: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              right: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  tableCell("Status: " + status),
+                  tableCell("Generated Date: " + generatedDate, "right"),
+                  tableCell("Amount: INR " + formatCurrency(amount), "right"),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ spacing: { after: 160 } }),
+          new Paragraph({ children: [new TextRun({ text: "Bill From / Bill To", bold: true, color: "1d4ed8", size: 22 })], spacing: { after: 120 } }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              left: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              right: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: [title("Bill From"), ...billFromRows.flatMap(([label, value]) => [labelValue(label, value)])],
+                    width: { size: 50, type: WidthType.PERCENTAGE },
+                  }),
+                  new TableCell({
+                    children: [title("Bill To"), ...billToRows.flatMap(([label, value]) => [labelValue(label, value)])],
+                    width: { size: 50, type: WidthType.PERCENTAGE },
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ spacing: { after: 160 } }),
+          new Paragraph({ children: [new TextRun({ text: "Bill Details", bold: true, color: "1d4ed8", size: 22 })], spacing: { after: 120 } }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              left: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              right: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+            },
+            rows: [
+              new TableRow({
+                children: [tableCell("Invoice Month"), tableCell(month, "right"), tableCell("Transaction Volume"), tableCell(client.monthlyTransactionVolume.toLocaleString(), "right")],
+              }),
+              new TableRow({
+                children: [tableCell("Invoice Status"), tableCell(status, "right"), tableCell("Last Invoice Generated"), tableCell(client.lastInvoiceGenerated, "right")],
+              }),
+            ],
+          }),
+          new Paragraph({ spacing: { after: 160 } }),
+          new Paragraph({ children: [new TextRun({ text: "Statement of Charges", bold: true, color: "1d4ed8", size: 22 })], spacing: { after: 120 } }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              left: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              right: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  tableCell("Particulars"),
+                  tableCell("Amount", "right"),
+                ],
+              }),
+              ...lineItems.map(
+                (item) =>
+                  new TableRow({
+                    children: [tableCell(item.description), tableCell(`INR ${formatCurrency(item.amount)}`, "right")],
+                  }),
+              ),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Subtotal: INR ${formatCurrency(subtotal)}   `, bold: true, size: 18 }),
+              new TextRun({ text: gst > 0 ? `GST / Tax: INR ${formatCurrency(gst)}   ` : "GST / Tax: LUT exempt   ", bold: true, size: 18 }),
+              new TextRun({ text: `Final Payable: INR ${formatCurrency(totalPayable)}`, bold: true, size: 18 }),
+            ],
+            spacing: { before: 120, after: 120 },
+          }),
+          new Paragraph({
+            pageBreakBefore: true,
+            children: [new TextRun({ text: "For Mylapay", bold: true, color: "1d4ed8", size: 20 })],
+            spacing: { after: 160 },
+          }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              bottom: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              left: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              right: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: [
+                      new Paragraph({ children: [new TextRun({ text: "Company Seal", bold: true, color: "1d4ed8", size: 18 })] }),
+                      new Paragraph({ children: [new TextRun({ text: "Space reserved for seal", size: 16, color: "64748b" })] }),
+                    ],
+                    width: { size: 50, type: WidthType.PERCENTAGE },
+                  }),
+                  new TableCell({
+                    children: [
+                      new Paragraph({ children: [new TextRun({ text: "Authority Signature Name", bold: true, color: "1d4ed8", size: 18 })] }),
+                      new Paragraph({ children: [new TextRun({ text: getClientSignatureName(client), bold: true, size: 18 })] }),
+                      new Paragraph({ children: [new TextRun({ text: `Authorized signatory · For ${MYLAPAY_BRANDING.companyName}`, color: "64748b", size: 16 })] }),
+                    ],
+                    width: { size: 50, type: WidthType.PERCENTAGE },
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ spacing: { before: 160 } }),
+          new Paragraph({
+            children: [new TextRun({ text: MYLAPAY_BRANDING.footerLine, color: "64748b", size: 16 })],
+            spacing: { after: 60 },
+          }),
+          new Paragraph({
+            children: [new TextRun({ text: `${MYLAPAY_BRANDING.companyName} · ${MYLAPAY_BRANDING.address} · ${MYLAPAY_BRANDING.email} · ${MYLAPAY_BRANDING.phone}`, color: "64748b", size: 16 })],
+          }),
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(document);
+  downloadBlob(`${invoiceNumber}.docx`, blob);
 }
 
 function getInvoiceDisplayNumber(invoice: any) {
@@ -930,6 +1095,11 @@ async function downloadInvoicePdfTemplate({
   doc.text(`Final Payable: ${money(totalPayable)}`, pageWidth - margin - 4, y + 11, { align: "right" });
 
   y += 30;
+  if (y + 70 > pageHeight - 20) {
+    doc.addPage();
+    y = margin;
+  }
+
   const sealWidth = (contentWidth - gutter) * 0.38;
   const signWidth = contentWidth - sealWidth - gutter;
   drawPanel(margin, y, sealWidth, 34, [255, 255, 255], [191, 219, 254]);

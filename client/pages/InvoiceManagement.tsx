@@ -1479,6 +1479,7 @@ function ClientOverviewScreen({
   onExportDocx,
   onGenerateInvoice,
   onStatusChange,
+  onDownloadPdf,
   onDownloadDocx,
 }: {
   client: ClientRecord;
@@ -1488,6 +1489,7 @@ function ClientOverviewScreen({
   onExportDocx: () => void;
   onGenerateInvoice: () => void;
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
+  onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
 }) {
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
@@ -1738,7 +1740,7 @@ function ClientOverviewScreen({
                           onPaid={() => markInvoicePaid(invoice)}
                           onClose={() => closeInvoice(invoice)}
                           onStatusChange={(status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
-                          onDownloadPdf={() => downloadInvoicePdf(invoice)}
+                          onDownloadPdf={() => onDownloadPdf(invoice)}
                           onDownloadDocx={() => onDownloadDocx(invoice)}
                           onDelete={() => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
                         />
@@ -2573,6 +2575,7 @@ export default function InvoiceManagement() {
         onExportDocx={() => exportClientDocx(selectedClient)}
         onGenerateInvoice={() => openInvoiceCreateModal(selectedClient)}
         onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
+        onDownloadPdf={downloadInvoicePdf}
         onDownloadDocx={downloadInvoiceDocx}
       />
     );

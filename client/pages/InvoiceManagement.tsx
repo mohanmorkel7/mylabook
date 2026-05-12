@@ -327,7 +327,7 @@ const INVOICES = [
 ];
 
 const NOTIFICATIONS = [
-  { title: "Overdue invoice detected", description: "Razorpay invoice crossed due date and requires follow-up.", tone: "red", icon: MailWarning },
+  { title: "Overdue invoice detected", description: "Razorpay invoice crossed due date and requires follow-up.", tone: "red", icon: AlertTriangle },
   { title: "AWS billing spike", description: "RZPX infra costs increased by 14% vs last month.", tone: "amber", icon: Warehouse },
   { title: "Slab threshold crossed", description: "PayU moved into the higher variable pricing slab.", tone: "blue", icon: Layers3 },
   { title: "New invoice generated", description: "Juspay May invoice generated and queued for approval.", tone: "emerald", icon: FileText },

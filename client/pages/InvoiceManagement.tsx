@@ -2573,7 +2573,7 @@ export default function InvoiceManagement() {
         onExportDocx={() => exportClientDocx(selectedClient)}
         onGenerateInvoice={() => openInvoiceCreateModal(selectedClient)}
         onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
-        onDownloadDocx={(invoice) => downloadInvoiceDocx(invoice)}
+        onDownloadDocx={downloadInvoiceDocx}
       />
     );
   }

@@ -1363,6 +1363,23 @@ function ClientOverviewScreen({
                 onChange={(e) => setTxnInput(Number(e.target.value))}
                 className="w-full accent-primary"
               />
+              <div className="grid gap-2 md:grid-cols-[1fr_160px] md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="txn-input">Transaction count</Label>
+                  <Input
+                    id="txn-input"
+                    type="number"
+                    min={0}
+                    step={100000}
+                    value={txnInput}
+                    onChange={(e) => setTxnInput(Number(e.target.value) || 0)}
+                    className="h-11"
+                  />
+                </div>
+                <div className="rounded-2xl border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                  Type a value or move the slider to recalculate instantly.
+                </div>
+              </div>
               <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-4 text-white shadow-lg">
                 <div className="text-sm uppercase tracking-[0.18em] text-white/80">Real-time invoice recalculation</div>
                 <div className="mt-2 text-3xl font-semibold">{currencyLabel(invoiceDraft)}</div>

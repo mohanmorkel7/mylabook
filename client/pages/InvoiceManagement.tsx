@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
+import jsPDF from "jspdf";
 import {
   Area,
   AreaChart,
@@ -370,6 +371,57 @@ function formatCurrency(value: number) {
 
 function currencyLabel(value: number) {
   return `₹${formatCurrency(value)}`;
+}
+
+function downloadTextFile(filename: string, content: string, type = "text/plain") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsv(value: any): string {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function toCsv(rows: Record<string, any>[]) {
+  if (!rows.length) return "";
+  const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+  return [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escapeCsv(row[header])).join(",")),
+  ].join("\n");
+}
+
+function downloadPdf(filename: string, title: string, lines: string[]) {
+  const pdf = new jsPDF("p", "mm", "a4");
+  const left = 14;
+  let y = 18;
+  pdf.setFontSize(18);
+  pdf.text(title, left, y);
+  y += 10;
+  pdf.setFontSize(11);
+  lines.forEach((line) => {
+    const wrapped = pdf.splitTextToSize(line, 180);
+    wrapped.forEach((part: string) => {
+      if (y > 280) {
+        pdf.addPage();
+        y = 18;
+      }
+      pdf.text(part, left, y);
+      y += 6;
+    });
+  });
+  pdf.save(filename);
 }
 
 function getPriorityFromClient(client: ClientRecord): keyof typeof PRIORITY_META {
@@ -750,9 +802,15 @@ function ClientConfigCard({
 function ClientOverviewScreen({
   client,
   onBack,
+  onExportPdf,
+  onExportCsv,
+  onGenerateInvoice,
 }: {
   client: ClientRecord;
   onBack: () => void;
+  onExportPdf: () => void;
+  onExportCsv: () => void;
+  onGenerateInvoice: () => void;
 }) {
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
   const [invoiceDraft, setInvoiceDraft] = useState(
@@ -806,13 +864,16 @@ function ClientOverviewScreen({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={onExportPdf}>
             <Download className="h-4 w-4" /> Export PDF
           </Button>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={onExportCsv}>
             <FileDown className="h-4 w-4" /> Export CSV
           </Button>
-          <Button className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500">
+          <Button
+            className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500"
+            onClick={onGenerateInvoice}
+          >
             <ReceiptText className="h-4 w-4" /> Generate Invoice
           </Button>
         </div>
@@ -971,8 +1032,12 @@ function ClientOverviewScreen({
                       <TableCell>{invoice.generatedDate}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" className="gap-2"><Download className="h-4 w-4" /> PDF</Button>
-                          <Button variant="ghost" size="sm" className="gap-2"><FileText className="h-4 w-4" /> Send</Button>
+                          <Button variant="ghost" size="sm" className="gap-2" onClick={() => downloadInvoicePdf(invoice)}>
+                            <Download className="h-4 w-4" /> PDF
+                          </Button>
+                          <Button variant="ghost" size="sm" className="gap-2" onClick={() => sendInvoice(invoice)}>
+                            <FileText className="h-4 w-4" /> Send
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1402,6 +1467,150 @@ export default function InvoiceManagement() {
     [clients],
   );
 
+  const exportClientsCsv = (targetClients = filteredClients) => {
+    const rows = targetClients.map((client) => ({
+      Client: client.name,
+      Code: client.code,
+      Status: client.status,
+      Priority: getPriorityForScoring(client),
+      Services: client.services.join(" | "),
+      "Fixed Billing": client.fixedBilling,
+      "Monthly Invoice Estimate": client.monthlyInvoiceEstimate,
+      "Monthly Transaction Volume": client.monthlyTransactionVolume,
+      "Last Invoice Generated": client.lastInvoiceGenerated,
+    }));
+    const csv = toCsv(rows);
+    downloadTextFile(
+      `invoice-management-clients-${new Date().toISOString().split("T")[0]}.csv`,
+      csv,
+      "text/csv;charset=utf-8",
+    );
+    toast({ title: "CSV exported", description: `${rows.length} client rows downloaded.` });
+  };
+
+  const exportClientPdf = (client = selectedClient) => {
+    if (!client) return;
+    const lines = [
+      `Client Code: ${client.code}`,
+      `Status: ${client.status}`,
+      `Priority: ${getPriorityForScoring(client)}`,
+      `Services: ${client.services.join(", ")}`,
+      `Fixed Billing: ${currencyLabel(client.fixedBilling)}`,
+      `Monthly Estimate: ${currencyLabel(client.monthlyInvoiceEstimate)}`,
+      `Transaction Volume: ${client.monthlyTransactionVolume.toLocaleString()}`,
+      `AWS Infra: ${client.aws.enabled ? `Enabled (Vendor ${currencyLabel(client.aws.vendorCost)}, Margin ${client.aws.marginPercentage}%)` : "Disabled"}`,
+      `Minimum Guarantee: ${currencyLabel(client.minimumGuarantee)}`,
+      `Platform Fee: ${currencyLabel(client.additionalPlatformFee)}`,
+      `Integration Fee: ${currencyLabel(client.integrationFee)}`,
+      `Last Invoice: ${client.lastInvoiceGenerated}`,
+      `Notes: ${client.notes}`,
+    ];
+    downloadPdf(
+      `invoice-management-${client.code.toLowerCase()}-${new Date().toISOString().split("T")[0]}.pdf`,
+      `Invoice Management - ${client.name}`,
+      lines,
+    );
+    toast({ title: "PDF exported", description: `${client.name} overview PDF downloaded.` });
+  };
+
+  const handleSync = () => {
+    setClients([...CLIENTS]);
+    setInvoices(INVOICES);
+    toast({ title: "Synced", description: "Invoice management data refreshed from the sample dataset." });
+  };
+
+  const generateInvoiceForClient = (client = selectedClient) => {
+    if (!client) return;
+    const generatedDate = new Date().toISOString().split("T")[0];
+    const nextInvoiceId = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, "0")}`;
+    const generatedAmount = Math.round(
+      estimateInvoiceFromSlabs(
+        client.monthlyTransactionVolume,
+        client.fixedBilling,
+        client.transactionSlabs,
+        client.aws,
+        client.minimumGuarantee,
+        client.integrationFee,
+        client.additionalPlatformFee,
+      ),
+    );
+    const nextInvoice = {
+      invoiceId: nextInvoiceId,
+      month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+      client: client.name,
+      amount: generatedAmount,
+      status: "Generated" as InvoiceStatus,
+      generatedDate,
+    };
+    setInvoices((prev) => [nextInvoice, ...prev]);
+    setClients((prev) =>
+      prev.map((item) =>
+        item.id === client.id
+          ? {
+              ...item,
+              lastInvoiceGenerated: generatedDate,
+              invoiceHistory: [nextInvoice, ...(item.invoiceHistory || [])],
+            }
+          : item,
+      ),
+    );
+    toast({
+      title: "Invoice generated",
+      description: `${client.name} invoice ${nextInvoiceId} created successfully.`,
+    });
+    if (clientId === client.id) {
+      downloadPdf(
+        `${client.code.toLowerCase()}-${nextInvoiceId}.pdf`,
+        `Invoice ${nextInvoiceId}`,
+        [
+          `Client: ${client.name}`,
+          `Month: ${nextInvoice.month}`,
+          `Amount: ${currencyLabel(nextInvoice.amount)}`,
+          `Status: ${nextInvoice.status}`,
+          `Generated Date: ${generatedDate}`,
+        ],
+      );
+    }
+  };
+
+  const downloadInvoicePdf = (invoice: any) => {
+    const client = clients.find((item) => item.name === invoice.client);
+    downloadPdf(
+      `${invoice.invoiceId}.pdf`,
+      `Invoice ${invoice.invoiceId}`,
+      [
+        `Client: ${invoice.client}`,
+        `Month: ${invoice.month}`,
+        `Amount: ${currencyLabel(invoice.amount)}`,
+        `Status: ${invoice.status}`,
+        `Generated Date: ${invoice.generatedDate}`,
+        client ? `Client Code: ${client.code}` : "",
+      ].filter(Boolean),
+    );
+    toast({ title: "PDF downloaded", description: `${invoice.invoiceId} PDF downloaded.` });
+  };
+
+  const sendInvoice = (invoice: any) => {
+    setInvoices((prev) =>
+      prev.map((item) =>
+        item.invoiceId === invoice.invoiceId
+          ? { ...item, status: item.status === "Paid" ? item.status : "Sent" }
+          : item,
+      ),
+    );
+    setClients((prev) =>
+      prev.map((client) => ({
+        ...client,
+        invoiceHistory: (client.invoiceHistory || []).map((item) =>
+          item.invoiceId === invoice.invoiceId
+            ? { ...item, status: item.status === "Paid" ? item.status : "Sent" }
+            : item,
+        ),
+      })),
+    );
+    toast({ title: "Invoice sent", description: `${invoice.invoiceId} marked as sent.` });
+  };
+
   const saveConfig = (payload: any) => {
     const baseId = payload.id || payload.code?.toLowerCase() || `client-${Date.now()}`;
     const nextClient: ClientRecord = {
@@ -1478,7 +1687,15 @@ export default function InvoiceManagement() {
   }
 
   if (isOverviewRoute && selectedClient) {
-    return <ClientOverviewScreen client={selectedClient} onBack={() => navigate("/invoice-management")} />;
+    return (
+      <ClientOverviewScreen
+        client={selectedClient}
+        onBack={() => navigate("/invoice-management")}
+        onExportPdf={() => exportClientPdf(selectedClient)}
+        onExportCsv={() => exportClientsCsv([selectedClient])}
+        onGenerateInvoice={() => generateInvoiceForClient(selectedClient)}
+      />
+    );
   }
 
   return (
@@ -1497,10 +1714,10 @@ export default function InvoiceManagement() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={handleSync}>
               <RefreshCcw className="h-4 w-4" /> Sync
             </Button>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => exportClientsCsv()}>
               <Download className="h-4 w-4" /> Export CSV
             </Button>
             <Button
@@ -1684,8 +1901,12 @@ export default function InvoiceManagement() {
                     <TableCell>{invoice.generatedDate}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" className="gap-2"><Download className="h-4 w-4" /> PDF</Button>
-                        <Button variant="ghost" size="sm" className="gap-2"><FileText className="h-4 w-4" /> Send</Button>
+                        <Button variant="ghost" size="sm" className="gap-2" onClick={() => downloadInvoicePdf(invoice)}>
+                          <Download className="h-4 w-4" /> PDF
+                        </Button>
+                        <Button variant="ghost" size="sm" className="gap-2" onClick={() => sendInvoice(invoice)}>
+                          <FileText className="h-4 w-4" /> Send
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1736,7 +1957,10 @@ export default function InvoiceManagement() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>Close</Button>
-              <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">Generate</Button>
+              <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white" onClick={() => {
+                generateInvoiceForClient(selectedClient);
+                setInvoiceModalOpen(false);
+              }}>Generate</Button>
             </div>
           </div>
         </DialogContent>

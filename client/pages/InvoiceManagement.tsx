@@ -139,6 +139,87 @@ const INVOICE_STATUS_META: Record<string, string> = {
   Overdue: "bg-red-500/10 text-red-700 border-red-200",
 };
 
+const MYLAPAY_LOGO_URL = "/mylapaylogo.png";
+
+const MYLAPAY_BRANDING = {
+  companyName: "Mylapay",
+  address: "Coimbatore, Tamil Nadu, India",
+  email: "contact@mylapay.com",
+  phone: "+91 98765 43210",
+  gstin: "GSTIN: —",
+  lutNumber: "LUT: —",
+  footerLine: "Thank you for your business. Please refer to this invoice for payment and reconciliation.",
+  authorizedLabel: "Authorized Signatory",
+};
+
+const INVOICE_SERIAL_CONFIG_KEY = "invoice-serial-config";
+const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
+
+type InvoiceNumberFormat = "PREFIX/FY/SEQ" | "PREFIX-FY-SEQ" | "FY/SEQ";
+
+interface InvoiceSerialConfig {
+  prefix: string;
+  separator: string;
+  serialDigits: number;
+  format: InvoiceNumberFormat;
+  financialYearStartMonth: number;
+}
+
+interface InvoiceSerialState {
+  financialYear: string;
+  serial: number;
+  lastIssuedAt: string;
+}
+
+const DEFAULT_INVOICE_SERIAL_CONFIG: InvoiceSerialConfig = {
+  prefix: "MYL",
+  separator: "/",
+  serialDigits: 4,
+  format: "PREFIX/FY/SEQ",
+  financialYearStartMonth: 4,
+};
+
+function getIstNow() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+}
+
+function getFinancialYearLabel(date = getIstNow(), startMonth = 4) {
+  const month = date.getUTCMonth() + 1;
+  const year = date.getUTCFullYear();
+  const fyStartYear = month >= startMonth ? year : year - 1;
+  const fyEndYear = fyStartYear + 1;
+  return `${String(fyStartYear).slice(-2)}-${String(fyEndYear).slice(-2)}`;
+}
+
+function formatInvoiceSerial(serial: number, digits: number) {
+  return String(serial).padStart(Math.max(1, digits), "0");
+}
+
+function buildInvoiceNumber(
+  config: InvoiceSerialConfig,
+  financialYear: string,
+  serial: number,
+) {
+  const serialPart = formatInvoiceSerial(serial, config.serialDigits);
+  switch (config.format) {
+    case "FY/SEQ":
+      return `${financialYear}${config.separator}${serialPart}`;
+    case "PREFIX-FY-SEQ":
+      return `${config.prefix}-${financialYear}-${serialPart}`;
+    case "PREFIX/FY/SEQ":
+    default:
+      return `${config.prefix}${config.separator}${financialYear}${config.separator}${serialPart}`;
+  }
+}
+
+function getCurrentInvoiceNumberPreview(config: InvoiceSerialConfig) {
+  const financialYear = getFinancialYearLabel(
+    getIstNow(),
+    config.financialYearStartMonth,
+  );
+  return buildInvoiceNumber(config, financialYear, 1);
+}
+
 const CLIENTS = [
   {
     id: "payswiff",
@@ -315,7 +396,14 @@ const CLIENTS = [
   },
 ] as const;
 
-type ClientRecord = (typeof CLIENTS)[number];
+type ClientRecord = (typeof CLIENTS)[number] & {
+  gstin?: string;
+  lutNumber?: string;
+  billingAddress?: string;
+  billingState?: string;
+  billingEmail?: string;
+  signatoryName?: string;
+};
 
 type InvoiceStatus = "Draft" | "Generated" | "Approved" | "Sent" | "Paid" | "Overdue";
 
@@ -402,26 +490,243 @@ function toCsv(rows: Record<string, any>[]) {
   ].join("\n");
 }
 
-function downloadPdf(filename: string, title: string, lines: string[]) {
-  const pdf = new jsPDF("p", "mm", "a4");
-  const left = 14;
-  let y = 18;
-  pdf.setFontSize(18);
-  pdf.text(title, left, y);
-  y += 10;
-  pdf.setFontSize(11);
-  lines.forEach((line) => {
-    const wrapped = pdf.splitTextToSize(line, 180);
-    wrapped.forEach((part: string) => {
-      if (y > 280) {
-        pdf.addPage();
-        y = 18;
-      }
-      pdf.text(part, left, y);
-      y += 6;
+async function fetchImageDataUrl(url: string) {
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ""));
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
     });
+  } catch (error) {
+    return null;
+  }
+}
+
+function getInvoiceDisplayNumber(invoice: any) {
+  return invoice.invoiceNumber || invoice.invoice_id || invoice.invoiceId || "—";
+}
+
+function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: number) {
+  const fixedBilling = client.fixedBilling;
+  const awsCharge = client.aws?.enabled ? client.aws.vendorCost * (client.aws.marginPercentage / 100) : 0;
+  const remainingAfterFixed = Math.max(invoiceAmount - fixedBilling - awsCharge, 0);
+  return [
+    { description: "Fixed Commercial Charges", amount: fixedBilling },
+    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - client.integrationFee - client.additionalPlatformFee, 0) },
+    { description: "AWS Infra Pass-through", amount: awsCharge },
+    { description: "Additional Platform Fee", amount: client.additionalPlatformFee },
+    { description: "Integration Fee", amount: client.integrationFee },
+  ];
+}
+
+function getClientDisplayBillingName(client: ClientRecord) {
+  return client.name;
+}
+
+function getClientBillToAddress(client: ClientRecord) {
+  return client.billingAddress || "—";
+}
+
+function getClientGstin(client: ClientRecord) {
+  return client.gstin || "—";
+}
+
+function getClientLut(client: ClientRecord) {
+  return client.lutNumber || "—";
+}
+
+function getClientSignatureName(client: ClientRecord) {
+  return client.signatoryName || "Authorized Signatory";
+}
+
+async function downloadInvoicePdfTemplate({
+  client,
+  invoiceNumber,
+  generatedDate,
+  amount,
+  status,
+  month,
+  financialYear,
+  serial,
+}: {
+  client: ClientRecord;
+  invoiceNumber: string;
+  generatedDate: string;
+  amount: number;
+  status: string;
+  month: string;
+  financialYear: string;
+  serial: number;
+}) {
+  const doc = new jsPDF("p", "mm", "a4");
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  const logoData = await fetchImageDataUrl(MYLAPAY_LOGO_URL);
+
+  doc.setFillColor(15, 23, 42);
+  doc.roundedRect(margin, margin, pageWidth - margin * 2, 38, 5, 5, "F");
+  doc.setTextColor(255, 255, 255);
+  if (logoData) {
+    try {
+      doc.addImage(logoData, "PNG", margin + 4, margin + 4, 26, 13);
+    } catch {}
+  }
+  doc.setFontSize(17);
+  doc.setFont("helvetica", "bold");
+  doc.text("Tax Invoice", pageWidth - margin - 4, margin + 12, { align: "right" });
+  doc.setFontSize(9.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Invoice Number: ${invoiceNumber}`, pageWidth - margin - 4, margin + 19, { align: "right" });
+  doc.text(`Financial Year: ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 24, { align: "right" });
+  doc.text(`Month: ${month}`, pageWidth - margin - 4, margin + 29, { align: "right" });
+
+  let y = margin + 48;
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 24, 4, 4, "F");
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Invoice Summary", margin + 4, y + 7);
+  doc.setFontSize(9.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Status: ${status}`, margin + 4, y + 14);
+  doc.text(`Generated Date: ${generatedDate}`, pageWidth / 2, y + 14);
+  doc.text(`Amount: ${currencyLabel(amount)}`, pageWidth - margin - 4, y + 14, { align: "right" });
+
+  y += 30;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 52, 4, 4, "FD");
+  doc.setFontSize(11.5);
+  doc.setFont("helvetica", "bold");
+  doc.text("Bill From", margin + 4, y + 7);
+  doc.text("Bill To", pageWidth / 2 + 4, y + 7);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(MYLAPAY_BRANDING.companyName, margin + 4, y + 14);
+  doc.text(MYLAPAY_BRANDING.address, margin + 4, y + 19);
+  doc.text(MYLAPAY_BRANDING.email, margin + 4, y + 24);
+  doc.text(MYLAPAY_BRANDING.phone, margin + 4, y + 29);
+  doc.text(MYLAPAY_BRANDING.gstin, margin + 4, y + 34);
+  doc.text(MYLAPAY_BRANDING.lutNumber, margin + 4, y + 39);
+  doc.setFont("helvetica", "bold");
+  doc.text(getClientDisplayBillingName(client), pageWidth / 2 + 4, y + 14);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Client Code: ${client.code}`, pageWidth / 2 + 4, y + 19);
+  doc.text(`GSTIN: ${getClientGstin(client)}`, pageWidth / 2 + 4, y + 24);
+  doc.text(`LUT: ${getClientLut(client)}`, pageWidth / 2 + 4, y + 29);
+  doc.text(`Billing Email: ${client.billingEmail || "—"}`, pageWidth / 2 + 4, y + 34);
+  const billToAddress = doc.splitTextToSize(getClientBillToAddress(client), pageWidth / 2 - 20);
+  doc.text(`Billing Address:`, pageWidth / 2 + 4, y + 39);
+  doc.text(billToAddress, pageWidth / 2 + 28, y + 39);
+
+  y += 58;
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Bill Details", margin, y);
+  y += 4;
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 42, 4, 4, "FD");
+  const detailCol = (pageWidth - margin * 2) / 2;
+  const detailRows = [
+    ["Invoice Month", month],
+    ["Transaction Volume", client.monthlyTransactionVolume.toLocaleString()],
+    ["Invoice Status", status],
+    ["Last Invoice Generated", client.lastInvoiceGenerated],
+  ];
+  detailRows.forEach((row, index) => {
+    const rowY = y + 7 + Math.floor(index / 2) * 14;
+    const colX = index % 2 === 0 ? margin + 4 : margin + detailCol + 4;
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(row[0], colX, rowY);
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(String(row[1] || "—"), colX, rowY + 5);
   });
-  pdf.save(filename);
+
+  y += 50;
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Statement of Charges", margin, y);
+  y += 4;
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 66, 4, 4, "S");
+  doc.setFillColor(15, 23, 42);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(margin, y, pageWidth - margin * 2, 9, "F");
+  doc.setFontSize(9);
+  doc.text("Particulars", margin + 3, y + 6);
+  doc.text("Amount", pageWidth - margin - 3, y + 6, { align: "right" });
+  let rowY = y + 14;
+  doc.setTextColor(15, 23, 42);
+  lineItems.forEach((item, index) => {
+    if (index % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, rowY - 3, pageWidth - margin * 2, 10, "F");
+    }
+    doc.text(item.description, margin + 3, rowY);
+    doc.text(currencyLabel(item.amount), pageWidth - margin - 3, rowY, { align: "right" });
+    rowY += 10;
+  });
+
+  const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const gst = client.lutNumber ? 0 : subtotal * 0.18;
+  const totalPayable = subtotal + gst;
+
+  y = rowY + 6;
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 26, 4, 4, "F");
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Subtotal: ${currencyLabel(subtotal)}`, margin + 4, y + 8);
+  doc.text(`GST / Tax: ${gst > 0 ? currencyLabel(gst) : "LUT exempt"}`, margin + 4, y + 14);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Final Payable: ${currencyLabel(totalPayable)}`, pageWidth - margin - 4, y + 12, { align: "right" });
+
+  y += 38;
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, pageWidth - margin - 4, y + 8, { align: "right" });
+  doc.setLineWidth(0.4);
+  doc.line(pageWidth - 68, y + 22, pageWidth - margin, y + 22);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(getClientSignatureName(client), pageWidth - margin - 4, y + 28, { align: "right" });
+  doc.text(MYLAPAY_BRANDING.authorizedLabel, pageWidth - margin - 4, y + 33, { align: "right" });
+
+  doc.setDrawColor(226, 232, 240);
+  doc.line(margin, 274, pageWidth - margin, 274);
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(MYLAPAY_BRANDING.footerLine, margin, 279);
+  doc.text(
+    `${MYLAPAY_BRANDING.companyName} · ${MYLAPAY_BRANDING.address} · ${MYLAPAY_BRANDING.email} · ${MYLAPAY_BRANDING.phone}`,
+    margin,
+    284,
+  );
+
+  doc.save(`${invoiceNumber}.pdf`);
+}
+
+function getInvoiceNumberForClient(
+  client: ClientRecord,
+  config: InvoiceSerialConfig,
+  state: InvoiceSerialState,
+) {
+  const financialYear = getFinancialYearLabel(getIstNow(), config.financialYearStartMonth);
+  const serial = state.financialYear === financialYear ? state.serial + 1 : 1;
+  return {
+    invoiceNumber: buildInvoiceNumber(config, financialYear, serial),
+    financialYear,
+    serial,
+  };
 }
 
 function getPriorityFromClient(client: ClientRecord): keyof typeof PRIORITY_META {
@@ -1007,14 +1312,14 @@ function ClientOverviewScreen({
         <Card>
           <CardHeader>
             <CardTitle>Invoice History Table</CardTitle>
-            <CardDescription>Invoice IDs, status workflow, generated dates and download/send actions</CardDescription>
+            <CardDescription>Invoice numbers, status workflow, generated dates and download/send actions</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Invoice ID</TableHead>
+                    <TableHead>Invoice Number</TableHead>
                     <TableHead>Month</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
@@ -1025,7 +1330,7 @@ function ClientOverviewScreen({
                 <TableBody>
                   {client.invoiceHistory.map((invoice) => (
                     <TableRow key={invoice.invoiceId}>
-                      <TableCell className="font-medium">{invoice.invoiceId}</TableCell>
+                      <TableCell className="font-medium">{getInvoiceDisplayNumber(invoice)}</TableCell>
                       <TableCell>{invoice.month}</TableCell>
                       <TableCell>{currencyLabel(invoice.amount)}</TableCell>
                       <TableCell><InvoiceStatusBadge status={invoice.status} /></TableCell>
@@ -1111,6 +1416,11 @@ function InvoiceConfigEditor({
   const [slabs, setSlabs] = useState(client?.transactionSlabs ? [...client.transactionSlabs] : [
     { from: 0, to: 5000000, rate: 0.04, unit: "paisa" as const },
   ]);
+  const [gstin, setGstin] = useState(client?.gstin || "");
+  const [lutNumber, setLutNumber] = useState(client?.lutNumber || "");
+  const [billingAddress, setBillingAddress] = useState(client?.billingAddress || "");
+  const [billingEmail, setBillingEmail] = useState(client?.billingEmail || "");
+  const [signatoryName, setSignatoryName] = useState(client?.signatoryName || "");
   const [notes, setNotes] = useState(client?.notes || "");
   const [txnPreview, setTxnPreview] = useState(client?.monthlyTransactionVolume || 1000000);
 
@@ -1167,6 +1477,11 @@ function InvoiceConfigEditor({
       services: selectedServices,
       transactionSlabs: slabs,
       notes,
+      gstin,
+      lutNumber,
+      billingAddress,
+      billingEmail,
+      signatoryName,
       monthlyInvoiceEstimate: preview,
       monthlyTransactionVolume: txnPreview,
     });
@@ -1234,6 +1549,26 @@ function InvoiceConfigEditor({
                           {Object.keys(STATUS_META).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>GSTIN</Label>
+                      <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="GST identification number" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>LUT Number</Label>
+                      <Input value={lutNumber} onChange={(e) => setLutNumber(e.target.value)} placeholder="LUT reference number" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Billing Address</Label>
+                      <Textarea value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} placeholder="Billing address shown on invoice" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Billing Email</Label>
+                      <Input value={billingEmail} onChange={(e) => setBillingEmail(e.target.value)} placeholder="invoice email" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Authority Signature Name</Label>
+                      <Input value={signatoryName} onChange={(e) => setSignatoryName(e.target.value)} placeholder="Authorized signatory name" />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Service Type</Label>
@@ -1410,9 +1745,43 @@ export default function InvoiceManagement() {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceSerialConfig, setInvoiceSerialConfig] = useState<InvoiceSerialConfig>(() => {
+    try {
+      const raw = localStorage.getItem(INVOICE_SERIAL_CONFIG_KEY);
+      return raw ? { ...DEFAULT_INVOICE_SERIAL_CONFIG, ...JSON.parse(raw) } : DEFAULT_INVOICE_SERIAL_CONFIG;
+    } catch {
+      return DEFAULT_INVOICE_SERIAL_CONFIG;
+    }
+  });
+  const [invoiceSerialState, setInvoiceSerialState] = useState<InvoiceSerialState>(() => {
+    try {
+      const raw = localStorage.getItem(INVOICE_SERIAL_STATE_KEY);
+      return raw
+        ? { ...JSON.parse(raw), serial: Number(JSON.parse(raw).serial || 0) }
+        : { financialYear: getFinancialYearLabel(getIstNow(), DEFAULT_INVOICE_SERIAL_CONFIG.financialYearStartMonth), serial: 0, lastIssuedAt: new Date().toISOString() };
+    } catch {
+      return { financialYear: getFinancialYearLabel(getIstNow(), DEFAULT_INVOICE_SERIAL_CONFIG.financialYearStartMonth), serial: 0, lastIssuedAt: new Date().toISOString() };
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(INVOICE_SERIAL_CONFIG_KEY, JSON.stringify(invoiceSerialConfig));
+    } catch {}
+  }, [invoiceSerialConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(INVOICE_SERIAL_STATE_KEY, JSON.stringify(invoiceSerialState));
+    } catch {}
+  }, [invoiceSerialState]);
 
   const selectedClient = useMemo(() => clients.find((item) => item.id === clientId) || clients[0], [clients, clientId]);
   const editingClient = useMemo(() => clients.find((item) => item.id === (editingClientId || clientId)) || undefined, [clients, editingClientId, clientId]);
+  const invoiceNumberPreview = useMemo(
+    () => getCurrentInvoiceNumberPreview(invoiceSerialConfig),
+    [invoiceSerialConfig],
+  );
 
   useEffect(() => {
     if (isCreateRoute) {
@@ -1488,28 +1857,19 @@ export default function InvoiceManagement() {
     toast({ title: "CSV exported", description: `${rows.length} client rows downloaded.` });
   };
 
-  const exportClientPdf = (client = selectedClient) => {
+  const exportClientPdf = async (client = selectedClient) => {
     if (!client) return;
-    const lines = [
-      `Client Code: ${client.code}`,
-      `Status: ${client.status}`,
-      `Priority: ${getPriorityForScoring(client)}`,
-      `Services: ${client.services.join(", ")}`,
-      `Fixed Billing: ${currencyLabel(client.fixedBilling)}`,
-      `Monthly Estimate: ${currencyLabel(client.monthlyInvoiceEstimate)}`,
-      `Transaction Volume: ${client.monthlyTransactionVolume.toLocaleString()}`,
-      `AWS Infra: ${client.aws.enabled ? `Enabled (Vendor ${currencyLabel(client.aws.vendorCost)}, Margin ${client.aws.marginPercentage}%)` : "Disabled"}`,
-      `Minimum Guarantee: ${currencyLabel(client.minimumGuarantee)}`,
-      `Platform Fee: ${currencyLabel(client.additionalPlatformFee)}`,
-      `Integration Fee: ${currencyLabel(client.integrationFee)}`,
-      `Last Invoice: ${client.lastInvoiceGenerated}`,
-      `Notes: ${client.notes}`,
-    ];
-    downloadPdf(
-      `invoice-management-${client.code.toLowerCase()}-${new Date().toISOString().split("T")[0]}.pdf`,
-      `Invoice Management - ${client.name}`,
-      lines,
-    );
+    const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+    await downloadInvoicePdfTemplate({
+      client,
+      invoiceNumber: serialInfo.invoiceNumber,
+      generatedDate: new Date().toISOString().split("T")[0],
+      amount: client.monthlyInvoiceEstimate,
+      status: "Draft",
+      month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+      financialYear: serialInfo.financialYear,
+      serial: serialInfo.serial,
+    });
     toast({ title: "PDF exported", description: `${client.name} overview PDF downloaded.` });
   };
 
@@ -1519,10 +1879,9 @@ export default function InvoiceManagement() {
     toast({ title: "Synced", description: "Invoice management data refreshed from the sample dataset." });
   };
 
-  const generateInvoiceForClient = (client = selectedClient) => {
+  const generateInvoiceForClient = async (client = selectedClient) => {
     if (!client) return;
     const generatedDate = new Date().toISOString().split("T")[0];
-    const nextInvoiceId = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, "0")}`;
     const generatedAmount = Math.round(
       estimateInvoiceFromSlabs(
         client.monthlyTransactionVolume,
@@ -1534,8 +1893,12 @@ export default function InvoiceManagement() {
         client.additionalPlatformFee,
       ),
     );
+    const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
     const nextInvoice = {
-      invoiceId: nextInvoiceId,
+      invoiceId: serialInfo.invoiceNumber,
+      invoiceNumber: serialInfo.invoiceNumber,
+      serial: serialInfo.serial,
+      financialYear: serialInfo.financialYear,
       month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
       client: client.name,
       amount: generatedAmount,
@@ -1554,46 +1917,51 @@ export default function InvoiceManagement() {
           : item,
       ),
     );
+    setInvoiceSerialState({
+      financialYear: serialInfo.financialYear,
+      serial: serialInfo.serial,
+      lastIssuedAt: new Date().toISOString(),
+    });
     toast({
       title: "Invoice generated",
-      description: `${client.name} invoice ${nextInvoiceId} created successfully.`,
+      description: `${client.name} invoice ${serialInfo.invoiceNumber} created successfully.`,
     });
     if (clientId === client.id) {
-      downloadPdf(
-        `${client.code.toLowerCase()}-${nextInvoiceId}.pdf`,
-        `Invoice ${nextInvoiceId}`,
-        [
-          `Client: ${client.name}`,
-          `Month: ${nextInvoice.month}`,
-          `Amount: ${currencyLabel(nextInvoice.amount)}`,
-          `Status: ${nextInvoice.status}`,
-          `Generated Date: ${generatedDate}`,
-        ],
-      );
+      await downloadInvoicePdfTemplate({
+        client,
+        invoiceNumber: serialInfo.invoiceNumber,
+        generatedDate,
+        amount: nextInvoice.amount,
+        status: nextInvoice.status,
+        month: nextInvoice.month,
+        financialYear: serialInfo.financialYear,
+        serial: serialInfo.serial,
+      });
     }
   };
 
-  const downloadInvoicePdf = (invoice: any) => {
+  const downloadInvoicePdf = async (invoice: any) => {
     const client = clients.find((item) => item.name === invoice.client);
-    downloadPdf(
-      `${invoice.invoiceId}.pdf`,
-      `Invoice ${invoice.invoiceId}`,
-      [
-        `Client: ${invoice.client}`,
-        `Month: ${invoice.month}`,
-        `Amount: ${currencyLabel(invoice.amount)}`,
-        `Status: ${invoice.status}`,
-        `Generated Date: ${invoice.generatedDate}`,
-        client ? `Client Code: ${client.code}` : "",
-      ].filter(Boolean),
-    );
-    toast({ title: "PDF downloaded", description: `${invoice.invoiceId} PDF downloaded.` });
+    if (!client) return;
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
+    await downloadInvoicePdfTemplate({
+      client,
+      invoiceNumber,
+      generatedDate: invoice.generatedDate,
+      amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
+      status: invoice.status,
+      month: invoice.month,
+      financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+      serial: Number(invoice.serial || invoiceSerialState.serial || 1),
+    });
+    toast({ title: "PDF downloaded", description: `${invoiceNumber} PDF downloaded.` });
   };
 
   const sendInvoice = (invoice: any) => {
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
     setInvoices((prev) =>
       prev.map((item) =>
-        item.invoiceId === invoice.invoiceId
+        getInvoiceDisplayNumber(item) === invoiceNumber
           ? { ...item, status: item.status === "Paid" ? item.status : "Sent" }
           : item,
       ),
@@ -1602,13 +1970,13 @@ export default function InvoiceManagement() {
       prev.map((client) => ({
         ...client,
         invoiceHistory: (client.invoiceHistory || []).map((item) =>
-          item.invoiceId === invoice.invoiceId
+          getInvoiceDisplayNumber(item) === invoiceNumber
             ? { ...item, status: item.status === "Paid" ? item.status : "Sent" }
             : item,
         ),
       })),
     );
-    toast({ title: "Invoice sent", description: `${invoice.invoiceId} marked as sent.` });
+    toast({ title: "Invoice sent", description: `${invoiceNumber} marked as sent.` });
   };
 
   const saveConfig = (payload: any) => {
@@ -1639,6 +2007,11 @@ export default function InvoiceManagement() {
       aws: payload.aws,
       notes: payload.notes,
       invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
+      gstin: payload.gstin,
+      lutNumber: payload.lutNumber,
+      billingAddress: payload.billingAddress,
+      billingEmail: payload.billingEmail,
+      signatoryName: payload.signatoryName,
     };
 
     setClients((prev) => {
@@ -1729,6 +2102,147 @@ export default function InvoiceManagement() {
           </div>
         </div>
       </div>
+
+      <Card className="border-muted/60 shadow-sm">
+        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <CardTitle>Invoice Number Serial Config</CardTitle>
+            <CardDescription>
+              Auto-resets every financial year and controls invoice number format
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className="rounded-full">
+            Current FY: {getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth)}
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 xl:grid-cols-4">
+            <div className="space-y-2">
+              <Label>Prefix</Label>
+              <Input
+                value={invoiceSerialConfig.prefix}
+                onChange={(e) =>
+                  setInvoiceSerialConfig((prev) => ({ ...prev, prefix: e.target.value }))
+                }
+                placeholder="MYL"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Separator</Label>
+              <Input
+                value={invoiceSerialConfig.separator}
+                onChange={(e) =>
+                  setInvoiceSerialConfig((prev) => ({ ...prev, separator: e.target.value || "/" }))
+                }
+                placeholder="/"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Serial Digits</Label>
+              <Input
+                type="number"
+                min={2}
+                max={6}
+                value={invoiceSerialConfig.serialDigits}
+                onChange={(e) =>
+                  setInvoiceSerialConfig((prev) => ({
+                    ...prev,
+                    serialDigits: Number(e.target.value) || 4,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Format</Label>
+              <Select
+                value={invoiceSerialConfig.format}
+                onValueChange={(value) =>
+                  setInvoiceSerialConfig((prev) => ({
+                    ...prev,
+                    format: value as InvoiceNumberFormat,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PREFIX/FY/SEQ">Prefix / FY / Serial</SelectItem>
+                  <SelectItem value="PREFIX-FY-SEQ">Prefix-FY-Serial</SelectItem>
+                  <SelectItem value="FY/SEQ">FY / Serial</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Financial Year Start Month</Label>
+              <Select
+                value={String(invoiceSerialConfig.financialYearStartMonth)}
+                onValueChange={(value) =>
+                  setInvoiceSerialConfig((prev) => ({
+                    ...prev,
+                    financialYearStartMonth: Number(value) || 4,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="4">April</SelectItem>
+                  <SelectItem value="1">January</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Next Invoice Number Preview</Label>
+              <div className="rounded-2xl border bg-muted/20 px-4 py-3 font-mono text-sm font-medium">
+                {invoiceNumberPreview}
+              </div>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Counter Controls</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="rounded-full">
+                  Current Serial: {invoiceSerialState.serial}
+                </Badge>
+                <Badge variant="outline" className="rounded-full">
+                  Last Issued FY: {invoiceSerialState.financialYear || "—"}
+                </Badge>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setInvoiceSerialState({
+                      financialYear: getFinancialYearLabel(
+                        getIstNow(),
+                        invoiceSerialConfig.financialYearStartMonth,
+                      ),
+                      serial: 0,
+                      lastIssuedAt: new Date().toISOString(),
+                    })
+                  }
+                >
+                  Reset Serial Now
+                </Button>
+              </div>
+            </div>
+            <div className="md:col-span-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 p-4 text-white">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-white/70">
+                    Auto reset rule
+                  </div>
+                  <div className="mt-1 text-sm text-white/90">
+                    Serial resets on FY rollover. Example format updates with your config and next invoice uses the current fiscal year series.
+                  </div>
+                </div>
+                <Badge variant="outline" className="rounded-full border-white/20 bg-white/10 text-white">
+                  {invoiceSerialConfig.format}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         <MetricCard title="Total Revenue" value={currencyLabel(metrics.totalRevenue)} change="+18.2% MoM" icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={metrics.revenueSpark} />
@@ -1881,7 +2395,7 @@ export default function InvoiceManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Invoice ID</TableHead>
+                  <TableHead>Invoice Number</TableHead>
                   <TableHead>Month</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Amount</TableHead>
@@ -1893,7 +2407,7 @@ export default function InvoiceManagement() {
               <TableBody>
                 {invoices.map((invoice) => (
                   <TableRow key={invoice.invoiceId}>
-                    <TableCell className="font-medium">{invoice.invoiceId}</TableCell>
+                    <TableCell className="font-medium">{getInvoiceDisplayNumber(invoice)}</TableCell>
                     <TableCell>{invoice.month}</TableCell>
                     <TableCell>{invoice.client}</TableCell>
                     <TableCell>{currencyLabel(invoice.amount)}</TableCell>

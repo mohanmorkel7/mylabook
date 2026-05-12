@@ -165,6 +165,7 @@ import AdminTemplates from "@/pages/AdminTemplates";
 import FinOpsDashboard from "@/pages/FinOpsDashboard";
 import FinOpsAutomation from "@/pages/FinOpsAutomation";
 import FinanceManagement from "@/pages/FinanceManagement";
+import InvoiceManagement from "@/pages/InvoiceManagement";
 import UserProfile from "@/pages/UserProfile";
 import DepartmentManager from "@/pages/DepartmentManager";
 import DepartmentUploadTestPage from "@/pages/DepartmentUploadTestPage";
@@ -601,6 +602,50 @@ function AppRoutes() {
           <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <FinanceManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/invoice-management"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+            <DashboardLayout>
+              <InvoiceManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/invoice-management/new"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+            <DashboardLayout>
+              <InvoiceManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/invoice-management/client/:id"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+            <DashboardLayout>
+              <InvoiceManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/invoice-management/client/:id/edit"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+            <DashboardLayout>
+              <InvoiceManagement />
             </DashboardLayout>
           </ProtectedRoute>
         }

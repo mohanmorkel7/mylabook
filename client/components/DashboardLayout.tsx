@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Ticket,
   DollarSign,
+  ReceiptText,
   ChevronDown,
   ChevronRight,
   Megaphone,
@@ -151,7 +152,14 @@ const navigationItems: NavigationItem[] = [
     icon: Briefcase,
     roles: ["admin", "finance"],
   },
-  // j) Product Management
+  // j) Invoice Management
+  {
+    name: "Invoice Management",
+    href: "/invoice-management",
+    icon: ReceiptText,
+    roles: ["admin", "finance", "finops"],
+  },
+  // k) Product Management
   {
     name: "Product",
     href: "/product_master",

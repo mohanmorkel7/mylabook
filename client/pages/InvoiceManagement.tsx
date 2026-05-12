@@ -1189,26 +1189,25 @@ function InvoiceRowActions({
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-[210px] rounded-2xl border bg-muted/20 px-3 py-2">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</p>
-          <Select value={invoice.status} onValueChange={(value) => onStatusChange(value as InvoiceStatus)}>
-            <SelectTrigger className="mt-1 h-9 rounded-xl border-0 bg-background px-2 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[
-                "Waiting for approval",
-                "Generated",
-                "Send",
-                "Paid",
-                "Rejected",
-                "Overdue",
-                "Closed",
-              ].map((status) => (
-                <SelectItem key={status} value={status}>
-                  {status}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            value={invoice.status}
+            onChange={(e) => onStatusChange(e.target.value as InvoiceStatus)}
+            className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-background px-3 text-sm outline-none ring-0 transition focus:border-primary"
+          >
+            {[
+              "Waiting for approval",
+              "Generated",
+              "Send",
+              "Paid",
+              "Rejected",
+              "Overdue",
+              "Closed",
+            ].map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
         </div>
 
         {canEdit && (

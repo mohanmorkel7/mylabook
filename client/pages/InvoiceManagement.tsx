@@ -3054,6 +3054,30 @@ export default function InvoiceManagement() {
 
       console.log("[Invoice] generateInvoiceForClient - Next invoice object:", nextInvoice);
 
+      // Save invoice to database via API (encrypted at rest)
+      try {
+        console.log("[Invoice] generateInvoiceForClient - Saving to database...");
+        await fetch("/api/invoice-management/invoices", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            invoiceId: nextInvoice.invoiceId,
+            invoiceNumber: nextInvoice.invoiceNumber,
+            clientId: client.clientId || client.id,
+            clientName: client.name,
+            month: nextInvoice.month,
+            amount: nextInvoice.amount,
+            status: nextInvoice.status,
+            generatedDate: nextInvoice.generatedDate,
+            financialYear: nextInvoice.financialYear,
+            serial: nextInvoice.serial,
+          }),
+        });
+        console.log("[Invoice] generateInvoiceForClient - Successfully saved to database");
+      } catch (dbError) {
+        console.warn("[Invoice] generateInvoiceForClient - Database save failed (will continue):", dbError);
+      }
+
       setInvoices((prev) => [nextInvoice, ...prev]);
       setClients((prev) =>
         prev.map((item) =>
@@ -3089,16 +3113,66 @@ export default function InvoiceManagement() {
   };
 
   const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {
-    setInvoices((prev) => updateInvoiceCollection(prev, invoiceNumber, updater));
+    // Update local state first for immediate UI feedback
+    let updatedInvoice: InvoiceRecord | undefined;
+    setInvoices((prev) => {
+      const updated = updateInvoiceCollection(prev, invoiceNumber, updater);
+      updatedInvoice = updated.find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+      return updated;
+    });
+
     setClients((prev) =>
-      prev.map((client) => ({
-        ...client,
-        invoiceHistory: updateInvoiceCollection((client.invoiceHistory || []) as InvoiceRecord[], invoiceNumber, updater),
-      })),
+      prev.map((client) => {
+        const updated = {
+          ...client,
+          invoiceHistory: updateInvoiceCollection((client.invoiceHistory || []) as InvoiceRecord[], invoiceNumber, updater),
+        };
+        if (updated.invoiceHistory !== client.invoiceHistory) {
+          updatedInvoice = updated.invoiceHistory.find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+        }
+        return updated;
+      }),
     );
+
+    // Save to database (best-effort, don't block UI)
+    if (updatedInvoice) {
+      fetch("/api/invoice-management/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId: updatedInvoice.invoiceId,
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          clientId: updatedInvoice.clientId,
+          clientName: updatedInvoice.client,
+          month: updatedInvoice.month,
+          amount: updatedInvoice.amount,
+          status: updatedInvoice.status,
+          generatedDate: updatedInvoice.generatedDate,
+          financialYear: updatedInvoice.financialYear,
+          serial: updatedInvoice.serial,
+        }),
+      }).catch((err) => {
+        console.warn("[Invoice] Failed to update invoice in database:", err);
+      });
+    }
   };
 
   const deleteInvoiceByNumber = (invoiceNumber: string) => {
+    // Find the invoice to get its ID
+    const invoiceToDelete = clients
+      .flatMap((c) => c.invoiceHistory || [])
+      .find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+
+    if (invoiceToDelete) {
+      // Delete from database (best-effort)
+      fetch(`/api/invoice-management/invoices/${invoiceToDelete.invoiceId}`, {
+        method: "DELETE",
+      }).catch((err) => {
+        console.warn("[Invoice] Failed to delete invoice from database:", err);
+      });
+    }
+
+    // Update local state
     setInvoices((prev) => deleteInvoiceFromCollection(prev, invoiceNumber));
     setClients((prev) =>
       prev.map((client) => ({

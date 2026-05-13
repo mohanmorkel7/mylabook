@@ -3337,6 +3337,8 @@ export default function InvoiceManagement() {
           clientType: payload.clientType || "Domestic",
           currency: payload.clientCurrency || "INR",
           notes: payload.notes,
+          transactionSlabs: payload.transactionSlabs || [],
+          aws: payload.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
         }),
       });
 

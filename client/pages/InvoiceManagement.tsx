@@ -179,8 +179,13 @@ const MYLAPAY_BRANDING = {
 
 const INVOICE_SERIAL_CONFIG_KEY = "invoice-serial-config";
 const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
+const COMPANY_CONFIG_KEY = "company-config";
+const TAX_CONFIG_KEY = "tax-config";
+const CURRENCY_CONFIG_KEY = "currency-config";
 
 type InvoiceNumberFormat = "PREFIX/FY/SEQ" | "PREFIX-FY-SEQ" | "FY/SEQ";
+type ClientType = "Domestic" | "International";
+type CurrencyType = "INR" | "USD" | "AED" | "SAR" | "KWD" | "OMR" | "QAR" | "BHD";
 
 interface InvoiceSerialConfig {
   prefix: string;
@@ -196,12 +201,81 @@ interface InvoiceSerialState {
   lastIssuedAt: string;
 }
 
+interface CompanyConfig {
+  companyName: string;
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+  gstNumber: string;
+  panNumber: string;
+  lutNumber: string;
+  cinNumber: string;
+  email: string;
+  phone: string;
+  website: string;
+}
+
+interface TaxConfig {
+  sgstPercentage: number;
+  cgstPercentage: number;
+  igstPercentage: number;
+  tdsPercentage: number;
+  defaultTaxType: "SGST+CGST" | "IGST";
+}
+
+interface CurrencyConfig {
+  domesticCurrency: CurrencyType;
+  supportedCurrencies: {
+    code: CurrencyType;
+    symbol: string;
+    country: string;
+  }[];
+}
+
 const DEFAULT_INVOICE_SERIAL_CONFIG: InvoiceSerialConfig = {
   prefix: "MYL",
   separator: "/",
   serialDigits: 4,
   format: "PREFIX/FY/SEQ",
   financialYearStartMonth: 4,
+};
+
+const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
+  companyName: "Mindeed Technologies and Services Pvt Ltd",
+  address: "#17/3, Pembroke House, Second Floor, Shafee Mohammed Road",
+  city: "Chennai",
+  state: "Tamil Nadu",
+  pincode: "600006",
+  gstNumber: "33AAMCM6618H1ZB",
+  panNumber: "AAMCM6618H",
+  lutNumber: "LUT-33-TN",
+  cinNumber: "U72900TN2019PTC129197",
+  email: "contact@mylapay.com",
+  phone: "+91 44 XXXX XXXX",
+  website: "www.mylapay.com",
+};
+
+const DEFAULT_TAX_CONFIG: TaxConfig = {
+  sgstPercentage: 9,
+  cgstPercentage: 9,
+  igstPercentage: 18,
+  tdsPercentage: 1.6,
+  defaultTaxType: "SGST+CGST",
+};
+
+const DEFAULT_CURRENCY_CONFIG: CurrencyConfig = {
+  domesticCurrency: "INR",
+  supportedCurrencies: [
+    { code: "INR", symbol: "₹", country: "India" },
+    { code: "USD", symbol: "$", country: "USA" },
+    { code: "AED", symbol: "د.إ", country: "UAE" },
+    { code: "SAR", symbol: "﷼", country: "Saudi Arabia" },
+    { code: "KWD", symbol: "د.ك", country: "Kuwait" },
+    { code: "OMR", symbol: "ر.ع.", country: "Oman" },
+    { code: "QAR", symbol: "﷼", country: "Qatar" },
+    { code: "BHD", symbol: "د.ب", country: "Bahrain" },
+  ],
 };
 
 function getIstNow() {
@@ -429,6 +503,8 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   billingEmail?: string;
   signatoryName?: string;
   invoiceHistory?: InvoiceRecord[];
+  clientType?: ClientType;
+  currency?: CurrencyType;
 };
 
 type InvoiceStatus =
@@ -2053,6 +2129,8 @@ function InvoiceConfigEditor({
   const [signatoryName, setSignatoryName] = useState(client?.signatoryName || "");
   const [notes, setNotes] = useState(client?.notes || "");
   const [txnPreview, setTxnPreview] = useState(client?.monthlyTransactionVolume || 1000000);
+  const [clientType, setClientType] = useState<ClientType>(client?.clientType || "Domestic");
+  const [clientCurrency, setClientCurrency] = useState<CurrencyType>(client?.currency || "INR");
 
   const preview = useMemo(() => {
     const fakeClient = {
@@ -2114,6 +2192,8 @@ function InvoiceConfigEditor({
       signatoryName,
       monthlyInvoiceEstimate: preview,
       monthlyTransactionVolume: txnPreview,
+      clientType,
+      clientCurrency,
     });
   };
 
@@ -2177,6 +2257,32 @@ function InvoiceConfigEditor({
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {Object.keys(STATUS_META).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Client Type</Label>
+                      <Select value={clientType} onValueChange={(value) => setClientType(value as ClientType)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Domestic">Domestic (India)</SelectItem>
+                          <SelectItem value="International">International</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Currency</Label>
+                      <Select value={clientCurrency} onValueChange={(value) => setClientCurrency(value as CurrencyType)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="INR">₹ INR - India</SelectItem>
+                          <SelectItem value="USD">$ USD - United States</SelectItem>
+                          <SelectItem value="AED">د.إ AED - UAE</SelectItem>
+                          <SelectItem value="SAR">﷼ SAR - Saudi Arabia</SelectItem>
+                          <SelectItem value="KWD">د.ك KWD - Kuwait</SelectItem>
+                          <SelectItem value="OMR">ر.ع. OMR - Oman</SelectItem>
+                          <SelectItem value="QAR">﷼ QAR - Qatar</SelectItem>
+                          <SelectItem value="BHD">د.ب BHD - Bahrain</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -2398,6 +2504,35 @@ export default function InvoiceManagement() {
     }
   });
 
+  const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(() => {
+    try {
+      const raw = localStorage.getItem(COMPANY_CONFIG_KEY);
+      return raw ? { ...DEFAULT_COMPANY_CONFIG, ...JSON.parse(raw) } : DEFAULT_COMPANY_CONFIG;
+    } catch {
+      return DEFAULT_COMPANY_CONFIG;
+    }
+  });
+
+  const [taxConfig, setTaxConfig] = useState<TaxConfig>(() => {
+    try {
+      const raw = localStorage.getItem(TAX_CONFIG_KEY);
+      return raw ? { ...DEFAULT_TAX_CONFIG, ...JSON.parse(raw) } : DEFAULT_TAX_CONFIG;
+    } catch {
+      return DEFAULT_TAX_CONFIG;
+    }
+  });
+
+  const [currencyConfig, setCurrencyConfig] = useState<CurrencyConfig>(() => {
+    try {
+      const raw = localStorage.getItem(CURRENCY_CONFIG_KEY);
+      return raw ? { ...DEFAULT_CURRENCY_CONFIG, ...JSON.parse(raw) } : DEFAULT_CURRENCY_CONFIG;
+    } catch {
+      return DEFAULT_CURRENCY_CONFIG;
+    }
+  });
+
+  const [activeConfigTab, setActiveConfigTab] = useState<"company" | "tax" | "currency">("company");
+
   useEffect(() => {
     try {
       localStorage.setItem(INVOICE_SERIAL_CONFIG_KEY, JSON.stringify(invoiceSerialConfig));
@@ -2409,6 +2544,24 @@ export default function InvoiceManagement() {
       localStorage.setItem(INVOICE_SERIAL_STATE_KEY, JSON.stringify(invoiceSerialState));
     } catch {}
   }, [invoiceSerialState]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COMPANY_CONFIG_KEY, JSON.stringify(companyConfig));
+    } catch {}
+  }, [companyConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAX_CONFIG_KEY, JSON.stringify(taxConfig));
+    } catch {}
+  }, [taxConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CURRENCY_CONFIG_KEY, JSON.stringify(currencyConfig));
+    } catch {}
+  }, [currencyConfig]);
 
   const selectedClient = useMemo(() => clients.find((item) => item.id === clientId) || clients[0], [clients, clientId]);
   const editingClient = useMemo(() => clients.find((item) => item.id === (editingClientId || clientId)) || undefined, [clients, editingClientId, clientId]);
@@ -2748,6 +2901,8 @@ export default function InvoiceManagement() {
       billingAddress: payload.billingAddress,
       billingEmail: payload.billingEmail,
       signatoryName: payload.signatoryName,
+      clientType: payload.clientType || "Domestic",
+      currency: payload.clientCurrency || "INR",
     };
 
     setClients((prev) => {
@@ -2980,6 +3135,268 @@ export default function InvoiceManagement() {
                 </Badge>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-muted/60 shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Mylapay Configuration</CardTitle>
+              <CardDescription>
+                Company details, tax settings, and currency management
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="rounded-full">
+              3 sections
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div className="flex gap-2 border-b">
+              <Button
+                variant={activeConfigTab === "company" ? "default" : "ghost"}
+                className="rounded-b-none"
+                onClick={() => setActiveConfigTab("company")}
+              >
+                Company Details
+              </Button>
+              <Button
+                variant={activeConfigTab === "tax" ? "default" : "ghost"}
+                className="rounded-b-none"
+                onClick={() => setActiveConfigTab("tax")}
+              >
+                Tax Settings
+              </Button>
+              <Button
+                variant={activeConfigTab === "currency" ? "default" : "ghost"}
+                className="rounded-b-none"
+                onClick={() => setActiveConfigTab("currency")}
+              >
+                Currency Management
+              </Button>
+            </div>
+
+            {activeConfigTab === "company" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Company Name</Label>
+                  <Input
+                    value={companyConfig.companyName}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, companyName: e.target.value }))}
+                    placeholder="Mindeed Technologies and Services Pvt Ltd"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Address</Label>
+                  <Textarea
+                    value={companyConfig.address}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, address: e.target.value }))}
+                    placeholder="Street address"
+                    className="resize-none"
+                    rows={2}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input
+                    value={companyConfig.city}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, city: e.target.value }))}
+                    placeholder="Chennai"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>State</Label>
+                  <Input
+                    value={companyConfig.state}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, state: e.target.value }))}
+                    placeholder="Tamil Nadu"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pincode</Label>
+                  <Input
+                    value={companyConfig.pincode}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, pincode: e.target.value }))}
+                    placeholder="600006"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={companyConfig.email}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, email: e.target.value }))}
+                    placeholder="contact@mylapay.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input
+                    value={companyConfig.phone}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, phone: e.target.value }))}
+                    placeholder="+91 44 XXXX XXXX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Website</Label>
+                  <Input
+                    value={companyConfig.website}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, website: e.target.value }))}
+                    placeholder="www.mylapay.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>GST Number</Label>
+                  <Input
+                    value={companyConfig.gstNumber}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, gstNumber: e.target.value }))}
+                    placeholder="33AAMCM6618H1ZB"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>PAN Number</Label>
+                  <Input
+                    value={companyConfig.panNumber}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, panNumber: e.target.value }))}
+                    placeholder="AAMCM6618H"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>LUT Number</Label>
+                  <Input
+                    value={companyConfig.lutNumber}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, lutNumber: e.target.value }))}
+                    placeholder="LUT-33-TN"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CIN Number</Label>
+                  <Input
+                    value={companyConfig.cinNumber}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, cinNumber: e.target.value }))}
+                    placeholder="U72900TN2019PTC129197"
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeConfigTab === "tax" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border bg-muted/20 p-4 md:col-span-2">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">Current Tax Type</div>
+                  <Badge className="rounded-full">{taxConfig.defaultTaxType}</Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label>SGST Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={taxConfig.sgstPercentage}
+                    onChange={(e) => setTaxConfig((prev) => ({ ...prev, sgstPercentage: Number(e.target.value) || 0 }))}
+                    placeholder="9"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CGST Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={taxConfig.cgstPercentage}
+                    onChange={(e) => setTaxConfig((prev) => ({ ...prev, cgstPercentage: Number(e.target.value) || 0 }))}
+                    placeholder="9"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>IGST Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={taxConfig.igstPercentage}
+                    onChange={(e) => setTaxConfig((prev) => ({ ...prev, igstPercentage: Number(e.target.value) || 0 }))}
+                    placeholder="18"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>TDS Percentage (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={taxConfig.tdsPercentage}
+                    onChange={(e) => setTaxConfig((prev) => ({ ...prev, tdsPercentage: Number(e.target.value) || 0 }))}
+                    placeholder="1.60"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Default Tax Type</Label>
+                  <Select
+                    value={taxConfig.defaultTaxType}
+                    onValueChange={(value) => setTaxConfig((prev) => ({ ...prev, defaultTaxType: value as "SGST+CGST" | "IGST" }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SGST+CGST">SGST + CGST (Domestic)</SelectItem>
+                      <SelectItem value="IGST">IGST (International)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {activeConfigTab === "currency" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Domestic Currency</Label>
+                  <Select
+                    value={currencyConfig.domesticCurrency}
+                    onValueChange={(value) => setCurrencyConfig((prev) => ({ ...prev, domesticCurrency: value as CurrencyType }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencyConfig.supportedCurrencies.map((curr) => (
+                        <SelectItem key={curr.code} value={curr.code}>
+                          {curr.symbol} {curr.code} - {curr.country}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Supported Currencies</Label>
+                  <div className="grid gap-2 rounded-2xl border bg-muted/20 p-4 max-h-48 overflow-y-auto">
+                    {currencyConfig.supportedCurrencies.map((curr) => (
+                      <div
+                        key={curr.code}
+                        className="flex items-center justify-between rounded-lg border bg-background p-3 text-sm"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-medium">{curr.symbol}</span>
+                          <span className="font-medium">{curr.code}</span>
+                          <span className="text-muted-foreground">{curr.country}</span>
+                        </div>
+                        <Badge variant="outline" className="rounded-full">
+                          {curr.code === currencyConfig.domesticCurrency ? "Domestic" : "International"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

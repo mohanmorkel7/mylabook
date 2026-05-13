@@ -3054,6 +3054,30 @@ export default function InvoiceManagement() {
 
       console.log("[Invoice] generateInvoiceForClient - Next invoice object:", nextInvoice);
 
+      // Save invoice to database via API (encrypted at rest)
+      try {
+        console.log("[Invoice] generateInvoiceForClient - Saving to database...");
+        await fetch("/api/invoice-management/invoices", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            invoiceId: nextInvoice.invoiceId,
+            invoiceNumber: nextInvoice.invoiceNumber,
+            clientId: client.clientId || client.id,
+            clientName: client.name,
+            month: nextInvoice.month,
+            amount: nextInvoice.amount,
+            status: nextInvoice.status,
+            generatedDate: nextInvoice.generatedDate,
+            financialYear: nextInvoice.financialYear,
+            serial: nextInvoice.serial,
+          }),
+        });
+        console.log("[Invoice] generateInvoiceForClient - Successfully saved to database");
+      } catch (dbError) {
+        console.warn("[Invoice] generateInvoiceForClient - Database save failed (will continue):", dbError);
+      }
+
       setInvoices((prev) => [nextInvoice, ...prev]);
       setClients((prev) =>
         prev.map((item) =>

@@ -565,17 +565,17 @@ async function downloadInvoiceDocxTemplate({
 
   const title = (text: string) =>
     new Docx.Paragraph({
-      children: [new Docx.TextRun({ text, bold: true, color: "1d4ed8", size: 24 })],
-      spacing: { after: 140 },
+      children: [new Docx.TextRun({ text, bold: true, color: "1d4ed8", size: 20 })],
+      spacing: { after: 40 },
     });
 
   const labelValue = (label: string, value: string) =>
     new Docx.Paragraph({
       children: [
-        new Docx.TextRun({ text: `${label}: `, bold: true, color: "64748b", size: 18 }),
-        new Docx.TextRun({ text: value || "—", color: "0f172a", size: 18 }),
+        new Docx.TextRun({ text: `${label}: `, bold: true, color: "64748b", size: 15 }),
+        new Docx.TextRun({ text: value || "—", color: "0f172a", size: 15 }),
       ],
-      spacing: { after: 80 },
+      spacing: { after: 18 },
     });
 
   const tableCell = (text: string, align: "left" | "right" = "left") =>
@@ -587,7 +587,7 @@ async function downloadInvoiceDocxTemplate({
         }),
       ],
       width: { size: 50, type: Docx.WidthType.PERCENTAGE },
-      margins: { top: 120, bottom: 120, left: 180, right: 180 },
+      margins: { top: 60, bottom: 60, left: 120, right: 120 },
     });
 
   const billFromRows = [
@@ -619,7 +619,7 @@ async function downloadInvoiceDocxTemplate({
                   children: [
                     new Docx.ImageRun({
                       data: logoData,
-                      transformation: { width: 110, height: 40 },
+                      transformation: { width: 92, height: 34 },
                     }),
                   ],
                 }),
@@ -627,19 +627,19 @@ async function downloadInvoiceDocxTemplate({
             : []),
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
-            children: [new Docx.TextRun({ text: "Tax Invoice", bold: true, color: "1d4ed8", size: 30 })],
-            spacing: { after: 60 },
+            children: [new Docx.TextRun({ text: "Tax Invoice", bold: true, color: "1d4ed8", size: 24 })],
+            spacing: { after: 24 },
           }),
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
             children: [
-              new Docx.TextRun({ text: `Invoice Number: ${invoiceNumber}`, size: 18 }),
-              new Docx.TextRun({ text: "\n", size: 18 }),
-              new Docx.TextRun({ text: `Financial Year: ${financialYear} · Serial #${serial}`, size: 18 }),
-              new Docx.TextRun({ text: "\n", size: 18 }),
-              new Docx.TextRun({ text: `Month: ${month}`, size: 18 }),
+              new Docx.TextRun({ text: `Invoice Number: ${invoiceNumber}`, size: 14 }),
+              new Docx.TextRun({ text: "\n", size: 14 }),
+              new Docx.TextRun({ text: `Financial Year: ${financialYear} · Serial #${serial}`, size: 14 }),
+              new Docx.TextRun({ text: "\n", size: 14 }),
+              new Docx.TextRun({ text: `Month: ${month}`, size: 14 }),
             ],
-            spacing: { after: 160 },
+            spacing: { after: 40 },
           }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
@@ -661,8 +661,8 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { after: 160 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill From / Bill To", bold: true, color: "1d4ed8", size: 22 })], spacing: { after: 120 } }),
+          new Docx.Paragraph({ spacing: { after: 28 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill From / Bill To", bold: true, color: "1d4ed8", size: 18 })], spacing: { after: 16 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
@@ -688,8 +688,8 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { after: 160 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill Details", bold: true, color: "1d4ed8", size: 22 })], spacing: { after: 120 } }),
+          new Docx.Paragraph({ spacing: { after: 20 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill Details", bold: true, color: "1d4ed8", size: 18 })], spacing: { after: 12 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
@@ -709,8 +709,8 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { after: 160 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Statement of Charges", bold: true, color: "1d4ed8", size: 22 })], spacing: { after: 120 } }),
+          new Docx.Paragraph({ spacing: { after: 20 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Statement of Charges", bold: true, color: "1d4ed8", size: 18 })], spacing: { after: 12 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
@@ -738,14 +738,14 @@ async function downloadInvoiceDocxTemplate({
           }),
           new Docx.Paragraph({
             children: [
-              new Docx.TextRun({ text: `Subtotal: INR ${formatCurrency(subtotal)}   `, bold: true, size: 18 }),
-              new Docx.TextRun({ text: gst > 0 ? `GST / Tax: INR ${formatCurrency(gst)}   ` : "GST / Tax: LUT exempt   ", bold: true, size: 18 }),
-              new Docx.TextRun({ text: `Final Payable: INR ${formatCurrency(totalPayable)}`, bold: true, size: 18 }),
+              new Docx.TextRun({ text: `Subtotal: INR ${formatCurrency(subtotal)}   `, bold: true, size: 14 }),
+              new Docx.TextRun({ text: gst > 0 ? `GST / Tax: INR ${formatCurrency(gst)}   ` : "GST / Tax: LUT exempt   ", bold: true, size: 14 }),
+              new Docx.TextRun({ text: `Final Payable: INR ${formatCurrency(totalPayable)}`, bold: true, size: 14 }),
             ],
-            spacing: { before: 120, after: 120 },
+            spacing: { before: 60, after: 40 },
           }),
           new Docx.Paragraph({
-            pageBreakBefore: true,
+            pageBreakBefore: lineItems.length > 6,
             children: [new Docx.TextRun({ text: "For Mylapay", bold: true, color: "1d4ed8", size: 20 })],
             spacing: { after: 160 },
           }),
@@ -764,16 +764,16 @@ async function downloadInvoiceDocxTemplate({
                 children: [
                   new Docx.TableCell({
                     children: [
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Company Seal", bold: true, color: "1d4ed8", size: 18 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Space reserved for seal", size: 16, color: "64748b" })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Company Seal", bold: true, color: "1d4ed8", size: 14 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Space reserved for seal", size: 12, color: "64748b" })] }),
                     ],
                     width: { size: 50, type: Docx.WidthType.PERCENTAGE },
                   }),
                   new Docx.TableCell({
                     children: [
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Authority Signature Name", bold: true, color: "1d4ed8", size: 18 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: getClientSignatureName(client), bold: true, size: 18 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: `Authorized signatory · For ${MYLAPAY_BRANDING.companyName}`, color: "64748b", size: 16 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Authority Signature Name", bold: true, color: "1d4ed8", size: 14 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: getClientSignatureName(client), bold: true, size: 14 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: `Authorized signatory · For ${MYLAPAY_BRANDING.companyName}`, color: "64748b", size: 12 })] }),
                     ],
                     width: { size: 50, type: Docx.WidthType.PERCENTAGE },
                   }),
@@ -781,13 +781,13 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { before: 160 } }),
+          new Docx.Paragraph({ spacing: { before: 24 } }),
           new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: MYLAPAY_BRANDING.footerLine, color: "64748b", size: 16 })],
-            spacing: { after: 60 },
+            children: [new Docx.TextRun({ text: MYLAPAY_BRANDING.footerLine, color: "64748b", size: 12 })],
+            spacing: { after: 24 },
           }),
           new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: `${MYLAPAY_BRANDING.companyName} · ${MYLAPAY_BRANDING.address} · ${MYLAPAY_BRANDING.email} · ${MYLAPAY_BRANDING.phone}`, color: "64748b", size: 16 })],
+            children: [new Docx.TextRun({ text: `${MYLAPAY_BRANDING.companyName} · ${MYLAPAY_BRANDING.address} · ${MYLAPAY_BRANDING.email} · ${MYLAPAY_BRANDING.phone}`, color: "64748b", size: 12 })],
           }),
         ],
       },
@@ -955,7 +955,7 @@ async function downloadInvoicePdfTemplate({
 
   doc.setFillColor(248, 251, 255);
   doc.setDrawColor(191, 219, 254);
-  doc.roundedRect(margin, margin, contentWidth, 32, 5, 5, "FD");
+  doc.roundedRect(margin, margin, contentWidth, 28, 5, 5, "FD");
   doc.setFillColor(37, 99, 235);
   doc.rect(margin, margin, contentWidth, 2, "F");
   if (logoData) {
@@ -967,29 +967,29 @@ async function downloadInvoicePdfTemplate({
   }
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(17.5);
-  doc.text("Tax Invoice", pageWidth - margin - 4, margin + 11, { align: "right" });
+  doc.setFontSize(16.5);
+  doc.text("Tax Invoice", pageWidth - margin - 4, margin + 10, { align: "right" });
   doc.setTextColor(71, 85, 105);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.2);
-  doc.text(`Invoice Number: ${invoiceNumber}`, pageWidth - margin - 4, margin + 18, { align: "right" });
-  doc.text(`Financial Year: ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 22, { align: "right" });
-  doc.text(`Month: ${month}`, pageWidth - margin - 4, margin + 26, { align: "right" });
+  doc.setFontSize(8.8);
+  doc.text(`Invoice Number: ${invoiceNumber}`, pageWidth - margin - 4, margin + 16, { align: "right" });
+  doc.text(`Financial Year: ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 20, { align: "right" });
+  doc.text(`Month: ${month}`, pageWidth - margin - 4, margin + 24, { align: "right" });
 
-  let y = margin + 38;
-  drawPanel(margin, y, contentWidth, 20, [239, 246, 255], [191, 219, 254]);
+  let y = margin + 32;
+  drawPanel(margin, y, contentWidth, 16, [239, 246, 255], [191, 219, 254]);
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11.8);
-  doc.text("Invoice Summary", margin + 4, y + 7);
+  doc.setFontSize(10.8);
+  doc.text("Invoice Summary", margin + 4, y + 5.5);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.2);
+  doc.setFontSize(8.4);
   doc.setTextColor(51, 65, 85);
-  doc.text(`Status: ${status}`, margin + 4, y + 13);
-  doc.text(`Generated Date: ${generatedDate}`, pageWidth / 2, y + 13, { align: "center" });
-  doc.text(`Amount: ${money(amount)}`, pageWidth - margin - 4, y + 13, { align: "right" });
+  doc.text(`Status: ${status}`, margin + 4, y + 11.2);
+  doc.text(`Generated Date: ${generatedDate}`, pageWidth / 2, y + 11.2, { align: "center" });
+  doc.text(`Amount: ${money(amount)}`, pageWidth - margin - 4, y + 11.2, { align: "right" });
 
-  y += 26;
+  y += 22;
   const leftBillFrom = [
     { label: "Company", value: MYLAPAY_BRANDING.companyName },
     { label: "Address", value: MYLAPAY_BRANDING.address },
@@ -1015,20 +1015,20 @@ async function downloadInvoicePdfTemplate({
   renderFieldBlock(margin, y, (contentWidth - gutter) / 2, "Bill From", leftBillFrom);
   renderFieldBlock(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, "Bill To", rightBillTo);
 
-  y += cardHeight + 8;
+  y += cardHeight + 6;
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11.8);
+  doc.setFontSize(10.8);
   doc.text("Bill Details", margin, y);
-  y += 4;
-  drawPanel(margin, y, contentWidth, 28, [248, 250, 252], [226, 232, 240]);
+  y += 3;
+  drawPanel(margin, y, contentWidth, 22, [248, 250, 252], [226, 232, 240]);
   const halfWidth = (contentWidth - 10) / 2;
-  drawTwoColumnDetail(margin + 4, y + 6, halfWidth, "Invoice Month", month);
-  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 6, halfWidth, "Transaction Volume", client.monthlyTransactionVolume.toLocaleString(), "right");
-  drawTwoColumnDetail(margin + 4, y + 18, halfWidth, "Invoice Status", status);
-  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 18, halfWidth, "Last Invoice Generated", client.lastInvoiceGenerated, "right");
+  drawTwoColumnDetail(margin + 4, y + 5, halfWidth, "Invoice Month", month);
+  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 5, halfWidth, "Transaction Volume", client.monthlyTransactionVolume.toLocaleString(), "right");
+  drawTwoColumnDetail(margin + 4, y + 14, halfWidth, "Invoice Status", status);
+  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 14, halfWidth, "Last Invoice Generated", client.lastInvoiceGenerated, "right");
 
-  y += 36;
+  y += 30;
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
@@ -1037,8 +1037,8 @@ async function downloadInvoicePdfTemplate({
   y += 4;
   const tableX = margin;
   const tableWidth = contentWidth;
-  const tableHeaderHeight = 9;
-  const rowHeights = lineItems.map((item) => Math.max(8.5, wrap(item.description, tableWidth - 45).length * 4.2 + 3.5));
+  const tableHeaderHeight = 8;
+  const rowHeights = lineItems.map((item) => Math.max(7.2, wrap(item.description, tableWidth - 45).length * 3.4 + 2.8));
   const tableBodyHeight = tableHeaderHeight + rowHeights.reduce((sum, height) => sum + height, 0);
   drawPanel(tableX, y, tableWidth, tableBodyHeight, [255, 255, 255], [226, 232, 240]);
   doc.setFillColor(37, 99, 235);
@@ -1049,21 +1049,21 @@ async function downloadInvoicePdfTemplate({
   doc.text("Particulars", tableX + 3, y + 6);
   doc.text("Amount", tableX + tableWidth - 3, y + 6, { align: "right" });
 
-  let rowY = y + tableHeaderHeight + 5.5;
+  let rowY = y + tableHeaderHeight + 4.2;
   lineItems.forEach((item, index) => {
     const descLines = wrap(item.description, tableWidth - 45);
     const rowHeight = rowHeights[index];
     if (index % 2 === 0) {
       doc.setFillColor(248, 250, 252);
-      doc.rect(tableX + 1, rowY - 4, tableWidth - 2, rowHeight, "F");
+      doc.rect(tableX + 1, rowY - 3.2, tableWidth - 2, rowHeight, "F");
     }
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.1);
-    doc.text(descLines, tableX + 3, rowY - 0.5);
+    doc.setFontSize(8.4);
+    doc.text(descLines, tableX + 3, rowY - 0.3);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.1);
-    doc.text(money(item.amount), tableX + tableWidth - 3, rowY - 0.5, { align: "right" });
+    doc.setFontSize(8.4);
+    doc.text(money(item.amount), tableX + tableWidth - 3, rowY - 0.3, { align: "right" });
     rowY += rowHeight;
   });
 
@@ -1072,60 +1072,60 @@ async function downloadInvoicePdfTemplate({
   const totalPayable = subtotal + gst;
 
   y = rowY + 2;
-  drawPanel(margin, y, contentWidth, 24, [239, 246, 255], [191, 219, 254]);
+  drawPanel(margin, y, contentWidth, 20, [239, 246, 255], [191, 219, 254]);
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.8);
-  doc.text(`Subtotal: ${money(subtotal)}`, margin + 4, y + 8);
-  doc.text(`GST / Tax: ${gst > 0 ? money(gst) : "LUT exempt"}`, margin + 4, y + 14);
+  doc.setFontSize(8.8);
+  doc.text(`Subtotal: ${money(subtotal)}`, margin + 4, y + 6.8);
+  doc.text(`GST / Tax: ${gst > 0 ? money(gst) : "LUT exempt"}`, margin + 4, y + 12.3);
   doc.setFont("helvetica", "bold");
-  doc.text(`Final Payable: ${money(totalPayable)}`, pageWidth - margin - 4, y + 11, { align: "right" });
+  doc.text(`Final Payable: ${money(totalPayable)}`, pageWidth - margin - 4, y + 9.8, { align: "right" });
 
-  y += 30;
-  if (y + 70 > pageHeight - 20) {
+  y += 24;
+  if (lineItems.length > 6) {
     doc.addPage();
     y = margin;
   }
 
   const sealWidth = (contentWidth - gutter) * 0.38;
   const signWidth = contentWidth - sealWidth - gutter;
-  drawPanel(margin, y, sealWidth, 34, [255, 255, 255], [191, 219, 254]);
-  drawPanel(margin + sealWidth + gutter, y, signWidth, 34, [255, 255, 255], [191, 219, 254]);
+  drawPanel(margin, y, sealWidth, 28, [255, 255, 255], [191, 219, 254]);
+  drawPanel(margin + sealWidth + gutter, y, signWidth, 28, [255, 255, 255], [191, 219, 254]);
 
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.2);
-  doc.text("Company Seal", margin + sealWidth / 2, y + 8, { align: "center" });
+  doc.setFontSize(9.5);
+  doc.text("Company Seal", margin + sealWidth / 2, y + 7, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.6);
+  doc.setFontSize(7.8);
   doc.setTextColor(100, 116, 139);
-  doc.text("Space reserved for seal", margin + sealWidth / 2, y + 14, { align: "center" });
+  doc.text("Space reserved for seal", margin + sealWidth / 2, y + 12, { align: "center" });
   doc.setDrawColor(191, 219, 254);
-  doc.line(margin + 5, y + 22, margin + sealWidth - 5, y + 22);
+  doc.line(margin + 5, y + 18, margin + sealWidth - 5, y + 18);
 
   const signX = margin + sealWidth + gutter;
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.2);
-  doc.text("Authority Signature Name", signX + 4, y + 8);
+  doc.setFontSize(9.5);
+  doc.text("Authority Signature Name", signX + 4, y + 7);
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.2);
-  doc.text(getClientSignatureName(client), signX + 4, y + 14);
+  doc.setFontSize(9.5);
+  doc.text(getClientSignatureName(client), signX + 4, y + 12);
   doc.setDrawColor(191, 219, 254);
-  doc.line(signX + 4, y + 21, signX + signWidth - 4, y + 21);
+  doc.line(signX + 4, y + 18, signX + signWidth - 4, y + 18);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.6);
+  doc.setFontSize(7.8);
   doc.setTextColor(100, 116, 139);
-  doc.text("Authorized signatory", signX + 4, y + 27);
-  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 27, { align: "right" });
+  doc.text("Authorized signatory", signX + 4, y + 22);
+  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 22, { align: "right" });
 
-  const footerY = pageHeight - 15;
+  const footerY = pageHeight - 12;
   doc.setDrawColor(226, 232, 240);
   doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
   doc.setTextColor(100, 116, 139);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.1);
+  doc.setFontSize(7.6);
   doc.text(wrap(MYLAPAY_BRANDING.footerLine, contentWidth), margin, footerY);
   doc.text(
     wrap(
@@ -1133,7 +1133,7 @@ async function downloadInvoicePdfTemplate({
       contentWidth,
     ),
     margin,
-    footerY + 4,
+    footerY + 3,
   );
 
   doc.save(`${invoiceNumber}.pdf`);

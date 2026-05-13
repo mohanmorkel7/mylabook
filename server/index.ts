@@ -72,19 +72,19 @@ export function createServer() {
   }, 1000); // Delay initialization to prevent blocking server startup
 
   // Initialize FinOps schema tables (idempotent, runs once at startup)
-  try {
-    setTimeout(async () => {
+  setTimeout(async () => {
+    try {
       await initializeFinOpsSchema();
       await ensureFinOpsProductionSchema();
       await initializeFinanceSchema();
       await initializeInvoiceSchema();
-    }, 1500); // After database initialization
-  } catch (e) {
-    console.error(
-      "Failed to initialize FinOps schema:",
-      (e as any)?.message,
-    );
-  }
+    } catch (e) {
+      console.error(
+        "Failed to initialize FinOps schema:",
+        (e as any)?.message,
+      );
+    }
+  }, 1500); // After database initialization
 
   // Start FinOps Scheduler for local/dev runtime (idempotent)
   try {

@@ -166,8 +166,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.params;
     const result = await queryWithRetry(
-      "SELECT * FROM invoice_clients WHERE client_id = $1",
-      [clientId]
+      () => pool.query("SELECT * FROM invoice_clients WHERE client_id = $1", [clientId])
     );
 
     if (result.rows.length === 0) {
@@ -253,78 +252,79 @@ router.post("/clients", async (req: Request, res: Response) => {
 
     const id = clientId || `client-${Date.now()}`;
 
-    await queryWithRetry(
-      `INSERT INTO invoice_clients (
-        client_id, client_code, client_name, status, priority, services,
-        fixed_billing, monthly_invoice_est, monthly_txn_volume,
-        variable_revenue, aws_infra_recovery, recon_revenue,
-        profitability_revenue, min_guarantee, additional_fee, integration_fee,
-        billing_cycle, last_invoice_generated, logo, logo_class, color,
-        gstin, lut_number, billing_address, billing_email, signatory_name,
-        client_type, currency, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
-      ON CONFLICT (client_id) DO UPDATE SET
-        client_code = EXCLUDED.client_code,
-        client_name = EXCLUDED.client_name,
-        status = EXCLUDED.status,
-        priority = EXCLUDED.priority,
-        services = EXCLUDED.services,
-        fixed_billing = EXCLUDED.fixed_billing,
-        monthly_invoice_est = EXCLUDED.monthly_invoice_est,
-        monthly_txn_volume = EXCLUDED.monthly_txn_volume,
-        variable_revenue = EXCLUDED.variable_revenue,
-        aws_infra_recovery = EXCLUDED.aws_infra_recovery,
-        recon_revenue = EXCLUDED.recon_revenue,
-        profitability_revenue = EXCLUDED.profitability_revenue,
-        min_guarantee = EXCLUDED.min_guarantee,
-        additional_fee = EXCLUDED.additional_fee,
-        integration_fee = EXCLUDED.integration_fee,
-        billing_cycle = EXCLUDED.billing_cycle,
-        last_invoice_generated = EXCLUDED.last_invoice_generated,
-        logo = EXCLUDED.logo,
-        logo_class = EXCLUDED.logo_class,
-        color = EXCLUDED.color,
-        gstin = EXCLUDED.gstin,
-        lut_number = EXCLUDED.lut_number,
-        billing_address = EXCLUDED.billing_address,
-        billing_email = EXCLUDED.billing_email,
-        signatory_name = EXCLUDED.signatory_name,
-        client_type = EXCLUDED.client_type,
-        currency = EXCLUDED.currency,
-        notes = EXCLUDED.notes,
-        updated_at = NOW()`,
-      [
-        id,
-        encrypt(clientCode),
-        encrypt(clientName),
-        encrypt(status),
-        encrypt(priority),
-        encrypt(JSON.stringify(services)),
-        encrypt(String(fixedBilling)),
-        encrypt(String(monthlyInvoiceEstimate)),
-        encrypt(String(monthlyTransactionVolume)),
-        encrypt(String(variableRevenueGenerated)),
-        encrypt(String(awsInfraRecovery)),
-        encrypt(String(reconRevenue)),
-        encrypt(String(profitabilityRevenue)),
-        encrypt(String(minimumGuarantee)),
-        encrypt(String(additionalPlatformFee)),
-        encrypt(String(integrationFee)),
-        encrypt(billingCycle),
-        encrypt(lastInvoiceGenerated),
-        encrypt(logo),
-        encrypt(logoClass),
-        encrypt(color),
-        encrypt(gstin),
-        encrypt(lutNumber),
-        encrypt(billingAddress),
-        encrypt(billingEmail),
-        encrypt(signatoryName),
-        encrypt(clientType),
-        encrypt(currency),
-        encrypt(notes),
-      ]
-    );
+    const query = `INSERT INTO invoice_clients (
+      client_id, client_code, client_name, status, priority, services,
+      fixed_billing, monthly_invoice_est, monthly_txn_volume,
+      variable_revenue, aws_infra_recovery, recon_revenue,
+      profitability_revenue, min_guarantee, additional_fee, integration_fee,
+      billing_cycle, last_invoice_generated, logo, logo_class, color,
+      gstin, lut_number, billing_address, billing_email, signatory_name,
+      client_type, currency, notes
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+    ON CONFLICT (client_id) DO UPDATE SET
+      client_code = EXCLUDED.client_code,
+      client_name = EXCLUDED.client_name,
+      status = EXCLUDED.status,
+      priority = EXCLUDED.priority,
+      services = EXCLUDED.services,
+      fixed_billing = EXCLUDED.fixed_billing,
+      monthly_invoice_est = EXCLUDED.monthly_invoice_est,
+      monthly_txn_volume = EXCLUDED.monthly_txn_volume,
+      variable_revenue = EXCLUDED.variable_revenue,
+      aws_infra_recovery = EXCLUDED.aws_infra_recovery,
+      recon_revenue = EXCLUDED.recon_revenue,
+      profitability_revenue = EXCLUDED.profitability_revenue,
+      min_guarantee = EXCLUDED.min_guarantee,
+      additional_fee = EXCLUDED.additional_fee,
+      integration_fee = EXCLUDED.integration_fee,
+      billing_cycle = EXCLUDED.billing_cycle,
+      last_invoice_generated = EXCLUDED.last_invoice_generated,
+      logo = EXCLUDED.logo,
+      logo_class = EXCLUDED.logo_class,
+      color = EXCLUDED.color,
+      gstin = EXCLUDED.gstin,
+      lut_number = EXCLUDED.lut_number,
+      billing_address = EXCLUDED.billing_address,
+      billing_email = EXCLUDED.billing_email,
+      signatory_name = EXCLUDED.signatory_name,
+      client_type = EXCLUDED.client_type,
+      currency = EXCLUDED.currency,
+      notes = EXCLUDED.notes,
+      updated_at = NOW()`;
+
+    const params = [
+      id,
+      encrypt(clientCode),
+      encrypt(clientName),
+      encrypt(status),
+      encrypt(priority),
+      encrypt(JSON.stringify(services)),
+      encrypt(String(fixedBilling)),
+      encrypt(String(monthlyInvoiceEstimate)),
+      encrypt(String(monthlyTransactionVolume)),
+      encrypt(String(variableRevenueGenerated)),
+      encrypt(String(awsInfraRecovery)),
+      encrypt(String(reconRevenue)),
+      encrypt(String(profitabilityRevenue)),
+      encrypt(String(minimumGuarantee)),
+      encrypt(String(additionalPlatformFee)),
+      encrypt(String(integrationFee)),
+      encrypt(billingCycle),
+      encrypt(lastInvoiceGenerated),
+      encrypt(logo),
+      encrypt(logoClass),
+      encrypt(color),
+      encrypt(gstin),
+      encrypt(lutNumber),
+      encrypt(billingAddress),
+      encrypt(billingEmail),
+      encrypt(signatoryName),
+      encrypt(clientType),
+      encrypt(currency),
+      encrypt(notes),
+    ];
+
+    await queryWithRetry(() => pool.query(query, params));
 
     res.json({ success: true, clientId: id });
   } catch (error) {
@@ -337,8 +337,7 @@ router.post("/clients", async (req: Request, res: Response) => {
 router.get("/clients", async (req: Request, res: Response) => {
   try {
     const result = await queryWithRetry(
-      "SELECT * FROM invoice_clients ORDER BY updated_at DESC",
-      []
+      () => pool.query("SELECT * FROM invoice_clients ORDER BY updated_at DESC")
     );
 
     const clients = result.rows.map((client: any) => ({
@@ -378,27 +377,28 @@ router.post("/invoices", async (req: Request, res: Response) => {
       serial,
     } = req.body;
 
-    await queryWithRetry(
-      `INSERT INTO invoice_records (
-        invoice_id, invoice_number, client_id, client_name, month,
-        amount, status, generated_date, financial_year, serial
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (invoice_id) DO UPDATE SET
-        status = EXCLUDED.status,
-        updated_at = NOW()`,
-      [
-        invoiceId,
-        encrypt(invoiceNumber),
-        encrypt(clientId),
-        encrypt(clientName),
-        encrypt(month),
-        encrypt(String(amount)),
-        encrypt(status),
-        encrypt(generatedDate),
-        encrypt(financialYear),
-        encrypt(String(serial)),
-      ]
-    );
+    const query = `INSERT INTO invoice_records (
+      invoice_id, invoice_number, client_id, client_name, month,
+      amount, status, generated_date, financial_year, serial
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    ON CONFLICT (invoice_id) DO UPDATE SET
+      status = EXCLUDED.status,
+      updated_at = NOW()`;
+
+    const params = [
+      invoiceId,
+      encrypt(invoiceNumber),
+      encrypt(clientId),
+      encrypt(clientName),
+      encrypt(month),
+      encrypt(String(amount)),
+      encrypt(status),
+      encrypt(generatedDate),
+      encrypt(financialYear),
+      encrypt(String(serial)),
+    ];
+
+    await queryWithRetry(() => pool.query(query, params));
 
     res.json({ success: true, invoiceId });
   } catch (error) {
@@ -412,8 +412,7 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.params;
     const result = await queryWithRetry(
-      "SELECT * FROM invoice_records WHERE client_id = $1 ORDER BY generated_date DESC",
-      [clientId]
+      () => pool.query("SELECT * FROM invoice_records WHERE client_id = $1 ORDER BY generated_date DESC", [clientId])
     );
 
     const invoices = result.rows.map((row: any) => ({

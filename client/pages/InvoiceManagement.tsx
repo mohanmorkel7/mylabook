@@ -999,30 +999,40 @@ async function downloadInvoicePdfTemplate({
 
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(...INVOICE_THEME.primaryRgb);
-  doc.roundedRect(margin, margin, contentWidth, 34, 6, 6, "FD");
-  doc.setFillColor(...INVOICE_THEME.primaryRgb);
-  doc.rect(margin, margin, contentWidth, 2, "F");
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(margin + 5, margin + 8, 46, 18, 4, 4, "F");
+  doc.roundedRect(margin, margin, contentWidth, 44, 7, 7, "FD");
+  doc.setFillColor(...INVOICE_THEME.secondaryRgb);
+  doc.roundedRect(margin + 4, margin + 4, 60, 36, 5, 5, "F");
   if (logoData) {
     try {
-      doc.addImage(logoData, "PNG", margin + 7, margin + 10, 32, 12);
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(margin + 8, margin + 12, 32, 12, 3, 3, "F");
+      doc.addImage(logoData, "PNG", margin + 10, margin + 14, 28, 8.8);
     } catch {}
   }
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.4);
+  doc.text("Mylapay", margin + 44, margin + 17, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.6);
+  doc.text("Mindeed Technologies and Services Pvt Ltd", margin + 44, margin + 22, { align: "center" });
+
   doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(17.5);
-  doc.text("Tax Invoice", pageWidth - margin - 4, margin + 10, { align: "right" });
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(18.5);
+  doc.text("Tax Invoice", pageWidth - margin - 4, margin + 11, { align: "right" });
   doc.setFontSize(8.2);
-  doc.text("Enterprise billing statement", pageWidth - margin - 4, margin + 15, { align: "right" });
-  doc.setFontSize(8.9);
-  doc.text(`Invoice Number: ${invoiceNumber}`, pageWidth - margin - 4, margin + 21, { align: "right" });
-  doc.text(`Financial Year: ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 25, { align: "right" });
-  doc.text(`Month: ${month}`, pageWidth - margin - 4, margin + 29, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.text("Enterprise billing statement", pageWidth - margin - 4, margin + 16, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.8);
+  doc.text(invoiceNumber, pageWidth - margin - 4, margin + 23, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.7);
+  doc.text(`FY ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 28, { align: "right" });
+  doc.text(month, pageWidth - margin - 4, margin + 32, { align: "right" });
 
-  let y = margin + 39;
+  let y = margin + 48;
   drawPanel(margin, y, contentWidth, 18, [255, 255, 255], INVOICE_THEME.primaryRgb);
   const summaryThird = contentWidth / 3;
   doc.setTextColor(...INVOICE_THEME.secondaryRgb);
@@ -1207,14 +1217,14 @@ async function downloadInvoicePdfTemplate({
   doc.text("Authorized signatory", signX + 4, y + 20);
   doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 20, { align: "right" });
 
-  const footerY = pageHeight - 10;
-  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
-  doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
+  const footerY = pageHeight - 18;
+  doc.setFillColor(...INVOICE_THEME.secondaryRgb);
+  doc.roundedRect(margin, footerY, contentWidth, 16, 5, 5, "F");
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.9);
+  doc.setFontSize(6.4);
   MYLAPAY_FOOTER_LINES.forEach((line, index) => {
-    doc.text(line, margin, footerY + index * 2.8);
+    doc.text(line, margin + 4, footerY + 4 + index * 4);
   });
 
   doc.save(`${invoiceNumber}.pdf`);

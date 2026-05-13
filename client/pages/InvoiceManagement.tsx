@@ -2901,9 +2901,25 @@ export default function InvoiceManagement() {
     });
   }, [clients, search, serviceFilter]);
 
+  // Build aggregated invoice list from all clients' invoice history
+  const allInvoicesFromClients = useMemo(() => {
+    const allInvoices: (InvoiceRecord & { client: string })[] = [];
+    clients.forEach((client) => {
+      if (client.invoiceHistory && Array.isArray(client.invoiceHistory)) {
+        client.invoiceHistory.forEach((inv) => {
+          allInvoices.push({
+            ...inv,
+            client: client.name,
+          });
+        });
+      }
+    });
+    return allInvoices.sort((a, b) => new Date(b.generatedDate).getTime() - new Date(a.generatedDate).getTime());
+  }, [clients]);
+
   const metrics = useMemo(() => {
     const totalRevenue = clients.reduce((sum, client) => sum + client.monthlyInvoiceEstimate, 0);
-    const pendingInvoices = invoices.filter((invoice) => invoice.status === "Waiting for approval" || invoice.status === "Generated" || invoice.status === "Send" || invoice.status === "Overdue").length;
+    const pendingInvoices = allInvoicesFromClients.filter((invoice) => invoice.status === "Waiting for approval" || invoice.status === "Generated" || invoice.status === "Send" || invoice.status === "Overdue").length;
     const transactionVolume = clients.reduce((sum, client) => sum + client.monthlyTransactionVolume, 0);
     const variableRevenue = clients.reduce((sum, client) => sum + client.variableRevenueGenerated, 0);
     const awsRecovery = clients.reduce((sum, client) => sum + client.awsInfraRecovery, 0);
@@ -4124,7 +4140,7 @@ export default function InvoiceManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoices.map((invoice) => (
+                {allInvoicesFromClients.map((invoice) => (
                   <TableRow key={invoice.invoiceId}>
                     <TableCell className="font-medium">{getInvoiceDisplayNumber(invoice)}</TableCell>
                     <TableCell>{invoice.month}</TableCell>

@@ -1921,20 +1921,18 @@ function ClientOverviewScreen({
   const finalPayable = invoiceDraft + tax;
 
   // Logging for debugging Commercial Summary Panel calculations
-  if (isOverviewRoute) {
-    console.log("[Invoice] Commercial Summary calculations:", {
-      clientId: client.id,
-      clientName: client.name,
-      fixedBilling: client.fixedBilling,
-      minimumGuarantee: client.minimumGuarantee,
-      fixedCharges,
-      awsMargin,
-      invoiceDraft,
-      variableCharges,
-      tax,
-      finalPayable,
-    });
-  }
+  console.log("[Invoice] Commercial Summary calculations:", {
+    clientId: client.id,
+    clientName: client.name,
+    fixedBilling: client.fixedBilling,
+    minimumGuarantee: client.minimumGuarantee,
+    fixedCharges,
+    awsMargin,
+    invoiceDraft,
+    variableCharges,
+    tax,
+    finalPayable,
+  });
   const priority = getPriorityForScoring(client);
 
   return (

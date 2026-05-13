@@ -3163,6 +3163,9 @@ export default function InvoiceManagement() {
         </div>
       </div>
 
+      {/* Configuration sections hidden from main view - only shown in settings modal via gear icon */}
+      {false && (
+        <>
       <Card className="border-muted/60 shadow-sm">
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
@@ -3304,7 +3307,6 @@ export default function InvoiceManagement() {
         </CardContent>
       </Card>
 
-      {(currentUserRole === "admin" || currentUserRole === "finance-admin") && (
       <Card className="border-muted/60 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -3566,6 +3568,7 @@ export default function InvoiceManagement() {
           </div>
         </CardContent>
       </Card>
+        </>
       )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
@@ -3851,15 +3854,15 @@ export default function InvoiceManagement() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Configuration Management
+              Configuration & Approvals
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6">
-            <div className="flex gap-2 border-b">
+            <div className="flex gap-2 border-b overflow-x-auto">
               <Button
                 variant={settingsActiveTab === "requests" ? "default" : "ghost"}
-                className="rounded-b-none"
+                className="rounded-b-none whitespace-nowrap"
                 onClick={() => setSettingsActiveTab("requests")}
               >
                 Pending Requests
@@ -3871,7 +3874,7 @@ export default function InvoiceManagement() {
               </Button>
               <Button
                 variant={settingsActiveTab === "history" ? "default" : "ghost"}
-                className="rounded-b-none"
+                className="rounded-b-none whitespace-nowrap"
                 onClick={() => setSettingsActiveTab("history")}
               >
                 Change History (Last 5)

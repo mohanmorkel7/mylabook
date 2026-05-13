@@ -877,9 +877,9 @@ async function downloadInvoicePdfTemplate({
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 12;
+  const margin = 10;
   const contentWidth = pageWidth - margin * 2;
-  const gutter = 6;
+  const gutter = 5;
   const logoData = await fetchImageDataUrl(MYLAPAY_LOGO_URL);
   const money = (value: number) => `INR ${formatCurrency(value)}`;
   const wrap = (value: string, width: number) => doc.splitTextToSize(String(value || "—"), width) as string[];
@@ -900,8 +900,8 @@ async function downloadInvoicePdfTemplate({
   const measureFieldBlock = (fields: Array<{ label: string; value: string }>, width: number) => {
     return fields.reduce((height, field) => {
       const valueLines = wrap(field.value, width);
-      return height + 3.5 + valueLines.length * 4.2 + 2.5;
-    }, 10);
+      return height + 3 + valueLines.length * 3.7 + 2.2;
+    }, 9);
   };
 
   const renderFieldBlock = (
@@ -915,23 +915,23 @@ async function downloadInvoicePdfTemplate({
     const titleColor = options?.titleColor || [29, 78, 216];
     const bodyColor = options?.bodyColor || [15, 23, 42];
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.8);
+    doc.setFontSize(10.2);
     doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
-    doc.text(title, x + 4, y + 6);
+    doc.text(title, x + 4, y + 5.6);
 
-    let cursorY = y + 13;
+    let cursorY = y + 12;
     fields.forEach((field) => {
       const lines = wrap(field.value, width - 8);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.8);
-      doc.setTextColor(96, 112, 133);
+      doc.setFontSize(7.2);
+      doc.setTextColor(100, 116, 139);
       doc.text(field.label, x + 4, cursorY);
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.4);
+      doc.setFontSize(8.8);
       doc.setTextColor(bodyColor[0], bodyColor[1], bodyColor[2]);
-      doc.text(lines, x + 4, cursorY + 4);
-      cursorY += 3.8 + lines.length * 4.2 + 1.8;
+      doc.text(lines, x + 4, cursorY + 3.8);
+      cursorY += 3.4 + lines.length * 3.8 + 1.4;
     });
   };
 
@@ -944,52 +944,63 @@ async function downloadInvoicePdfTemplate({
     align: "left" | "right" = "left",
   ) => {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.8);
-    doc.setTextColor(96, 112, 133);
+    doc.setFontSize(7.4);
+    doc.setTextColor(100, 116, 139);
     doc.text(label, align === "right" ? x + width : x, y, { align });
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
+    doc.setFontSize(9.8);
     doc.setTextColor(15, 23, 42);
-    doc.text(wrap(value, width)[0], align === "right" ? x + width : x, y + 5, { align });
+    doc.text(wrap(value, width)[0], align === "right" ? x + width : x, y + 4.4, { align });
   };
 
-  doc.setFillColor(248, 251, 255);
+  doc.setFillColor(248, 250, 255);
   doc.setDrawColor(191, 219, 254);
-  doc.roundedRect(margin, margin, contentWidth, 28, 5, 5, "FD");
+  doc.roundedRect(margin, margin, contentWidth, 34, 6, 6, "FD");
   doc.setFillColor(37, 99, 235);
   doc.rect(margin, margin, contentWidth, 2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(margin + 5, margin + 8, 46, 18, 4, 4, "F");
   if (logoData) {
     try {
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(margin + 4, margin + 7, 38, 16, 3, 3, "F");
-      doc.addImage(logoData, "PNG", margin + 6, margin + 9, 30, 10);
+      doc.addImage(logoData, "PNG", margin + 7, margin + 10, 32, 12);
     } catch {}
   }
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16.5);
+  doc.setFontSize(17.5);
   doc.text("Tax Invoice", pageWidth - margin - 4, margin + 10, { align: "right" });
   doc.setTextColor(71, 85, 105);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.8);
-  doc.text(`Invoice Number: ${invoiceNumber}`, pageWidth - margin - 4, margin + 16, { align: "right" });
-  doc.text(`Financial Year: ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 20, { align: "right" });
-  doc.text(`Month: ${month}`, pageWidth - margin - 4, margin + 24, { align: "right" });
+  doc.setFontSize(8.2);
+  doc.text("Enterprise billing statement", pageWidth - margin - 4, margin + 15, { align: "right" });
+  doc.setFontSize(8.9);
+  doc.text(`Invoice Number: ${invoiceNumber}`, pageWidth - margin - 4, margin + 21, { align: "right" });
+  doc.text(`Financial Year: ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 25, { align: "right" });
+  doc.text(`Month: ${month}`, pageWidth - margin - 4, margin + 29, { align: "right" });
 
-  let y = margin + 32;
-  drawPanel(margin, y, contentWidth, 16, [239, 246, 255], [191, 219, 254]);
+  let y = margin + 39;
+  drawPanel(margin, y, contentWidth, 18, [239, 246, 255], [191, 219, 254]);
+  const summaryThird = contentWidth / 3;
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.8);
-  doc.text("Invoice Summary", margin + 4, y + 5.5);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.4);
-  doc.setTextColor(51, 65, 85);
-  doc.text(`Status: ${status}`, margin + 4, y + 11.2);
-  doc.text(`Generated Date: ${generatedDate}`, pageWidth / 2, y + 11.2, { align: "center" });
-  doc.text(`Amount: ${money(amount)}`, pageWidth - margin - 4, y + 11.2, { align: "right" });
+  doc.setFontSize(10.2);
+  doc.text("Invoice Summary", margin + 4, y + 5.8);
+  doc.setDrawColor(226, 232, 240);
+  doc.line(margin + summaryThird, y + 3, margin + summaryThird, y + 15);
+  doc.line(margin + summaryThird * 2, y + 3, margin + summaryThird * 2, y + 15);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.4);
+  doc.setTextColor(100, 116, 139);
+  doc.text("STATUS", margin + 4, y + 10.7);
+  doc.text("GENERATED", margin + summaryThird + 4, y + 10.7);
+  doc.text("AMOUNT", margin + summaryThird * 2 + 4, y + 10.7);
+  doc.setFontSize(9.2);
+  doc.setTextColor(15, 23, 42);
+  doc.text(status, margin + 4, y + 15);
+  doc.text(generatedDate, margin + summaryThird + 4, y + 15);
+  doc.text(money(amount), margin + summaryThird * 2 + 4, y + 15);
 
-  y += 22;
+  y += 25;
   const leftBillFrom = [
     { label: "Company", value: MYLAPAY_BRANDING.companyName },
     { label: "Address", value: MYLAPAY_BRANDING.address },
@@ -1009,26 +1020,28 @@ async function downloadInvoicePdfTemplate({
   const cardHeight = Math.max(
     measureFieldBlock(leftBillFrom, (contentWidth - gutter) / 2),
     measureFieldBlock(rightBillTo, (contentWidth - gutter) / 2),
-  );
+  ) + 1;
   drawPanel(margin, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], [226, 232, 240]);
   drawPanel(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], [226, 232, 240]);
   renderFieldBlock(margin, y, (contentWidth - gutter) / 2, "Bill From", leftBillFrom);
   renderFieldBlock(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, "Bill To", rightBillTo);
 
-  y += cardHeight + 6;
+  y += cardHeight + 5;
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.8);
+  doc.setFontSize(10.4);
   doc.text("Bill Details", margin, y);
   y += 3;
-  drawPanel(margin, y, contentWidth, 22, [248, 250, 252], [226, 232, 240]);
+  drawPanel(margin, y, contentWidth, 20, [248, 250, 252], [226, 232, 240]);
   const halfWidth = (contentWidth - 10) / 2;
-  drawTwoColumnDetail(margin + 4, y + 5, halfWidth, "Invoice Month", month);
-  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 5, halfWidth, "Transaction Volume", client.monthlyTransactionVolume.toLocaleString(), "right");
-  drawTwoColumnDetail(margin + 4, y + 14, halfWidth, "Invoice Status", status);
-  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 14, halfWidth, "Last Invoice Generated", client.lastInvoiceGenerated, "right");
+  doc.setDrawColor(226, 232, 240);
+  doc.line(margin + halfWidth + 5, y + 3, margin + halfWidth + 5, y + 17);
+  drawTwoColumnDetail(margin + 4, y + 4.5, halfWidth, "Invoice Month", month);
+  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 4.5, halfWidth, "Transaction Volume", client.monthlyTransactionVolume.toLocaleString(), "right");
+  drawTwoColumnDetail(margin + 4, y + 12.5, halfWidth, "Invoice Status", status);
+  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 12.5, halfWidth, "Last Invoice Generated", client.lastInvoiceGenerated, "right");
 
-  y += 30;
+  y += 28;
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
@@ -1037,33 +1050,33 @@ async function downloadInvoicePdfTemplate({
   y += 4;
   const tableX = margin;
   const tableWidth = contentWidth;
-  const tableHeaderHeight = 8;
-  const rowHeights = lineItems.map((item) => Math.max(7.2, wrap(item.description, tableWidth - 45).length * 3.4 + 2.8));
+  const tableHeaderHeight = 7.6;
+  const rowHeights = lineItems.map((item) => Math.max(6.8, wrap(item.description, tableWidth - 45).length * 3.2 + 2.2));
   const tableBodyHeight = tableHeaderHeight + rowHeights.reduce((sum, height) => sum + height, 0);
   drawPanel(tableX, y, tableWidth, tableBodyHeight, [255, 255, 255], [226, 232, 240]);
   doc.setFillColor(37, 99, 235);
   doc.rect(tableX, y, tableWidth, tableHeaderHeight, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("Particulars", tableX + 3, y + 6);
-  doc.text("Amount", tableX + tableWidth - 3, y + 6, { align: "right" });
+  doc.setFontSize(8.8);
+  doc.text("Particulars", tableX + 3, y + 5.5);
+  doc.text("Amount", tableX + tableWidth - 3, y + 5.5, { align: "right" });
 
-  let rowY = y + tableHeaderHeight + 4.2;
+  let rowY = y + tableHeaderHeight + 3.8;
   lineItems.forEach((item, index) => {
     const descLines = wrap(item.description, tableWidth - 45);
     const rowHeight = rowHeights[index];
     if (index % 2 === 0) {
       doc.setFillColor(248, 250, 252);
-      doc.rect(tableX + 1, rowY - 3.2, tableWidth - 2, rowHeight, "F");
+      doc.rect(tableX + 1, rowY - 3.0, tableWidth - 2, rowHeight, "F");
     }
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.4);
-    doc.text(descLines, tableX + 3, rowY - 0.3);
+    doc.setFontSize(8.2);
+    doc.text(descLines, tableX + 3, rowY - 0.25);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.4);
-    doc.text(money(item.amount), tableX + tableWidth - 3, rowY - 0.3, { align: "right" });
+    doc.setFontSize(8.2);
+    doc.text(money(item.amount), tableX + tableWidth - 3, rowY - 0.25, { align: "right" });
     rowY += rowHeight;
   });
 
@@ -1072,16 +1085,17 @@ async function downloadInvoicePdfTemplate({
   const totalPayable = subtotal + gst;
 
   y = rowY + 2;
-  drawPanel(margin, y, contentWidth, 20, [239, 246, 255], [191, 219, 254]);
+  drawPanel(margin, y, contentWidth, 21, [239, 246, 255], [191, 219, 254]);
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.8);
-  doc.text(`Subtotal: ${money(subtotal)}`, margin + 4, y + 6.8);
-  doc.text(`GST / Tax: ${gst > 0 ? money(gst) : "LUT exempt"}`, margin + 4, y + 12.3);
+  doc.setFontSize(8.6);
+  doc.text(`Subtotal: ${money(subtotal)}`, margin + 4, y + 7);
+  doc.text(`GST / Tax: ${gst > 0 ? money(gst) : "LUT exempt"}`, margin + 4, y + 13);
   doc.setFont("helvetica", "bold");
-  doc.text(`Final Payable: ${money(totalPayable)}`, pageWidth - margin - 4, y + 9.8, { align: "right" });
+  doc.setFontSize(9.2);
+  doc.text(`Final Payable: ${money(totalPayable)}`, pageWidth - margin - 4, y + 10, { align: "right" });
 
-  y += 24;
+  y += 25;
   if (lineItems.length > 6) {
     doc.addPage();
     y = margin;
@@ -1089,43 +1103,43 @@ async function downloadInvoicePdfTemplate({
 
   const sealWidth = (contentWidth - gutter) * 0.38;
   const signWidth = contentWidth - sealWidth - gutter;
-  drawPanel(margin, y, sealWidth, 28, [255, 255, 255], [191, 219, 254]);
-  drawPanel(margin + sealWidth + gutter, y, signWidth, 28, [255, 255, 255], [191, 219, 254]);
+  drawPanel(margin, y, sealWidth, 30, [255, 255, 255], [191, 219, 254]);
+  drawPanel(margin + sealWidth + gutter, y, signWidth, 30, [255, 255, 255], [191, 219, 254]);
 
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.text("Company Seal", margin + sealWidth / 2, y + 7, { align: "center" });
+  doc.setFontSize(9.2);
+  doc.text("Company Seal", margin + sealWidth / 2, y + 7.2, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.8);
+  doc.setFontSize(7.4);
   doc.setTextColor(100, 116, 139);
-  doc.text("Space reserved for seal", margin + sealWidth / 2, y + 12, { align: "center" });
+  doc.text("Space reserved for seal", margin + sealWidth / 2, y + 12.2, { align: "center" });
   doc.setDrawColor(191, 219, 254);
-  doc.line(margin + 5, y + 18, margin + sealWidth - 5, y + 18);
+  doc.line(margin + 5, y + 19, margin + sealWidth - 5, y + 19);
 
   const signX = margin + sealWidth + gutter;
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.text("Authority Signature Name", signX + 4, y + 7);
+  doc.setFontSize(9.2);
+  doc.text("Authority Signature", signX + 4, y + 7.2);
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.text(getClientSignatureName(client), signX + 4, y + 12);
+  doc.setFontSize(9.7);
+  doc.text(getClientSignatureName(client), signX + 4, y + 12.5);
   doc.setDrawColor(191, 219, 254);
-  doc.line(signX + 4, y + 18, signX + signWidth - 4, y + 18);
+  doc.line(signX + 4, y + 19, signX + signWidth - 4, y + 19);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.8);
+  doc.setFontSize(7.4);
   doc.setTextColor(100, 116, 139);
-  doc.text("Authorized signatory", signX + 4, y + 22);
-  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 22, { align: "right" });
+  doc.text("Authorized signatory", signX + 4, y + 23);
+  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 23, { align: "right" });
 
-  const footerY = pageHeight - 12;
+  const footerY = pageHeight - 11;
   doc.setDrawColor(226, 232, 240);
   doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
   doc.setTextColor(100, 116, 139);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.6);
+  doc.setFontSize(7.2);
   doc.text(wrap(MYLAPAY_BRANDING.footerLine, contentWidth), margin, footerY);
   doc.text(
     wrap(

@@ -2566,8 +2566,7 @@ export default function InvoiceManagement() {
   });
 
   const [activeConfigTab, setActiveConfigTab] = useState<"company" | "tax" | "currency">("company");
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [settingsActiveTab, setSettingsActiveTab] = useState<"requests" | "history">("requests");
+  const [settingsViewOpen, setSettingsViewOpen] = useState(false);
 
   const [configChangeRequests, setConfigChangeRequests] = useState<ConfigChangeRequest[]>(() => {
     try {
@@ -3141,7 +3140,7 @@ export default function InvoiceManagement() {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setSettingsModalOpen(true)}
+                onClick={() => setSettingsViewOpen(true)}
                 title="Configuration settings (Admin only)"
               >
                 <Settings className="h-4 w-4" />
@@ -3163,9 +3162,19 @@ export default function InvoiceManagement() {
         </div>
       </div>
 
-      {/* Configuration sections hidden from main view - only shown in settings modal via gear icon */}
-      {false && (
-        <>
+      {/* Configuration sections shown when settings view is open */}
+      {settingsViewOpen && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="icon" onClick={() => setSettingsViewOpen(false)}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <div className="text-sm text-muted-foreground">Invoice Management</div>
+              <h2 className="text-2xl font-semibold tracking-tight">Configuration & Approvals</h2>
+            </div>
+          </div>
+
       <Card className="border-muted/60 shadow-sm">
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
@@ -3568,9 +3577,12 @@ export default function InvoiceManagement() {
           </div>
         </CardContent>
       </Card>
-        </>
+        </div>
       )}
 
+      {/* Main Dashboard - hidden when settings view is open */}
+      {!settingsViewOpen && (
+        <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         <MetricCard title="Total Revenue" value={currencyLabel(metrics.totalRevenue)} change="+18.2% MoM" icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={metrics.revenueSpark} />
         <MetricCard title="Monthly Invoice Value" value={currencyLabel(metrics.monthlyInvoiceValue)} change="+12.8% MoM" icon={ReceiptText} accent="bg-gradient-to-br from-sky-500 to-indigo-600" sparkline={metrics.invoiceSpark} />
@@ -3848,183 +3860,9 @@ export default function InvoiceManagement() {
           </div>
         </DialogContent>
       </Dialog>
+        </>
+      )}
 
-      <Dialog open={settingsModalOpen} onOpenChange={setSettingsModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Configuration & Approvals
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            <div className="flex gap-2 border-b overflow-x-auto">
-              <Button
-                variant={settingsActiveTab === "requests" ? "default" : "ghost"}
-                className="rounded-b-none whitespace-nowrap"
-                onClick={() => setSettingsActiveTab("requests")}
-              >
-                Pending Requests
-                {configChangeRequests.filter((r) => r.status === "pending").length > 0 && (
-                  <Badge className="ml-2" variant="destructive">
-                    {configChangeRequests.filter((r) => r.status === "pending").length}
-                  </Badge>
-                )}
-              </Button>
-              <Button
-                variant={settingsActiveTab === "history" ? "default" : "ghost"}
-                className="rounded-b-none whitespace-nowrap"
-                onClick={() => setSettingsActiveTab("history")}
-              >
-                Change History (Last 5)
-              </Button>
-            </div>
-
-            {settingsActiveTab === "requests" && (
-              <div className="space-y-4">
-                {configChangeRequests.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground">
-                    <Clock className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                    <p>No pending change requests</p>
-                  </div>
-                ) : (
-                  configChangeRequests.map((request) => (
-                    <Card key={request.id} className="border-muted/60">
-                      <CardContent className="pt-6">
-                        <div className="space-y-4">
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Type</p>
-                              <Badge className="mt-1 rounded-full capitalize">{request.type.replace("-", " ")}</Badge>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Status</p>
-                              <div className="mt-1 flex items-center gap-2">
-                                {request.status === "pending" && (
-                                  <>
-                                    <Clock className="h-4 w-4 text-amber-600" />
-                                    <Badge variant="outline" className="rounded-full">Pending</Badge>
-                                  </>
-                                )}
-                                {request.status === "approved" && (
-                                  <>
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                    <Badge variant="outline" className="rounded-full text-green-600">Approved</Badge>
-                                  </>
-                                )}
-                                {request.status === "applied" && (
-                                  <>
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                    <Badge variant="outline" className="rounded-full text-green-600">Applied</Badge>
-                                  </>
-                                )}
-                                {request.status === "rejected" && (
-                                  <>
-                                    <XCircle className="h-4 w-4 text-red-600" />
-                                    <Badge variant="outline" className="rounded-full text-red-600">Rejected</Badge>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Requested By</p>
-                              <p className="mt-1 font-medium text-sm">{request.requestedBy}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Requested At</p>
-                              <p className="mt-1 font-medium text-sm">{new Date(request.requestedAt).toLocaleString()}</p>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium mb-2">Changes</p>
-                            <div className="rounded-lg bg-muted/30 p-3 font-mono text-xs">
-                              {Object.entries(request.changes).map(([key, value]) => (
-                                <div key={key} className="text-muted-foreground">
-                                  <span className="text-foreground">{key}:</span> {JSON.stringify(value)}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium mb-2">Approvals ({request.approvals.length}/2 required)</p>
-                            <div className="space-y-2">
-                              {request.approvals.length === 0 && (
-                                <p className="text-sm text-muted-foreground">No approvals yet</p>
-                              )}
-                              {request.approvals.map((approval, idx) => (
-                                <div key={idx} className="flex items-center gap-2 rounded-lg bg-muted/20 p-2 text-sm">
-                                  <CheckCircle className="h-4 w-4 text-green-600" />
-                                  <span>{approval.approvedBy}</span>
-                                  <span className="text-muted-foreground text-xs">({new Date(approval.approvedAt).toLocaleString()})</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          {request.status === "pending" && (
-                            <div className="flex gap-2">
-                              <Button
-                                className="flex-1 gap-2"
-                                onClick={() => approveConfigChange(request.id)}
-                                variant="default"
-                              >
-                                <CheckCircle className="h-4 w-4" /> Approve
-                              </Button>
-                              <Button
-                                className="flex-1 gap-2"
-                                onClick={() => rejectConfigChange(request.id)}
-                                variant="destructive"
-                              >
-                                <XCircle className="h-4 w-4" /> Reject
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            )}
-
-            {settingsActiveTab === "history" && (
-              <div className="space-y-4">
-                {auditLog.slice(0, 5).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground">
-                    <Clock className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                    <p>No configuration changes yet</p>
-                  </div>
-                ) : (
-                  auditLog.slice(0, 5).map((entry) => (
-                    <Card key={entry.id} className="border-muted/60">
-                      <CardContent className="pt-6">
-                        <div className="space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-1">
-                              <p className="font-medium capitalize">{entry.type.replace("-", " ")}</p>
-                              <p className="text-sm text-muted-foreground">Changed by {entry.changedBy}</p>
-                            </div>
-                            <p className="text-sm text-muted-foreground">{new Date(entry.changedAt).toLocaleString()}</p>
-                          </div>
-                          <div className="rounded-lg bg-muted/30 p-3 font-mono text-xs space-y-1">
-                            {Object.entries(entry.changes).map(([key, value]) => (
-                              <div key={key} className="text-muted-foreground">
-                                <span className="text-foreground">{key}:</span> {JSON.stringify(value)}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

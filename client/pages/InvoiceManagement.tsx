@@ -921,312 +921,294 @@ async function downloadInvoicePdfTemplate({
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 10;
+  const margin = 14;
   const contentWidth = pageWidth - margin * 2;
-  const gutter = 5;
+  const PRIMARY = INVOICE_THEME.primaryRgb;
+  const SECONDARY = INVOICE_THEME.secondaryRgb;
+  const TEXT = SECONDARY;
+  const MUTED: [number, number, number] = [110, 124, 158];
+  const SOFT: [number, number, number] = [225, 232, 246];
+  const FOOTER_HEIGHT = 18;
   const logoData = await fetchImageDataUrl(MYLAPAY_LOGO_URL);
   const money = (value: number) => `INR ${formatCurrency(value)}`;
-  const wrap = (value: string, width: number) => doc.splitTextToSize(String(value || "—"), width) as string[];
+  const wrap = (value: string, width: number) =>
+    doc.splitTextToSize(String(value || "—"), width) as string[];
 
-  const drawPanel = (
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    fill: [number, number, number],
-    stroke: [number, number, number],
-  ) => {
-    doc.setFillColor(fill[0], fill[1], fill[2]);
-    doc.setDrawColor(stroke[0], stroke[1], stroke[2]);
-    doc.roundedRect(x, y, width, height, 4, 4, "FD");
-  };
+  const setText = (color: [number, number, number]) => doc.setTextColor(color[0], color[1], color[2]);
+  const setFill = (color: [number, number, number]) => doc.setFillColor(color[0], color[1], color[2]);
+  const setStroke = (color: [number, number, number]) => doc.setDrawColor(color[0], color[1], color[2]);
 
-  const measureFieldBlock = (fields: Array<{ label: string; value: string }>, width: number) => {
-    return fields.reduce((height, field) => {
-      const valueLines = wrap(field.value, width);
-      return height + 3 + valueLines.length * 3.7 + 2.2;
-    }, 9);
-  };
-
-  const renderFieldBlock = (
-    x: number,
-    y: number,
-    width: number,
-    title: string,
-    fields: Array<{ label: string; value: string }>,
-    options?: { titleColor?: [number, number, number]; bodyColor?: [number, number, number] },
-  ) => {
-    const titleColor = options?.titleColor || INVOICE_THEME.secondaryRgb;
-    const bodyColor = options?.bodyColor || INVOICE_THEME.secondaryRgb;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.2);
-    doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
-    doc.text(title, x + 4, y + 5.6);
-
-    let cursorY = y + 12;
-    fields.forEach((field) => {
-      const lines = wrap(field.value, width - 8);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.2);
-      doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-      doc.text(field.label, x + 4, cursorY);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.8);
-      doc.setTextColor(bodyColor[0], bodyColor[1], bodyColor[2]);
-      doc.text(lines, x + 4, cursorY + 3.8);
-      cursorY += 3.4 + lines.length * 3.8 + 1.4;
+  const drawFooter = () => {
+    const fy = pageHeight - FOOTER_HEIGHT;
+    setStroke(SOFT);
+    doc.setLineWidth(0.3);
+    doc.line(margin, fy, pageWidth - margin, fy);
+    setText(MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    MYLAPAY_FOOTER_LINES.forEach((line, idx) => {
+      doc.text(line, margin, fy + 4.5 + idx * 3.4);
     });
+    setText(PRIMARY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.6);
+    doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - margin, fy + 4.5, { align: "right" });
   };
 
-  const drawTwoColumnDetail = (
-    x: number,
-    y: number,
-    width: number,
-    label: string,
-    value: string,
-    align: "left" | "right" = "left",
-  ) => {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.4);
-    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-    doc.text(label, align === "right" ? x + width : x, y, { align });
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.8);
-    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-    doc.text(wrap(value, width)[0], align === "right" ? x + width : x, y + 4.4, { align });
+  const ensureSpace = (needed: number) => {
+    if (cursorY + needed > pageHeight - FOOTER_HEIGHT - 6) {
+      drawFooter();
+      doc.addPage();
+      cursorY = margin;
+      drawHeaderBand();
+    }
   };
 
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
-  doc.roundedRect(margin, margin, contentWidth, 44, 7, 7, "FD");
-  doc.setFillColor(...INVOICE_THEME.secondaryRgb);
-  doc.roundedRect(margin + 4, margin + 4, 60, 36, 5, 5, "F");
+  const drawHeaderBand = () => {
+    setFill(SECONDARY);
+    doc.rect(0, 0, pageWidth, 4, "F");
+    setFill(PRIMARY);
+    doc.rect(0, 4, pageWidth, 1, "F");
+    cursorY = margin + 2;
+  };
+
+  let cursorY = margin;
+  drawHeaderBand();
+
+  // === HEADER ===
+  const headerHeight = 28;
   if (logoData) {
     try {
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(margin + 8, margin + 12, 32, 12, 3, 3, "F");
-      doc.addImage(logoData, "PNG", margin + 10, margin + 14, 28, 8.8);
+      doc.addImage(logoData, "PNG", margin, cursorY, 40, 14);
     } catch {}
   }
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.4);
-  doc.text("Mylapay", margin + 44, margin + 17, { align: "center" });
+  setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.6);
-  doc.text("Mindeed Technologies and Services Pvt Ltd", margin + 44, margin + 22, { align: "center" });
+  doc.setFontSize(7.2);
+  doc.text("Mindeed Technologies and Services Pvt Ltd", margin, cursorY + 19);
+  doc.text("Coimbatore, Tamil Nadu, India", margin, cursorY + 22.5);
+  doc.text("contact@mylapay.com  ·  +91 98765 43210", margin, cursorY + 26);
 
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
+  setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18.5);
-  doc.text("Tax Invoice", pageWidth - margin - 4, margin + 11, { align: "right" });
-  doc.setFontSize(8.2);
-  doc.setFont("helvetica", "normal");
-  doc.text("Enterprise billing statement", pageWidth - margin - 4, margin + 16, { align: "right" });
+  doc.setFontSize(26);
+  doc.text("INVOICE", pageWidth - margin, cursorY + 6, { align: "right" });
+  setText(PRIMARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.8);
-  doc.text(invoiceNumber, pageWidth - margin - 4, margin + 23, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.7);
-  doc.text(`FY ${financialYear} · Serial #${serial}`, pageWidth - margin - 4, margin + 28, { align: "right" });
-  doc.text(month, pageWidth - margin - 4, margin + 32, { align: "right" });
+  doc.setFontSize(8.6);
+  doc.text("TAX INVOICE", pageWidth - margin, cursorY + 11.5, { align: "right" });
 
-  let y = margin + 48;
-  drawPanel(margin, y, contentWidth, 18, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  const summaryThird = contentWidth / 3;
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.2);
-  doc.text("Invoice Summary", margin + 4, y + 5.8);
-  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
-  doc.line(margin + summaryThird, y + 3, margin + summaryThird, y + 15);
-  doc.line(margin + summaryThird * 2, y + 3, margin + summaryThird * 2, y + 15);
-  doc.setFont("helvetica", "bold");
+  setText(MUTED);
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.4);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.text("STATUS", margin + 4, y + 10.7);
-  doc.text("GENERATED", margin + summaryThird + 4, y + 10.7);
-  doc.text("AMOUNT", margin + summaryThird * 2 + 4, y + 10.7);
-  doc.setFontSize(9.2);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.text(status, margin + 4, y + 15);
-  doc.text(generatedDate, margin + summaryThird + 4, y + 15);
-  doc.text(money(amount), margin + summaryThird * 2 + 4, y + 15);
-
-  y += 25;
-  const leftBillFrom = [
-    { label: "Company", value: MYLAPAY_BRANDING.companyName },
-    { label: "Address", value: MYLAPAY_BRANDING.address },
-    { label: "Email", value: MYLAPAY_BRANDING.email },
-    { label: "Phone", value: MYLAPAY_BRANDING.phone },
-    { label: "GSTIN", value: MYLAPAY_BRANDING.gstin },
-    { label: "LUT", value: MYLAPAY_BRANDING.lutNumber },
-  ];
-  const rightBillTo = [
-    { label: "Client", value: getClientDisplayBillingName(client) },
-    { label: "Client Code", value: client.code },
-    { label: "GSTIN", value: getClientGstin(client) },
-    { label: "LUT", value: getClientLut(client) },
-    { label: "Billing Email", value: client.billingEmail || "—" },
-    { label: "Billing Address", value: getClientBillToAddress(client) },
-  ];
-  const cardHeight = Math.max(
-    measureFieldBlock(leftBillFrom, (contentWidth - gutter) / 2),
-    measureFieldBlock(rightBillTo, (contentWidth - gutter) / 2),
-  ) + 1;
-  drawPanel(margin, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  drawPanel(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  renderFieldBlock(margin, y, (contentWidth - gutter) / 2, "Bill From", leftBillFrom);
-  renderFieldBlock(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, "Bill To", rightBillTo);
-
-  y += cardHeight + 5;
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
+  doc.text("Invoice No.", pageWidth - margin - 38, cursorY + 18.5);
+  doc.text("Issue Date", pageWidth - margin - 38, cursorY + 22.5);
+  doc.text("Period", pageWidth - margin - 38, cursorY + 26.5);
+  setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.4);
-  doc.text("Bill Details", margin, y);
-  y += 3;
-  drawPanel(margin, y, contentWidth, 20, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  const halfWidth = (contentWidth - 10) / 2;
-  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
-  doc.line(margin + halfWidth + 5, y + 3, margin + halfWidth + 5, y + 17);
-  drawTwoColumnDetail(margin + 4, y + 4.5, halfWidth, "Invoice Month", month);
-  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 4.5, halfWidth, "Transaction Volume", client.monthlyTransactionVolume.toLocaleString(), "right");
-  drawTwoColumnDetail(margin + 4, y + 12.5, halfWidth, "Invoice Status", status);
-  drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 12.5, halfWidth, "Last Invoice Generated", client.lastInvoiceGenerated, "right");
+  doc.setFontSize(8.2);
+  doc.text(invoiceNumber, pageWidth - margin, cursorY + 18.5, { align: "right" });
+  doc.text(generatedDate, pageWidth - margin, cursorY + 22.5, { align: "right" });
+  doc.text(`${month} · FY ${financialYear}`, pageWidth - margin, cursorY + 26.5, { align: "right" });
 
-  y += 28;
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11.8);
-  doc.text("Statement of Charges", margin, y);
-  y += 4;
-  const tableX = margin;
-  const tableWidth = contentWidth;
-  const tableHeaderHeight = 7.6;
-  const rowHeights = lineItems.map((item) => Math.max(6.8, wrap(item.description, tableWidth - 45).length * 3.2 + 2.2));
-  const tableBodyHeight = tableHeaderHeight + rowHeights.reduce((sum, height) => sum + height, 0);
-  drawPanel(tableX, y, tableWidth, tableBodyHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  doc.setFillColor(...INVOICE_THEME.primaryRgb);
-  doc.rect(tableX, y, tableWidth, tableHeaderHeight, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.8);
-  doc.text("Particulars", tableX + 3, y + 5.5);
-  doc.text("Amount", tableX + tableWidth - 3, y + 5.5, { align: "right" });
+  cursorY += headerHeight + 4;
 
-  let rowY = y + tableHeaderHeight + 3.8;
-  lineItems.forEach((item, index) => {
-    const descLines = wrap(item.description, tableWidth - 45);
-    const rowHeight = rowHeights[index];
-    if (index % 2 === 0) {
-      doc.setFillColor(255, 255, 255);
-      doc.rect(tableX + 1, rowY - 3.0, tableWidth - 2, rowHeight, "F");
-    }
-    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.2);
-    doc.text(descLines, tableX + 3, rowY - 0.25);
+  // Divider line
+  setStroke(PRIMARY);
+  doc.setLineWidth(0.6);
+  doc.line(margin, cursorY, pageWidth - margin, cursorY);
+  cursorY += 6;
+
+  // === BILL FROM / BILL TO ===
+  const colWidth = (contentWidth - 8) / 2;
+  const billFrom = [
+    [MYLAPAY_BRANDING.companyName, true],
+    [MYLAPAY_BRANDING.address, false],
+    [MYLAPAY_BRANDING.email, false],
+    [MYLAPAY_BRANDING.phone, false],
+    [`GSTIN: ${(MYLAPAY_BRANDING.gstin || "—").replace(/^GSTIN:\s*/i, "")}`, false],
+    [`LUT: ${(MYLAPAY_BRANDING.lutNumber || "—").replace(/^LUT:\s*/i, "")}`, false],
+  ] as Array<[string, boolean]>;
+  const billTo = [
+    [getClientDisplayBillingName(client), true],
+    [getClientBillToAddress(client), false],
+    [client.billingEmail || "—", false],
+    [`Client Code: ${client.code || "—"}`, false],
+    [`GSTIN: ${getClientGstin(client) || "—"}`, false],
+    [`LUT: ${getClientLut(client) || "—"}`, false],
+  ] as Array<[string, boolean]>;
+
+  const renderParty = (x: number, label: string, rows: Array<[string, boolean]>) => {
+    setText(PRIMARY);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.2);
-    doc.text(money(item.amount), tableX + tableWidth - 3, rowY - 0.25, { align: "right" });
-    rowY += rowHeight;
-  });
+    doc.setFontSize(7.6);
+    doc.text(label.toUpperCase(), x, cursorY);
+    let py = cursorY + 5;
+    rows.forEach(([text, bold]) => {
+      const lines = wrap(text, colWidth);
+      setText(bold ? SECONDARY : MUTED);
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(bold ? 11 : 8.4);
+      doc.text(lines, x, py);
+      py += lines.length * (bold ? 4.6 : 3.8) + (bold ? 1.2 : 0.6);
+    });
+    return py;
+  };
 
+  const leftEnd = renderParty(margin, "Billed From", billFrom);
+  const rightEnd = renderParty(margin + colWidth + 8, "Billed To", billTo);
+  cursorY = Math.max(leftEnd, rightEnd) + 6;
+
+  // === META STRIP ===
+  ensureSpace(16);
+  setFill(SOFT);
+  doc.rect(margin, cursorY, contentWidth, 12, "F");
+  const metaCols: Array<[string, string]> = [
+    ["Status", status],
+    ["Period", month],
+    ["Txn Volume", client.monthlyTransactionVolume.toLocaleString()],
+    ["Last Generated", client.lastInvoiceGenerated || "—"],
+  ];
+  const metaW = contentWidth / metaCols.length;
+  metaCols.forEach(([label, value], i) => {
+    const cx = margin + i * metaW + 4;
+    setText(MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.text(label.toUpperCase(), cx, cursorY + 4.6);
+    setText(SECONDARY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.6);
+    doc.text(wrap(String(value || "—"), metaW - 6)[0], cx, cursorY + 9.2);
+  });
+  cursorY += 18;
+
+  // === STATEMENT OF CHARGES ===
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
+  ensureSpace(20);
+  setText(SECONDARY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Statement of Charges", margin, cursorY);
+  cursorY += 4;
+
+  const headerH = 8;
+  setFill(SECONDARY);
+  doc.rect(margin, cursorY, contentWidth, headerH, "F");
+  setText([255, 255, 255]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.6);
+  doc.text("#", margin + 3, cursorY + 5.4);
+  doc.text("PARTICULARS", margin + 12, cursorY + 5.4);
+  doc.text("AMOUNT", pageWidth - margin - 3, cursorY + 5.4, { align: "right" });
+  cursorY += headerH;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.6);
+  lineItems.forEach((item, idx) => {
+    const lines = wrap(item.description, contentWidth - 50);
+    const rowH = Math.max(8, lines.length * 4 + 3);
+    ensureSpace(rowH + 2);
+    if (idx % 2 === 0) {
+      setFill([248, 251, 254]);
+      doc.rect(margin, cursorY, contentWidth, rowH, "F");
+    }
+    setText(MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.8);
+    doc.text(String(idx + 1).padStart(2, "0"), margin + 3, cursorY + 5.6);
+    setText(SECONDARY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.6);
+    doc.text(lines, margin + 12, cursorY + 5.6);
+    doc.setFont("helvetica", "bold");
+    doc.text(money(item.amount), pageWidth - margin - 3, cursorY + 5.6, { align: "right" });
+    cursorY += rowH;
+  });
+  setStroke(SOFT);
+  doc.setLineWidth(0.3);
+  doc.line(margin, cursorY, pageWidth - margin, cursorY);
+  cursorY += 4;
+
+  // === TOTALS ===
   const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const gst = client.lutNumber ? 0 : subtotal * 0.18;
   const totalPayable = subtotal + gst;
 
-  y = rowY + 2;
-  drawPanel(margin, y, contentWidth, 21, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.6);
-  doc.text(`Subtotal: ${money(subtotal)}`, margin + 4, y + 7);
-  doc.text(`GST / Tax: ${gst > 0 ? money(gst) : "LUT exempt"}`, margin + 4, y + 13);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.2);
-  doc.text(`Final Payable: ${money(totalPayable)}`, pageWidth - margin - 4, y + 10, { align: "right" });
+  ensureSpace(28);
+  const totalsX = pageWidth - margin - 78;
+  const totalsW = 78;
+  const lineRow = (label: string, value: string, opts?: { bold?: boolean; bg?: boolean }) => {
+    if (opts?.bg) {
+      setFill(SECONDARY);
+      doc.rect(totalsX, cursorY, totalsW, 9, "F");
+      setText([255, 255, 255]);
+    } else {
+      setText(SECONDARY);
+    }
+    doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
+    doc.setFontSize(opts?.bold ? 10 : 8.6);
+    doc.text(label, totalsX + 4, cursorY + 6);
+    doc.text(value, totalsX + totalsW - 4, cursorY + 6, { align: "right" });
+    cursorY += opts?.bg ? 9 : 7;
+  };
+  lineRow("Subtotal", money(subtotal));
+  lineRow("GST / Tax (18%)", gst > 0 ? money(gst) : "LUT Exempt");
+  lineRow("Total Payable", money(totalPayable), { bold: true, bg: true });
+  cursorY += 4;
 
-  y += 25;
-  if (lineItems.length > 6) {
-    doc.addPage();
-    y = margin;
-  }
-
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
+  // === AMOUNT IN WORDS ===
+  ensureSpace(10);
+  setText(MUTED);
   doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
+  doc.text(`Amount in words: ${INVOICE_AMOUNT_IN_WORDS}`, margin, cursorY + 4);
+  cursorY += 9;
+
+  // === DECLARATION ===
+  ensureSpace(12);
+  setText(SECONDARY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.6);
+  doc.text("Declaration", margin, cursorY);
+  setStroke(PRIMARY);
+  doc.setLineWidth(0.5);
+  doc.line(margin, cursorY + 1.6, margin + 28, cursorY + 1.6);
+  cursorY += 5;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  INVOICE_DECLARATION_LINES.forEach((line) => {
+    const lines = wrap(line, contentWidth);
+    ensureSpace(lines.length * 3.6 + 2);
+    setText(SECONDARY);
+    doc.text(lines, margin, cursorY);
+    cursorY += lines.length * 3.6 + 1.4;
+  });
+  cursorY += 3;
+
+  // === SIGNATURE ===
+  ensureSpace(28);
+  const sigW = 70;
+  const sigX = pageWidth - margin - sigW;
+  setText(SECONDARY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.6);
+  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, sigX + sigW, cursorY, { align: "right" });
+  cursorY += 18;
+  setStroke(SECONDARY);
+  doc.setLineWidth(0.4);
+  doc.line(sigX, cursorY, sigX + sigW, cursorY);
+  setText(SECONDARY);
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(8.4);
-  doc.text(INVOICE_AMOUNT_IN_WORDS, pageWidth / 2, y + 4, { align: "center" });
-  y += 8;
-
-  const declarationTextWidth = contentWidth - 8;
-  const declarationHeight = 8 + INVOICE_DECLARATION_LINES.reduce(
-    (height, line) => height + wrap(line, declarationTextWidth).length * 3.2,
-    0,
-  );
-  drawPanel(margin, y, contentWidth, declarationHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.4);
-  doc.text("Declaration", margin + 4, y + 5.2);
-
-  let declarationY = y + 10;
-  INVOICE_DECLARATION_LINES.forEach((line, index) => {
-    const wrappedLines = wrap(line, declarationTextWidth);
-    doc.setFont("helvetica", index < 2 ? "bold" : "normal");
-    doc.setFontSize(index < 2 ? 8.0 : 7.4);
-    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-    doc.text(wrappedLines, margin + 4, declarationY);
-    declarationY += wrappedLines.length * 3.2;
-  });
-
-  y += declarationHeight + 4;
-
-  const sealWidth = (contentWidth - gutter) * 0.38;
-  const signWidth = contentWidth - sealWidth - gutter;
-  drawPanel(margin, y, sealWidth, 26, [255, 255, 255], INVOICE_THEME.primaryRgb);
-  drawPanel(margin + sealWidth + gutter, y, signWidth, 26, [255, 255, 255], INVOICE_THEME.primaryRgb);
-
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.8);
-  doc.text("Company Seal", margin + sealWidth / 2, y + 6.4, { align: "center" });
+  doc.text(getClientSignatureName(client), sigX + sigW, cursorY + 4, { align: "right" });
+  setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.0);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.text("Space reserved for seal", margin + sealWidth / 2, y + 10.6, { align: "center" });
-  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
-  doc.line(margin + 5, y + 16, margin + sealWidth - 5, y + 16);
+  doc.setFontSize(7.4);
+  doc.text("Authorized Signatory", sigX + sigW, cursorY + 8, { align: "right" });
 
-  const signX = margin + sealWidth + gutter;
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.8);
-  doc.text("Authority Signature", signX + 4, y + 6.4);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.9);
-  doc.text(getClientSignatureName(client), signX + 4, y + 10.8);
-  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
-  doc.line(signX + 4, y + 16, signX + signWidth - 4, y + 16);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.0);
-  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
-  doc.text("Authorized signatory", signX + 4, y + 20);
-  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 20, { align: "right" });
-
-  const footerY = pageHeight - 18;
-  doc.setFillColor(...INVOICE_THEME.secondaryRgb);
-  doc.roundedRect(margin, footerY, contentWidth, 16, 5, 5, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.4);
-  MYLAPAY_FOOTER_LINES.forEach((line, index) => {
-    doc.text(line, margin + 4, footerY + 4 + index * 4);
-  });
-
+  drawFooter();
   doc.save(`${invoiceNumber}.pdf`);
 }
 

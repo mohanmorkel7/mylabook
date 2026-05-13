@@ -1919,6 +1919,22 @@ function ClientOverviewScreen({
   const variableCharges = invoiceDraft - client.fixedBilling - awsMargin - client.additionalPlatformFee - client.integrationFee;
   const tax = invoiceDraft * 0.18;
   const finalPayable = invoiceDraft + tax;
+
+  // Logging for debugging Commercial Summary Panel calculations
+  if (isOverviewRoute) {
+    console.log("[Invoice] Commercial Summary calculations:", {
+      clientId: client.id,
+      clientName: client.name,
+      fixedBilling: client.fixedBilling,
+      minimumGuarantee: client.minimumGuarantee,
+      fixedCharges,
+      awsMargin,
+      invoiceDraft,
+      variableCharges,
+      tax,
+      finalPayable,
+    });
+  }
   const priority = getPriorityForScoring(client);
 
   return (
@@ -2747,7 +2763,11 @@ export default function InvoiceManagement() {
       });
   }, [toast]);
 
-  const selectedClient = useMemo(() => clients.find((item) => item.id === clientId) || clients[0], [clients, clientId]);
+  const selectedClient = useMemo(() => {
+    const found = clients.find((item) => item.id === clientId);
+    console.log("[Invoice] selectedClient useMemo - clientId:", clientId, "found:", found, "all clients:", clients);
+    return found || clients[0];
+  }, [clients, clientId]);
   const editingClient = useMemo(() => clients.find((item) => item.id === (editingClientId || clientId)) || undefined, [clients, editingClientId, clientId]);
   const invoiceNumberPreview = useMemo(
     () => getCurrentInvoiceNumberPreview(invoiceSerialConfig),
@@ -2810,10 +2830,15 @@ export default function InvoiceManagement() {
 
   // Fetch client data from database when editing or viewing a specific client
   useEffect(() => {
-    if (isEditRoute && clientId && clientId !== "new") {
+    if ((isEditRoute || isOverviewRoute) && clientId && clientId !== "new") {
+      console.log("[Invoice] Fetching client from database - clientId:", clientId, "isEditRoute:", isEditRoute, "isOverviewRoute:", isOverviewRoute);
       fetch(`/api/invoice-management/clients/${clientId}`)
-        .then(res => res.json())
+        .then(res => {
+          console.log("[Invoice] Fetch response status:", res.status);
+          return res.json();
+        })
         .then(data => {
+          console.log("[Invoice] Fetched client data:", data);
           // Update the local client record with the decrypted data from database
           setClients(prev => {
             const exists = prev.some(c => c.id === data.clientId || c.id === data.id);
@@ -2824,16 +2849,16 @@ export default function InvoiceManagement() {
               status: data.status,
               priority: data.priority,
               services: data.services || [],
-              fixedBilling: data.fixedBilling,
-              monthlyInvoiceEstimate: data.monthlyInvoiceEstimate,
-              monthlyTransactionVolume: data.monthlyTransactionVolume,
-              variableRevenueGenerated: data.variableRevenueGenerated,
-              awsInfraRecovery: data.awsInfraRecovery,
-              reconRevenue: data.reconRevenue,
-              profitabilityRevenue: data.profitabilityRevenue,
-              minimumGuarantee: data.minimumGuarantee,
-              additionalPlatformFee: data.additionalPlatformFee,
-              integrationFee: data.integrationFee,
+              fixedBilling: data.fixedBilling || 0,
+              monthlyInvoiceEstimate: data.monthlyInvoiceEstimate || 0,
+              monthlyTransactionVolume: data.monthlyTransactionVolume || 0,
+              variableRevenueGenerated: data.variableRevenueGenerated || 0,
+              awsInfraRecovery: data.awsInfraRecovery || 0,
+              reconRevenue: data.reconRevenue || 0,
+              profitabilityRevenue: data.profitabilityRevenue || 0,
+              minimumGuarantee: data.minimumGuarantee || 0,
+              additionalPlatformFee: data.additionalPlatformFee || 0,
+              integrationFee: data.integrationFee || 0,
               billingCycle: data.billingCycle,
               lastInvoiceGenerated: data.lastInvoiceGenerated,
               logo: data.logo,
@@ -2851,12 +2876,20 @@ export default function InvoiceManagement() {
               clientType: data.clientType || "Domestic",
               currency: data.currency || "INR",
             };
+            console.log("[Invoice] Updated client object:", updatedClient);
             return exists ? prev.map(c => (c.id === data.id || c.id === data.clientId) ? updatedClient : c) : [updatedClient, ...prev];
           });
         })
-        .catch(err => console.error("Failed to fetch client from database:", err));
+        .catch(err => {
+          console.error("[Invoice] Failed to fetch client from database:", err);
+          toast({
+            title: "Warning",
+            description: "Could not load client data from database",
+            variant: "destructive",
+          });
+        });
     }
-  }, [isEditRoute, clientId]);
+  }, [isEditRoute, isOverviewRoute, clientId, toast]);
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {

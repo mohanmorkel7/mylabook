@@ -58,6 +58,7 @@ import notificationsProductionRouter from "./routes/notifications-production";
 import adminProductionRouter from "./routes/admin-production";
 import finopsProductionRouter, { ensureFinOpsProductionSchema } from "./routes/finops-production";
 import financeManagementRouter, { initializeFinanceSchema, runFinanceSLACheck, startFinanceMidnightReset } from "./routes/finance-management";
+import invoiceManagementRouter, { initializeInvoiceSchema } from "./routes/invoice-management";
 
 export function createServer() {
   const app = express();
@@ -76,6 +77,7 @@ export function createServer() {
       await initializeFinOpsSchema();
       await ensureFinOpsProductionSchema();
       await initializeFinanceSchema();
+      await initializeInvoiceSchema();
     }, 1500); // After database initialization
   } catch (e) {
     console.error(
@@ -634,6 +636,13 @@ export function createServer() {
     console.log("Finance Management router loaded successfully");
   } catch (error) {
     console.error("Error loading Finance Management router:", error);
+  }
+
+  try {
+    app.use("/api/invoice-management", invoiceManagementRouter);
+    console.log("Invoice Management router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Invoice Management router:", error);
   }
 
   // Allow Vite dev server to serve SPA assets by passing through non-API requests

@@ -2687,6 +2687,61 @@ export default function InvoiceManagement() {
     } catch {}
   }, [auditLog]);
 
+  // Load all clients from database on component mount
+  useEffect(() => {
+    fetch("/api/invoice-management/clients")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const dbClients: ClientRecord[] = data.map((client: any) => ({
+            id: client.clientId,
+            code: client.clientCode,
+            name: client.clientName,
+            status: client.status,
+            priority: client.priority,
+            services: client.services || [],
+            fixedBilling: client.fixedBilling || 0,
+            monthlyInvoiceEstimate: client.monthlyInvoiceEstimate || 0,
+            monthlyTransactionVolume: client.monthlyTransactionVolume || 0,
+            variableRevenueGenerated: client.variableRevenueGenerated || 0,
+            awsInfraRecovery: client.awsInfraRecovery || 0,
+            reconRevenue: client.reconRevenue || 0,
+            profitabilityRevenue: client.profitabilityRevenue || 0,
+            minimumGuarantee: client.minimumGuarantee || 0,
+            additionalPlatformFee: client.additionalPlatformFee || 0,
+            integrationFee: client.integrationFee || 0,
+            billingCycle: client.billingCycle,
+            lastInvoiceGenerated: client.lastInvoiceGenerated,
+            logo: client.logo,
+            logoClass: client.logoClass,
+            color: client.color,
+            transactionSlabs: [],
+            aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
+            notes: client.notes,
+            invoiceHistory: [],
+            gstin: client.gstin,
+            lutNumber: client.lutNumber,
+            billingAddress: client.billingAddress,
+            billingEmail: client.billingEmail,
+            signatoryName: client.signatoryName,
+            clientType: client.clientType || "Domestic",
+            currency: client.currency || "INR",
+          }));
+          // Merge with existing clients, keeping DB data as primary
+          setClients(prev => {
+            const merged = [...dbClients];
+            prev.forEach(existing => {
+              if (!merged.some(db => db.id === existing.id)) {
+                merged.push(existing);
+              }
+            });
+            return merged;
+          });
+        }
+      })
+      .catch(err => console.error("Failed to load clients from database:", err));
+  }, []);
+
   const selectedClient = useMemo(() => clients.find((item) => item.id === clientId) || clients[0], [clients, clientId]);
   const editingClient = useMemo(() => clients.find((item) => item.id === (editingClientId || clientId)) || undefined, [clients, editingClientId, clientId]);
   const invoiceNumberPreview = useMemo(
@@ -2729,6 +2784,56 @@ export default function InvoiceManagement() {
       setInvoiceModalOpen(false);
     }
   }, [isCreateRoute]);
+
+  // Fetch client data from database when editing or viewing a specific client
+  useEffect(() => {
+    if (isEditRoute && clientId && clientId !== "new") {
+      fetch(`/api/invoice-management/clients/${clientId}`)
+        .then(res => res.json())
+        .then(data => {
+          // Update the local client record with the decrypted data from database
+          setClients(prev => {
+            const exists = prev.some(c => c.id === data.clientId);
+            const updatedClient: ClientRecord = {
+              id: data.clientId,
+              code: data.clientCode,
+              name: data.clientName,
+              status: data.status,
+              priority: data.priority,
+              services: data.services || [],
+              fixedBilling: data.fixedBilling,
+              monthlyInvoiceEstimate: data.monthlyInvoiceEstimate,
+              monthlyTransactionVolume: data.monthlyTransactionVolume,
+              variableRevenueGenerated: data.variableRevenueGenerated,
+              awsInfraRecovery: data.awsInfraRecovery,
+              reconRevenue: data.reconRevenue,
+              profitabilityRevenue: data.profitabilityRevenue,
+              minimumGuarantee: data.minimumGuarantee,
+              additionalPlatformFee: data.additionalPlatformFee,
+              integrationFee: data.integrationFee,
+              billingCycle: data.billingCycle,
+              lastInvoiceGenerated: data.lastInvoiceGenerated,
+              logo: data.logo,
+              logoClass: data.logoClass,
+              color: data.color,
+              transactionSlabs: [],
+              aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
+              notes: data.notes,
+              invoiceHistory: [],
+              gstin: data.gstin,
+              lutNumber: data.lutNumber,
+              billingAddress: data.billingAddress,
+              billingEmail: data.billingEmail,
+              signatoryName: data.signatoryName,
+              clientType: data.clientType || "Domestic",
+              currency: data.currency || "INR",
+            };
+            return exists ? prev.map(c => c.id === data.clientId ? updatedClient : c) : [updatedClient, ...prev];
+          });
+        })
+        .catch(err => console.error("Failed to fetch client from database:", err));
+    }
+  }, [isEditRoute, clientId]);
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
@@ -3078,54 +3183,100 @@ export default function InvoiceManagement() {
     });
   };
 
-  const saveConfig = (payload: any) => {
-    const baseId = payload.id || payload.code?.toLowerCase() || `client-${Date.now()}`;
-    const nextClient: ClientRecord = {
-      id: baseId,
-      code: payload.code,
-      name: payload.name,
-      status: payload.status,
-      priority: payload.priority,
-      services: payload.services,
-      fixedBilling: payload.fixedBilling,
-      monthlyInvoiceEstimate: payload.monthlyInvoiceEstimate,
-      monthlyTransactionVolume: payload.monthlyTransactionVolume,
-      variableRevenueGenerated: Math.max(0, payload.monthlyInvoiceEstimate - payload.fixedBilling),
-      awsInfraRecovery: payload.aws.enabled ? payload.aws.vendorCost * (payload.aws.marginPercentage / 100) : 0,
-      reconRevenue: Math.round(payload.monthlyInvoiceEstimate * 0.32),
-      profitabilityRevenue: Math.round(payload.monthlyInvoiceEstimate * 0.18),
-      minimumGuarantee: payload.minimumGuarantee,
-      additionalPlatformFee: payload.additionalPlatformFee,
-      integrationFee: payload.integrationFee,
-      billingCycle: payload.billingCycle,
-      lastInvoiceGenerated: new Date().toISOString().split("T")[0],
-      logo: String(payload.name || "C").charAt(0).toUpperCase(),
-      logoClass: "from-indigo-500 to-purple-600",
-      color: "indigo",
-      transactionSlabs: payload.transactionSlabs,
-      aws: payload.aws,
-      notes: payload.notes,
-      invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
-      gstin: payload.gstin,
-      lutNumber: payload.lutNumber,
-      billingAddress: payload.billingAddress,
-      billingEmail: payload.billingEmail,
-      signatoryName: payload.signatoryName,
-      clientType: payload.clientType || "Domestic",
-      currency: payload.clientCurrency || "INR",
-    };
+  const saveConfig = async (payload: any) => {
+    try {
+      const baseId = payload.id || payload.code?.toLowerCase() || `client-${Date.now()}`;
+      const nextClient: ClientRecord = {
+        id: baseId,
+        code: payload.code,
+        name: payload.name,
+        status: payload.status,
+        priority: payload.priority,
+        services: payload.services,
+        fixedBilling: payload.fixedBilling,
+        monthlyInvoiceEstimate: payload.monthlyInvoiceEstimate,
+        monthlyTransactionVolume: payload.monthlyTransactionVolume,
+        variableRevenueGenerated: Math.max(0, payload.monthlyInvoiceEstimate - payload.fixedBilling),
+        awsInfraRecovery: payload.aws.enabled ? payload.aws.vendorCost * (payload.aws.marginPercentage / 100) : 0,
+        reconRevenue: Math.round(payload.monthlyInvoiceEstimate * 0.32),
+        profitabilityRevenue: Math.round(payload.monthlyInvoiceEstimate * 0.18),
+        minimumGuarantee: payload.minimumGuarantee,
+        additionalPlatformFee: payload.additionalPlatformFee,
+        integrationFee: payload.integrationFee,
+        billingCycle: payload.billingCycle,
+        lastInvoiceGenerated: new Date().toISOString().split("T")[0],
+        logo: String(payload.name || "C").charAt(0).toUpperCase(),
+        logoClass: "from-indigo-500 to-purple-600",
+        color: "indigo",
+        transactionSlabs: payload.transactionSlabs,
+        aws: payload.aws,
+        notes: payload.notes,
+        invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
+        gstin: payload.gstin,
+        lutNumber: payload.lutNumber,
+        billingAddress: payload.billingAddress,
+        billingEmail: payload.billingEmail,
+        signatoryName: payload.signatoryName,
+        clientType: payload.clientType || "Domestic",
+        currency: payload.clientCurrency || "INR",
+      };
 
-    setClients((prev) => {
-      const exists = prev.some((client) => client.id === baseId);
-      return exists ? prev.map((client) => (client.id === baseId ? nextClient : client)) : [nextClient, ...prev];
-    });
+      // Save to database via API (encrypted at rest)
+      await fetch("/api/invoice-management/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: baseId,
+          clientCode: payload.code,
+          clientName: payload.name,
+          status: payload.status,
+          priority: payload.priority,
+          services: payload.services,
+          fixedBilling: payload.fixedBilling,
+          monthlyInvoiceEstimate: payload.monthlyInvoiceEstimate,
+          monthlyTransactionVolume: payload.monthlyTransactionVolume,
+          variableRevenueGenerated: Math.max(0, payload.monthlyInvoiceEstimate - payload.fixedBilling),
+          awsInfraRecovery: payload.aws.enabled ? payload.aws.vendorCost * (payload.aws.marginPercentage / 100) : 0,
+          reconRevenue: Math.round(payload.monthlyInvoiceEstimate * 0.32),
+          profitabilityRevenue: Math.round(payload.monthlyInvoiceEstimate * 0.18),
+          minimumGuarantee: payload.minimumGuarantee,
+          additionalPlatformFee: payload.additionalPlatformFee,
+          integrationFee: payload.integrationFee,
+          billingCycle: payload.billingCycle,
+          lastInvoiceGenerated: new Date().toISOString().split("T")[0],
+          logo: String(payload.name || "C").charAt(0).toUpperCase(),
+          logoClass: "from-indigo-500 to-purple-600",
+          color: "indigo",
+          gstin: payload.gstin,
+          lutNumber: payload.lutNumber,
+          billingAddress: payload.billingAddress,
+          billingEmail: payload.billingEmail,
+          signatoryName: payload.signatoryName,
+          clientType: payload.clientType || "Domestic",
+          currency: payload.clientCurrency || "INR",
+          notes: payload.notes,
+        }),
+      });
 
-    toast({
-      title: `Configuration ${payload.id ? "updated" : "created"}`,
-      description: `${payload.name} commercial configuration saved successfully.`,
-    });
+      setClients((prev) => {
+        const exists = prev.some((client) => client.id === baseId);
+        return exists ? prev.map((client) => (client.id === baseId ? nextClient : client)) : [nextClient, ...prev];
+      });
 
-    navigate(`/invoice-management/client/${baseId}`);
+      toast({
+        title: `Configuration ${payload.id ? "updated" : "created"}`,
+        description: `${payload.name} commercial configuration saved successfully to database (encrypted).`,
+      });
+
+      navigate(`/invoice-management/client/${baseId}`);
+    } catch (error) {
+      console.error("Error saving client config:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save client configuration to database",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDeleteClient = (id: string) => {

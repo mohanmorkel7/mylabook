@@ -3113,13 +3113,48 @@ export default function InvoiceManagement() {
   };
 
   const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {
-    setInvoices((prev) => updateInvoiceCollection(prev, invoiceNumber, updater));
+    // Update local state first for immediate UI feedback
+    let updatedInvoice: InvoiceRecord | undefined;
+    setInvoices((prev) => {
+      const updated = updateInvoiceCollection(prev, invoiceNumber, updater);
+      updatedInvoice = updated.find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+      return updated;
+    });
+
     setClients((prev) =>
-      prev.map((client) => ({
-        ...client,
-        invoiceHistory: updateInvoiceCollection((client.invoiceHistory || []) as InvoiceRecord[], invoiceNumber, updater),
-      })),
+      prev.map((client) => {
+        const updated = {
+          ...client,
+          invoiceHistory: updateInvoiceCollection((client.invoiceHistory || []) as InvoiceRecord[], invoiceNumber, updater),
+        };
+        if (updated.invoiceHistory !== client.invoiceHistory) {
+          updatedInvoice = updated.invoiceHistory.find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+        }
+        return updated;
+      }),
     );
+
+    // Save to database (best-effort, don't block UI)
+    if (updatedInvoice) {
+      fetch("/api/invoice-management/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId: updatedInvoice.invoiceId,
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          clientId: updatedInvoice.clientId,
+          clientName: updatedInvoice.client,
+          month: updatedInvoice.month,
+          amount: updatedInvoice.amount,
+          status: updatedInvoice.status,
+          generatedDate: updatedInvoice.generatedDate,
+          financialYear: updatedInvoice.financialYear,
+          serial: updatedInvoice.serial,
+        }),
+      }).catch((err) => {
+        console.warn("[Invoice] Failed to update invoice in database:", err);
+      });
+    }
   };
 
   const deleteInvoiceByNumber = (invoiceNumber: string) => {

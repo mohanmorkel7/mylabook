@@ -3337,6 +3337,8 @@ export default function InvoiceManagement() {
           clientType: payload.clientType || "Domestic",
           currency: payload.clientCurrency || "INR",
           notes: payload.notes,
+          transactionSlabs: payload.transactionSlabs || [],
+          aws: payload.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
         }),
       });
 
@@ -3361,13 +3363,17 @@ export default function InvoiceManagement() {
     }
   };
 
-  const handleDeleteClient = async (id: string) => {
+  const handleDeleteClient = async (clientIdToDelete: string) => {
     try {
+      // Find the client's clientId (the string identifier like "payswiff")
+      const clientToDelete = clients.find(c => c.id === clientIdToDelete);
+      const idToUse = clientToDelete?.clientId || clientIdToDelete;
+
       // Remove from local state immediately for better UX
-      setClients((prev) => prev.filter((client) => client.id !== id));
+      setClients((prev) => prev.filter((client) => client.id !== clientIdToDelete));
 
       // Try to delete from database (best-effort, don't block UI)
-      fetch(`/api/invoice-management/clients/${id}`, {
+      fetch(`/api/invoice-management/clients/${idToUse}`, {
         method: "DELETE",
       }).catch(err => {
         console.warn("[Invoice] Failed to delete from database:", err);
@@ -3376,7 +3382,7 @@ export default function InvoiceManagement() {
 
       toast({ title: "Config deleted", description: "The client commercial configuration was removed." });
 
-      if (clientId === id) {
+      if (clientId === idToUse) {
         navigate("/invoice-management");
       }
     } catch (error) {

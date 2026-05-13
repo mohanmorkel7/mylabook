@@ -155,7 +155,6 @@ const INVOICE_THEME = {
 const BILLING_COMPANY_NAME = "Mindeed Technologies and Services Pvt Ltd";
 const INVOICE_AMOUNT_IN_WORDS = "(Rupees One lakh forty-seven thousand five hundred Only)";
 const INVOICE_DECLARATION_LINES = [
-  "Declaration:",
   "We hereby declare that",
   "1. We have obtained approval for a lower TDS deduction, and going forward, TDS should be deducted at the rate of 1.60 % only.",
   "2. We are registered under the Micro, Small, and Medium Enterprises Development Act, 2006 (MSME).",
@@ -642,6 +641,49 @@ function formatCurrency(value: number, currencyCode: CurrencyType = "INR") {
 
 function currencyLabel(value: number, currencyCode: CurrencyType = "INR") {
   return `${getCurrencySymbol(currencyCode)}${formatCurrency(value, currencyCode)}`;
+}
+
+function numberToWords(num: number): string {
+  if (num === 0) return "Zero Only";
+
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const scales = ["", "Thousand", "Lakh", "Crore"];
+
+  const convertHundreds = (n: number): string => {
+    let result = "";
+    const hundred = Math.floor(n / 100);
+    const remainder = n % 100;
+    if (hundred > 0) result += ones[hundred] + " Hundred ";
+    if (remainder >= 20) {
+      result += tens[Math.floor(remainder / 10)] + " ";
+      if (remainder % 10 > 0) result += ones[remainder % 10] + " ";
+    } else if (remainder > 0) {
+      result += (remainder < 10 ? ones[remainder] : teens[remainder - 10]) + " ";
+    }
+    return result.trim();
+  };
+
+  if (num < 0) return "Minus " + numberToWords(Math.abs(num));
+  if (num < 100) return ones[Math.floor(num / 10)] ? (tens[Math.floor(num / 10)] + (num % 10 > 0 ? " " + ones[num % 10] : "")) : ones[num % 10];
+
+  const parts: string[] = [];
+  let scale = 0;
+
+  while (num > 0) {
+    if (num % 100 !== 0 || scale === 0) {
+      const part = convertHundreds(num % (scale === 0 ? 100 : 100));
+      if (part) {
+        if (scale > 0 && scales[scale]) parts.unshift(part + " " + scales[scale]);
+        else if (part) parts.unshift(part);
+      }
+    }
+    num = Math.floor(num / 100);
+    scale++;
+  }
+
+  return (parts.join(" ").trim() + " Only").replace(/\s+/g, " ");
 }
 
 function downloadBlob(filename: string, blob: Blob) {
@@ -1223,14 +1265,14 @@ async function downloadInvoicePdfTemplate({
 
   // === STATEMENT OF CHARGES ===
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
-  ensureSpace(20);
+  ensureSpace(18);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(10.4);
   doc.text("Statement of Charges", margin, cursorY);
-  cursorY += 4;
+  cursorY += 3;
 
-  const headerH = 8;
+  const headerH = 7.5;
   setFill(SECONDARY);
   doc.rect(margin, cursorY, contentWidth, headerH, "F");
   setText([255, 255, 255]);
@@ -1296,32 +1338,32 @@ async function downloadInvoicePdfTemplate({
   cursorY += 4;
 
   // === AMOUNT IN WORDS ===
-  ensureSpace(10);
+  ensureSpace(8);
   setText(MUTED);
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
-  doc.text(`Amount in words: ${INVOICE_AMOUNT_IN_WORDS}`, margin, cursorY + 4);
-  cursorY += 9;
+  doc.setFontSize(7.8);
+  doc.text(`Amount in words: Rupees ${numberToWords(Math.round(totalPayable))}`, margin, cursorY + 3);
+  cursorY += 7;
 
   // === DECLARATION ===
-  ensureSpace(12);
+  ensureSpace(10);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.6);
+  doc.setFontSize(9.2);
   doc.text("Declaration", margin, cursorY);
   setStroke(PRIMARY);
   doc.setLineWidth(0.5);
-  doc.line(margin, cursorY + 1.6, margin + 28, cursorY + 1.6);
-  cursorY += 5;
+  doc.line(margin, cursorY + 1.4, margin + 26, cursorY + 1.4);
+  cursorY += 4;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   INVOICE_DECLARATION_LINES.forEach((line) => {
     const lines = wrap(line, contentWidth);
-    ensureSpace(lines.length * 3.6 + 2);
+    ensureSpace(lines.length * 3.3 + 1.5);
     setText(SECONDARY);
     doc.text(lines, margin, cursorY);
-    cursorY += lines.length * 3.6 + 1.4;
+    cursorY += lines.length * 3.3 + 1;
   });
   cursorY += 3;
 

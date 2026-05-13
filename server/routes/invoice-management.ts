@@ -4,6 +4,29 @@ import crypto from "crypto";
 
 const router = Router();
 
+let schemaInitialized = false;
+let schemaInitializing = false;
+let schemaInitPromise: Promise<void> | null = null;
+
+// ── Schema initialization helper ───────────────────────────────────────────
+async function ensureSchemaReady() {
+  if (schemaInitialized) return;
+
+  // If already initializing, wait for it to complete
+  if (schemaInitializing && schemaInitPromise) {
+    return schemaInitPromise;
+  }
+
+  schemaInitializing = true;
+  console.log("[Invoice] Schema not yet initialized, initializing now...");
+  schemaInitPromise = initializeInvoiceSchema().then(() => {
+    schemaInitialized = true;
+    schemaInitializing = false;
+  });
+
+  return schemaInitPromise;
+}
+
 // ── AES-256-CBC encryption ────────────────────────────────────────────────
 const RAW_KEY = process.env.INVOICE_ENCRYPTION_KEY ?? "invoice-management-aes-key-secure!";
 const ENC_KEY = Buffer.from(RAW_KEY.padEnd(32, "0").slice(0, 32));
@@ -29,9 +52,21 @@ function decrypt(text: string | null | undefined): string {
   } catch { return ""; }
 }
 
+// ── Middleware to ensure schema is ready ──────────────────────────────────
+router.use(async (req, res, next) => {
+  try {
+    await ensureSchemaReady();
+    next();
+  } catch (error) {
+    console.error("[Invoice] Failed to ensure schema ready:", error);
+    res.status(503).json({ error: "Service temporarily unavailable - initializing database" });
+  }
+});
+
 // ── Schema ────────────────────────────────────────────────────────────────
 export async function initializeInvoiceSchema() {
   try {
+    console.log("[Invoice] Initializing schema...");
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoice_clients (
         id                    SERIAL PRIMARY KEY,
@@ -336,9 +371,12 @@ router.post("/clients", async (req: Request, res: Response) => {
 // ── GET all clients ────────────────────────────────────────────────────
 router.get("/clients", async (req: Request, res: Response) => {
   try {
+    console.log("[Invoice] GET /clients - Starting fetch...");
     const result = await queryWithRetry(
       () => pool.query("SELECT * FROM invoice_clients ORDER BY updated_at DESC")
     );
+
+    console.log(`[Invoice] GET /clients - Found ${result.rows.length} clients`);
 
     const clients = result.rows.map((client: any) => ({
       id: client.id,
@@ -354,10 +392,12 @@ router.get("/clients", async (req: Request, res: Response) => {
       currency: decrypt(client.currency),
     }));
 
+    console.log("[Invoice] GET /clients - Returning clients:", clients);
     res.json(clients);
-  } catch (error) {
-    console.error("Error fetching clients:", error);
-    res.status(500).json({ error: "Failed to fetch clients" });
+  } catch (error: any) {
+    console.error("[Invoice] GET /clients - Error:", error?.message || error);
+    console.error("[Invoice] GET /clients - Full error:", error);
+    res.status(500).json({ error: "Failed to fetch clients", details: (error as any)?.message });
   }
 });
 

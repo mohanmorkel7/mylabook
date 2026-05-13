@@ -3426,13 +3426,14 @@ export default function InvoiceManagement() {
                   <Label>Invoice Amount</Label>
                   <Input
                     type={invoiceModalMode === "edit" ? "number" : "text"}
-                    value={invoiceModalMode === "edit" ? invoiceAmountDraft : currencyLabel(invoiceAmountDraft || selectedClient?.monthlyInvoiceEstimate || 0)}
+                    value={invoiceModalMode === "edit" ? invoiceAmountDraft : currencyLabel(invoiceAmountDraft > 0 ? invoiceAmountDraft : (selectedClient?.monthlyInvoiceEstimate || 0))}
                     onChange={(e) => setInvoiceAmountDraft(Number(e.target.value) || 0)}
                     readOnly={invoiceModalMode !== "edit"}
+                    placeholder={`${currencyLabel(selectedClient?.monthlyInvoiceEstimate || 0)}`}
                   />
                   {invoiceModalMode !== "edit" && (
                     <p className="text-xs text-muted-foreground">
-                      + {currencyLabel(Math.round((invoiceAmountDraft || 0) * 0.18))} tax (18%) = {currencyLabel(Math.round((invoiceAmountDraft || 0) * 1.18))} final payable
+                      + {currencyLabel(Math.round((invoiceAmountDraft > 0 ? invoiceAmountDraft : (selectedClient?.monthlyInvoiceEstimate || 0)) * 0.18))} tax (18%) = {currencyLabel(Math.round((invoiceAmountDraft > 0 ? invoiceAmountDraft : (selectedClient?.monthlyInvoiceEstimate || 0)) * 1.18))} final payable
                     </p>
                   )}
                 </div>
@@ -4175,13 +4176,14 @@ export default function InvoiceManagement() {
                 <Label>Invoice Amount</Label>
                 <Input
                   type={invoiceModalMode === "edit" ? "number" : "text"}
-                  value={invoiceModalMode === "edit" ? invoiceAmountDraft : currencyLabel(invoiceAmountDraft || selectedClient?.monthlyInvoiceEstimate || 0)}
+                  value={invoiceModalMode === "edit" ? invoiceAmountDraft : currencyLabel(invoiceAmountDraft > 0 ? invoiceAmountDraft : (selectedClient?.monthlyInvoiceEstimate || 0))}
                   onChange={(e) => setInvoiceAmountDraft(Number(e.target.value) || 0)}
                   readOnly={invoiceModalMode !== "edit"}
+                  placeholder={`${currencyLabel(selectedClient?.monthlyInvoiceEstimate || 0)}`}
                 />
                 {invoiceModalMode !== "edit" && (
                   <p className="text-xs text-muted-foreground">
-                    + {currencyLabel(Math.round((invoiceAmountDraft || 0) * 0.18))} tax (18%) = {currencyLabel(Math.round((invoiceAmountDraft || 0) * 1.18))} final payable
+                    + {currencyLabel(Math.round((invoiceAmountDraft > 0 ? invoiceAmountDraft : (selectedClient?.monthlyInvoiceEstimate || 0)) * 0.18))} tax (18%) = {currencyLabel(Math.round((invoiceAmountDraft > 0 ? invoiceAmountDraft : (selectedClient?.monthlyInvoiceEstimate || 0)) * 1.18))} final payable
                   </p>
                 )}
               </div>

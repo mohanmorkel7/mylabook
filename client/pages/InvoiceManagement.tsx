@@ -649,38 +649,48 @@ function numberToWords(num: number): string {
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
   const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
   const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const scales = ["", "Thousand", "Lakh", "Crore"];
 
-  const convertHundreds = (n: number): string => {
+  const convertTwoDigits = (n: number): string => {
+    if (n === 0) return "";
+    if (n < 10) return ones[n];
+    if (n < 20) return teens[n - 10];
+    return tens[Math.floor(n / 10)] + (n % 10 > 0 ? " " + ones[n % 10] : "");
+  };
+
+  const convertThreeDigits = (n: number): string => {
+    if (n === 0) return "";
     let result = "";
     const hundred = Math.floor(n / 100);
+    if (hundred > 0) result += ones[hundred] + " Hundred";
     const remainder = n % 100;
-    if (hundred > 0) result += ones[hundred] + " Hundred ";
-    if (remainder >= 20) {
-      result += tens[Math.floor(remainder / 10)] + " ";
-      if (remainder % 10 > 0) result += ones[remainder % 10] + " ";
-    } else if (remainder > 0) {
-      result += (remainder < 10 ? ones[remainder] : teens[remainder - 10]) + " ";
+    if (remainder > 0) {
+      if (result) result += " ";
+      result += convertTwoDigits(remainder);
     }
     return result.trim();
   };
 
   if (num < 0) return "Minus " + numberToWords(Math.abs(num));
-  if (num < 100) return ones[Math.floor(num / 10)] ? (tens[Math.floor(num / 10)] + (num % 10 > 0 ? " " + ones[num % 10] : "")) : ones[num % 10];
+
+  // Indian numbering: Crore (10M), Lakh (100K), Thousand (1K), Hundred, Ones
+  const crores = Math.floor(num / 10000000);
+  const lakhs = Math.floor((num % 10000000) / 100000);
+  const thousands = Math.floor((num % 100000) / 1000);
+  const remainder = num % 1000;
 
   const parts: string[] = [];
-  let scale = 0;
 
-  while (num > 0) {
-    if (num % 100 !== 0 || scale === 0) {
-      const part = convertHundreds(num % (scale === 0 ? 100 : 100));
-      if (part) {
-        if (scale > 0 && scales[scale]) parts.unshift(part + " " + scales[scale]);
-        else if (part) parts.unshift(part);
-      }
-    }
-    num = Math.floor(num / 100);
-    scale++;
+  if (crores > 0) {
+    parts.push(convertThreeDigits(crores) + " Crore");
+  }
+  if (lakhs > 0) {
+    parts.push(convertThreeDigits(lakhs) + " Lakh");
+  }
+  if (thousands > 0) {
+    parts.push(convertThreeDigits(thousands) + " Thousand");
+  }
+  if (remainder > 0) {
+    parts.push(convertThreeDigits(remainder));
   }
 
   return (parts.join(" ").trim() + " Only").replace(/\s+/g, " ");
@@ -1263,7 +1273,7 @@ async function downloadInvoicePdfTemplate({
   doc.setFontSize(8.6);
   lineItems.forEach((item, idx) => {
     const lines = wrap(item.description, contentWidth - 50);
-    const rowH = Math.max(8, lines.length * 4 + 3);
+    const rowH = Math.max(9, lines.length * 4.2 + 4);
     ensureSpace(rowH + 2);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
@@ -1271,14 +1281,14 @@ async function downloadInvoicePdfTemplate({
     }
     setText(MUTED);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.8);
-    doc.text(String(idx + 1).padStart(2, "0"), margin + 3, cursorY + 5.6);
+    doc.setFontSize(8.2);
+    doc.text(String(idx + 1).padStart(2, "0"), margin + 3, cursorY + 5.8);
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.6);
-    doc.text(lines, margin + 12, cursorY + 5.6);
+    doc.setFontSize(8.8);
+    doc.text(lines, margin + 12, cursorY + 5.8);
     doc.setFont("helvetica", "bold");
-    doc.text(money(item.amount), pageWidth - margin - 3, cursorY + 5.6, { align: "right" });
+    doc.text(money(item.amount), pageWidth - margin - 3, cursorY + 5.8, { align: "right" });
     cursorY += rowH;
   });
   setStroke(SOFT);
@@ -1317,31 +1327,31 @@ async function downloadInvoicePdfTemplate({
   ensureSpace(8);
   setText(MUTED);
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(7.8);
-  doc.text(`Amount in words: Rupees ${numberToWords(Math.round(totalPayable))}`, margin, cursorY + 3);
-  cursorY += 7;
+  doc.setFontSize(8.2);
+  doc.text(`Amount in words: Rupees ${numberToWords(Math.round(totalPayable))}`, margin, cursorY + 2.5);
+  cursorY += 8;
 
   // === DECLARATION ===
   ensureSpace(10);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.2);
+  doc.setFontSize(9.6);
   doc.text("Declaration", margin, cursorY);
   setStroke(PRIMARY);
   doc.setLineWidth(0.5);
-  doc.line(margin, cursorY + 1.4, margin + 26, cursorY + 1.4);
-  cursorY += 4;
+  doc.line(margin, cursorY + 1.6, margin + 28, cursorY + 1.6);
+  cursorY += 5;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(8.4);
   INVOICE_DECLARATION_LINES.forEach((line) => {
     const lines = wrap(line, contentWidth);
-    ensureSpace(lines.length * 3.3 + 1.5);
+    ensureSpace(lines.length * 3.8 + 2);
     setText(SECONDARY);
     doc.text(lines, margin, cursorY);
-    cursorY += lines.length * 3.3 + 1;
+    cursorY += lines.length * 3.8 + 1.5;
   });
-  cursorY += 3;
+  cursorY += 4;
 
   // === SIGNATURE ===
   ensureSpace(28);

@@ -2755,19 +2755,37 @@ export default function InvoiceManagement() {
   );
 
   const openInvoiceCreateModal = (client: ClientRecord) => {
-    setInvoiceModalMode("create");
-    setSelectedInvoice(null);
-    setInvoiceAmountDraft(Math.round(estimateInvoiceFromSlabs(
-      client.monthlyTransactionVolume,
-      client.fixedBilling,
-      client.transactionSlabs,
-      client.aws,
-      client.minimumGuarantee,
-      client.integrationFee,
-      client.additionalPlatformFee,
-    )));
-    setInvoiceMonthDraft(new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }));
-    setInvoiceModalOpen(true);
+    console.log("[Invoice] openInvoiceCreateModal - Opening for client:", client?.name, client);
+
+    if (!client) {
+      console.error("[Invoice] openInvoiceCreateModal - No client provided");
+      toast({ title: "Error", description: "Client not found", variant: "destructive" });
+      return;
+    }
+
+    try {
+      setInvoiceModalMode("create");
+      setSelectedInvoice(null);
+
+      const estimated = Math.round(estimateInvoiceFromSlabs(
+        client.monthlyTransactionVolume || 0,
+        client.fixedBilling || 0,
+        client.transactionSlabs || [],
+        client.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
+        client.minimumGuarantee || 0,
+        client.integrationFee || 0,
+        client.additionalPlatformFee || 0,
+      ));
+
+      console.log("[Invoice] openInvoiceCreateModal - Estimated amount:", estimated);
+      setInvoiceAmountDraft(estimated);
+      setInvoiceMonthDraft(new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }));
+      setInvoiceModalOpen(true);
+      console.log("[Invoice] openInvoiceCreateModal - Modal opened");
+    } catch (error) {
+      console.error("[Invoice] openInvoiceCreateModal - Error:", error);
+      toast({ title: "Error", description: "Failed to open invoice creation modal", variant: "destructive" });
+    }
   };
 
   const openInvoiceEditModal = (invoice: InvoiceRecord) => {
@@ -2946,53 +2964,81 @@ export default function InvoiceManagement() {
   };
 
   const generateInvoiceForClient = async (client = selectedClient) => {
-    if (!client) return;
-    const generatedDate = new Date().toISOString().split("T")[0];
-    const generatedAmount = Math.round(
-      estimateInvoiceFromSlabs(
-        client.monthlyTransactionVolume,
-        client.fixedBilling,
-        client.transactionSlabs,
-        client.aws,
-        client.minimumGuarantee,
-        client.integrationFee,
-        client.additionalPlatformFee,
-      ),
-    );
-    const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
-    const nextInvoice: InvoiceRecord = {
-      invoiceId: serialInfo.invoiceNumber,
-      invoiceNumber: serialInfo.invoiceNumber,
-      serial: serialInfo.serial,
-      financialYear: serialInfo.financialYear,
-      month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
-      client: client.name,
-      amount: generatedAmount,
-      status: "Waiting for approval",
-      generatedDate,
-    };
-    setInvoices((prev) => [nextInvoice, ...prev]);
-    setClients((prev) =>
-      prev.map((item) =>
-        item.id === client.id
-          ? {
-              ...item,
-              lastInvoiceGenerated: generatedDate,
-              invoiceHistory: [nextInvoice, ...(item.invoiceHistory || [])],
-            }
-          : item,
-      ),
-    );
-    setInvoiceSerialState({
-      financialYear: serialInfo.financialYear,
-      serial: serialInfo.serial,
-      lastIssuedAt: new Date().toISOString(),
-    });
-    setInvoiceModalOpen(false);
-    toast({
-      title: "Invoice sent for approval",
-      description: `${client.name} invoice ${serialInfo.invoiceNumber} is waiting for FinOps approval.`,
-    });
+    console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name);
+
+    if (!client) {
+      console.error("[Invoice] generateInvoiceForClient - No client provided");
+      toast({ title: "Error", description: "Client not found", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const generatedDate = new Date().toISOString().split("T")[0];
+      console.log("[Invoice] generateInvoiceForClient - Generated date:", generatedDate);
+
+      const generatedAmount = Math.round(
+        estimateInvoiceFromSlabs(
+          client.monthlyTransactionVolume || 0,
+          client.fixedBilling || 0,
+          client.transactionSlabs || [],
+          client.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
+          client.minimumGuarantee || 0,
+          client.integrationFee || 0,
+          client.additionalPlatformFee || 0,
+        ),
+      );
+
+      console.log("[Invoice] generateInvoiceForClient - Generated amount:", generatedAmount);
+
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+      console.log("[Invoice] generateInvoiceForClient - Serial info:", serialInfo);
+
+      const nextInvoice: InvoiceRecord = {
+        invoiceId: serialInfo.invoiceNumber,
+        invoiceNumber: serialInfo.invoiceNumber,
+        serial: serialInfo.serial,
+        financialYear: serialInfo.financialYear,
+        month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+        client: client.name,
+        amount: generatedAmount,
+        status: "Waiting for approval",
+        generatedDate,
+      };
+
+      console.log("[Invoice] generateInvoiceForClient - Next invoice object:", nextInvoice);
+
+      setInvoices((prev) => [nextInvoice, ...prev]);
+      setClients((prev) =>
+        prev.map((item) =>
+          item.id === client.id
+            ? {
+                ...item,
+                lastInvoiceGenerated: generatedDate,
+                invoiceHistory: [nextInvoice, ...(item.invoiceHistory || [])],
+              }
+            : item,
+        ),
+      );
+      setInvoiceSerialState({
+        financialYear: serialInfo.financialYear,
+        serial: serialInfo.serial,
+        lastIssuedAt: new Date().toISOString(),
+      });
+      setInvoiceModalOpen(false);
+
+      console.log("[Invoice] generateInvoiceForClient - Invoice generated successfully");
+      toast({
+        title: "Invoice sent for approval",
+        description: `${client.name} invoice ${serialInfo.invoiceNumber} is waiting for FinOps approval.`,
+      });
+    } catch (error) {
+      console.error("[Invoice] generateInvoiceForClient - Error:", error);
+      toast({
+        title: "Error generating invoice",
+        description: (error as any)?.message || "Unknown error",
+        variant: "destructive",
+      });
+    }
   };
 
   const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {

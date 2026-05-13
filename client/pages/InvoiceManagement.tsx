@@ -2816,11 +2816,11 @@ export default function InvoiceManagement() {
         .then(data => {
           // Update the local client record with the decrypted data from database
           setClients(prev => {
-            const exists = prev.some(c => c.id === data.clientId);
+            const exists = prev.some(c => c.id === data.clientId || c.id === data.id);
             const updatedClient: ClientRecord = {
-              id: data.clientId,
-              code: data.clientCode,
-              name: data.clientName,
+              id: data.id || data.clientId,
+              code: data.code || data.clientCode,
+              name: data.name || data.clientName,
               status: data.status,
               priority: data.priority,
               services: data.services || [],
@@ -2839,10 +2839,10 @@ export default function InvoiceManagement() {
               logo: data.logo,
               logoClass: data.logoClass,
               color: data.color,
-              transactionSlabs: [],
-              aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
+              transactionSlabs: data.transactionSlabs || [],
+              aws: data.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
               notes: data.notes,
-              invoiceHistory: [],
+              invoiceHistory: data.invoiceHistory || [],
               gstin: data.gstin,
               lutNumber: data.lutNumber,
               billingAddress: data.billingAddress,
@@ -2851,7 +2851,7 @@ export default function InvoiceManagement() {
               clientType: data.clientType || "Domestic",
               currency: data.currency || "INR",
             };
-            return exists ? prev.map(c => c.id === data.clientId ? updatedClient : c) : [updatedClient, ...prev];
+            return exists ? prev.map(c => (c.id === data.id || c.id === data.clientId) ? updatedClient : c) : [updatedClient, ...prev];
           });
         })
         .catch(err => console.error("Failed to fetch client from database:", err));
@@ -3364,17 +3364,80 @@ export default function InvoiceManagement() {
 
   if (isOverviewRoute && selectedClient) {
     return (
-      <ClientOverviewScreen
-        client={selectedClient}
-        onBack={() => navigate("/invoice-management")}
-        onExportPdf={() => exportClientPdf(selectedClient)}
-        onExportCsv={() => exportClientsCsv([selectedClient])}
-        onExportDocx={() => exportClientDocx(selectedClient)}
-        onGenerateInvoice={() => openInvoiceCreateModal(selectedClient)}
-        onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
-        onDownloadPdf={downloadInvoicePdf}
-        onDownloadDocx={downloadInvoiceDocx}
-      />
+      <>
+        <ClientOverviewScreen
+          client={selectedClient}
+          onBack={() => navigate("/invoice-management")}
+          onExportPdf={() => exportClientPdf(selectedClient)}
+          onExportCsv={() => exportClientsCsv([selectedClient])}
+          onExportDocx={() => exportClientDocx(selectedClient)}
+          onGenerateInvoice={() => openInvoiceCreateModal(selectedClient)}
+          onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
+          onDownloadPdf={downloadInvoicePdf}
+          onDownloadDocx={downloadInvoiceDocx}
+        />
+
+        {/* Invoice Creation/Editing Modal */}
+        <Dialog open={invoiceModalOpen} onOpenChange={setInvoiceModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {invoiceModalMode === "edit" ? "Edit Invoice" : "Invoice Generation Modal"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Client</Label>
+                  <Input value={selectedInvoice?.client || selectedClient?.name || ""} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>Amount</Label>
+                  <Input
+                    type={invoiceModalMode === "edit" ? "number" : "text"}
+                    value={invoiceModalMode === "edit" ? invoiceAmountDraft : currencyLabel(invoiceAmountDraft || selectedClient?.monthlyInvoiceEstimate || 0)}
+                    onChange={(e) => setInvoiceAmountDraft(Number(e.target.value) || 0)}
+                    readOnly={invoiceModalMode !== "edit"}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Invoice Month</Label>
+                  <Input
+                    value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
+                    onChange={(e) => setInvoiceMonthDraft(e.target.value)}
+                    readOnly={invoiceModalMode !== "edit"}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Input value={invoiceModalMode === "edit" ? "Generated" : "Waiting for approval"} readOnly />
+                </div>
+              </div>
+              <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                {invoiceModalMode === "edit"
+                  ? "Only invoices approved by the FinOps admin can be edited and updated."
+                  : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>Close</Button>
+                <Button
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                  onClick={() => {
+                    if (invoiceModalMode === "edit") {
+                      saveInvoiceUpdate();
+                    } else {
+                      generateInvoiceForClient(selectedClient);
+                    }
+                    setInvoiceModalOpen(false);
+                  }}
+                >
+                  {invoiceModalMode === "edit" ? "Update Invoice" : "Submit for approval"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
     );
   }
 

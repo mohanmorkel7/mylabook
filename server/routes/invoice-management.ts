@@ -121,11 +121,22 @@ export async function initializeInvoiceSchema() {
         client_type           TEXT,
         currency              TEXT,
         notes                 TEXT,
+        transaction_slabs     TEXT,
+        aws_config            TEXT,
         created_at            TIMESTAMPTZ DEFAULT NOW(),
         updated_at            TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     console.log("[Invoice] ✓ invoice_clients table created");
+
+    // Add missing columns if they don't exist (for existing tables)
+    try {
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS transaction_slabs TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS aws_config TEXT`);
+      console.log("[Invoice] ✓ Added missing columns to invoice_clients");
+    } catch (err) {
+      console.log("[Invoice] Columns already exist or error:", (err as any)?.message);
+    }
 
     // Create invoice_records table
     console.log("[Invoice] Creating invoice_records table...");
@@ -253,6 +264,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       clientType,
       currency,
       notes,
+      transactionSlabs,
+      aws,
     } = req.body;
 
     const id = clientId || `client-${Date.now()}`;
@@ -264,8 +277,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       profitability_revenue, min_guarantee, additional_fee, integration_fee,
       billing_cycle, last_invoice_generated, logo, logo_class, color,
       gstin, lut_number, billing_address, billing_email, signatory_name,
-      client_type, currency, notes
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+      client_type, currency, notes, transaction_slabs, aws_config
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
     ON CONFLICT (client_id) DO UPDATE SET
       client_code = EXCLUDED.client_code,
       client_name = EXCLUDED.client_name,

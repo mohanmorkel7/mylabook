@@ -58,6 +58,7 @@ import notificationsProductionRouter from "./routes/notifications-production";
 import adminProductionRouter from "./routes/admin-production";
 import finopsProductionRouter, { ensureFinOpsProductionSchema } from "./routes/finops-production";
 import financeManagementRouter, { initializeFinanceSchema, runFinanceSLACheck, startFinanceMidnightReset } from "./routes/finance-management";
+import invoiceManagementRouter, { initializeInvoiceSchema } from "./routes/invoice-management";
 
 export function createServer() {
   const app = express();
@@ -71,18 +72,19 @@ export function createServer() {
   }, 1000); // Delay initialization to prevent blocking server startup
 
   // Initialize FinOps schema tables (idempotent, runs once at startup)
-  try {
-    setTimeout(async () => {
+  setTimeout(async () => {
+    try {
       await initializeFinOpsSchema();
       await ensureFinOpsProductionSchema();
       await initializeFinanceSchema();
-    }, 1500); // After database initialization
-  } catch (e) {
-    console.error(
-      "Failed to initialize FinOps schema:",
-      (e as any)?.message,
-    );
-  }
+      await initializeInvoiceSchema();
+    } catch (e) {
+      console.error(
+        "Failed to initialize FinOps schema:",
+        (e as any)?.message,
+      );
+    }
+  }, 1500); // After database initialization
 
   // Start FinOps Scheduler for local/dev runtime (idempotent)
   try {
@@ -634,6 +636,13 @@ export function createServer() {
     console.log("Finance Management router loaded successfully");
   } catch (error) {
     console.error("Error loading Finance Management router:", error);
+  }
+
+  try {
+    app.use("/api/invoice-management", invoiceManagementRouter);
+    console.log("Invoice Management router loaded successfully");
+  } catch (error) {
+    console.error("Error loading Invoice Management router:", error);
   }
 
   // Allow Vite dev server to serve SPA assets by passing through non-API requests

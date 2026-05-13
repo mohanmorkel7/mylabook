@@ -3158,6 +3158,21 @@ export default function InvoiceManagement() {
   };
 
   const deleteInvoiceByNumber = (invoiceNumber: string) => {
+    // Find the invoice to get its ID
+    const invoiceToDelete = clients
+      .flatMap((c) => c.invoiceHistory || [])
+      .find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+
+    if (invoiceToDelete) {
+      // Delete from database (best-effort)
+      fetch(`/api/invoice-management/invoices/${invoiceToDelete.invoiceId}`, {
+        method: "DELETE",
+      }).catch((err) => {
+        console.warn("[Invoice] Failed to delete invoice from database:", err);
+      });
+    }
+
+    // Update local state
     setInvoices((prev) => deleteInvoiceFromCollection(prev, invoiceNumber));
     setClients((prev) =>
       prev.map((client) => ({

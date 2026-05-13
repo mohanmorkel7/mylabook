@@ -666,6 +666,25 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
   }
 });
 
+// ── DELETE invoice ────────────────────────────────────────────────────────
+router.delete("/invoices/:invoiceId", async (req: Request, res: Response) => {
+  try {
+    const { invoiceId } = req.params;
+    console.log("[Invoice] DELETE /invoices - Deleting invoice:", invoiceId);
+
+    // Delete from database
+    await queryWithRetry(
+      () => pool.query("DELETE FROM invoice_records WHERE invoice_id = $1", [invoiceId])
+    );
+    console.log("[Invoice] DELETE /invoices - Successfully deleted:", invoiceId);
+
+    res.json({ success: true, invoiceId });
+  } catch (error: any) {
+    console.error("[Invoice] DELETE /invoices - Error:", error?.message || error);
+    res.status(500).json({ error: "Failed to delete invoice", details: error?.message });
+  }
+});
+
 // ── DELETE client ─────────────────────────────────────────────────────────
 router.delete("/clients/:clientId", async (req: Request, res: Response) => {
   try {

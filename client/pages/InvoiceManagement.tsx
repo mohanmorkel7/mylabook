@@ -142,15 +142,32 @@ const INVOICE_STATUS_META: Record<string, string> = {
 };
 
 const MYLAPAY_LOGO_URL = "/mylapaylogo.png";
+const BILLING_COMPANY_NAME = "Mindeed Technologies and Services Pvt Ltd";
+const INVOICE_AMOUNT_IN_WORDS = "(Rupees One lakh forty-seven thousand five hundred Only)";
+const INVOICE_DECLARATION_LINES = [
+  "Declaration:",
+  "We hereby declare that",
+  "1. We have obtained approval for a lower TDS deduction, and going forward, TDS should be deducted at the rate of 1.60 % only.",
+  "2. We are registered under the Micro, Small, and Medium Enterprises Development Act, 2006 (MSME).",
+  "MSME No of Mindeed: UDYAM-TN-02-0113863",
+  "GST No of Mindeed: 33AAMCM6618H1ZB",
+  "PAN No of Mindeed: AAMCM6618H",
+  "Payment Terms: 15 days from the date of Invoice.",
+];
+const MYLAPAY_FOOTER_LINES = [
+  "MYLAPAY Incorporated as Mindeed Technologies and Services Private Limited.",
+  "# 17/3, Pembroke House, Second Floor, Shafee Mohammed Road, Nungambakkam, Chennai 600 006.",
+  "CIN: U72900TN2019PTC129197 | Website: www.mylapay.com | Reach us at:contactus@mylapay.com",
+];
 
 const MYLAPAY_BRANDING = {
-  companyName: "Mylapay",
+  companyName: BILLING_COMPANY_NAME,
   address: "Coimbatore, Tamil Nadu, India",
   email: "contact@mylapay.com",
   phone: "+91 98765 43210",
   gstin: "GSTIN: —",
   lutNumber: "LUT: —",
-  footerLine: "Thank you for your business. Please refer to this invoice for payment and reconciliation.",
+  footerLine: MYLAPAY_FOOTER_LINES.join("\n"),
   authorizedLabel: "Authorized Signatory",
 };
 
@@ -742,12 +759,33 @@ async function downloadInvoiceDocxTemplate({
               new Docx.TextRun({ text: gst > 0 ? `GST / Tax: INR ${formatCurrency(gst)}   ` : "GST / Tax: LUT exempt   ", bold: true, size: 14 }),
               new Docx.TextRun({ text: `Final Payable: INR ${formatCurrency(totalPayable)}`, bold: true, size: 14 }),
             ],
-            spacing: { before: 60, after: 40 },
+            spacing: { before: 50, after: 10 },
+          }),
+          new Docx.Paragraph({
+            children: [new Docx.TextRun({ text: INVOICE_AMOUNT_IN_WORDS, italics: true, color: "334155", size: 13 })],
+            spacing: { after: 12 },
           }),
           new Docx.Paragraph({
             pageBreakBefore: lineItems.length > 6,
-            children: [new Docx.TextRun({ text: "For Mylapay", bold: true, color: "1d4ed8", size: 20 })],
-            spacing: { after: 160 },
+            children: [new Docx.TextRun({ text: "Declaration", bold: true, color: "1d4ed8", size: 17 })],
+            spacing: { after: 8 },
+          }),
+          ...INVOICE_DECLARATION_LINES.map((line, index) =>
+            new Docx.Paragraph({
+              children: [
+                new Docx.TextRun({
+                  text: line,
+                  bold: index < 2,
+                  size: 12,
+                  color: index < 2 ? "0f172a" : "334155",
+                }),
+              ],
+              spacing: { after: index === INVOICE_DECLARATION_LINES.length - 1 ? 10 : 4 },
+            }),
+          ),
+          new Docx.Paragraph({
+            children: [new Docx.TextRun({ text: `For ${MYLAPAY_BRANDING.companyName}`, bold: true, color: "1d4ed8", size: 18 })],
+            spacing: { after: 12 },
           }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
@@ -781,14 +819,14 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { before: 24 } }),
-          new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: MYLAPAY_BRANDING.footerLine, color: "64748b", size: 12 })],
-            spacing: { after: 24 },
-          }),
-          new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: `${MYLAPAY_BRANDING.companyName} · ${MYLAPAY_BRANDING.address} · ${MYLAPAY_BRANDING.email} · ${MYLAPAY_BRANDING.phone}`, color: "64748b", size: 12 })],
-          }),
+          new Docx.Paragraph({ spacing: { before: 18 } }),
+          ...MYLAPAY_FOOTER_LINES.map(
+            (line, index) =>
+              new Docx.Paragraph({
+                children: [new Docx.TextRun({ text: line, color: "64748b", size: 11 })],
+                spacing: { after: index === MYLAPAY_FOOTER_LINES.length - 1 ? 16 : 2 },
+              }),
+          ),
         ],
       },
     ],
@@ -1101,54 +1139,77 @@ async function downloadInvoicePdfTemplate({
     y = margin;
   }
 
+  doc.setTextColor(71, 85, 105);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8.4);
+  doc.text(INVOICE_AMOUNT_IN_WORDS, pageWidth / 2, y + 4, { align: "center" });
+  y += 8;
+
+  const declarationTextWidth = contentWidth - 8;
+  const declarationHeight = 8 + INVOICE_DECLARATION_LINES.reduce(
+    (height, line) => height + wrap(line, declarationTextWidth).length * 3.2,
+    0,
+  );
+  drawPanel(margin, y, contentWidth, declarationHeight, [255, 255, 255], [226, 232, 240]);
+  doc.setTextColor(30, 64, 175);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.4);
+  doc.text("Declaration", margin + 4, y + 5.2);
+
+  let declarationY = y + 10;
+  INVOICE_DECLARATION_LINES.forEach((line, index) => {
+    const wrappedLines = wrap(line, declarationTextWidth);
+    doc.setFont("helvetica", index < 2 ? "bold" : "normal");
+    doc.setFontSize(index < 2 ? 8.0 : 7.4);
+    doc.setTextColor(index < 2 ? 15 : 51, index < 2 ? 23 : 65, index < 2 ? 42 : 85);
+    doc.text(wrappedLines, margin + 4, declarationY);
+    declarationY += wrappedLines.length * 3.2;
+  });
+
+  y += declarationHeight + 4;
+
   const sealWidth = (contentWidth - gutter) * 0.38;
   const signWidth = contentWidth - sealWidth - gutter;
-  drawPanel(margin, y, sealWidth, 30, [255, 255, 255], [191, 219, 254]);
-  drawPanel(margin + sealWidth + gutter, y, signWidth, 30, [255, 255, 255], [191, 219, 254]);
+  drawPanel(margin, y, sealWidth, 26, [255, 255, 255], [191, 219, 254]);
+  drawPanel(margin + sealWidth + gutter, y, signWidth, 26, [255, 255, 255], [191, 219, 254]);
 
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.2);
-  doc.text("Company Seal", margin + sealWidth / 2, y + 7.2, { align: "center" });
+  doc.setFontSize(8.8);
+  doc.text("Company Seal", margin + sealWidth / 2, y + 6.4, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.4);
+  doc.setFontSize(7.0);
   doc.setTextColor(100, 116, 139);
-  doc.text("Space reserved for seal", margin + sealWidth / 2, y + 12.2, { align: "center" });
+  doc.text("Space reserved for seal", margin + sealWidth / 2, y + 10.6, { align: "center" });
   doc.setDrawColor(191, 219, 254);
-  doc.line(margin + 5, y + 19, margin + sealWidth - 5, y + 19);
+  doc.line(margin + 5, y + 16, margin + sealWidth - 5, y + 16);
 
   const signX = margin + sealWidth + gutter;
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.2);
-  doc.text("Authority Signature", signX + 4, y + 7.2);
+  doc.setFontSize(8.8);
+  doc.text("Authority Signature", signX + 4, y + 6.4);
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.7);
-  doc.text(getClientSignatureName(client), signX + 4, y + 12.5);
+  doc.setFontSize(8.9);
+  doc.text(getClientSignatureName(client), signX + 4, y + 10.8);
   doc.setDrawColor(191, 219, 254);
-  doc.line(signX + 4, y + 19, signX + signWidth - 4, y + 19);
+  doc.line(signX + 4, y + 16, signX + signWidth - 4, y + 16);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.4);
+  doc.setFontSize(7.0);
   doc.setTextColor(100, 116, 139);
-  doc.text("Authorized signatory", signX + 4, y + 23);
-  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 23, { align: "right" });
+  doc.text("Authorized signatory", signX + 4, y + 20);
+  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 20, { align: "right" });
 
-  const footerY = pageHeight - 11;
+  const footerY = pageHeight - 10;
   doc.setDrawColor(226, 232, 240);
   doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
   doc.setTextColor(100, 116, 139);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.2);
-  doc.text(wrap(MYLAPAY_BRANDING.footerLine, contentWidth), margin, footerY);
-  doc.text(
-    wrap(
-      `${MYLAPAY_BRANDING.companyName} · ${MYLAPAY_BRANDING.address} · ${MYLAPAY_BRANDING.email} · ${MYLAPAY_BRANDING.phone}`,
-      contentWidth,
-    ),
-    margin,
-    footerY + 3,
-  );
+  doc.setFontSize(6.9);
+  MYLAPAY_FOOTER_LINES.forEach((line, index) => {
+    doc.text(line, margin, footerY + index * 2.8);
+  });
 
   doc.save(`${invoiceNumber}.pdf`);
 }

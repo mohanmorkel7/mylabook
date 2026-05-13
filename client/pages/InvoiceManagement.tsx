@@ -1239,30 +1239,6 @@ async function downloadInvoicePdfTemplate({
   const rightEnd = renderParty(margin + colWidth + 8, "Billed To", billTo);
   cursorY = Math.max(leftEnd, rightEnd) + 6;
 
-  // === META STRIP ===
-  ensureSpace(16);
-  setFill(SOFT);
-  doc.rect(margin, cursorY, contentWidth, 12, "F");
-  const metaCols: Array<[string, string]> = [
-    ["Status", status],
-    ["Period", month],
-    ["Txn Volume", client.monthlyTransactionVolume.toLocaleString()],
-    ["Last Generated", client.lastInvoiceGenerated || "—"],
-  ];
-  const metaW = contentWidth / metaCols.length;
-  metaCols.forEach(([label, value], i) => {
-    const cx = margin + i * metaW + 4;
-    setText(MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.8);
-    doc.text(label.toUpperCase(), cx, cursorY + 4.6);
-    setText(SECONDARY);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.6);
-    doc.text(wrap(String(value || "—"), metaW - 6)[0], cx, cursorY + 9.2);
-  });
-  cursorY += 18;
-
   // === STATEMENT OF CHARGES ===
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
   ensureSpace(18);

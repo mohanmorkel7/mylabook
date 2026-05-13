@@ -606,14 +606,42 @@ const SERVICE_CATEGORY = [
   { category: "FIRC", value: 8 },
 ];
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IN", {
+function getCurrencySymbol(currencyCode: CurrencyType = "INR"): string {
+  const currencyMap: Record<CurrencyType, string> = {
+    "INR": "₹",
+    "USD": "$",
+    "AED": "د.إ",
+    "SAR": "﷼",
+    "KWD": "د.ك",
+    "OMR": "ر.ع.",
+    "QAR": "﷼",
+    "BHD": "د.ب",
+  };
+  return currencyMap[currencyCode] || "₹";
+}
+
+function getLocaleForCurrency(currencyCode: CurrencyType = "INR"): string {
+  const localeMap: Record<CurrencyType, string> = {
+    "INR": "en-IN",
+    "USD": "en-US",
+    "AED": "en-AE",
+    "SAR": "en-SA",
+    "KWD": "en-KW",
+    "OMR": "en-OM",
+    "QAR": "en-QA",
+    "BHD": "en-BH",
+  };
+  return localeMap[currencyCode] || "en-IN";
+}
+
+function formatCurrency(value: number, currencyCode: CurrencyType = "INR") {
+  return new Intl.NumberFormat(getLocaleForCurrency(currencyCode), {
     maximumFractionDigits: 0,
   }).format(Math.round(value));
 }
 
-function currencyLabel(value: number) {
-  return `₹${formatCurrency(value)}`;
+function currencyLabel(value: number, currencyCode: CurrencyType = "INR") {
+  return `${getCurrencySymbol(currencyCode)}${formatCurrency(value, currencyCode)}`;
 }
 
 function downloadBlob(filename: string, blob: Blob) {
@@ -1772,11 +1800,11 @@ function ClientConfigCard({
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-xl bg-muted/50 p-3">
               <p className="text-muted-foreground">Fixed billing</p>
-              <p className="mt-1 font-semibold">{currencyLabel(client.fixedBilling)}</p>
+              <p className="mt-1 font-semibold">{currencyLabel(client.fixedBilling, client.currency || "INR")}</p>
             </div>
             <div className="rounded-xl bg-muted/50 p-3">
               <p className="text-muted-foreground">Invoice estimate</p>
-              <p className="mt-1 font-semibold">{currencyLabel(client.monthlyInvoiceEstimate)}</p>
+              <p className="mt-1 font-semibold">{currencyLabel(client.monthlyInvoiceEstimate, client.currency || "INR")}</p>
             </div>
             <div className="rounded-xl bg-muted/50 p-3">
               <p className="text-muted-foreground">Txn volume</p>
@@ -1790,7 +1818,7 @@ function ClientConfigCard({
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Variable billing</span>
-              <span className="font-medium">{currencyLabel(client.variableRevenueGenerated)}</span>
+              <span className="font-medium">{currencyLabel(client.variableRevenueGenerated, client.currency || "INR")}</span>
             </div>
             <div className="h-2 rounded-full bg-muted">
               <div className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: `${Math.min(100, 20 + client.services.length * 12)}%` }} />
@@ -1904,10 +1932,10 @@ function ClientOverviewScreen({
 
       <div className="grid gap-4 lg:grid-cols-4">
         {[
-          { label: "Total billing value", value: currencyLabel(invoiceDraft), icon: Wallet },
+          { label: "Total billing value", value: currencyLabel(invoiceDraft, client.currency || "INR"), icon: Wallet },
           { label: "Monthly transaction volume", value: client.monthlyTransactionVolume.toLocaleString(), icon: Layers3 },
-          { label: "Fixed charges", value: currencyLabel(fixedCharges), icon: BadgeCheck },
-          { label: "Final payable", value: currencyLabel(finalPayable), icon: CheckCircle2 },
+          { label: "Fixed charges", value: currencyLabel(fixedCharges, client.currency || "INR"), icon: BadgeCheck },
+          { label: "Final payable", value: currencyLabel(finalPayable, client.currency || "INR"), icon: CheckCircle2 },
         ].map((item) => (
           <Card key={item.label}>
             <CardContent className="p-5">
@@ -1935,28 +1963,28 @@ function ClientOverviewScreen({
             <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Fixed charges breakdown</span>
-                <span className="font-medium">{currencyLabel(fixedCharges)}</span>
+                <span className="font-medium">{currencyLabel(fixedCharges, client.currency || "INR")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Variable charges calculation</span>
-                <span className="font-medium">{currencyLabel(Math.max(variableCharges, 0))}</span>
+                <span className="font-medium">{currencyLabel(Math.max(variableCharges, 0), client.currency || "INR")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">AWS margin calculations</span>
-                <span className="font-medium">{currencyLabel(awsMargin)}</span>
+                <span className="font-medium">{currencyLabel(awsMargin, client.currency || "INR")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Estimated monthly invoice</span>
-                <span className="font-semibold text-primary">{currencyLabel(invoiceDraft)}</span>
+                <span className="font-semibold text-primary">{currencyLabel(invoiceDraft, client.currency || "INR")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Tax preview</span>
-                <span className="font-medium">{currencyLabel(tax)}</span>
+                <span className="font-medium">{currencyLabel(tax, client.currency || "INR")}</span>
               </div>
               <Separator />
               <div className="flex items-center justify-between text-base font-semibold">
                 <span>Final payable amount</span>
-                <span>{currencyLabel(finalPayable)}</span>
+                <span>{currencyLabel(finalPayable, client.currency || "INR")}</span>
               </div>
             </div>
 
@@ -1993,7 +2021,7 @@ function ClientOverviewScreen({
               </div>
               <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-4 text-white shadow-lg">
                 <div className="text-sm uppercase tracking-[0.18em] text-white/80">Real-time invoice recalculation</div>
-                <div className="mt-2 text-3xl font-semibold">{currencyLabel(invoiceDraft)}</div>
+                <div className="mt-2 text-3xl font-semibold">{currencyLabel(invoiceDraft, client.currency || "INR")}</div>
                 <div className="mt-1 text-sm text-white/80">Slab-driven estimate updates as the transaction input changes.</div>
               </div>
               <div className="space-y-3">
@@ -2067,7 +2095,7 @@ function ClientOverviewScreen({
                     <TableRow key={invoice.invoiceId}>
                       <TableCell className="font-medium">{getInvoiceDisplayNumber(invoice)}</TableCell>
                       <TableCell>{invoice.month}</TableCell>
-                      <TableCell>{currencyLabel(invoice.amount)}</TableCell>
+                      <TableCell>{currencyLabel(invoice.amount, client.currency || "INR")}</TableCell>
                       <TableCell><InvoiceStatusBadge status={invoice.status} /></TableCell>
                       <TableCell>{invoice.generatedDate}</TableCell>
                       <TableCell>
@@ -2110,15 +2138,15 @@ function ClientOverviewScreen({
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span>AWS infra recovery</span>
-                <span className="font-medium">{currencyLabel(client.awsInfraRecovery)}</span>
+                <span className="font-medium">{currencyLabel(client.awsInfraRecovery, client.currency || "INR")}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span>Recon services revenue</span>
-                <span className="font-medium">{currencyLabel(client.reconRevenue)}</span>
+                <span className="font-medium">{currencyLabel(client.reconRevenue, client.currency || "INR")}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span>Profitability services revenue</span>
-                <span className="font-medium">{currencyLabel(client.profitabilityRevenue)}</span>
+                <span className="font-medium">{currencyLabel(client.profitabilityRevenue, client.currency || "INR")}</span>
               </div>
             </div>
           </CardContent>
@@ -2438,7 +2466,7 @@ function InvoiceConfigEditor({
                       <Label>Live Calculation Preview</Label>
                       <div className="rounded-xl border bg-background p-4">
                         <div className="text-sm text-muted-foreground">Estimated monthly invoice</div>
-                        <div className="mt-1 text-3xl font-semibold">{currencyLabel(preview)}</div>
+                        <div className="mt-1 text-3xl font-semibold">{currencyLabel(preview, clientCurrency)}</div>
                       </div>
                     </div>
                   </div>

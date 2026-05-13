@@ -187,6 +187,28 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
     }
 
     const client = result.rows[0];
+
+    // Fetch invoice history for this client
+    let invoices: any[] = [];
+    try {
+      const invoicesResult = await queryWithRetry(
+        () => pool.query("SELECT * FROM invoice_records WHERE client_id = $1 ORDER BY generated_date DESC", [clientId])
+      );
+      invoices = invoicesResult.rows.map((row: any) => ({
+        invoiceId: decrypt(row.invoice_id),
+        invoiceNumber: decrypt(row.invoice_number),
+        month: decrypt(row.month),
+        amount: parseInt(decrypt(row.amount) || "0"),
+        status: decrypt(row.status),
+        generatedDate: decrypt(row.generated_date),
+        financialYear: decrypt(row.financial_year),
+        serial: parseInt(decrypt(row.serial) || "0"),
+      }));
+    } catch (invoiceErr: any) {
+      console.warn("[Invoice] Failed to fetch invoice history for", clientId, invoiceErr?.message);
+      invoices = [];
+    }
+
     // Decrypt all fields - use consistent field names with the list endpoint
     const decrypted = {
       id: client.id,
@@ -211,9 +233,6 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       logo: decrypt(client.logo),
       logoClass: decrypt(client.logo_class),
       color: decrypt(client.color),
-      transactionSlabs: [],
-      aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
-      invoiceHistory: [],
       gstin: decrypt(client.gstin),
       lutNumber: decrypt(client.lut_number),
       billingAddress: decrypt(client.billing_address),
@@ -224,6 +243,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       notes: decrypt(client.notes),
       transactionSlabs: JSON.parse(decrypt(client.transaction_slabs) || "[]"),
       aws: JSON.parse(decrypt(client.aws_config) || '{"enabled":false,"vendorCost":0,"marginPercentage":0}'),
+      invoiceHistory: invoices,
     };
 
     res.json(decrypted);

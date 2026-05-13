@@ -1914,7 +1914,7 @@ function ClientOverviewScreen({
     setInvoiceDraft(next);
   }, [txnInput, client]);
 
-  const fixedCharges = client.fixedBilling + client.minimumGuarantee;
+  const fixedCharges = client.fixedBilling + client.additionalPlatformFee + client.integrationFee;
   const awsMargin = client.aws.enabled ? client.aws.vendorCost * (client.aws.marginPercentage / 100) : 0;
   const variableCharges = invoiceDraft - client.fixedBilling - awsMargin - client.additionalPlatformFee - client.integrationFee;
   const tax = invoiceDraft * 0.18;

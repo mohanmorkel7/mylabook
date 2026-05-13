@@ -176,12 +176,12 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
     }
 
     const client = result.rows[0];
-    // Decrypt all fields
+    // Decrypt all fields - use consistent field names with the list endpoint
     const decrypted = {
       id: client.id,
       clientId: client.client_id,
-      clientCode: decrypt(client.client_code),
-      clientName: decrypt(client.client_name),
+      code: decrypt(client.client_code),
+      name: decrypt(client.client_name),
       status: decrypt(client.status),
       priority: decrypt(client.priority),
       services: JSON.parse(decrypt(client.services) || "[]"),
@@ -200,6 +200,9 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       logo: decrypt(client.logo),
       logoClass: decrypt(client.logo_class),
       color: decrypt(client.color),
+      transactionSlabs: [],
+      aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
+      invoiceHistory: [],
       gstin: decrypt(client.gstin),
       lutNumber: decrypt(client.lut_number),
       billingAddress: decrypt(client.billing_address),

@@ -3361,11 +3361,27 @@ export default function InvoiceManagement() {
     }
   };
 
-  const handleDeleteClient = (id: string) => {
-    setClients((prev) => prev.filter((client) => client.id !== id));
-    toast({ title: "Config deleted", description: "The client commercial configuration was removed." });
-    if (clientId === id) {
-      navigate("/invoice-management");
+  const handleDeleteClient = async (id: string) => {
+    try {
+      // Remove from local state immediately for better UX
+      setClients((prev) => prev.filter((client) => client.id !== id));
+
+      // Try to delete from database (best-effort, don't block UI)
+      fetch(`/api/invoice-management/clients/${id}`, {
+        method: "DELETE",
+      }).catch(err => {
+        console.warn("[Invoice] Failed to delete from database:", err);
+        // If delete fails, the data will be re-added when the page refreshes
+      });
+
+      toast({ title: "Config deleted", description: "The client commercial configuration was removed." });
+
+      if (clientId === id) {
+        navigate("/invoice-management");
+      }
+    } catch (error) {
+      console.error("[Invoice] handleDeleteClient error:", error);
+      toast({ title: "Error", description: "Failed to delete configuration", variant: "destructive" });
     }
   };
 

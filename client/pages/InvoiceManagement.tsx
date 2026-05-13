@@ -2940,7 +2940,7 @@ export default function InvoiceManagement() {
       revenueSpark: [72, 80, 86, 83, 91, 98],
       invoiceSpark: [44, 50, 56, 61, 65, 69],
     };
-  }, [clients, invoices]);
+  }, [clients, allInvoicesFromClients]);
 
   const pieData = useMemo(
     () =>

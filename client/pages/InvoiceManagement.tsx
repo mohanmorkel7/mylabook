@@ -2565,7 +2565,7 @@ export default function InvoiceManagement() {
   const isEditRoute = location.pathname.endsWith("/edit");
   const isOverviewRoute = Boolean(clientId) && !isEditRoute;
 
-  const [clients, setClients] = useState<ClientRecord[]>([...CLIENTS]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [invoices, setInvoices] = useState(INVOICES);
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -2689,10 +2689,15 @@ export default function InvoiceManagement() {
 
   // Load all clients from database on component mount
   useEffect(() => {
+    console.log("[InvoiceManagement] Loading clients from database...");
     fetch("/api/invoice-management/clients")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
+        console.log("[InvoiceManagement] Fetched clients from DB:", data);
+        if (Array.isArray(data)) {
           const dbClients: ClientRecord[] = data.map((client: any) => ({
             id: client.clientId,
             code: client.clientCode,
@@ -2727,20 +2732,20 @@ export default function InvoiceManagement() {
             clientType: client.clientType || "Domestic",
             currency: client.currency || "INR",
           }));
-          // Merge with existing clients, keeping DB data as primary
-          setClients(prev => {
-            const merged = [...dbClients];
-            prev.forEach(existing => {
-              if (!merged.some(db => db.id === existing.id)) {
-                merged.push(existing);
-              }
-            });
-            return merged;
-          });
+          console.log("[InvoiceManagement] Mapped clients:", dbClients);
+          setClients(dbClients);
+        } else {
+          console.warn("[InvoiceManagement] API did not return an array");
         }
       })
-      .catch(err => console.error("Failed to load clients from database:", err));
-  }, []);
+      .catch(err => {
+        console.error("[InvoiceManagement] Failed to load clients from database:", err);
+        toast({
+          title: "Warning",
+          description: "Could not load clients from database. Please refresh the page.",
+        });
+      });
+  }, [toast]);
 
   const selectedClient = useMemo(() => clients.find((item) => item.id === clientId) || clients[0], [clients, clientId]);
   const editingClient = useMemo(() => clients.find((item) => item.id === (editingClientId || clientId)) || undefined, [clients, editingClientId, clientId]);

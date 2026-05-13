@@ -142,6 +142,12 @@ const INVOICE_STATUS_META: Record<string, string> = {
 };
 
 const MYLAPAY_LOGO_URL = "/mylapaylogo.png";
+const INVOICE_THEME = {
+  primaryRgb: [44, 175, 230] as [number, number, number],
+  secondaryRgb: [31, 41, 92] as [number, number, number],
+  primaryHex: "2cafe6",
+  secondaryHex: "1f295c",
+};
 const BILLING_COMPANY_NAME = "Mindeed Technologies and Services Pvt Ltd";
 const INVOICE_AMOUNT_IN_WORDS = "(Rupees One lakh forty-seven thousand five hundred Only)";
 const INVOICE_DECLARATION_LINES = [
@@ -582,15 +588,15 @@ async function downloadInvoiceDocxTemplate({
 
   const title = (text: string) =>
     new Docx.Paragraph({
-      children: [new Docx.TextRun({ text, bold: true, color: "1d4ed8", size: 20 })],
+      children: [new Docx.TextRun({ text, bold: true, color: INVOICE_THEME.secondaryHex, size: 20 })],
       spacing: { after: 40 },
     });
 
   const labelValue = (label: string, value: string) =>
     new Docx.Paragraph({
       children: [
-        new Docx.TextRun({ text: `${label}: `, bold: true, color: "64748b", size: 15 }),
-        new Docx.TextRun({ text: value || "—", color: "0f172a", size: 15 }),
+        new Docx.TextRun({ text: `${label}: `, bold: true, color: INVOICE_THEME.primaryHex, size: 15 }),
+        new Docx.TextRun({ text: value || "—", color: INVOICE_THEME.secondaryHex, size: 15 }),
       ],
       spacing: { after: 18 },
     });
@@ -600,7 +606,7 @@ async function downloadInvoiceDocxTemplate({
       children: [
         new Docx.Paragraph({
           alignment: align === "right" ? Docx.AlignmentType.RIGHT : Docx.AlignmentType.LEFT,
-          children: [new Docx.TextRun({ text, size: 18 })],
+          children: [new Docx.TextRun({ text, size: 18, color: INVOICE_THEME.secondaryHex })],
         }),
       ],
       width: { size: 50, type: Docx.WidthType.PERCENTAGE },
@@ -644,7 +650,7 @@ async function downloadInvoiceDocxTemplate({
             : []),
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
-            children: [new Docx.TextRun({ text: "Tax Invoice", bold: true, color: "1d4ed8", size: 24 })],
+            children: [new Docx.TextRun({ text: "Tax Invoice", bold: true, color: INVOICE_THEME.secondaryHex, size: 24 })],
             spacing: { after: 24 },
           }),
           new Docx.Paragraph({
@@ -661,12 +667,12 @@ async function downloadInvoiceDocxTemplate({
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
-              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
             },
             rows: [
               new Docx.TableRow({
@@ -679,16 +685,16 @@ async function downloadInvoiceDocxTemplate({
             ],
           }),
           new Docx.Paragraph({ spacing: { after: 28 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill From / Bill To", bold: true, color: "1d4ed8", size: 18 })], spacing: { after: 16 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill From / Bill To", bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })], spacing: { after: 16 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
-              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
             },
             rows: [
               new Docx.TableRow({
@@ -706,16 +712,16 @@ async function downloadInvoiceDocxTemplate({
             ],
           }),
           new Docx.Paragraph({ spacing: { after: 20 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill Details", bold: true, color: "1d4ed8", size: 18 })], spacing: { after: 12 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill Details", bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })], spacing: { after: 12 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
-              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
             },
             rows: [
               new Docx.TableRow({
@@ -727,16 +733,16 @@ async function downloadInvoiceDocxTemplate({
             ],
           }),
           new Docx.Paragraph({ spacing: { after: 20 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Statement of Charges", bold: true, color: "1d4ed8", size: 18 })], spacing: { after: 12 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Statement of Charges", bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })], spacing: { after: 12 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
-              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
-              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: "e2e8f0" },
+              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
             },
             rows: [
               new Docx.TableRow({
@@ -762,12 +768,12 @@ async function downloadInvoiceDocxTemplate({
             spacing: { before: 50, after: 10 },
           }),
           new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: INVOICE_AMOUNT_IN_WORDS, italics: true, color: "334155", size: 13 })],
+            children: [new Docx.TextRun({ text: INVOICE_AMOUNT_IN_WORDS, italics: true, color: INVOICE_THEME.secondaryHex, size: 13 })],
             spacing: { after: 12 },
           }),
           new Docx.Paragraph({
             pageBreakBefore: lineItems.length > 6,
-            children: [new Docx.TextRun({ text: "Declaration", bold: true, color: "1d4ed8", size: 17 })],
+            children: [new Docx.TextRun({ text: "Declaration", bold: true, color: INVOICE_THEME.secondaryHex, size: 17 })],
             spacing: { after: 8 },
           }),
           ...INVOICE_DECLARATION_LINES.map((line, index) =>
@@ -777,41 +783,41 @@ async function downloadInvoiceDocxTemplate({
                   text: line,
                   bold: index < 2,
                   size: 12,
-                  color: index < 2 ? "0f172a" : "334155",
+                  color: INVOICE_THEME.secondaryHex,
                 }),
               ],
               spacing: { after: index === INVOICE_DECLARATION_LINES.length - 1 ? 10 : 4 },
             }),
           ),
           new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: `For ${MYLAPAY_BRANDING.companyName}`, bold: true, color: "1d4ed8", size: 18 })],
+            children: [new Docx.TextRun({ text: `For ${MYLAPAY_BRANDING.companyName}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })],
             spacing: { after: 12 },
           }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
-              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
-              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: "bfdbfe" },
+              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
             },
             rows: [
               new Docx.TableRow({
                 children: [
                   new Docx.TableCell({
                     children: [
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Company Seal", bold: true, color: "1d4ed8", size: 14 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Space reserved for seal", size: 12, color: "64748b" })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Company Seal", bold: true, color: INVOICE_THEME.secondaryHex, size: 14 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Space reserved for seal", size: 12, color: INVOICE_THEME.primaryHex })] }),
                     ],
                     width: { size: 50, type: Docx.WidthType.PERCENTAGE },
                   }),
                   new Docx.TableCell({
                     children: [
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Authority Signature Name", bold: true, color: "1d4ed8", size: 14 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Authority Signature Name", bold: true, color: INVOICE_THEME.secondaryHex, size: 14 })] }),
                       new Docx.Paragraph({ children: [new Docx.TextRun({ text: getClientSignatureName(client), bold: true, size: 14 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: `Authorized signatory · For ${MYLAPAY_BRANDING.companyName}`, color: "64748b", size: 12 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: `Authorized signatory · For ${MYLAPAY_BRANDING.companyName}`, color: INVOICE_THEME.primaryHex, size: 12 })] }),
                     ],
                     width: { size: 50, type: Docx.WidthType.PERCENTAGE },
                   }),
@@ -823,7 +829,7 @@ async function downloadInvoiceDocxTemplate({
           ...MYLAPAY_FOOTER_LINES.map(
             (line, index) =>
               new Docx.Paragraph({
-                children: [new Docx.TextRun({ text: line, color: "64748b", size: 11 })],
+                children: [new Docx.TextRun({ text: line, color: INVOICE_THEME.secondaryHex, size: 11 })],
                 spacing: { after: index === MYLAPAY_FOOTER_LINES.length - 1 ? 16 : 2 },
               }),
           ),
@@ -950,8 +956,8 @@ async function downloadInvoicePdfTemplate({
     fields: Array<{ label: string; value: string }>,
     options?: { titleColor?: [number, number, number]; bodyColor?: [number, number, number] },
   ) => {
-    const titleColor = options?.titleColor || [29, 78, 216];
-    const bodyColor = options?.bodyColor || [15, 23, 42];
+    const titleColor = options?.titleColor || INVOICE_THEME.secondaryRgb;
+    const bodyColor = options?.bodyColor || INVOICE_THEME.secondaryRgb;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.2);
     doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
@@ -962,7 +968,7 @@ async function downloadInvoicePdfTemplate({
       const lines = wrap(field.value, width - 8);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7.2);
-      doc.setTextColor(100, 116, 139);
+      doc.setTextColor(...INVOICE_THEME.secondaryRgb);
       doc.text(field.label, x + 4, cursorY);
 
       doc.setFont("helvetica", "normal");
@@ -983,18 +989,18 @@ async function downloadInvoicePdfTemplate({
   ) => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.4);
-    doc.setTextColor(100, 116, 139);
+    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
     doc.text(label, align === "right" ? x + width : x, y, { align });
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.8);
-    doc.setTextColor(15, 23, 42);
+    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
     doc.text(wrap(value, width)[0], align === "right" ? x + width : x, y + 4.4, { align });
   };
 
-  doc.setFillColor(248, 250, 255);
-  doc.setDrawColor(191, 219, 254);
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
   doc.roundedRect(margin, margin, contentWidth, 34, 6, 6, "FD");
-  doc.setFillColor(37, 99, 235);
+  doc.setFillColor(...INVOICE_THEME.primaryRgb);
   doc.rect(margin, margin, contentWidth, 2, "F");
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(margin + 5, margin + 8, 46, 18, 4, 4, "F");
@@ -1003,11 +1009,11 @@ async function downloadInvoicePdfTemplate({
       doc.addImage(logoData, "PNG", margin + 7, margin + 10, 32, 12);
     } catch {}
   }
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(17.5);
   doc.text("Tax Invoice", pageWidth - margin - 4, margin + 10, { align: "right" });
-  doc.setTextColor(71, 85, 105);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.2);
   doc.text("Enterprise billing statement", pageWidth - margin - 4, margin + 15, { align: "right" });
@@ -1017,23 +1023,23 @@ async function downloadInvoicePdfTemplate({
   doc.text(`Month: ${month}`, pageWidth - margin - 4, margin + 29, { align: "right" });
 
   let y = margin + 39;
-  drawPanel(margin, y, contentWidth, 18, [239, 246, 255], [191, 219, 254]);
+  drawPanel(margin, y, contentWidth, 18, [255, 255, 255], INVOICE_THEME.primaryRgb);
   const summaryThird = contentWidth / 3;
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10.2);
   doc.text("Invoice Summary", margin + 4, y + 5.8);
-  doc.setDrawColor(226, 232, 240);
+  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
   doc.line(margin + summaryThird, y + 3, margin + summaryThird, y + 15);
   doc.line(margin + summaryThird * 2, y + 3, margin + summaryThird * 2, y + 15);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.4);
-  doc.setTextColor(100, 116, 139);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.text("STATUS", margin + 4, y + 10.7);
   doc.text("GENERATED", margin + summaryThird + 4, y + 10.7);
   doc.text("AMOUNT", margin + summaryThird * 2 + 4, y + 10.7);
   doc.setFontSize(9.2);
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.text(status, margin + 4, y + 15);
   doc.text(generatedDate, margin + summaryThird + 4, y + 15);
   doc.text(money(amount), margin + summaryThird * 2 + 4, y + 15);
@@ -1059,20 +1065,20 @@ async function downloadInvoicePdfTemplate({
     measureFieldBlock(leftBillFrom, (contentWidth - gutter) / 2),
     measureFieldBlock(rightBillTo, (contentWidth - gutter) / 2),
   ) + 1;
-  drawPanel(margin, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], [226, 232, 240]);
-  drawPanel(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], [226, 232, 240]);
+  drawPanel(margin, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
+  drawPanel(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, cardHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
   renderFieldBlock(margin, y, (contentWidth - gutter) / 2, "Bill From", leftBillFrom);
   renderFieldBlock(margin + (contentWidth - gutter) / 2 + gutter, y, (contentWidth - gutter) / 2, "Bill To", rightBillTo);
 
   y += cardHeight + 5;
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10.4);
   doc.text("Bill Details", margin, y);
   y += 3;
-  drawPanel(margin, y, contentWidth, 20, [248, 250, 252], [226, 232, 240]);
+  drawPanel(margin, y, contentWidth, 20, [255, 255, 255], INVOICE_THEME.primaryRgb);
   const halfWidth = (contentWidth - 10) / 2;
-  doc.setDrawColor(226, 232, 240);
+  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
   doc.line(margin + halfWidth + 5, y + 3, margin + halfWidth + 5, y + 17);
   drawTwoColumnDetail(margin + 4, y + 4.5, halfWidth, "Invoice Month", month);
   drawTwoColumnDetail(margin + 4 + halfWidth + 6, y + 4.5, halfWidth, "Transaction Volume", client.monthlyTransactionVolume.toLocaleString(), "right");
@@ -1081,7 +1087,7 @@ async function downloadInvoicePdfTemplate({
 
   y += 28;
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11.8);
   doc.text("Statement of Charges", margin, y);
@@ -1091,8 +1097,8 @@ async function downloadInvoicePdfTemplate({
   const tableHeaderHeight = 7.6;
   const rowHeights = lineItems.map((item) => Math.max(6.8, wrap(item.description, tableWidth - 45).length * 3.2 + 2.2));
   const tableBodyHeight = tableHeaderHeight + rowHeights.reduce((sum, height) => sum + height, 0);
-  drawPanel(tableX, y, tableWidth, tableBodyHeight, [255, 255, 255], [226, 232, 240]);
-  doc.setFillColor(37, 99, 235);
+  drawPanel(tableX, y, tableWidth, tableBodyHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
+  doc.setFillColor(...INVOICE_THEME.primaryRgb);
   doc.rect(tableX, y, tableWidth, tableHeaderHeight, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
@@ -1105,10 +1111,10 @@ async function downloadInvoicePdfTemplate({
     const descLines = wrap(item.description, tableWidth - 45);
     const rowHeight = rowHeights[index];
     if (index % 2 === 0) {
-      doc.setFillColor(248, 250, 252);
+      doc.setFillColor(255, 255, 255);
       doc.rect(tableX + 1, rowY - 3.0, tableWidth - 2, rowHeight, "F");
     }
-    doc.setTextColor(15, 23, 42);
+    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.2);
     doc.text(descLines, tableX + 3, rowY - 0.25);
@@ -1123,8 +1129,8 @@ async function downloadInvoicePdfTemplate({
   const totalPayable = subtotal + gst;
 
   y = rowY + 2;
-  drawPanel(margin, y, contentWidth, 21, [239, 246, 255], [191, 219, 254]);
-  doc.setTextColor(15, 23, 42);
+  drawPanel(margin, y, contentWidth, 21, [255, 255, 255], INVOICE_THEME.primaryRgb);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.6);
   doc.text(`Subtotal: ${money(subtotal)}`, margin + 4, y + 7);
@@ -1139,7 +1145,7 @@ async function downloadInvoicePdfTemplate({
     y = margin;
   }
 
-  doc.setTextColor(71, 85, 105);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(8.4);
   doc.text(INVOICE_AMOUNT_IN_WORDS, pageWidth / 2, y + 4, { align: "center" });
@@ -1150,8 +1156,8 @@ async function downloadInvoicePdfTemplate({
     (height, line) => height + wrap(line, declarationTextWidth).length * 3.2,
     0,
   );
-  drawPanel(margin, y, contentWidth, declarationHeight, [255, 255, 255], [226, 232, 240]);
-  doc.setTextColor(30, 64, 175);
+  drawPanel(margin, y, contentWidth, declarationHeight, [255, 255, 255], INVOICE_THEME.primaryRgb);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.4);
   doc.text("Declaration", margin + 4, y + 5.2);
@@ -1161,7 +1167,7 @@ async function downloadInvoicePdfTemplate({
     const wrappedLines = wrap(line, declarationTextWidth);
     doc.setFont("helvetica", index < 2 ? "bold" : "normal");
     doc.setFontSize(index < 2 ? 8.0 : 7.4);
-    doc.setTextColor(index < 2 ? 15 : 51, index < 2 ? 23 : 65, index < 2 ? 42 : 85);
+    doc.setTextColor(...INVOICE_THEME.secondaryRgb);
     doc.text(wrappedLines, margin + 4, declarationY);
     declarationY += wrappedLines.length * 3.2;
   });
@@ -1170,41 +1176,41 @@ async function downloadInvoicePdfTemplate({
 
   const sealWidth = (contentWidth - gutter) * 0.38;
   const signWidth = contentWidth - sealWidth - gutter;
-  drawPanel(margin, y, sealWidth, 26, [255, 255, 255], [191, 219, 254]);
-  drawPanel(margin + sealWidth + gutter, y, signWidth, 26, [255, 255, 255], [191, 219, 254]);
+  drawPanel(margin, y, sealWidth, 26, [255, 255, 255], INVOICE_THEME.primaryRgb);
+  drawPanel(margin + sealWidth + gutter, y, signWidth, 26, [255, 255, 255], INVOICE_THEME.primaryRgb);
 
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
   doc.text("Company Seal", margin + sealWidth / 2, y + 6.4, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.0);
-  doc.setTextColor(100, 116, 139);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.text("Space reserved for seal", margin + sealWidth / 2, y + 10.6, { align: "center" });
-  doc.setDrawColor(191, 219, 254);
+  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
   doc.line(margin + 5, y + 16, margin + sealWidth - 5, y + 16);
 
   const signX = margin + sealWidth + gutter;
-  doc.setTextColor(30, 64, 175);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
   doc.text("Authority Signature", signX + 4, y + 6.4);
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.9);
   doc.text(getClientSignatureName(client), signX + 4, y + 10.8);
-  doc.setDrawColor(191, 219, 254);
+  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
   doc.line(signX + 4, y + 16, signX + signWidth - 4, y + 16);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.0);
-  doc.setTextColor(100, 116, 139);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.text("Authorized signatory", signX + 4, y + 20);
   doc.text(`For ${MYLAPAY_BRANDING.companyName}`, signX + signWidth - 4, y + 20, { align: "right" });
 
   const footerY = pageHeight - 10;
-  doc.setDrawColor(226, 232, 240);
+  doc.setDrawColor(...INVOICE_THEME.primaryRgb);
   doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
-  doc.setTextColor(100, 116, 139);
+  doc.setTextColor(...INVOICE_THEME.secondaryRgb);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.9);
   MYLAPAY_FOOTER_LINES.forEach((line, index) => {

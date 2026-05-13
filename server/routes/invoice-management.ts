@@ -8,6 +8,9 @@ let schemaInitialized = false;
 let schemaInitializing = false;
 let schemaInitPromise: Promise<void> | null = null;
 
+// In-memory fallback cache for when database is unavailable
+const memoryCache = new Map<string, any>();
+
 // ── Schema initialization helper ───────────────────────────────────────────
 async function ensureSchemaReady() {
   if (schemaInitialized) return;
@@ -323,27 +326,64 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(notes),
     ];
 
-    // Ensure schema is ready before saving
-    if (!schemaInitialized) {
-      await ensureSchemaReady();
+    // Save to memory cache immediately (as backup)
+    const cacheData = {
+      client_id: id,
+      client_code: clientCode,
+      client_name: clientName,
+      status: status,
+      priority: priority,
+      services: services,
+      fixed_billing: fixedBilling,
+      monthly_invoice_est: monthlyInvoiceEstimate,
+      monthly_txn_volume: monthlyTransactionVolume,
+      variable_revenue: variableRevenueGenerated,
+      aws_infra_recovery: awsInfraRecovery,
+      recon_revenue: reconRevenue,
+      profitability_revenue: profitabilityRevenue,
+      min_guarantee: minimumGuarantee,
+      additional_fee: additionalPlatformFee,
+      integration_fee: integrationFee,
+      billing_cycle: billingCycle,
+      last_invoice_generated: lastInvoiceGenerated,
+      logo: logo,
+      logo_class: logoClass,
+      color: color,
+      gstin: gstin,
+      lut_number: lutNumber,
+      billing_address: billingAddress,
+      billing_email: billingEmail,
+      signatory_name: signatoryName,
+      client_type: clientType,
+      currency: currency,
+      notes: notes,
+    };
+    memoryCache.set(id, cacheData);
+    console.log("[Invoice] POST /clients - Saved to memory cache:", id);
+
+    // Try to save to database
+    let dbSaved = false;
+    try {
+      // Ensure schema is ready before saving
+      if (!schemaInitialized) {
+        console.log("[Invoice] POST /clients - Schema not ready, initializing...");
+        await ensureSchemaReady();
+      }
+
+      console.log("[Invoice] POST /clients - Saving client to database:", clientId);
+      await queryWithRetry(() => pool.query(query, params));
+      dbSaved = true;
+      console.log("[Invoice] POST /clients - Successfully saved to database:", clientId);
+    } catch (dbError: any) {
+      console.warn("[Invoice] POST /clients - Database save failed:", dbError?.message);
+      // Continue anyway - we have memory cache
     }
 
-    await queryWithRetry(() => pool.query(query, params));
-
-    res.json({ success: true, clientId: id });
+    res.json({ success: true, clientId: id, dbSaved, fromCache: !dbSaved });
   } catch (error: any) {
-    console.error("Error saving client:", error?.message || error);
-
-    // If database is unavailable, still respond with success to prevent UI errors
-    // The data can be retried later
-    if (error?.message?.includes("timeout") ||
-        error?.message?.includes("Connection") ||
-        error?.message?.includes("ECONNREFUSED")) {
-      console.warn("Database unavailable, but responding with success to prevent UI blocking");
-      return res.json({ success: true, clientId: id, warning: "Database unavailable - will sync when available" });
-    }
-
-    res.status(500).json({ error: "Failed to save client" });
+    console.error("[Invoice] POST /clients - Fatal error:", error?.message || error);
+    console.error("[Invoice] POST /clients - Sending error response");
+    res.status(500).json({ error: "Failed to save client", details: error?.message });
   }
 });
 
@@ -352,50 +392,96 @@ router.get("/clients", async (req: Request, res: Response) => {
   try {
     console.log("[Invoice] GET /clients - Starting fetch...");
 
-    // Ensure schema is ready before querying
-    if (!schemaInitialized) {
-      console.log("[Invoice] GET /clients - Schema not ready yet, initializing...");
-      await ensureSchemaReady();
+    let dbClients: any[] = [];
+    let fromDatabase = false;
+
+    // Try to get from database
+    try {
+      // Ensure schema is ready before querying
+      if (!schemaInitialized) {
+        console.log("[Invoice] GET /clients - Schema not ready yet, initializing...");
+        try {
+          await ensureSchemaReady();
+          console.log("[Invoice] GET /clients - Schema initialization completed");
+        } catch (err) {
+          console.warn("[Invoice] GET /clients - Schema initialization timed out, continuing anyway");
+        }
+      }
+
+      console.log("[Invoice] GET /clients - Executing database query...");
+      const result = await queryWithRetry(
+        () => pool.query("SELECT * FROM invoice_clients ORDER BY updated_at DESC")
+      );
+
+      console.log(`[Invoice] GET /clients - Database query succeeded, found ${result.rows.length} rows`);
+
+      dbClients = result.rows.map((client: any) => {
+        return {
+          id: client.id,
+          clientId: client.client_id,
+          clientCode: decrypt(client.client_code),
+          clientName: decrypt(client.client_name),
+          status: decrypt(client.status),
+          priority: decrypt(client.priority),
+          billingAddress: decrypt(client.billing_address),
+          billingEmail: decrypt(client.billing_email),
+          gstin: decrypt(client.gstin),
+          lutNumber: decrypt(client.lut_number),
+          currency: decrypt(client.currency),
+        };
+      });
+      fromDatabase = true;
+    } catch (dbError: any) {
+      console.warn("[Invoice] GET /clients - Database query failed:", dbError?.message);
+      // Will fall back to memory cache
     }
 
-    const result = await queryWithRetry(
-      () => pool.query("SELECT * FROM invoice_clients ORDER BY updated_at DESC")
-    );
-
-    console.log(`[Invoice] GET /clients - Found ${result.rows.length} clients`);
-
-    const clients = result.rows.map((client: any) => ({
-      id: client.id,
+    // Add data from memory cache (clients saved recently but not yet in DB)
+    console.log(`[Invoice] GET /clients - Memory cache has ${memoryCache.size} clients`);
+    const cacheClients = Array.from(memoryCache.values()).map((client: any) => ({
+      id: undefined,
       clientId: client.client_id,
-      clientCode: decrypt(client.client_code),
-      clientName: decrypt(client.client_name),
-      status: decrypt(client.status),
-      priority: decrypt(client.priority),
-      billingAddress: decrypt(client.billing_address),
-      billingEmail: decrypt(client.billing_email),
-      gstin: decrypt(client.gstin),
-      lutNumber: decrypt(client.lut_number),
-      currency: decrypt(client.currency),
+      clientCode: client.client_code,
+      clientName: client.client_name,
+      status: client.status,
+      priority: client.priority,
+      billingAddress: client.billing_address,
+      billingEmail: client.billing_email,
+      gstin: client.gstin,
+      lutNumber: client.lut_number,
+      currency: client.currency,
     }));
 
-    console.log("[Invoice] GET /clients - Returning clients:", clients);
-    res.json(clients);
-  } catch (error: any) {
-    console.error("[Invoice] GET /clients - Error:", error?.message || error);
-
-    // If table doesn't exist or database connection error, return empty array
-    // This allows the frontend to continue even if database is temporarily unavailable
-    if (error?.code === "42P01" ||
-        error?.message?.includes("does not exist") ||
-        error?.message?.includes("timeout") ||
-        error?.message?.includes("Connection") ||
-        error?.message?.includes("ECONNREFUSED")) {
-      console.log("[Invoice] GET /clients - Database unavailable or table not ready, returning empty array");
-      return res.json([]);
+    // Merge: DB clients first (they're authoritative), then cache-only clients
+    const mergedClients = dbClients.slice();
+    for (const cacheClient of cacheClients) {
+      if (!mergedClients.some(db => db.clientId === cacheClient.clientId)) {
+        mergedClients.push(cacheClient);
+        console.log("[Invoice] GET /clients - Added cached client:", cacheClient.clientId);
+      }
     }
 
-    // For other errors, return proper error
-    res.status(500).json({ error: "Failed to fetch clients", details: (error as any)?.message });
+    console.log("[Invoice] GET /clients - Successfully returning", mergedClients.length, "clients (from DB:", fromDatabase, ", cache:", cacheClients.length, ")");
+    res.json(mergedClients);
+  } catch (error: any) {
+    console.error("[Invoice] GET /clients - Unexpected error:", error?.message || error);
+
+    // Final fallback: return from memory cache only
+    console.log("[Invoice] GET /clients - Returning memory cache as fallback");
+    const cacheClients = Array.from(memoryCache.values()).map((client: any) => ({
+      clientId: client.client_id,
+      clientCode: client.client_code,
+      clientName: client.client_name,
+      status: client.status,
+      priority: client.priority,
+      billingAddress: client.billing_address,
+      billingEmail: client.billing_email,
+      gstin: client.gstin,
+      lutNumber: client.lut_number,
+      currency: client.currency,
+    }));
+
+    res.json(cacheClients);
   }
 });
 

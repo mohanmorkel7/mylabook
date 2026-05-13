@@ -77,6 +77,10 @@ import {
   TrendingUp,
   Wallet,
   Warehouse,
+  Settings,
+  CheckCircle,
+  Clock,
+  XCircle,
 } from "lucide-react";
 
 const SERVICE_OPTIONS = [
@@ -182,10 +186,40 @@ const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
 const COMPANY_CONFIG_KEY = "company-config";
 const TAX_CONFIG_KEY = "tax-config";
 const CURRENCY_CONFIG_KEY = "currency-config";
+const CONFIG_CHANGE_REQUESTS_KEY = "config-change-requests";
+const CONFIG_AUDIT_LOG_KEY = "config-audit-log";
 
 type InvoiceNumberFormat = "PREFIX/FY/SEQ" | "PREFIX-FY-SEQ" | "FY/SEQ";
 type ClientType = "Domestic" | "International";
 type CurrencyType = "INR" | "USD" | "AED" | "SAR" | "KWD" | "OMR" | "QAR" | "BHD";
+type ConfigChangeType = "invoice-serial" | "company" | "tax" | "currency";
+type ApprovalStatus = "pending" | "approved" | "rejected";
+
+interface ConfigApproval {
+  approvedBy: string;
+  approvedAt: string;
+  status: ApprovalStatus;
+}
+
+interface ConfigChangeRequest {
+  id: string;
+  type: ConfigChangeType;
+  requestedBy: string;
+  requestedAt: string;
+  changes: Record<string, any>;
+  approvals: ConfigApproval[];
+  status: "pending" | "approved" | "rejected" | "applied";
+  appliedAt?: string;
+}
+
+interface AuditLogEntry {
+  id: string;
+  type: ConfigChangeType;
+  changedBy: string;
+  changedAt: string;
+  changes: Record<string, any>;
+  requestId?: string;
+}
 
 interface InvoiceSerialConfig {
   prefix: string;
@@ -2532,6 +2566,29 @@ export default function InvoiceManagement() {
   });
 
   const [activeConfigTab, setActiveConfigTab] = useState<"company" | "tax" | "currency">("company");
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsActiveTab, setSettingsActiveTab] = useState<"requests" | "history">("requests");
+
+  const [configChangeRequests, setConfigChangeRequests] = useState<ConfigChangeRequest[]>(() => {
+    try {
+      const raw = localStorage.getItem(CONFIG_CHANGE_REQUESTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem(CONFIG_AUDIT_LOG_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const currentUser = "admin@mylapay.com";
+  const currentUserRole = "admin";
 
   useEffect(() => {
     try {
@@ -2562,6 +2619,18 @@ export default function InvoiceManagement() {
       localStorage.setItem(CURRENCY_CONFIG_KEY, JSON.stringify(currencyConfig));
     } catch {}
   }, [currencyConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONFIG_CHANGE_REQUESTS_KEY, JSON.stringify(configChangeRequests));
+    } catch {}
+  }, [configChangeRequests]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONFIG_AUDIT_LOG_KEY, JSON.stringify(auditLog));
+    } catch {}
+  }, [auditLog]);
 
   const selectedClient = useMemo(() => clients.find((item) => item.id === clientId) || clients[0], [clients, clientId]);
   const editingClient = useMemo(() => clients.find((item) => item.id === (editingClientId || clientId)) || undefined, [clients, editingClientId, clientId]);
@@ -2868,6 +2937,92 @@ export default function InvoiceManagement() {
     toast({ title: "Invoice sent", description: `${invoiceNumber} marked as Send.` });
   };
 
+  const createConfigChangeRequest = (type: ConfigChangeType, changes: Record<string, any>) => {
+    const requestId = `req-${Date.now()}`;
+    const newRequest: ConfigChangeRequest = {
+      id: requestId,
+      type,
+      requestedBy: currentUser,
+      requestedAt: new Date().toISOString(),
+      changes,
+      approvals: [],
+      status: "pending",
+    };
+    setConfigChangeRequests((prev) => [newRequest, ...prev]);
+    toast({
+      title: "Configuration change requested",
+      description: `Request submitted for approval. Awaiting approvals from 2 admins.`,
+    });
+    return requestId;
+  };
+
+  const approveConfigChange = (requestId: string) => {
+    setConfigChangeRequests((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        const newApprovals = [
+          ...req.approvals,
+          {
+            approvedBy: currentUser,
+            approvedAt: new Date().toISOString(),
+            status: "approved" as ApprovalStatus,
+          },
+        ];
+        const isFullyApproved = newApprovals.length >= 2 && newApprovals.every((a) => a.status === "approved");
+        const updatedReq = { ...req, approvals: newApprovals, status: (isFullyApproved ? "approved" : "pending") as any };
+        if (isFullyApproved) {
+          applyConfigChange(updatedReq);
+        }
+        return updatedReq;
+      }),
+    );
+    toast({
+      title: "Configuration approved",
+      description: `Your approval has been recorded. ${configChangeRequests.find((r) => r.id === requestId)?.approvals.length === 1 ? "Awaiting 1 more approval." : "Configuration applied."}`,
+    });
+  };
+
+  const rejectConfigChange = (requestId: string) => {
+    setConfigChangeRequests((prev) =>
+      prev.map((req) =>
+        req.id === requestId ? { ...req, status: "rejected" as any } : req,
+      ),
+    );
+    toast({
+      title: "Configuration rejected",
+      description: "The change request has been rejected.",
+    });
+  };
+
+  const applyConfigChange = (request: ConfigChangeRequest) => {
+    const now = new Date().toISOString();
+    if (request.type === "invoice-serial") {
+      setInvoiceSerialConfig((prev) => ({ ...prev, ...request.changes }));
+    } else if (request.type === "company") {
+      setCompanyConfig((prev) => ({ ...prev, ...request.changes }));
+    } else if (request.type === "tax") {
+      setTaxConfig((prev) => ({ ...prev, ...request.changes }));
+    } else if (request.type === "currency") {
+      setCurrencyConfig((prev) => ({ ...prev, ...request.changes }));
+    }
+    setConfigChangeRequests((prev) =>
+      prev.map((req) => (req.id === request.id ? { ...req, status: "applied", appliedAt: now } : req)),
+    );
+    const logEntry: AuditLogEntry = {
+      id: `log-${Date.now()}`,
+      type: request.type,
+      changedBy: currentUser,
+      changedAt: now,
+      changes: request.changes,
+      requestId: request.id,
+    };
+    setAuditLog((prev) => [logEntry, ...prev]);
+    toast({
+      title: "Configuration applied",
+      description: `${request.type} configuration updated successfully.`,
+    });
+  };
+
   const saveConfig = (payload: any) => {
     const baseId = payload.id || payload.code?.toLowerCase() || `client-${Date.now()}`;
     const nextClient: ClientRecord = {
@@ -2982,6 +3137,16 @@ export default function InvoiceManagement() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {(currentUserRole === "admin" || currentUserRole === "finance-admin") && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSettingsModalOpen(true)}
+                title="Configuration settings (Admin only)"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="outline" className="gap-2" onClick={handleSync}>
               <RefreshCcw className="h-4 w-4" /> Sync
             </Button>
@@ -3139,13 +3304,14 @@ export default function InvoiceManagement() {
         </CardContent>
       </Card>
 
+      {(currentUserRole === "admin" || currentUserRole === "finance-admin") && (
       <Card className="border-muted/60 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Mylapay Configuration</CardTitle>
               <CardDescription>
-                Company details, tax settings, and currency management
+                Company details, tax settings, and currency management (click settings icon for change requests)
               </CardDescription>
             </div>
             <Badge variant="outline" className="rounded-full">
@@ -3400,6 +3566,7 @@ export default function InvoiceManagement() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         <MetricCard title="Total Revenue" value={currencyLabel(metrics.totalRevenue)} change="+18.2% MoM" icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={metrics.revenueSpark} />
@@ -3675,6 +3842,183 @@ export default function InvoiceManagement() {
                 {invoiceModalMode === "edit" ? "Update Invoice" : "Submit for approval"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={settingsModalOpen} onOpenChange={setSettingsModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Configuration Management
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="flex gap-2 border-b">
+              <Button
+                variant={settingsActiveTab === "requests" ? "default" : "ghost"}
+                className="rounded-b-none"
+                onClick={() => setSettingsActiveTab("requests")}
+              >
+                Pending Requests
+                {configChangeRequests.filter((r) => r.status === "pending").length > 0 && (
+                  <Badge className="ml-2" variant="destructive">
+                    {configChangeRequests.filter((r) => r.status === "pending").length}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant={settingsActiveTab === "history" ? "default" : "ghost"}
+                className="rounded-b-none"
+                onClick={() => setSettingsActiveTab("history")}
+              >
+                Change History (Last 5)
+              </Button>
+            </div>
+
+            {settingsActiveTab === "requests" && (
+              <div className="space-y-4">
+                {configChangeRequests.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground">
+                    <Clock className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                    <p>No pending change requests</p>
+                  </div>
+                ) : (
+                  configChangeRequests.map((request) => (
+                    <Card key={request.id} className="border-muted/60">
+                      <CardContent className="pt-6">
+                        <div className="space-y-4">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Type</p>
+                              <Badge className="mt-1 rounded-full capitalize">{request.type.replace("-", " ")}</Badge>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Status</p>
+                              <div className="mt-1 flex items-center gap-2">
+                                {request.status === "pending" && (
+                                  <>
+                                    <Clock className="h-4 w-4 text-amber-600" />
+                                    <Badge variant="outline" className="rounded-full">Pending</Badge>
+                                  </>
+                                )}
+                                {request.status === "approved" && (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                    <Badge variant="outline" className="rounded-full text-green-600">Approved</Badge>
+                                  </>
+                                )}
+                                {request.status === "applied" && (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                    <Badge variant="outline" className="rounded-full text-green-600">Applied</Badge>
+                                  </>
+                                )}
+                                {request.status === "rejected" && (
+                                  <>
+                                    <XCircle className="h-4 w-4 text-red-600" />
+                                    <Badge variant="outline" className="rounded-full text-red-600">Rejected</Badge>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Requested By</p>
+                              <p className="mt-1 font-medium text-sm">{request.requestedBy}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Requested At</p>
+                              <p className="mt-1 font-medium text-sm">{new Date(request.requestedAt).toLocaleString()}</p>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium mb-2">Changes</p>
+                            <div className="rounded-lg bg-muted/30 p-3 font-mono text-xs">
+                              {Object.entries(request.changes).map(([key, value]) => (
+                                <div key={key} className="text-muted-foreground">
+                                  <span className="text-foreground">{key}:</span> {JSON.stringify(value)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium mb-2">Approvals ({request.approvals.length}/2 required)</p>
+                            <div className="space-y-2">
+                              {request.approvals.length === 0 && (
+                                <p className="text-sm text-muted-foreground">No approvals yet</p>
+                              )}
+                              {request.approvals.map((approval, idx) => (
+                                <div key={idx} className="flex items-center gap-2 rounded-lg bg-muted/20 p-2 text-sm">
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                  <span>{approval.approvedBy}</span>
+                                  <span className="text-muted-foreground text-xs">({new Date(approval.approvedAt).toLocaleString()})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {request.status === "pending" && (
+                            <div className="flex gap-2">
+                              <Button
+                                className="flex-1 gap-2"
+                                onClick={() => approveConfigChange(request.id)}
+                                variant="default"
+                              >
+                                <CheckCircle className="h-4 w-4" /> Approve
+                              </Button>
+                              <Button
+                                className="flex-1 gap-2"
+                                onClick={() => rejectConfigChange(request.id)}
+                                variant="destructive"
+                              >
+                                <XCircle className="h-4 w-4" /> Reject
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )}
+
+            {settingsActiveTab === "history" && (
+              <div className="space-y-4">
+                {auditLog.slice(0, 5).length === 0 ? (
+                  <div className="rounded-2xl border border-dashed p-8 text-center text-muted-foreground">
+                    <Clock className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                    <p>No configuration changes yet</p>
+                  </div>
+                ) : (
+                  auditLog.slice(0, 5).map((entry) => (
+                    <Card key={entry.id} className="border-muted/60">
+                      <CardContent className="pt-6">
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <p className="font-medium capitalize">{entry.type.replace("-", " ")}</p>
+                              <p className="text-sm text-muted-foreground">Changed by {entry.changedBy}</p>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{new Date(entry.changedAt).toLocaleString()}</p>
+                          </div>
+                          <div className="rounded-lg bg-muted/30 p-3 font-mono text-xs space-y-1">
+                            {Object.entries(entry.changes).map(([key, value]) => (
+                              <div key={key} className="text-muted-foreground">
+                                <span className="text-foreground">{key}:</span> {JSON.stringify(value)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -222,6 +222,8 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       clientType: decrypt(client.client_type),
       currency: decrypt(client.currency),
       notes: decrypt(client.notes),
+      transactionSlabs: JSON.parse(decrypt(client.transaction_slabs) || "[]"),
+      aws: JSON.parse(decrypt(client.aws_config) || '{"enabled":false,"vendorCost":0,"marginPercentage":0}'),
     };
 
     res.json(decrypted);
@@ -308,6 +310,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       client_type = EXCLUDED.client_type,
       currency = EXCLUDED.currency,
       notes = EXCLUDED.notes,
+      transaction_slabs = EXCLUDED.transaction_slabs,
+      aws_config = EXCLUDED.aws_config,
       updated_at = NOW()`;
 
     const params = [
@@ -340,6 +344,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(clientType),
       encrypt(currency),
       encrypt(notes),
+      encrypt(JSON.stringify(transactionSlabs || [])),
+      encrypt(JSON.stringify(aws || { enabled: false, vendorCost: 0, marginPercentage: 0 })),
     ];
 
     // Save to memory cache immediately (as backup)
@@ -373,6 +379,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       client_type: clientType,
       currency: currency,
       notes: notes,
+      transaction_slabs: transactionSlabs,
+      aws_config: aws,
     };
     memoryCache.set(id, cacheData);
     console.log("[Invoice] POST /clients - Saved to memory cache:", id);
@@ -463,6 +471,8 @@ router.get("/clients", async (req: Request, res: Response) => {
           clientType: decrypt(client.client_type),
           currency: decrypt(client.currency),
           notes: decrypt(client.notes),
+          transactionSlabs: JSON.parse(decrypt(client.transaction_slabs) || "[]"),
+          aws: JSON.parse(decrypt(client.aws_config) || '{"enabled":false,"vendorCost":0,"marginPercentage":0}'),
         };
       });
       fromDatabase = true;
@@ -504,6 +514,8 @@ router.get("/clients", async (req: Request, res: Response) => {
       clientType: client.client_type,
       currency: client.currency,
       notes: client.notes,
+      transactionSlabs: client.transaction_slabs || [],
+      aws: client.aws_config || { enabled: false, vendorCost: 0, marginPercentage: 0 },
     }));
 
     // Merge: DB clients first (they're authoritative), then cache-only clients
@@ -552,6 +564,8 @@ router.get("/clients", async (req: Request, res: Response) => {
       clientType: client.client_type,
       currency: client.currency,
       notes: client.notes,
+      transactionSlabs: client.transaction_slabs || [],
+      aws: client.aws_config || { enabled: false, vendorCost: 0, marginPercentage: 0 },
     }));
 
     res.json(cacheClients);
@@ -629,6 +643,34 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching invoices:", error);
     res.status(500).json({ error: "Failed to fetch invoices" });
+  }
+});
+
+// ── DELETE client ─────────────────────────────────────────────────────────
+router.delete("/clients/:clientId", async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.params;
+    console.log("[Invoice] DELETE /clients - Deleting client:", clientId);
+
+    // Delete from database
+    try {
+      await queryWithRetry(
+        () => pool.query("DELETE FROM invoice_clients WHERE client_id = $1", [clientId])
+      );
+      console.log("[Invoice] DELETE /clients - Successfully deleted from database:", clientId);
+    } catch (dbError: any) {
+      console.warn("[Invoice] DELETE /clients - Database deletion failed:", dbError?.message);
+      // Continue to remove from memory cache anyway
+    }
+
+    // Remove from memory cache
+    memoryCache.delete(clientId);
+    console.log("[Invoice] DELETE /clients - Removed from memory cache:", clientId);
+
+    res.json({ success: true, clientId });
+  } catch (error: any) {
+    console.error("[Invoice] DELETE /clients - Error:", error?.message || error);
+    res.status(500).json({ error: "Failed to delete client", details: error?.message });
   }
 });
 

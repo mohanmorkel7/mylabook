@@ -197,6 +197,8 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       invoices = invoicesResult.rows.map((row: any) => ({
         invoiceId: decrypt(row.invoice_id),
         invoiceNumber: decrypt(row.invoice_number),
+        clientId: row.client_id,
+        clientName: decrypt(row.client_name),
         month: decrypt(row.month),
         amount: parseInt(decrypt(row.amount) || "0"),
         status: decrypt(row.status),

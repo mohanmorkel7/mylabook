@@ -3291,7 +3291,12 @@ export default function InvoiceManagement() {
   };
 
   const downloadInvoicePdf = async (invoice: any) => {
-    const client = clients.find((item) => item.name === invoice.client);
+    const invoiceClientId = invoice.clientId || invoice.clientID || invoice.client_id;
+    const invoiceClientName = invoice.clientName || invoice.client;
+    const client =
+      clients.find((item) => item.clientId === invoiceClientId || item.id === invoiceClientId) ||
+      clients.find((item) => item.name === invoiceClientName) ||
+      selectedClient;
     if (!client) return;
     try {
       const invoiceNumber = getInvoiceDisplayNumber(invoice);
@@ -3314,7 +3319,12 @@ export default function InvoiceManagement() {
   };
 
   const downloadInvoiceDocx = async (invoice: any) => {
-    const client = clients.find((item) => item.name === invoice.client);
+    const invoiceClientId = invoice.clientId || invoice.clientID || invoice.client_id;
+    const invoiceClientName = invoice.clientName || invoice.client;
+    const client =
+      clients.find((item) => item.clientId === invoiceClientId || item.id === invoiceClientId) ||
+      clients.find((item) => item.name === invoiceClientName) ||
+      selectedClient;
     if (!client) return;
     try {
       const invoiceNumber = getInvoiceDisplayNumber(invoice);

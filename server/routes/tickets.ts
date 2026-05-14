@@ -507,10 +507,12 @@ router.get("/export-stream", async (req: Request, res: Response) => {
     let queryStream;
 
     try {
+      console.log("[export-stream] Setting statement_timeout to 0...");
       await client.query("SET statement_timeout = 0");
 
       // Fetch all rows at once (much faster than streaming for XLSX generation)
       const startTime = Date.now();
+      console.log("[export-stream] Executing export SQL...");
       const result = await client.query(exportSql, simpleParams);
       const rowCount = result.rows.length;
       console.log(`[export-stream] Fetched ${rowCount} rows in ${Date.now() - startTime}ms`);
@@ -546,14 +548,24 @@ router.get("/export-stream", async (req: Request, res: Response) => {
         }
       }
 
-      // Generate XLSX
+      // Generate XLSX workbook
       try {
+        console.log(`[export-stream] Building XLSX from ${ws_data.length} rows...`);
+
+        if (!XLSX || !XLSX.utils) {
+          throw new Error("XLSX library not available");
+        }
+
         const ws = XLSX.utils.aoa_to_sheet(ws_data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Tickets");
 
         // Generate binary XLSX data
         const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+
+        if (!buffer) {
+          throw new Error("Failed to generate buffer from XLSX");
+        }
 
         // Send file to client
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -563,23 +575,23 @@ router.get("/export-stream", async (req: Request, res: Response) => {
 
         console.log(`[export-stream] Sent XLSX (${buffer.length} bytes) for ${rowCount} tickets in ${Date.now() - startTime}ms`);
       } catch (e) {
-        console.error("[export-stream] Failed to generate XLSX:", e);
+        console.error("[export-stream] Failed to generate XLSX:", e?.message || e);
         if (!res.headersSent) {
-          res.status(500).json({ error: "Failed to generate XLSX" });
+          res.status(500).json({ error: "Failed to generate XLSX", details: String(e?.message || e) });
         }
       }
     } catch (error) {
-      console.error("[export-stream] Error:", error);
+      console.error("[export-stream] Query or processing error:", error?.message || error);
       if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to stream export" });
+        res.status(500).json({ error: "Failed to process export", details: String(error?.message || error) });
       }
     } finally {
       client.release();
     }
   } catch (error) {
-    console.error("[export-stream] Error:", error);
+    console.error("[export-stream] Outer error:", error?.message || error);
     if (!res.headersSent) {
-      res.status(500).json({ error: "Failed to stream export" });
+      res.status(500).json({ error: "Export endpoint error", details: String(error?.message || error) });
     }
   }
 });

@@ -226,6 +226,7 @@ router.get("/", async (req: Request, res: Response) => {
     // If client requests simple listing (raw tickets table), run a lightweight query
     if (String(req.query.simple || "").trim() === "1") {
       try {
+        const queryStartMs = Date.now();
         console.log("[GET /api/tickets] Using simple query mode");
         const isExport = String(req.query.export || "").trim() === "1";
         const offset = (page - 1) * effectiveLimit;
@@ -283,6 +284,14 @@ router.get("/", async (req: Request, res: Response) => {
             })()
           : await pool.query(simpleSql, simpleParams);
 
+        const queryDurationMs = Date.now() - queryStartMs;
+        if (queryDurationMs > 5000) {
+          const poolSize = (pool as any).totalCount;
+          const idleCount = (pool as any).idleCount;
+          const waitingCount = (pool as any).waitingCount || 0;
+          console.warn(`[GET /api/tickets] Simple query took ${queryDurationMs}ms (page=${page}, limit=${effectiveLimit}) | POOL: Total=${poolSize} Idle=${idleCount} Waiting=${waitingCount}`);
+        }
+
         const totalCount = isExport ? rowsRes.rows.length : Number((await pool.query(
           `SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'`,
         )).rows[0]?.estimate || 0);
@@ -337,11 +346,11 @@ router.get("/", async (req: Request, res: Response) => {
           mode: "simple",
         });
       } catch (err) {
+        const errorDurationMs = Date.now() - queryStartMs;
         console.error(
-          "[GET /api/tickets] Simple tickets query failed:",
+          `[GET /api/tickets] Simple query failed after ${errorDurationMs}ms:`,
           err?.message || err,
         );
-        console.error("[GET /api/tickets] Full error:", err);
         // Return empty result instead of falling back to heavy query
         return res.status(200).json({
           tickets: [],
@@ -349,7 +358,7 @@ router.get("/", async (req: Request, res: Response) => {
           pages: 0,
           server_time: new Date().toISOString(),
           mode: "simple",
-          message: "Simple query failed, returning empty results",
+          message: `Simple query failed after ${errorDurationMs}ms: ${err?.message || "unknown error"}`,
         });
       }
     }

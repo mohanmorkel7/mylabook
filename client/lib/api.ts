@@ -239,7 +239,7 @@ export class ApiClient {
             endpoint.includes("/auth/login")
               ? 15000
               : 8000;
-          if (endpoint.includes("/tickets")) timeoutMs = 30000; // allow tickets up to 30s
+          if (endpoint.includes("/tickets")) timeoutMs = 90000; // allow tickets up to 90s under load
           // finops tracker can be slow depending on DB - allow up to 30s
           if (
             endpoint.includes("/finops-production/tracker") ||

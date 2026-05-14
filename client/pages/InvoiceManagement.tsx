@@ -1360,25 +1360,33 @@ async function downloadInvoicePdfTemplate({
   cursorY += 4;
 
   // === SIGNATURE ===
-  ensureSpace(28);
+  ensureSpace(16);
   const sigW = 70;
   const sigX = pageWidth - margin - sigW;
+  const signatoryName = (client.signatoryName || "").trim();
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.6);
+  doc.setFontSize(8.2);
   doc.text(`For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, sigX + sigW, cursorY, { align: "right" });
-  cursorY += 18;
+  cursorY += 10;
   setStroke(SECONDARY);
-  doc.setLineWidth(0.4);
+  doc.setLineWidth(0.35);
   doc.line(sigX, cursorY, sigX + sigW, cursorY);
-  setText(SECONDARY);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.4);
-  doc.text(getClientSignatureName(client), sigX + sigW, cursorY + 4, { align: "right" });
-  setText(MUTED);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.4);
-  doc.text("Authorized Signatory", sigX + sigW, cursorY + 8, { align: "right" });
+  if (signatoryName) {
+    setText(SECONDARY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text(signatoryName, sigX + sigW, cursorY + 3.5, { align: "right" });
+    setText(MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text("Authorized Signatory", sigX + sigW, cursorY + 7, { align: "right" });
+  } else {
+    setText(MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text("Authorized Signatory", sigX + sigW, cursorY + 4.5, { align: "right" });
+  }
 
   drawFooter();
   doc.save(`${invoiceNumber}.pdf`);

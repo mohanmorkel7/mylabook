@@ -773,7 +773,9 @@ async function downloadInvoiceDocxTemplate({
   const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
-  const gst = client.lutNumber ? 0 : subtotal * 0.18;
+  // Calculate GST (18%) - LUT exemption only applies to specific cases
+  // For now, always calculate GST for proper invoicing
+  const gst = subtotal * 0.18;
   const totalPayable = subtotal + gst;
 
   const title = (text: string) =>
@@ -1298,7 +1300,9 @@ async function downloadInvoicePdfTemplate({
 
   // === TOTALS ===
   const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const gst = client.lutNumber ? 0 : subtotal * 0.18;
+  // Calculate GST (18%) - LUT exemption only applies to specific cases
+  // For now, always calculate GST for proper invoicing
+  const gst = subtotal * 0.18;
   const totalPayable = subtotal + gst;
 
   ensureSpace(28);

@@ -241,8 +241,7 @@ router.get("/", async (req: Request, res: Response) => {
         const simpleLimitClause = isExport
           ? ""
           : `LIMIT $${restrictToViewer && viewerId ? 2 : 1} OFFSET $${restrictToViewer && viewerId ? 3 : 2}`;
-        const rowsRes = await pool.query(
-          `SELECT
+        const simpleSql = `SELECT
               t.id, t.track_id, t.subject, t.description,
               t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
               t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
@@ -251,20 +250,29 @@ router.get("/", async (req: Request, res: Response) => {
               to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
               tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
               ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
-              tc.id as category_id_join, tc.name as category_name, tc.color as category_color,
-              creator.id as creator_id, creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
-              assignee.id as assignee_id, assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
+              tc.id as category_id_join, tc.name as category_name, tc.color as category_color
              FROM tickets t
              LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
              LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
              LEFT JOIN ticket_categories tc ON t.category_id = tc.id
-             LEFT JOIN users creator ON t.created_by = creator.id
-             LEFT JOIN users assignee ON t.assigned_to = assignee.id
              ${simpleWhere}
              ORDER BY t.created_at DESC
-             ${simpleLimitClause}`,
-          simpleParams,
-        );
+             ${simpleLimitClause}`;
+        const rowsRes = isExport
+          ? await (async () => {
+              const client = await pool.connect();
+              try {
+                await client.query("BEGIN");
+                await client.query("SET LOCAL statement_timeout = 0");
+                return await client.query(simpleSql, simpleParams);
+              } finally {
+                try {
+                  await client.query("COMMIT");
+                } catch (e) {}
+                client.release();
+              }
+            })()
+          : await pool.query(simpleSql, simpleParams);
 
         const totalCount = isExport ? rowsRes.rows.length : Number((await pool.query(
           `SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'`,
@@ -308,20 +316,6 @@ router.get("/", async (req: Request, res: Response) => {
                 id: r.category_id_join,
                 name: r.category_name,
                 color: r.category_color,
-              }
-            : null,
-          creator: r.creator_id
-            ? {
-                id: r.creator_id,
-                name: r.creator_name,
-                email: r.creator_email,
-              }
-            : null,
-          assignee: r.assignee_id
-            ? {
-                id: r.assignee_id,
-                name: r.assignee_name,
-                email: r.assignee_email,
               }
             : null,
         }));

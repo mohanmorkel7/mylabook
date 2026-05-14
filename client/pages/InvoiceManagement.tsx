@@ -2762,6 +2762,24 @@ export default function InvoiceManagement() {
           }));
           console.log("[InvoiceManagement] Mapped clients:", dbClients);
           setClients(dbClients);
+
+          // Load invoice history for each client so dashboard + overview use real API data
+          Promise.all(
+            dbClients.map(async (client) => {
+              try {
+                const res = await fetch(`/api/invoice-management/invoices/${client.clientId}`);
+                if (!res.ok) return client;
+                const invoiceHistory = await res.json();
+                return { ...client, invoiceHistory: Array.isArray(invoiceHistory) ? invoiceHistory : [] };
+              } catch (err) {
+                console.warn("[InvoiceManagement] Failed to load invoices for client:", client.clientId, err);
+                return client;
+              }
+            })
+          ).then((clientsWithHistory) => {
+            console.log("[InvoiceManagement] Clients with invoice history:", clientsWithHistory);
+            setClients(clientsWithHistory);
+          });
         } else {
           console.warn("[InvoiceManagement] API did not return an array");
         }
@@ -2857,6 +2875,7 @@ export default function InvoiceManagement() {
             const exists = prev.some(c => c.id === data.clientId || c.id === data.id);
             const updatedClient: ClientRecord = {
               id: data.id || data.clientId,
+              clientId: data.clientId,
               code: data.code || data.clientCode,
               name: data.name || data.clientName,
               status: data.status,
@@ -2892,12 +2911,28 @@ export default function InvoiceManagement() {
             console.log("[Invoice] Updated client object:", updatedClient);
             return exists ? prev.map(c => (c.id === data.id || c.id === data.clientId) ? updatedClient : c) : [updatedClient, ...prev];
           });
+
+          console.log("[Invoice] Fetching invoice history directly for clientId:", clientId);
+          return fetch(`/api/invoice-management/invoices/${clientId}`)
+            .then(res => {
+              console.log("[Invoice] Invoice history fetch status:", res.status);
+              if (!res.ok) throw new Error(`Invoice history API error: ${res.status}`);
+              return res.json();
+            })
+            .then((invoiceHistory) => {
+              console.log("[Invoice] Invoice history fetched:", invoiceHistory);
+              setClients(prev => prev.map((c) =>
+                (c.clientId === clientId || c.id === clientId)
+                  ? { ...c, invoiceHistory: Array.isArray(invoiceHistory) ? invoiceHistory : [] }
+                  : c
+              ));
+            });
         })
         .catch(err => {
-          console.error("[Invoice] Failed to fetch client from database:", err);
+          console.error("[Invoice] Failed to fetch client or invoice history from database:", err);
           toast({
             title: "Warning",
-            description: "Could not load client data from database",
+            description: "Could not load client invoice data from database",
             variant: "destructive",
           });
         });

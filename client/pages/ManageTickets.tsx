@@ -1413,6 +1413,7 @@ export default function ManageTickets() {
         description: `Downloaded ${blob.size} bytes of ticket data`,
       });
 
+      /*
       // Normalize similar to fetchTickets
       const serverMs = data?.server_time
         ? new Date(String(data.server_time)).getTime()
@@ -1754,6 +1755,7 @@ export default function ManageTickets() {
       );
 
       toast({ title: "Export ready", description: "Excel export downloaded" });
+      */
     } catch (err) {
       console.error("Export failed:", err);
       toast({

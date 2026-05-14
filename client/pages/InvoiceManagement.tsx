@@ -152,7 +152,6 @@ const INVOICE_THEME = {
   primaryHex: "2cafe6",
   secondaryHex: "1f295c",
 };
-const BILLING_COMPANY_NAME = "Mindeed Technologies and Services Pvt Ltd";
 const INVOICE_AMOUNT_IN_WORDS = "(Rupees One lakh forty-seven thousand five hundred Only)";
 const INVOICE_DECLARATION_LINES = [
   "We hereby declare that",
@@ -168,17 +167,6 @@ const MYLAPAY_FOOTER_LINES = [
   "# 17/3, Pembroke House, Second Floor, Shafee Mohammed Road, Nungambakkam, Chennai 600 006.",
   "CIN: U72900TN2019PTC129197 | Website: www.mylapay.com | Reach us at:contactus@mylapay.com",
 ];
-
-const MYLAPAY_BRANDING = {
-  companyName: BILLING_COMPANY_NAME,
-  address: "Coimbatore, Tamil Nadu, India",
-  email: "contact@mylapay.com",
-  phone: "+91 98765 43210",
-  gstin: "GSTIN: —",
-  lutNumber: "LUT: —",
-  footerLine: MYLAPAY_FOOTER_LINES.join("\n"),
-  authorizedLabel: "Authorized Signatory",
-};
 
 const INVOICE_SERIAL_CONFIG_KEY = "invoice-serial-config";
 const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
@@ -751,6 +739,7 @@ async function fetchImageDataUrl(url: string) {
 
 async function downloadInvoiceDocxTemplate({
   client,
+  companyConfig,
   invoiceNumber,
   generatedDate,
   amount,
@@ -760,6 +749,7 @@ async function downloadInvoiceDocxTemplate({
   serial,
 }: {
   client: ClientRecord;
+  companyConfig: CompanyConfig;
   invoiceNumber: string;
   generatedDate: string;
   amount: number;
@@ -806,12 +796,14 @@ async function downloadInvoiceDocxTemplate({
     });
 
   const billFromRows = [
-    ["Company", MYLAPAY_BRANDING.companyName],
-    ["Address", MYLAPAY_BRANDING.address],
-    ["Email", MYLAPAY_BRANDING.email],
-    ["Phone", MYLAPAY_BRANDING.phone],
-    ["GSTIN", MYLAPAY_BRANDING.gstin],
-    ["LUT", MYLAPAY_BRANDING.lutNumber],
+    ["Company", companyConfig.companyName],
+    ["Address", getCompanyDisplayAddress(companyConfig)],
+    ["Email", companyConfig.email],
+    ["Phone", companyConfig.phone],
+    ["GSTIN", companyConfig.gstNumber],
+    ["LUT", companyConfig.lutNumber],
+    ["CIN", companyConfig.cinNumber],
+    ["Website", companyConfig.website],
   ];
   const billToRows = [
     ["Client", getClientDisplayBillingName(client)],
@@ -1091,8 +1083,15 @@ function getClientSignatureName(client: ClientRecord) {
   return client.signatoryName || "Authorized Signatory";
 }
 
+function getCompanyDisplayAddress(companyConfig: CompanyConfig) {
+  return [companyConfig.address, `${companyConfig.city}, ${companyConfig.state}, India`, companyConfig.pincode]
+    .filter(Boolean)
+    .join("\n");
+}
+
 async function downloadInvoicePdfTemplate({
   client,
+  companyConfig,
   invoiceNumber,
   generatedDate,
   amount,
@@ -1102,6 +1101,7 @@ async function downloadInvoicePdfTemplate({
   serial,
 }: {
   client: ClientRecord;
+  companyConfig: CompanyConfig;
   invoiceNumber: string;
   generatedDate: string;
   amount: number;
@@ -1177,9 +1177,9 @@ async function downloadInvoicePdfTemplate({
   setText(MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.2);
-  doc.text("Mindeed Technologies and Services Pvt Ltd", margin, cursorY + 19);
-  doc.text("Coimbatore, Tamil Nadu, India", margin, cursorY + 22.5);
-  doc.text("contact@mylapay.com  ·  +91 98765 43210", margin, cursorY + 26);
+  doc.text(companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd", margin, cursorY + 19);
+  doc.text(getCompanyDisplayAddress(companyConfig), margin, cursorY + 22.5);
+  doc.text(`${companyConfig.email || "contact@mylapay.com"}  ·  ${companyConfig.phone || "+91 44 XXXX XXXX"}`, margin, cursorY + 26);
 
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
@@ -1214,12 +1214,14 @@ async function downloadInvoicePdfTemplate({
   // === BILL FROM / BILL TO ===
   const colWidth = (contentWidth - 8) / 2;
   const billFrom = [
-    [MYLAPAY_BRANDING.companyName, true],
-    [MYLAPAY_BRANDING.address, false],
-    [MYLAPAY_BRANDING.email, false],
-    [MYLAPAY_BRANDING.phone, false],
-    [`GSTIN: ${(MYLAPAY_BRANDING.gstin || "—").replace(/^GSTIN:\s*/i, "")}`, false],
-    [`LUT: ${(MYLAPAY_BRANDING.lutNumber || "—").replace(/^LUT:\s*/i, "")}`, false],
+    [companyConfig.companyName, true],
+    [getCompanyDisplayAddress(companyConfig), false],
+    [companyConfig.email, false],
+    [companyConfig.phone, false],
+    [`GSTIN: ${companyConfig.gstNumber || "—"}`, false],
+    [`LUT: ${companyConfig.lutNumber || "—"}`, false],
+    [`CIN: ${companyConfig.cinNumber || "—"}`, false],
+    [`Website: ${companyConfig.website || "—"}`, false],
   ] as Array<[string, boolean]>;
   const billTo = [
     [getClientDisplayBillingName(client), true],
@@ -3027,6 +3029,7 @@ export default function InvoiceManagement() {
     const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
     await downloadInvoicePdfTemplate({
       client,
+      companyConfig,
       invoiceNumber: serialInfo.invoiceNumber,
       generatedDate: new Date().toISOString().split("T")[0],
       amount: client.monthlyInvoiceEstimate,
@@ -3043,6 +3046,7 @@ export default function InvoiceManagement() {
     const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
     await downloadInvoiceDocxTemplate({
       client,
+      companyConfig,
       invoiceNumber: serialInfo.invoiceNumber,
       generatedDate: new Date().toISOString().split("T")[0],
       amount: client.monthlyInvoiceEstimate,
@@ -3282,6 +3286,7 @@ export default function InvoiceManagement() {
     const invoiceNumber = getInvoiceDisplayNumber(invoice);
     await downloadInvoicePdfTemplate({
       client,
+      companyConfig,
       invoiceNumber,
       generatedDate: invoice.generatedDate,
       amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
@@ -3299,6 +3304,7 @@ export default function InvoiceManagement() {
     const invoiceNumber = getInvoiceDisplayNumber(invoice);
     await downloadInvoiceDocxTemplate({
       client,
+      companyConfig,
       invoiceNumber,
       generatedDate: invoice.generatedDate,
       amount: Number(invoice.amount || client.monthlyInvoiceEstimate),

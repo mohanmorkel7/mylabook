@@ -2715,8 +2715,9 @@ export default function InvoiceManagement() {
         if (Array.isArray(data)) {
           const dbClients: ClientRecord[] = data.map((client: any) => ({
             id: client.clientId,
-            code: client.clientCode,
-            name: client.clientName,
+            clientId: client.clientId,
+            code: client.code,
+            name: client.name,
             status: client.status,
             priority: client.priority,
             services: client.services || [],
@@ -2735,8 +2736,8 @@ export default function InvoiceManagement() {
             logo: client.logo,
             logoClass: client.logoClass,
             color: client.color,
-            transactionSlabs: [],
-            aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
+            transactionSlabs: client.transactionSlabs || [],
+            aws: client.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
             notes: client.notes,
             invoiceHistory: [],
             gstin: client.gstin,

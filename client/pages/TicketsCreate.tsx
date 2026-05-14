@@ -46,7 +46,7 @@ export default function TicketsCreatePage() {
     description: "",
     priority_id: undefined,
     category_id: undefined,
-    assigned_to: undefined,
+    assigned_to: 315,
     team_id: undefined,
     bucket_id: undefined,
     bucket_name: undefined,
@@ -632,7 +632,7 @@ export default function TicketsCreatePage() {
                 onValueChange={(v) => {
                   setForm({
                     ...form,
-                    assigned_to: v ? parseInt(v) : undefined,
+                    assigned_to: v ? parseInt(v) : 315,
                   });
                   setErrors((prev) => ({ ...prev, assigned_to: undefined }));
                 }}

@@ -115,7 +115,7 @@ const FALLBACK_TICKETS = [
     status_id: 2,
     category_id: 1,
     created_by: 1,
-    assigned_to: 1,
+    assigned_to: 315,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     priority: { id: 3, name: "High", level: 3, color: "#EF4444" },
@@ -183,6 +183,7 @@ router.get("/", async (req: Request, res: Response) => {
         typeof req.query.created_from_mail_config !== "undefined"
           ? String(req.query.created_from_mail_config) === "true"
           : undefined,
+      source: req.query.source ? String(req.query.source) : undefined,
     };
 
     const page = parseInt(req.query.page as string) || 1;

@@ -291,6 +291,7 @@ export default function ManageTickets() {
   >([]);
   const serverFilteredRef = useRef(false);
   const ticketsFetchRequestRef = useRef(0);
+  const ticketsFetchDebounceRef = useRef<number | null>(null);
   const initialFiltersFetchDoneRef = useRef(false);
 
   // Expose getMailConfigProviderName on window for TicketCharts to use
@@ -535,7 +536,7 @@ export default function ManageTickets() {
     if (!filtersInitialized) return;
     if (!initialFiltersFetchDoneRef.current) return;
 
-    fetchTickets(currentPage);
+    scheduleTicketsFetch(currentPage);
     fetchUsers();
     fetchTags();
     // Always refresh created tickets count so the tab displays an accurate value
@@ -556,12 +557,29 @@ export default function ManageTickets() {
     };
   }, [activeTab, currentPage, pageSize, filtersInitialized]);
 
+  const scheduleTicketsFetch = (page: number) => {
+    if (ticketsFetchDebounceRef.current) {
+      window.clearTimeout(ticketsFetchDebounceRef.current);
+    }
+    ticketsFetchDebounceRef.current = window.setTimeout(() => {
+      fetchTickets(page);
+    }, 120);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (ticketsFetchDebounceRef.current) {
+        window.clearTimeout(ticketsFetchDebounceRef.current);
+      }
+    };
+  }, []);
+
   // When filters change, fetch fresh results from server (reset to page 1)
   useEffect(() => {
     if (!filtersInitialized) return;
     if (!initialFiltersFetchDoneRef.current) {
       initialFiltersFetchDoneRef.current = true;
-      fetchTickets(1);
+      scheduleTicketsFetch(1);
       fetchUsers();
       fetchTags();
       fetchCreatedTicketsCount();
@@ -571,7 +589,7 @@ export default function ManageTickets() {
       return;
     }
     setCurrentPage(1);
-    fetchTickets(1);
+    scheduleTicketsFetch(1);
   }, [filters, filtersInitialized, activeTab]);
 
   // Keep URL search params in sync with filters so state survives refresh and navigation

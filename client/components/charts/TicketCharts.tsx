@@ -90,6 +90,67 @@ export default function TicketCharts({
   useEffect(() => {
     let mounted = true;
 
+    const buildLocalSummaries = () => {
+      const sourceTickets = Array.isArray(tickets) ? tickets : [];
+      const assignedMap = new Map<string, number>();
+      const statusMap = new Map<string, number>();
+      const userStatusMap: Record<string, Record<string, number>> = {};
+      const tagStatusMap: Record<string, Record<string, number>> = {};
+
+      for (const ticket of sourceTickets) {
+        const assignedName =
+          ticket?.assignee?.name || ticket?.assigned_to_name || "Unassigned";
+        const statusName = ticket?.status?.name || ticket?.status_name || "Unknown";
+        const tag = classifyTicketTag ? classifyTicketTag(ticket) : "Manual";
+
+        assignedMap.set(assignedName, (assignedMap.get(assignedName) || 0) + 1);
+        statusMap.set(statusName, (statusMap.get(statusName) || 0) + 1);
+
+        if (!userStatusMap[assignedName]) userStatusMap[assignedName] = {};
+        userStatusMap[assignedName][statusName] =
+          (userStatusMap[assignedName][statusName] || 0) + 1;
+
+        if (!tagStatusMap[tag]) tagStatusMap[tag] = {};
+        tagStatusMap[tag][statusName] = (tagStatusMap[tag][statusName] || 0) + 1;
+      }
+
+      const assignedArr = Array.from(assignedMap.entries()).map(([name, count]) => ({
+        user_id: null,
+        name,
+        count,
+      }));
+      const statusesArr = Array.from(statusMap.entries()).map(([status, count]) => ({
+        status,
+        count,
+      }));
+      const userStatusArr = Object.entries(userStatusMap).map(([name, counts]) => ({
+        user_id: null,
+        name,
+        counts,
+      }));
+      const tagStatusArr = Object.entries(tagStatusMap).map(([tag, counts]) => ({
+        tag,
+        counts,
+      }));
+
+      if (!mounted) return;
+      setAssigned(assignedArr);
+      setStatuses(statusesArr);
+      setUserStatus(userStatusArr);
+      setTagStatus(tagStatusArr);
+      setLoading(false);
+      if (onSummaryFetched) {
+        onSummaryFetched({ assigned: assignedArr, statuses: statusesArr });
+      }
+    };
+
+    if (Array.isArray(tickets) && tickets.length > 0 && classifyTicketTag) {
+      buildLocalSummaries();
+      return () => {
+        mounted = false;
+      };
+    }
+
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -101,7 +162,6 @@ export default function TicketCharts({
           computedTo,
         });
         const params = new URLSearchParams();
-        // Prefer explicit dateFrom/dateTo props when provided (e.g., date picker in Manage Tickets)
         const useFrom =
           dateFrom && String(dateFrom).trim()
             ? dateFrom
@@ -114,16 +174,6 @@ export default function TicketCharts({
             : range === "all"
               ? undefined
               : computedTo;
-        console.log("[TicketCharts] Date filter logic:", {
-          dateFrom,
-          dateTo,
-          range,
-          "dateFrom && String(dateFrom).trim()":
-            dateFrom && String(dateFrom).trim(),
-          "dateTo && String(dateTo).trim()": dateTo && String(dateTo).trim(),
-          useFrom,
-          useTo,
-        });
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
         const query = params.toString() ? `?${params.toString()}` : "";
@@ -153,18 +203,11 @@ export default function TicketCharts({
           const rawData = Array.isArray(userStatusPayload)
             ? userStatusPayload
             : userStatusPayload?.data || [];
-          const grouped: Record<
-            number,
-            { user_id: number; name: string; counts: Record<string, number> }
-          > = {};
+          const grouped: Record<number, { user_id: number; name: string; counts: Record<string, number> }> = {};
           rawData.forEach((row: any) => {
             const userId = row.user_id || 0;
             if (!grouped[userId]) {
-              grouped[userId] = {
-                user_id: userId,
-                name: row.user_name || "Unknown",
-                counts: {},
-              };
+              grouped[userId] = { user_id: userId, name: row.user_name || "Unknown", counts: {} };
             }
             const statusName = row.status_name || "Unknown";
             grouped[userId].counts[statusName] = row.count || 0;
@@ -177,8 +220,7 @@ export default function TicketCharts({
           const sourceTickets = Array.isArray(tickets) ? tickets : [];
           for (const ticket of sourceTickets) {
             const tag = classifyTicketTag ? classifyTicketTag(ticket) : "Manual";
-            const statusName =
-              ticket?.status?.name || ticket?.status_name || "Unknown";
+            const statusName = ticket?.status?.name || ticket?.status_name || "Unknown";
             if (!grouped[tag]) grouped[tag] = {};
             grouped[tag][statusName] = (grouped[tag][statusName] || 0) + 1;
           }
@@ -205,13 +247,12 @@ export default function TicketCharts({
       }
     };
 
-    // Initial fetch
     fetchData();
 
     return () => {
       mounted = false;
     };
-  }, [dateFrom, dateTo, range]);
+  }, [dateFrom, dateTo, range, tickets, classifyTicketTag]);
 
   // Vertical bar chart component
   const VerticalBarChart = ({

@@ -2,6 +2,8 @@ import cron from "node-cron";
 import finopsAlertService from "./finopsAlertService";
 import { pool, isDatabaseAvailable, queryWithRetry } from "../database/connection";
 
+const g = globalThis as any;
+
 class FinOpsScheduler {
   private isInitialized = false;
   // Track the last date (IST) when rollover was performed to avoid accidental double rollovers
@@ -11,8 +13,10 @@ class FinOpsScheduler {
    * Initialize all scheduled jobs
    */
   public initialize(): void {
-    if (this.isInitialized) {
+    if (this.isInitialized || g.__finopsSchedulerInitialized) {
       console.log("FinOps Scheduler already initialized");
+      this.isInitialized = true;
+      g.__finopsSchedulerInitialized = true;
       return;
     }
 
@@ -117,6 +121,7 @@ class FinOpsScheduler {
     );
 
     this.isInitialized = true;
+    g.__finopsSchedulerInitialized = true;
     console.log("FinOps Scheduler initialized successfully");
   }
 
@@ -650,6 +655,7 @@ class FinOpsScheduler {
     if (this.isInitialized) {
       cron.getTasks().forEach((task) => task.stop());
       this.isInitialized = false;
+      g.__finopsSchedulerInitialized = false;
       console.log("FinOps Scheduler stopped");
     }
   }

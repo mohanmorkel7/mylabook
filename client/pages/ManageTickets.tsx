@@ -540,16 +540,17 @@ export default function ManageTickets() {
     scheduleTicketsFetch(currentPage);
     fetchUsers();
     fetchTags();
-    // Always refresh created tickets count so the tab displays an accurate value
-    fetchCreatedTicketsCount();
     if (activeTab === "created") {
+      fetchCreatedTicketsCount();
       fetchCreatedTickets();
     }
 
     // Listen for created tickets updates from other parts of the app (e.g., Mails)
     const handler = () => {
-      if (activeTab === "created") fetchCreatedTickets();
-      fetchCreatedTicketsCount();
+      if (activeTab === "created") {
+        fetchCreatedTickets();
+        fetchCreatedTicketsCount();
+      }
     };
     window.addEventListener("createdTicketsUpdated", handler);
 
@@ -583,8 +584,8 @@ export default function ManageTickets() {
       scheduleTicketsFetch(1);
       fetchUsers();
       fetchTags();
-      fetchCreatedTicketsCount();
       if (activeTab === "created") {
+        fetchCreatedTicketsCount();
         fetchCreatedTickets();
       }
       return;

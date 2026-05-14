@@ -2276,6 +2276,7 @@ function InvoiceConfigEditor({
   const submit = () => {
     onSave({
       id: client?.id,
+      clientId: client?.clientId,
       name,
       code,
       status,
@@ -3357,9 +3358,15 @@ export default function InvoiceManagement() {
 
   const saveConfig = async (payload: any) => {
     try {
-      const baseId = payload.id || payload.code?.toLowerCase() || `client-${Date.now()}`;
+      // For editing: use clientId (unique identifier), for new: use code as identifier
+      const clientId = payload.clientId || payload.code?.toLowerCase();
+      const baseId = payload.id || clientId || `client-${Date.now()}`;
+
+      console.log("[Invoice] saveConfig - payload:", { id: payload.id, clientId: payload.clientId, code: payload.code, baseId });
+
       const nextClient: ClientRecord = {
         id: baseId,
+        clientId: clientId,
         code: payload.code,
         name: payload.name,
         status: payload.status,
@@ -3394,11 +3401,12 @@ export default function InvoiceManagement() {
       };
 
       // Save to database via API (encrypted at rest)
+      // Use clientId for UPSERT to prevent duplicates
       await fetch("/api/invoice-management/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: baseId,
+          clientId: clientId,
           clientCode: payload.code,
           clientName: payload.name,
           status: payload.status,
@@ -3438,7 +3446,7 @@ export default function InvoiceManagement() {
       });
 
       toast({
-        title: `Configuration ${payload.id ? "updated" : "created"}`,
+        title: `Configuration ${payload.clientId ? "updated" : "created"}`,
         description: `${payload.name} commercial configuration saved successfully to database (encrypted).`,
       });
 

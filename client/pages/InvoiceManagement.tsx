@@ -770,17 +770,17 @@ async function downloadInvoiceDocxTemplate({
 
   const title = (text: string) =>
     new Docx.Paragraph({
-      children: [new Docx.TextRun({ text, bold: true, color: INVOICE_THEME.secondaryHex, size: 20 })],
-      spacing: { after: 40 },
+      children: [new Docx.TextRun({ text, bold: true, color: INVOICE_THEME.secondaryHex, size: 14 })],
+      spacing: { after: 6 },
     });
 
   const labelValue = (label: string, value: string) =>
     new Docx.Paragraph({
       children: [
-        new Docx.TextRun({ text: `${label}: `, bold: true, color: INVOICE_THEME.primaryHex, size: 15 }),
-        new Docx.TextRun({ text: value || "—", color: INVOICE_THEME.secondaryHex, size: 15 }),
+        new Docx.TextRun({ text: `${label}: `, bold: true, color: INVOICE_THEME.primaryHex, size: 10 }),
+        new Docx.TextRun({ text: value || "—", color: INVOICE_THEME.secondaryHex, size: 10 }),
       ],
-      spacing: { after: 18 },
+      spacing: { after: 2 },
     });
 
   const tableCell = (text: string, align: "left" | "right" = "left") =>
@@ -788,11 +788,11 @@ async function downloadInvoiceDocxTemplate({
       children: [
         new Docx.Paragraph({
           alignment: align === "right" ? Docx.AlignmentType.RIGHT : Docx.AlignmentType.LEFT,
-          children: [new Docx.TextRun({ text, size: 18, color: INVOICE_THEME.secondaryHex })],
+          children: [new Docx.TextRun({ text, size: 9, color: INVOICE_THEME.secondaryHex })],
         }),
       ],
       width: { size: 50, type: Docx.WidthType.PERCENTAGE },
-      margins: { top: 60, bottom: 60, left: 120, right: 120 },
+      margins: { top: 30, bottom: 30, left: 70, right: 70 },
     });
 
   const billFromRows = [
@@ -826,28 +826,53 @@ async function downloadInvoiceDocxTemplate({
                   children: [
                     new Docx.ImageRun({
                       data: logoData,
-                      transformation: { width: 92, height: 34 },
+                      transformation: { width: 80, height: 30 },
                     }),
                   ],
+                  spacing: { after: 2 },
                 }),
               ]
             : []),
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
-            children: [new Docx.TextRun({ text: "Tax Invoice", bold: true, color: INVOICE_THEME.secondaryHex, size: 24 })],
-            spacing: { after: 24 },
+            children: [new Docx.TextRun({ text: "INVOICE", bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })],
+            spacing: { after: 0 },
           }),
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
-            children: [
-              new Docx.TextRun({ text: `Invoice Number: ${invoiceNumber}`, size: 14 }),
-              new Docx.TextRun({ text: "\n", size: 14 }),
-              new Docx.TextRun({ text: `Financial Year: ${financialYear} · Serial #${serial}`, size: 14 }),
-              new Docx.TextRun({ text: "\n", size: 14 }),
-              new Docx.TextRun({ text: `Month: ${month}`, size: 14 }),
-            ],
-            spacing: { after: 40 },
+            children: [new Docx.TextRun({ text: "TAX INVOICE", bold: true, color: INVOICE_THEME.primaryHex, size: 9 })],
+            spacing: { after: 5 },
           }),
+          new Docx.Table({
+            width: { size: 100, type: Docx.WidthType.PERCENTAGE },
+            borders: {
+              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
+            },
+            rows: [
+              new Docx.TableRow({
+                children: [
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Invoice No.", bold: true, size: 9 })] })] }),
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: invoiceNumber, bold: true, size: 9 })] })] }),
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Issue Date", bold: true, size: 9 })] })] }),
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: generatedDate, bold: true, size: 9 })] })] }),
+                ],
+              }),
+              new Docx.TableRow({
+                children: [
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Period", bold: true, size: 9 })] })] }),
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: `${month} · FY ${financialYear}`, bold: true, size: 9 })] })] }),
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Serial", bold: true, size: 9 })] })] }),
+                  new Docx.TableCell({ children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: `#${serial}`, bold: true, size: 9 })] })] }),
+                ],
+              }),
+            ],
+          }),
+          new Docx.Paragraph({ spacing: { after: 4 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
@@ -868,8 +893,8 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { after: 28 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill From / Bill To", bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })], spacing: { after: 16 } }),
+          new Docx.Paragraph({ spacing: { after: 4 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill From / Bill To", bold: true, color: INVOICE_THEME.secondaryHex, size: 12 })], spacing: { after: 4 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
@@ -895,29 +920,9 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { after: 20 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Bill Details", bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })], spacing: { after: 12 } }),
-          new Docx.Table({
-            width: { size: 100, type: Docx.WidthType.PERCENTAGE },
-            borders: {
-              top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
-              bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
-              left: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
-              right: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
-              insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
-              insideVertical: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.primaryHex },
-            },
-            rows: [
-              new Docx.TableRow({
-                children: [tableCell("Invoice Month"), tableCell(month, "right"), tableCell("Transaction Volume"), tableCell(client.monthlyTransactionVolume.toLocaleString(), "right")],
-              }),
-              new Docx.TableRow({
-                children: [tableCell("Invoice Status"), tableCell(status, "right"), tableCell("Last Invoice Generated"), tableCell(client.lastInvoiceGenerated, "right")],
-              }),
-            ],
-          }),
-          new Docx.Paragraph({ spacing: { after: 20 } }),
-          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Statement of Charges", bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })], spacing: { after: 12 } }),
+          new Docx.Paragraph({ spacing: { after: 4 } }),
+          new Docx.Paragraph({ spacing: { after: 4 } }),
+          new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Statement of Charges", bold: true, color: INVOICE_THEME.secondaryHex, size: 12 })], spacing: { after: 4 } }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
             borders: {
@@ -931,34 +936,34 @@ async function downloadInvoiceDocxTemplate({
             rows: [
               new Docx.TableRow({
                 children: [
+                  tableCell("#"),
                   tableCell("Particulars"),
                   tableCell("Amount", "right"),
                 ],
               }),
               ...lineItems.map(
-                (item) =>
+                (item, index) =>
                   new Docx.TableRow({
-                    children: [tableCell(item.description), tableCell(`INR ${formatCurrency(item.amount)}`, "right")],
+                    children: [tableCell(String(index + 1).padStart(2, "0")), tableCell(item.description), tableCell(`INR ${formatCurrency(item.amount)}`, "right")],
                   }),
               ),
             ],
           }),
           new Docx.Paragraph({
             children: [
-              new Docx.TextRun({ text: `Subtotal: INR ${formatCurrency(subtotal)}   `, bold: true, size: 14 }),
-              new Docx.TextRun({ text: gst > 0 ? `GST / Tax: INR ${formatCurrency(gst)}   ` : "GST / Tax: LUT exempt   ", bold: true, size: 14 }),
-              new Docx.TextRun({ text: `Final Payable: INR ${formatCurrency(totalPayable)}`, bold: true, size: 14 }),
+              new Docx.TextRun({ text: `Subtotal: INR ${formatCurrency(subtotal)}   `, bold: true, size: 10 }),
+              new Docx.TextRun({ text: gst > 0 ? `GST / Tax (18%): INR ${formatCurrency(gst)}   ` : "GST / Tax (18%): LUT exempt   ", bold: true, size: 10 }),
+              new Docx.TextRun({ text: `Total Payable: INR ${formatCurrency(totalPayable)}`, bold: true, size: 10 }),
             ],
-            spacing: { before: 50, after: 10 },
+            spacing: { before: 6, after: 4 },
           }),
           new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: INVOICE_AMOUNT_IN_WORDS, italics: true, color: INVOICE_THEME.secondaryHex, size: 13 })],
-            spacing: { after: 12 },
+            children: [new Docx.TextRun({ text: `Amount in words: Rupees ${numberToWords(Math.round(totalPayable))}`, italics: true, color: INVOICE_THEME.secondaryHex, size: 10 })],
+            spacing: { after: 4 },
           }),
           new Docx.Paragraph({
-            pageBreakBefore: lineItems.length > 6,
-            children: [new Docx.TextRun({ text: "Declaration", bold: true, color: INVOICE_THEME.secondaryHex, size: 17 })],
-            spacing: { after: 8 },
+            children: [new Docx.TextRun({ text: "Declaration", bold: true, color: INVOICE_THEME.secondaryHex, size: 12 })],
+            spacing: { after: 2 },
           }),
           ...INVOICE_DECLARATION_LINES.map((line, index) =>
             new Docx.Paragraph({
@@ -966,16 +971,16 @@ async function downloadInvoiceDocxTemplate({
                 new Docx.TextRun({
                   text: line,
                   bold: index < 2,
-                  size: 12,
+                  size: 9,
                   color: INVOICE_THEME.secondaryHex,
                 }),
               ],
-              spacing: { after: index === INVOICE_DECLARATION_LINES.length - 1 ? 10 : 4 },
+              spacing: { after: index === INVOICE_DECLARATION_LINES.length - 1 ? 2 : 1 },
             }),
           ),
           new Docx.Paragraph({
-            children: [new Docx.TextRun({ text: `For ${MYLAPAY_BRANDING.companyName}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 18 })],
-            spacing: { after: 12 },
+            children: [new Docx.TextRun({ text: `For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 11 })],
+            spacing: { before: 2, after: 2 },
           }),
           new Docx.Table({
             width: { size: 100, type: Docx.WidthType.PERCENTAGE },
@@ -992,16 +997,16 @@ async function downloadInvoiceDocxTemplate({
                 children: [
                   new Docx.TableCell({
                     children: [
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Company Seal", bold: true, color: INVOICE_THEME.secondaryHex, size: 14 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Space reserved for seal", size: 12, color: INVOICE_THEME.primaryHex })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Company Seal", bold: true, color: INVOICE_THEME.secondaryHex, size: 10 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Space reserved for seal", size: 8, color: INVOICE_THEME.primaryHex })] }),
                     ],
                     width: { size: 50, type: Docx.WidthType.PERCENTAGE },
                   }),
                   new Docx.TableCell({
                     children: [
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Authority Signature Name", bold: true, color: INVOICE_THEME.secondaryHex, size: 14 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: getClientSignatureName(client), bold: true, size: 14 })] }),
-                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: `Authorized signatory · For ${MYLAPAY_BRANDING.companyName}`, color: INVOICE_THEME.primaryHex, size: 12 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: "Authorized Signatory", bold: true, color: INVOICE_THEME.secondaryHex, size: 10 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: getClientSignatureName(client), bold: true, size: 10 })] }),
+                      new Docx.Paragraph({ children: [new Docx.TextRun({ text: `For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, color: INVOICE_THEME.primaryHex, size: 8 })] }),
                     ],
                     width: { size: 50, type: Docx.WidthType.PERCENTAGE },
                   }),
@@ -1009,12 +1014,12 @@ async function downloadInvoiceDocxTemplate({
               }),
             ],
           }),
-          new Docx.Paragraph({ spacing: { before: 18 } }),
+          new Docx.Paragraph({ spacing: { before: 4 } }),
           ...MYLAPAY_FOOTER_LINES.map(
             (line, index) =>
               new Docx.Paragraph({
-                children: [new Docx.TextRun({ text: line, color: INVOICE_THEME.secondaryHex, size: 11 })],
-                spacing: { after: index === MYLAPAY_FOOTER_LINES.length - 1 ? 16 : 2 },
+                children: [new Docx.TextRun({ text: line, color: INVOICE_THEME.secondaryHex, size: 8 })],
+                spacing: { after: index === MYLAPAY_FOOTER_LINES.length - 1 ? 2 : 1 },
               }),
           ),
         ],

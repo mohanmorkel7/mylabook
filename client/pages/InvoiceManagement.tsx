@@ -3026,36 +3026,46 @@ export default function InvoiceManagement() {
 
   const exportClientPdf = async (client = selectedClient) => {
     if (!client) return;
-    const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
-    await downloadInvoicePdfTemplate({
-      client,
-      companyConfig,
-      invoiceNumber: serialInfo.invoiceNumber,
-      generatedDate: new Date().toISOString().split("T")[0],
-      amount: client.monthlyInvoiceEstimate,
-      status: "Waiting for approval",
-      month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
-      financialYear: serialInfo.financialYear,
-      serial: serialInfo.serial,
-    });
-    toast({ title: "PDF exported", description: `${client.name} overview PDF downloaded.` });
+    try {
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+      await downloadInvoicePdfTemplate({
+        client,
+        companyConfig,
+        invoiceNumber: serialInfo.invoiceNumber,
+        generatedDate: new Date().toISOString().split("T")[0],
+        amount: client.monthlyInvoiceEstimate,
+        status: "Waiting for approval",
+        month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+        financialYear: serialInfo.financialYear,
+        serial: serialInfo.serial,
+      });
+      toast({ title: "PDF exported", description: `${client.name} overview PDF downloaded.` });
+    } catch (error: any) {
+      console.error("[Invoice] exportClientPdf error:", error);
+      toast({ title: "Error", description: error?.message || "Failed to export PDF", variant: "destructive" });
+    }
   };
 
   const exportClientDocx = async (client = selectedClient) => {
     if (!client) return;
-    const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
-    await downloadInvoiceDocxTemplate({
-      client,
-      companyConfig,
-      invoiceNumber: serialInfo.invoiceNumber,
-      generatedDate: new Date().toISOString().split("T")[0],
-      amount: client.monthlyInvoiceEstimate,
-      status: "Waiting for approval",
-      month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
-      financialYear: serialInfo.financialYear,
-      serial: serialInfo.serial,
-    });
-    toast({ title: "DOCX exported", description: `${client.name} overview DOCX downloaded.` });
+    try {
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+      await downloadInvoiceDocxTemplate({
+        client,
+        companyConfig,
+        invoiceNumber: serialInfo.invoiceNumber,
+        generatedDate: new Date().toISOString().split("T")[0],
+        amount: client.monthlyInvoiceEstimate,
+        status: "Waiting for approval",
+        month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+        financialYear: serialInfo.financialYear,
+        serial: serialInfo.serial,
+      });
+      toast({ title: "DOCX exported", description: `${client.name} overview DOCX downloaded.` });
+    } catch (error: any) {
+      console.error("[Invoice] exportClientDocx error:", error);
+      toast({ title: "Error", description: error?.message || "Failed to export DOCX", variant: "destructive" });
+    }
   };
 
   const handleSync = () => {
@@ -3283,37 +3293,47 @@ export default function InvoiceManagement() {
   const downloadInvoicePdf = async (invoice: any) => {
     const client = clients.find((item) => item.name === invoice.client);
     if (!client) return;
-    const invoiceNumber = getInvoiceDisplayNumber(invoice);
-    await downloadInvoicePdfTemplate({
-      client,
-      companyConfig,
-      invoiceNumber,
-      generatedDate: invoice.generatedDate,
-      amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
-      status: invoice.status,
-      month: invoice.month,
-      financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
-      serial: Number(invoice.serial || invoiceSerialState.serial || 1),
-    });
-    toast({ title: "PDF downloaded", description: `${invoiceNumber} PDF downloaded.` });
+    try {
+      const invoiceNumber = getInvoiceDisplayNumber(invoice);
+      await downloadInvoicePdfTemplate({
+        client,
+        companyConfig,
+        invoiceNumber,
+        generatedDate: invoice.generatedDate,
+        amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
+        status: invoice.status,
+        month: invoice.month,
+        financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+        serial: Number(invoice.serial || invoiceSerialState.serial || 1),
+      });
+      toast({ title: "PDF downloaded", description: `${invoiceNumber} PDF downloaded.` });
+    } catch (error: any) {
+      console.error("[Invoice] downloadInvoicePdf error:", error);
+      toast({ title: "Error", description: error?.message || "Failed to download PDF", variant: "destructive" });
+    }
   };
 
   const downloadInvoiceDocx = async (invoice: any) => {
     const client = clients.find((item) => item.name === invoice.client);
     if (!client) return;
-    const invoiceNumber = getInvoiceDisplayNumber(invoice);
-    await downloadInvoiceDocxTemplate({
-      client,
-      companyConfig,
-      invoiceNumber,
-      generatedDate: invoice.generatedDate,
-      amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
-      status: invoice.status,
-      month: invoice.month,
-      financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
-      serial: Number(invoice.serial || invoiceSerialState.serial || 1),
-    });
-    toast({ title: "DOCX downloaded", description: `${invoiceNumber} DOCX downloaded.` });
+    try {
+      const invoiceNumber = getInvoiceDisplayNumber(invoice);
+      await downloadInvoiceDocxTemplate({
+        client,
+        companyConfig,
+        invoiceNumber,
+        generatedDate: invoice.generatedDate,
+        amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
+        status: invoice.status,
+        month: invoice.month,
+        financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+        serial: Number(invoice.serial || invoiceSerialState.serial || 1),
+      });
+      toast({ title: "DOCX downloaded", description: `${invoiceNumber} DOCX downloaded.` });
+    } catch (error: any) {
+      console.error("[Invoice] downloadInvoiceDocx error:", error);
+      toast({ title: "Error", description: error?.message || "Failed to download DOCX", variant: "destructive" });
+    }
   };
 
   const sendInvoice = (invoice: any) => {

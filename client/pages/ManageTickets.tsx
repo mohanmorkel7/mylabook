@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -442,7 +442,8 @@ export default function ManageTickets() {
   }
 
   // Helper function to classify a ticket into a tag. Prefer mail_config_sources provider, then description_preview or description
-  const getTicketTag = (ticket: any): string => {
+  // Memoized with useCallback to prevent infinite effect loops in TicketCharts
+  const getTicketTag = useCallback((ticket: any): string => {
     try {
       // Prioritize subject-based Razorpay UPI classification.
       // Only use the ticket title, not the description/body.
@@ -481,7 +482,7 @@ export default function ManageTickets() {
       // Silently ignore errors
     }
     return "Manual";
-  };
+  }, []);
 
   // Helper function to get today's date in YYYY-MM-DD format
   const getTodayDateString = (): string => {

@@ -258,17 +258,25 @@ router.get("/", async (req: Request, res: Response) => {
              ${simpleWhere}
              ORDER BY t.created_at DESC
              ${simpleLimitClause}`;
+        const exportSql = `SELECT
+              t.id, t.track_id, t.subject, t.description,
+              t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
+              t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
+              tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
+              ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
+              tc.id as category_id_join, tc.name as category_name, tc.color as category_color
+             FROM tickets t
+             LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
+             LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+             LEFT JOIN ticket_categories tc ON t.category_id = tc.id
+             ${simpleWhere}`;
         const rowsRes = isExport
           ? await (async () => {
               const client = await pool.connect();
               try {
-                await client.query("BEGIN");
-                await client.query("SET LOCAL statement_timeout = 0");
-                return await client.query(simpleSql, simpleParams);
+                await client.query("SET statement_timeout = 0");
+                return await client.query(exportSql, simpleParams);
               } finally {
-                try {
-                  await client.query("COMMIT");
-                } catch (e) {}
                 client.release();
               }
             })()

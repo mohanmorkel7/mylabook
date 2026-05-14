@@ -439,6 +439,7 @@ router.get("/", async (req: Request, res: Response) => {
 // GET /api/tickets/summary
 // Returns aggregated counts (assigned users, statuses, overdue stats)
 router.get("/summary", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "private, max-age=30");
   const cacheKey = JSON.stringify({
     date_from: req.query.date_from || null,
     date_to: req.query.date_to || null,
@@ -606,6 +607,7 @@ router.get("/summary", async (req: Request, res: Response) => {
 // GET /api/tickets/summary/user-status
 // Returns counts grouped by assigned user and by status for a date range
 router.get("/summary/user-status", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "private, max-age=30");
   const cacheKey = JSON.stringify({
     status_id: req.query.status_id || null,
     assigned_to: req.query.assigned_to || null,
@@ -714,6 +716,7 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
 // GET /api/tickets/summary/by-tag
 // Returns counts grouped by tags
 router.get("/summary/by-tag", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "private, max-age=30");
   const cacheKey = JSON.stringify({
     date_from: req.query.date_from || null,
     date_to: req.query.date_to || null,

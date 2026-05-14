@@ -10,12 +10,12 @@ const dbConfig = {
   password: process.env.PG_PASSWORD || "myl@p@y-crm$102019",
   port: Number(process.env.PG_PORT) || 2019,
   ssl: false,
-  // Reduced pool size to prevent exhaustion under load
-  max: 10, // max number of clients in the pool (reduced from 20)
-  min: 2, // minimum connections to maintain
-  idleTimeoutMillis: 20000, // 20 seconds - close idle connections faster
-  connectionTimeoutMillis: 10000, // 10 seconds for connection (reduced from 20s)
-  statement_timeout: 120000, // 120 seconds (2 minutes) for statement execution - remote DB is slow
+  // Pool sized to handle concurrent ticket page + chart + background job traffic
+  max: 25, // max clients in the pool
+  min: 4, // keep warm connections ready
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 8000,
+  statement_timeout: 120000, // 120 seconds for statement execution - remote DB is slow
 };
 
 // Log the actual connection parameters being used (hide password for security)

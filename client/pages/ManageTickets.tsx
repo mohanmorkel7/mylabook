@@ -1367,8 +1367,31 @@ export default function ManageTickets() {
   const exportAllTicketsToExcel = async () => {
     try {
       setIsExporting(true);
-      const resp = await api.getTickets({ simple: "1", export: "1" });
-      const data = resp?.data ?? resp;
+      const fetchImpl = (window as any).__originalFetch || window.fetch.bind(window);
+      const url = new URL("/api/tickets", window.location.origin);
+      url.searchParams.set("simple", "1");
+      url.searchParams.set("export", "1");
+      url.searchParams.set("_ts", String(Date.now()));
+      const headers: Record<string, string> = {};
+      try {
+        const stored = localStorage.getItem("banani_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.id) headers["x-user-id"] = String(parsed.id);
+        }
+      } catch (e) {}
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 120000);
+      const response = await fetchImpl(url.toString(), {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeoutId);
+      if (!response.ok) {
+        throw new Error(`Export request failed: ${response.status}`);
+      }
+      const data = await response.json();
       const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
 
       // Normalize similar to fetchTickets

@@ -480,32 +480,33 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       : "";
     const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
 
-    // Minimal query: just fetch tickets data, no expensive JOINs
-    // User names will be resolved from the loaded users list on the client
+    // Minimal query: just fetch ticket IDs first, then get full rows
+    // ORDER BY id DESC uses the primary key index - much faster than created_at DESC
     const exportSql = `SELECT
           t.id, t.track_id, t.subject, t.description,
           t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to, t.closed_by, t.closed_at,
           t.created_at, t.updated_at
          FROM tickets t
          ${simpleWhere}
-         ORDER BY t.created_at DESC LIMIT 10000`;
+         ORDER BY t.id DESC LIMIT 10000`;
 
     // Use a dedicated connection without statement timeout for full-table export
     const client = await pool.connect();
     try {
       await client.query("SET statement_timeout = 0");
-      const result = await client.query(exportSql, simpleParams);
-      const rowCount = result.rows.length;
-      const queryDurationMs = Date.now() - startTime;
 
-      console.log(`[export-stream] Fetched ${rowCount} rows in ${queryDurationMs}ms`);
-
-      // Fetch lookup data in parallel (much faster than JOINing on server)
-      const [prioritiesRes, statusesRes, categoriesRes] = await Promise.all([
+      // Run main query AND lookup tables in parallel
+      const [result, prioritiesRes, statusesRes, categoriesRes] = await Promise.all([
+        client.query(exportSql, simpleParams),
         pool.query("SELECT id, name FROM ticket_priorities"),
         pool.query("SELECT id, name FROM ticket_statuses"),
         pool.query("SELECT id, name FROM ticket_categories"),
       ]);
+
+      const rowCount = result.rows.length;
+      const queryDurationMs = Date.now() - startTime;
+
+      console.log(`[export-stream] Fetched ${rowCount} rows in ${queryDurationMs}ms`);
 
       const prioritiesMap = new Map(prioritiesRes.rows.map((r: any) => [r.id, r.name]));
       const statusesMap = new Map(statusesRes.rows.map((r: any) => [r.id, r.name]));

@@ -334,6 +334,21 @@ export async function initializeDatabase() {
         );
       }
 
+      // Ensure ticket performance indexes exist (idempotent)
+      try {
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_tickets_id_desc ON tickets(id DESC);
+          CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_tickets_status_id ON tickets(status_id);
+          CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);
+          CREATE INDEX IF NOT EXISTS idx_tickets_created_by ON tickets(created_by);
+          CREATE INDEX IF NOT EXISTS idx_tickets_priority_id ON tickets(priority_id);
+        `);
+        console.log("Ticket performance indexes ensured");
+      } catch (indexError: any) {
+        console.log("Ticket index creation skipped:", indexError.message);
+      }
+
       // Run finops hourly timeline migration
       try {
         const hourlyTimelineMigrationPath = path.join(

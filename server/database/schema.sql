@@ -209,6 +209,15 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 -- Create indexes for better performance
+-- Ticket indexes for fast list, filter, sort and export queries
+CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_id_desc ON tickets(id DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_status_id ON tickets(status_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tickets_created_by ON tickets(created_by);
+CREATE INDEX IF NOT EXISTS idx_tickets_priority_id ON tickets(priority_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_mail_config_id ON tickets(mail_config_id);
+
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);

@@ -480,52 +480,52 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       : "";
     const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
 
-    // Optimized query: fetch all needed data with minimal overhead
+    // Minimal query: just fetch tickets data, no expensive JOINs
+    // User names will be resolved from the loaded users list on the client
     const exportSql = `SELECT
           t.id, t.track_id, t.subject, t.description,
           t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to, t.closed_by, t.closed_at,
-          t.created_at, t.updated_at,
-          tp.name as priority_name,
-          ts.name as status_name,
-          tc.name as category_name,
-          CONCAT(COALESCE(u1.first_name, ''), ' ', COALESCE(u1.last_name, '')) as created_by_name,
-          u1.email as created_by_email,
-          CONCAT(COALESCE(u2.first_name, ''), ' ', COALESCE(u2.last_name, '')) as assigned_to_name,
-          u2.email as assigned_to_email,
-          CONCAT(COALESCE(u3.first_name, ''), ' ', COALESCE(u3.last_name, '')) as closed_by_name,
-          u3.email as closed_by_email
+          t.created_at, t.updated_at
          FROM tickets t
-         LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
-         LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
-         LEFT JOIN ticket_categories tc ON t.category_id = tc.id
-         LEFT JOIN users u1 ON t.created_by = u1.id
-         LEFT JOIN users u2 ON t.assigned_to = u2.id
-         LEFT JOIN users u3 ON t.closed_by = u3.id
          ${simpleWhere}
-         ORDER BY t.created_at DESC`;
+         ORDER BY t.created_at DESC LIMIT 10000`;
 
     // Use a dedicated connection without statement timeout
     const client = await pool.connect();
     try {
-      await client.query("SET statement_timeout = 0");
       const result = await client.query(exportSql, simpleParams);
       const rowCount = result.rows.length;
       const queryDurationMs = Date.now() - startTime;
 
       console.log(`[export-stream] Fetched ${rowCount} rows in ${queryDurationMs}ms`);
 
+      // Fetch lookup data in parallel (much faster than JOINing on server)
+      const [prioritiesRes, statusesRes, categoriesRes] = await Promise.all([
+        pool.query("SELECT id, name FROM ticket_priorities"),
+        pool.query("SELECT id, name FROM ticket_statuses"),
+        pool.query("SELECT id, name FROM ticket_categories"),
+      ]);
+
+      const prioritiesMap = new Map(prioritiesRes.rows.map((r: any) => [r.id, r.name]));
+      const statusesMap = new Map(statusesRes.rows.map((r: any) => [r.id, r.name]));
+      const categoriesMap = new Map(categoriesRes.rows.map((r: any) => [r.id, r.name]));
+
       // Format data for client export
+      // User names will be resolved on client from the users list passed to the export function
       const tickets = result.rows.map((r: any) => ({
         id: r.id,
         track_id: r.track_id || `TKT-${String(r.id).padStart(4, "0")}`,
         subject: r.subject || "",
         description: (r.description || "").substring(0, 500),
-        priority_name: r.priority_name || "",
-        status_name: r.status_name || "",
-        category_name: r.category_name || "",
-        created_by_name: (r.created_by_name || "").trim() || r.created_by_email || (r.created_by ? `User #${r.created_by}` : ""),
-        assigned_to_name: (r.assigned_to_name || "").trim() || r.assigned_to_email || (r.assigned_to ? `User #${r.assigned_to}` : ""),
-        closed_by_name: (r.closed_by_name || "").trim() || r.closed_by_email || (r.closed_by ? `User #${r.closed_by}` : ""),
+        priority_id: r.priority_id,
+        priority_name: prioritiesMap.get(r.priority_id) || "",
+        status_id: r.status_id,
+        status_name: statusesMap.get(r.status_id) || "",
+        category_id: r.category_id,
+        category_name: categoriesMap.get(r.category_id) || "",
+        created_by: r.created_by,
+        assigned_to: r.assigned_to,
+        closed_by: r.closed_by,
         created_at: r.created_at,
         updated_at: r.updated_at,
         closed_at: r.closed_at,

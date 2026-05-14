@@ -1366,7 +1366,7 @@ async function downloadInvoicePdfTemplate({
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.6);
-  doc.text(`For ${MYLAPAY_BRANDING.companyName}`, sigX + sigW, cursorY, { align: "right" });
+  doc.text(`For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, sigX + sigW, cursorY, { align: "right" });
   cursorY += 18;
   setStroke(SECONDARY);
   doc.setLineWidth(0.4);

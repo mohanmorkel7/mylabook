@@ -490,9 +490,10 @@ router.get("/export-stream", async (req: Request, res: Response) => {
          ${simpleWhere}
          ORDER BY t.created_at DESC LIMIT 10000`;
 
-    // Use a dedicated connection without statement timeout
+    // Use a dedicated connection without statement timeout for full-table export
     const client = await pool.connect();
     try {
+      await client.query("SET statement_timeout = 0");
       const result = await client.query(exportSql, simpleParams);
       const rowCount = result.rows.length;
       const queryDurationMs = Date.now() - startTime;

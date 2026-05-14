@@ -447,10 +447,12 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // GET /api/tickets/export-stream
-// Streams tickets as XLSX file directly, avoiding JSON buffering on server or client
+// Returns all ticket data for export - client builds XLSX from this JSON data
+// This avoids server-side XLSX complexity and lets client use its optimized XLSX building
 router.get("/export-stream", async (req: Request, res: Response) => {
   try {
-    console.log("[GET /api/tickets/export-stream] Starting XLSX stream export");
+    console.log("[GET /api/tickets/export-stream] Starting export data fetch");
+    const startTime = Date.now();
 
     // Determine viewer from x-user-id header
     let viewerId: number | undefined = undefined;
@@ -478,14 +480,11 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       : "";
     const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
 
-    // Minimal query for export: select only needed columns, no heavy JOINs
+    // Optimized query: fetch all needed data with minimal overhead
     const exportSql = `SELECT
           t.id, t.track_id, t.subject, t.description,
-          t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
-          t.created_at, t.updated_at, t.closed_by, t.closed_at,
-          to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
-          to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
-          to_char(t.closed_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS closed_at_iso,
+          t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to, t.closed_by, t.closed_at,
+          t.created_at, t.updated_at,
           tp.name as priority_name,
           ts.name as status_name,
           tc.name as category_name,
@@ -502,97 +501,51 @@ router.get("/export-stream", async (req: Request, res: Response) => {
          ${simpleWhere}
          ORDER BY t.created_at DESC`;
 
-    // Use a dedicated connection without statement timeout so it can stream large datasets
+    // Use a dedicated connection without statement timeout
     const client = await pool.connect();
-    let queryStream;
-
     try {
-      console.log("[export-stream] Setting statement_timeout to 0...");
       await client.query("SET statement_timeout = 0");
-
-      // Fetch all rows at once (much faster than streaming for XLSX generation)
-      const startTime = Date.now();
-      console.log("[export-stream] Executing export SQL...");
       const result = await client.query(exportSql, simpleParams);
       const rowCount = result.rows.length;
-      console.log(`[export-stream] Fetched ${rowCount} rows in ${Date.now() - startTime}ms`);
+      const queryDurationMs = Date.now() - startTime;
 
-      // Build workbook from rows
-      const ws_data: any[] = [
-        ["Ticket ID", "Subject", "Description", "Priority", "Status", "Category",
-         "Created By", "Assigned To", "Created Date", "Updated Date", "Closed By", "Closed Date"],
-      ];
+      console.log(`[export-stream] Fetched ${rowCount} rows in ${queryDurationMs}ms`);
 
-      for (const row of result.rows) {
-        try {
-          const createdByLabel = row.created_by_name || row.created_by_email || (row.created_by ? `User #${row.created_by}` : "");
-          const assignedToLabel = row.assigned_to_name || row.assigned_to_email || (row.assigned_to ? `User #${row.assigned_to}` : "");
-          const closedByLabel = row.closed_by_name || row.closed_by_email || (row.closed_by ? `User #${row.closed_by}` : "");
+      // Format data for client export
+      const tickets = result.rows.map((r: any) => ({
+        id: r.id,
+        track_id: r.track_id || `TKT-${String(r.id).padStart(4, "0")}`,
+        subject: r.subject || "",
+        description: (r.description || "").substring(0, 500),
+        priority_name: r.priority_name || "",
+        status_name: r.status_name || "",
+        category_name: r.category_name || "",
+        created_by_name: r.created_by_name || r.created_by_email || (r.created_by ? `User #${r.created_by}` : ""),
+        assigned_to_name: r.assigned_to_name || r.assigned_to_email || (r.assigned_to ? `User #${r.assigned_to}` : ""),
+        closed_by_name: r.closed_by_name || r.closed_by_email || (r.closed_by ? `User #${r.closed_by}` : ""),
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        closed_at: r.closed_at,
+      }));
 
-          ws_data.push([
-            row.track_id || `TKT-${String(row.id).padStart(4, "0")}`,
-            row.subject || "",
-            (row.description || "").substring(0, 500),
-            row.priority_name || "",
-            row.status_name || "",
-            row.category_name || "",
-            createdByLabel,
-            assignedToLabel,
-            row.created_at_iso || row.created_at || "",
-            row.updated_at_iso || row.updated_at || "",
-            closedByLabel,
-            row.closed_at_iso || row.closed_at || "",
-          ]);
-        } catch (e) {
-          console.error(`[export-stream] Error processing row:`, e);
-        }
-      }
+      res.set("Cache-Control", "no-store");
+      res.json({
+        tickets,
+        total: rowCount,
+        server_time: new Date().toISOString(),
+        duration_ms: queryDurationMs,
+      });
 
-      // Generate XLSX workbook
-      try {
-        console.log(`[export-stream] Building XLSX from ${ws_data.length} rows...`);
-
-        if (!XLSX || !XLSX.utils) {
-          throw new Error("XLSX library not available");
-        }
-
-        const ws = XLSX.utils.aoa_to_sheet(ws_data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Tickets");
-
-        // Generate binary XLSX data
-        const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
-
-        if (!buffer) {
-          throw new Error("Failed to generate buffer from XLSX");
-        }
-
-        // Send file to client
-        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        res.setHeader("Content-Disposition", `attachment; filename="tickets_export_${Date.now()}.xlsx"`);
-        res.setHeader("Content-Length", buffer.length);
-        res.send(buffer);
-
-        console.log(`[export-stream] Sent XLSX (${buffer.length} bytes) for ${rowCount} tickets in ${Date.now() - startTime}ms`);
-      } catch (e) {
-        console.error("[export-stream] Failed to generate XLSX:", e?.message || e);
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Failed to generate XLSX", details: String(e?.message || e) });
-        }
-      }
-    } catch (error) {
-      console.error("[export-stream] Query or processing error:", error?.message || error);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to process export", details: String(error?.message || error) });
-      }
+      console.log(`[export-stream] Responded with ${rowCount} tickets in ${Date.now() - startTime}ms`);
     } finally {
       client.release();
     }
   } catch (error) {
-    console.error("[export-stream] Outer error:", error?.message || error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Export endpoint error", details: String(error?.message || error) });
-    }
+    console.error("[export-stream] Error:", error?.message || error);
+    res.status(500).json({
+      error: "Export failed",
+      details: String(error?.message || error),
+    });
   }
 });
 

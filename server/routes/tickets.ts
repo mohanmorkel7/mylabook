@@ -226,13 +226,21 @@ router.get("/", async (req: Request, res: Response) => {
     if (String(req.query.simple || "").trim() === "1") {
       try {
         console.log("[GET /api/tickets] Using simple query mode");
+        const isExport = String(req.query.export || "").trim() === "1";
         const offset = (page - 1) * effectiveLimit;
         const simpleWhere = restrictToViewer && viewerId
           ? `WHERE (t.assigned_to = $1 OR $1 = ANY(t.watcher_user_ids))`
           : "";
         const simpleParams = restrictToViewer && viewerId
-          ? [viewerId, effectiveLimit, offset]
-          : [effectiveLimit, offset];
+          ? isExport
+            ? [viewerId]
+            : [viewerId, effectiveLimit, offset]
+          : isExport
+            ? []
+            : [effectiveLimit, offset];
+        const simpleLimitClause = isExport
+          ? ""
+          : `LIMIT $${restrictToViewer && viewerId ? 2 : 1} OFFSET $${restrictToViewer && viewerId ? 3 : 2}`;
         const rowsRes = await pool.query(
           `SELECT
               t.id, t.track_id, t.subject, t.description,
@@ -254,15 +262,14 @@ router.get("/", async (req: Request, res: Response) => {
              LEFT JOIN users assignee ON t.assigned_to = assignee.id
              ${simpleWhere}
              ORDER BY t.created_at DESC
-             LIMIT $${restrictToViewer && viewerId ? 2 : 1} OFFSET $${restrictToViewer && viewerId ? 3 : 2}`,
+             ${simpleLimitClause}`,
           simpleParams,
         );
 
-        const estimateRes = await pool.query(
+        const totalCount = isExport ? rowsRes.rows.length : Number((await pool.query(
           `SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'`,
-        );
-        const totalCount = Number(estimateRes.rows[0]?.estimate || 0);
-        const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
+        )).rows[0]?.estimate || 0);
+        const pages = isExport ? 1 : Math.max(1, Math.ceil(totalCount / effectiveLimit));
 
         // Map iso fields and reshape data for client
         const tickets = (rowsRes.rows || []).map((r: any) => ({

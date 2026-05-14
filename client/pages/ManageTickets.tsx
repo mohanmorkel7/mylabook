@@ -277,6 +277,7 @@ export default function ManageTickets() {
   const [createdTicketsCount, setCreatedTicketsCount] = useState<number>(0);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [now, setNow] = useState<number>(Date.now());
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [overdueStatusId, setOverdueStatusId] = useState<number | null>(null);
@@ -1365,63 +1366,52 @@ export default function ManageTickets() {
   // Export all tickets to Excel with multiple sheets as requested
   const exportAllTicketsToExcel = async () => {
     try {
-      setIsLoading(true);
-      const allTickets: any[] = [];
-      let page = 1;
-      let totalPages = 1;
+      setIsExporting(true);
+      const resp = await api.getTickets({ simple: "1", export: "1" });
+      const data = resp?.data ?? resp;
+      const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
 
-      // Fetch all pages sequentially
-      do {
-        const resp = await api.getTickets({}, page, 100);
-        const data = resp?.data ?? resp;
-        const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
-
-        // Normalize similar to fetchTickets
-        const serverMs = data?.server_time
-          ? new Date(String(data.server_time)).getTime()
-          : null;
-        const fetchClientMs = Date.now();
-        const normalized = (ticketsArr || []).map((t: any) => {
-          let statusInfo = t.status;
-          if (!statusInfo && t.status_id) {
-            statusInfo = {
-              id: t.status_id,
-              name: t.status_name || "Unknown",
-              color: t.status_color || "#999",
-              is_closed: t.status_is_closed || false,
-              sort_order: 0,
-            };
-          }
-          const pr = ((): number | null => {
-            const val =
-              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
-            const num = Number(val);
-            return Number.isFinite(num) ? num : null;
-          })();
-
-          return {
-            ...t,
-            priority_id: pr,
-            assigned_to_id:
-              t.assigned_to_id ??
-              (t.assigned_to !== undefined && t.assigned_to !== null
-                ? Number(t.assigned_to)
-                : null) ??
-              null,
-            track_id:
-              t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
-            description: t.description || "",
-            status: statusInfo,
-            created_from_mail_config: t.created_from_mail_config ?? false,
-            __server_time_ms: serverMs,
-            __fetched_at_ms: fetchClientMs,
+      // Normalize similar to fetchTickets
+      const serverMs = data?.server_time
+        ? new Date(String(data.server_time)).getTime()
+        : null;
+      const fetchClientMs = Date.now();
+      const allTickets = (ticketsArr || []).map((t: any) => {
+        let statusInfo = t.status;
+        if (!statusInfo && t.status_id) {
+          statusInfo = {
+            id: t.status_id,
+            name: t.status_name || "Unknown",
+            color: t.status_color || "#999",
+            is_closed: t.status_is_closed || false,
+            sort_order: 0,
           };
-        });
+        }
+        const pr = ((): number | null => {
+          const val =
+            t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+          const num = Number(val);
+          return Number.isFinite(num) ? num : null;
+        })();
 
-        allTickets.push(...normalized);
-        totalPages = data?.pages ?? 1;
-        page += 1;
-      } while (page <= totalPages);
+        return {
+          ...t,
+          priority_id: pr,
+          assigned_to_id:
+            t.assigned_to_id ??
+            (t.assigned_to !== undefined && t.assigned_to !== null
+              ? Number(t.assigned_to)
+              : null) ??
+            null,
+          track_id:
+            t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+          description: t.description || "",
+          status: statusInfo,
+          created_from_mail_config: t.created_from_mail_config ?? false,
+          __server_time_ms: serverMs,
+          __fetched_at_ms: fetchClientMs,
+        };
+      });
 
       // Prepare summaries
       const tagCounts = new Map<string, number>();
@@ -1730,7 +1720,7 @@ export default function ManageTickets() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsExporting(false);
     }
   };
 
@@ -2262,8 +2252,8 @@ export default function ManageTickets() {
               </Select>
             </div>
 
-            <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
-              Export Excel
+            <Button variant="outline" onClick={() => exportAllTicketsToExcel()} disabled={isExporting}>
+              {isExporting ? "Exporting..." : "Export Excel"}
             </Button>
 
             <Link to="/tickets/create">

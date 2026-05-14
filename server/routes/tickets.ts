@@ -488,9 +488,12 @@ router.get("/export-stream", async (req: Request, res: Response) => {
           tp.name as priority_name,
           ts.name as status_name,
           tc.name as category_name,
-          u1.name as created_by_name, u1.email as created_by_email,
-          u2.name as assigned_to_name, u2.email as assigned_to_email,
-          u3.name as closed_by_name, u3.email as closed_by_email
+          CONCAT(COALESCE(u1.first_name, ''), ' ', COALESCE(u1.last_name, '')) as created_by_name,
+          u1.email as created_by_email,
+          CONCAT(COALESCE(u2.first_name, ''), ' ', COALESCE(u2.last_name, '')) as assigned_to_name,
+          u2.email as assigned_to_email,
+          CONCAT(COALESCE(u3.first_name, ''), ' ', COALESCE(u3.last_name, '')) as closed_by_name,
+          u3.email as closed_by_email
          FROM tickets t
          LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
          LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
@@ -520,9 +523,9 @@ router.get("/export-stream", async (req: Request, res: Response) => {
         priority_name: r.priority_name || "",
         status_name: r.status_name || "",
         category_name: r.category_name || "",
-        created_by_name: r.created_by_name || r.created_by_email || (r.created_by ? `User #${r.created_by}` : ""),
-        assigned_to_name: r.assigned_to_name || r.assigned_to_email || (r.assigned_to ? `User #${r.assigned_to}` : ""),
-        closed_by_name: r.closed_by_name || r.closed_by_email || (r.closed_by ? `User #${r.closed_by}` : ""),
+        created_by_name: (r.created_by_name || "").trim() || r.created_by_email || (r.created_by ? `User #${r.created_by}` : ""),
+        assigned_to_name: (r.assigned_to_name || "").trim() || r.assigned_to_email || (r.assigned_to ? `User #${r.assigned_to}` : ""),
+        closed_by_name: (r.closed_by_name || "").trim() || r.closed_by_email || (r.closed_by ? `User #${r.closed_by}` : ""),
         created_at: r.created_at,
         updated_at: r.updated_at,
         closed_at: r.closed_at,

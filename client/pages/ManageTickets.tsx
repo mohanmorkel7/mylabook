@@ -1381,7 +1381,7 @@ export default function ManageTickets() {
         }
       } catch (e) {}
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 120000);
+      const timeoutId = window.setTimeout(() => controller.abort(), 600000);
       const response = await fetchImpl(url.toString(), {
         method: "GET",
         headers,

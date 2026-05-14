@@ -2137,7 +2137,8 @@ function ClientOverviewScreen({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {client.invoiceHistory.map((invoice) => (
+                  {(client.invoiceHistory || []).length > 0 ? (
+                    (client.invoiceHistory || []).map((invoice) => (
                     <TableRow key={invoice.invoiceId}>
                       <TableCell className="font-medium">{getInvoiceDisplayNumber(invoice)}</TableCell>
                       <TableCell>{invoice.month}</TableCell>
@@ -2160,7 +2161,14 @@ function ClientOverviewScreen({
                         />
                       </TableCell>
                     </TableRow>
-                  ))}
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                        No invoices yet. Generate your first invoice to get started.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -2834,6 +2842,7 @@ export default function InvoiceManagement() {
 
   // Fetch client data from database when editing or viewing a specific client
   useEffect(() => {
+    console.log("[Invoice] useEffect - Checking conditions:", { isEditRoute, isOverviewRoute, clientId, pathEndsWith: location.pathname });
     if ((isEditRoute || isOverviewRoute) && clientId && clientId !== "new") {
       console.log("[Invoice] Fetching client from database - clientId:", clientId, "isEditRoute:", isEditRoute, "isOverviewRoute:", isOverviewRoute);
       fetch(`/api/invoice-management/clients/${clientId}`)

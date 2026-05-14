@@ -252,7 +252,7 @@ export default function TicketCharts({
     return () => {
       mounted = false;
     };
-  }, [dateFrom, dateTo, range, tickets, classifyTicketTag]);
+  }, [dateFrom, dateTo, range, tickets]);
 
   // Vertical bar chart component
   const VerticalBarChart = ({

@@ -1446,13 +1446,18 @@ export default function ManageTickets() {
         return parts.join(" ");
       };
 
+      const getUserDisplayName = (userId?: number | null, fallbackName?: string) => {
+        if (fallbackName && String(fallbackName).trim()) return fallbackName;
+        const match = users.find((u) => Number(u.id) === Number(userId));
+        if (match) return match.name || match.email || `User #${match.id}`;
+        return userId != null ? `User #${userId}` : "";
+      };
+
       const getClosedByLabel = (t: any) =>
-        t.closed_by != null
-          ? `User #${t.closed_by}`
-          : t.status_change_history?.closed?.user_name ||
-            (t.status_change_history?.closed?.user_id != null
-              ? `User #${t.status_change_history.closed.user_id}`
-              : "");
+        getUserDisplayName(
+          t.closed_by ?? t.status_change_history?.closed?.user_id,
+          t.status_change_history?.closed?.user_name,
+        );
 
       const getClosedAtLabel = (t: any) =>
         t.closed_at || t.status_change_history?.closed?.changed_at || "";

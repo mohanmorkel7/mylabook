@@ -619,7 +619,7 @@ router.post("/invoices", async (req: Request, res: Response) => {
     const params = [
       invoiceId,
       encrypt(invoiceNumber),
-      encrypt(clientId),
+      clientId,  // Do NOT encrypt client_id - we need to query by it
       encrypt(clientName),
       encrypt(month),
       encrypt(String(amount)),
@@ -649,7 +649,7 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
     const invoices = result.rows.map((row: any) => ({
       invoiceId: decrypt(row.invoice_id),
       invoiceNumber: decrypt(row.invoice_number),
-      clientId: decrypt(row.client_id),
+      clientId: row.client_id,  // client_id is stored as plain text for querying
       clientName: decrypt(row.client_name),
       month: decrypt(row.month),
       amount: parseInt(decrypt(row.amount) || "0"),

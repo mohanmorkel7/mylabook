@@ -1406,48 +1406,131 @@ export default function ManageTickets() {
 
       console.log(`[Export] Received ${ticketsArr.length} tickets, building XLSX...`);
 
-      // Build XLSX workbook from the data
-      const wb = XLSX.utils.book_new();
+      // ── helpers ──────────────────────────────────────────────────────────────
       const exportHeaders = [
-        "Ticket ID",
-        "Subject",
-        "Priority",
-        "Status",
-        "Category",
-        "Assigned To",
-        "Created Date",
-        "Updated Date",
-        "Closed By",
-        "Closed Date",
+        "ticket_id", "subject", "assigned_to", "status", "Priority",
+        "created_at", "Updated_at", "closed_by", "closed_at", "duration", "tag",
       ];
 
-      // Build rows for export
-      const exportRows = ticketsArr.map((t: any) => [
-        t.track_id || `TKT-${String(t.id).padStart(4, "0")}`,
-        t.subject || "",
-        t.priority_name || "",
-        t.status_name || "",
-        t.category_name || "",
-        t.assigned_to_name || "",
-        formatToIST(t.created_at),
-        formatToIST(t.updated_at),
-        t.closed_by_name || "",
-        formatToIST(t.closed_at),
-      ]);
+      const fmtDuration = (start?: string, end?: string) => {
+        if (!start) return "";
+        const s = new Date(start).getTime();
+        const e = end ? new Date(end).getTime() : Date.now();
+        if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return "";
+        let mins = Math.max(0, Math.floor((e - s) / 60000));
+        const d = Math.floor(mins / 1440); mins -= d * 1440;
+        const h = Math.floor(mins / 60);   mins -= h * 60;
+        return [d && `${d}d`, h && `${h}h`, (mins || (!d && !h)) && `${mins}m`].filter(Boolean).join(" ");
+      };
 
-      const wsData = [exportHeaders, ...exportRows];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      XLSX.utils.book_append_sheet(wb, ws, "Tickets");
+      const tagOfTicket = (t: any): string => {
+        const subj = String(t.subject || "").toLowerCase();
+        if (subj.includes("upi") && subj.includes("razorpay")) return "Razorpay UPI";
+        if (subj.includes("razorpay")) return "Razorpay";
+        if (subj.includes("payswiff")) return "Payswiff";
+        return t.mail_config_id ? "Email" : "Manual";
+      };
+
+      const toRow = (t: any) => {
+        const closedAt = t.closed_at || "";
+        const durationEnd = closedAt || undefined;
+        return [
+          t.track_id,
+          t.subject || "",
+          t.assigned_to_name || "",
+          t.status_name || "",
+          t.priority_name || "",
+          formatToIST(t.created_at),
+          formatToIST(t.updated_at),
+          t.closed_by_name || "",
+          closedAt ? formatToIST(closedAt) : "",
+          fmtDuration(t.created_at, durationEnd),
+          tagOfTicket(t),
+        ];
+      };
+
+      // ── aggregate ────────────────────────────────────────────────────────────
+      const tagCounts     = new Map<string, number>();
+      const userCounts    = new Map<string, number>();
+      const statusCounts  = new Map<string, number>();
+      const tagStatusCounts:  Record<string, Record<string, number>> = {};
+      const userStatusCounts: Record<string, Record<string, number>> = {};
+      const allRows:   any[] = [];
+      const emailRows: any[] = [];
+
+      for (const t of ticketsArr) {
+        const tag    = tagOfTicket(t);
+        const status = t.status_name || "Unknown";
+        const user   = t.assigned_to_name || "Unassigned";
+
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+        userCounts.set(user, (userCounts.get(user) || 0) + 1);
+        statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+
+        if (!tagStatusCounts[tag]) tagStatusCounts[tag] = {};
+        tagStatusCounts[tag][status] = (tagStatusCounts[tag][status] || 0) + 1;
+
+        if (!userStatusCounts[user]) userStatusCounts[user] = {};
+        userStatusCounts[user][status] = (userStatusCounts[user][status] || 0) + 1;
+
+        const row = toRow(t);
+        allRows.push(row);
+        if (t.mail_config_id) emailRows.push(row);
+      }
+
+      // ── build workbook ───────────────────────────────────────────────────────
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Summary
+      const statusNames = statusesList?.length
+        ? statusesList.map((s: any) => s.name)
+        : Array.from(statusCounts.keys());
+
+      const summaryRows: any[] = [["Tag", "Total", ...statusNames]];
+      for (const [tag, total] of tagCounts.entries()) {
+        summaryRows.push([tag, total, ...statusNames.map((s: string) => tagStatusCounts[tag]?.[s] || 0)]);
+      }
+      summaryRows.push([]);
+      summaryRows.push(["User", "Total", ...statusNames]);
+      for (const [user, total] of userCounts.entries()) {
+        summaryRows.push([user, total, ...statusNames.map((s: string) => userStatusCounts[user]?.[s] || 0)]);
+      }
+      summaryRows.push([]);
+      summaryRows.push(["Status", "Count"]);
+      for (const [s, c] of statusCounts.entries()) summaryRows.push([s, c]);
+      summaryRows.push([]);
+      summaryRows.push(["All Tickets", ...exportHeaders]);
+      for (const row of allRows) summaryRows.push(["", ...row]);
+
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), "Summary");
+
+      // Sheet 2: From Email
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([exportHeaders, ...emailRows]), "From Email");
+
+      // Sheet 3: All Tickets
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([exportHeaders, ...allRows]), "All Tickets");
+
+      // Per-tag sheets
+      for (const tag of tagCounts.keys()) {
+        const tagRows = ticketsArr
+          .filter((t: any) => tagOfTicket(t) === tag)
+          .map(toRow);
+        XLSX.utils.book_append_sheet(
+          wb,
+          XLSX.utils.aoa_to_sheet([exportHeaders, ...tagRows]),
+          String(tag).slice(0, 31),
+        );
+      }
 
       // Write and download
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      const blob = new Blob([wbout], { type: "application/octet-stream" });
-      saveAs(blob, `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const blobData = new Blob([wbout], { type: "application/octet-stream" });
+      saveAs(blobData, `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
 
       setIsExporting(false);
       toast({
-        title: "Success",
-        description: `Downloaded ${ticketsArr.length} tickets`,
+        title: "Export ready",
+        description: `Downloaded ${ticketsArr.length} tickets across ${1 + tagCounts.size + 2} sheets`,
       });
 
       /*

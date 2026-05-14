@@ -480,12 +480,12 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       : "";
     const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
 
-    // Minimal query: no description (large text, slows query significantly)
+    // Minimal query: no description (large text column, slows down significantly)
     // ORDER BY id DESC uses the primary key index - much faster than created_at DESC
     const exportSql = `SELECT
           t.id, t.track_id, t.subject,
           t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to, t.closed_by, t.closed_at,
-          t.created_at, t.updated_at
+          t.created_at, t.updated_at, t.mail_config_id
          FROM tickets t
          ${simpleWhere}
          ORDER BY t.id DESC LIMIT 10000`;
@@ -529,6 +529,7 @@ router.get("/export-stream", async (req: Request, res: Response) => {
         created_at: r.created_at,
         updated_at: r.updated_at,
         closed_at: r.closed_at,
+        mail_config_id: r.mail_config_id,
       }));
 
       res.set("Cache-Control", "no-store");

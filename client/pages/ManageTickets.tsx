@@ -720,10 +720,13 @@ export default function ManageTickets() {
             if (!Number.isNaN(aid)) serverFilters.assigned_to = aid;
           }
         }
+
+        if (filters.source && String(filters.source).trim() !== "") {
+          serverFilters.source = filters.source;
+        }
       }
 
-      // Note: source/tag filter is applied client-side based on description analysis
-      // Don't apply to server filters
+      // Source is now handled server-side so pagination stays consistent
 
       const response = await api.getTickets(
         { ...serverFilters, ...(hasFilters ? {} : { simple: "1" }) },
@@ -873,28 +876,6 @@ export default function ManageTickets() {
         }
       }
 
-      // Handle source filter - skip if it's empty, "All", or whitespace
-      const sourceFilterValue = String(filters.source || "").trim();
-      if (sourceFilterValue && sourceFilterValue !== "All") {
-        console.debug(
-          "[ManageTickets] Applying source filter:",
-          filters.source,
-          "before:",
-          filtered.length,
-        );
-        filtered = filtered.filter((t) => {
-          const ticketTag = getTicketTag(t);
-          return ticketTag === filters.source;
-        });
-        console.debug("[ManageTickets] After source filter:", filtered.length);
-      } else {
-        console.debug(
-          "[ManageTickets] SKIPPING source filter - showing all tickets",
-          "filters.source value:",
-          JSON.stringify(filters.source),
-        );
-      }
-
       // Date filters (only for "Created from Email" tab)
       if (activeTab === "created") {
         const expandIstDate = (dateStr: string, endOfDay = false) => {
@@ -968,8 +949,7 @@ export default function ManageTickets() {
       setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
       // Use filtered count if any client-side filters are active, otherwise use server total
       // Note: dateFrom/dateTo, searchText, priority, status, assignedTo are all SERVER-SIDE filters
-      // Only 'source' is client-side (based on description analysis)
-      const hasClientSideFilters = Boolean(filters.source);
+      const hasClientSideFilters = false;
       // Derive total tickets from multiple possible response shapes
       let serverTotal = undefined as number | undefined;
       if (data != null) {
@@ -1264,14 +1244,6 @@ export default function ManageTickets() {
       }
     }
 
-    // Source filter (based on description classification: Razorpay, Payswiff, Manual)
-    if (filters.source && String(filters.source).trim() !== "") {
-      filtered = filtered.filter((t) => {
-        const ticketTag = getTicketTag(t);
-        return ticketTag === filters.source;
-      });
-    }
-
     // Date range filter (interpret date-only inputs as full IST day ranges)
     const expandIstDate = (dateStr: string, endOfDay = false) => {
       const parts = String(dateStr).split("-");
@@ -1440,7 +1412,92 @@ export default function ManageTickets() {
 
       const tagStatusCounts: Record<string, Record<string, number>> = {};
 
+      const exportHeaders = [
+        "ticket_id",
+        "subject",
+        "assigned_to",
+        "status",
+        "Priority",
+        "created_at",
+        "Updated_at",
+        "closed_by",
+        "closed_at",
+        "duration",
+        "tag",
+      ];
+
       const createdEmailRows: any[] = [];
+      const allDetailRows: any[] = [];
+
+      const formatDurationLabel = (startedAt?: string, endedAt?: string) => {
+        if (!startedAt) return "";
+        const startMs = new Date(startedAt).getTime();
+        const endMs = endedAt ? new Date(endedAt).getTime() : Date.now();
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return "";
+        let totalMinutes = Math.max(0, Math.floor((endMs - startMs) / 60000));
+        const days = Math.floor(totalMinutes / (60 * 24));
+        totalMinutes -= days * 60 * 24;
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const parts = [];
+        if (days) parts.push(`${days}d`);
+        if (hours) parts.push(`${hours}h`);
+        if (minutes || parts.length === 0) parts.push(`${minutes}m`);
+        return parts.join(" ");
+      };
+
+      const getClosedByLabel = (t: any) =>
+        t.closed_by != null
+          ? `User #${t.closed_by}`
+          : t.status_change_history?.closed?.user_name ||
+            (t.status_change_history?.closed?.user_id != null
+              ? `User #${t.status_change_history.closed.user_id}`
+              : "");
+
+      const getClosedAtLabel = (t: any) =>
+        t.closed_at || t.status_change_history?.closed?.changed_at || "";
+
+      const getExportTagLabel = (t: any) => {
+        try {
+          const tags = normalizeTagForTicket(t);
+          return tags.length > 0 ? tags.join(", ") : "Manual";
+        } catch (e) {
+          return "Manual";
+        }
+      };
+
+      const toExportRow = (t: any) => {
+        const ticketId = t.track_id ?? t.trackId ?? t.ticket_id ?? `TKT-${String(t.id).padStart(4, "0")}`;
+        const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
+        const priorityLabel =
+          (t.priority && t.priority.name) ||
+          (PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS] &&
+            PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS].name) ||
+          "";
+        const createdAtLabel = formatToIST(t.created_at);
+        const updatedAtLabel = formatToIST(t.updated_at);
+        const closedByLabel = getClosedByLabel(t);
+        const closedAtRaw = getClosedAtLabel(t);
+        const closedAtLabel = closedAtRaw ? formatToIST(closedAtRaw) : "";
+        const durationEnd = closedAtRaw || (t.status?.is_closed ? t.updated_at : undefined);
+        const durationLabel = formatDurationLabel(t.created_at, durationEnd);
+        const tagLabel = getExportTagLabel(t);
+
+        return [
+          ticketId,
+          t.subject || t.track_id || "",
+          assignedLabel,
+          statusLabel,
+          priorityLabel,
+          createdAtLabel,
+          updatedAtLabel,
+          closedByLabel,
+          closedAtLabel,
+          durationLabel,
+          tagLabel,
+        ];
+      };
 
       const normalizeTagForTicket = (t: any): string[] => {
         // Priority: subject-based Razorpay UPI, then explicit tags, then description content, then mail config provider, Manual
@@ -1521,42 +1578,11 @@ export default function ManageTickets() {
         statusCounts.set(statusLabel, (statusCounts.get(statusLabel) || 0) + 1);
 
         // Created-from-email rows
-        if (t.created_from_mail_config) {
-          const provider = ((): string => {
-            try {
-              const p = getMailConfigProviderName(
-                t.mail_config_sources || t.mail_config_sources,
-                t.description,
-              );
-              return (
-                p ||
-                (Array.isArray(t.tags) && t.tags.length
-                  ? String(t.tags[0])
-                  : "")
-              );
-            } catch (e) {
-              return Array.isArray(t.tags) && t.tags.length
-                ? String(t.tags[0])
-                : "";
-            }
-          })();
+        const detailRow = toExportRow(t);
+        allDetailRows.push(detailRow);
 
-          createdEmailRows.push([
-            t.id,
-            t.subject || t.track_id || "",
-            assignedLabel,
-            statusLabel,
-            (t.priority && t.priority.name) ||
-              (PRIORITY_OPTIONS[
-                t.priority_id as keyof typeof PRIORITY_OPTIONS
-              ] &&
-                PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS]
-                  .name) ||
-              "",
-            formatToIST(t.created_at),
-            formatToIST(t.updated_at),
-            provider,
-          ]);
+        if (t.created_from_mail_config) {
+          createdEmailRows.push(detailRow);
         }
       }
 
@@ -1576,18 +1602,6 @@ export default function ManageTickets() {
           (userStatusCounts[assignedLabel][statusLabel] || 0) + 1;
       }
 
-      const tagRows = [["Tag", "Count"]];
-      Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
-
-      const userRows = [["User", "Count"]];
-      Array.from(userCounts.entries()).forEach(([k, v]) =>
-        userRows.push([k, v]),
-      );
-
-      const statusRows = [["Status", "Count"]];
-      Array.from(statusCounts.entries()).forEach(([k, v]) =>
-        statusRows.push([k, v]),
-      );
 
       // Build Summary sheet with per-tag status breakdown
       // Determine status columns from statusesList (fallback to common names)
@@ -1635,24 +1649,18 @@ export default function ManageTickets() {
         summaryRows.push([k, v]),
       );
 
+      summaryRows.push([]);
+      summaryRows.push(["All Tickets", ...exportHeaders]);
+      for (const row of allDetailRows) {
+        summaryRows.push(["", ...row]);
+      }
+
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
       // Sheet 2: From Email
-      const wsEmailHeaders = [
-        [
-          "ticket_id",
-          "subject",
-          "assigned_to",
-          "status",
-          "Priority",
-          "created_at",
-          "Updated_at",
-          "tag",
-        ],
-      ];
       const wsEmail = XLSX.utils.aoa_to_sheet([
-        ...wsEmailHeaders,
+        exportHeaders,
         ...createdEmailRows,
       ]);
       XLSX.utils.book_append_sheet(wb, wsEmail, "From Email");
@@ -1662,18 +1670,7 @@ export default function ManageTickets() {
         new Set<string>([...Array.from(tagCounts.keys())]),
       );
       for (const tagName of uniqueTagsForSheets) {
-        const rows = [
-          [
-            "ticket_id",
-            "subject",
-            "assigned_to",
-            "status",
-            "Priority",
-            "created_at",
-            "Updated_at",
-            "tags",
-          ],
-        ];
+        const rows = [exportHeaders];
         for (const t of allTickets) {
           let match = false;
           try {
@@ -1684,30 +1681,7 @@ export default function ManageTickets() {
           } catch (e) {}
 
           if (match) {
-            rows.push([
-              t.id,
-              t.subject || t.track_id || "",
-              t.assignee?.name || getAssignedUserName(t.assigned_to_id),
-              (t.status && (t.status.name || t.status)) || "",
-              (t.priority && t.priority.name) ||
-                (PRIORITY_OPTIONS[
-                  t.priority_id as keyof typeof PRIORITY_OPTIONS
-                ] &&
-                  PRIORITY_OPTIONS[
-                    t.priority_id as keyof typeof PRIORITY_OPTIONS
-                  ].name) ||
-                "",
-              formatToIST(t.created_at),
-              formatToIST(t.updated_at),
-              Array.isArray(t.tags)
-                ? t.tags.join(", ")
-                : t.created_from_mail_config
-                  ? getMailConfigProviderName(
-                      t.mail_config_sources || t.mail_config_sources,
-                      t.description,
-                    ) || ""
-                  : "Manual",
-            ]);
+            rows.push(toExportRow(t));
           }
         }
 

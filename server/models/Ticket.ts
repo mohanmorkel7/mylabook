@@ -205,6 +205,7 @@ export interface TicketFilters {
   // New flags
   unassigned?: boolean;
   created_from_mail_config?: boolean;
+  source?: string;
 }
 
 const ticketCountCache = new Map<
@@ -295,6 +296,8 @@ export class TicketRepository {
       tags,
       custom_fields,
     } = ticketData;
+
+    const normalizedAssignedTo = assigned_to ?? 315;
 
     // Compute SLA time on the server (UTC) and format as 'YYYY-MM-DD HH:mm:ss'
     let computedSlaValue: string | null = null;
@@ -427,7 +430,7 @@ export class TicketRepository {
           bucket_id,
           status_id,
           demand,
-          assigned_to,
+          normalizedAssignedTo,
           related_lead_id,
           related_client_id,
           estimated_hours,
@@ -446,6 +449,11 @@ export class TicketRepository {
         if ((ticketData as any).mail_config_id) {
           cols.push("mail_config_id");
           values.push((ticketData as any).mail_config_id);
+        }
+
+        if ((ticketData as any).source) {
+          cols.push("source");
+          values.push((ticketData as any).source);
         }
 
         // Persist watchers directly into watcher_user_ids column if provided
@@ -706,9 +714,33 @@ export class TicketRepository {
     // Support filtering by whether ticket was created from a mail config
     if (typeof filters.created_from_mail_config !== "undefined") {
       if (filters.created_from_mail_config) {
-        whereConditions.push(`t.mail_config_id IS NOT NULL`);
+      whereConditions.push(`t.mail_config_id IS NOT NULL`);
+    } else {
+      whereConditions.push(`t.mail_config_id IS NULL`);
+    }
+  }
+
+    if (filters.source && String(filters.source).trim() !== "" && String(filters.source).trim() !== "All") {
+      const source = String(filters.source).trim();
+      const sourceLower = source.toLowerCase();
+      const subjectExpr = "LOWER(COALESCE(t.subject, ''))";
+      const descExpr = "LOWER(COALESCE(t.description, ''))";
+      if (sourceLower === "razorpay upi") {
+        whereConditions.push(`(${subjectExpr} LIKE '%upi%' AND (${subjectExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%@razorpay.com%'))`);
+      } else if (sourceLower === "razorpay") {
+        whereConditions.push(`((${subjectExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%@razorpay.com%') AND NOT (${subjectExpr} LIKE '%upi%' AND (${subjectExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%@razorpay.com%')))`);
+      } else if (sourceLower === "payswiff") {
+        whereConditions.push(`(${subjectExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%@payswiff.com%')`);
+      } else if (sourceLower === "slack") {
+        whereConditions.push(`(${subjectExpr} LIKE '%slack%' OR ${descExpr} LIKE '%slack%' OR ${descExpr} LIKE '%@slack.com%')`);
+      } else if (sourceLower === "email") {
+        whereConditions.push(`t.created_from_mail_config IS TRUE`);
+      } else if (sourceLower === "manual") {
+        whereConditions.push(`(t.created_from_mail_config IS DISTINCT FROM TRUE AND t.mail_config_id IS NULL AND NOT (${subjectExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%@razorpay.com%' OR ${subjectExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%@payswiff.com%' OR ${subjectExpr} LIKE '%slack%' OR ${descExpr} LIKE '%slack%' OR ${descExpr} LIKE '%@slack.com%'))`);
       } else {
-        whereConditions.push(`t.mail_config_id IS NULL`);
+        whereConditions.push(`(${subjectExpr} LIKE $${paramIndex} OR ${descExpr} LIKE $${paramIndex})`);
+        queryParams.push(`%${sourceLower}%`);
+        paramIndex++;
       }
     }
 

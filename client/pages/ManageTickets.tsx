@@ -1365,15 +1365,13 @@ export default function ManageTickets() {
     }
   };
 
-  // Export all tickets to Excel with multiple sheets as requested
+  // Export all tickets to Excel via server-side streaming endpoint
   const exportAllTicketsToExcel = async () => {
     try {
       setIsExporting(true);
       const fetchImpl = (window as any).__originalFetch || window.fetch.bind(window);
-      const url = new URL("/api/tickets", window.location.origin);
-      url.searchParams.set("simple", "1");
-      url.searchParams.set("export", "1");
-      url.searchParams.set("_ts", String(Date.now()));
+      // Use the new streaming export endpoint that returns XLSX directly
+      const url = `${window.location.origin}/api/tickets/export-stream`;
       const headers: Record<string, string> = {};
       try {
         const stored = localStorage.getItem("banani_user");
@@ -1382,19 +1380,38 @@ export default function ManageTickets() {
           if (parsed?.id) headers["x-user-id"] = String(parsed.id);
         }
       } catch (e) {}
+
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 600000);
-      const response = await fetchImpl(url.toString(), {
+
+      const response = await fetchImpl(url, {
         method: "GET",
         headers,
         signal: controller.signal,
       });
+
       window.clearTimeout(timeoutId);
+
       if (!response.ok) {
         throw new Error(`Export request failed: ${response.status}`);
       }
-      const data = await response.json();
-      const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
+
+      // Response is a binary XLSX file, stream it directly to disk
+      const blob = await response.blob();
+      const urlBlob = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = urlBlob;
+      link.download = `tickets_export_${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(urlBlob);
+
+      setIsExporting(false);
+      toast({
+        title: "Success",
+        description: `Downloaded ${blob.size} bytes of ticket data`,
+      });
 
       // Normalize similar to fetchTickets
       const serverMs = data?.server_time

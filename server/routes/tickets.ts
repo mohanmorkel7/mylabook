@@ -2,6 +2,7 @@ import multer from "multer";
 import { Router, Request, Response } from "express";
 import path from "path";
 import fs from "fs";
+import * as XLSX from "xlsx";
 import {
   TicketRepository,
   CreateTicketRequest,
@@ -433,6 +434,144 @@ router.get("/", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching tickets:", error);
     res.status(500).json({ error: "Failed to fetch tickets" });
+  }
+});
+
+// GET /api/tickets/export-stream
+// Streams tickets as XLSX file directly, avoiding JSON buffering on server or client
+router.get("/export-stream", async (req: Request, res: Response) => {
+  try {
+    console.log("[GET /api/tickets/export-stream] Starting XLSX stream export");
+
+    // Determine viewer from x-user-id header
+    let viewerId: number | undefined = undefined;
+    let restrictToViewer = false;
+    try {
+      const headerUserId = req.headers["x-user-id"] as string | undefined;
+      if (headerUserId) {
+        viewerId = normalizeUserId(headerUserId);
+        const roleRes = await pool.query(
+          "SELECT role FROM users WHERE id = $1",
+          [viewerId],
+        );
+        const role = roleRes.rows[0]?.role;
+        const roleLower = String(role || "").toLowerCase();
+        if (role && !(roleLower === "admin" || roleLower === "finops admin"))
+          restrictToViewer = true;
+      }
+    } catch (e) {
+      // ignore and default to unrestricted listing
+    }
+
+    // Build where clause for viewer restriction
+    const simpleWhere = restrictToViewer && viewerId
+      ? `WHERE (t.assigned_to = $1 OR $1 = ANY(t.watcher_user_ids))`
+      : "";
+    const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
+
+    // Minimal query for export: select only needed columns, no heavy JOINs
+    const exportSql = `SELECT
+          t.id, t.track_id, t.subject, t.description,
+          t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
+          t.created_at, t.updated_at, t.closed_by, t.closed_at,
+          to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
+          to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
+          to_char(t.closed_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS closed_at_iso,
+          tp.name as priority_name,
+          ts.name as status_name,
+          tc.name as category_name,
+          u1.name as created_by_name, u1.email as created_by_email,
+          u2.name as assigned_to_name, u2.email as assigned_to_email,
+          u3.name as closed_by_name, u3.email as closed_by_email
+         FROM tickets t
+         LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
+         LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+         LEFT JOIN ticket_categories tc ON t.category_id = tc.id
+         LEFT JOIN users u1 ON t.created_by = u1.id
+         LEFT JOIN users u2 ON t.assigned_to = u2.id
+         LEFT JOIN users u3 ON t.closed_by = u3.id
+         ${simpleWhere}
+         ORDER BY t.created_at DESC`;
+
+    // Use a dedicated connection without statement timeout so it can stream large datasets
+    const client = await pool.connect();
+    let queryStream;
+
+    try {
+      await client.query("SET statement_timeout = 0");
+
+      // Fetch all rows at once (much faster than streaming for XLSX generation)
+      const startTime = Date.now();
+      const result = await client.query(exportSql, simpleParams);
+      const rowCount = result.rows.length;
+      console.log(`[export-stream] Fetched ${rowCount} rows in ${Date.now() - startTime}ms`);
+
+      // Build workbook from rows
+      const ws_data: any[] = [
+        ["Ticket ID", "Subject", "Description", "Priority", "Status", "Category",
+         "Created By", "Assigned To", "Created Date", "Updated Date", "Closed By", "Closed Date"],
+      ];
+
+      for (const row of result.rows) {
+        try {
+          const createdByLabel = row.created_by_name || row.created_by_email || (row.created_by ? `User #${row.created_by}` : "");
+          const assignedToLabel = row.assigned_to_name || row.assigned_to_email || (row.assigned_to ? `User #${row.assigned_to}` : "");
+          const closedByLabel = row.closed_by_name || row.closed_by_email || (row.closed_by ? `User #${row.closed_by}` : "");
+
+          ws_data.push([
+            row.track_id || `TKT-${String(row.id).padStart(4, "0")}`,
+            row.subject || "",
+            (row.description || "").substring(0, 500),
+            row.priority_name || "",
+            row.status_name || "",
+            row.category_name || "",
+            createdByLabel,
+            assignedToLabel,
+            row.created_at_iso || row.created_at || "",
+            row.updated_at_iso || row.updated_at || "",
+            closedByLabel,
+            row.closed_at_iso || row.closed_at || "",
+          ]);
+        } catch (e) {
+          console.error(`[export-stream] Error processing row:`, e);
+        }
+      }
+
+      // Generate XLSX
+      try {
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Tickets");
+
+        // Generate binary XLSX data
+        const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+
+        // Send file to client
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="tickets_export_${Date.now()}.xlsx"`);
+        res.setHeader("Content-Length", buffer.length);
+        res.send(buffer);
+
+        console.log(`[export-stream] Sent XLSX (${buffer.length} bytes) for ${rowCount} tickets in ${Date.now() - startTime}ms`);
+      } catch (e) {
+        console.error("[export-stream] Failed to generate XLSX:", e);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to generate XLSX" });
+        }
+      }
+    } catch (error) {
+      console.error("[export-stream] Error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to stream export" });
+      }
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("[export-stream] Error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to stream export" });
+    }
   }
 });
 

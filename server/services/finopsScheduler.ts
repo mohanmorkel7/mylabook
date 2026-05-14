@@ -34,9 +34,10 @@ class FinOpsScheduler {
       },
     );
 
-    // Fast SLA monitoring every 30 seconds for immediate overdue alerts
+    // SLA monitoring every 5 minutes (reduced from 30 seconds to avoid pool exhaustion)
+    // This is balanced between alert latency and DB load
     cron.schedule(
-      "*/30 * * * * *",
+      "*/5 * * * *",
       async () => {
         if (!(await isDatabaseAvailable())) return;
         await finopsAlertService.checkSLAAlerts();
@@ -46,22 +47,12 @@ class FinOpsScheduler {
       },
     );
 
-    // Regular SLA monitoring every 15 minutes for redundancy
-    cron.schedule(
-      "*/15 * * * *",
-      async () => {
-        if (!(await isDatabaseAvailable())) return;
-        console.log("Running SLA monitoring check...");
-        await finopsAlertService.checkSLAAlerts();
-      },
-      {
-        timezone: "Asia/Kolkata",
-      },
-    );
+    // Note: 15-minute SLA check disabled - we have 5-minute check above which is sufficient
+    // Reducing jobs to conserve DB pool for user-facing requests
 
-    // Incomplete subtask check every 30 minutes
+    // Incomplete subtask check every 2 hours (reduced from 30 minutes to free up pool)
     cron.schedule(
-      "*/30 * * * *",
+      "0 */2 * * *",
       async () => {
         if (!(await isDatabaseAvailable())) return;
         console.log("Checking for incomplete subtasks...");
@@ -96,9 +87,9 @@ class FinOpsScheduler {
       },
     );
 
-    // Task status sync every minute for real-time monitoring
+    // Task status sync every 10 minutes (reduced from every minute to conserve DB pool)
     cron.schedule(
-      "* * * * *",
+      "*/10 * * * *",
       async () => {
         if (!(await isDatabaseAvailable())) return;
         await this.syncTaskStatuses();

@@ -10,10 +10,11 @@ const dbConfig = {
   password: process.env.PG_PASSWORD || "myl@p@y-crm$102019",
   port: Number(process.env.PG_PORT) || 2019,
   ssl: false,
-  // Pool sized to handle concurrent ticket page + chart + background job traffic
+  // Pool sized for concurrent ticket page + chart traffic
+  // Background jobs now run on longer schedules to avoid starvation
   max: 25, // max clients in the pool
-  min: 4, // keep warm connections ready
-  idleTimeoutMillis: 30000,
+  min: 2, // keep minimal warm connections ready (reduce from 4 to free up sooner)
+  idleTimeoutMillis: 10000, // 10s - release idle connections faster
   connectionTimeoutMillis: 8000,
   statement_timeout: 120000, // 120 seconds for statement execution - remote DB is slow
 };
@@ -83,9 +84,10 @@ export function startPoolMonitoring() {
     }
 
     // If too many waiting connections, drain to reset
-    if (waitingCount > 10) {
+    // Lower threshold (3 waiting) since pool is only 25 total
+    if (waitingCount > 3) {
       console.warn(
-        `[POOL] ${waitingCount} connections waiting, draining pool...`,
+        `[POOL] ${waitingCount} connections waiting (${idleCount} idle of ${poolSize} total), draining pool...`,
       );
       await pool.drain();
       connectionErrors = 0;

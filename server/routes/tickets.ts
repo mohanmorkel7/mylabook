@@ -480,10 +480,10 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       : "";
     const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
 
-    // Minimal query: just fetch ticket IDs first, then get full rows
+    // Minimal query: no description (large text, slows query significantly)
     // ORDER BY id DESC uses the primary key index - much faster than created_at DESC
     const exportSql = `SELECT
-          t.id, t.track_id, t.subject, t.description,
+          t.id, t.track_id, t.subject,
           t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to, t.closed_by, t.closed_at,
           t.created_at, t.updated_at
          FROM tickets t
@@ -495,12 +495,13 @@ router.get("/export-stream", async (req: Request, res: Response) => {
     try {
       await client.query("SET statement_timeout = 0");
 
-      // Run main query AND lookup tables in parallel
-      const [result, prioritiesRes, statusesRes, categoriesRes] = await Promise.all([
+      // Run main query AND all lookup tables in parallel
+      const [result, prioritiesRes, statusesRes, categoriesRes, usersRes] = await Promise.all([
         client.query(exportSql, simpleParams),
         pool.query("SELECT id, name FROM ticket_priorities"),
         pool.query("SELECT id, name FROM ticket_statuses"),
         pool.query("SELECT id, name FROM ticket_categories"),
+        pool.query("SELECT id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name, email FROM users"),
       ]);
 
       const rowCount = result.rows.length;
@@ -511,23 +512,20 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       const prioritiesMap = new Map(prioritiesRes.rows.map((r: any) => [r.id, r.name]));
       const statusesMap = new Map(statusesRes.rows.map((r: any) => [r.id, r.name]));
       const categoriesMap = new Map(categoriesRes.rows.map((r: any) => [r.id, r.name]));
+      const usersMap = new Map(usersRes.rows.map((r: any) => [r.id, r.name || r.email || `User #${r.id}`]));
+
+      const userName = (id: any) => (id ? usersMap.get(id) || `User #${id}` : "");
 
       // Format data for client export
-      // User names will be resolved on client from the users list passed to the export function
       const tickets = result.rows.map((r: any) => ({
         id: r.id,
         track_id: r.track_id || `TKT-${String(r.id).padStart(4, "0")}`,
         subject: r.subject || "",
-        description: (r.description || "").substring(0, 500),
-        priority_id: r.priority_id,
         priority_name: prioritiesMap.get(r.priority_id) || "",
-        status_id: r.status_id,
         status_name: statusesMap.get(r.status_id) || "",
-        category_id: r.category_id,
         category_name: categoriesMap.get(r.category_id) || "",
-        created_by: r.created_by,
-        assigned_to: r.assigned_to,
-        closed_by: r.closed_by,
+        assigned_to_name: userName(r.assigned_to),
+        closed_by_name: userName(r.closed_by),
         created_at: r.created_at,
         updated_at: r.updated_at,
         closed_at: r.closed_at,

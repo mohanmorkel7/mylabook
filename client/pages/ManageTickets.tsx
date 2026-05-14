@@ -1396,21 +1396,58 @@ export default function ManageTickets() {
         throw new Error(`Export request failed: ${response.status}`);
       }
 
-      // Response is a binary XLSX file, stream it directly to disk
-      const blob = await response.blob();
-      const urlBlob = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = urlBlob;
-      link.download = `tickets_export_${new Date().toISOString().split("T")[0]}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(urlBlob);
+      // Response is JSON with ticket data - build XLSX on client
+      const data = await response.json();
+      const ticketsArr = data?.tickets ?? [];
+
+      if (!Array.isArray(ticketsArr) || ticketsArr.length === 0) {
+        throw new Error("No tickets returned from export endpoint");
+      }
+
+      console.log(`[Export] Received ${ticketsArr.length} tickets, building XLSX...`);
+
+      // Build XLSX workbook from the data
+      const wb = XLSX.utils.book_new();
+      const exportHeaders = [
+        "Ticket ID",
+        "Subject",
+        "Priority",
+        "Status",
+        "Category",
+        "Assigned To",
+        "Created Date",
+        "Updated Date",
+        "Closed By",
+        "Closed Date",
+      ];
+
+      // Build rows for export
+      const exportRows = ticketsArr.map((t: any) => [
+        t.track_id || `TKT-${String(t.id).padStart(4, "0")}`,
+        t.subject || "",
+        t.priority_name || "",
+        t.status_name || "",
+        t.category_name || "",
+        t.assigned_to_name || "",
+        formatToIST(t.created_at),
+        formatToIST(t.updated_at),
+        t.closed_by_name || "",
+        formatToIST(t.closed_at),
+      ]);
+
+      const wsData = [exportHeaders, ...exportRows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, "Tickets");
+
+      // Write and download
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], { type: "application/octet-stream" });
+      saveAs(blob, `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
 
       setIsExporting(false);
       toast({
         title: "Success",
-        description: `Downloaded ${blob.size} bytes of ticket data`,
+        description: `Downloaded ${ticketsArr.length} tickets`,
       });
 
       /*

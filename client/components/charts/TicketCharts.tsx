@@ -90,66 +90,8 @@ export default function TicketCharts({
   useEffect(() => {
     let mounted = true;
 
-    const buildLocalSummaries = () => {
-      const sourceTickets = Array.isArray(tickets) ? tickets : [];
-      const assignedMap = new Map<string, number>();
-      const statusMap = new Map<string, number>();
-      const userStatusMap: Record<string, Record<string, number>> = {};
-      const tagStatusMap: Record<string, Record<string, number>> = {};
-
-      for (const ticket of sourceTickets) {
-        const assignedName =
-          ticket?.assignee?.name || ticket?.assigned_to_name || "Unassigned";
-        const statusName = ticket?.status?.name || ticket?.status_name || "Unknown";
-        const tag = classifyTicketTag ? classifyTicketTag(ticket) : "Manual";
-
-        assignedMap.set(assignedName, (assignedMap.get(assignedName) || 0) + 1);
-        statusMap.set(statusName, (statusMap.get(statusName) || 0) + 1);
-
-        if (!userStatusMap[assignedName]) userStatusMap[assignedName] = {};
-        userStatusMap[assignedName][statusName] =
-          (userStatusMap[assignedName][statusName] || 0) + 1;
-
-        if (!tagStatusMap[tag]) tagStatusMap[tag] = {};
-        tagStatusMap[tag][statusName] = (tagStatusMap[tag][statusName] || 0) + 1;
-      }
-
-      const assignedArr = Array.from(assignedMap.entries()).map(([name, count]) => ({
-        user_id: null,
-        name,
-        count,
-      }));
-      const statusesArr = Array.from(statusMap.entries()).map(([status, count]) => ({
-        status,
-        count,
-      }));
-      const userStatusArr = Object.entries(userStatusMap).map(([name, counts]) => ({
-        user_id: null,
-        name,
-        counts,
-      }));
-      const tagStatusArr = Object.entries(tagStatusMap).map(([tag, counts]) => ({
-        tag,
-        counts,
-      }));
-
-      if (!mounted) return;
-      setAssigned(assignedArr);
-      setStatuses(statusesArr);
-      setUserStatus(userStatusArr);
-      setTagStatus(tagStatusArr);
-      setLoading(false);
-      if (onSummaryFetched) {
-        onSummaryFetched({ assigned: assignedArr, statuses: statusesArr });
-      }
-    };
-
-    if (Array.isArray(tickets) && tickets.length > 0 && classifyTicketTag) {
-      buildLocalSummaries();
-      return () => {
-        mounted = false;
-      };
-    }
+    // Always fetch from summary API — it covers ALL tickets, not just the current page
+    // Local summaries from the 50-ticket page would show wrong counts (e.g. Total: 50 instead of 5251)
 
     const fetchData = async () => {
       try {
@@ -252,7 +194,7 @@ export default function TicketCharts({
     return () => {
       mounted = false;
     };
-  }, [dateFrom, dateTo, range, tickets]);
+  }, [dateFrom, dateTo, range]);
 
   // Vertical bar chart component
   const VerticalBarChart = ({

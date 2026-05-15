@@ -1423,13 +1423,8 @@ export default function ManageTickets() {
         return [d && `${d}d`, h && `${h}h`, (mins || (!d && !h)) && `${mins}m`].filter(Boolean).join(" ");
       };
 
-      const tagOfTicket = (t: any): string => {
-        const subj = String(t.subject || "").toLowerCase();
-        if (subj.includes("upi") && subj.includes("razorpay")) return "Razorpay UPI";
-        if (subj.includes("razorpay")) return "Razorpay";
-        if (subj.includes("payswiff")) return "Payswiff";
-        return t.mail_config_id ? "Email" : "Manual";
-      };
+      // Use server-computed tag (includes description analysis) for accurate classification
+      const tagOfTicket = (t: any): string => t.ticket_tag || "Manual";
 
       const toRow = (t: any) => {
         const closedAt = t.closed_at || "";
@@ -1498,9 +1493,7 @@ export default function ManageTickets() {
       summaryRows.push([]);
       summaryRows.push(["Status", "Count"]);
       for (const [s, c] of statusCounts.entries()) summaryRows.push([s, c]);
-      summaryRows.push([]);
-      summaryRows.push(["All Tickets", ...exportHeaders]);
-      for (const row of allRows) summaryRows.push(["", ...row]);
+      // Note: "All ticket rows" removed from Summary as requested
 
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), "Summary");
 
@@ -1510,7 +1503,8 @@ export default function ManageTickets() {
       // Sheet 3: All Tickets
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([exportHeaders, ...allRows]), "All Tickets");
 
-      // Per-tag sheets
+      // Per-tag sheets — fully dynamic, one sheet per unique tag found in the data
+      // Uses server-computed tags (includes description analysis), so all records are correctly classified
       for (const tag of tagCounts.keys()) {
         const tagRows = ticketsArr
           .filter((t: any) => tagOfTicket(t) === tag)

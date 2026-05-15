@@ -480,15 +480,32 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       : "";
     const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
 
-    // Minimal query: no description (large text column, slows down significantly)
-    // ORDER BY id DESC uses the primary key index - much faster than created_at DESC
+    // Compute tag server-side using subject+description CASE (no description returned - just the tag label)
+    // ORDER BY id DESC uses the primary key index
     const exportSql = `SELECT
           t.id, t.track_id, t.subject,
           t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to, t.closed_by, t.closed_at,
-          t.created_at, t.updated_at, t.mail_config_id
+          t.created_at, t.updated_at, t.mail_config_id,
+          CASE
+            WHEN (LOWER(t.subject) LIKE '%upi%')
+              AND (LOWER(t.subject) LIKE '%razorpay%' OR LOWER(COALESCE(t.description,'')) LIKE '%razorpay%')
+              THEN 'Razorpay UPI'
+            WHEN LOWER(t.subject) LIKE '%razorpay%'
+              OR LOWER(COALESCE(t.description,'')) LIKE '%razorpay%'
+              OR LOWER(t.subject) LIKE '%@razorpay.com%'
+              THEN 'Razorpay'
+            WHEN LOWER(COALESCE(t.description,'')) LIKE '%payswiff%'
+              OR LOWER(t.subject) LIKE '%payswiff%'
+              THEN 'Payswiff'
+            WHEN LOWER(COALESCE(t.description,'')) LIKE '%@slack.com%'
+              OR LOWER(COALESCE(t.description,'')) LIKE '%slack from%'
+              THEN 'Slack'
+            WHEN t.mail_config_id IS NOT NULL THEN 'Email'
+            ELSE 'Manual'
+          END as ticket_tag
          FROM tickets t
          ${simpleWhere}
-         ORDER BY t.id DESC LIMIT 10000`;
+         ORDER BY t.id DESC`;
 
     // Use a dedicated connection without statement timeout for full-table export
     const client = await pool.connect();
@@ -530,6 +547,7 @@ router.get("/export-stream", async (req: Request, res: Response) => {
         updated_at: r.updated_at,
         closed_at: r.closed_at,
         mail_config_id: r.mail_config_id,
+        ticket_tag: r.ticket_tag || "Manual",
       }));
 
       res.set("Cache-Control", "no-store");

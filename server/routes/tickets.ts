@@ -293,8 +293,11 @@ router.get("/", async (req: Request, res: Response) => {
         }
 
         const totalCount = isExport ? rowsRes.rows.length : Number((await pool.query(
-          `SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'`,
-        )).rows[0]?.estimate || 0);
+          restrictToViewer && viewerId
+            ? `SELECT COUNT(*) FROM tickets WHERE (assigned_to = $1 OR $1 = ANY(watcher_user_ids))`
+            : `SELECT COUNT(*) FROM tickets`,
+          restrictToViewer && viewerId ? [viewerId] : [],
+        )).rows[0]?.count || 0);
         const pages = isExport ? 1 : Math.max(1, Math.ceil(totalCount / effectiveLimit));
 
         // Map iso fields and reshape data for client

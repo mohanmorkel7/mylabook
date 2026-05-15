@@ -157,7 +157,7 @@ const navigationItems: NavigationItem[] = [
     name: "Invoice Management",
     href: "/invoice-management",
     icon: ReceiptText,
-    roles: ["admin", "finance", "finops"],
+    roles: ["admin", "finance"],
   },
   // k) Product Management
   {

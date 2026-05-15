@@ -577,7 +577,7 @@ function AppRoutes() {
       <Route
         path="/finops"
         element={
-          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <FinOpsAutomation />
             </DashboardLayout>
@@ -610,7 +610,7 @@ function AppRoutes() {
       <Route
         path="/invoice-management"
         element={
-          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <InvoiceManagement />
             </DashboardLayout>
@@ -621,7 +621,7 @@ function AppRoutes() {
       <Route
         path="/invoice-management/new"
         element={
-          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <InvoiceManagement />
             </DashboardLayout>
@@ -632,7 +632,7 @@ function AppRoutes() {
       <Route
         path="/invoice-management/client/:id"
         element={
-          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <InvoiceManagement />
             </DashboardLayout>
@@ -643,7 +643,7 @@ function AppRoutes() {
       <Route
         path="/invoice-management/client/:id/edit"
         element={
-          <ProtectedRoute allowedRoles={["admin", "finance", "finops"]}>
+          <ProtectedRoute allowedRoles={["admin", "finance"]}>
             <DashboardLayout>
               <InvoiceManagement />
             </DashboardLayout>

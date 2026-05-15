@@ -15,6 +15,11 @@ import { pool } from "../database/connection";
 const router = Router();
 import { authenticateToken } from "../middleware/auth";
 
+const isFullAccessRole = (role?: string) => {
+  const roleLower = String(role || "").trim().toLowerCase();
+  return roleLower === "admin" || roleLower === "finops admin";
+};
+
 const metadataCache = new Map<string, { data: any; expiresAt: number }>();
 const assignedOptionsCache = new Map<
   string,
@@ -204,10 +209,8 @@ router.get("/", async (req: Request, res: Response) => {
           [viewerId],
         );
         const role = roleRes.rows[0]?.role;
-        const roleLower = String(role || "").toLowerCase();
         // Allow full visibility for Admin and FinOps Admin roles
-        if (role && !(roleLower === "admin" || roleLower === "finops admin"))
-          restrictToViewer = true;
+        if (!isFullAccessRole(role)) restrictToViewer = true;
       }
     } catch (e) {
       // ignore and default to unrestricted listing
@@ -469,9 +472,7 @@ router.get("/export-stream", async (req: Request, res: Response) => {
           [viewerId],
         );
         const role = roleRes.rows[0]?.role;
-        const roleLower = String(role || "").toLowerCase();
-        if (role && !(roleLower === "admin" || roleLower === "finops admin"))
-          restrictToViewer = true;
+        if (!isFullAccessRole(role)) restrictToViewer = true;
       }
     } catch (e) {
       // ignore and default to unrestricted listing

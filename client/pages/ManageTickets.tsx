@@ -2038,7 +2038,7 @@ export default function ManageTickets() {
       // can be based on server time and may not reflect the client-side IST check.
 
       // Fallback to using sla_time timestamp if available. Interpret the incoming
-      // sla_time as IST wall time when it lacks an explicit timezone (DB TIMESTAMP without tz).
+      // sla_time is stored as UTC in the DB and sent as UTC ISO string (ending in Z).
       if (ticket.sla_time) {
         try {
           const s = String(ticket.sla_time || "").trim();

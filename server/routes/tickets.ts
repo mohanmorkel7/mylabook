@@ -249,7 +249,7 @@ router.get("/", async (req: Request, res: Response) => {
               t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
               to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
               to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
-              to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
+              to_char(t.sla_time, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
               tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
               ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
               tc.id as category_id_join, tc.name as category_name, tc.color as category_color

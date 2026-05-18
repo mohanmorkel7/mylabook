@@ -15,9 +15,16 @@ import { pool } from "../database/connection";
 const router = Router();
 import { authenticateToken } from "../middleware/auth";
 
-const isFullAccessRole = (role?: string) => {
-  const roleLower = String(role || "").trim().toLowerCase();
-  return roleLower === "admin" || roleLower === "finops admin";
+const isFullAccessRole = (user?: {
+  role?: string;
+  department_admin?: boolean;
+  admin_for_department?: string | null;
+}) => {
+  const roleLower = String(user?.role || "").trim().toLowerCase();
+  if (roleLower === "admin" || roleLower === "finops admin") return true;
+
+  const adminDept = String(user?.admin_for_department || "").trim().toLowerCase();
+  return !!user?.department_admin && adminDept === "finops";
 };
 
 const metadataCache = new Map<string, { data: any; expiresAt: number }>();
@@ -205,12 +212,12 @@ router.get("/", async (req: Request, res: Response) => {
       if (headerUserId) {
         viewerId = normalizeUserId(headerUserId);
         const roleRes = await pool.query(
-          "SELECT role FROM users WHERE id = $1",
+          "SELECT role, department_admin, admin_for_department FROM users WHERE id = $1",
           [viewerId],
         );
-        const role = roleRes.rows[0]?.role;
+        const userRow = roleRes.rows[0];
         // Allow full visibility for Admin and FinOps Admin roles
-        if (!isFullAccessRole(role)) restrictToViewer = true;
+        if (!isFullAccessRole(userRow)) restrictToViewer = true;
       }
     } catch (e) {
       // ignore and default to unrestricted listing
@@ -468,11 +475,11 @@ router.get("/export-stream", async (req: Request, res: Response) => {
       if (headerUserId) {
         viewerId = normalizeUserId(headerUserId);
         const roleRes = await pool.query(
-          "SELECT role FROM users WHERE id = $1",
+          "SELECT role, department_admin, admin_for_department FROM users WHERE id = $1",
           [viewerId],
         );
-        const role = roleRes.rows[0]?.role;
-        if (!isFullAccessRole(role)) restrictToViewer = true;
+        const userRow = roleRes.rows[0];
+        if (!isFullAccessRole(userRow)) restrictToViewer = true;
       }
     } catch (e) {
       // ignore and default to unrestricted listing

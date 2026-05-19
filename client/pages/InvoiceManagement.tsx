@@ -1315,35 +1315,41 @@ async function downloadInvoicePdfTemplate({
   cursorY += 6;
 
   // === BILL TO ONLY ===
-  const billToWidth = contentWidth * 0.56;
-  setText(SECONDARY);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.6);
-  doc.text("BILLED TO", margin, cursorY);
-  let billToY = cursorY + 4.6;
-
-  setText(SECONDARY);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.2);
-  doc.text(getClientDisplayBillingName(client), margin, billToY);
-  billToY += 5.2;
-
-  setText(MUTED);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.8);
-  const billToRows = [
-    `Client Code: ${client.code || "—"}`,
-    client.billingEmail || "—",
+  const halfWidth = (contentWidth - 8) / 2;
+  const leftX = margin;
+  const rightX = margin + halfWidth + 8;
+  const leftRows = [
+    getClientDisplayBillingName(client),
     getClientBillToAddress(client),
+  ];
+  const rightRows = [
+    client.billingEmail || "—",
     `GSTIN: ${getClientGstin(client) || "—"}`,
     `LUT: ${getClientLut(client) || "—"}`,
   ];
-  billToRows.forEach((line) => {
-    const lines = wrap(line, billToWidth);
-    doc.text(lines, margin, billToY);
-    billToY += lines.length * 3.2 + 0.5;
-  });
-  cursorY = billToY + 3;
+
+  const renderBillSection = (x: number, title: string, rows: string[], width: number) => {
+    setText(SECONDARY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.6);
+    doc.text(title, x, cursorY);
+
+    let py = cursorY + 4.6;
+    rows.forEach((row, index) => {
+      const lines = wrap(row, width);
+      setText(index === 0 ? SECONDARY : MUTED);
+      doc.setFont("helvetica", index === 0 ? "bold" : "normal");
+      doc.setFontSize(index === 0 ? 10.2 : 6.8);
+      doc.text(lines, x, py);
+      py += lines.length * (index === 0 ? 4.4 : 3.2) + 0.5;
+    });
+
+    return py;
+  };
+
+  const leftEnd = renderBillSection(leftX, "BILLED TO", leftRows, halfWidth);
+  const rightEnd = renderBillSection(rightX, "DETAILS", rightRows, halfWidth);
+  cursorY = Math.max(leftEnd, rightEnd) + 3;
 
   // === STATEMENT OF CHARGES ===
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);

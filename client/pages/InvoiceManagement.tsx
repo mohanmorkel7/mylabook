@@ -1255,18 +1255,17 @@ async function downloadInvoicePdfTemplate({
   drawHeaderBand();
 
   // === HEADER ===
-  const headerHeight = 24;
+  const headerHeight = 22;
   if (logoData) {
     try {
-      doc.addImage(logoData, "PNG", margin, cursorY, 34, 12);
+      doc.addImage(logoData, "PNG", margin, cursorY, 30, 10);
     } catch {}
   }
   setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.1);
-  doc.text(companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd", margin, cursorY + 16.5);
-  doc.text(getCompanyDisplayAddress(companyConfig), margin, cursorY + 19.5);
-  doc.text(`${companyConfig.email || "contact@mylapay.com"}  ·  ${companyConfig.phone || "+91 44 XXXX XXXX"}`, margin, cursorY + 22.1);
+  doc.setFontSize(5.6);
+  doc.text(companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd", margin, cursorY + 14.4);
+  doc.text(`${companyConfig.email || "contact@mylapay.com"}  ·  ${companyConfig.phone || "+91 44 XXXX XXXX"}`, margin, cursorY + 17.1);
 
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
@@ -1298,72 +1297,36 @@ async function downloadInvoicePdfTemplate({
   doc.line(margin, cursorY, pageWidth - margin, cursorY);
   cursorY += 6;
 
-  // === COMPACT COMPANY / CLIENT DETAILS ===
-  const partyColWidth = (contentWidth - 8) / 2;
-  const compactParty = (
-    x: number,
-    name: string,
-    code: string,
-    email: string,
-    address: string,
-    extra: string[],
-  ) => {
-    setText(SECONDARY);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.4);
-    doc.text(name, x, cursorY);
-    let py = cursorY + 4.6;
+  // === BILL TO ONLY ===
+  const billToWidth = contentWidth * 0.56;
+  setText(SECONDARY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.6);
+  doc.text("BILLED TO", margin, cursorY);
+  let billToY = cursorY + 4.6;
 
-    setText(MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.text(code, x, py);
-    py += 3.4;
+  setText(SECONDARY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.2);
+  doc.text(getClientDisplayBillingName(client), margin, billToY);
+  billToY += 5.2;
 
-    address.split("\n").filter(Boolean).forEach((line) => {
-      const lines = wrap(line, partyColWidth);
-      doc.text(lines, x, py);
-      py += lines.length * 3.1;
-    });
-
-    if (email) {
-      doc.text(email, x, py + 0.8);
-      py += 3.2;
-    }
-
-    extra.filter(Boolean).forEach((line) => {
-      doc.text(line, x, py + 0.8);
-      py += 3.2;
-    });
-
-    return py;
-  };
-
-  const leftEnd = compactParty(
-    margin,
-    companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd",
-    `${companyConfig.email || "contact@mylapay.com"}  ·  ${companyConfig.phone || "+91 44 XXXX XXXX"}`,
-    companyConfig.email || "",
-    getCompanyDisplayAddress(companyConfig),
-    [
-      `GSTIN: ${companyConfig.gstNumber || "—"}`,
-      `LUT: ${companyConfig.lutNumber || "—"}`,
-      `CIN: ${companyConfig.cinNumber || "—"}`,
-      `Website: ${companyConfig.website || "—"}`,
-    ],
-  );
-  const rightEnd = compactParty(
-    margin + partyColWidth + 8,
-    getClientDisplayBillingName(client),
+  setText(MUTED);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.8);
+  const billToRows = [
     `Client Code: ${client.code || "—"}`,
     client.billingEmail || "—",
     getClientBillToAddress(client),
-    [
-      `GSTIN: ${getClientGstin(client) || "—"}`,
-      `LUT: ${getClientLut(client) || "—"}`,
-    ],
-  );
-  cursorY = Math.max(leftEnd, rightEnd) + 5;
+    `GSTIN: ${getClientGstin(client) || "—"}`,
+    `LUT: ${getClientLut(client) || "—"}`,
+  ];
+  billToRows.forEach((line) => {
+    const lines = wrap(line, billToWidth);
+    doc.text(lines, margin, billToY);
+    billToY += lines.length * 3.2 + 0.5;
+  });
+  cursorY = billToY + 3;
 
   // === STATEMENT OF CHARGES ===
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount);

@@ -178,8 +178,14 @@ const CONFIG_AUDIT_LOG_KEY = "config-audit-log";
 
 type InvoiceNumberFormat = "PREFIX/FY/SEQ" | "PREFIX-FY-SEQ" | "FY/SEQ";
 type ClientType = "Domestic" | "International";
+type BillingModel = "transaction" | "mmc";
 type CurrencyType = "INR" | "USD" | "AED" | "SAR" | "KWD" | "OMR" | "QAR" | "BHD";
 type ConfigChangeType = "invoice-serial" | "company" | "tax" | "currency";
+
+interface CustomInvoiceRow {
+  name: string;
+  amount: number;
+}
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
 interface ConfigApproval {
@@ -526,6 +532,14 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   invoiceHistory?: InvoiceRecord[];
   clientType?: ClientType;
   currency?: CurrencyType;
+  billingModel?: BillingModel;
+  billingYear?: 1 | 2 | 3;
+  setupFee?: number;
+  setupFeePaid?: number;
+  mmcYear1?: number;
+  mmcYear2?: number;
+  mmcYear3?: number;
+  customInvoiceRows?: CustomInvoiceRow[];
 };
 
 type InvoiceStatus =
@@ -547,6 +561,8 @@ interface InvoiceRecord {
   generatedDate: string;
   serial?: number;
   financialYear?: string;
+  customInvoiceRows?: CustomInvoiceRow[];
+  billingModel?: BillingModel;
 }
 
 const INVOICES: InvoiceRecord[] = [
@@ -1104,15 +1120,33 @@ function deleteInvoiceFromCollection(invoices: InvoiceRecord[], targetInvoiceNum
 }
 
 function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: number) {
-  const fixedBilling = client.fixedBilling;
-  const awsCharge = client.aws?.enabled ? client.aws.vendorCost * (client.aws.marginPercentage / 100) : 0;
+  const breakdown = calculateInvoiceCommercials(client, client.monthlyTransactionVolume || 0);
+  const customRows = breakdown.customRows;
+  const setupRows = breakdown.setupFeeDue > 0
+    ? [{ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue }]
+    : [];
+
+  if (getBillingModel(client) === "mmc") {
+    const mmcLabel = `MMC (Year ${client.billingYear || 1}) or Transaction Fee whichever is higher`;
+    const coreCommercial = Math.max(invoiceAmount - breakdown.setupFeeDue - breakdown.customRowsTotal, 0);
+    return [
+      ...setupRows,
+      { description: mmcLabel, amount: coreCommercial },
+      ...customRows.map((row) => ({ description: row.name, amount: Number(row.amount || 0) })),
+    ];
+  }
+
+  const fixedBilling = Number(client.fixedBilling || 0);
+  const awsCharge = breakdown.awsMarkup;
   const remainingAfterFixed = Math.max(invoiceAmount - fixedBilling - awsCharge, 0);
   return [
+    ...setupRows,
     { description: "Fixed Commercial Charges", amount: fixedBilling },
-    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - client.integrationFee - client.additionalPlatformFee, 0) },
+    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0) },
     { description: "AWS Infra Pass-through", amount: awsCharge },
-    { description: "Additional Platform Fee", amount: client.additionalPlatformFee },
-    { description: "Integration Fee", amount: client.integrationFee },
+    { description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0) },
+    { description: "Integration Fee", amount: Number(client.integrationFee || 0) },
+    ...customRows.map((row) => ({ description: row.name, amount: Number(row.amount || 0) })),
   ];
 }
 
@@ -1479,15 +1513,25 @@ function getPriorityForScoring(client: ClientRecord) {
   return "Low";
 }
 
-function estimateInvoiceFromSlabs(
-  txnCount: number,
-  fixedBilling: number,
-  slabs: ClientRecord["transactionSlabs"],
-  aws: ClientRecord["aws"],
-  minimumGuarantee: number,
-  integrationFee: number,
-  platformFee: number,
-) {
+function getBillingModel(client: ClientRecord): BillingModel {
+  return client.billingModel === "mmc" ? "mmc" : "transaction";
+}
+
+function getCustomInvoiceRows(client: ClientRecord): CustomInvoiceRow[] {
+  return Array.isArray(client.customInvoiceRows)
+    ? client.customInvoiceRows.filter((row) => row && String(row.name || "").trim().length > 0)
+    : [];
+}
+
+function getActiveMmcAmount(client: ClientRecord): number {
+  const year = client.billingYear || 1;
+  if (year >= 3) return Number(client.mmcYear3 || client.mmcYear2 || client.mmcYear1 || 0);
+  if (year === 2) return Number(client.mmcYear2 || client.mmcYear1 || 0);
+  return Number(client.mmcYear1 || 0);
+}
+
+function calculateInvoiceCommercials(client: ClientRecord, txnCount: number) {
+  const slabs = client.transactionSlabs || [];
   const variable = slabs.reduce((sum, slab) => {
     const slabStart = slab.from;
     const slabEnd = slab.to ?? Number.POSITIVE_INFINITY;
@@ -1495,9 +1539,39 @@ function estimateInvoiceFromSlabs(
     const unitMultiplier = slab.unit === "paisa" ? 0.01 : 1;
     return sum + covered * slab.rate * unitMultiplier;
   }, 0);
-  const awsMarkup = aws.enabled ? aws.vendorCost * (aws.marginPercentage / 100) : 0;
-  const raw = fixedBilling + variable + awsMarkup + integrationFee + platformFee;
-  return Math.max(raw, minimumGuarantee);
+
+  const awsMarkup = client.aws?.enabled
+    ? Number(client.aws.vendorCost || 0) * (Number(client.aws.marginPercentage || 0) / 100)
+    : 0;
+  const transactionBase =
+    Number(client.fixedBilling || 0) +
+    variable +
+    awsMarkup +
+    Number(client.integrationFee || 0) +
+    Number(client.additionalPlatformFee || 0);
+
+  const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
+  const customRows = getCustomInvoiceRows(client);
+  const customRowsTotal = customRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const mmcFloor = getBillingModel(client) === "mmc" ? getActiveMmcAmount(client) : 0;
+  const coreCommercial = getBillingModel(client) === "mmc" ? Math.max(transactionBase, mmcFloor) : transactionBase;
+  const subtotal = Math.max(coreCommercial + setupFeeDue + customRowsTotal, Number(client.minimumGuarantee || 0));
+
+  return {
+    variable,
+    awsMarkup,
+    transactionBase,
+    setupFeeDue,
+    customRows,
+    customRowsTotal,
+    mmcFloor,
+    coreCommercial,
+    subtotal,
+  };
+}
+
+function estimateInvoiceFromSlabs(client: ClientRecord, txnCount: number) {
+  return calculateInvoiceCommercials(client, txnCount).subtotal;
 }
 
 function Sparkline({ values, className }: { values: number[]; className?: string }) {
@@ -1944,6 +2018,7 @@ function ClientOverviewScreen({
   onStatusChange,
   onDownloadPdf,
   onDownloadDocx,
+  onSaveCustomRows,
 }: {
   client: ClientRecord;
   onBack: () => void;
@@ -1954,38 +2029,52 @@ function ClientOverviewScreen({
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
+  onSaveCustomRows: (rows: CustomInvoiceRow[]) => void;
 }) {
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
-  const [invoiceDraft, setInvoiceDraft] = useState(
-    estimateInvoiceFromSlabs(
-      client.monthlyTransactionVolume,
-      client.fixedBilling,
-      client.transactionSlabs,
-      client.aws,
-      client.minimumGuarantee,
-      client.integrationFee,
-      client.additionalPlatformFee,
-    ),
+  const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
+    client.customInvoiceRows && client.customInvoiceRows.length > 0
+      ? [...client.customInvoiceRows]
+      : [{ name: "", amount: 0 }],
   );
 
   useEffect(() => {
-    const next = estimateInvoiceFromSlabs(
-      txnInput,
-      client.fixedBilling,
-      client.transactionSlabs,
-      client.aws,
-      client.minimumGuarantee,
-      client.integrationFee,
-      client.additionalPlatformFee,
-    );
-    setInvoiceDraft(next);
-  }, [txnInput, client]);
+    setTxnInput(client.monthlyTransactionVolume);
+  }, [client.id, client.monthlyTransactionVolume]);
 
-  const fixedCharges = client.fixedBilling + client.additionalPlatformFee + client.integrationFee;
-  const awsMargin = client.aws.enabled ? client.aws.vendorCost * (client.aws.marginPercentage / 100) : 0;
-  const variableCharges = invoiceDraft - client.fixedBilling - awsMargin - client.additionalPlatformFee - client.integrationFee;
+  useEffect(() => {
+    setCustomRowsDraft(
+      client.customInvoiceRows && client.customInvoiceRows.length > 0
+        ? [...client.customInvoiceRows]
+        : [{ name: "", amount: 0 }],
+    );
+  }, [client.id, client.customInvoiceRows]);
+
+  const commercialSummary = useMemo(() => calculateInvoiceCommercials(client, txnInput), [client, txnInput]);
+  const invoiceDraft = commercialSummary.subtotal;
+  const fixedCharges = client.fixedBilling + client.additionalPlatformFee + client.integrationFee + commercialSummary.setupFeeDue;
+  const awsMargin = commercialSummary.awsMarkup;
+  const variableCharges = Math.max(commercialSummary.transactionBase - client.fixedBilling - awsMargin - client.additionalPlatformFee - client.integrationFee, 0);
   const tax = invoiceDraft * 0.18;
   const finalPayable = invoiceDraft + tax;
+
+  const addCustomRow = () => {
+    setCustomRowsDraft((prev) => [...prev, { name: "", amount: 0 }]);
+  };
+
+  const updateCustomRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {
+    setCustomRowsDraft((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: key === "amount" ? Number(value) || 0 : value } : row)),
+    );
+  };
+
+  const removeCustomRow = (index: number) => {
+    setCustomRowsDraft((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const saveCustomRows = () => {
+    onSaveCustomRows(customRowsDraft.filter((row) => String(row.name || "").trim().length > 0));
+  };
 
   // Logging for debugging Commercial Summary Panel calculations
   console.log("[Invoice] Commercial Summary calculations:", {
@@ -2252,6 +2341,35 @@ function ClientOverviewScreen({
             <div className="rounded-2xl border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
               {client.notes}
             </div>
+            <div className="space-y-3 rounded-2xl border bg-background p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium">Additional invoice rows</p>
+                  <p className="text-sm text-muted-foreground">Add custom invoice rows that will be included in generated invoices.</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={addCustomRow}>
+                  <Plus className="mr-2 h-4 w-4" /> Add row
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {customRowsDraft.map((row, index) => (
+                  <div key={index} className="grid gap-3 md:grid-cols-[1fr_140px_auto] md:items-end">
+                    <div className="space-y-2">
+                      <Label>Name</Label>
+                      <Input value={row.name} onChange={(e) => updateCustomRow(index, "name", e.target.value)} placeholder="Fee name" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Amount</Label>
+                      <Input type="number" value={row.amount} onChange={(e) => updateCustomRow(index, "amount", e.target.value)} />
+                    </div>
+                    <Button variant="outline" size="icon" onClick={() => removeCustomRow(index)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button onClick={saveCustomRows} className="w-fit">Save rows</Button>
+            </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span>AWS infra recovery</span>
@@ -2291,6 +2409,13 @@ function InvoiceConfigEditor({
   const [priority, setPriority] = useState<keyof typeof PRIORITY_META>(getPriorityFromClient(client || CLIENTS[0]));
   const [fixedBilling, setFixedBilling] = useState(client?.fixedBilling || 0);
   const [billingCycle, setBillingCycle] = useState(client?.billingCycle || "Monthly");
+  const [billingModel, setBillingModel] = useState<BillingModel>(client?.billingModel || "transaction");
+  const [billingYear, setBillingYear] = useState<1 | 2 | 3>(client?.billingYear || 1);
+  const [setupFee, setSetupFee] = useState(client?.setupFee || 0);
+  const [setupFeePaid, setSetupFeePaid] = useState(client?.setupFeePaid || 0);
+  const [mmcYear1, setMmcYear1] = useState(client?.mmcYear1 || 0);
+  const [mmcYear2, setMmcYear2] = useState(client?.mmcYear2 || 0);
+  const [mmcYear3, setMmcYear3] = useState(client?.mmcYear3 || 0);
   const [minimumGuarantee, setMinimumGuarantee] = useState(client?.minimumGuarantee || 0);
   const [additionalPlatformFee, setAdditionalPlatformFee] = useState(client?.additionalPlatformFee || 0);
   const [integrationFee, setIntegrationFee] = useState(client?.integrationFee || 0);
@@ -2310,6 +2435,11 @@ function InvoiceConfigEditor({
   const [txnPreview, setTxnPreview] = useState(client?.monthlyTransactionVolume || 1000000);
   const [clientType, setClientType] = useState<ClientType>(client?.clientType || "Domestic");
   const [clientCurrency, setClientCurrency] = useState<CurrencyType>(client?.currency || "INR");
+  const [customInvoiceRows, setCustomInvoiceRows] = useState<CustomInvoiceRow[]>(
+    client?.customInvoiceRows && client.customInvoiceRows.length > 0
+      ? [...client.customInvoiceRows]
+      : [],
+  );
 
   const preview = useMemo(() => {
     const fakeClient = {
@@ -2319,17 +2449,17 @@ function InvoiceConfigEditor({
       minimumGuarantee,
       integrationFee,
       additionalPlatformFee,
-    } as any;
-    return estimateInvoiceFromSlabs(
-      txnPreview,
-      fakeClient.fixedBilling,
-      fakeClient.transactionSlabs,
-      fakeClient.aws,
-      fakeClient.minimumGuarantee,
-      fakeClient.integrationFee,
-      fakeClient.additionalPlatformFee,
-    );
-  }, [fixedBilling, slabs, awsEnabled, awsVendorCost, awsMarginPercentage, minimumGuarantee, integrationFee, additionalPlatformFee, txnPreview]);
+      billingModel,
+      billingYear,
+      setupFee,
+      setupFeePaid,
+      mmcYear1,
+      mmcYear2,
+      mmcYear3,
+      customInvoiceRows,
+    } as ClientRecord;
+    return estimateInvoiceFromSlabs(fakeClient, txnPreview);
+  }, [fixedBilling, slabs, awsEnabled, awsVendorCost, awsMarginPercentage, minimumGuarantee, integrationFee, additionalPlatformFee, txnPreview, billingModel, billingYear, setupFee, setupFeePaid, mmcYear1, mmcYear2, mmcYear3, customInvoiceRows]);
 
   const updateSlab = (index: number, key: keyof ClientRecord["transactionSlabs"][number], value: any) => {
     setSlabs((prev) => prev.map((slab, i) => (i === index ? { ...slab, [key]: value } : slab)));
@@ -2348,6 +2478,20 @@ function InvoiceConfigEditor({
     );
   };
 
+  const addCustomInvoiceRow = () => {
+    setCustomInvoiceRows((prev) => [...prev, { name: "", amount: 0 }]);
+  };
+
+  const updateCustomInvoiceRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {
+    setCustomInvoiceRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: key === "amount" ? Number(value) || 0 : value } : row)),
+    );
+  };
+
+  const removeCustomInvoiceRow = (index: number) => {
+    setCustomInvoiceRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const submit = () => {
     onSave({
       id: client?.id,
@@ -2358,6 +2502,13 @@ function InvoiceConfigEditor({
       priority,
       fixedBilling,
       billingCycle,
+      billingModel,
+      billingYear,
+      setupFee,
+      setupFeePaid,
+      mmcYear1,
+      mmcYear2,
+      mmcYear3,
       minimumGuarantee,
       additionalPlatformFee,
       integrationFee,
@@ -2374,6 +2525,7 @@ function InvoiceConfigEditor({
       monthlyTransactionVolume: txnPreview,
       clientType,
       clientCurrency,
+      customInvoiceRows,
     });
   };
 
@@ -2497,6 +2649,37 @@ function InvoiceConfigEditor({
                         ))}
                       </div>
                     </div>
+                    <div className="space-y-3 md:col-span-2 rounded-2xl border bg-muted/20 p-4">
+                      <Label>Billing Mode</Label>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className={cn("flex items-start gap-3 rounded-xl border p-4 text-sm", billingModel === "transaction" && "border-primary bg-primary/5")}>
+                          <input
+                            type="radio"
+                            name="billing-model"
+                            checked={billingModel === "transaction"}
+                            onChange={() => setBillingModel("transaction")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <div>
+                            <div className="font-medium">Transaction based config</div>
+                            <div className="text-muted-foreground">Bill based on transaction slabs and recurring fees.</div>
+                          </div>
+                        </label>
+                        <label className={cn("flex items-start gap-3 rounded-xl border p-4 text-sm", billingModel === "mmc" && "border-primary bg-primary/5")}>
+                          <input
+                            type="radio"
+                            name="billing-model"
+                            checked={billingModel === "mmc"}
+                            onChange={() => setBillingModel("mmc")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <div>
+                            <div className="font-medium">MMC (Monthly Minimum Commitment)</div>
+                            <div className="text-muted-foreground">Bill whichever is higher: MMC floor or transaction-based amount.</div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -2530,6 +2713,41 @@ function InvoiceConfigEditor({
                       <Label>Integration Fee</Label>
                       <Input type="number" value={integrationFee} onChange={(e) => setIntegrationFee(Number(e.target.value))} />
                     </div>
+                    {billingModel === "mmc" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Active MMC Year</Label>
+                          <Select value={String(billingYear)} onValueChange={(value) => setBillingYear(Number(value) as 1 | 2 | 3)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">Year 1</SelectItem>
+                              <SelectItem value="2">Year 2</SelectItem>
+                              <SelectItem value="3">Year 3 onwards</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Onetime Setup Fee</Label>
+                          <Input type="number" value={setupFee} onChange={(e) => setSetupFee(Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Setup Fee Collected</Label>
+                          <Input type="number" value={setupFeePaid} onChange={(e) => setSetupFeePaid(Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Year 1 MMC</Label>
+                          <Input type="number" value={mmcYear1} onChange={(e) => setMmcYear1(Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Year 2 MMC</Label>
+                          <Input type="number" value={mmcYear2} onChange={(e) => setMmcYear2(Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Year 3 onwards MMC</Label>
+                          <Input type="number" value={mmcYear3} onChange={(e) => setMmcYear3(Number(e.target.value))} />
+                        </div>
+                      </>
+                    )}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -2559,6 +2777,48 @@ function InvoiceConfigEditor({
                     <div className="space-y-2">
                       <Label>Configuration Notes</Label>
                       <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Commercial notes, tax handling, pass-through logic..." />
+                    </div>
+                    <div className="space-y-4 rounded-2xl border bg-background p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium">Additional invoice rows</p>
+                          <p className="text-sm text-muted-foreground">Add any extra invoice row such as VAP/MIP connectivity or compliance charges.</p>
+                        </div>
+                        <Button variant="outline" type="button" onClick={addCustomInvoiceRow}>
+                          <Plus className="mr-2 h-4 w-4" /> Add row
+                        </Button>
+                      </div>
+                      <div className="space-y-3">
+                        {customInvoiceRows.length === 0 && (
+                          <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                            No custom rows added yet.
+                          </div>
+                        )}
+                        {customInvoiceRows.map((row, index) => (
+                          <div key={index} className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
+                            <div className="space-y-2">
+                              <Label>Row name</Label>
+                              <Input
+                                value={row.name}
+                                onChange={(e) => updateCustomInvoiceRow(index, "name", e.target.value)}
+                                placeholder="e.g. VAP/MIP connectivity fee"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Amount</Label>
+                              <Input
+                                type="number"
+                                value={row.amount}
+                                onChange={(e) => updateCustomInvoiceRow(index, "amount", e.target.value)}
+                                placeholder="0"
+                              />
+                            </div>
+                            <Button variant="outline" type="button" onClick={() => removeCustomInvoiceRow(index)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </AccordionContent>
@@ -2822,6 +3082,14 @@ export default function InvoiceManagement() {
             signatoryName: client.signatoryName,
             clientType: client.clientType || "Domestic",
             currency: client.currency || "INR",
+            billingModel: client.billingModel || "transaction",
+            billingYear: client.billingYear || 1,
+            setupFee: client.setupFee || 0,
+            setupFeePaid: client.setupFeePaid || 0,
+            mmcYear1: client.mmcYear1 || 0,
+            mmcYear2: client.mmcYear2 || 0,
+            mmcYear3: client.mmcYear3 || 0,
+            customInvoiceRows: client.customInvoiceRows || [],
           }));
           console.log("[InvoiceManagement] Mapped clients:", dbClients);
           setClients(dbClients);
@@ -2880,15 +3148,7 @@ export default function InvoiceManagement() {
       setInvoiceModalMode("create");
       setSelectedInvoice(null);
 
-      const estimated = Math.round(estimateInvoiceFromSlabs(
-        client.monthlyTransactionVolume || 0,
-        client.fixedBilling || 0,
-        client.transactionSlabs || [],
-        client.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
-        client.minimumGuarantee || 0,
-        client.integrationFee || 0,
-        client.additionalPlatformFee || 0,
-      ));
+      const estimated = Math.round(estimateInvoiceFromSlabs(client, client.monthlyTransactionVolume || 0));
 
       console.log("[Invoice] openInvoiceCreateModal - Estimated amount:", estimated);
       setInvoiceAmountDraft(estimated);
@@ -2970,6 +3230,14 @@ export default function InvoiceManagement() {
               signatoryName: data.signatoryName,
               clientType: data.clientType || "Domestic",
               currency: data.currency || "INR",
+              billingModel: data.billingModel || "transaction",
+              billingYear: data.billingYear || 1,
+              setupFee: data.setupFee || 0,
+              setupFeePaid: data.setupFeePaid || 0,
+              mmcYear1: data.mmcYear1 || 0,
+              mmcYear2: data.mmcYear2 || 0,
+              mmcYear3: data.mmcYear3 || 0,
+              customInvoiceRows: data.customInvoiceRows || [],
             };
             console.log("[Invoice] Updated client object:", updatedClient);
             return exists ? prev.map(c => (c.id === data.id || c.id === data.clientId) ? updatedClient : c) : [updatedClient, ...prev];
@@ -3149,15 +3417,7 @@ export default function InvoiceManagement() {
       console.log("[Invoice] generateInvoiceForClient - Generated date:", generatedDate);
 
       const generatedAmount = Math.round(
-        estimateInvoiceFromSlabs(
-          client.monthlyTransactionVolume || 0,
-          client.fixedBilling || 0,
-          client.transactionSlabs || [],
-          client.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
-          client.minimumGuarantee || 0,
-          client.integrationFee || 0,
-          client.additionalPlatformFee || 0,
-        ),
+        estimateInvoiceFromSlabs(client, client.monthlyTransactionVolume || 0),
       );
 
       console.log("[Invoice] generateInvoiceForClient - Generated amount:", generatedAmount);
@@ -3175,6 +3435,8 @@ export default function InvoiceManagement() {
         amount: generatedAmount,
         status: "Waiting for approval",
         generatedDate,
+        customInvoiceRows: client.customInvoiceRows || [],
+        billingModel: client.billingModel || "transaction",
       };
 
       console.log("[Invoice] generateInvoiceForClient - Next invoice object:", nextInvoice);
@@ -3196,6 +3458,8 @@ export default function InvoiceManagement() {
             generatedDate: nextInvoice.generatedDate,
             financialYear: nextInvoice.financialYear,
             serial: nextInvoice.serial,
+            customInvoiceRows: nextInvoice.customInvoiceRows || [],
+            billingModel: nextInvoice.billingModel || "transaction",
           }),
         });
         console.log("[Invoice] generateInvoiceForClient - Successfully saved to database");
@@ -3275,6 +3539,8 @@ export default function InvoiceManagement() {
           generatedDate: updatedInvoice.generatedDate,
           financialYear: updatedInvoice.financialYear,
           serial: updatedInvoice.serial,
+          customInvoiceRows: updatedInvoice.customInvoiceRows || [],
+          billingModel: updatedInvoice.billingModel || selectedClient?.billingModel || "transaction",
         }),
       }).catch((err) => {
         console.warn("[Invoice] Failed to update invoice in database:", err);
@@ -3362,7 +3628,7 @@ export default function InvoiceManagement() {
     try {
       const invoiceNumber = getInvoiceDisplayNumber(invoice);
       await downloadInvoicePdfTemplate({
-        client,
+        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction" },
         companyConfig,
         invoiceNumber,
         generatedDate: invoice.generatedDate,
@@ -3390,7 +3656,7 @@ export default function InvoiceManagement() {
     try {
       const invoiceNumber = getInvoiceDisplayNumber(invoice);
       await downloadInvoiceDocxTemplate({
-        client,
+        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction" },
         companyConfig,
         invoiceNumber,
         generatedDate: invoice.generatedDate,
@@ -3544,6 +3810,14 @@ export default function InvoiceManagement() {
         signatoryName: payload.signatoryName,
         clientType: payload.clientType || "Domestic",
         currency: payload.clientCurrency || "INR",
+        billingModel: payload.billingModel || "transaction",
+        billingYear: payload.billingYear || 1,
+        setupFee: payload.setupFee || 0,
+        setupFeePaid: payload.setupFeePaid || 0,
+        mmcYear1: payload.mmcYear1 || 0,
+        mmcYear2: payload.mmcYear2 || 0,
+        mmcYear3: payload.mmcYear3 || 0,
+        customInvoiceRows: payload.customInvoiceRows || [],
       };
 
       // Save to database via API (encrypted at rest)
@@ -3583,6 +3857,14 @@ export default function InvoiceManagement() {
           notes: payload.notes,
           transactionSlabs: payload.transactionSlabs || [],
           aws: payload.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
+          billingModel: payload.billingModel || "transaction",
+          billingYear: payload.billingYear || 1,
+          setupFee: payload.setupFee || 0,
+          setupFeePaid: payload.setupFeePaid || 0,
+          mmcYear1: payload.mmcYear1 || 0,
+          mmcYear2: payload.mmcYear2 || 0,
+          mmcYear3: payload.mmcYear3 || 0,
+          customInvoiceRows: payload.customInvoiceRows || [],
         }),
       });
 
@@ -3672,6 +3954,14 @@ export default function InvoiceManagement() {
           onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
           onDownloadPdf={downloadInvoicePdf}
           onDownloadDocx={downloadInvoiceDocx}
+          onSaveCustomRows={(rows) =>
+            saveConfig({
+              ...selectedClient,
+              clientId: selectedClient.clientId,
+              clientCurrency: selectedClient.currency || "INR",
+              customInvoiceRows: rows,
+            })
+          }
         />
 
         {/* Invoice Creation/Editing Modal */}

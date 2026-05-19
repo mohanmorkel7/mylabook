@@ -74,6 +74,19 @@ function decrypt(text: string | null | undefined): string {
   } catch { return ""; }
 }
 
+function safeParseJson<T>(value: string | null | undefined, fallback: T): T {
+  try {
+    if (!value) return fallback;
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeBillingModel(value: string | null | undefined) {
+  return String(value || "transaction").toLowerCase() === "mmc" ? "mmc" : "transaction";
+}
+
 // ── Initialize schema asynchronously at router creation time ─────────────
 // This will start initialization but not block router creation
 setTimeout(() => {
@@ -109,6 +122,14 @@ export async function initializeInvoiceSchema() {
         additional_fee        TEXT,
         integration_fee       TEXT,
         billing_cycle         TEXT,
+        billing_model         TEXT,
+        billing_year          TEXT,
+        setup_fee             TEXT,
+        setup_fee_paid        TEXT,
+        mmc_year_1            TEXT,
+        mmc_year_2            TEXT,
+        mmc_year_3            TEXT,
+        custom_invoice_rows   TEXT,
         last_invoice_generated TEXT,
         logo                  TEXT,
         logo_class            TEXT,
@@ -133,6 +154,14 @@ export async function initializeInvoiceSchema() {
     try {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS transaction_slabs TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS aws_config TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS billing_model TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS billing_year TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS setup_fee TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS setup_fee_paid TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS mmc_year_1 TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS mmc_year_2 TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS mmc_year_3 TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
       console.log("[Invoice] ✓ Added missing columns to invoice_clients");
     } catch (err) {
       console.log("[Invoice] Columns already exist or error:", (err as any)?.message);
@@ -153,11 +182,21 @@ export async function initializeInvoiceSchema() {
         generated_date      TEXT NOT NULL,
         financial_year      TEXT,
         serial              TEXT,
+        billing_model       TEXT,
+        custom_invoice_rows TEXT,
         created_at          TIMESTAMPTZ DEFAULT NOW(),
         updated_at          TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     console.log("[Invoice] ✓ invoice_records table created");
+
+    // Add missing columns for invoice_records if table already existed
+    try {
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS billing_model TEXT`);
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
+    } catch (err) {
+      console.log("[Invoice] invoice_records columns already exist or error:", (err as any)?.message);
+    }
 
     // Create indexes
     console.log("[Invoice] Creating indexes...");
@@ -205,6 +244,8 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         generatedDate: decrypt(row.generated_date),
         financialYear: decrypt(row.financial_year),
         serial: parseInt(decrypt(row.serial) || "0"),
+        billingModel: normalizeBillingModel(decrypt(row.billing_model)),
+        customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
       }));
     } catch (invoiceErr: any) {
       console.warn("[Invoice] Failed to fetch invoice history for", clientId, invoiceErr?.message);
@@ -231,6 +272,14 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       additionalPlatformFee: parseInt(decrypt(client.additional_fee) || "0"),
       integrationFee: parseInt(decrypt(client.integration_fee) || "0"),
       billingCycle: decrypt(client.billing_cycle),
+      billingModel: normalizeBillingModel(decrypt(client.billing_model)),
+      billingYear: parseInt(decrypt(client.billing_year) || "1"),
+      setupFee: parseInt(decrypt(client.setup_fee) || "0"),
+      setupFeePaid: parseInt(decrypt(client.setup_fee_paid) || "0"),
+      mmcYear1: parseInt(decrypt(client.mmc_year_1) || "0"),
+      mmcYear2: parseInt(decrypt(client.mmc_year_2) || "0"),
+      mmcYear3: parseInt(decrypt(client.mmc_year_3) || "0"),
+      customInvoiceRows: safeParseJson(decrypt(client.custom_invoice_rows), []),
       lastInvoiceGenerated: decrypt(client.last_invoice_generated),
       logo: decrypt(client.logo),
       logoClass: decrypt(client.logo_class),
@@ -276,6 +325,14 @@ router.post("/clients", async (req: Request, res: Response) => {
       additionalPlatformFee,
       integrationFee,
       billingCycle,
+      billingModel,
+      billingYear,
+      setupFee,
+      setupFeePaid,
+      mmcYear1,
+      mmcYear2,
+      mmcYear3,
+      customInvoiceRows,
       lastInvoiceGenerated,
       logo,
       logoClass,
@@ -299,10 +356,12 @@ router.post("/clients", async (req: Request, res: Response) => {
       fixed_billing, monthly_invoice_est, monthly_txn_volume,
       variable_revenue, aws_infra_recovery, recon_revenue,
       profitability_revenue, min_guarantee, additional_fee, integration_fee,
-      billing_cycle, last_invoice_generated, logo, logo_class, color,
+      billing_cycle, billing_model, billing_year, setup_fee, setup_fee_paid,
+      mmc_year_1, mmc_year_2, mmc_year_3, custom_invoice_rows,
+      last_invoice_generated, logo, logo_class, color,
       gstin, lut_number, billing_address, billing_email, signatory_name,
       client_type, currency, notes, transaction_slabs, aws_config
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
     ON CONFLICT (client_id) DO UPDATE SET
       client_code = EXCLUDED.client_code,
       client_name = EXCLUDED.client_name,
@@ -320,6 +379,14 @@ router.post("/clients", async (req: Request, res: Response) => {
       additional_fee = EXCLUDED.additional_fee,
       integration_fee = EXCLUDED.integration_fee,
       billing_cycle = EXCLUDED.billing_cycle,
+      billing_model = EXCLUDED.billing_model,
+      billing_year = EXCLUDED.billing_year,
+      setup_fee = EXCLUDED.setup_fee,
+      setup_fee_paid = EXCLUDED.setup_fee_paid,
+      mmc_year_1 = EXCLUDED.mmc_year_1,
+      mmc_year_2 = EXCLUDED.mmc_year_2,
+      mmc_year_3 = EXCLUDED.mmc_year_3,
+      custom_invoice_rows = EXCLUDED.custom_invoice_rows,
       last_invoice_generated = EXCLUDED.last_invoice_generated,
       logo = EXCLUDED.logo,
       logo_class = EXCLUDED.logo_class,
@@ -354,6 +421,14 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(String(additionalPlatformFee)),
       encrypt(String(integrationFee)),
       encrypt(billingCycle),
+      encrypt(normalizeBillingModel(billingModel)),
+      encrypt(String(billingYear || 1)),
+      encrypt(String(setupFee || 0)),
+      encrypt(String(setupFeePaid || 0)),
+      encrypt(String(mmcYear1 || 0)),
+      encrypt(String(mmcYear2 || 0)),
+      encrypt(String(mmcYear3 || 0)),
+      encrypt(JSON.stringify(Array.isArray(customInvoiceRows) ? customInvoiceRows : [])),
       encrypt(lastInvoiceGenerated),
       encrypt(logo),
       encrypt(logoClass),
@@ -389,6 +464,14 @@ router.post("/clients", async (req: Request, res: Response) => {
       additional_fee: additionalPlatformFee,
       integration_fee: integrationFee,
       billing_cycle: billingCycle,
+      billing_model: normalizeBillingModel(billingModel),
+      billing_year: String(billingYear || 1),
+      setup_fee: String(setupFee || 0),
+      setup_fee_paid: String(setupFeePaid || 0),
+      mmc_year_1: String(mmcYear1 || 0),
+      mmc_year_2: String(mmcYear2 || 0),
+      mmc_year_3: String(mmcYear3 || 0),
+      custom_invoice_rows: Array.isArray(customInvoiceRows) ? customInvoiceRows : [],
       last_invoice_generated: lastInvoiceGenerated,
       logo: logo,
       logo_class: logoClass,
@@ -481,6 +564,14 @@ router.get("/clients", async (req: Request, res: Response) => {
           additionalPlatformFee: parseInt(decrypt(client.additional_fee) || "0"),
           integrationFee: parseInt(decrypt(client.integration_fee) || "0"),
           billingCycle: decrypt(client.billing_cycle),
+          billingModel: normalizeBillingModel(decrypt(client.billing_model)),
+          billingYear: parseInt(decrypt(client.billing_year) || "1"),
+          setupFee: parseInt(decrypt(client.setup_fee) || "0"),
+          setupFeePaid: parseInt(decrypt(client.setup_fee_paid) || "0"),
+          mmcYear1: parseInt(decrypt(client.mmc_year_1) || "0"),
+          mmcYear2: parseInt(decrypt(client.mmc_year_2) || "0"),
+          mmcYear3: parseInt(decrypt(client.mmc_year_3) || "0"),
+          customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
           lastInvoiceGenerated: decrypt(client.last_invoice_generated),
           logo: decrypt(client.logo),
           logoClass: decrypt(client.logo_class),
@@ -524,6 +615,14 @@ router.get("/clients", async (req: Request, res: Response) => {
       additionalPlatformFee: client.additional_fee || 0,
       integrationFee: client.integration_fee || 0,
       billingCycle: client.billing_cycle,
+      billingModel: normalizeBillingModel(client.billing_model),
+      billingYear: parseInt(client.billing_year || "1"),
+      setupFee: parseInt(client.setup_fee || "0"),
+      setupFeePaid: parseInt(client.setup_fee_paid || "0"),
+      mmcYear1: parseInt(client.mmc_year_1 || "0"),
+      mmcYear2: parseInt(client.mmc_year_2 || "0"),
+      mmcYear3: parseInt(client.mmc_year_3 || "0"),
+      customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,
@@ -574,6 +673,14 @@ router.get("/clients", async (req: Request, res: Response) => {
       additionalPlatformFee: client.additional_fee || 0,
       integrationFee: client.integration_fee || 0,
       billingCycle: client.billing_cycle,
+      billingModel: normalizeBillingModel(client.billing_model),
+      billingYear: parseInt(client.billing_year || "1"),
+      setupFee: parseInt(client.setup_fee || "0"),
+      setupFeePaid: parseInt(client.setup_fee_paid || "0"),
+      mmcYear1: parseInt(client.mmc_year_1 || "0"),
+      mmcYear2: parseInt(client.mmc_year_2 || "0"),
+      mmcYear3: parseInt(client.mmc_year_3 || "0"),
+      customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,
@@ -608,14 +715,19 @@ router.post("/invoices", async (req: Request, res: Response) => {
       generatedDate,
       financialYear,
       serial,
+      billingModel,
+      customInvoiceRows,
     } = req.body;
 
     const query = `INSERT INTO invoice_records (
       invoice_id, invoice_number, client_id, client_name, month,
-      amount, status, generated_date, financial_year, serial
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      amount, status, generated_date, financial_year, serial,
+      billing_model, custom_invoice_rows
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ON CONFLICT (invoice_id) DO UPDATE SET
       status = EXCLUDED.status,
+      billing_model = EXCLUDED.billing_model,
+      custom_invoice_rows = EXCLUDED.custom_invoice_rows,
       updated_at = NOW()`;
 
     const params = [
@@ -629,6 +741,8 @@ router.post("/invoices", async (req: Request, res: Response) => {
       encrypt(generatedDate),
       encrypt(financialYear),
       encrypt(String(serial)),
+      encrypt(normalizeBillingModel(billingModel)),
+      encrypt(JSON.stringify(Array.isArray(customInvoiceRows) ? customInvoiceRows : [])),
     ];
 
     await queryWithRetry(() => pool.query(query, params));
@@ -659,6 +773,8 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
       generatedDate: decrypt(row.generated_date),
       financialYear: decrypt(row.financial_year),
       serial: parseInt(decrypt(row.serial) || "0"),
+      billingModel: normalizeBillingModel(decrypt(row.billing_model)),
+      customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
     }));
 
     res.json(invoices);

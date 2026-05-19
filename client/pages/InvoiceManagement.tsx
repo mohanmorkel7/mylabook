@@ -4639,11 +4639,11 @@ export default function InvoiceManagement() {
             <div className="grid min-w-[980px] gap-4 pb-2 lg:grid-cols-2 2xl:grid-cols-3">
               {filteredClients.map((client) => (
                 <ClientConfigCard
-                  key={client.id}
+                  key={client.clientId || client.id}
                   client={client}
-                  onEdit={() => navigate(`/invoice-management/client/${client.id}/edit`)}
+                  onEdit={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}/edit`)}
                   onDelete={() => handleDeleteClient(client.id)}
-                  onOverview={() => navigate(`/invoice-management/client/${client.id}`)}
+                  onOverview={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}`)}
                 />
               ))}
             </div>

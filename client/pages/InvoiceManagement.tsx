@@ -1255,41 +1255,58 @@ async function downloadInvoicePdfTemplate({
   drawHeaderBand();
 
   // === HEADER ===
-  const headerHeight = 22;
+  const headerHeight = 38;
+  const headerLeftWidth = contentWidth * 0.46;
   if (logoData) {
     try {
-      doc.addImage(logoData, "PNG", margin, cursorY, 30, 10);
+      doc.addImage(logoData, "PNG", margin, cursorY, 28, 9.5);
     } catch {}
   }
+
+  const headerLeftLines = [
+    companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd",
+    ...wrap(getCompanyDisplayAddress(companyConfig), headerLeftWidth),
+    companyConfig.email || "contact@mylapay.com",
+    companyConfig.phone || "+91 44 XXXX XXXX",
+    `GSTIN: ${companyConfig.gstNumber || "—"}`,
+    `LUT: ${companyConfig.lutNumber || "—"}`,
+  ];
+
   setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.6);
-  doc.text(companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd", margin, cursorY + 14.4);
-  doc.text(`${companyConfig.email || "contact@mylapay.com"}  ·  ${companyConfig.phone || "+91 44 XXXX XXXX"}`, margin, cursorY + 17.1);
+  doc.setFontSize(5.3);
+  let headerLeftY = cursorY + 12.8;
+  headerLeftLines.forEach((line, idx) => {
+    doc.setFont("helvetica", idx === 0 ? "bold" : "normal");
+    doc.setFontSize(idx === 0 ? 6.1 : 5.2);
+    const lines = wrap(String(line), headerLeftWidth);
+    doc.text(lines, margin, headerLeftY);
+    headerLeftY += lines.length * (idx === 0 ? 3.1 : 2.7) + 0.2;
+  });
 
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(26);
-  doc.text("INVOICE", pageWidth - margin, cursorY + 6, { align: "right" });
+  doc.setFontSize(23);
+  doc.text("INVOICE", pageWidth - margin, cursorY + 5.8, { align: "right" });
   setText(PRIMARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.6);
-  doc.text("TAX INVOICE", pageWidth - margin, cursorY + 11.5, { align: "right" });
+  doc.setFontSize(8.4);
+  doc.text("TAX INVOICE", pageWidth - margin, cursorY + 10.7, { align: "right" });
 
   setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.4);
-  doc.text("Invoice No.", pageWidth - margin - 38, cursorY + 18.5);
-  doc.text("Issue Date", pageWidth - margin - 38, cursorY + 22.5);
-  doc.text("Period", pageWidth - margin - 38, cursorY + 26.5);
+  doc.setFontSize(7.1);
+  doc.text("Invoice No.", pageWidth - margin - 38, cursorY + 17.8);
+  doc.text("Issue Date", pageWidth - margin - 38, cursorY + 21.4);
+  doc.text("Period", pageWidth - margin - 38, cursorY + 25.0);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.2);
-  doc.text(invoiceNumber, pageWidth - margin, cursorY + 18.5, { align: "right" });
-  doc.text(generatedDate, pageWidth - margin, cursorY + 22.5, { align: "right" });
-  doc.text(`${month} · FY ${financialYear}`, pageWidth - margin, cursorY + 26.5, { align: "right" });
+  doc.setFontSize(8.0);
+  doc.text(invoiceNumber, pageWidth - margin, cursorY + 17.8, { align: "right" });
+  doc.text(generatedDate, pageWidth - margin, cursorY + 21.4, { align: "right" });
+  doc.text(`${month} · FY ${financialYear}`, pageWidth - margin, cursorY + 25.0, { align: "right" });
 
-  cursorY += headerHeight + 4;
+  cursorY += headerHeight + 2;
 
   // Divider line
   setStroke(PRIMARY);

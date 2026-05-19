@@ -3525,15 +3525,16 @@ export default function InvoiceManagement() {
   };
 
   const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {
-    const currentInvoice = invoices.find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+    const currentInvoice =
+      invoices.find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber) ||
+      clients.flatMap((client) => client.invoiceHistory || []).find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+
     if (!currentInvoice) return;
 
     const updatedInvoice = updater(currentInvoice);
 
     // Update local state first for immediate UI feedback
-    setInvoices((prev) =>
-      updateInvoiceCollection(prev, invoiceNumber, () => updatedInvoice),
-    );
+    setInvoices((prev) => updateInvoiceCollection(prev, invoiceNumber, () => updatedInvoice));
 
     setClients((prev) =>
       prev.map((client) => ({
@@ -3546,6 +3547,8 @@ export default function InvoiceManagement() {
       })),
     );
 
+    const persistedClientId = updatedInvoice.clientId || selectedClient?.clientId || selectedClient?.id;
+
     // Save to database (best-effort, don't block UI)
     fetch("/api/invoice-management/invoices", {
       method: "POST",
@@ -3553,7 +3556,7 @@ export default function InvoiceManagement() {
       body: JSON.stringify({
         invoiceId: updatedInvoice.invoiceId,
         invoiceNumber: updatedInvoice.invoiceNumber,
-        clientId: updatedInvoice.clientId || selectedClient?.clientId || selectedClient?.id,
+        clientId: persistedClientId,
         clientName: updatedInvoice.client,
         month: updatedInvoice.month,
         amount: updatedInvoice.amount,

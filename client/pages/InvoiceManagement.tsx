@@ -1425,7 +1425,7 @@ async function downloadInvoicePdfTemplate({
   lineRow("Subtotal", money(subtotal));
   lineRow("GST / Tax (18%)", gst > 0 ? money(gst) : "LUT Exempt");
   lineRow("Total Payable", money(totalPayable), { bold: true, bg: true });
-  cursorY += 4;
+  cursorY += 8;
 
   // === AMOUNT IN WORDS ===
   ensureSpace(8);
@@ -1436,7 +1436,7 @@ async function downloadInvoicePdfTemplate({
   cursorY += 8;
 
   // === DECLARATION ===
-  ensureSpace(10);
+  ensureSpace(14);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.6);
@@ -1444,7 +1444,7 @@ async function downloadInvoicePdfTemplate({
   setStroke(PRIMARY);
   doc.setLineWidth(0.5);
   doc.line(margin, cursorY + 1.6, margin + 28, cursorY + 1.6);
-  cursorY += 5;
+  cursorY += 8;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.4);
@@ -1453,7 +1453,7 @@ async function downloadInvoicePdfTemplate({
     ensureSpace(lines.length * 3.8 + 2);
     setText(SECONDARY);
     doc.text(lines, margin, cursorY);
-    cursorY += lines.length * 3.8 + 1.5;
+    cursorY += lines.length * 3.8 + 2.2;
   });
   cursorY += 4;
 

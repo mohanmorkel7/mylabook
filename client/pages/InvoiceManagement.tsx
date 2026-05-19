@@ -3125,11 +3125,23 @@ export default function InvoiceManagement() {
   }, [toast]);
 
   const selectedClient = useMemo(() => {
-    const found = clients.find((item) => item.id === clientId);
+    const routeId = String(clientId || "").toLowerCase();
+    const found = clients.find((item) =>
+      String(item.id) === String(clientId) ||
+      String(item.clientId || "").toLowerCase() === routeId ||
+      String(item.code || "").toLowerCase() === routeId,
+    );
     console.log("[Invoice] selectedClient useMemo - clientId:", clientId, "found:", found, "all clients:", clients);
     return found || clients[0];
   }, [clients, clientId]);
-  const editingClient = useMemo(() => clients.find((item) => item.id === (editingClientId || clientId)) || undefined, [clients, editingClientId, clientId]);
+  const editingClient = useMemo(() => {
+    const routeId = String(editingClientId || clientId || "").toLowerCase();
+    return clients.find((item) =>
+      String(item.id) === String(editingClientId || clientId) ||
+      String(item.clientId || "").toLowerCase() === routeId ||
+      String(item.code || "").toLowerCase() === routeId,
+    ) || undefined;
+  }, [clients, editingClientId, clientId]);
   const invoiceNumberPreview = useMemo(
     () => getCurrentInvoiceNumberPreview(invoiceSerialConfig),
     [invoiceSerialConfig],
@@ -3772,7 +3784,7 @@ export default function InvoiceManagement() {
     try {
       // For editing: use clientId (unique identifier), for new: use code as identifier
       const clientId = payload.clientId || payload.code?.toLowerCase();
-      const baseId = payload.id || clientId || `client-${Date.now()}`;
+      const baseId = clientId || payload.id || `client-${Date.now()}`;
 
       console.log("[Invoice] saveConfig - payload:", { id: payload.id, clientId: payload.clientId, code: payload.code, baseId });
 
@@ -3869,8 +3881,20 @@ export default function InvoiceManagement() {
       });
 
       setClients((prev) => {
-        const exists = prev.some((client) => client.id === baseId);
-        return exists ? prev.map((client) => (client.id === baseId ? nextClient : client)) : [nextClient, ...prev];
+        const exists = prev.some(
+          (client) =>
+            client.id === baseId ||
+            client.clientId === baseId ||
+            client.id === payload.id ||
+            client.clientId === payload.clientId,
+        );
+        return exists
+          ? prev.map((client) =>
+              client.id === baseId || client.clientId === baseId || client.id === payload.id || client.clientId === payload.clientId
+                ? nextClient
+                : client,
+            )
+          : [nextClient, ...prev];
       });
 
       toast({
@@ -3878,7 +3902,7 @@ export default function InvoiceManagement() {
         description: `${payload.name} commercial configuration saved successfully to database (encrypted).`,
       });
 
-      navigate(`/invoice-management/client/${baseId}`);
+      navigate(`/invoice-management/client/${clientId || baseId}`);
     } catch (error) {
       console.error("Error saving client config:", error);
       toast({

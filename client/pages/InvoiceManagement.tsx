@@ -184,7 +184,13 @@ type ConfigChangeType = "invoice-serial" | "company" | "tax" | "currency";
 
 interface CustomInvoiceRow {
   name: string;
+  narration?: string;
   amount: number;
+  hsn?: string;
+  rate?: string;
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
 }
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -807,13 +813,16 @@ async function downloadInvoiceDocxTemplate({
 
   const tableCell = (text: string, width: number, align: "left" | "right" = "left", bold = false, size = 8.4) =>
     new Docx.TableCell({
-      children: [
-        new Docx.Paragraph({
-          alignment: align === "right" ? Docx.AlignmentType.RIGHT : Docx.AlignmentType.LEFT,
-          children: [new Docx.TextRun({ text, size, bold, color: INVOICE_THEME.secondaryHex })],
-          spacing: { after: 0 },
-        }),
-      ],
+      children: String(text || "—")
+        .split("\n")
+        .map(
+          (line) =>
+            new Docx.Paragraph({
+              alignment: align === "right" ? Docx.AlignmentType.RIGHT : Docx.AlignmentType.LEFT,
+              children: [new Docx.TextRun({ text: line || "—", size, bold, color: INVOICE_THEME.secondaryHex })],
+              spacing: { after: 0 },
+            }),
+        ),
       width: { size: width, type: Docx.WidthType.PERCENTAGE },
       margins: { top: 35, bottom: 35, left: 60, right: 60 },
     });
@@ -1143,7 +1152,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
     return [
       ...setupRows,
       { description: mmcLabel, amount: coreCommercial },
-      ...customRows.map((row) => ({ description: row.name, amount: Number(row.amount || 0) })),
+      ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0) })),
     ];
   }
 
@@ -1157,7 +1166,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
     { description: "AWS Infra Pass-through", amount: awsCharge },
     { description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0) },
     { description: "Integration Fee", amount: Number(client.integrationFee || 0) },
-    ...customRows.map((row) => ({ description: row.name, amount: Number(row.amount || 0) })),
+    ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0) })),
   ];
 }
 
@@ -1225,6 +1234,10 @@ async function downloadInvoicePdfTemplate({
   const money = (value: number) => `INR ${formatCurrency(value)}`;
   const wrap = (value: string, width: number) =>
     doc.splitTextToSize(String(value || "—"), width) as string[];
+  const wrapParagraph = (value: string, width: number) =>
+    String(value || "—")
+      .split("\n")
+      .flatMap((part) => doc.splitTextToSize(part || "—", width) as string[]);
 
   const setText = (color: [number, number, number]) => doc.setTextColor(color[0], color[1], color[2]);
   const setFill = (color: [number, number, number]) => doc.setFillColor(color[0], color[1], color[2]);
@@ -1387,7 +1400,7 @@ async function downloadInvoicePdfTemplate({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.6);
   lineItems.forEach((item, idx) => {
-    const lines = wrap(item.description, contentWidth - 50);
+    const lines = wrapParagraph(item.description, contentWidth - 50);
     const rowH = Math.max(9, lines.length * 4.2 + 4);
     ensureSpace(rowH + 2);
     if (idx % 2 === 0) {
@@ -1543,8 +1556,23 @@ function getBillingModel(client: ClientRecord): BillingModel {
 
 function getCustomInvoiceRows(client: ClientRecord): CustomInvoiceRow[] {
   return Array.isArray(client.customInvoiceRows)
-    ? client.customInvoiceRows.filter((row) => row && String(row.name || "").trim().length > 0)
+    ? client.customInvoiceRows.filter((row) => row && (String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0))
     : [];
+}
+
+function formatCustomInvoiceRowParagraph(row: CustomInvoiceRow) {
+  return [
+    row.name,
+    row.narration,
+    row.hsn ? `HSN: ${row.hsn}` : "",
+    row.rate ? `Rate: ${row.rate}` : "",
+    row.cgst !== undefined && row.cgst !== null ? `CGST: ${row.cgst}` : "",
+    row.sgst !== undefined && row.sgst !== null ? `SGST: ${row.sgst}` : "",
+    row.igst !== undefined && row.igst !== null ? `IGST: ${row.igst}` : "",
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function getActiveMmcAmount(client: ClientRecord): number {
@@ -2076,7 +2104,7 @@ function ClientOverviewScreen({
     setCustomRowsDraft(
       client.customInvoiceRows && client.customInvoiceRows.length > 0
         ? [...client.customInvoiceRows]
-        : [{ name: "", amount: 0 }],
+        : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0 }],
     );
   }, [client.id, client.customInvoiceRows]);
 
@@ -2091,12 +2119,21 @@ function ClientOverviewScreen({
   const finalPayable = invoiceDraft + tax;
 
   const addCustomRow = () => {
-    setCustomRowsDraft((prev) => [...prev, { name: "", amount: 0 }]);
+    setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0 }]);
   };
 
   const updateCustomRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {
     setCustomRowsDraft((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [key]: key === "amount" ? Number(value) || 0 : value } : row)),
+      prev.map((row, i) =>
+        i === index
+          ? {
+              ...row,
+              [key]: key === "amount" || key === "cgst" || key === "sgst" || key === "igst"
+                ? Number(value) || 0
+                : value,
+            }
+          : row,
+      ),
     );
   };
 
@@ -2105,7 +2142,11 @@ function ClientOverviewScreen({
   };
 
   const saveCustomRows = () => {
-    onSaveCustomRows(customRowsDraft.filter((row) => String(row.name || "").trim().length > 0));
+    onSaveCustomRows(
+      customRowsDraft.filter(
+        (row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0,
+      ),
+    );
   };
 
   // Logging for debugging Commercial Summary Panel calculations
@@ -2380,13 +2421,14 @@ function ClientOverviewScreen({
               ))}
             </div>
             <div className="rounded-2xl border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
-              {client.notes}
+              <p className="font-medium text-foreground">Service description preview</p>
+              <p className="mt-2">{client.notes || "No description added yet."}</p>
             </div>
             <div className="space-y-3 rounded-2xl border bg-background p-4">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="font-medium">Additional invoice rows</p>
-                  <p className="text-sm text-muted-foreground">Add custom invoice rows that will be included in generated invoices.</p>
+                  <p className="text-sm text-muted-foreground">Add paragraph-style invoice rows with narration, HSN and tax split.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={addCustomRow}>
                   <Plus className="mr-2 h-4 w-4" /> Add row
@@ -2394,18 +2436,55 @@ function ClientOverviewScreen({
               </div>
               <div className="space-y-3">
                 {customRowsDraft.map((row, index) => (
-                  <div key={index} className="grid gap-3 md:grid-cols-[1fr_140px_auto] md:items-end">
-                    <div className="space-y-2">
-                      <Label>Name</Label>
-                      <Input value={row.name} onChange={(e) => updateCustomRow(index, "name", e.target.value)} placeholder="Fee name" />
+                  <div key={index} className="space-y-3 rounded-2xl border bg-muted/20 p-4">
+                    <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_140px_auto] md:items-end">
+                      <div className="space-y-2 md:col-span-1">
+                        <Label>Narration / Service title</Label>
+                        <Input
+                          value={row.name}
+                          onChange={(e) => updateCustomRow(index, "name", e.target.value)}
+                          placeholder="UPI Reconciliation Services for April 26"
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Paragraph / notes</Label>
+                        <Textarea
+                          value={row.narration || ""}
+                          onChange={(e) => updateCustomRow(index, "narration", e.target.value)}
+                          placeholder="Minimum guarantee, payee count, service period, agreement notes..."
+                          className="min-h-24"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Amount</Label>
+                        <Input type="number" value={row.amount} onChange={(e) => updateCustomRow(index, "amount", e.target.value)} />
+                      </div>
+                      <Button variant="outline" size="icon" onClick={() => removeCustomRow(index)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Amount</Label>
-                      <Input type="number" value={row.amount} onChange={(e) => updateCustomRow(index, "amount", e.target.value)} />
+                    <div className="grid gap-3 md:grid-cols-5">
+                      <div className="space-y-2">
+                        <Label>HSN</Label>
+                        <Input value={row.hsn || ""} onChange={(e) => updateCustomRow(index, "hsn", e.target.value)} placeholder="998314" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Rate</Label>
+                        <Input value={row.rate || ""} onChange={(e) => updateCustomRow(index, "rate", e.target.value)} placeholder="18%" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CGST</Label>
+                        <Input type="number" value={row.cgst ?? 0} onChange={(e) => updateCustomRow(index, "cgst", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>SGST</Label>
+                        <Input type="number" value={row.sgst ?? 0} onChange={(e) => updateCustomRow(index, "sgst", e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>IGST</Label>
+                        <Input type="number" value={row.igst ?? 0} onChange={(e) => updateCustomRow(index, "igst", e.target.value)} />
+                      </div>
                     </div>
-                    <Button variant="outline" size="icon" onClick={() => removeCustomRow(index)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   </div>
                 ))}
               </div>
@@ -2525,7 +2604,16 @@ function InvoiceConfigEditor({
 
   const updateCustomInvoiceRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {
     setCustomInvoiceRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [key]: key === "amount" ? Number(value) || 0 : value } : row)),
+      prev.map((row, i) =>
+        i === index
+          ? {
+              ...row,
+              [key]: key === "amount" || key === "cgst" || key === "sgst" || key === "igst"
+                ? Number(value) || 0
+                : value,
+            }
+          : row,
+      ),
     );
   };
 
@@ -2566,7 +2654,9 @@ function InvoiceConfigEditor({
       monthlyTransactionVolume: txnPreview,
       clientType,
       clientCurrency,
-      customInvoiceRows,
+      customInvoiceRows: customInvoiceRows.filter(
+        (row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0,
+      ),
     });
   };
 
@@ -2823,7 +2913,7 @@ function InvoiceConfigEditor({
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="font-medium">Additional invoice rows</p>
-                          <p className="text-sm text-muted-foreground">Add any extra invoice row such as VAP/MIP connectivity or compliance charges.</p>
+                          <p className="text-sm text-muted-foreground">Add paragraph-style rows such as UPI reconciliation, minimum guarantee or setup fee lines.</p>
                         </div>
                         <Button variant="outline" type="button" onClick={addCustomInvoiceRow}>
                           <Plus className="mr-2 h-4 w-4" /> Add row
@@ -2836,27 +2926,60 @@ function InvoiceConfigEditor({
                           </div>
                         )}
                         {customInvoiceRows.map((row, index) => (
-                          <div key={index} className="grid gap-3 md:grid-cols-[1fr_160px_auto] md:items-end">
-                            <div className="space-y-2">
-                              <Label>Row name</Label>
-                              <Input
-                                value={row.name}
-                                onChange={(e) => updateCustomInvoiceRow(index, "name", e.target.value)}
-                                placeholder="e.g. VAP/MIP connectivity fee"
-                              />
+                          <div key={index} className="space-y-3 rounded-2xl border bg-muted/20 p-4">
+                            <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_160px_auto] md:items-end">
+                              <div className="space-y-2 md:col-span-1">
+                                <Label>Narration / Service title</Label>
+                                <Input
+                                  value={row.name}
+                                  onChange={(e) => updateCustomInvoiceRow(index, "name", e.target.value)}
+                                  placeholder="UPI Reconciliation Services for April 26"
+                                />
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <Label>Paragraph / notes</Label>
+                                <Textarea
+                                  value={row.narration || ""}
+                                  onChange={(e) => updateCustomInvoiceRow(index, "narration", e.target.value)}
+                                  placeholder="Minimum guarantee, payee count, service period, agreement notes..."
+                                  className="min-h-24"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Amount</Label>
+                                <Input
+                                  type="number"
+                                  value={row.amount}
+                                  onChange={(e) => updateCustomInvoiceRow(index, "amount", e.target.value)}
+                                  placeholder="0"
+                                />
+                              </div>
+                              <Button variant="outline" type="button" onClick={() => removeCustomInvoiceRow(index)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <div className="space-y-2">
-                              <Label>Amount</Label>
-                              <Input
-                                type="number"
-                                value={row.amount}
-                                onChange={(e) => updateCustomInvoiceRow(index, "amount", e.target.value)}
-                                placeholder="0"
-                              />
+                            <div className="grid gap-3 md:grid-cols-5">
+                              <div className="space-y-2">
+                                <Label>HSN</Label>
+                                <Input value={row.hsn || ""} onChange={(e) => updateCustomInvoiceRow(index, "hsn", e.target.value)} placeholder="998314" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Rate</Label>
+                                <Input value={row.rate || ""} onChange={(e) => updateCustomInvoiceRow(index, "rate", e.target.value)} placeholder="18%" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>CGST</Label>
+                                <Input type="number" value={row.cgst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "cgst", e.target.value)} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>SGST</Label>
+                                <Input type="number" value={row.sgst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "sgst", e.target.value)} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>IGST</Label>
+                                <Input type="number" value={row.igst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "igst", e.target.value)} />
+                              </div>
                             </div>
-                            <Button variant="outline" type="button" onClick={() => removeCustomInvoiceRow(index)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
                           </div>
                         ))}
                       </div>

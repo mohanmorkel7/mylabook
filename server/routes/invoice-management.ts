@@ -247,8 +247,8 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         financialYear: decrypt(row.financial_year),
         serial: parseInt(decrypt(row.serial) || "0"),
         billingModel: normalizeBillingModel(decrypt(row.billing_model)),
-      invoiceType: String(decrypt(row.invoice_type) || "commercial") as "commercial" | "setup_fee",
-      customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
+        invoiceType: String(decrypt(row.invoice_type) || "commercial") as "commercial" | "setup_fee",
+        customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
       }));
     } catch (invoiceErr: any) {
       console.warn("[Invoice] Failed to fetch invoice history for", clientId, invoiceErr?.message);

@@ -183,6 +183,7 @@ export async function initializeInvoiceSchema() {
         financial_year      TEXT,
         serial              TEXT,
         billing_model       TEXT,
+        invoice_type        TEXT,
         custom_invoice_rows TEXT,
         created_at          TIMESTAMPTZ DEFAULT NOW(),
         updated_at          TIMESTAMPTZ DEFAULT NOW()
@@ -193,6 +194,7 @@ export async function initializeInvoiceSchema() {
     // Add missing columns for invoice_records if table already existed
     try {
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS billing_model TEXT`);
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS invoice_type TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
     } catch (err) {
       console.log("[Invoice] invoice_records columns already exist or error:", (err as any)?.message);
@@ -245,7 +247,8 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         financialYear: decrypt(row.financial_year),
         serial: parseInt(decrypt(row.serial) || "0"),
         billingModel: normalizeBillingModel(decrypt(row.billing_model)),
-        customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
+      invoiceType: String(decrypt(row.invoice_type) || "commercial") as "commercial" | "setup_fee",
+      customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
       }));
     } catch (invoiceErr: any) {
       console.warn("[Invoice] Failed to fetch invoice history for", clientId, invoiceErr?.message);
@@ -716,17 +719,19 @@ router.post("/invoices", async (req: Request, res: Response) => {
       financialYear,
       serial,
       billingModel,
+      invoiceType,
       customInvoiceRows,
     } = req.body;
 
     const query = `INSERT INTO invoice_records (
       invoice_id, invoice_number, client_id, client_name, month,
       amount, status, generated_date, financial_year, serial,
-      billing_model, custom_invoice_rows
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      billing_model, invoice_type, custom_invoice_rows
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     ON CONFLICT (invoice_id) DO UPDATE SET
       status = EXCLUDED.status,
       billing_model = EXCLUDED.billing_model,
+      invoice_type = EXCLUDED.invoice_type,
       custom_invoice_rows = EXCLUDED.custom_invoice_rows,
       updated_at = NOW()`;
 
@@ -742,6 +747,7 @@ router.post("/invoices", async (req: Request, res: Response) => {
       encrypt(financialYear),
       encrypt(String(serial)),
       encrypt(normalizeBillingModel(billingModel)),
+      encrypt(String(invoiceType || "commercial")),
       encrypt(JSON.stringify(Array.isArray(customInvoiceRows) ? customInvoiceRows : [])),
     ];
 
@@ -774,6 +780,7 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
       financialYear: decrypt(row.financial_year),
       serial: parseInt(decrypt(row.serial) || "0"),
       billingModel: normalizeBillingModel(decrypt(row.billing_model)),
+      invoiceType: String(decrypt(row.invoice_type) || "commercial") as "commercial" | "setup_fee",
       customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
     }));
 

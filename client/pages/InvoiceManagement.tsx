@@ -551,6 +551,8 @@ type InvoiceStatus =
   | "Overdue"
   | "Closed";
 
+type InvoiceType = "commercial" | "setup_fee";
+
 interface InvoiceRecord {
   invoiceId: string;
   invoiceNumber?: string;
@@ -563,6 +565,7 @@ interface InvoiceRecord {
   financialYear?: string;
   customInvoiceRows?: CustomInvoiceRow[];
   billingModel?: BillingModel;
+  invoiceType?: InvoiceType;
 }
 
 const INVOICES: InvoiceRecord[] = [
@@ -763,6 +766,7 @@ async function downloadInvoiceDocxTemplate({
   month,
   financialYear,
   serial,
+  invoiceType = "commercial",
 }: {
   client: ClientRecord;
   companyConfig: CompanyConfig;
@@ -773,11 +777,12 @@ async function downloadInvoiceDocxTemplate({
   month: string;
   financialYear: string;
   serial: number;
+  invoiceType?: InvoiceType;
 }) {
   const logoResponse = await fetch(MYLAPAY_LOGO_URL);
   const logoBlob = logoResponse.ok ? await logoResponse.blob() : null;
   const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType);
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
   // Calculate GST (18%) - LUT exemption only applies to specific cases
   // For now, always calculate GST for proper invoicing
@@ -1119,9 +1124,15 @@ function deleteInvoiceFromCollection(invoices: InvoiceRecord[], targetInvoiceNum
   return invoices.filter((invoice) => getInvoiceDisplayNumber(invoice) !== targetInvoiceNumber);
 }
 
-function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: number) {
+function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: number, invoiceType: InvoiceType = "commercial") {
   const breakdown = calculateInvoiceCommercials(client, client.monthlyTransactionVolume || 0);
   const customRows = breakdown.customRows;
+  const setupFeeDue = breakdown.setupFeeDue > 0 ? breakdown.setupFeeDue : Number(client.setupFee || 0);
+
+  if (invoiceType === "setup_fee") {
+    return [{ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue }];
+  }
+
   const setupRows = breakdown.setupFeeDue > 0
     ? [{ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue }]
     : [];
@@ -1186,6 +1197,7 @@ async function downloadInvoicePdfTemplate({
   month,
   financialYear,
   serial,
+  invoiceType = "commercial",
 }: {
   client: ClientRecord;
   companyConfig: CompanyConfig;
@@ -1196,6 +1208,7 @@ async function downloadInvoicePdfTemplate({
   month: string;
   financialYear: string;
   serial: number;
+  invoiceType?: InvoiceType;
 }) {
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -1352,7 +1365,7 @@ async function downloadInvoicePdfTemplate({
   cursorY = Math.max(leftEnd, rightEnd) + 3;
 
   // === STATEMENT OF CHARGES ===
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType);
   ensureSpace(18);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
@@ -2004,6 +2017,10 @@ function ClientConfigCard({
               <div className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500" style={{ width: `${Math.min(100, 20 + client.services.length * 12)}%` }} />
             </div>
           </div>
+          <div className="rounded-xl border bg-muted/30 p-3 text-sm leading-6 text-muted-foreground">
+            <p className="font-medium text-foreground">Service description preview</p>
+            <p className="mt-1 line-clamp-3">{client.notes || "No description added yet."}</p>
+          </div>
           <div className="flex items-center justify-between">
             <Button variant="outline" className="gap-2" onClick={onOverview}>
               View Overview <ChevronRight className="h-4 w-4" />
@@ -2026,6 +2043,7 @@ function ClientOverviewScreen({
   onExportCsv,
   onExportDocx,
   onGenerateInvoice,
+  onGenerateSetupFeeInvoice,
   onStatusChange,
   onDownloadPdf,
   onDownloadDocx,
@@ -2037,6 +2055,7 @@ function ClientOverviewScreen({
   onExportCsv: () => void;
   onExportDocx: () => void;
   onGenerateInvoice: () => void;
+  onGenerateSetupFeeInvoice: () => void;
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
@@ -2062,6 +2081,8 @@ function ClientOverviewScreen({
   }, [client.id, client.customInvoiceRows]);
 
   const commercialSummary = useMemo(() => calculateInvoiceCommercials(client, txnInput), [client, txnInput]);
+  const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
+  const setupFeeInvoiceExists = (client.invoiceHistory || []).some((invoice) => invoice.invoiceType === "setup_fee");
   const invoiceDraft = commercialSummary.subtotal;
   const fixedCharges = client.fixedBilling + client.additionalPlatformFee + client.integrationFee + commercialSummary.setupFeeDue;
   const awsMargin = commercialSummary.awsMarkup;
@@ -2118,6 +2139,10 @@ function ClientOverviewScreen({
             <p className="mt-1 text-sm text-muted-foreground">
               Client commercial configuration, calculation engine and invoice overview
             </p>
+            <div className="mt-4 rounded-2xl border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+              <p className="font-medium text-foreground">Service description preview</p>
+              <p className="mt-2">{client.notes || "No description added yet."}</p>
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2130,6 +2155,11 @@ function ClientOverviewScreen({
           <Button variant="outline" className="gap-2" onClick={onExportDocx}>
             <FileText className="h-4 w-4" /> Export DOCX
           </Button>
+          {setupFeeDue > 0 && !setupFeeInvoiceExists && (
+            <Button variant="outline" className="gap-2" onClick={onGenerateSetupFeeInvoice}>
+              <ReceiptText className="h-4 w-4" /> Generate Setup Fee Invoice
+            </Button>
+          )}
           <Button
             className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500"
             onClick={onGenerateInvoice}
@@ -2786,8 +2816,8 @@ function InvoiceConfigEditor({
                       ))}
                     </div>
                     <div className="space-y-2">
-                      <Label>Configuration Notes</Label>
-                      <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Commercial notes, tax handling, pass-through logic..." />
+                      <Label>Service description / preview text</Label>
+                      <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Commercial notes, service description, tax handling, pass-through logic..." />
                     </div>
                     <div className="space-y-4 rounded-2xl border bg-background p-4">
                       <div className="flex items-center justify-between gap-2">
@@ -3426,8 +3456,8 @@ export default function InvoiceManagement() {
     toast({ title: "Synced", description: "Invoice management data refreshed from the sample dataset." });
   };
 
-  const generateInvoiceForClient = async (client = selectedClient) => {
-    console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name);
+  const generateInvoiceForClient = async (client = selectedClient, invoiceType: InvoiceType = "commercial") => {
+    console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name, invoiceType);
 
     if (!client) {
       console.error("[Invoice] generateInvoiceForClient - No client provided");
@@ -3439,9 +3469,20 @@ export default function InvoiceManagement() {
       const generatedDate = new Date().toISOString().split("T")[0];
       console.log("[Invoice] generateInvoiceForClient - Generated date:", generatedDate);
 
-      const generatedAmount = Math.round(
-        estimateInvoiceFromSlabs(client, client.monthlyTransactionVolume || 0),
-      );
+      if (invoiceType === "setup_fee" && (client.invoiceHistory || []).some((invoice) => invoice.invoiceType === "setup_fee")) {
+        toast({ title: "Setup fee invoice already exists", description: "This client already has a one time setup invoice in history.", variant: "destructive" });
+        return;
+      }
+
+      const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
+      const generatedAmount = invoiceType === "setup_fee"
+        ? setupFeeDue
+        : Math.round(estimateInvoiceFromSlabs(client, client.monthlyTransactionVolume || 0));
+
+      if (invoiceType === "setup_fee" && generatedAmount <= 0) {
+        toast({ title: "No setup fee due", description: "This client has no pending one time setup fee.", variant: "destructive" });
+        return;
+      }
 
       console.log("[Invoice] generateInvoiceForClient - Generated amount:", generatedAmount);
 
@@ -3458,8 +3499,9 @@ export default function InvoiceManagement() {
         amount: generatedAmount,
         status: "Waiting for approval",
         generatedDate,
-        customInvoiceRows: client.customInvoiceRows || [],
+        customInvoiceRows: invoiceType === "setup_fee" ? [] : client.customInvoiceRows || [],
         billingModel: client.billingModel || "transaction",
+        invoiceType,
       };
 
       console.log("[Invoice] generateInvoiceForClient - Next invoice object:", nextInvoice);
@@ -3483,6 +3525,7 @@ export default function InvoiceManagement() {
             serial: nextInvoice.serial,
             customInvoiceRows: nextInvoice.customInvoiceRows || [],
             billingModel: nextInvoice.billingModel || "transaction",
+            invoiceType: nextInvoice.invoiceType || "commercial",
           }),
         });
         console.log("[Invoice] generateInvoiceForClient - Successfully saved to database");
@@ -3511,7 +3554,7 @@ export default function InvoiceManagement() {
 
       console.log("[Invoice] generateInvoiceForClient - Invoice generated successfully");
       toast({
-        title: "Invoice sent for approval",
+        title: invoiceType === "setup_fee" ? "Setup fee invoice sent for approval" : "Invoice sent for approval",
         description: `${client.name} invoice ${serialInfo.invoiceNumber} is waiting for FinOps approval.`,
       });
     } catch (error) {
@@ -3522,6 +3565,10 @@ export default function InvoiceManagement() {
         variant: "destructive",
       });
     }
+  };
+
+  const generateSetupFeeInvoiceForClient = async (client = selectedClient) => {
+    await generateInvoiceForClient(client, "setup_fee");
   };
 
   const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {
@@ -3566,6 +3613,7 @@ export default function InvoiceManagement() {
         serial: updatedInvoice.serial,
         customInvoiceRows: updatedInvoice.customInvoiceRows || [],
         billingModel: updatedInvoice.billingModel || selectedClient?.billingModel || "transaction",
+        invoiceType: updatedInvoice.invoiceType || "commercial",
       }),
     }).catch((err) => {
       console.warn("[Invoice] Failed to update invoice in database:", err);
@@ -3661,6 +3709,7 @@ export default function InvoiceManagement() {
         month: invoice.month,
         financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
         serial: Number(invoice.serial || invoiceSerialState.serial || 1),
+        invoiceType: invoice.invoiceType || "commercial",
       });
       toast({ title: "PDF downloaded", description: `${invoiceNumber} PDF downloaded.` });
     } catch (error: any) {
@@ -3689,6 +3738,7 @@ export default function InvoiceManagement() {
         month: invoice.month,
         financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
         serial: Number(invoice.serial || invoiceSerialState.serial || 1),
+        invoiceType: invoice.invoiceType || "commercial",
       });
       toast({ title: "DOCX downloaded", description: `${invoiceNumber} DOCX downloaded.` });
     } catch (error: any) {
@@ -3987,6 +4037,7 @@ export default function InvoiceManagement() {
           onExportCsv={() => exportClientsCsv([selectedClient])}
           onExportDocx={() => exportClientDocx(selectedClient)}
           onGenerateInvoice={() => openInvoiceCreateModal(selectedClient)}
+          onGenerateSetupFeeInvoice={() => generateSetupFeeInvoiceForClient(selectedClient)}
           onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
           onDownloadPdf={downloadInvoicePdf}
           onDownloadDocx={downloadInvoiceDocx}

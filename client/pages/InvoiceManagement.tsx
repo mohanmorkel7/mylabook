@@ -191,6 +191,23 @@ interface CustomInvoiceRow {
   cgst?: number;
   sgst?: number;
   igst?: number;
+  align?: "left" | "center" | "right";
+}
+
+type RowAlign = "left" | "center" | "right";
+
+interface OverviewInvoiceRow {
+  id: string;
+  kind: "derived" | "custom";
+  narration: string;
+  amount: number;
+  hsn: string;
+  rate: string;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  align: RowAlign;
+  editable: boolean;
 }
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -1007,7 +1024,7 @@ async function downloadInvoiceDocxTemplate({
                   new Docx.TableRow({
                     children: [
                       tableCell(String(index + 1).padStart(2, "0"), 10, "left", false, 8),
-                      tableCell(item.description, 65, "left", false, 8),
+                      tableCell(item.description, 65, item.align || "left", false, 8),
                       tableCell(`INR ${formatCurrency(item.amount)}`, 25, "right", true, 8),
                     ],
                   }),
@@ -1139,7 +1156,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const setupFeeDue = breakdown.setupFeeDue > 0 ? breakdown.setupFeeDue : Number(client.setupFee || 0);
 
   if (invoiceType === "setup_fee") {
-    return [{ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue }];
+    return [{ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, align: "left" as const }];
   }
 
   const setupRows = breakdown.setupFeeDue > 0
@@ -1151,8 +1168,8 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
     const coreCommercial = Math.max(invoiceAmount - breakdown.setupFeeDue - breakdown.customRowsTotal, 0);
     return [
       ...setupRows,
-      { description: mmcLabel, amount: coreCommercial },
-      ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0) })),
+      { description: mmcLabel, amount: coreCommercial, align: "left" as const },
+      ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const })),
     ];
   }
 
@@ -1161,12 +1178,12 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const remainingAfterFixed = Math.max(invoiceAmount - fixedBilling - awsCharge, 0);
   return [
     ...setupRows,
-    { description: "Fixed Commercial Charges", amount: fixedBilling },
-    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0) },
-    { description: "AWS Infra Pass-through", amount: awsCharge },
-    { description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0) },
-    { description: "Integration Fee", amount: Number(client.integrationFee || 0) },
-    ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0) })),
+    { description: "Fixed Commercial Charges", amount: fixedBilling, align: "left" as const },
+    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0), align: "left" as const },
+    { description: "AWS Infra Pass-through", amount: awsCharge, align: "left" as const },
+    { description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0), align: "left" as const },
+    { description: "Integration Fee", amount: Number(client.integrationFee || 0), align: "left" as const },
+    ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const })),
   ];
 }
 
@@ -1414,7 +1431,8 @@ async function downloadInvoicePdfTemplate({
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.8);
-    doc.text(lines, margin + 12, cursorY + 5.8);
+    const descX = item.align === "right" ? pageWidth - margin - 45 : item.align === "center" ? margin + contentWidth / 2 : margin + 12;
+    doc.text(lines, descX, cursorY + 5.8, { align: item.align || "left" });
     doc.setFont("helvetica", "bold");
     doc.text(money(item.amount), pageWidth - margin - 3, cursorY + 5.8, { align: "right" });
     cursorY += rowH;
@@ -1573,6 +1591,137 @@ function formatCustomInvoiceRowParagraph(row: CustomInvoiceRow) {
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join("\n");
+}
+
+function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean): OverviewInvoiceRow[] {
+  const breakdown = calculateInvoiceCommercials(client, txnCount);
+  const variableCharge = Math.max(
+    breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
+    0,
+  );
+  const setupFeeDue = breakdown.setupFeeDue;
+  const baseRows: OverviewInvoiceRow[] = [
+    {
+      id: "fixed-billing",
+      kind: "derived",
+      narration: "Fixed Commercial Charges",
+      amount: Number(client.fixedBilling || 0),
+      hsn: "",
+      rate: "",
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: true,
+    },
+  ];
+
+  if (transactionBased) {
+    baseRows.push({
+      id: "variable-slab",
+      kind: "derived",
+      narration: "Variable Slab Charges",
+      amount: variableCharge,
+      hsn: "",
+      rate: "",
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: false,
+    });
+  }
+
+  baseRows.push(
+    {
+      id: "aws-pass-through",
+      kind: "derived",
+      narration: "AWS Infra Pass-through",
+      amount: breakdown.awsMarkup,
+      hsn: "",
+      rate: "",
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: false,
+    },
+    {
+      id: "additional-platform-fee",
+      kind: "derived",
+      narration: "Additional Platform Fee",
+      amount: Number(client.additionalPlatformFee || 0),
+      hsn: "",
+      rate: "",
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: true,
+    },
+    {
+      id: "integration-fee",
+      kind: "derived",
+      narration: "Integration Fee",
+      amount: Number(client.integrationFee || 0),
+      hsn: "",
+      rate: "",
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: true,
+    },
+  );
+
+  if (setupFeeDue > 0) {
+    baseRows.push({
+      id: "setup-fee",
+      kind: "derived",
+      narration: "One time Setup Fee",
+      amount: setupFeeDue,
+      hsn: "",
+      rate: "",
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: true,
+    });
+  }
+
+  const customRows = getCustomInvoiceRows(client).map((row, index) => ({
+    id: `custom-${index}`,
+    kind: "custom" as const,
+    narration: row.narration || row.name,
+    amount: Number(row.amount || 0),
+    hsn: String(row.hsn || ""),
+    rate: String(row.rate || ""),
+    cgst: Number(row.cgst || 0),
+    sgst: Number(row.sgst || 0),
+    igst: Number(row.igst || 0),
+    align: row.align || "left",
+    editable: true,
+  }));
+
+  return [...baseRows, ...customRows];
+}
+
+function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[] {
+  return rows
+    .filter((row) => row.kind === "custom")
+    .map((row) => ({
+      name: row.narration,
+      narration: row.narration,
+      amount: row.amount,
+      hsn: row.hsn,
+      rate: row.rate,
+      cgst: row.cgst,
+      sgst: row.sgst,
+      igst: row.igst,
+      align: row.align,
+    }))
+    .filter((row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0);
 }
 
 function getActiveMmcAmount(client: ClientRecord): number {
@@ -2076,6 +2225,7 @@ function ClientOverviewScreen({
   onDownloadPdf,
   onDownloadDocx,
   onSaveCustomRows,
+  onSaveOverviewConfig,
 }: {
   client: ClientRecord;
   onBack: () => void;
@@ -2088,17 +2238,22 @@ function ClientOverviewScreen({
   onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
   onSaveCustomRows: (rows: CustomInvoiceRow[]) => void;
+  onSaveOverviewConfig: (payload: any) => void;
 }) {
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
+  const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
+  const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() => buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction"));
   const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
     client.customInvoiceRows && client.customInvoiceRows.length > 0
       ? [...client.customInvoiceRows]
-      : [{ name: "", amount: 0 }],
+      : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0 }],
   );
 
   useEffect(() => {
     setTxnInput(client.monthlyTransactionVolume);
-  }, [client.id, client.monthlyTransactionVolume]);
+    setTransactionBased(getBillingModel(client) === "transaction");
+    setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction"));
+  }, [client.id, client.monthlyTransactionVolume, client.customInvoiceRows, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
 
   useEffect(() => {
     setCustomRowsDraft(
@@ -2107,6 +2262,20 @@ function ClientOverviewScreen({
         : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0 }],
     );
   }, [client.id, client.customInvoiceRows]);
+
+  useEffect(() => {
+    setOverviewRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== "variable-slab") return row;
+        const breakdown = calculateInvoiceCommercials(client, txnInput);
+        const variableCharge = Math.max(
+          breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
+          0,
+        );
+        return { ...row, amount: transactionBased ? variableCharge : 0 };
+      }),
+    );
+  }, [txnInput, transactionBased, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws]);
 
   const commercialSummary = useMemo(() => calculateInvoiceCommercials(client, txnInput), [client, txnInput]);
   const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
@@ -2147,6 +2316,67 @@ function ClientOverviewScreen({
         (row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0,
       ),
     );
+  };
+
+  const updateOverviewRow = (index: number, key: keyof OverviewInvoiceRow, value: string | number) => {
+    setOverviewRows((prev) =>
+      prev.map((row, i) =>
+        i === index
+          ? {
+              ...row,
+              [key]: key === "amount" || key === "cgst" || key === "sgst" || key === "igst"
+                ? Number(value) || 0
+                : value,
+            }
+          : row,
+      ),
+    );
+  };
+
+  const addOverviewRow = () => {
+    setOverviewRows((prev) => [
+      ...prev,
+      {
+        id: `custom-${Date.now()}`,
+        kind: "custom",
+        narration: "",
+        amount: 0,
+        hsn: "",
+        rate: "",
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        align: "left",
+        editable: true,
+      },
+    ]);
+  };
+
+  const removeOverviewRow = (index: number) => {
+    setOverviewRows((prev) => prev.filter((_, i) => i !== index || prev[i].kind !== "custom"));
+  };
+
+  const saveOverviewConfig = () => {
+    const customRows = overviewRowsToCustomRows(overviewRows);
+    const fixedBilling = overviewRows.find((row) => row.id === "fixed-billing")?.amount ?? client.fixedBilling;
+    const additionalPlatformFee = overviewRows.find((row) => row.id === "additional-platform-fee")?.amount ?? client.additionalPlatformFee;
+    const integrationFee = overviewRows.find((row) => row.id === "integration-fee")?.amount ?? client.integrationFee;
+    const setupFeeRow = overviewRows.find((row) => row.id === "setup-fee")?.amount;
+    const setupFeePaid = Number(client.setupFeePaid || 0);
+    const setupFee = setupFeeRow !== undefined ? Math.max(Number(setupFeeRow || 0) + setupFeePaid, setupFeePaid) : Number(client.setupFee || 0);
+    const monthlyInvoiceEstimate = overviewRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+    onSaveOverviewConfig({
+      ...client,
+      billingModel: transactionBased ? "transaction" : "mmc",
+      monthlyTransactionVolume: txnInput,
+      fixedBilling,
+      additionalPlatformFee,
+      integrationFee,
+      setupFee,
+      customInvoiceRows: customRows,
+      monthlyInvoiceEstimate,
+    });
   };
 
   // Logging for debugging Commercial Summary Panel calculations
@@ -2209,6 +2439,147 @@ function ClientOverviewScreen({
           </Button>
         </div>
       </div>
+
+      <Card className="border-primary/10 shadow-sm">
+        <CardHeader className="space-y-2">
+          <CardTitle>Invoice table</CardTitle>
+          <CardDescription>Build the invoice row by row. Transaction based mode shows the transaction count input and recalculates the variable rows.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-muted/20 p-4">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox checked={transactionBased} onCheckedChange={(checked) => setTransactionBased(Boolean(checked))} />
+              Transaction Based
+            </label>
+            {transactionBased && (
+              <div className="flex flex-1 flex-wrap items-center gap-3">
+                <div className="min-w-[220px] flex-1 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <Label htmlFor="txn-based-count">Transaction Count</Label>
+                    <span className="text-muted-foreground">{txnInput.toLocaleString()}</span>
+                  </div>
+                  <Input
+                    id="txn-based-count"
+                    type="number"
+                    min={0}
+                    step={100000}
+                    value={txnInput}
+                    onChange={(e) => setTxnInput(Number(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="min-w-[260px] flex-[2]">
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(client.monthlyTransactionVolume * 2, 1000000)}
+                    step={100000}
+                    value={txnInput}
+                    onChange={(e) => setTxnInput(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">Move the slider or type a number. The variable row updates automatically.</p>
+                </div>
+              </div>
+            )}
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button variant="outline" onClick={addOverviewRow}>
+                <Plus className="mr-2 h-4 w-4" /> Add row
+              </Button>
+              <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white" onClick={saveOverviewConfig}>
+                Save Overview
+              </Button>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border">
+            <ScrollArea className="w-full">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">S.No</TableHead>
+                    <TableHead>Narration</TableHead>
+                    <TableHead className="w-32 text-right">Amount</TableHead>
+                    <TableHead className="w-28">HSN</TableHead>
+                    <TableHead className="w-24">RATE</TableHead>
+                    <TableHead className="w-24">CGST</TableHead>
+                    <TableHead className="w-24">SGST</TableHead>
+                    <TableHead className="w-24">IGST</TableHead>
+                    <TableHead className="w-32 text-right">Total Amount</TableHead>
+                    <TableHead className="w-28">Align</TableHead>
+                    <TableHead className="w-20">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {overviewRows.map((row, index) => {
+                    const rowTotal = Number(row.amount || 0) + Number(row.cgst || 0) + Number(row.sgst || 0) + Number(row.igst || 0);
+                    const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-medium">{String(index + 1).padStart(2, "0")}</TableCell>
+                        <TableCell>
+                          <Textarea
+                            value={row.narration}
+                            onChange={(e) => updateOverviewRow(index, "narration", e.target.value)}
+                            className={`min-h-20 ${alignClass}`}
+                            placeholder="Narration / service title"
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            value={row.amount}
+                            onChange={(e) => updateOverviewRow(index, "amount", e.target.value)}
+                            readOnly={row.id === "variable-slab" && transactionBased}
+                            className="text-right"
+                          />
+                          {row.id === "variable-slab" && transactionBased && (
+                            <p className="mt-1 text-xs text-muted-foreground">Calculated from transaction count</p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Input value={row.hsn} onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)} className={alignClass} placeholder="998314" />
+                        </TableCell>
+                        <TableCell>
+                          <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={alignClass} placeholder="18%" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" value={row.cgst} onChange={(e) => updateOverviewRow(index, "cgst", e.target.value)} className="text-right" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" value={row.sgst} onChange={(e) => updateOverviewRow(index, "sgst", e.target.value)} className="text-right" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" value={row.igst} onChange={(e) => updateOverviewRow(index, "igst", e.target.value)} className="text-right" />
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
+                        <TableCell>
+                          <Select value={row.align} onValueChange={(value) => updateOverviewRow(index, "align", value as RowAlign)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="left">Left</SelectItem>
+                              <SelectItem value="center">Center</SelectItem>
+                              <SelectItem value="right">Right</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {row.kind === "custom" ? (
+                            <Button variant="outline" size="icon" onClick={() => removeOverviewRow(index)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Locked</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-4">
         {[
@@ -2425,70 +2796,10 @@ function ClientOverviewScreen({
               <p className="mt-2">{client.notes || "No description added yet."}</p>
             </div>
             <div className="space-y-3 rounded-2xl border bg-background p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium">Additional invoice rows</p>
-                  <p className="text-sm text-muted-foreground">Add paragraph-style invoice rows with narration, HSN and tax split.</p>
-                </div>
-                <Button variant="outline" size="sm" onClick={addCustomRow}>
-                  <Plus className="mr-2 h-4 w-4" /> Add row
-                </Button>
+              <div className="rounded-2xl border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+                <p className="font-medium text-foreground">Inline row editing is now in the invoice table above.</p>
+                <p className="mt-2">Use the table section to add rows, edit narration, amount, HSN, tax split and alignment, then save the overview.</p>
               </div>
-              <div className="space-y-3">
-                {customRowsDraft.map((row, index) => (
-                  <div key={index} className="space-y-3 rounded-2xl border bg-muted/20 p-4">
-                    <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_140px_auto] md:items-end">
-                      <div className="space-y-2 md:col-span-1">
-                        <Label>Narration / Service title</Label>
-                        <Input
-                          value={row.name}
-                          onChange={(e) => updateCustomRow(index, "name", e.target.value)}
-                          placeholder="UPI Reconciliation Services for April 26"
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label>Paragraph / notes</Label>
-                        <Textarea
-                          value={row.narration || ""}
-                          onChange={(e) => updateCustomRow(index, "narration", e.target.value)}
-                          placeholder="Minimum guarantee, payee count, service period, agreement notes..."
-                          className="min-h-24"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Amount</Label>
-                        <Input type="number" value={row.amount} onChange={(e) => updateCustomRow(index, "amount", e.target.value)} />
-                      </div>
-                      <Button variant="outline" size="icon" onClick={() => removeCustomRow(index)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-5">
-                      <div className="space-y-2">
-                        <Label>HSN</Label>
-                        <Input value={row.hsn || ""} onChange={(e) => updateCustomRow(index, "hsn", e.target.value)} placeholder="998314" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Rate</Label>
-                        <Input value={row.rate || ""} onChange={(e) => updateCustomRow(index, "rate", e.target.value)} placeholder="18%" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>CGST</Label>
-                        <Input type="number" value={row.cgst ?? 0} onChange={(e) => updateCustomRow(index, "cgst", e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>SGST</Label>
-                        <Input type="number" value={row.sgst ?? 0} onChange={(e) => updateCustomRow(index, "sgst", e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>IGST</Label>
-                        <Input type="number" value={row.igst ?? 0} onChange={(e) => updateCustomRow(index, "igst", e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Button onClick={saveCustomRows} className="w-fit">Save rows</Button>
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
@@ -4172,6 +4483,7 @@ export default function InvoiceManagement() {
               customInvoiceRows: rows,
             })
           }
+          onSaveOverviewConfig={saveConfig}
         />
 
         {/* Invoice Creation/Editing Modal */}

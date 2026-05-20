@@ -2526,9 +2526,8 @@ function ClientOverviewScreen({
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border">
-            <ScrollArea className="w-full">
-              <Table className="min-w-[1500px] table-fixed">
+          <div className="overflow-x-auto rounded-2xl border">
+              <Table className="min-w-[1220px] table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">No.</TableHead>
@@ -2660,7 +2659,6 @@ function ClientOverviewScreen({
                   })}
                 </TableBody>
               </Table>
-            </ScrollArea>
           </div>
         </CardContent>
       </Card>

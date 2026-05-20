@@ -182,6 +182,8 @@ type BillingModel = "transaction" | "mmc";
 type CurrencyType = "INR" | "USD" | "AED" | "SAR" | "KWD" | "OMR" | "QAR" | "BHD";
 type ConfigChangeType = "invoice-serial" | "company" | "tax" | "currency";
 
+type NarrationMode = "title" | "subtitle" | "multiline";
+
 interface CustomInvoiceRow {
   name: string;
   narration?: string;
@@ -192,6 +194,8 @@ interface CustomInvoiceRow {
   sgst?: number;
   igst?: number;
   align?: "left" | "center" | "right";
+  narrationMode?: NarrationMode;
+  exportEnabled?: boolean;
 }
 
 type RowAlign = "left" | "center" | "right";
@@ -208,6 +212,8 @@ interface OverviewInvoiceRow {
   igst: number;
   align: RowAlign;
   editable: boolean;
+  narrationMode?: NarrationMode;
+  exportEnabled: boolean;
 }
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -563,6 +569,7 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   mmcYear2?: number;
   mmcYear3?: number;
   customInvoiceRows?: CustomInvoiceRow[];
+  invoiceTableConfig?: OverviewInvoiceRow[];
 };
 
 type InvoiceStatus =
@@ -805,7 +812,7 @@ async function downloadInvoiceDocxTemplate({
   const logoResponse = await fetch(MYLAPAY_LOGO_URL);
   const logoBlob = logoResponse.ok ? await logoResponse.blob() : null;
   const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
   // Calculate GST (18%) - LUT exemption only applies to specific cases
   // For now, always calculate GST for proper invoicing
@@ -1156,7 +1163,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const setupFeeDue = breakdown.setupFeeDue > 0 ? breakdown.setupFeeDue : Number(client.setupFee || 0);
 
   if (invoiceType === "setup_fee") {
-    return [{ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, align: "left" as const }];
+    return [{ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, align: "left" as const, exportEnabled: invoiceAmount !== 0 || setupFeeDue !== 0 }];
   }
 
   const setupRows = breakdown.setupFeeDue > 0
@@ -1168,8 +1175,8 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
     const coreCommercial = Math.max(invoiceAmount - breakdown.setupFeeDue - breakdown.customRowsTotal, 0);
     return [
       ...setupRows,
-      { description: mmcLabel, amount: coreCommercial, align: "left" as const },
-      ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const })),
+      { description: mmcLabel, amount: coreCommercial, align: "left" as const, exportEnabled: coreCommercial !== 0 },
+      ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const, exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0 })),
     ];
   }
 
@@ -1178,12 +1185,12 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const remainingAfterFixed = Math.max(invoiceAmount - fixedBilling - awsCharge, 0);
   return [
     ...setupRows,
-    { description: "Fixed Commercial Charges", amount: fixedBilling, align: "left" as const },
-    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0), align: "left" as const },
-    { description: "AWS Infra Pass-through", amount: awsCharge, align: "left" as const },
-    { description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0), align: "left" as const },
-    { description: "Integration Fee", amount: Number(client.integrationFee || 0), align: "left" as const },
-    ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const })),
+    { description: "Fixed Commercial Charges", amount: fixedBilling, align: "left" as const, exportEnabled: fixedBilling !== 0 },
+    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0), align: "left" as const, exportEnabled: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0) !== 0 },
+    { description: "AWS Infra Pass-through", amount: awsCharge, align: "left" as const, exportEnabled: awsCharge !== 0 },
+    { description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0), align: "left" as const, exportEnabled: Number(client.additionalPlatformFee || 0) !== 0 },
+    { description: "Integration Fee", amount: Number(client.integrationFee || 0), align: "left" as const, exportEnabled: Number(client.integrationFee || 0) !== 0 },
+    ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const, exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0 })),
   ];
 }
 
@@ -1395,7 +1402,7 @@ async function downloadInvoicePdfTemplate({
   cursorY = Math.max(leftEnd, rightEnd) + 3;
 
   // === STATEMENT OF CHARGES ===
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
   ensureSpace(18);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
@@ -1579,18 +1586,25 @@ function getCustomInvoiceRows(client: ClientRecord): CustomInvoiceRow[] {
 }
 
 function formatCustomInvoiceRowParagraph(row: CustomInvoiceRow) {
-  return [
-    row.name,
-    row.narration,
+  const title = String(row.name || "").trim();
+  const subtitle = String(row.narration || "").trim();
+  const extras = [
     row.hsn ? `HSN: ${row.hsn}` : "",
     row.rate ? `Rate: ${row.rate}` : "",
     row.cgst !== undefined && row.cgst !== null ? `CGST: ${row.cgst}` : "",
     row.sgst !== undefined && row.sgst !== null ? `SGST: ${row.sgst}` : "",
     row.igst !== undefined && row.igst !== null ? `IGST: ${row.igst}` : "",
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean);
+
+  if (row.narrationMode === "title") {
+    return [title, subtitle, ...extras].filter(Boolean).join("\n");
+  }
+
+  if (row.narrationMode === "subtitle") {
+    return [subtitle || title, title && subtitle ? `Title: ${title}` : "", ...extras].filter(Boolean).join("\n");
+  }
+
+  return [title, subtitle, ...extras].filter(Boolean).join("\n");
 }
 
 function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean): OverviewInvoiceRow[] {
@@ -1613,6 +1627,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       igst: 0,
       align: "left",
       editable: true,
+      narrationMode: "title",
+      exportEnabled: Number(client.fixedBilling || 0) !== 0,
     },
   ];
 
@@ -1629,6 +1645,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       igst: 0,
       align: "left",
       editable: false,
+      narrationMode: "subtitle",
+      exportEnabled: variableCharge !== 0,
     });
   }
 
@@ -1645,6 +1663,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       igst: 0,
       align: "left",
       editable: false,
+      narrationMode: "subtitle",
+      exportEnabled: breakdown.awsMarkup !== 0,
     },
     {
       id: "additional-platform-fee",
@@ -1658,6 +1678,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       igst: 0,
       align: "left",
       editable: true,
+      narrationMode: "title",
+      exportEnabled: Number(client.additionalPlatformFee || 0) !== 0,
     },
     {
       id: "integration-fee",
@@ -1671,6 +1693,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       igst: 0,
       align: "left",
       editable: true,
+      narrationMode: "title",
+      exportEnabled: Number(client.integrationFee || 0) !== 0,
     },
   );
 
@@ -1687,6 +1711,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       igst: 0,
       align: "left",
       editable: true,
+      narrationMode: "title",
+      exportEnabled: setupFeeDue !== 0,
     });
   }
 
@@ -1702,6 +1728,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     igst: Number(row.igst || 0),
     align: row.align || "left",
     editable: true,
+    narrationMode: row.narrationMode || "multiline",
+    exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
   }));
 
   return [...baseRows, ...customRows];
@@ -1720,6 +1748,8 @@ function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[
       sgst: row.sgst,
       igst: row.igst,
       align: row.align,
+      narrationMode: row.narrationMode,
+      exportEnabled: row.exportEnabled,
     }))
     .filter((row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0);
 }
@@ -2318,7 +2348,7 @@ function ClientOverviewScreen({
     );
   };
 
-  const updateOverviewRow = (index: number, key: keyof OverviewInvoiceRow, value: string | number) => {
+  const updateOverviewRow = (index: number, key: keyof OverviewInvoiceRow, value: string | number | boolean) => {
     setOverviewRows((prev) =>
       prev.map((row, i) =>
         i === index
@@ -2326,7 +2356,9 @@ function ClientOverviewScreen({
               ...row,
               [key]: key === "amount" || key === "cgst" || key === "sgst" || key === "igst"
                 ? Number(value) || 0
-                : value,
+                : key === "exportEnabled"
+                  ? Boolean(value)
+                  : value,
             }
           : row,
       ),
@@ -2348,6 +2380,8 @@ function ClientOverviewScreen({
         igst: 0,
         align: "left",
         editable: true,
+        narrationMode: "multiline",
+        exportEnabled: true,
       },
     ]);
   };
@@ -2376,6 +2410,7 @@ function ClientOverviewScreen({
       setupFee,
       customInvoiceRows: customRows,
       monthlyInvoiceEstimate,
+      invoiceTableConfig: overviewRows,
     });
   };
 
@@ -2493,11 +2528,11 @@ function ClientOverviewScreen({
 
           <div className="overflow-hidden rounded-2xl border">
             <ScrollArea className="w-full">
-              <Table>
+              <Table className="min-w-[1900px] table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">S.No</TableHead>
-                    <TableHead>Narration</TableHead>
+                    <TableHead className="w-[420px]">Narration</TableHead>
                     <TableHead className="w-32 text-right">Amount</TableHead>
                     <TableHead className="w-28">HSN</TableHead>
                     <TableHead className="w-24">RATE</TableHead>
@@ -2506,6 +2541,7 @@ function ClientOverviewScreen({
                     <TableHead className="w-24">IGST</TableHead>
                     <TableHead className="w-32 text-right">Total Amount</TableHead>
                     <TableHead className="w-28">Align</TableHead>
+                    <TableHead className="w-24">Export</TableHead>
                     <TableHead className="w-20">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -2516,13 +2552,25 @@ function ClientOverviewScreen({
                     return (
                       <TableRow key={row.id}>
                         <TableCell className="font-medium">{String(index + 1).padStart(2, "0")}</TableCell>
-                        <TableCell>
-                          <Textarea
-                            value={row.narration}
-                            onChange={(e) => updateOverviewRow(index, "narration", e.target.value)}
-                            className={`min-h-20 ${alignClass}`}
-                            placeholder="Narration / service title"
-                          />
+                        <TableCell className="align-top">
+                          <div className="space-y-2">
+                            <Select value={row.narrationMode || "multiline"} onValueChange={(value) => updateOverviewRow(index, "narrationMode", value as NarrationMode)}>
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Mode" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="title">Title</SelectItem>
+                                <SelectItem value="subtitle">Subtitle</SelectItem>
+                                <SelectItem value="multiline">Multiline</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Textarea
+                              value={row.narration}
+                              onChange={(e) => updateOverviewRow(index, "narration", e.target.value)}
+                              className={`min-h-24 w-full ${alignClass}`}
+                              placeholder={row.narrationMode === "title" ? "Title text" : row.narrationMode === "subtitle" ? "Subtitle text" : "Multiline narration"}
+                            />
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <Input
@@ -2561,6 +2609,12 @@ function ClientOverviewScreen({
                               <SelectItem value="right">Right</SelectItem>
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          <label className="flex items-center gap-2 text-sm">
+                            <Checkbox checked={row.exportEnabled !== false} onCheckedChange={(checked) => updateOverviewRow(index, "exportEnabled", Boolean(checked))} />
+                            Export
+                          </label>
                         </TableCell>
                         <TableCell>
                           {row.kind === "custom" ? (
@@ -3565,6 +3619,7 @@ export default function InvoiceManagement() {
             mmcYear2: client.mmcYear2 || 0,
             mmcYear3: client.mmcYear3 || 0,
             customInvoiceRows: client.customInvoiceRows || [],
+            invoiceTableConfig: client.invoiceTableConfig || [],
           }));
           console.log("[InvoiceManagement] Mapped clients:", dbClients);
           setClients(dbClients);
@@ -3725,6 +3780,7 @@ export default function InvoiceManagement() {
               mmcYear2: data.mmcYear2 || 0,
               mmcYear3: data.mmcYear3 || 0,
               customInvoiceRows: data.customInvoiceRows || [],
+              invoiceTableConfig: data.invoiceTableConfig || [],
             };
             console.log("[Invoice] Updated client object:", updatedClient);
             return exists ? prev.map(c => (c.id === data.id || c.id === data.clientId) ? updatedClient : c) : [updatedClient, ...prev];
@@ -4326,6 +4382,7 @@ export default function InvoiceManagement() {
         mmcYear2: payload.mmcYear2 || 0,
         mmcYear3: payload.mmcYear3 || 0,
         customInvoiceRows: payload.customInvoiceRows || [],
+        invoiceTableConfig: payload.invoiceTableConfig || [],
       };
 
       // Save to database via API (encrypted at rest)
@@ -4373,6 +4430,7 @@ export default function InvoiceManagement() {
           mmcYear2: payload.mmcYear2 || 0,
           mmcYear3: payload.mmcYear3 || 0,
           customInvoiceRows: payload.customInvoiceRows || [],
+          invoiceTableConfig: payload.invoiceTableConfig || [],
         }),
       });
 

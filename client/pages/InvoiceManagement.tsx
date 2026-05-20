@@ -2528,21 +2528,51 @@ function ClientOverviewScreen({
 
           <div className="overflow-hidden rounded-2xl border">
             <ScrollArea className="w-full">
-              <Table className="min-w-[1900px] table-fixed">
+              <Table className="min-w-[1500px] table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-16">S.No</TableHead>
-                    <TableHead className="w-[420px]">Narration</TableHead>
-                    <TableHead className="w-32 text-right">Amount</TableHead>
-                    <TableHead className="w-28">HSN</TableHead>
-                    <TableHead className="w-24">RATE</TableHead>
-                    <TableHead className="w-24">CGST</TableHead>
-                    <TableHead className="w-24">SGST</TableHead>
-                    <TableHead className="w-24">IGST</TableHead>
-                    <TableHead className="w-32 text-right">Total Amount</TableHead>
-                    <TableHead className="w-28">Align</TableHead>
-                    <TableHead className="w-24">Export</TableHead>
-                    <TableHead className="w-20">Action</TableHead>
+                    <TableHead className="w-12 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">No.</TableHead>
+                    <TableHead className="w-[300px] px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <FileText className="h-3.5 w-3.5" />
+                        Narration
+                      </span>
+                    </TableHead>
+                    <TableHead className="w-24 px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <Wallet className="h-3.5 w-3.5" />
+                        Amt
+                      </span>
+                    </TableHead>
+                    <TableHead className="w-20 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">HSN</TableHead>
+                    <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Rate</TableHead>
+                    <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">CGST</TableHead>
+                    <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">SGST</TableHead>
+                    <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">IGST</TableHead>
+                    <TableHead className="w-24 px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <BadgeCheck className="h-3.5 w-3.5" />
+                        Total
+                      </span>
+                    </TableHead>
+                    <TableHead className="w-20 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Settings className="h-3.5 w-3.5" />
+                        Align
+                      </span>
+                    </TableHead>
+                    <TableHead className="w-16 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Expt
+                      </span>
+                    </TableHead>
+                    <TableHead className="w-16 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Act
+                      </span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2551,11 +2581,11 @@ function ClientOverviewScreen({
                     const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
                     return (
                       <TableRow key={row.id}>
-                        <TableCell className="font-medium">{String(index + 1).padStart(2, "0")}</TableCell>
-                        <TableCell className="align-top">
-                          <div className="space-y-2">
+                        <TableCell className="px-2 py-2 font-medium text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</TableCell>
+                        <TableCell className="align-top px-2 py-2">
+                          <div className="space-y-1.5">
                             <Select value={row.narrationMode || "multiline"} onValueChange={(value) => updateOverviewRow(index, "narrationMode", value as NarrationMode)}>
-                              <SelectTrigger className="h-9">
+                              <SelectTrigger className="h-8 text-xs">
                                 <SelectValue placeholder="Mode" />
                               </SelectTrigger>
                               <SelectContent>
@@ -2567,42 +2597,42 @@ function ClientOverviewScreen({
                             <Textarea
                               value={row.narration}
                               onChange={(e) => updateOverviewRow(index, "narration", e.target.value)}
-                              className={`min-h-24 w-full ${alignClass}`}
+                              className={`min-h-20 resize-none w-full text-xs leading-5 ${alignClass}`}
                               placeholder={row.narrationMode === "title" ? "Title text" : row.narrationMode === "subtitle" ? "Subtitle text" : "Multiline narration"}
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="px-2 py-2 text-right align-top">
                           <Input
                             type="number"
                             value={row.amount}
                             onChange={(e) => updateOverviewRow(index, "amount", e.target.value)}
                             readOnly={row.id === "variable-slab" && transactionBased}
-                            className="text-right"
+                            className="h-8 text-right text-xs"
                           />
                           {row.id === "variable-slab" && transactionBased && (
-                            <p className="mt-1 text-xs text-muted-foreground">Calculated from transaction count</p>
+                            <p className="mt-1 text-[11px] text-muted-foreground">Calculated from transaction count</p>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <Input value={row.hsn} onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)} className={alignClass} placeholder="998314" />
+                        <TableCell className="px-2 py-2 align-top">
+                          <Input value={row.hsn} onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="998314" />
                         </TableCell>
-                        <TableCell>
-                          <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={alignClass} placeholder="18%" />
+                        <TableCell className="px-2 py-2 align-top">
+                          <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="18%" />
                         </TableCell>
-                        <TableCell>
-                          <Input type="number" value={row.cgst} onChange={(e) => updateOverviewRow(index, "cgst", e.target.value)} className="text-right" />
+                        <TableCell className="px-2 py-2 align-top">
+                          <Input type="number" value={row.cgst} onChange={(e) => updateOverviewRow(index, "cgst", e.target.value)} className="h-8 text-right text-xs" />
                         </TableCell>
-                        <TableCell>
-                          <Input type="number" value={row.sgst} onChange={(e) => updateOverviewRow(index, "sgst", e.target.value)} className="text-right" />
+                        <TableCell className="px-2 py-2 align-top">
+                          <Input type="number" value={row.sgst} onChange={(e) => updateOverviewRow(index, "sgst", e.target.value)} className="h-8 text-right text-xs" />
                         </TableCell>
-                        <TableCell>
-                          <Input type="number" value={row.igst} onChange={(e) => updateOverviewRow(index, "igst", e.target.value)} className="text-right" />
+                        <TableCell className="px-2 py-2 align-top">
+                          <Input type="number" value={row.igst} onChange={(e) => updateOverviewRow(index, "igst", e.target.value)} className="h-8 text-right text-xs" />
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
-                        <TableCell>
+                        <TableCell className="px-2 py-2 text-right align-top whitespace-nowrap text-xs font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
+                        <TableCell className="px-2 py-2 align-top">
                           <Select value={row.align} onValueChange={(value) => updateOverviewRow(index, "align", value as RowAlign)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="left">Left</SelectItem>
                               <SelectItem value="center">Center</SelectItem>
@@ -2610,19 +2640,19 @@ function ClientOverviewScreen({
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell>
-                          <label className="flex items-center gap-2 text-sm">
+                        <TableCell className="px-2 py-2 text-center align-top">
+                          <label className="flex items-center justify-center" title="Include in export">
                             <Checkbox checked={row.exportEnabled !== false} onCheckedChange={(checked) => updateOverviewRow(index, "exportEnabled", Boolean(checked))} />
-                            Export
+                            <span className="sr-only">Export</span>
                           </label>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-2 py-2 text-center align-top">
                           {row.kind === "custom" ? (
-                            <Button variant="outline" size="icon" onClick={() => removeOverviewRow(index)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Remove row" onClick={() => removeOverviewRow(index)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           ) : (
-                            <span className="text-xs text-muted-foreground">Locked</span>
+                            <span className="text-[11px] text-muted-foreground">Locked</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -3291,58 +3321,60 @@ function InvoiceConfigEditor({
                           </div>
                         )}
                         {customInvoiceRows.map((row, index) => (
-                          <div key={index} className="space-y-3 rounded-2xl border bg-muted/20 p-4">
-                            <div className="grid gap-3 md:grid-cols-[1.2fr_1fr_160px_auto] md:items-end">
+                          <div key={index} className="space-y-3 rounded-2xl border bg-muted/20 p-3 md:p-4">
+                            <div className="grid gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_120px_auto] md:items-end">
                               <div className="space-y-2 md:col-span-1">
-                                <Label>Narration / Service title</Label>
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Narration</Label>
                                 <Input
                                   value={row.name}
                                   onChange={(e) => updateCustomInvoiceRow(index, "name", e.target.value)}
                                   placeholder="UPI Reconciliation Services for April 26"
+                                  className="h-8 text-xs"
                                 />
                               </div>
                               <div className="space-y-2 md:col-span-2">
-                                <Label>Paragraph / notes</Label>
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Paragraph / notes</Label>
                                 <Textarea
                                   value={row.narration || ""}
                                   onChange={(e) => updateCustomInvoiceRow(index, "narration", e.target.value)}
                                   placeholder="Minimum guarantee, payee count, service period, agreement notes..."
-                                  className="min-h-24"
+                                  className="min-h-20 resize-none text-xs leading-5"
                                 />
                               </div>
                               <div className="space-y-2">
-                                <Label>Amount</Label>
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Amount</Label>
                                 <Input
                                   type="number"
                                   value={row.amount}
                                   onChange={(e) => updateCustomInvoiceRow(index, "amount", e.target.value)}
                                   placeholder="0"
+                                  className="h-8 text-xs"
                                 />
                               </div>
-                              <Button variant="outline" type="button" onClick={() => removeCustomInvoiceRow(index)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" type="button" title="Remove row" onClick={() => removeCustomInvoiceRow(index)}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                             <div className="grid gap-3 md:grid-cols-5">
                               <div className="space-y-2">
-                                <Label>HSN</Label>
-                                <Input value={row.hsn || ""} onChange={(e) => updateCustomInvoiceRow(index, "hsn", e.target.value)} placeholder="998314" />
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">HSN</Label>
+                                <Input value={row.hsn || ""} onChange={(e) => updateCustomInvoiceRow(index, "hsn", e.target.value)} placeholder="998314" className="h-8 text-xs" />
                               </div>
                               <div className="space-y-2">
-                                <Label>Rate</Label>
-                                <Input value={row.rate || ""} onChange={(e) => updateCustomInvoiceRow(index, "rate", e.target.value)} placeholder="18%" />
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Rate</Label>
+                                <Input value={row.rate || ""} onChange={(e) => updateCustomInvoiceRow(index, "rate", e.target.value)} placeholder="18%" className="h-8 text-xs" />
                               </div>
                               <div className="space-y-2">
-                                <Label>CGST</Label>
-                                <Input type="number" value={row.cgst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "cgst", e.target.value)} />
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">CGST</Label>
+                                <Input type="number" value={row.cgst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "cgst", e.target.value)} className="h-8 text-right text-xs" />
                               </div>
                               <div className="space-y-2">
-                                <Label>SGST</Label>
-                                <Input type="number" value={row.sgst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "sgst", e.target.value)} />
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">SGST</Label>
+                                <Input type="number" value={row.sgst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "sgst", e.target.value)} className="h-8 text-right text-xs" />
                               </div>
                               <div className="space-y-2">
-                                <Label>IGST</Label>
-                                <Input type="number" value={row.igst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "igst", e.target.value)} />
+                                <Label className="text-xs uppercase tracking-wide text-muted-foreground">IGST</Label>
+                                <Input type="number" value={row.igst ?? 0} onChange={(e) => updateCustomInvoiceRow(index, "igst", e.target.value)} className="h-8 text-right text-xs" />
                               </div>
                             </div>
                           </div>

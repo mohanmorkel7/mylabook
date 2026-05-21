@@ -1455,12 +1455,9 @@ async function downloadInvoicePdfTemplate({
   const cgstTotal = lineItems.reduce((sum, item) => sum + Number(item.cgst || 0), 0);
   const sgstTotal = lineItems.reduce((sum, item) => sum + Number(item.sgst || 0), 0);
   const igstTotal = lineItems.reduce((sum, item) => sum + Number(item.igst || 0), 0);
-  const explicitTaxTotal = cgstTotal + sgstTotal + igstTotal;
-  const fallbackTax = subtotal * 0.18;
-  const taxTotal = explicitTaxTotal > 0 ? explicitTaxTotal : fallbackTax;
+  const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const totalPayable = subtotal + taxTotal;
-  const formatPdfAmount = (value: number) => Number(value || 0).toFixed(2);
-  const amountText = (value: number) => formatPdfAmount(value);
+  const amountText = (value: number) => Number(value || 0).toFixed(2);
 
   ensureSpace(18);
   setText(SECONDARY);
@@ -1511,7 +1508,7 @@ async function downloadInvoicePdfTemplate({
 
   lineItems.forEach((item, idx) => {
     const narrationLines = wrapParagraph(item.description, columns.narration - 4);
-    const rowH = Math.max(9, narrationLines.length * 4 + 4);
+    const rowH = Math.max(10, narrationLines.length * 4.4 + 5);
     ensureSpace(rowH + 2);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
@@ -1548,9 +1545,9 @@ async function downloadInvoicePdfTemplate({
     doc.setFont("helvetica", "normal");
     doc.text(item.hsn || "-", colPositions.hsn + 2, cursorY + 5.8);
     doc.text(item.rate || "-", colPositions.rate + 2, cursorY + 5.8);
-    doc.text(item.cgst > 0 ? amountText(item.cgst) : "0", colPositions.cgst + columns.cgst - 2, cursorY + 5.8, { align: "right" });
-    doc.text(item.sgst > 0 ? amountText(item.sgst) : "0", colPositions.sgst + columns.sgst - 2, cursorY + 5.8, { align: "right" });
-    doc.text(item.igst > 0 ? amountText(item.igst) : "0", colPositions.igst + columns.igst - 2, cursorY + 5.8, { align: "right" });
+    doc.text(item.cgst > 0 ? amountText(item.cgst) : "-", colPositions.cgst + columns.cgst - 2, cursorY + 5.8, { align: "right" });
+    doc.text(item.sgst > 0 ? amountText(item.sgst) : "-", colPositions.sgst + columns.sgst - 2, cursorY + 5.8, { align: "right" });
+    doc.text(item.igst > 0 ? amountText(item.igst) : "-", colPositions.igst + columns.igst - 2, cursorY + 5.8, { align: "right" });
     doc.setFont("helvetica", "bold");
     doc.text(amountText(item.totalAmount), colPositions.total + columns.total - 3, cursorY + 5.8, { align: "right" });
     cursorY += rowH;
@@ -1579,15 +1576,11 @@ async function downloadInvoicePdfTemplate({
     doc.text(value, totalsX + totalsW - 4, cursorY + 6, { align: "right" });
     cursorY += opts?.bg ? 9 : 7;
   };
-  lineRow("Sub Total", `INR ${amountText(subtotal)}`);
-  if (explicitTaxTotal > 0) {
-    lineRow("CGST", cgstTotal > 0 ? `INR ${amountText(cgstTotal)}` : "-");
-    lineRow("SGST", sgstTotal > 0 ? `INR ${amountText(sgstTotal)}` : "-");
-    lineRow("IGST", igstTotal > 0 ? `INR ${amountText(igstTotal)}` : "-");
-  } else {
-    lineRow("GST / Tax (18%)", subtotal > 0 ? `INR ${amountText(fallbackTax)}` : "-");
-  }
-  lineRow("Total Amount", `INR ${amountText(totalPayable)}`, { bold: true, bg: true });
+  lineRow("Sub Total", amountText(subtotal));
+  lineRow("CGST", cgstTotal > 0 ? amountText(cgstTotal) : "-");
+  lineRow("SGST", sgstTotal > 0 ? amountText(sgstTotal) : "-");
+  lineRow("IGST", igstTotal > 0 ? amountText(igstTotal) : "-");
+  lineRow("Total Amount", amountText(totalPayable), { bold: true, bg: true });
   cursorY += 8;
 
   // === AMOUNT IN WORDS ===
@@ -1700,23 +1693,16 @@ function getCustomInvoiceRows(client: ClientRecord): CustomInvoiceRow[] {
 function formatCustomInvoiceRowParagraph(row: CustomInvoiceRow) {
   const title = String(row.name || "").trim();
   const subtitle = String(row.narration || "").trim();
-  const extras = [
-    row.hsn ? `HSN: ${row.hsn}` : "",
-    row.rate ? `Rate: ${row.rate}` : "",
-    row.cgst !== undefined && row.cgst !== null ? `CGST: ${row.cgst}` : "",
-    row.sgst !== undefined && row.sgst !== null ? `SGST: ${row.sgst}` : "",
-    row.igst !== undefined && row.igst !== null ? `IGST: ${row.igst}` : "",
-  ].filter(Boolean);
 
   if (row.narrationMode === "title") {
-    return [title, subtitle, ...extras].filter(Boolean).join("\n");
+    return [title, subtitle].filter(Boolean).join("\n");
   }
 
   if (row.narrationMode === "subtitle") {
-    return [subtitle || title, title && subtitle ? `Title: ${title}` : "", ...extras].filter(Boolean).join("\n");
+    return [subtitle || title, title && subtitle ? `Title: ${title}` : ""].filter(Boolean).join("\n");
   }
 
-  return [title, subtitle, ...extras].filter(Boolean).join("\n");
+  return [title, subtitle].filter(Boolean).join("\n");
 }
 
 function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean): OverviewInvoiceRow[] {

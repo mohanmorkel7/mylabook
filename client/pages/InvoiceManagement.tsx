@@ -1884,7 +1884,6 @@ function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[
       sgst: row.sgst,
       igst: row.igst,
       align: row.align,
-      taxType: row.taxType,
       narrationMode: row.narrationMode,
       exportEnabled: row.exportEnabled,
     }))
@@ -2446,6 +2445,10 @@ function ClientOverviewScreen({
     );
   }, [txnInput, transactionBased, taxType, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws]);
 
+  useEffect(() => {
+    setOverviewRows((prev) => prev.map((row) => applyOverviewRowTaxes(row, taxType)));
+  }, [taxType]);
+
   const commercialSummary = useMemo(() => calculateInvoiceCommercials(client, txnInput), [client, txnInput]);
   const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
   const setupFeeInvoiceExists = (client.invoiceHistory || []).some((invoice) => invoice.invoiceType === "setup_fee");
@@ -2535,14 +2538,15 @@ function ClientOverviewScreen({
   };
 
   const saveOverviewConfig = () => {
-    const customRows = overviewRowsToCustomRows(overviewRows);
-    const fixedBilling = overviewRows.find((row) => row.id === "fixed-billing")?.amount ?? client.fixedBilling;
-    const additionalPlatformFee = overviewRows.find((row) => row.id === "additional-platform-fee")?.amount ?? client.additionalPlatformFee;
-    const integrationFee = overviewRows.find((row) => row.id === "integration-fee")?.amount ?? client.integrationFee;
-    const setupFeeRow = overviewRows.find((row) => row.id === "setup-fee")?.amount;
+    const normalizedRows = overviewRows.map((row) => applyOverviewRowTaxes(row, taxType));
+    const customRows = overviewRowsToCustomRows(normalizedRows);
+    const fixedBilling = normalizedRows.find((row) => row.id === "fixed-billing")?.amount ?? client.fixedBilling;
+    const additionalPlatformFee = normalizedRows.find((row) => row.id === "additional-platform-fee")?.amount ?? client.additionalPlatformFee;
+    const integrationFee = normalizedRows.find((row) => row.id === "integration-fee")?.amount ?? client.integrationFee;
+    const setupFeeRow = normalizedRows.find((row) => row.id === "setup-fee")?.amount;
     const setupFeePaid = Number(client.setupFeePaid || 0);
     const setupFee = setupFeeRow !== undefined ? Math.max(Number(setupFeeRow || 0) + setupFeePaid, setupFeePaid) : Number(client.setupFee || 0);
-    const monthlyInvoiceEstimate = overviewRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const monthlyInvoiceEstimate = normalizedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
     onSaveOverviewConfig({
       ...client,
@@ -2555,7 +2559,7 @@ function ClientOverviewScreen({
       setupFee,
       customInvoiceRows: customRows,
       monthlyInvoiceEstimate,
-      invoiceTableConfig: overviewRows,
+      invoiceTableConfig: normalizedRows,
     });
   };
 
@@ -2631,6 +2635,18 @@ function ClientOverviewScreen({
               <Checkbox checked={transactionBased} onCheckedChange={(checked) => setTransactionBased(Boolean(checked))} />
               Transaction Based
             </label>
+            <div className="min-w-[180px] space-y-2">
+              <Label className="text-sm font-medium">Tax Type</Label>
+              <Select value={taxType} onValueChange={(value) => setTaxType(value as RowTaxType)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Domestic">Domestic</SelectItem>
+                  <SelectItem value="International">International</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {transactionBased && (
               <div className="flex flex-1 flex-wrap items-center gap-3">
                 <div className="min-w-[220px] flex-1 space-y-2">
@@ -2699,9 +2715,6 @@ function ClientOverviewScreen({
                         Total
                       </span>
                     </TableHead>
-                    <TableHead className="w-28 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Tax Type
-                    </TableHead>
                     <TableHead className="w-20 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <Settings className="h-3.5 w-3.5" />
@@ -2724,7 +2737,8 @@ function ClientOverviewScreen({
                 </TableHeader>
                 <TableBody>
                   {overviewRows.map((row, index) => {
-                    const rowTotal = Number(row.amount || 0) + Number(row.cgst || 0) + Number(row.sgst || 0) + Number(row.igst || 0);
+                    const rowTaxes = calculateRowTaxes(row.amount, row.rate, row.taxType || taxType);
+                    const rowTotal = rowTaxes.totalAmount;
                     const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
                     return (
                       <TableRow key={row.id}>
@@ -2768,24 +2782,15 @@ function ClientOverviewScreen({
                           <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="18%" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={row.cgst} readOnly className="h-8 text-right text-xs" />
+                          <Input type="number" value={rowTaxes.cgst} readOnly className="h-8 text-right text-xs bg-muted/20" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={row.sgst} readOnly className="h-8 text-right text-xs" />
+                          <Input type="number" value={rowTaxes.sgst} readOnly className="h-8 text-right text-xs bg-muted/20" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={row.igst} readOnly className="h-8 text-right text-xs" />
+                          <Input type="number" value={rowTaxes.igst} readOnly className="h-8 text-right text-xs bg-muted/20" />
                         </TableCell>
                         <TableCell className="px-2 py-2 text-right align-top whitespace-nowrap text-xs font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
-                        <TableCell className="px-2 py-2 align-top">
-                          <Select value={row.taxType || taxType} onValueChange={(value) => updateOverviewRow(index, "taxType", value as RowTaxType)}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Domestic">Domestic</SelectItem>
-                              <SelectItem value="International">International</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
                         <TableCell className="px-2 py-2 align-top">
                           <Select value={row.align} onValueChange={(value) => updateOverviewRow(index, "align", value as RowAlign)}>
                             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>

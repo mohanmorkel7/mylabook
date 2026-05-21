@@ -215,6 +215,19 @@ interface OverviewInvoiceRow {
   narrationMode?: NarrationMode;
   exportEnabled: boolean;
 }
+
+interface InvoiceExportLineItem {
+  description: string;
+  amount: number;
+  hsn: string;
+  rate: string;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  align: RowAlign;
+  exportEnabled: boolean;
+  totalAmount: number;
+}
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
 interface ConfigApproval {
@@ -1162,21 +1175,44 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const customRows = breakdown.customRows;
   const setupFeeDue = breakdown.setupFeeDue > 0 ? breakdown.setupFeeDue : Number(client.setupFee || 0);
 
+  const makeRow = (item: Partial<InvoiceExportLineItem> & Pick<InvoiceExportLineItem, "description" | "amount">): InvoiceExportLineItem => ({
+    hsn: item.hsn || "",
+    rate: item.rate || "",
+    cgst: Number(item.cgst || 0),
+    sgst: Number(item.sgst || 0),
+    igst: Number(item.igst || 0),
+    align: item.align || "left",
+    exportEnabled: item.exportEnabled ?? Number(item.amount || 0) !== 0,
+    totalAmount: Number(item.amount || 0) + Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+    description: item.description,
+    amount: Number(item.amount || 0),
+  });
+
   if (invoiceType === "setup_fee") {
-    return [{ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, align: "left" as const, exportEnabled: invoiceAmount !== 0 || setupFeeDue !== 0 }];
+    return [makeRow({ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue })];
   }
 
-  const setupRows = breakdown.setupFeeDue > 0
-    ? [{ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue }]
-    : [];
+  const setupRows = breakdown.setupFeeDue > 0 ? [makeRow({ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue })] : [];
 
   if (getBillingModel(client) === "mmc") {
     const mmcLabel = `MMC (Year ${client.billingYear || 1}) or Transaction Fee whichever is higher`;
     const coreCommercial = Math.max(invoiceAmount - breakdown.setupFeeDue - breakdown.customRowsTotal, 0);
     return [
       ...setupRows,
-      { description: mmcLabel, amount: coreCommercial, align: "left" as const, exportEnabled: coreCommercial !== 0 },
-      ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const, exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0 })),
+      makeRow({ description: mmcLabel, amount: coreCommercial }),
+      ...customRows.map((row) =>
+        makeRow({
+          description: formatCustomInvoiceRowParagraph(row),
+          amount: Number(row.amount || 0),
+          hsn: String(row.hsn || ""),
+          rate: String(row.rate || ""),
+          cgst: Number(row.cgst || 0),
+          sgst: Number(row.sgst || 0),
+          igst: Number(row.igst || 0),
+          align: row.align || "left",
+          exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
+        }),
+      ),
     ];
   }
 
@@ -1185,12 +1221,24 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const remainingAfterFixed = Math.max(invoiceAmount - fixedBilling - awsCharge, 0);
   return [
     ...setupRows,
-    { description: "Fixed Commercial Charges", amount: fixedBilling, align: "left" as const, exportEnabled: fixedBilling !== 0 },
-    { description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0), align: "left" as const, exportEnabled: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0) !== 0 },
-    { description: "AWS Infra Pass-through", amount: awsCharge, align: "left" as const, exportEnabled: awsCharge !== 0 },
-    { description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0), align: "left" as const, exportEnabled: Number(client.additionalPlatformFee || 0) !== 0 },
-    { description: "Integration Fee", amount: Number(client.integrationFee || 0), align: "left" as const, exportEnabled: Number(client.integrationFee || 0) !== 0 },
-    ...customRows.map((row) => ({ description: formatCustomInvoiceRowParagraph(row), amount: Number(row.amount || 0), align: row.align || "left" as const, exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0 })),
+    makeRow({ description: "Fixed Commercial Charges", amount: fixedBilling }),
+    makeRow({ description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0) }),
+    makeRow({ description: "AWS Infra Pass-through", amount: awsCharge }),
+    makeRow({ description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0) }),
+    makeRow({ description: "Integration Fee", amount: Number(client.integrationFee || 0) }),
+    ...customRows.map((row) =>
+      makeRow({
+        description: formatCustomInvoiceRowParagraph(row),
+        amount: Number(row.amount || 0),
+        hsn: String(row.hsn || ""),
+        rate: String(row.rate || ""),
+        cgst: Number(row.cgst || 0),
+        sgst: Number(row.sgst || 0),
+        igst: Number(row.igst || 0),
+        align: row.align || "left",
+        exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
+      }),
+    ),
   ];
 }
 
@@ -1403,6 +1451,17 @@ async function downloadInvoicePdfTemplate({
 
   // === STATEMENT OF CHARGES ===
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
+  const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const cgstTotal = lineItems.reduce((sum, item) => sum + Number(item.cgst || 0), 0);
+  const sgstTotal = lineItems.reduce((sum, item) => sum + Number(item.sgst || 0), 0);
+  const igstTotal = lineItems.reduce((sum, item) => sum + Number(item.igst || 0), 0);
+  const explicitTaxTotal = cgstTotal + sgstTotal + igstTotal;
+  const fallbackTax = subtotal * 0.18;
+  const taxTotal = explicitTaxTotal > 0 ? explicitTaxTotal : fallbackTax;
+  const totalPayable = subtotal + taxTotal;
+  const formatPdfAmount = (value: number) => Number(value || 0).toFixed(2);
+  const amountText = (value: number) => formatPdfAmount(value);
+
   ensureSpace(18);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
@@ -1410,52 +1469,99 @@ async function downloadInvoicePdfTemplate({
   doc.text("Statement of Charges", margin, cursorY);
   cursorY += 3;
 
-  const headerH = 7.5;
+  const columns = {
+    no: 10,
+    narration: 64,
+    amount: 16,
+    hsn: 14,
+    rate: 12,
+    cgst: 12,
+    sgst: 12,
+    igst: 12,
+    total: 20,
+  };
+  const colPositions = {
+    no: margin,
+    narration: margin + columns.no,
+    amount: margin + columns.no + columns.narration,
+    hsn: margin + columns.no + columns.narration + columns.amount,
+    rate: margin + columns.no + columns.narration + columns.amount + columns.hsn,
+    cgst: margin + columns.no + columns.narration + columns.amount + columns.hsn + columns.rate,
+    sgst: margin + columns.no + columns.narration + columns.amount + columns.hsn + columns.rate + columns.cgst,
+    igst: margin + columns.no + columns.narration + columns.amount + columns.hsn + columns.rate + columns.cgst + columns.sgst,
+    total: margin + columns.no + columns.narration + columns.amount + columns.hsn + columns.rate + columns.cgst + columns.sgst + columns.igst,
+  };
+  const tableW = columns.no + columns.narration + columns.amount + columns.hsn + columns.rate + columns.cgst + columns.sgst + columns.igst + columns.total;
+  const headerH = 8;
   setFill(SECONDARY);
-  doc.rect(margin, cursorY, contentWidth, headerH, "F");
+  doc.rect(margin, cursorY, tableW, headerH, "F");
   setText([255, 255, 255]);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.6);
-  doc.text("#", margin + 3, cursorY + 5.4);
-  doc.text("PARTICULARS", margin + 12, cursorY + 5.4);
-  doc.text("AMOUNT", pageWidth - margin - 3, cursorY + 5.4, { align: "right" });
+  doc.setFontSize(7.6);
+  doc.text("#", colPositions.no + 3, cursorY + 5.4);
+  doc.text("PARTICULARS", colPositions.narration + 3, cursorY + 5.4);
+  doc.text("AMOUNT", colPositions.amount + columns.amount - 3, cursorY + 5.4, { align: "right" });
+  doc.text("HSN", colPositions.hsn + 2, cursorY + 5.4);
+  doc.text("RATE", colPositions.rate + 2, cursorY + 5.4);
+  doc.text("CGST", colPositions.cgst + 2, cursorY + 5.4);
+  doc.text("SGST", colPositions.sgst + 2, cursorY + 5.4);
+  doc.text("IGST", colPositions.igst + 2, cursorY + 5.4);
+  doc.text("AMOUNT", colPositions.total + columns.total - 3, cursorY + 5.4, { align: "right" });
   cursorY += headerH;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.6);
   lineItems.forEach((item, idx) => {
-    const lines = wrapParagraph(item.description, contentWidth - 50);
-    const rowH = Math.max(9, lines.length * 4.2 + 4);
+    const narrationLines = wrapParagraph(item.description, columns.narration - 4);
+    const rowH = Math.max(9, narrationLines.length * 4 + 4);
     ensureSpace(rowH + 2);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
-      doc.rect(margin, cursorY, contentWidth, rowH, "F");
+      doc.rect(margin, cursorY, tableW, rowH, "F");
     }
+    setStroke(SOFT);
+    doc.setLineWidth(0.2);
+    doc.rect(margin, cursorY, tableW, rowH);
+
+    const verticalLines = [
+      colPositions.narration,
+      colPositions.amount,
+      colPositions.hsn,
+      colPositions.rate,
+      colPositions.cgst,
+      colPositions.sgst,
+      colPositions.igst,
+      colPositions.total,
+    ];
+    verticalLines.forEach((x) => doc.line(x, cursorY, x, cursorY + rowH));
+
     setText(MUTED);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.2);
-    doc.text(String(idx + 1).padStart(2, "0"), margin + 3, cursorY + 5.8);
+    doc.setFontSize(8.1);
+    doc.text(String(idx + 1).padStart(2, "0"), colPositions.no + 3, cursorY + 5.8);
+
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.8);
-    const descX = item.align === "right" ? pageWidth - margin - 45 : item.align === "center" ? margin + contentWidth / 2 : margin + 12;
-    doc.text(lines, descX, cursorY + 5.8, { align: item.align || "left" });
+    doc.setFontSize(8.2);
+    doc.text(narrationLines, colPositions.narration + 3, cursorY + 5.6, { align: "left" });
+
     doc.setFont("helvetica", "bold");
-    doc.text(money(item.amount), pageWidth - margin - 3, cursorY + 5.8, { align: "right" });
+    doc.text(amountText(item.amount), colPositions.amount + columns.amount - 3, cursorY + 5.8, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.text(item.hsn || "-", colPositions.hsn + 2, cursorY + 5.8);
+    doc.text(item.rate || "-", colPositions.rate + 2, cursorY + 5.8);
+    doc.text(item.cgst > 0 ? amountText(item.cgst) : "0", colPositions.cgst + columns.cgst - 2, cursorY + 5.8, { align: "right" });
+    doc.text(item.sgst > 0 ? amountText(item.sgst) : "0", colPositions.sgst + columns.sgst - 2, cursorY + 5.8, { align: "right" });
+    doc.text(item.igst > 0 ? amountText(item.igst) : "0", colPositions.igst + columns.igst - 2, cursorY + 5.8, { align: "right" });
+    doc.setFont("helvetica", "bold");
+    doc.text(amountText(item.totalAmount), colPositions.total + columns.total - 3, cursorY + 5.8, { align: "right" });
     cursorY += rowH;
   });
+
   setStroke(SOFT);
   doc.setLineWidth(0.3);
-  doc.line(margin, cursorY, pageWidth - margin, cursorY);
+  doc.line(margin, cursorY, margin + tableW, cursorY);
   cursorY += 4;
 
   // === TOTALS ===
-  const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  // Calculate GST (18%) - LUT exemption only applies to specific cases
-  // For now, always calculate GST for proper invoicing
-  const gst = subtotal * 0.18;
-  const totalPayable = subtotal + gst;
-
   ensureSpace(28);
   const totalsX = pageWidth - margin - 78;
   const totalsW = 78;
@@ -1473,9 +1579,15 @@ async function downloadInvoicePdfTemplate({
     doc.text(value, totalsX + totalsW - 4, cursorY + 6, { align: "right" });
     cursorY += opts?.bg ? 9 : 7;
   };
-  lineRow("Subtotal", money(subtotal));
-  lineRow("GST / Tax (18%)", gst > 0 ? money(gst) : "LUT Exempt");
-  lineRow("Total Payable", money(totalPayable), { bold: true, bg: true });
+  lineRow("Sub Total", `INR ${amountText(subtotal)}`);
+  if (explicitTaxTotal > 0) {
+    lineRow("CGST", cgstTotal > 0 ? `INR ${amountText(cgstTotal)}` : "-");
+    lineRow("SGST", sgstTotal > 0 ? `INR ${amountText(sgstTotal)}` : "-");
+    lineRow("IGST", igstTotal > 0 ? `INR ${amountText(igstTotal)}` : "-");
+  } else {
+    lineRow("GST / Tax (18%)", subtotal > 0 ? `INR ${amountText(fallbackTax)}` : "-");
+  }
+  lineRow("Total Amount", `INR ${amountText(totalPayable)}`, { bold: true, bg: true });
   cursorY += 8;
 
   // === AMOUNT IN WORDS ===

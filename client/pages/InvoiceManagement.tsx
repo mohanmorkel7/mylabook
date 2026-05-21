@@ -1724,7 +1724,7 @@ function parseRatePercentage(rate: string) {
 
 function calculateRowTaxes(amount: number, rate: string, taxType: RowTaxType) {
   const taxable = Number(amount || 0);
-  const percent = parseRatePercentage(rate);
+  const percent = String(rate || "").trim() ? parseRatePercentage(rate) : 18;
   const tax = taxable * (percent / 100);
   if (taxType === "International") {
     const igst = Math.round(tax * 100) / 100;

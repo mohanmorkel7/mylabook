@@ -1468,13 +1468,13 @@ async function downloadInvoicePdfTemplate({
 
   const columns = {
     no: 10,
-    narration: 64,
-    amount: 16,
-    hsn: 14,
-    rate: 12,
-    cgst: 12,
-    sgst: 12,
-    igst: 12,
+    narration: 72,
+    amount: 18,
+    hsn: 16,
+    rate: 14,
+    cgst: 14,
+    sgst: 14,
+    igst: 14,
     total: 20,
   };
   const colPositions = {
@@ -1494,21 +1494,21 @@ async function downloadInvoicePdfTemplate({
   doc.rect(margin, cursorY, tableW, headerH, "F");
   setText([255, 255, 255]);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.6);
-  doc.text("#", colPositions.no + 3, cursorY + 5.4);
-  doc.text("PARTICULARS", colPositions.narration + 3, cursorY + 5.4);
-  doc.text("AMOUNT", colPositions.amount + columns.amount - 3, cursorY + 5.4, { align: "right" });
-  doc.text("HSN", colPositions.hsn + 2, cursorY + 5.4);
-  doc.text("RATE", colPositions.rate + 2, cursorY + 5.4);
-  doc.text("CGST", colPositions.cgst + 2, cursorY + 5.4);
-  doc.text("SGST", colPositions.sgst + 2, cursorY + 5.4);
-  doc.text("IGST", colPositions.igst + 2, cursorY + 5.4);
-  doc.text("AMOUNT", colPositions.total + columns.total - 3, cursorY + 5.4, { align: "right" });
+  doc.setFontSize(7.2);
+  doc.text("#", colPositions.no + columns.no / 2, cursorY + 5.2, { align: "center" });
+  doc.text("PARTICULARS", colPositions.narration + 3, cursorY + 5.2);
+  doc.text("AMOUNT", colPositions.amount + columns.amount - 3, cursorY + 5.2, { align: "right" });
+  doc.text("HSN", colPositions.hsn + columns.hsn / 2, cursorY + 5.2, { align: "center" });
+  doc.text("RATE", colPositions.rate + columns.rate / 2, cursorY + 5.2, { align: "center" });
+  doc.text("CGST", colPositions.cgst + columns.cgst / 2, cursorY + 5.2, { align: "center" });
+  doc.text("SGST", colPositions.sgst + columns.sgst / 2, cursorY + 5.2, { align: "center" });
+  doc.text("IGST", colPositions.igst + columns.igst / 2, cursorY + 5.2, { align: "center" });
+  doc.text("AMOUNT", colPositions.total + columns.total - 3, cursorY + 5.2, { align: "right" });
   cursorY += headerH;
 
   lineItems.forEach((item, idx) => {
-    const narrationLines = wrapParagraph(item.description, columns.narration - 4);
-    const rowH = Math.max(10, narrationLines.length * 4.4 + 5);
+    const narrationLines = wrapParagraph(item.description, columns.narration - 6);
+    const rowH = Math.max(11, narrationLines.length * 4.2 + 5);
     ensureSpace(rowH + 2);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
@@ -1532,24 +1532,24 @@ async function downloadInvoicePdfTemplate({
 
     setText(MUTED);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.1);
-    doc.text(String(idx + 1).padStart(2, "0"), colPositions.no + 3, cursorY + 5.8);
+    doc.setFontSize(7.8);
+    doc.text(String(idx + 1).padStart(2, "0"), colPositions.no + columns.no / 2, cursorY + 5.9, { align: "center" });
 
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.2);
-    doc.text(narrationLines, colPositions.narration + 3, cursorY + 5.6, { align: "left" });
+    doc.setFontSize(7.9);
+    doc.text(narrationLines, colPositions.narration + 3, cursorY + 5.7, { align: "left" });
 
     doc.setFont("helvetica", "bold");
-    doc.text(amountText(item.amount), colPositions.amount + columns.amount - 3, cursorY + 5.8, { align: "right" });
+    doc.text(amountText(item.amount), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
     doc.setFont("helvetica", "normal");
-    doc.text(item.hsn || "-", colPositions.hsn + 2, cursorY + 5.8);
-    doc.text(item.rate || "-", colPositions.rate + 2, cursorY + 5.8);
-    doc.text(item.cgst > 0 ? amountText(item.cgst) : "-", colPositions.cgst + columns.cgst - 2, cursorY + 5.8, { align: "right" });
-    doc.text(item.sgst > 0 ? amountText(item.sgst) : "-", colPositions.sgst + columns.sgst - 2, cursorY + 5.8, { align: "right" });
-    doc.text(item.igst > 0 ? amountText(item.igst) : "-", colPositions.igst + columns.igst - 2, cursorY + 5.8, { align: "right" });
+    doc.text(item.hsn || "-", colPositions.hsn + columns.hsn / 2, cursorY + 5.9, { align: "center" });
+    doc.text(item.rate || "-", colPositions.rate + columns.rate / 2, cursorY + 5.9, { align: "center" });
+    doc.text(item.cgst > 0 ? amountText(item.cgst) : "-", colPositions.cgst + columns.cgst / 2, cursorY + 5.9, { align: "center" });
+    doc.text(item.sgst > 0 ? amountText(item.sgst) : "-", colPositions.sgst + columns.sgst / 2, cursorY + 5.9, { align: "center" });
+    doc.text(item.igst > 0 ? amountText(item.igst) : "-", colPositions.igst + columns.igst / 2, cursorY + 5.9, { align: "center" });
     doc.setFont("helvetica", "bold");
-    doc.text(amountText(item.totalAmount), colPositions.total + columns.total - 3, cursorY + 5.8, { align: "right" });
+    doc.text(amountText(item.totalAmount), colPositions.total + columns.total - 3, cursorY + 5.9, { align: "right" });
     cursorY += rowH;
   });
 
@@ -1560,8 +1560,8 @@ async function downloadInvoicePdfTemplate({
 
   // === TOTALS ===
   ensureSpace(28);
-  const totalsX = pageWidth - margin - 78;
-  const totalsW = 78;
+  const totalsX = pageWidth - margin - 90;
+  const totalsW = 90;
   const lineRow = (label: string, value: string, opts?: { bold?: boolean; bg?: boolean }) => {
     if (opts?.bg) {
       setFill(SECONDARY);

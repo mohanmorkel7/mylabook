@@ -194,11 +194,13 @@ interface CustomInvoiceRow {
   sgst?: number;
   igst?: number;
   align?: "left" | "center" | "right";
+  taxType?: RowTaxType;
   narrationMode?: NarrationMode;
   exportEnabled?: boolean;
 }
 
 type RowAlign = "left" | "center" | "right";
+type RowTaxType = "Domestic" | "International";
 
 interface OverviewInvoiceRow {
   id: string;
@@ -211,6 +213,7 @@ interface OverviewInvoiceRow {
   sgst: number;
   igst: number;
   align: RowAlign;
+  taxType?: RowTaxType;
   editable: boolean;
   narrationMode?: NarrationMode;
   exportEnabled: boolean;
@@ -225,6 +228,7 @@ interface InvoiceExportLineItem {
   sgst: number;
   igst: number;
   align: RowAlign;
+  taxType?: RowTaxType;
   exportEnabled: boolean;
   totalAmount: number;
 }
@@ -1175,21 +1179,27 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const customRows = breakdown.customRows;
   const setupFeeDue = breakdown.setupFeeDue > 0 ? breakdown.setupFeeDue : Number(client.setupFee || 0);
 
-  const makeRow = (item: Partial<InvoiceExportLineItem> & Pick<InvoiceExportLineItem, "description" | "amount">): InvoiceExportLineItem => ({
-    hsn: item.hsn || "",
-    rate: item.rate || "",
-    cgst: Number(item.cgst || 0),
-    sgst: Number(item.sgst || 0),
-    igst: Number(item.igst || 0),
-    align: item.align || "left",
-    exportEnabled: item.exportEnabled ?? Number(item.amount || 0) !== 0,
-    totalAmount: Number(item.amount || 0) + Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
-    description: item.description,
-    amount: Number(item.amount || 0),
-  });
+  const makeRow = (item: Partial<InvoiceExportLineItem> & Pick<InvoiceExportLineItem, "description" | "amount">): InvoiceExportLineItem => {
+    const defaultTaxType: RowTaxType = client.clientType === "International" ? "International" : "Domestic";
+    const taxType = item.taxType || defaultTaxType;
+    const taxes = calculateRowTaxes(Number(item.amount || 0), item.rate || "", taxType);
+    return {
+      hsn: item.hsn || "",
+      rate: item.rate || "",
+      cgst: taxes.cgst,
+      sgst: taxes.sgst,
+      igst: taxes.igst,
+      align: item.align || "left",
+      taxType,
+      exportEnabled: item.exportEnabled ?? Number(item.amount || 0) !== 0,
+      totalAmount: taxes.totalAmount,
+      description: item.description,
+      amount: Number(item.amount || 0),
+    };
+  };
 
   if (invoiceType === "setup_fee") {
-    return [makeRow({ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue })];
+    return [makeRow({ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, taxType: client.clientType === "International" ? "International" : "Domestic" })];
   }
 
   const setupRows = breakdown.setupFeeDue > 0 ? [makeRow({ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue })] : [];
@@ -1210,6 +1220,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
           sgst: Number(row.sgst || 0),
           igst: Number(row.igst || 0),
           align: row.align || "left",
+          taxType: row.taxType,
           exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
         }),
       ),
@@ -1236,6 +1247,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
         sgst: Number(row.sgst || 0),
         igst: Number(row.igst || 0),
         align: row.align || "left",
+        taxType: row.taxType,
         exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
       }),
     ),
@@ -1705,7 +1717,33 @@ function formatCustomInvoiceRowParagraph(row: CustomInvoiceRow) {
   return [title, subtitle].filter(Boolean).join("\n");
 }
 
+function parseRatePercentage(rate: string) {
+  const value = Number(String(rate || "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(value) ? value : 0;
+}
+
+function calculateRowTaxes(amount: number, rate: string, taxType: RowTaxType) {
+  const taxable = Number(amount || 0);
+  const percent = parseRatePercentage(rate);
+  const tax = taxable * (percent / 100);
+  if (taxType === "International") {
+    const igst = Math.round(tax * 100) / 100;
+    return { cgst: 0, sgst: 0, igst, totalAmount: Math.round((taxable + igst) * 100) / 100 };
+  }
+
+  const cgst = Math.round((tax / 2) * 100) / 100;
+  const sgst = Math.round((tax / 2) * 100) / 100;
+  return { cgst, sgst, igst: 0, totalAmount: Math.round((taxable + cgst + sgst) * 100) / 100 };
+}
+
+function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxType): OverviewInvoiceRow {
+  const taxType = row.taxType || fallbackTaxType;
+  const taxes = calculateRowTaxes(row.amount, row.rate, taxType);
+  return { ...row, taxType, cgst: taxes.cgst, sgst: taxes.sgst, igst: taxes.igst };
+}
+
 function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean): OverviewInvoiceRow[] {
+  const defaultTaxType: RowTaxType = client.clientType === "International" ? "International" : "Domestic";
   const breakdown = calculateInvoiceCommercials(client, txnCount);
   const variableCharge = Math.max(
     breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
@@ -1830,7 +1868,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
   }));
 
-  return [...baseRows, ...customRows];
+  return [...baseRows, ...customRows].map((row) => applyOverviewRowTaxes(row, defaultTaxType));
 }
 
 function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[] {
@@ -1846,6 +1884,7 @@ function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[
       sgst: row.sgst,
       igst: row.igst,
       align: row.align,
+      taxType: row.taxType,
       narrationMode: row.narrationMode,
       exportEnabled: row.exportEnabled,
     }))
@@ -2370,26 +2409,28 @@ function ClientOverviewScreen({
 }) {
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
   const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
+  const [taxType, setTaxType] = useState<RowTaxType>(client.clientType === "International" ? "International" : "Domestic");
   const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() => buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction"));
   const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
     client.customInvoiceRows && client.customInvoiceRows.length > 0
       ? [...client.customInvoiceRows]
-      : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0 }],
+      : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0, taxType: client.clientType === "International" ? "International" : "Domestic" }],
   );
 
   useEffect(() => {
     setTxnInput(client.monthlyTransactionVolume);
     setTransactionBased(getBillingModel(client) === "transaction");
+    setTaxType(client.clientType === "International" ? "International" : "Domestic");
     setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction"));
-  }, [client.id, client.monthlyTransactionVolume, client.customInvoiceRows, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
+  }, [client.id, client.clientType, client.monthlyTransactionVolume, client.customInvoiceRows, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
 
   useEffect(() => {
     setCustomRowsDraft(
       client.customInvoiceRows && client.customInvoiceRows.length > 0
         ? [...client.customInvoiceRows]
-        : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0 }],
+        : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0, taxType: client.clientType === "International" ? "International" : "Domestic" }],
     );
-  }, [client.id, client.customInvoiceRows]);
+  }, [client.id, client.clientType, client.customInvoiceRows]);
 
   useEffect(() => {
     setOverviewRows((prev) =>
@@ -2400,10 +2441,10 @@ function ClientOverviewScreen({
           breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
           0,
         );
-        return { ...row, amount: transactionBased ? variableCharge : 0 };
+        return applyOverviewRowTaxes({ ...row, amount: transactionBased ? variableCharge : 0 }, taxType);
       }),
     );
-  }, [txnInput, transactionBased, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws]);
+  }, [txnInput, transactionBased, taxType, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws]);
 
   const commercialSummary = useMemo(() => calculateInvoiceCommercials(client, txnInput), [client, txnInput]);
   const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
@@ -2416,7 +2457,7 @@ function ClientOverviewScreen({
   const finalPayable = invoiceDraft + tax;
 
   const addCustomRow = () => {
-    setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0 }]);
+    setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0, taxType }]);
   };
 
   const updateCustomRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {
@@ -2447,20 +2488,24 @@ function ClientOverviewScreen({
   };
 
   const updateOverviewRow = (index: number, key: keyof OverviewInvoiceRow, value: string | number | boolean) => {
-    setOverviewRows((prev) =>
-      prev.map((row, i) =>
-        i === index
-          ? {
-              ...row,
-              [key]: key === "amount" || key === "cgst" || key === "sgst" || key === "igst"
-                ? Number(value) || 0
-                : key === "exportEnabled"
-                  ? Boolean(value)
-                  : value,
-            }
-          : row,
-      ),
-    );
+    setOverviewRows((prev) => {
+      const nextTaxType = key === "taxType" ? (String(value) as RowTaxType) : taxType;
+      if (key === "taxType") setTaxType(nextTaxType);
+      return prev.map((row, i) => {
+        const nextRow =
+          i === index
+            ? {
+                ...row,
+                [key]: key === "amount" || key === "cgst" || key === "sgst" || key === "igst"
+                  ? Number(value) || 0
+                  : key === "exportEnabled"
+                    ? Boolean(value)
+                    : value,
+              }
+            : row;
+        return applyOverviewRowTaxes(nextRow as OverviewInvoiceRow, nextTaxType);
+      });
+    });
   };
 
   const addOverviewRow = () => {
@@ -2477,6 +2522,7 @@ function ClientOverviewScreen({
         sgst: 0,
         igst: 0,
         align: "left",
+        taxType,
         editable: true,
         narrationMode: "multiline",
         exportEnabled: true,
@@ -2501,6 +2547,7 @@ function ClientOverviewScreen({
     onSaveOverviewConfig({
       ...client,
       billingModel: transactionBased ? "transaction" : "mmc",
+      clientType: taxType,
       monthlyTransactionVolume: txnInput,
       fixedBilling,
       additionalPlatformFee,
@@ -2646,11 +2693,14 @@ function ClientOverviewScreen({
                     <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">CGST</TableHead>
                     <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">SGST</TableHead>
                     <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">IGST</TableHead>
-                    <TableHead className="w-24 px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    <TableHead className="w-24 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       <span className="inline-flex items-center justify-end gap-1">
                         <BadgeCheck className="h-3.5 w-3.5" />
                         Total
                       </span>
+                    </TableHead>
+                    <TableHead className="w-28 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Tax Type
                     </TableHead>
                     <TableHead className="w-20 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
@@ -2718,15 +2768,24 @@ function ClientOverviewScreen({
                           <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="18%" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={row.cgst} onChange={(e) => updateOverviewRow(index, "cgst", e.target.value)} className="h-8 text-right text-xs" />
+                          <Input type="number" value={row.cgst} readOnly className="h-8 text-right text-xs" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={row.sgst} onChange={(e) => updateOverviewRow(index, "sgst", e.target.value)} className="h-8 text-right text-xs" />
+                          <Input type="number" value={row.sgst} readOnly className="h-8 text-right text-xs" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={row.igst} onChange={(e) => updateOverviewRow(index, "igst", e.target.value)} className="h-8 text-right text-xs" />
+                          <Input type="number" value={row.igst} readOnly className="h-8 text-right text-xs" />
                         </TableCell>
                         <TableCell className="px-2 py-2 text-right align-top whitespace-nowrap text-xs font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
+                        <TableCell className="px-2 py-2 align-top">
+                          <Select value={row.taxType || taxType} onValueChange={(value) => updateOverviewRow(index, "taxType", value as RowTaxType)}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Domestic">Domestic</SelectItem>
+                              <SelectItem value="International">International</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
                         <TableCell className="px-2 py-2 align-top">
                           <Select value={row.align} onValueChange={(value) => updateOverviewRow(index, "align", value as RowAlign)}>
                             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -3090,7 +3149,7 @@ function InvoiceConfigEditor({
   };
 
   const addCustomInvoiceRow = () => {
-    setCustomInvoiceRows((prev) => [...prev, { name: "", amount: 0 }]);
+    setCustomInvoiceRows((prev) => [...prev, { name: "", amount: 0, taxType: clientType === "International" ? "International" : "Domestic" }]);
   };
 
   const updateCustomInvoiceRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {

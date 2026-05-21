@@ -2397,6 +2397,7 @@ function ClientOverviewScreen({
   onStatusChange,
   onDownloadPdf,
   onDownloadDocx,
+  onDeleteInvoice,
   onSaveCustomRows,
   onSaveOverviewConfig,
   taxConfig,
@@ -2411,6 +2412,7 @@ function ClientOverviewScreen({
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
+  onDeleteInvoice: (invoiceId: string) => void;
   onSaveCustomRows: (rows: CustomInvoiceRow[]) => void;
   onSaveOverviewConfig: (payload: any) => void;
   taxConfig: TaxConfig;
@@ -3019,7 +3021,7 @@ function ClientOverviewScreen({
                           onStatusChange={(status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
                           onDownloadPdf={() => onDownloadPdf(invoice)}
                           onDownloadDocx={() => onDownloadDocx(invoice)}
-                          onDelete={() => deleteInvoiceById(invoice.invoiceId)}
+                          onDelete={() => onDeleteInvoice(invoice.invoiceId)}
                         />
                       </TableCell>
                     </TableRow>
@@ -4738,6 +4740,7 @@ export default function InvoiceManagement() {
           onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
           onDownloadPdf={downloadInvoicePdf}
           onDownloadDocx={downloadInvoiceDocx}
+          onDeleteInvoice={deleteInvoiceById}
           onSaveCustomRows={(rows) =>
             saveConfig({
               ...selectedClient,

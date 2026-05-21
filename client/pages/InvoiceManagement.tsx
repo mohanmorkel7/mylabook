@@ -2157,7 +2157,7 @@ function InvoiceRowActions({
         <Button variant="outline" size="sm" className="h-9 rounded-xl gap-2" onClick={onDownloadDocx} title="Export DOCX">
           <FileDown className="h-4 w-4" /> DOCX
         </Button>
-        <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-rose-200 text-rose-600" onClick={onDelete} title="Delete invoice">
+        <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl border-rose-200 text-rose-600" onClick={onDelete} title="Delete invoice">
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
@@ -3019,7 +3019,7 @@ function ClientOverviewScreen({
                           onStatusChange={(status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
                           onDownloadPdf={() => onDownloadPdf(invoice)}
                           onDownloadDocx={() => onDownloadDocx(invoice)}
-                          onDelete={() => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
+                          onDelete={() => deleteInvoiceById(invoice.invoiceId)}
                         />
                       </TableCell>
                     </TableRow>
@@ -4315,27 +4315,26 @@ export default function InvoiceManagement() {
     });
   };
 
-  const deleteInvoiceByNumber = (invoiceNumber: string) => {
-    // Find the invoice to get its ID
+  const deleteInvoiceById = (invoiceId: string) => {
     const invoiceToDelete = clients
       .flatMap((c) => c.invoiceHistory || [])
-      .find((inv) => getInvoiceDisplayNumber(inv) === invoiceNumber);
+      .find((inv) => inv.invoiceId === invoiceId);
+
+    const invoiceNumber = invoiceToDelete ? getInvoiceDisplayNumber(invoiceToDelete) : invoiceId;
 
     if (invoiceToDelete) {
-      // Delete from database (best-effort)
-      fetch(`/api/invoice-management/invoices/${invoiceToDelete.invoiceId}`, {
+      fetch(`/api/invoice-management/invoices/${invoiceId}`, {
         method: "DELETE",
       }).catch((err) => {
         console.warn("[Invoice] Failed to delete invoice from database:", err);
       });
     }
 
-    // Update local state
-    setInvoices((prev) => deleteInvoiceFromCollection(prev, invoiceNumber));
+    setInvoices((prev) => prev.filter((invoice) => invoice.invoiceId !== invoiceId));
     setClients((prev) =>
       prev.map((client) => ({
         ...client,
-        invoiceHistory: deleteInvoiceFromCollection((client.invoiceHistory || []) as InvoiceRecord[], invoiceNumber),
+        invoiceHistory: (client.invoiceHistory || []).filter((invoice) => invoice.invoiceId !== invoiceId),
       })),
     );
     toast({ title: "Invoice deleted", description: `${invoiceNumber} removed from history.` });

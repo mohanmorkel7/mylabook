@@ -2719,9 +2719,9 @@ function ClientOverviewScreen({
                     </TableHead>
                     <TableHead className="w-20 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">HSN</TableHead>
                     <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Rate</TableHead>
-                    <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">CGST</TableHead>
-                    <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">SGST</TableHead>
-                    <TableHead className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">IGST</TableHead>
+                    <TableHead className="w-24 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">CGST</TableHead>
+                    <TableHead className="w-24 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">SGST</TableHead>
+                    <TableHead className="w-24 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">IGST</TableHead>
                     <TableHead className="w-24 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       <span className="inline-flex items-center justify-end gap-1">
                         <BadgeCheck className="h-3.5 w-3.5" />
@@ -2795,13 +2795,13 @@ function ClientOverviewScreen({
                           <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="18%" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={rowTaxes.cgst} readOnly className="h-8 text-right text-xs bg-muted/20" />
+                          <Input type="text" value={Math.round(rowTaxes.cgst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={rowTaxes.sgst} readOnly className="h-8 text-right text-xs bg-muted/20" />
+                          <Input type="text" value={Math.round(rowTaxes.sgst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input type="number" value={rowTaxes.igst} readOnly className="h-8 text-right text-xs bg-muted/20" />
+                          <Input type="text" value={Math.round(rowTaxes.igst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
                         </TableCell>
                         <TableCell className="px-2 py-2 text-right align-top whitespace-nowrap text-xs font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
                         <TableCell className="px-2 py-2 align-top">

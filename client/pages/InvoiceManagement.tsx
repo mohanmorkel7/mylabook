@@ -1737,7 +1737,7 @@ function calculateRowTaxes(amount: number, rate: string, taxType: RowTaxType) {
 }
 
 function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxType, taxConfig: TaxConfig): OverviewInvoiceRow {
-  const taxType = row.taxType || fallbackTaxType;
+  const taxType = fallbackTaxType;
   const defaultRate = taxType === "International"
     ? `${taxConfig.igstPercentage || 18}%`
     : `${Number(taxConfig.cgstPercentage || 9) + Number(taxConfig.sgstPercentage || 9)}%`;
@@ -2551,7 +2551,7 @@ function ClientOverviewScreen({
   };
 
   const saveOverviewConfig = () => {
-    const normalizedRows = overviewRows.map((row) => applyOverviewRowTaxes(row, taxType));
+    const normalizedRows = overviewRows.map((row) => applyOverviewRowTaxes(row, taxType, taxConfig));
     const customRows = overviewRowsToCustomRows(normalizedRows);
     const fixedBilling = normalizedRows.find((row) => row.id === "fixed-billing")?.amount ?? client.fixedBilling;
     const additionalPlatformFee = normalizedRows.find((row) => row.id === "additional-platform-fee")?.amount ?? client.additionalPlatformFee;
@@ -2750,7 +2750,7 @@ function ClientOverviewScreen({
                 </TableHeader>
                 <TableBody>
                   {overviewRows.map((row, index) => {
-                    const rowTaxes = calculateRowTaxes(row.amount, row.rate, row.taxType || taxType);
+                    const rowTaxes = calculateRowTaxes(row.amount, row.rate, taxType);
                     const rowTotal = rowTaxes.totalAmount;
                     const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
                     return (

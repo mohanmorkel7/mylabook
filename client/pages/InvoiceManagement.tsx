@@ -1736,14 +1736,21 @@ function calculateRowTaxes(amount: number, rate: string, taxType: RowTaxType) {
   return { cgst, sgst, igst: 0, totalAmount: Math.round((taxable + cgst + sgst) * 100) / 100 };
 }
 
-function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxType): OverviewInvoiceRow {
+function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxType, taxConfig: TaxConfig): OverviewInvoiceRow {
   const taxType = row.taxType || fallbackTaxType;
-  const taxes = calculateRowTaxes(row.amount, row.rate, taxType);
-  return { ...row, taxType, cgst: taxes.cgst, sgst: taxes.sgst, igst: taxes.igst };
+  const defaultRate = taxType === "International"
+    ? `${taxConfig.igstPercentage || 18}%`
+    : `${Number(taxConfig.cgstPercentage || 9) + Number(taxConfig.sgstPercentage || 9)}%`;
+  const effectiveRate = String(row.rate || "").trim() || defaultRate;
+  const taxes = calculateRowTaxes(row.amount, effectiveRate, taxType);
+  return { ...row, rate: effectiveRate, taxType, cgst: taxes.cgst, sgst: taxes.sgst, igst: taxes.igst };
 }
 
-function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean): OverviewInvoiceRow[] {
-  const defaultTaxType: RowTaxType = client.clientType === "International" ? "International" : "Domestic";
+function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean, taxConfig: TaxConfig): OverviewInvoiceRow[] {
+  const defaultTaxType: RowTaxType = taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic";
+  const defaultRate = defaultTaxType === "International"
+    ? `${taxConfig.igstPercentage || 18}%`
+    : `${Number(taxConfig.cgstPercentage || 9) + Number(taxConfig.sgstPercentage || 9)}%`;
   const breakdown = calculateInvoiceCommercials(client, txnCount);
   const variableCharge = Math.max(
     breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
@@ -1757,7 +1764,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       narration: "Fixed Commercial Charges",
       amount: Number(client.fixedBilling || 0),
       hsn: "",
-      rate: "",
+      rate: defaultRate,
       cgst: 0,
       sgst: 0,
       igst: 0,
@@ -1775,7 +1782,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       narration: "Variable Slab Charges",
       amount: variableCharge,
       hsn: "",
-      rate: "",
+      rate: defaultRate,
       cgst: 0,
       sgst: 0,
       igst: 0,
@@ -1793,7 +1800,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       narration: "AWS Infra Pass-through",
       amount: breakdown.awsMarkup,
       hsn: "",
-      rate: "",
+      rate: defaultRate,
       cgst: 0,
       sgst: 0,
       igst: 0,
@@ -1808,7 +1815,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       narration: "Additional Platform Fee",
       amount: Number(client.additionalPlatformFee || 0),
       hsn: "",
-      rate: "",
+      rate: defaultRate,
       cgst: 0,
       sgst: 0,
       igst: 0,
@@ -1823,7 +1830,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       narration: "Integration Fee",
       amount: Number(client.integrationFee || 0),
       hsn: "",
-      rate: "",
+      rate: defaultRate,
       cgst: 0,
       sgst: 0,
       igst: 0,
@@ -1841,7 +1848,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       narration: "One time Setup Fee",
       amount: setupFeeDue,
       hsn: "",
-      rate: "",
+      rate: defaultRate,
       cgst: 0,
       sgst: 0,
       igst: 0,
@@ -1858,7 +1865,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     narration: row.narration || row.name,
     amount: Number(row.amount || 0),
     hsn: String(row.hsn || ""),
-    rate: String(row.rate || ""),
+    rate: String(row.rate || defaultRate),
     cgst: Number(row.cgst || 0),
     sgst: Number(row.sgst || 0),
     igst: Number(row.igst || 0),
@@ -1868,7 +1875,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
   }));
 
-  return [...baseRows, ...customRows].map((row) => applyOverviewRowTaxes(row, defaultTaxType));
+  return [...baseRows, ...customRows].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
 }
 
 function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[] {
@@ -2392,6 +2399,7 @@ function ClientOverviewScreen({
   onDownloadDocx,
   onSaveCustomRows,
   onSaveOverviewConfig,
+  taxConfig,
 }: {
   client: ClientRecord;
   onBack: () => void;
@@ -2405,29 +2413,34 @@ function ClientOverviewScreen({
   onDownloadDocx: (invoice: InvoiceRecord) => void;
   onSaveCustomRows: (rows: CustomInvoiceRow[]) => void;
   onSaveOverviewConfig: (payload: any) => void;
+  taxConfig: TaxConfig;
 }) {
+  const defaultTaxType = taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic";
+  const defaultRate = defaultTaxType === "International"
+    ? `${taxConfig.igstPercentage || 18}%`
+    : `${Number(taxConfig.cgstPercentage || 9) + Number(taxConfig.sgstPercentage || 9)}%`;
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
   const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
-  const [taxType, setTaxType] = useState<RowTaxType>(client.clientType === "International" ? "International" : "Domestic");
-  const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() => buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction"));
+  const [taxType, setTaxType] = useState<RowTaxType>(defaultTaxType);
+  const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() => buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));
   const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
     client.customInvoiceRows && client.customInvoiceRows.length > 0
       ? [...client.customInvoiceRows]
-      : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0, taxType: client.clientType === "International" ? "International" : "Domestic" }],
+      : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType }],
   );
 
   useEffect(() => {
     setTxnInput(client.monthlyTransactionVolume);
     setTransactionBased(getBillingModel(client) === "transaction");
-    setTaxType(client.clientType === "International" ? "International" : "Domestic");
-    setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction"));
-  }, [client.id, client.clientType, client.monthlyTransactionVolume, client.customInvoiceRows, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
+    setTaxType(defaultTaxType);
+    setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));
+  }, [client.id, defaultTaxType, taxConfig, client.monthlyTransactionVolume, client.customInvoiceRows, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
 
   useEffect(() => {
     setCustomRowsDraft(
       client.customInvoiceRows && client.customInvoiceRows.length > 0
         ? [...client.customInvoiceRows]
-        : [{ name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0, taxType: client.clientType === "International" ? "International" : "Domestic" }],
+        : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType }],
     );
   }, [client.id, client.clientType, client.customInvoiceRows]);
 
@@ -2440,14 +2453,14 @@ function ClientOverviewScreen({
           breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
           0,
         );
-        return applyOverviewRowTaxes({ ...row, amount: transactionBased ? variableCharge : 0 }, taxType);
+        return applyOverviewRowTaxes({ ...row, amount: transactionBased ? variableCharge : 0 }, taxType, taxConfig);
       }),
     );
   }, [txnInput, transactionBased, taxType, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws]);
 
   useEffect(() => {
-    setOverviewRows((prev) => prev.map((row) => applyOverviewRowTaxes(row, taxType)));
-  }, [taxType]);
+    setOverviewRows((prev) => prev.map((row) => applyOverviewRowTaxes(row, taxType, taxConfig)));
+  }, [taxType, taxConfig]);
 
   const commercialSummary = useMemo(() => calculateInvoiceCommercials(client, txnInput), [client, txnInput]);
   const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
@@ -2460,7 +2473,7 @@ function ClientOverviewScreen({
   const finalPayable = invoiceDraft + tax;
 
   const addCustomRow = () => {
-    setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: "", cgst: 0, sgst: 0, igst: 0, taxType }]);
+    setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType }]);
   };
 
   const updateCustomRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {
@@ -2506,7 +2519,7 @@ function ClientOverviewScreen({
                     : value,
               }
             : row;
-        return applyOverviewRowTaxes(nextRow as OverviewInvoiceRow, nextTaxType);
+        return applyOverviewRowTaxes(nextRow as OverviewInvoiceRow, nextTaxType, taxConfig);
       });
     });
   };
@@ -2520,7 +2533,7 @@ function ClientOverviewScreen({
         narration: "",
         amount: 0,
         hsn: "",
-        rate: "",
+        rate: defaultRate,
         cgst: 0,
         sgst: 0,
         igst: 0,
@@ -4716,6 +4729,7 @@ export default function InvoiceManagement() {
       <>
         <ClientOverviewScreen
           client={selectedClient}
+          taxConfig={taxConfig}
           onBack={() => navigate("/invoice-management")}
           onExportPdf={() => exportClientPdf(selectedClient)}
           onExportCsv={() => exportClientsCsv([selectedClient])}

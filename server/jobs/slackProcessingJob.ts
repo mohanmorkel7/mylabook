@@ -27,10 +27,11 @@ async function getSlackDefaultAssigneeId(): Promise<number> {
     `SELECT id
      FROM users
      WHERE LOWER(TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')))) = LOWER($1)
+        OR LOWER(email) = LOWER($1)
      LIMIT 1`,
     [preferredName],
   );
-  return Number(res.rows[0]?.id || process.env.SLACK_DEFAULT_ASSIGNEE_ID || 76);
+  return Number(res.rows[0]?.id || process.env.SLACK_DEFAULT_ASSIGNEE_ID || 315);
 }
 
 function getTodayStartTs() {

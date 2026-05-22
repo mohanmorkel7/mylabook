@@ -2157,7 +2157,7 @@ function InvoiceRowActions({
         <Button variant="outline" size="sm" className="h-9 rounded-xl gap-2" onClick={onDownloadDocx} title="Export DOCX">
           <FileDown className="h-4 w-4" /> DOCX
         </Button>
-        <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl border-rose-200 text-rose-600" onClick={onDelete} title="Delete invoice">
+        <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl border-rose-200 text-rose-600" onClick={() => void onDelete()} title="Delete invoice">
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
@@ -2412,7 +2412,7 @@ function ClientOverviewScreen({
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
-  onDeleteInvoice: (invoiceId: string) => void;
+  onDeleteInvoice: (invoiceId: string) => void | Promise<void>;
   onSaveCustomRows: (rows: CustomInvoiceRow[]) => void;
   onSaveOverviewConfig: (payload: any) => void;
   taxConfig: TaxConfig;
@@ -4317,29 +4317,38 @@ export default function InvoiceManagement() {
     });
   };
 
-  const deleteInvoiceById = (invoiceId: string) => {
+  const deleteInvoiceById = async (invoiceId: string) => {
     const invoiceToDelete = clients
       .flatMap((c) => c.invoiceHistory || [])
       .find((inv) => inv.invoiceId === invoiceId);
 
     const invoiceNumber = invoiceToDelete ? getInvoiceDisplayNumber(invoiceToDelete) : invoiceId;
 
-    if (invoiceToDelete) {
-      fetch(`/api/invoice-management/invoices/${invoiceId}`, {
+    try {
+      const response = await fetch(`/api/invoice-management/invoices/${invoiceId}`, {
         method: "DELETE",
-      }).catch((err) => {
-        console.warn("[Invoice] Failed to delete invoice from database:", err);
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete invoice: ${response.status}`);
+      }
+
+      setInvoices((prev) => prev.filter((invoice) => invoice.invoiceId !== invoiceId));
+      setClients((prev) =>
+        prev.map((client) => ({
+          ...client,
+          invoiceHistory: (client.invoiceHistory || []).filter((invoice) => invoice.invoiceId !== invoiceId),
+        })),
+      );
+      toast({ title: "Invoice deleted", description: `${invoiceNumber} removed from history.` });
+    } catch (error) {
+      console.error("[Invoice] Failed to delete invoice:", error);
+      toast({
+        title: "Delete failed",
+        description: `Could not delete ${invoiceNumber}. Please try again.`,
+        variant: "destructive",
       });
     }
-
-    setInvoices((prev) => prev.filter((invoice) => invoice.invoiceId !== invoiceId));
-    setClients((prev) =>
-      prev.map((client) => ({
-        ...client,
-        invoiceHistory: (client.invoiceHistory || []).filter((invoice) => invoice.invoiceId !== invoiceId),
-      })),
-    );
-    toast({ title: "Invoice deleted", description: `${invoiceNumber} removed from history.` });
   };
 
   const approveInvoice = (invoice: InvoiceRecord) => {

@@ -4325,7 +4325,7 @@ export default function InvoiceManagement() {
     const invoiceNumber = invoiceToDelete ? getInvoiceDisplayNumber(invoiceToDelete) : invoiceId;
 
     try {
-      const response = await fetch(`/api/invoice-management/invoices/${invoiceId}`, {
+      const response = await fetch(`/api/invoice-management/invoices/${encodeURIComponent(invoiceId)}`, {
         method: "DELETE",
       });
 

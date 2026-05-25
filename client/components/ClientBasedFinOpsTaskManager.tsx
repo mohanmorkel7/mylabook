@@ -2993,7 +2993,7 @@ export default function ClientBasedFinOpsTaskManager() {
         if (subtask.status === "overdue") summary.overdue_subtasks++;
         if (subtask.status === "pending") summary.pending_subtasks++;
         if (subtask.status === "in_progress") summary.in_progress_subtasks++;
-        if (subtask.status === "approved") summary.approved_subtasks++;
+        if (subtask.status === "pending_approval" || subtask.status === "approved") summary.approved_subtasks++;
       });
     });
 
@@ -3076,7 +3076,7 @@ export default function ClientBasedFinOpsTaskManager() {
           clientSummary[clientName].pending_subtasks++;
         if (subtask.status === "in_progress")
           clientSummary[clientName].in_progress_subtasks++;
-        if (subtask.status === "approved")
+        if (subtask.status === "pending_approval" || subtask.status === "approved")
           clientSummary[clientName].approved_subtasks++;
       });
     });
@@ -3631,7 +3631,7 @@ export default function ClientBasedFinOpsTaskManager() {
 
         {/* Overall Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-          <Card>
+          <Card className="flex-1 min-w-[90px]">
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-blue-600">
                 {overallSummary.total_tasks}
@@ -3640,7 +3640,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="flex-1 min-w-[90px]">
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-gray-900">
                 {overallSummary.total_subtasks}
@@ -3649,7 +3649,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className={`cursor-pointer transition-all ${selectedStatusCard === 'completed' ? 'ring-2 ring-green-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('completed')}>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'completed' ? 'ring-2 ring-green-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('completed')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-green-600">
                 {overallSummary.completed_subtasks}
@@ -3658,7 +3658,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className={`cursor-pointer transition-all ${selectedStatusCard === 'delayed' ? 'ring-2 ring-yellow-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('delayed')}>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'delayed' ? 'ring-2 ring-yellow-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('delayed')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-yellow-600">
                 {overallSummary.delayed_subtasks}
@@ -3667,7 +3667,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className={`cursor-pointer transition-all ${selectedStatusCard === 'overdue' ? 'ring-2 ring-red-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('overdue')}>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'overdue' ? 'ring-2 ring-red-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('overdue')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-red-600">
                 {overallSummary.overdue_subtasks}
@@ -3676,7 +3676,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className={`cursor-pointer transition-all ${selectedStatusCard === 'pending' ? 'ring-2 ring-indigo-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('pending')}>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'pending' ? 'ring-2 ring-indigo-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('pending')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-indigo-600">
                 {overallSummary.pending_subtasks}
@@ -3685,7 +3685,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className={`cursor-pointer transition-all ${selectedStatusCard === 'in_progress' ? 'ring-2 ring-blue-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('in_progress')}>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'in_progress' ? 'ring-2 ring-blue-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('in_progress')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-blue-600">
                 {overallSummary.in_progress_subtasks}
@@ -3694,7 +3694,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className={`cursor-pointer transition-all ${selectedStatusCard === 'approved' ? 'ring-2 ring-purple-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('approved')}>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'approved' ? 'ring-2 ring-purple-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('approved')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-purple-600">
                 {overallSummary.approved_subtasks}
@@ -3703,7 +3703,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className="cursor-default hover:shadow-md">
+          <Card className="flex-1 min-w-[90px] cursor-default hover:shadow-md">
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-slate-600">
                 {Object.keys(clientSummary).length}
@@ -3799,7 +3799,7 @@ export default function ClientBasedFinOpsTaskManager() {
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="delayed">Delayed</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
-                  <SelectItem value="approved">Approve Pending</SelectItem>
+                  <SelectItem value="pending_approval">Approve Pending</SelectItem>
                 </SelectContent>
               </Select>
             </div>

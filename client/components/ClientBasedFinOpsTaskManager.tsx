@@ -3232,6 +3232,7 @@ export default function ClientBasedFinOpsTaskManager() {
                     "Active Clients",
                     "Pending",
                     "In-Progress",
+                    "Approve Pending",
                   ];
 
                   // Fetch tracker data for export (has all completed_by and assigned_to fields)
@@ -3295,6 +3296,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         Object.keys(clientSummary).length,
                         serverSummary.pending_subtasks ?? 0,
                         serverSummary.in_progress_subtasks ?? 0,
+                        serverSummary.approved_subtasks ?? 0,
                       ]
                     : [
                         overallSummary.total_tasks,
@@ -3305,6 +3307,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         Object.keys(clientSummary).length,
                         overallSummary.pending_subtasks,
                         overallSummary.in_progress_subtasks,
+                        overallSummary.approved_subtasks,
                       ];
 
                   const wsSummary = XLSX.utils.aoa_to_sheet([
@@ -3442,6 +3445,7 @@ export default function ClientBasedFinOpsTaskManager() {
                     "Overdue Subtasks",
                     "Pending Subtasks",
                     "In-Progress Subtasks",
+                    "Approve Pending Subtasks",
                   ]);
 
                   const clientAgg: Record<string, any> = {};
@@ -3462,6 +3466,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           overdue_subtasks: 0,
                           pending_subtasks: 0,
                           in_progress_subtasks: 0,
+                          approved_subtasks: 0,
                         };
 
                       clientAgg[name].total_tasks.add(row.task_id);
@@ -3477,6 +3482,9 @@ export default function ClientBasedFinOpsTaskManager() {
                         clientAgg[name].pending_subtasks++;
                       if (row.status === "in_progress")
                         clientAgg[name].in_progress_subtasks++;
+                      // Approve Pending: completed_by is set AND approved_at is null
+                      if (row.completed_by && !row.approved_at)
+                        clientAgg[name].approved_subtasks++;
                     });
 
                     Object.entries(clientAgg).forEach(([cName, sum]: any) => {
@@ -3489,6 +3497,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         sum.overdue_subtasks || 0,
                         sum.pending_subtasks || 0,
                         sum.in_progress_subtasks || 0,
+                        sum.approved_subtasks || 0,
                       ]);
                     });
                   } else {
@@ -3508,6 +3517,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           overdue_subtasks: 0,
                           pending_subtasks: 0,
                           in_progress_subtasks: 0,
+                          approved_subtasks: 0,
                         };
                       clientAgg[name].total_tasks += 1;
                       clientAgg[name].total_subtasks += (
@@ -3524,6 +3534,9 @@ export default function ClientBasedFinOpsTaskManager() {
                           clientAgg[name].pending_subtasks++;
                         if (st.status === "in_progress")
                           clientAgg[name].in_progress_subtasks++;
+                        // Approve Pending: completed_by is set AND approved_at is null
+                        if (st.completed_by && !st.approved_at)
+                          clientAgg[name].approved_subtasks++;
                       });
                     });
 
@@ -3537,6 +3550,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         sum.overdue_subtasks || 0,
                         sum.pending_subtasks || 0,
                         sum.in_progress_subtasks || 0,
+                        sum.approved_subtasks || 0,
                       ]);
                     });
                   }

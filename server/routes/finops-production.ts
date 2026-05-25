@@ -2325,6 +2325,7 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
         COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
         COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int as pending_subtasks,
         COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
+        COUNT(CASE WHEN ft.completed_by IS NOT NULL AND ft.approved_at IS NULL THEN 1 END)::int as approved_subtasks,
         COUNT(DISTINCT t.client_id)::int as active_clients
       FROM finops_tracker ft
       JOIN finops_tasks t ON t.id = ft.task_id

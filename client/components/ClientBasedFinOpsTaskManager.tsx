@@ -2976,6 +2976,7 @@ export default function ClientBasedFinOpsTaskManager() {
       overdue_subtasks: 0,
       pending_subtasks: 0,
       in_progress_subtasks: 0,
+      approved_subtasks: 0,
     };
 
     filteredTasks.forEach((task: ClientBasedFinOpsTask) => {
@@ -2992,6 +2993,7 @@ export default function ClientBasedFinOpsTaskManager() {
         if (subtask.status === "overdue") summary.overdue_subtasks++;
         if (subtask.status === "pending") summary.pending_subtasks++;
         if (subtask.status === "in_progress") summary.in_progress_subtasks++;
+        if (subtask.status === "approved") summary.approved_subtasks++;
       });
     });
 
@@ -3056,6 +3058,7 @@ export default function ClientBasedFinOpsTaskManager() {
           // New per-client counts
           pending_subtasks: 0,
           in_progress_subtasks: 0,
+          approved_subtasks: 0,
         };
       }
 
@@ -3073,6 +3076,8 @@ export default function ClientBasedFinOpsTaskManager() {
           clientSummary[clientName].pending_subtasks++;
         if (subtask.status === "in_progress")
           clientSummary[clientName].in_progress_subtasks++;
+        if (subtask.status === "approved")
+          clientSummary[clientName].approved_subtasks++;
       });
     });
 
@@ -3689,9 +3694,18 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={`cursor-pointer transition-all ${selectedStatusCard === 'approved' ? 'ring-2 ring-purple-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('approved')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-purple-600">
+                {overallSummary.approved_subtasks}
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Approve Pending</div>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-default hover:shadow-md">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-slate-600">
                 {Object.keys(clientSummary).length}
               </div>
               <div className="text-[10px] sm:text-xs text-gray-600 truncate">Active Clients</div>
@@ -3785,6 +3799,7 @@ export default function ClientBasedFinOpsTaskManager() {
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="delayed">Delayed</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="approved">Approve Pending</SelectItem>
                 </SelectContent>
               </Select>
             </div>

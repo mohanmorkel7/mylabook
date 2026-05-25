@@ -2698,11 +2698,22 @@ export default function ClientBasedFinOpsTaskManager() {
 
     // Status filter - filter by subtask status, not task status
     if (statusFilter !== "all") {
-      // Check if any subtask has the selected status
-      const hasSubtaskWithStatus =
-        task.subtasks && task.subtasks.length > 0
-          ? task.subtasks.some((subtask) => subtask.status === statusFilter)
-          : false;
+      // Check if any subtask matches the filter
+      let hasSubtaskWithStatus = false;
+
+      if (statusFilter === "approve_pending") {
+        // Approve Pending: completed_by is set AND approved_at is null
+        hasSubtaskWithStatus =
+          task.subtasks && task.subtasks.length > 0
+            ? task.subtasks.some((subtask) => subtask.completed_by && !subtask.approved_at)
+            : false;
+      } else {
+        // Regular status filter
+        hasSubtaskWithStatus =
+          task.subtasks && task.subtasks.length > 0
+            ? task.subtasks.some((subtask) => subtask.status === statusFilter)
+            : false;
+      }
 
       // Only include task if it has at least one subtask with the selected status
       if (!hasSubtaskWithStatus) return false;
@@ -2993,7 +3004,8 @@ export default function ClientBasedFinOpsTaskManager() {
         if (subtask.status === "overdue") summary.overdue_subtasks++;
         if (subtask.status === "pending") summary.pending_subtasks++;
         if (subtask.status === "in_progress") summary.in_progress_subtasks++;
-        if (subtask.status === "pending_approval" || subtask.status === "approved") summary.approved_subtasks++;
+        // Approve Pending: completed_by is set AND approved_at is null
+        if (subtask.completed_by && !subtask.approved_at) summary.approved_subtasks++;
       });
     });
 
@@ -3076,7 +3088,8 @@ export default function ClientBasedFinOpsTaskManager() {
           clientSummary[clientName].pending_subtasks++;
         if (subtask.status === "in_progress")
           clientSummary[clientName].in_progress_subtasks++;
-        if (subtask.status === "pending_approval" || subtask.status === "approved")
+        // Approve Pending: completed_by is set AND approved_at is null
+        if (subtask.completed_by && !subtask.approved_at)
           clientSummary[clientName].approved_subtasks++;
       });
     });
@@ -3630,7 +3643,7 @@ export default function ClientBasedFinOpsTaskManager() {
         )}
 
         {/* Overall Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+        <div className="flex flex-nowrap gap-2 sm:gap-3 overflow-x-auto pb-2">
           <Card className="flex-1 min-w-[90px]">
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-blue-600">
@@ -3694,7 +3707,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'approved' ? 'ring-2 ring-purple-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('approved')}>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'approve_pending' ? 'ring-2 ring-purple-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('approve_pending')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-purple-600">
                 {overallSummary.approved_subtasks}
@@ -3799,7 +3812,7 @@ export default function ClientBasedFinOpsTaskManager() {
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="delayed">Delayed</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
-                  <SelectItem value="pending_approval">Approve Pending</SelectItem>
+                  <SelectItem value="approve_pending">Approve Pending</SelectItem>
                 </SelectContent>
               </Select>
             </div>

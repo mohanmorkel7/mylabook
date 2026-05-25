@@ -3286,6 +3286,23 @@ export default function ClientBasedFinOpsTaskManager() {
                       ? serverResp.tasks
                       : filteredTasks);
 
+                  // Determine format before using it
+                  const isTrackerFormat = trackerResp.length > 0 && !tasksForExport[0]?.subtasks;
+
+                  // Calculate approve_pending from tracker/task data if not in serverSummary
+                  let approvePendingCount = 0;
+                  if (isTrackerFormat) {
+                    // Tracker format: each row is a subtask
+                    approvePendingCount = trackerResp.filter((row: any) => row.completed_by && !row.approved_at).length;
+                  } else {
+                    // Task format: subtasks are nested
+                    tasksForExport.forEach((task: any) => {
+                      (task.subtasks || []).forEach((st: any) => {
+                        if (st.completed_by && !st.approved_at) approvePendingCount++;
+                      });
+                    });
+                  }
+
                   const summaryRow = serverSummary
                     ? [
                         serverSummary.total_tasks ?? 0,
@@ -3296,7 +3313,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         Object.keys(clientSummary).length,
                         serverSummary.pending_subtasks ?? 0,
                         serverSummary.in_progress_subtasks ?? 0,
-                        serverSummary.approved_subtasks ?? 0,
+                        (serverSummary.approved_subtasks ?? 0) || approvePendingCount || 0,
                       ]
                     : [
                         overallSummary.total_tasks,
@@ -3307,7 +3324,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         Object.keys(clientSummary).length,
                         overallSummary.pending_subtasks,
                         overallSummary.in_progress_subtasks,
-                        overallSummary.approved_subtasks,
+                        overallSummary.approved_subtasks || approvePendingCount || 0,
                       ];
 
                   const wsSummary = XLSX.utils.aoa_to_sheet([
@@ -3318,8 +3335,6 @@ export default function ClientBasedFinOpsTaskManager() {
 
                   // Build client sheets based on server data
                   // Handle both tracker format (flat) and task format (nested with subtasks)
-                  const isTrackerFormat = trackerResp.length > 0 && !tasksForExport[0]?.subtasks;
-
                   const clientNames = Array.from(
                     new Set(
                       tasksForExport.map(

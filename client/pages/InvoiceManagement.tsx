@@ -1912,9 +1912,14 @@ function getActiveMmcAmount(client: ClientRecord): number {
 
 function calculateInvoiceCommercials(client: ClientRecord, txnCount: number) {
   const slabs = client.transactionSlabs || [];
-  const variable = slabs.reduce((sum, slab) => {
+  const variable = slabs.reduce((sum, slab, index) => {
     const slabStart = slab.from;
-    const slabEnd = slab.to ?? Number.POSITIVE_INFINITY;
+    // The last slab is always treated as open-ended (extends to infinity)
+    // so transactions beyond the last finite "to" are still charged.
+    const isLastSlab = index === slabs.length - 1;
+    const slabEnd = isLastSlab || slab.to == null || slab.to <= slab.from
+      ? Number.POSITIVE_INFINITY
+      : slab.to;
     const covered = Math.max(0, Math.min(txnCount, slabEnd) - slabStart);
     const unitMultiplier = slab.unit === "paisa" ? 0.01 : 1;
     return sum + covered * slab.rate * unitMultiplier;

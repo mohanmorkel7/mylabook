@@ -4377,7 +4377,12 @@ export default function InvoiceManagement() {
     toast({ title: "Synced", description: "Invoice management data refreshed from the sample dataset." });
   };
 
-  const generateInvoiceForClient = async (client = selectedClient, invoiceType: InvoiceType = "commercial") => {
+  const generateInvoiceForClient = async (
+    client = selectedClient,
+    invoiceType: InvoiceType = "commercial",
+    amountOverride?: number,
+    txnCountOverride?: number,
+  ) => {
     console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name, invoiceType);
 
     if (!client) {
@@ -4398,7 +4403,16 @@ export default function InvoiceManagement() {
       const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
       const generatedAmount = invoiceType === "setup_fee"
         ? setupFeeDue
-        : Math.round(estimateInvoiceFromSlabs(client, client.monthlyTransactionVolume || 0));
+        : Math.round(
+            typeof amountOverride === "number" && amountOverride > 0
+              ? amountOverride
+              : estimateInvoiceFromSlabs(
+                  client,
+                  (typeof txnCountOverride === "number" && txnCountOverride > 0
+                    ? txnCountOverride
+                    : client.monthlyTransactionVolume) || 0,
+                ),
+          );
 
       if (invoiceType === "setup_fee" && generatedAmount <= 0) {
         toast({ title: "No setup fee due", description: "This client has no pending one time setup fee.", variant: "destructive" });
@@ -5052,7 +5066,7 @@ export default function InvoiceManagement() {
                     if (invoiceModalMode === "edit") {
                       saveInvoiceUpdate();
                     } else {
-                      generateInvoiceForClient(selectedClient);
+                      generateInvoiceForClient(selectedClient, "commercial", invoiceAmountDraft, txnInput);
                     }
                     setInvoiceModalOpen(false);
                   }}
@@ -5802,7 +5816,7 @@ export default function InvoiceManagement() {
                   if (invoiceModalMode === "edit") {
                     saveInvoiceUpdate();
                   } else {
-                    generateInvoiceForClient(selectedClient);
+                    generateInvoiceForClient(selectedClient, "commercial", invoiceAmountDraft, txnInput);
                   }
                   setInvoiceModalOpen(false);
                 }}

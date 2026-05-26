@@ -2415,7 +2415,7 @@ function ClientOverviewScreen({
 }: {
   client: ClientRecord;
   onBack: () => void;
-  onExportPdf: () => void;
+  onExportPdf: (amountOverride?: number, txnCountOverride?: number) => void;
   onExportCsv: () => void;
   onExportDocx: () => void;
   onGenerateInvoice: (amountOverride?: number, txnCountOverride?: number) => void;
@@ -2627,7 +2627,7 @@ function ClientOverviewScreen({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2" onClick={onExportPdf}>
+          <Button variant="outline" className="gap-2" onClick={() => onExportPdf(invoiceDraft, txnInput)}>
             <Download className="h-4 w-4" /> Export PDF
           </Button>
           <Button variant="outline" className="gap-2" onClick={onExportCsv}>
@@ -4323,16 +4323,20 @@ export default function InvoiceManagement() {
     toast({ title: "CSV exported", description: `${rows.length} client rows downloaded.` });
   };
 
-  const exportClientPdf = async (client = selectedClient) => {
+  const exportClientPdf = async (client = selectedClient, amountOverride?: number, txnCountOverride?: number) => {
     if (!client) return;
     try {
       const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+      const exportAmount =
+        typeof amountOverride === "number" && amountOverride > 0
+          ? amountOverride
+          : estimateInvoiceFromSlabs(client, (typeof txnCountOverride === "number" && txnCountOverride > 0 ? txnCountOverride : client.monthlyTransactionVolume) || 0);
       await downloadInvoicePdfTemplate({
         client,
         companyConfig,
         invoiceNumber: serialInfo.invoiceNumber,
         generatedDate: new Date().toISOString().split("T")[0],
-        amount: client.monthlyInvoiceEstimate,
+        amount: exportAmount,
         status: "Waiting for approval",
         month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
         financialYear: serialInfo.financialYear,
@@ -4973,7 +4977,7 @@ export default function InvoiceManagement() {
           client={selectedClient}
           taxConfig={taxConfig}
           onBack={() => navigate("/invoice-management")}
-          onExportPdf={() => exportClientPdf(selectedClient)}
+          onExportPdf={(amountOverride, txnCountOverride) => exportClientPdf(selectedClient, amountOverride, txnCountOverride)}
           onExportCsv={() => exportClientsCsv([selectedClient])}
           onExportDocx={() => exportClientDocx(selectedClient)}
           onGenerateInvoice={(amountOverride, txnCountOverride) => openInvoiceCreateModal(selectedClient, amountOverride, txnCountOverride)}

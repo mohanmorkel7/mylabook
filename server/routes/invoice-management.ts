@@ -161,6 +161,12 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS mmc_year_1 TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS mmc_year_2 TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS mmc_year_3 TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS transaction_fee_rate TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS vap_mip_connectivity_fee TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS change_mgmt_fee_rate TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS change_mgmt_man_days TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS network_cert_note TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS infra_cost_note TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
       console.log("[Invoice] ✓ Added missing columns to invoice_clients");
     } catch (err) {
@@ -282,6 +288,12 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       mmcYear1: parseInt(decrypt(client.mmc_year_1) || "0"),
       mmcYear2: parseInt(decrypt(client.mmc_year_2) || "0"),
       mmcYear3: parseInt(decrypt(client.mmc_year_3) || "0"),
+      transactionFeeRate: parseFloat(decrypt(client.transaction_fee_rate) || "0"),
+      vapMipConnectivityFee: parseInt(decrypt(client.vap_mip_connectivity_fee) || "0"),
+      changeManagementFeeRate: parseInt(decrypt(client.change_mgmt_fee_rate) || "0"),
+      changeManagementManDays: parseInt(decrypt(client.change_mgmt_man_days) || "0"),
+      networkCertificationNote: decrypt(client.network_cert_note) || "",
+      infraCostNote: decrypt(client.infra_cost_note) || "",
       customInvoiceRows: safeParseJson(decrypt(client.custom_invoice_rows), []),
       lastInvoiceGenerated: decrypt(client.last_invoice_generated),
       logo: decrypt(client.logo),
@@ -335,6 +347,12 @@ router.post("/clients", async (req: Request, res: Response) => {
       mmcYear1,
       mmcYear2,
       mmcYear3,
+      transactionFeeRate,
+      vapMipConnectivityFee,
+      changeManagementFeeRate,
+      changeManagementManDays,
+      networkCertificationNote,
+      infraCostNote,
       customInvoiceRows,
       lastInvoiceGenerated,
       logo,
@@ -360,11 +378,14 @@ router.post("/clients", async (req: Request, res: Response) => {
       variable_revenue, aws_infra_recovery, recon_revenue,
       profitability_revenue, min_guarantee, additional_fee, integration_fee,
       billing_cycle, billing_model, billing_year, setup_fee, setup_fee_paid,
-      mmc_year_1, mmc_year_2, mmc_year_3, custom_invoice_rows,
+      mmc_year_1, mmc_year_2, mmc_year_3,
+      transaction_fee_rate, vap_mip_connectivity_fee, change_mgmt_fee_rate, change_mgmt_man_days,
+      network_cert_note, infra_cost_note,
+      custom_invoice_rows,
       last_invoice_generated, logo, logo_class, color,
       gstin, lut_number, billing_address, billing_email, signatory_name,
       client_type, currency, notes, transaction_slabs, aws_config
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
     ON CONFLICT (client_id) DO UPDATE SET
       client_code = EXCLUDED.client_code,
       client_name = EXCLUDED.client_name,
@@ -389,6 +410,12 @@ router.post("/clients", async (req: Request, res: Response) => {
       mmc_year_1 = EXCLUDED.mmc_year_1,
       mmc_year_2 = EXCLUDED.mmc_year_2,
       mmc_year_3 = EXCLUDED.mmc_year_3,
+      transaction_fee_rate = EXCLUDED.transaction_fee_rate,
+      vap_mip_connectivity_fee = EXCLUDED.vap_mip_connectivity_fee,
+      change_mgmt_fee_rate = EXCLUDED.change_mgmt_fee_rate,
+      change_mgmt_man_days = EXCLUDED.change_mgmt_man_days,
+      network_cert_note = EXCLUDED.network_cert_note,
+      infra_cost_note = EXCLUDED.infra_cost_note,
       custom_invoice_rows = EXCLUDED.custom_invoice_rows,
       last_invoice_generated = EXCLUDED.last_invoice_generated,
       logo = EXCLUDED.logo,
@@ -431,6 +458,12 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(String(mmcYear1 || 0)),
       encrypt(String(mmcYear2 || 0)),
       encrypt(String(mmcYear3 || 0)),
+      encrypt(String(transactionFeeRate || 0)),
+      encrypt(String(vapMipConnectivityFee || 0)),
+      encrypt(String(changeManagementFeeRate || 0)),
+      encrypt(String(changeManagementManDays || 0)),
+      encrypt(String(networkCertificationNote || "")),
+      encrypt(String(infraCostNote || "")),
       encrypt(JSON.stringify(Array.isArray(customInvoiceRows) ? customInvoiceRows : [])),
       encrypt(lastInvoiceGenerated),
       encrypt(logo),
@@ -474,6 +507,12 @@ router.post("/clients", async (req: Request, res: Response) => {
       mmc_year_1: String(mmcYear1 || 0),
       mmc_year_2: String(mmcYear2 || 0),
       mmc_year_3: String(mmcYear3 || 0),
+      transaction_fee_rate: String(transactionFeeRate || 0),
+      vap_mip_connectivity_fee: String(vapMipConnectivityFee || 0),
+      change_mgmt_fee_rate: String(changeManagementFeeRate || 0),
+      change_mgmt_man_days: String(changeManagementManDays || 0),
+      network_cert_note: String(networkCertificationNote || ""),
+      infra_cost_note: String(infraCostNote || ""),
       custom_invoice_rows: Array.isArray(customInvoiceRows) ? customInvoiceRows : [],
       last_invoice_generated: lastInvoiceGenerated,
       logo: logo,
@@ -574,6 +613,12 @@ router.get("/clients", async (req: Request, res: Response) => {
           mmcYear1: parseInt(decrypt(client.mmc_year_1) || "0"),
           mmcYear2: parseInt(decrypt(client.mmc_year_2) || "0"),
           mmcYear3: parseInt(decrypt(client.mmc_year_3) || "0"),
+          transactionFeeRate: parseFloat(decrypt(client.transaction_fee_rate) || "0"),
+          vapMipConnectivityFee: parseInt(decrypt(client.vap_mip_connectivity_fee) || "0"),
+          changeManagementFeeRate: parseInt(decrypt(client.change_mgmt_fee_rate) || "0"),
+          changeManagementManDays: parseInt(decrypt(client.change_mgmt_man_days) || "0"),
+          networkCertificationNote: decrypt(client.network_cert_note) || "",
+          infraCostNote: decrypt(client.infra_cost_note) || "",
           customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
           lastInvoiceGenerated: decrypt(client.last_invoice_generated),
           logo: decrypt(client.logo),

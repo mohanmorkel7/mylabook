@@ -585,6 +585,12 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   mmcYear1?: number;
   mmcYear2?: number;
   mmcYear3?: number;
+  transactionFeeRate?: number;
+  vapMipConnectivityFee?: number;
+  changeManagementFeeRate?: number;
+  changeManagementManDays?: number;
+  networkCertificationNote?: string;
+  infraCostNote?: string;
   customInvoiceRows?: CustomInvoiceRow[];
   invoiceTableConfig?: OverviewInvoiceRow[];
 };
@@ -2639,6 +2645,151 @@ function ClientOverviewScreen({
         </div>
       </div>
 
+      {getBillingModel(client) === "mmc" && (
+        <Card className="border-blue-200/50 bg-gradient-to-br from-blue-50/40 to-indigo-50/30 shadow-sm">
+          <CardHeader className="space-y-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <CardTitle className="text-blue-900">MMC (Monthly Minimum Commitment) Configuration</CardTitle>
+                <CardDescription>
+                  Bill whichever is higher: MMC floor or Transaction-based amount.
+                </CardDescription>
+              </div>
+              <Badge className="bg-blue-600 hover:bg-blue-700 rounded-full">
+                Active Year {client.billingYear || 1}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {(() => {
+              const txnFee = Number(client.transactionFeeRate || 0);
+              const txnVolume = Number(txnInput || 0);
+              const transactionBasedTotal = txnFee * txnVolume;
+              const activeMmc = getActiveMmcAmount(client);
+              const billedFloor = Math.max(activeMmc, transactionBasedTotal);
+              const vapFee = Number(client.vapMipConnectivityFee || 0);
+              const cmRate = Number(client.changeManagementFeeRate || 0);
+              const cmDays = Number(client.changeManagementManDays || 0);
+              const cmTotal = cmRate * cmDays;
+              const setupFee = Number(client.setupFee || 0);
+              const setupPaid = Number(client.setupFeePaid || 0);
+              const setupDue = Math.max(setupFee - setupPaid, 0);
+              const grandTotal = billedFloor + vapFee + cmTotal + setupDue;
+              const winner = activeMmc >= transactionBasedTotal ? "MMC floor" : "Transaction-based";
+
+              return (
+                <>
+                  <div className="overflow-x-auto rounded-2xl border bg-white">
+                    <Table className="min-w-[640px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wide">Type</TableHead>
+                          <TableHead className="text-xs font-semibold uppercase tracking-wide text-right">Fee</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell className="font-medium">Onetime Setup Fee</TableCell>
+                          <TableCell className="text-right">{currencyLabel(setupFee, client.currency || "INR")}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Transaction Fee</TableCell>
+                          <TableCell className="text-right">INR {txnFee.toFixed(2)} / transaction</TableCell>
+                        </TableRow>
+                        <TableRow className="bg-blue-50/40">
+                          <TableCell className="font-medium">
+                            <div>MMC (Monthly Minimum Commitment)</div>
+                            <div className="text-xs text-muted-foreground">Note: MMC or Transaction fee whichever is higher</div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className={cn("text-xs", (client.billingYear || 1) === 1 ? "font-semibold text-blue-700" : "text-muted-foreground")}>
+                              Year 1: {currencyLabel(Number(client.mmcYear1 || 0), client.currency || "INR")} / month
+                            </div>
+                            <div className={cn("text-xs", (client.billingYear || 1) === 2 ? "font-semibold text-blue-700" : "text-muted-foreground")}>
+                              Year 2: {currencyLabel(Number(client.mmcYear2 || 0), client.currency || "INR")} / month
+                            </div>
+                            <div className={cn("text-xs", (client.billingYear || 1) >= 3 ? "font-semibold text-blue-700" : "text-muted-foreground")}>
+                              Year 3 onwards: {currencyLabel(Number(client.mmcYear3 || 0), client.currency || "INR")} / month
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">VAP/MIP Connectivity Fee</TableCell>
+                          <TableCell className="text-right">{currencyLabel(vapFee, client.currency || "INR")} / month</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Change Management Fee</TableCell>
+                          <TableCell className="text-right">{currencyLabel(cmRate, client.currency || "INR")} / man-day</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Network / Certification / Tools (one time &amp; recurring)</TableCell>
+                          <TableCell className="text-right text-xs italic text-muted-foreground">
+                            {client.networkCertificationNote || "To be borne by client/bank as per actuals"}
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="font-medium">Infra Cost &amp; Compliance Certification (if dedicated setup required)</TableCell>
+                          <TableCell className="text-right text-xs italic text-muted-foreground">
+                            {client.infraCostNote || "To be borne by client/bank as per actuals"}
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="rounded-2xl border bg-white p-4 space-y-3">
+                    <p className="text-sm font-semibold text-blue-900">
+                      Calculation for current period ({txnVolume.toLocaleString("en-IN")} transactions)
+                    </p>
+                    <div className="grid gap-2 text-sm md:grid-cols-2">
+                      <div className="rounded-xl bg-muted/30 p-3">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">MMC Floor (Year {client.billingYear || 1})</div>
+                        <div className="mt-1 text-base font-semibold">{currencyLabel(activeMmc, client.currency || "INR")}</div>
+                      </div>
+                      <div className="rounded-xl bg-muted/30 p-3">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                          Transaction-based ({txnVolume.toLocaleString("en-IN")} × {txnFee.toFixed(2)})
+                        </div>
+                        <div className="mt-1 text-base font-semibold">{currencyLabel(transactionBasedTotal, client.currency || "INR")}</div>
+                      </div>
+                      <div className="rounded-xl bg-blue-50 p-3 border border-blue-200 md:col-span-2">
+                        <div className="text-xs uppercase tracking-wide text-blue-700">Billed amount (whichever is higher)</div>
+                        <div className="mt-1 flex items-baseline gap-2">
+                          <span className="text-lg font-bold text-blue-900">{currencyLabel(billedFloor, client.currency || "INR")}</span>
+                          <span className="text-xs text-blue-700">— {winner} wins</span>
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-muted/30 p-3">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">VAP/MIP Connectivity</div>
+                        <div className="mt-1 text-base font-semibold">{currencyLabel(vapFee, client.currency || "INR")}</div>
+                      </div>
+                      <div className="rounded-xl bg-muted/30 p-3">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                          Change Management ({cmDays} man-day{cmDays === 1 ? "" : "s"} × {currencyLabel(cmRate, client.currency || "INR")})
+                        </div>
+                        <div className="mt-1 text-base font-semibold">{currencyLabel(cmTotal, client.currency || "INR")}</div>
+                      </div>
+                      {setupDue > 0 && (
+                        <div className="rounded-xl bg-amber-50 p-3 border border-amber-200 md:col-span-2">
+                          <div className="text-xs uppercase tracking-wide text-amber-700">Onetime Setup Fee Due</div>
+                          <div className="mt-1 text-base font-semibold text-amber-900">
+                            {currencyLabel(setupDue, client.currency || "INR")} <span className="text-xs font-normal">(paid {currencyLabel(setupPaid, client.currency || "INR")} of {currencyLabel(setupFee, client.currency || "INR")})</span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 p-3 text-white md:col-span-2">
+                        <div className="text-xs uppercase tracking-wide text-white/80">Estimated total (pre-tax)</div>
+                        <div className="mt-1 text-2xl font-bold">{currencyLabel(grandTotal, client.currency || "INR")}</div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-primary/10 shadow-sm">
         <CardHeader className="space-y-2">
           <CardTitle>Invoice table</CardTitle>
@@ -3106,6 +3257,12 @@ function InvoiceConfigEditor({
   const [mmcYear1, setMmcYear1] = useState(client?.mmcYear1 || 0);
   const [mmcYear2, setMmcYear2] = useState(client?.mmcYear2 || 0);
   const [mmcYear3, setMmcYear3] = useState(client?.mmcYear3 || 0);
+  const [transactionFeeRate, setTransactionFeeRate] = useState(client?.transactionFeeRate || 0.50);
+  const [vapMipConnectivityFee, setVapMipConnectivityFee] = useState(client?.vapMipConnectivityFee || 250000);
+  const [changeManagementFeeRate, setChangeManagementFeeRate] = useState(client?.changeManagementFeeRate || 15000);
+  const [changeManagementManDays, setChangeManagementManDays] = useState(client?.changeManagementManDays || 0);
+  const [networkCertificationNote, setNetworkCertificationNote] = useState(client?.networkCertificationNote || "To be borne by client/bank as per actuals");
+  const [infraCostNote, setInfraCostNote] = useState(client?.infraCostNote || "To be borne by client/bank as per actuals");
   const [minimumGuarantee, setMinimumGuarantee] = useState(client?.minimumGuarantee || 0);
   const [additionalPlatformFee, setAdditionalPlatformFee] = useState(client?.additionalPlatformFee || 0);
   const [integrationFee, setIntegrationFee] = useState(client?.integrationFee || 0);
@@ -3208,6 +3365,12 @@ function InvoiceConfigEditor({
       mmcYear1,
       mmcYear2,
       mmcYear3,
+      transactionFeeRate,
+      vapMipConnectivityFee,
+      changeManagementFeeRate,
+      changeManagementManDays,
+      networkCertificationNote,
+      infraCostNote,
       minimumGuarantee,
       additionalPlatformFee,
       integrationFee,
@@ -3416,6 +3579,10 @@ function InvoiceConfigEditor({
                     </div>
                     {billingModel === "mmc" && (
                       <>
+                        <div className="md:col-span-2 rounded-2xl border bg-blue-50/40 p-4 text-sm text-blue-900">
+                          <p className="font-semibold">MMC Pricing Configuration</p>
+                          <p className="text-blue-800/80 text-xs mt-1">Note: MMC or Transaction fee whichever is higher will be billed.</p>
+                        </div>
                         <div className="space-y-2">
                           <Label>Active MMC Year</Label>
                           <Select value={String(billingYear)} onValueChange={(value) => setBillingYear(Number(value) as 1 | 2 | 3)}>
@@ -3428,24 +3595,48 @@ function InvoiceConfigEditor({
                           </Select>
                         </div>
                         <div className="space-y-2">
-                          <Label>Onetime Setup Fee</Label>
-                          <Input type="number" value={setupFee} onChange={(e) => setSetupFee(Number(e.target.value))} />
+                          <Label>Onetime Setup Fee (INR)</Label>
+                          <Input type="number" value={setupFee} onChange={(e) => setSetupFee(Number(e.target.value))} placeholder="e.g. 750000" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Setup Fee Collected</Label>
+                          <Label>Setup Fee Collected (INR)</Label>
                           <Input type="number" value={setupFeePaid} onChange={(e) => setSetupFeePaid(Number(e.target.value))} />
                         </div>
                         <div className="space-y-2">
-                          <Label>Year 1 MMC</Label>
-                          <Input type="number" value={mmcYear1} onChange={(e) => setMmcYear1(Number(e.target.value))} />
+                          <Label>Transaction Fee (INR per transaction)</Label>
+                          <Input type="number" step="0.01" value={transactionFeeRate} onChange={(e) => setTransactionFeeRate(Number(e.target.value))} placeholder="e.g. 0.50" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Year 2 MMC</Label>
-                          <Input type="number" value={mmcYear2} onChange={(e) => setMmcYear2(Number(e.target.value))} />
+                          <Label>Year 1 MMC (INR / month)</Label>
+                          <Input type="number" value={mmcYear1} onChange={(e) => setMmcYear1(Number(e.target.value))} placeholder="e.g. 150000" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Year 2 MMC (INR / month)</Label>
+                          <Input type="number" value={mmcYear2} onChange={(e) => setMmcYear2(Number(e.target.value))} placeholder="e.g. 250000" />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                          <Label>Year 3 onwards MMC</Label>
-                          <Input type="number" value={mmcYear3} onChange={(e) => setMmcYear3(Number(e.target.value))} />
+                          <Label>Year 3 onwards MMC (INR / month)</Label>
+                          <Input type="number" value={mmcYear3} onChange={(e) => setMmcYear3(Number(e.target.value))} placeholder="e.g. 350000" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>VAP/MIP Connectivity Fee (INR / month)</Label>
+                          <Input type="number" value={vapMipConnectivityFee} onChange={(e) => setVapMipConnectivityFee(Number(e.target.value))} placeholder="e.g. 250000" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Change Management Fee (INR / man-day)</Label>
+                          <Input type="number" value={changeManagementFeeRate} onChange={(e) => setChangeManagementFeeRate(Number(e.target.value))} placeholder="e.g. 15000" />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Change Management Man-Days (current period)</Label>
+                          <Input type="number" value={changeManagementManDays} onChange={(e) => setChangeManagementManDays(Number(e.target.value))} placeholder="e.g. 0" />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Network / Certification / Tools Note</Label>
+                          <Input value={networkCertificationNote} onChange={(e) => setNetworkCertificationNote(e.target.value)} placeholder="To be borne by client/bank as per actuals" />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Infra Cost &amp; Compliance Certification Note</Label>
+                          <Input value={infraCostNote} onChange={(e) => setInfraCostNote(e.target.value)} placeholder="To be borne by client/bank as per actuals" />
                         </div>
                       </>
                     )}
@@ -3825,6 +4016,12 @@ export default function InvoiceManagement() {
             mmcYear1: client.mmcYear1 || 0,
             mmcYear2: client.mmcYear2 || 0,
             mmcYear3: client.mmcYear3 || 0,
+            transactionFeeRate: client.transactionFeeRate || 0,
+            vapMipConnectivityFee: client.vapMipConnectivityFee || 0,
+            changeManagementFeeRate: client.changeManagementFeeRate || 0,
+            changeManagementManDays: client.changeManagementManDays || 0,
+            networkCertificationNote: client.networkCertificationNote || "",
+            infraCostNote: client.infraCostNote || "",
             customInvoiceRows: client.customInvoiceRows || [],
             invoiceTableConfig: client.invoiceTableConfig || [],
           }));
@@ -3986,6 +4183,12 @@ export default function InvoiceManagement() {
               mmcYear1: data.mmcYear1 || 0,
               mmcYear2: data.mmcYear2 || 0,
               mmcYear3: data.mmcYear3 || 0,
+              transactionFeeRate: data.transactionFeeRate || 0,
+              vapMipConnectivityFee: data.vapMipConnectivityFee || 0,
+              changeManagementFeeRate: data.changeManagementFeeRate || 0,
+              changeManagementManDays: data.changeManagementManDays || 0,
+              networkCertificationNote: data.networkCertificationNote || "",
+              infraCostNote: data.infraCostNote || "",
               customInvoiceRows: data.customInvoiceRows || [],
               invoiceTableConfig: data.invoiceTableConfig || [],
             };
@@ -4596,6 +4799,12 @@ export default function InvoiceManagement() {
         mmcYear1: payload.mmcYear1 || 0,
         mmcYear2: payload.mmcYear2 || 0,
         mmcYear3: payload.mmcYear3 || 0,
+        transactionFeeRate: payload.transactionFeeRate || 0,
+        vapMipConnectivityFee: payload.vapMipConnectivityFee || 0,
+        changeManagementFeeRate: payload.changeManagementFeeRate || 0,
+        changeManagementManDays: payload.changeManagementManDays || 0,
+        networkCertificationNote: payload.networkCertificationNote || "",
+        infraCostNote: payload.infraCostNote || "",
         customInvoiceRows: payload.customInvoiceRows || [],
         invoiceTableConfig: payload.invoiceTableConfig || [],
       };
@@ -4644,6 +4853,12 @@ export default function InvoiceManagement() {
           mmcYear1: payload.mmcYear1 || 0,
           mmcYear2: payload.mmcYear2 || 0,
           mmcYear3: payload.mmcYear3 || 0,
+          transactionFeeRate: payload.transactionFeeRate || 0,
+          vapMipConnectivityFee: payload.vapMipConnectivityFee || 0,
+          changeManagementFeeRate: payload.changeManagementFeeRate || 0,
+          changeManagementManDays: payload.changeManagementManDays || 0,
+          networkCertificationNote: payload.networkCertificationNote || "",
+          infraCostNote: payload.infraCostNote || "",
           customInvoiceRows: payload.customInvoiceRows || [],
           invoiceTableConfig: payload.invoiceTableConfig || [],
         }),

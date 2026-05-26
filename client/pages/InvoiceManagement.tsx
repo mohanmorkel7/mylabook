@@ -3856,6 +3856,8 @@ export default function InvoiceManagement() {
   const [invoiceModalMode, setInvoiceModalMode] = useState<"create" | "edit">("create");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [invoiceAmountDraft, setInvoiceAmountDraft] = useState(0);
+  const [pendingInvoiceAmount, setPendingInvoiceAmount] = useState(0);
+  const [pendingInvoiceTxnCount, setPendingInvoiceTxnCount] = useState(0);
   const [invoiceMonthDraft, setInvoiceMonthDraft] = useState("");
   const [invoiceSerialConfig, setInvoiceSerialConfig] = useState<InvoiceSerialConfig>(() => {
     try {
@@ -4101,20 +4103,19 @@ export default function InvoiceManagement() {
 
       // Prefer the live amount from the overview screen (uses current txnInput slider/input)
       // Fall back to estimate from stored monthlyTransactionVolume only when no override provided.
+      const effectiveTxnCount =
+        typeof txnCountOverride === "number" && txnCountOverride > 0
+          ? txnCountOverride
+          : client.monthlyTransactionVolume || 0;
       const estimated =
         typeof amountOverride === "number" && amountOverride > 0
           ? Math.round(amountOverride)
-          : Math.round(
-              estimateInvoiceFromSlabs(
-                client,
-                (typeof txnCountOverride === "number" && txnCountOverride > 0
-                  ? txnCountOverride
-                  : client.monthlyTransactionVolume) || 0,
-              ),
-            );
+          : Math.round(estimateInvoiceFromSlabs(client, effectiveTxnCount));
 
       console.log("[Invoice] openInvoiceCreateModal - Estimated amount:", estimated);
       setInvoiceAmountDraft(estimated);
+      setPendingInvoiceAmount(estimated);
+      setPendingInvoiceTxnCount(effectiveTxnCount);
       setInvoiceMonthDraft(new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }));
       setInvoiceModalOpen(true);
       console.log("[Invoice] openInvoiceCreateModal - Modal opened");
@@ -5066,7 +5067,7 @@ export default function InvoiceManagement() {
                     if (invoiceModalMode === "edit") {
                       saveInvoiceUpdate();
                     } else {
-                      generateInvoiceForClient(selectedClient, "commercial", invoiceAmountDraft, txnInput);
+                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount);
                     }
                     setInvoiceModalOpen(false);
                   }}

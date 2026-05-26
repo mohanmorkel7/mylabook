@@ -2418,7 +2418,7 @@ function ClientOverviewScreen({
   onExportPdf: () => void;
   onExportCsv: () => void;
   onExportDocx: () => void;
-  onGenerateInvoice: () => void;
+  onGenerateInvoice: (amountOverride?: number, txnCountOverride?: number) => void;
   onGenerateSetupFeeInvoice: () => void;
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord) => void;
@@ -2643,7 +2643,7 @@ function ClientOverviewScreen({
           )}
           <Button
             className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500"
-            onClick={onGenerateInvoice}
+            onClick={() => onGenerateInvoice(invoiceDraft, txnInput)}
           >
             <ReceiptText className="h-4 w-4" /> Generate Invoice
           </Button>
@@ -4086,8 +4086,8 @@ export default function InvoiceManagement() {
     [invoiceSerialConfig],
   );
 
-  const openInvoiceCreateModal = (client: ClientRecord) => {
-    console.log("[Invoice] openInvoiceCreateModal - Opening for client:", client?.name, client);
+  const openInvoiceCreateModal = (client: ClientRecord, amountOverride?: number, txnCountOverride?: number) => {
+    console.log("[Invoice] openInvoiceCreateModal - Opening for client:", client?.name, client, { amountOverride, txnCountOverride });
 
     if (!client) {
       console.error("[Invoice] openInvoiceCreateModal - No client provided");
@@ -4099,7 +4099,19 @@ export default function InvoiceManagement() {
       setInvoiceModalMode("create");
       setSelectedInvoice(null);
 
-      const estimated = Math.round(estimateInvoiceFromSlabs(client, client.monthlyTransactionVolume || 0));
+      // Prefer the live amount from the overview screen (uses current txnInput slider/input)
+      // Fall back to estimate from stored monthlyTransactionVolume only when no override provided.
+      const estimated =
+        typeof amountOverride === "number" && amountOverride > 0
+          ? Math.round(amountOverride)
+          : Math.round(
+              estimateInvoiceFromSlabs(
+                client,
+                (typeof txnCountOverride === "number" && txnCountOverride > 0
+                  ? txnCountOverride
+                  : client.monthlyTransactionVolume) || 0,
+              ),
+            );
 
       console.log("[Invoice] openInvoiceCreateModal - Estimated amount:", estimated);
       setInvoiceAmountDraft(estimated);
@@ -4964,7 +4976,7 @@ export default function InvoiceManagement() {
           onExportPdf={() => exportClientPdf(selectedClient)}
           onExportCsv={() => exportClientsCsv([selectedClient])}
           onExportDocx={() => exportClientDocx(selectedClient)}
-          onGenerateInvoice={() => openInvoiceCreateModal(selectedClient)}
+          onGenerateInvoice={(amountOverride, txnCountOverride) => openInvoiceCreateModal(selectedClient, amountOverride, txnCountOverride)}
           onGenerateSetupFeeInvoice={() => generateSetupFeeInvoiceForClient(selectedClient)}
           onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
           onDownloadPdf={downloadInvoicePdf}

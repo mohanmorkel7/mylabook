@@ -172,11 +172,6 @@ const formatInvoicePdfDate = (dateStr: string) => {
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${String(day).padStart(2, "0")}-${monthNames[month - 1]}-${year}`;
 };
-const MYLAPAY_FOOTER_LINES = [
-  "MYLAPAY Incorporated as Mindeed Technologies and Services Private Limited.",
-  "# 17/3, Pembroke House, Second Floor, Shafee Mohammed Road, Nungambakkam, Chennai 600 006.",
-  "CIN: U72900TN2019PTC129197 | Website: www.mylapay.com | Reach us at:contactus@mylapay.com",
-];
 
 const INVOICE_SERIAL_CONFIG_KEY = "invoice-serial-config";
 const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
@@ -1147,11 +1142,11 @@ async function downloadInvoiceDocxTemplate({
             ],
           }),
           new Docx.Paragraph({ spacing: { before: 4 } }),
-          ...MYLAPAY_FOOTER_LINES.map(
-            (line, index) =>
+          ...getCompanyFooterLines(companyConfig).map(
+            (line, index, lines) =>
               new Docx.Paragraph({
                 children: [new Docx.TextRun({ text: line, color: INVOICE_THEME.secondaryHex, size: 8 })],
-                spacing: { after: index === MYLAPAY_FOOTER_LINES.length - 1 ? 2 : 1 },
+                spacing: { after: index === lines.length - 1 ? 2 : 1 },
               }),
           ),
         ],
@@ -1293,6 +1288,21 @@ function getCompanyHeaderWebsiteLine(companyConfig: CompanyConfig) {
   return normalizeInlineText(companyConfig.website);
 }
 
+function getCompanyFooterLines(companyConfig: CompanyConfig) {
+  const footerAddress = normalizeInlineText([
+    companyConfig.address,
+    companyConfig.city,
+    companyConfig.state,
+    companyConfig.pincode,
+  ].filter(Boolean).join(", "));
+
+  return [
+    `MYLAPAY Incorporated as ${companyConfig.companyName || "Mindeed Technologies and Services Private Limited"}.`,
+    footerAddress ? `# ${footerAddress}.` : "# —",
+    `CIN: ${companyConfig.cinNumber || "—"} | Website: ${companyConfig.website || "—"} | Reach us at:${companyConfig.email || "—"}`,
+  ];
+}
+
 function getClientGstin(client: ClientRecord) {
   return client.gstin || "—";
 }
@@ -1366,7 +1376,7 @@ async function downloadInvoicePdfTemplate({
     setText(MUTED);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.8);
-    MYLAPAY_FOOTER_LINES.forEach((line, idx) => {
+    getCompanyFooterLines(companyConfig).forEach((line, idx) => {
       doc.text(line, margin, fy + 4.5 + idx * 3.4);
     });
     setText(PRIMARY);
@@ -1396,11 +1406,11 @@ async function downloadInvoicePdfTemplate({
   drawHeaderBand();
 
   // === HEADER ===
-  const headerHeight = 38;
-  const headerLeftWidth = contentWidth * 0.5;
+  const headerHeight = 40;
+  const headerLeftWidth = contentWidth * 0.56;
   if (logoData) {
     try {
-      doc.addImage(logoData, "PNG", margin, cursorY, 28, 9.5);
+      doc.addImage(logoData, "PNG", margin, cursorY + 0.5, 31, 11.5);
     } catch {}
   }
 
@@ -1417,24 +1427,24 @@ async function downloadInvoicePdfTemplate({
 
   setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.3);
-  let headerLeftY = cursorY + 12.8;
+  doc.setFontSize(5.4);
+  let headerLeftY = cursorY + 13.8;
   headerLeftLines.forEach((line, idx) => {
     doc.setFont("helvetica", idx === 0 ? "bold" : "normal");
-    doc.setFontSize(idx === 0 ? 6.1 : 5.2);
+    doc.setFontSize(idx === 0 ? 7.2 : 5.5);
     const lines = wrap(String(line), headerLeftWidth);
     doc.text(lines, margin, headerLeftY);
-    headerLeftY += lines.length * (idx === 0 ? 3.1 : 2.7) + 0.2;
+    headerLeftY += lines.length * (idx === 0 ? 3.4 : 2.8) + 0.1;
   });
 
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(23);
-  doc.text("INVOICE", pageWidth - margin, cursorY + 5.8, { align: "right" });
+  doc.setFontSize(19.5);
+  doc.text("INVOICE", pageWidth - margin, cursorY + 6.2, { align: "right" });
   setText(PRIMARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.4);
-  doc.text("TAX INVOICE", pageWidth - margin, cursorY + 10.7, { align: "right" });
+  doc.setFontSize(6.8);
+  doc.text("TAX INVOICE", pageWidth - margin, cursorY + 10.0, { align: "right" });
 
   setText(MUTED);
   doc.setFont("helvetica", "normal");

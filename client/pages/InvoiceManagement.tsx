@@ -182,15 +182,60 @@ const formatInvoiceServicePeriod = (month: string, generatedDate: string) => {
   return date.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
 };
 
+const INDIAN_STATE_NAMES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman and Nicobar Islands",
+  "Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry",
+].sort((a, b) => b.length - a.length);
+
 const extractStateFromAddress = (address?: string) => {
-  const parts = String(address || "")
+  const source = normalizeInlineText(address).replace(/\b\d{6}\b/g, " ");
+  if (!source) return "";
+  const normalized = source.replace(/[\-|–|—|,]/g, " ").replace(/\s+/g, " ").trim();
+  const stateMatch = INDIAN_STATE_NAMES.find((state) => new RegExp(`\\b${state.replace(/ /g, "\\s+")}\\b`, "i").test(normalized));
+  if (stateMatch) return stateMatch;
+  const parts = String(source)
     .split(/[\n,]/)
     .map((part) => normalizeInlineText(part))
     .filter(Boolean)
-    .filter((part) => !/^(india|inr)$/i.test(part) && !/^\d{5,6}$/.test(part));
-
+    .filter((part) => !/^(india|inr)$/i.test(part))
+    .filter((part) => !/^\d{5,6}$/.test(part));
   if (parts.length === 0) return "";
-  return parts[parts.length - 1];
+  const candidate = parts[parts.length - 1].split(/\s*[-–—]\s*/)[0].trim();
+  return candidate;
 };
 
 const getClientPlaceOfSupply = (client: ClientRecord) =>
@@ -918,7 +963,7 @@ async function downloadInvoiceDocxTemplate({
     ["Client", getClientDisplayBillingName(client)],
     ["Client Code", client.code],
     ["GSTIN", getClientGstin(client)],
-    ["LUT", getClientLut(client)],
+    ...(normalizeInlineText(client.lutNumber) ? [["LUT", client.lutNumber as string]] : []),
     ["Billing Email", client.billingEmail || "—"],
     ["Billing Address", getClientBillToAddress(client)],
   ];
@@ -1476,7 +1521,7 @@ async function downloadInvoicePdfTemplate({
   const rightRows = [
     client.billingEmail || "—",
     `GSTIN: ${getClientGstin(client) || "—"}`,
-    `LUT: ${getClientLut(client) || "—"}`,
+    ...(normalizeInlineText(client.lutNumber) ? [`LUT: ${getClientLut(client)}`] : []),
   ];
 
   const renderBillSection = (x: number, title: string, rows: string[], width: number) => {

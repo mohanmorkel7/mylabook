@@ -5048,13 +5048,13 @@ export default function InvoiceManagement() {
 
         {/* Invoice Creation/Editing Modal */}
         <Dialog open={invoiceModalOpen} onOpenChange={setInvoiceModalOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[calc(100vh-2rem)] overflow-hidden p-6">
             <DialogHeader>
               <DialogTitle>
                 {invoiceModalMode === "edit" ? "Edit Invoice" : "Invoice Generation Modal"}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="max-h-[calc(100vh-8rem)] space-y-4 overflow-y-auto pr-1">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Client</Label>
@@ -5076,24 +5076,24 @@ export default function InvoiceManagement() {
                   )}
                 </div>
                 <div className="space-y-2">
-                <Label>Invoice Date</Label>
-                <Input
-                  type="date"
-                  value={invoiceDateDraft || new Date().toISOString().split("T")[0]}
-                  onChange={(e) => setInvoiceDateDraft(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  PDF format: {formatInvoicePdfDate(invoiceDateDraft || new Date().toISOString().split("T")[0])}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Invoice Month</Label>
-                <Input
-                  value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
-                  onChange={(e) => setInvoiceMonthDraft(e.target.value)}
-                  readOnly={invoiceModalMode !== "edit"}
-                />
-              </div>
+                  <Label>Invoice Date</Label>
+                  <Input
+                    type="date"
+                    value={invoiceDateDraft || new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setInvoiceDateDraft(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    PDF format: {formatInvoicePdfDate(invoiceDateDraft || new Date().toISOString().split("T")[0])}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Invoice Month</Label>
+                  <Input
+                    value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
+                    onChange={(e) => setInvoiceMonthDraft(e.target.value)}
+                    readOnly={invoiceModalMode !== "edit"}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Input value={invoiceModalMode === "edit" ? "Generated" : "Waiting for approval"} readOnly />
@@ -5112,8 +5112,8 @@ export default function InvoiceManagement() {
                 <Textarea
                   value={companyConfig.declarationText}
                   onChange={(e) => setCompanyConfig((prev) => ({ ...prev, declarationText: e.target.value }))}
-                  rows={8}
-                  className="min-h-[180px] resize-y"
+                  rows={6}
+                  className="min-h-[140px] resize-y"
                   placeholder="We hereby declare that..."
                 />
               </div>

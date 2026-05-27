@@ -139,6 +139,7 @@ export async function initializeInvoiceSchema() {
         billing_address       TEXT,
         billing_email         TEXT,
         signatory_name        TEXT,
+        signatory_image       TEXT,
         client_type           TEXT,
         currency              TEXT,
         notes                 TEXT,
@@ -168,6 +169,7 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS network_cert_note TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS infra_cost_note TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS signatory_image TEXT`);
       console.log("[Invoice] ✓ Added missing columns to invoice_clients");
     } catch (err) {
       console.log("[Invoice] Columns already exist or error:", (err as any)?.message);
@@ -304,6 +306,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       billingAddress: decrypt(client.billing_address),
       billingEmail: decrypt(client.billing_email),
       signatoryName: decrypt(client.signatory_name),
+      signatoryImage: decrypt(client.signatory_image),
       clientType: decrypt(client.client_type),
       currency: decrypt(client.currency),
       notes: decrypt(client.notes),
@@ -363,6 +366,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       billingAddress,
       billingEmail,
       signatoryName,
+      signatoryImage,
       clientType,
       currency,
       notes,
@@ -383,7 +387,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       network_cert_note, infra_cost_note,
       custom_invoice_rows,
       last_invoice_generated, logo, logo_class, color,
-      gstin, lut_number, billing_address, billing_email, signatory_name,
+      gstin, lut_number, billing_address, billing_email, signatory_name, signatory_image,
       client_type, currency, notes, transaction_slabs, aws_config
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
     ON CONFLICT (client_id) DO UPDATE SET
@@ -426,6 +430,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       billing_address = EXCLUDED.billing_address,
       billing_email = EXCLUDED.billing_email,
       signatory_name = EXCLUDED.signatory_name,
+      signatory_image = EXCLUDED.signatory_image,
       client_type = EXCLUDED.client_type,
       currency = EXCLUDED.currency,
       notes = EXCLUDED.notes,
@@ -474,6 +479,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(billingAddress),
       encrypt(billingEmail),
       encrypt(signatoryName),
+      encrypt(signatoryImage),
       encrypt(clientType),
       encrypt(currency),
       encrypt(notes),
@@ -523,6 +529,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       billing_address: billingAddress,
       billing_email: billingEmail,
       signatory_name: signatoryName,
+      signatory_image: signatoryImage,
       client_type: clientType,
       currency: currency,
       notes: notes,
@@ -628,8 +635,9 @@ router.get("/clients", async (req: Request, res: Response) => {
           lutNumber: decrypt(client.lut_number),
           billingAddress: decrypt(client.billing_address),
           billingEmail: decrypt(client.billing_email),
-          signatoryName: decrypt(client.signatory_name),
-          clientType: decrypt(client.client_type),
+      signatoryName: decrypt(client.signatory_name),
+      signatoryImage: decrypt(client.signatory_image),
+      clientType: decrypt(client.client_type),
           currency: decrypt(client.currency),
           notes: decrypt(client.notes),
           transactionSlabs: JSON.parse(decrypt(client.transaction_slabs) || "[]"),
@@ -680,6 +688,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       billingAddress: client.billing_address,
       billingEmail: client.billing_email,
       signatoryName: client.signatory_name,
+      signatoryImage: client.signatory_image,
       clientType: client.client_type,
       currency: client.currency,
       notes: client.notes,
@@ -738,6 +747,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       billingAddress: client.billing_address,
       billingEmail: client.billing_email,
       signatoryName: client.signatory_name,
+      signatoryImage: client.signatory_image,
       clientType: client.client_type,
       currency: client.currency,
       notes: client.notes,

@@ -650,6 +650,7 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   billingState?: string;
   billingEmail?: string;
   signatoryName?: string;
+  signatoryImage?: string;
   invoiceHistory?: InvoiceRecord[];
   clientType?: ClientType;
   currency?: CurrencyType;
@@ -866,6 +867,15 @@ function toCsv(rows: Record<string, any>[]) {
     headers.join(","),
     ...rows.map((row) => headers.map((header) => escapeCsv(row[header])).join(",")),
   ].join("\n");
+}
+
+async function readFileDataUrl(file: File) {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 async function fetchImageDataUrl(url: string) {
@@ -1359,6 +1369,10 @@ function getClientLut(client: ClientRecord) {
 
 function getClientSignatureName(client: ClientRecord) {
   return client.signatoryName || "Authorized Signatory";
+}
+
+function getClientSignatureImage(client: ClientRecord) {
+  return normalizeInlineText(client.signatoryImage);
 }
 
 function getCompanyDisplayAddress(companyConfig: CompanyConfig) {
@@ -3364,6 +3378,7 @@ function InvoiceConfigEditor({
   const [billingAddress, setBillingAddress] = useState(client?.billingAddress || "");
   const [billingEmail, setBillingEmail] = useState(client?.billingEmail || "");
   const [signatoryName, setSignatoryName] = useState(client?.signatoryName || "");
+  const [signatoryImage, setSignatoryImage] = useState(client?.signatoryImage || "");
   const [notes, setNotes] = useState(client?.notes || "");
   const [txnPreview, setTxnPreview] = useState(client?.monthlyTransactionVolume || 1000000);
   const [clientType, setClientType] = useState<ClientType>(client?.clientType || "Domestic");
@@ -3474,6 +3489,7 @@ function InvoiceConfigEditor({
       billingAddress,
       billingEmail,
       signatoryName,
+      signatoryImage,
       monthlyInvoiceEstimate: preview,
       monthlyTransactionVolume: txnPreview,
       clientType,
@@ -3592,6 +3608,24 @@ function InvoiceConfigEditor({
                     <div className="space-y-2">
                       <Label>Authority Signature Name</Label>
                       <Input value={signatoryName} onChange={(e) => setSignatoryName(e.target.value)} placeholder="Authorized signatory name" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Signature Image</Label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const dataUrl = await readFileDataUrl(file);
+                          setSignatoryImage(dataUrl);
+                        }}
+                      />
+                      {signatoryImage && (
+                        <div className="mt-2 rounded-xl border bg-muted/20 p-3">
+                          <img src={signatoryImage} alt="Signature preview" className="max-h-24 object-contain" />
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Service Type</Label>
@@ -4101,6 +4135,7 @@ export default function InvoiceManagement() {
             billingAddress: client.billingAddress,
             billingEmail: client.billingEmail,
             signatoryName: client.signatoryName,
+            signatoryImage: client.signatoryImage,
             clientType: client.clientType || "Domestic",
             currency: client.currency || "INR",
             billingModel: client.billingModel || "transaction",
@@ -4923,6 +4958,7 @@ export default function InvoiceManagement() {
         transactionSlabs: payload.transactionSlabs,
         aws: payload.aws,
         notes: payload.notes,
+        signatoryImage: payload.signatoryImage,
         invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
         gstin: payload.gstin,
         lutNumber: payload.lutNumber,
@@ -4980,6 +5016,7 @@ export default function InvoiceManagement() {
           billingAddress: payload.billingAddress,
           billingEmail: payload.billingEmail,
           signatoryName: payload.signatoryName,
+          signatoryImage: payload.signatoryImage,
           clientType: payload.clientType || "Domestic",
           currency: payload.clientCurrency || "INR",
           notes: payload.notes,

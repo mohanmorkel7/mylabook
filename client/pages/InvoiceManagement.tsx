@@ -777,6 +777,13 @@ function formatCurrency(value: number, currencyCode: CurrencyType = "INR") {
   }).format(Math.round(value));
 }
 
+function formatInvoiceAmount(value: number, currencyCode: CurrencyType = "INR") {
+  return new Intl.NumberFormat(getLocaleForCurrency(currencyCode), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value || 0));
+}
+
 function currencyLabel(value: number, currencyCode: CurrencyType = "INR") {
   return `${getCurrencySymbol(currencyCode)}${formatCurrency(value, currencyCode)}`;
 }
@@ -924,6 +931,7 @@ async function downloadInvoiceDocxTemplate({
   const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
   const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+  const invoiceCurrency = client.currency || "INR";
   // Calculate GST (18%) - LUT exemption only applies to specific cases
   // For now, always calculate GST for proper invoicing
   const gst = subtotal * 0.18;
@@ -1137,7 +1145,7 @@ async function downloadInvoiceDocxTemplate({
                     children: [
                       tableCell(String(index + 1).padStart(2, "0"), 10, "left", false, 8),
                       tableCell(item.description, 65, item.align || "left", false, 8),
-                      tableCell(`INR ${formatCurrency(item.amount)}`, 25, "right", true, 8),
+                      tableCell(`INR ${formatInvoiceAmount(item.amount, client.currency || "INR")}`, 25, "right", true, 8),
                     ],
                   }),
               ),
@@ -1146,9 +1154,9 @@ async function downloadInvoiceDocxTemplate({
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
             children: [
-              new Docx.TextRun({ text: `Subtotal: INR ${formatCurrency(subtotal)}   `, bold: true, size: 10 }),
-              new Docx.TextRun({ text: gst > 0 ? `GST / Tax (18%): INR ${formatCurrency(gst)}   ` : "GST / Tax (18%): LUT exempt   ", bold: true, size: 10 }),
-              new Docx.TextRun({ text: `Total Payable: INR ${formatCurrency(totalPayable)}`, bold: true, size: 10 }),
+              new Docx.TextRun({ text: `Subtotal: INR ${formatInvoiceAmount(subtotal, client.currency || "INR")}   `, bold: true, size: 10 }),
+              new Docx.TextRun({ text: gst > 0 ? `GST / Tax (18%): INR ${formatInvoiceAmount(gst, client.currency || "INR")}   ` : "GST / Tax (18%): LUT exempt   ", bold: true, size: 10 }),
+              new Docx.TextRun({ text: `Total Payable: INR ${formatInvoiceAmount(totalPayable, client.currency || "INR")}`, bold: true, size: 10 }),
             ],
             spacing: { before: 6, after: 4 },
           }),
@@ -1553,7 +1561,6 @@ async function downloadInvoicePdfTemplate({
   const igstTotal = lineItems.reduce((sum, item) => sum + Number(item.igst || 0), 0);
   const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const totalPayable = subtotal + taxTotal;
-  const amountText = (value: number) => Number(value || 0).toFixed(2);
 
   ensureSpace(18);
   setText(SECONDARY);
@@ -1637,15 +1644,15 @@ async function downloadInvoicePdfTemplate({
     doc.text(narrationLines, colPositions.narration + 3, cursorY + 5.7, { align: "left" });
 
     doc.setFont("helvetica", "bold");
-    doc.text(amountText(item.amount), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
+    doc.text(formatInvoiceAmount(item.amount, invoiceCurrency), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
     doc.setFont("helvetica", "normal");
     doc.text(item.hsn || "-", colPositions.hsn + columns.hsn / 2, cursorY + 5.9, { align: "center" });
     doc.text(item.rate || "-", colPositions.rate + columns.rate / 2, cursorY + 5.9, { align: "center" });
-    doc.text(item.cgst > 0 ? amountText(item.cgst) : "-", colPositions.cgst + columns.cgst / 2, cursorY + 5.9, { align: "center" });
-    doc.text(item.sgst > 0 ? amountText(item.sgst) : "-", colPositions.sgst + columns.sgst / 2, cursorY + 5.9, { align: "center" });
-    doc.text(item.igst > 0 ? amountText(item.igst) : "-", colPositions.igst + columns.igst / 2, cursorY + 5.9, { align: "center" });
+    doc.text(item.cgst > 0 ? formatInvoiceAmount(item.cgst, invoiceCurrency) : "-", colPositions.cgst + columns.cgst / 2, cursorY + 5.9, { align: "center" });
+    doc.text(item.sgst > 0 ? formatInvoiceAmount(item.sgst, invoiceCurrency) : "-", colPositions.sgst + columns.sgst / 2, cursorY + 5.9, { align: "center" });
+    doc.text(item.igst > 0 ? formatInvoiceAmount(item.igst, invoiceCurrency) : "-", colPositions.igst + columns.igst / 2, cursorY + 5.9, { align: "center" });
     doc.setFont("helvetica", "bold");
-    doc.text(amountText(item.totalAmount), colPositions.total + columns.total - 3, cursorY + 5.9, { align: "right" });
+    doc.text(formatInvoiceAmount(item.totalAmount, invoiceCurrency), colPositions.total + columns.total - 3, cursorY + 5.9, { align: "right" });
     cursorY += rowH;
   });
 
@@ -1672,11 +1679,11 @@ async function downloadInvoicePdfTemplate({
     doc.text(value, totalsX + totalsW - 4, cursorY + 6, { align: "right" });
     cursorY += opts?.bg ? 9 : 7;
   };
-  lineRow("Sub Total", amountText(subtotal));
-  lineRow("CGST", cgstTotal > 0 ? amountText(cgstTotal) : "-");
-  lineRow("SGST", sgstTotal > 0 ? amountText(sgstTotal) : "-");
-  lineRow("IGST", igstTotal > 0 ? amountText(igstTotal) : "-");
-  lineRow("Total Amount", amountText(totalPayable), { bold: true, bg: true });
+  lineRow("Sub Total", formatInvoiceAmount(subtotal, invoiceCurrency));
+  lineRow("CGST", cgstTotal > 0 ? formatInvoiceAmount(cgstTotal, invoiceCurrency) : "-");
+  lineRow("SGST", sgstTotal > 0 ? formatInvoiceAmount(sgstTotal, invoiceCurrency) : "-");
+  lineRow("IGST", igstTotal > 0 ? formatInvoiceAmount(igstTotal, invoiceCurrency) : "-");
+  lineRow("Total Amount", formatInvoiceAmount(totalPayable, invoiceCurrency), { bold: true, bg: true });
   cursorY += 8;
 
   // === AMOUNT IN WORDS ===

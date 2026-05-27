@@ -5064,6 +5064,19 @@ export default function InvoiceManagement() {
                   ? "Only invoices approved by the FinOps admin can be edited and updated."
                   : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
               </div>
+              <div className="space-y-2 rounded-2xl border bg-background p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <Label className="text-sm font-medium">Declaration</Label>
+                  <span className="text-xs text-muted-foreground">Editable in modal</span>
+                </div>
+                <Textarea
+                  value={companyConfig.declarationText}
+                  onChange={(e) => setCompanyConfig((prev) => ({ ...prev, declarationText: e.target.value }))}
+                  rows={8}
+                  className="min-h-[180px] resize-y"
+                  placeholder="We hereby declare that..."
+                />
+              </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>Close</Button>
                 <Button

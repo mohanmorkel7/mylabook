@@ -1524,7 +1524,7 @@ async function downloadInvoicePdfTemplate({
     ...(normalizeInlineText(client.lutNumber) ? [`LUT: ${getClientLut(client)}`] : []),
   ];
 
-  const renderBillSection = (x: number, title: string, rows: string[], width: number) => {
+  const renderBillSection = (x: number, title: string, rows: string[], width: number, boldFirstRow = true) => {
     setText(SECONDARY);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.6);
@@ -1532,19 +1532,20 @@ async function downloadInvoicePdfTemplate({
 
     let py = cursorY + 4.6;
     rows.forEach((row, index) => {
+      const isLeadRow = index === 0 && boldFirstRow;
       const lines = wrap(row, width);
-      setText(index === 0 ? SECONDARY : MUTED);
-      doc.setFont("helvetica", index === 0 ? "bold" : "normal");
-      doc.setFontSize(index === 0 ? 10.2 : 6.8);
+      setText(isLeadRow ? SECONDARY : MUTED);
+      doc.setFont("helvetica", isLeadRow ? "bold" : "normal");
+      doc.setFontSize(isLeadRow ? 10.2 : 6.8);
       doc.text(lines, x, py);
-      py += lines.length * (index === 0 ? 4.4 : 3.2) + 0.5;
+      py += lines.length * (isLeadRow ? 4.4 : 3.2) + 0.5;
     });
 
     return py;
   };
 
-  const leftEnd = renderBillSection(leftX, "BILLED TO", leftRows, halfWidth);
-  const rightEnd = renderBillSection(rightX, "DETAILS", rightRows, halfWidth);
+  const leftEnd = renderBillSection(leftX, "BILLED TO", leftRows, halfWidth, true);
+  const rightEnd = renderBillSection(rightX, "DETAILS", rightRows, halfWidth, false);
   cursorY = Math.max(leftEnd, rightEnd) + 3;
 
   // === STATEMENT OF CHARGES ===

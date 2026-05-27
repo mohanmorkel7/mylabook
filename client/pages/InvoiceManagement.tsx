@@ -1185,21 +1185,21 @@ async function downloadInvoiceDocxTemplate({
                   children: [
                     new Docx.ImageRun({
                       data: getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage),
-                      transformation: { width: 72, height: 36 },
+                      transformation: { width: 58, height: 58 },
                     }),
                   ],
-                  spacing: { after: 2 },
+                  spacing: { after: 1 },
                 }),
               ]
             : []),
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
-            children: [new Docx.TextRun({ text: getClientSignatureName(client) || "Authorized Signatory", bold: true, color: INVOICE_THEME.secondaryHex, size: 8 })],
+            children: [new Docx.TextRun({ text: getClientSignatureName(client) || "Authorized Signatory", bold: true, color: INVOICE_THEME.secondaryHex, size: 8.6 })],
             spacing: { after: 0 },
           }),
           new Docx.Paragraph({
             alignment: Docx.AlignmentType.RIGHT,
-            children: [new Docx.TextRun({ text: "Authorized Signatory", color: INVOICE_THEME.secondaryHex, size: 7 })],
+            children: [new Docx.TextRun({ text: "Authorized Signatory", color: INVOICE_THEME.secondaryHex, size: 8.2 })],
             spacing: { after: 0 },
           }),
           new Docx.Paragraph({ spacing: { before: 4 } }),
@@ -1722,26 +1722,26 @@ async function downloadInvoicePdfTemplate({
   cursorY += 6;
 
   if (signatoryImage) {
-    const imageW = 24;
-    const imageH = 24;
+    const imageW = 28;
+    const imageH = 28;
     try {
-      doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + 2, cursorY, imageW, imageH);
+      doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + sigW - imageW - 2, cursorY, imageW, imageH);
     } catch {}
-    cursorY += imageH + 4;
+    cursorY += imageH + 2;
   } else {
-    cursorY += 6;
+    cursorY += 4;
   }
 
   if (signatoryName) {
     setText(SECONDARY);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(8.5);
     doc.text(signatoryName, sigX + sigW, cursorY - 1, { align: "right" });
   }
   setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text("Authorized Signatory", sigX + sigW, cursorY + 3, { align: "right" });
+  doc.setFontSize(8.2);
+  doc.text("Authorized Signatory", sigX + sigW, cursorY + 2.5, { align: "right" });
 
   drawFooter();
   doc.save(`${invoiceNumber}.pdf`);

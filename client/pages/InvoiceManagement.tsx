@@ -1379,7 +1379,7 @@ async function downloadInvoicePdfTemplate({
   const headerLeftWidth = contentWidth * 0.62;
   if (logoData) {
     try {
-      doc.addImage(logoData, "PNG", margin, cursorY + 0.2, 34, 13.2);
+      doc.addImage(logoData, "PNG", margin, cursorY + 0.1, 32, 10.8);
     } catch {}
   }
 
@@ -1395,13 +1395,13 @@ async function downloadInvoicePdfTemplate({
   setText(MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.0);
-  let headerLeftY = cursorY + 13.2;
+  let headerLeftY = cursorY + 15.6;
   headerLeftLines.forEach((line, idx) => {
     doc.setFont("helvetica", idx === 0 ? "bold" : "normal");
     doc.setFontSize(idx === 0 ? 8.2 : 6.0);
     const lines = wrap(String(line), headerLeftWidth);
     doc.text(lines, margin, headerLeftY);
-    headerLeftY += lines.length * (idx === 0 ? 3.7 : 3.0) + 0.15;
+    headerLeftY += lines.length * (idx === 0 ? 3.7 : 3.0) + 0.2;
   });
 
   setText(SECONDARY);

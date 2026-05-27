@@ -1571,14 +1571,14 @@ async function downloadInvoicePdfTemplate({
 
   const columns = {
     no: 9,
-    narration: 54,
+    narration: 64,
     amount: 18,
-    hsn: 14,
+    hsn: 13,
     rate: 12,
-    cgst: 13,
-    sgst: 13,
-    igst: 13,
-    total: 16,
+    cgst: 14,
+    sgst: 14,
+    igst: 14,
+    total: 18,
   };
   const colPositions = {
     no: margin,
@@ -1663,8 +1663,8 @@ async function downloadInvoicePdfTemplate({
 
   // === TOTALS ===
   ensureSpace(28);
-  const totalsX = pageWidth - margin - 90;
-  const totalsW = 90;
+  const totalsW = 84;
+  const totalsX = margin + tableW - totalsW;
   const lineRow = (label: string, value: string, opts?: { bold?: boolean; bg?: boolean }) => {
     if (opts?.bg) {
       setFill(SECONDARY);

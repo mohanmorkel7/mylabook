@@ -1173,67 +1173,34 @@ async function downloadInvoiceDocxTemplate({
               spacing: { after: index === lines.length - 1 ? 2 : 1 },
             }),
           ),
-          new Docx.Table({
-            width: { size: 100, type: Docx.WidthType.PERCENTAGE },
-            rows: [
-              new Docx.TableRow({
-                children: [
-                  new Docx.TableCell({ width: { size: 58, type: Docx.WidthType.PERCENTAGE }, children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: "" })] })] }),
-                  new Docx.TableCell({
-                    width: { size: 42, type: Docx.WidthType.PERCENTAGE },
-                    children: [
-                      new Docx.Paragraph({
-                        alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: `For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 8.2 })],
-                        spacing: { after: 1 },
-                      }),
-                      new Docx.Table({
-                        width: { size: 100, type: Docx.WidthType.PERCENTAGE },
-                        borders: {
-                          top: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.secondaryHex },
-                          bottom: { style: Docx.BorderStyle.SINGLE, size: 1, color: INVOICE_THEME.secondaryHex },
-                          left: { style: Docx.BorderStyle.SINGLE, size: 0, color: INVOICE_THEME.secondaryHex },
-                          right: { style: Docx.BorderStyle.SINGLE, size: 0, color: INVOICE_THEME.secondaryHex },
-                          insideHorizontal: { style: Docx.BorderStyle.SINGLE, size: 0, color: INVOICE_THEME.secondaryHex },
-                          insideVertical: { style: Docx.BorderStyle.SINGLE, size: 0, color: INVOICE_THEME.secondaryHex },
-                        },
-                        rows: [
-                          new Docx.TableRow({
-                            children: [
-                              new Docx.TableCell({ width: { size: 100, type: Docx.WidthType.PERCENTAGE }, children: [new Docx.Paragraph({ children: [new Docx.TextRun({ text: " ", size: 1 })] })], margins: { top: 0, bottom: 0, left: 0, right: 0 } }),
-                            ],
-                          }),
-                        ],
-                      }),
-                      ...(getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage)
-                        ? [
-                            new Docx.Paragraph({
-                              alignment: Docx.AlignmentType.RIGHT,
-                              children: [
-                                new Docx.ImageRun({
-                                  data: getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage),
-                                  transformation: { width: 72, height: 36 },
-                                }),
-                              ],
-                              spacing: { after: 1 },
-                            }),
-                          ]
-                        : []),
-                      new Docx.Paragraph({
-                        alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: getClientSignatureName(client), bold: true, color: INVOICE_THEME.secondaryHex, size: 8 })],
-                        spacing: { after: 0 },
-                      }),
-                      new Docx.Paragraph({
-                        alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: "Authorized Signatory", color: INVOICE_THEME.secondaryHex, size: 7 })],
-                        spacing: { after: 0 },
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            ],
+          new Docx.Paragraph({
+            alignment: Docx.AlignmentType.RIGHT,
+            children: [new Docx.TextRun({ text: `For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 8.2 })],
+            spacing: { after: 2 },
+          }),
+          ...(getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage)
+            ? [
+                new Docx.Paragraph({
+                  alignment: Docx.AlignmentType.RIGHT,
+                  children: [
+                    new Docx.ImageRun({
+                      data: getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage),
+                      transformation: { width: 72, height: 36 },
+                    }),
+                  ],
+                  spacing: { after: 2 },
+                }),
+              ]
+            : []),
+          new Docx.Paragraph({
+            alignment: Docx.AlignmentType.RIGHT,
+            children: [new Docx.TextRun({ text: getClientSignatureName(client) || "Authorized Signatory", bold: true, color: INVOICE_THEME.secondaryHex, size: 8 })],
+            spacing: { after: 0 },
+          }),
+          new Docx.Paragraph({
+            alignment: Docx.AlignmentType.RIGHT,
+            children: [new Docx.TextRun({ text: "Authorized Signatory", color: INVOICE_THEME.secondaryHex, size: 7 })],
+            spacing: { after: 0 },
           }),
           new Docx.Paragraph({ spacing: { before: 4 } }),
         ],
@@ -1752,30 +1719,29 @@ async function downloadInvoicePdfTemplate({
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
   doc.text(`For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, sigX + sigW, cursorY, { align: "right" });
-  cursorY += 10;
-  setStroke(SECONDARY);
-  doc.setLineWidth(0.35);
+  cursorY += 6;
+
   if (signatoryImage) {
+    const imageW = 24;
+    const imageH = 24;
     try {
-      doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + 4, cursorY - 10, 18, 18);
+      doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + 2, cursorY, imageW, imageH);
     } catch {}
+    cursorY += imageH + 4;
+  } else {
+    cursorY += 6;
   }
-  doc.line(sigX, cursorY, sigX + sigW, cursorY);
+
   if (signatoryName) {
     setText(SECONDARY);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(signatoryName, sigX + sigW, cursorY + 3.5, { align: "right" });
-    setText(MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.text("Authorized Signatory", sigX + sigW, cursorY + 7, { align: "right" });
-  } else {
-    setText(MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.text("Authorized Signatory", sigX + sigW, cursorY + 4.5, { align: "right" });
+    doc.text(signatoryName, sigX + sigW, cursorY - 1, { align: "right" });
   }
+  setText(MUTED);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text("Authorized Signatory", sigX + sigW, cursorY + 3, { align: "right" });
 
   drawFooter();
   doc.save(`${invoiceNumber}.pdf`);

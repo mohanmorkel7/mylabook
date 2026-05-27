@@ -1571,14 +1571,14 @@ async function downloadInvoicePdfTemplate({
 
   const columns = {
     no: 9,
-    narration: 68,
-    amount: 18,
-    hsn: 13,
+    narration: 58,
+    amount: 24,
+    hsn: 12,
     rate: 12,
-    cgst: 14,
-    sgst: 14,
-    igst: 14,
-    total: 20,
+    cgst: 15,
+    sgst: 15,
+    igst: 15,
+    total: 22,
   };
   const colPositions = {
     no: margin,

@@ -130,6 +130,7 @@ export async function initializeInvoiceSchema() {
         mmc_year_2            TEXT,
         mmc_year_3            TEXT,
         custom_invoice_rows   TEXT,
+        invoice_table_config  TEXT,
         last_invoice_generated TEXT,
         logo                  TEXT,
         logo_class            TEXT,
@@ -169,6 +170,7 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS network_cert_note TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS infra_cost_note TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS invoice_table_config TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS signatory_image TEXT`);
       console.log("[Invoice] ✓ Added missing columns to invoice_clients");
     } catch (err) {
@@ -297,6 +299,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       networkCertificationNote: decrypt(client.network_cert_note) || "",
       infraCostNote: decrypt(client.infra_cost_note) || "",
       customInvoiceRows: safeParseJson(decrypt(client.custom_invoice_rows), []),
+      invoiceTableConfig: safeParseJson(decrypt(client.invoice_table_config), []),
       lastInvoiceGenerated: decrypt(client.last_invoice_generated),
       logo: decrypt(client.logo),
       logoClass: decrypt(client.logo_class),
@@ -357,6 +360,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       networkCertificationNote,
       infraCostNote,
       customInvoiceRows,
+      invoiceTableConfig,
       lastInvoiceGenerated,
       logo,
       logoClass,
@@ -386,10 +390,11 @@ router.post("/clients", async (req: Request, res: Response) => {
       transaction_fee_rate, vap_mip_connectivity_fee, change_mgmt_fee_rate, change_mgmt_man_days,
       network_cert_note, infra_cost_note,
       custom_invoice_rows,
+      invoice_table_config,
       last_invoice_generated, logo, logo_class, color,
       gstin, lut_number, billing_address, billing_email, signatory_name, signatory_image,
       client_type, currency, notes, transaction_slabs, aws_config
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47)
     ON CONFLICT (client_id) DO UPDATE SET
       client_code = EXCLUDED.client_code,
       client_name = EXCLUDED.client_name,
@@ -421,6 +426,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       network_cert_note = EXCLUDED.network_cert_note,
       infra_cost_note = EXCLUDED.infra_cost_note,
       custom_invoice_rows = EXCLUDED.custom_invoice_rows,
+      invoice_table_config = EXCLUDED.invoice_table_config,
       last_invoice_generated = EXCLUDED.last_invoice_generated,
       logo = EXCLUDED.logo,
       logo_class = EXCLUDED.logo_class,
@@ -470,6 +476,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(String(networkCertificationNote || "")),
       encrypt(String(infraCostNote || "")),
       encrypt(JSON.stringify(Array.isArray(customInvoiceRows) ? customInvoiceRows : [])),
+      encrypt(JSON.stringify(Array.isArray(invoiceTableConfig) ? invoiceTableConfig : [])),
       encrypt(lastInvoiceGenerated),
       encrypt(logo),
       encrypt(logoClass),
@@ -520,6 +527,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       network_cert_note: String(networkCertificationNote || ""),
       infra_cost_note: String(infraCostNote || ""),
       custom_invoice_rows: Array.isArray(customInvoiceRows) ? customInvoiceRows : [],
+      invoice_table_config: Array.isArray(invoiceTableConfig) ? invoiceTableConfig : [],
       last_invoice_generated: lastInvoiceGenerated,
       logo: logo,
       logo_class: logoClass,
@@ -627,6 +635,7 @@ router.get("/clients", async (req: Request, res: Response) => {
           networkCertificationNote: decrypt(client.network_cert_note) || "",
           infraCostNote: decrypt(client.infra_cost_note) || "",
           customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
+          invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
           lastInvoiceGenerated: decrypt(client.last_invoice_generated),
           logo: decrypt(client.logo),
           logoClass: decrypt(client.logo_class),
@@ -679,6 +688,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       mmcYear2: parseInt(client.mmc_year_2 || "0"),
       mmcYear3: parseInt(client.mmc_year_3 || "0"),
       customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
+      invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,
@@ -738,6 +748,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       mmcYear2: parseInt(client.mmc_year_2 || "0"),
       mmcYear3: parseInt(client.mmc_year_3 || "0"),
       customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
+      invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,

@@ -1259,8 +1259,8 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
 
   const configHsn = normalizeInlineText(taxConfig?.invoiceHsnCode);
   const configRate = `${Number(taxConfig?.invoiceRatePercentage || 18)}%`;
+  const defaultTaxType: RowTaxType = client.clientType === "International" ? "International" : "Domestic";
   const makeRow = (item: Partial<InvoiceExportLineItem> & Pick<InvoiceExportLineItem, "description" | "amount">): InvoiceExportLineItem => {
-    const defaultTaxType: RowTaxType = client.clientType === "International" ? "International" : "Domestic";
     const taxType = item.taxType || defaultTaxType;
     const taxes = calculateRowTaxes(Number(item.amount || 0), item.rate || configRate, taxType);
     return {
@@ -1281,6 +1281,27 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
 
   if (invoiceType === "setup_fee") {
     return [makeRow({ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, taxType: client.clientType === "International" ? "International" : "Domestic" })];
+  }
+
+  const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
+  if (savedRows.length > 0) {
+    return savedRows
+      .filter((row) => row && row.exportEnabled !== false && Number(row.amount || 0) !== 0)
+      .map((row) =>
+        makeRow({
+          description: row.narration || "—",
+          amount: Number(row.amount || 0),
+          hsn: String(row.hsn || ""),
+          rate: String(row.rate || configRate),
+          cgst: Number(row.cgst || 0),
+          sgst: Number(row.sgst || 0),
+          igst: Number(row.igst || 0),
+          align: row.align || "left",
+          taxType: row.taxType || defaultTaxType,
+          useConfigHsn: row.useConfigHsn,
+          exportEnabled: row.exportEnabled,
+        }),
+      );
   }
 
   const setupRows = breakdown.setupFeeDue > 0 ? [makeRow({ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue, useConfigHsn: false })] : [];
@@ -1984,6 +2005,11 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
   }));
 
+  const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
+  if (savedRows.length > 0) {
+    return savedRows.map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
+  }
+
   return [...baseRows, ...customRows].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
 }
 
@@ -2549,7 +2575,7 @@ function ClientOverviewScreen({
     setTransactionBased(getBillingModel(client) === "transaction");
     setTaxType(defaultTaxType);
     setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));
-  }, [client.id, defaultTaxType, taxConfig, client.monthlyTransactionVolume, client.customInvoiceRows, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
+  }, [client.id, defaultTaxType, taxConfig, client.monthlyTransactionVolume, client.customInvoiceRows, client.invoiceTableConfig, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
 
   useEffect(() => {
     setCustomRowsDraft(

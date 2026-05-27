@@ -290,6 +290,7 @@ interface OverviewInvoiceRow {
   editable: boolean;
   narrationMode?: NarrationMode;
   exportEnabled: boolean;
+  useConfigHsn?: boolean;
 }
 
 interface InvoiceExportLineItem {
@@ -304,6 +305,7 @@ interface InvoiceExportLineItem {
   taxType?: RowTaxType;
   exportEnabled: boolean;
   totalAmount: number;
+  useConfigHsn?: boolean;
 }
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -370,6 +372,8 @@ interface TaxConfig {
   igstPercentage: number;
   tdsPercentage: number;
   defaultTaxType: "SGST+CGST" | "IGST";
+  invoiceHsnCode: string;
+  invoiceRatePercentage: number;
 }
 
 interface CurrencyConfig {
@@ -412,6 +416,8 @@ const DEFAULT_TAX_CONFIG: TaxConfig = {
   igstPercentage: 18,
   tdsPercentage: 1.6,
   defaultTaxType: "SGST+CGST",
+  invoiceHsnCode: "",
+  invoiceRatePercentage: 18,
 };
 
 const DEFAULT_CURRENCY_CONFIG: CurrencyConfig = {
@@ -914,6 +920,7 @@ async function downloadInvoiceDocxTemplate({
   financialYear,
   serial,
   invoiceType = "commercial",
+  taxConfig,
 }: {
   client: ClientRecord;
   companyConfig: CompanyConfig;
@@ -925,11 +932,12 @@ async function downloadInvoiceDocxTemplate({
   financialYear: string;
   serial: number;
   invoiceType?: InvoiceType;
+  taxConfig: TaxConfig;
 }) {
   const logoResponse = await fetch(MYLAPAY_LOGO_URL);
   const logoBlob = logoResponse.ok ? await logoResponse.blob() : null;
   const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
   const invoiceCurrency = client.currency || "INR";
   // Calculate GST (18%) - LUT exemption only applies to specific cases
@@ -1244,18 +1252,20 @@ function deleteInvoiceFromCollection(invoices: InvoiceRecord[], targetInvoiceNum
   return invoices.filter((invoice) => getInvoiceDisplayNumber(invoice) !== targetInvoiceNumber);
 }
 
-function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: number, invoiceType: InvoiceType = "commercial") {
+function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: number, invoiceType: InvoiceType = "commercial", taxConfig?: TaxConfig) {
   const breakdown = calculateInvoiceCommercials(client, client.monthlyTransactionVolume || 0);
   const customRows = breakdown.customRows;
   const setupFeeDue = breakdown.setupFeeDue > 0 ? breakdown.setupFeeDue : Number(client.setupFee || 0);
 
+  const configHsn = normalizeInlineText(taxConfig?.invoiceHsnCode);
+  const configRate = `${Number(taxConfig?.invoiceRatePercentage || 18)}%`;
   const makeRow = (item: Partial<InvoiceExportLineItem> & Pick<InvoiceExportLineItem, "description" | "amount">): InvoiceExportLineItem => {
     const defaultTaxType: RowTaxType = client.clientType === "International" ? "International" : "Domestic";
     const taxType = item.taxType || defaultTaxType;
-    const taxes = calculateRowTaxes(Number(item.amount || 0), item.rate || "", taxType);
+    const taxes = calculateRowTaxes(Number(item.amount || 0), item.rate || configRate, taxType);
     return {
-      hsn: item.hsn || "",
-      rate: item.rate || "",
+      hsn: item.useConfigHsn ? configHsn : (item.hsn || ""),
+      rate: item.rate || configRate,
       cgst: taxes.cgst,
       sgst: taxes.sgst,
       igst: taxes.igst,
@@ -1265,6 +1275,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
       totalAmount: taxes.totalAmount,
       description: item.description,
       amount: Number(item.amount || 0),
+      useConfigHsn: item.useConfigHsn,
     };
   };
 
@@ -1272,25 +1283,26 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
     return [makeRow({ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, taxType: client.clientType === "International" ? "International" : "Domestic" })];
   }
 
-  const setupRows = breakdown.setupFeeDue > 0 ? [makeRow({ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue })] : [];
+  const setupRows = breakdown.setupFeeDue > 0 ? [makeRow({ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue, useConfigHsn: false })] : [];
 
   if (getBillingModel(client) === "mmc") {
     const mmcLabel = `MMC (Year ${client.billingYear || 1}) or Transaction Fee whichever is higher`;
     const coreCommercial = Math.max(invoiceAmount - breakdown.setupFeeDue - breakdown.customRowsTotal, 0);
     return [
       ...setupRows,
-      makeRow({ description: mmcLabel, amount: coreCommercial }),
+      makeRow({ description: mmcLabel, amount: coreCommercial, useConfigHsn: false }),
       ...customRows.map((row) =>
         makeRow({
           description: formatCustomInvoiceRowParagraph(row),
           amount: Number(row.amount || 0),
           hsn: String(row.hsn || ""),
-          rate: String(row.rate || ""),
+          rate: String(row.rate || configRate),
           cgst: Number(row.cgst || 0),
           sgst: Number(row.sgst || 0),
           igst: Number(row.igst || 0),
           align: row.align || "left",
           taxType: row.taxType,
+          useConfigHsn: row.useConfigHsn,
           exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
         }),
       ),
@@ -1302,22 +1314,23 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const remainingAfterFixed = Math.max(invoiceAmount - fixedBilling - awsCharge, 0);
   return [
     ...setupRows,
-    makeRow({ description: "Fixed Commercial Charges", amount: fixedBilling }),
-    makeRow({ description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0) }),
-    makeRow({ description: "AWS Infra Pass-through", amount: awsCharge }),
-    makeRow({ description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0) }),
-    makeRow({ description: "Integration Fee", amount: Number(client.integrationFee || 0) }),
+    makeRow({ description: "Fixed Commercial Charges", amount: fixedBilling, useConfigHsn: false }),
+    makeRow({ description: "Variable Slab Charges", amount: Math.max(remainingAfterFixed - Number(client.integrationFee || 0) - Number(client.additionalPlatformFee || 0), 0), useConfigHsn: false }),
+    makeRow({ description: "AWS Infra Pass-through", amount: awsCharge, useConfigHsn: false }),
+    makeRow({ description: "Additional Platform Fee", amount: Number(client.additionalPlatformFee || 0), useConfigHsn: false }),
+    makeRow({ description: "Integration Fee", amount: Number(client.integrationFee || 0), useConfigHsn: false }),
     ...customRows.map((row) =>
       makeRow({
         description: formatCustomInvoiceRowParagraph(row),
         amount: Number(row.amount || 0),
         hsn: String(row.hsn || ""),
-        rate: String(row.rate || ""),
+        rate: String(row.rate || configRate),
         cgst: Number(row.cgst || 0),
         sgst: Number(row.sgst || 0),
         igst: Number(row.igst || 0),
         align: row.align || "left",
         taxType: row.taxType,
+        useConfigHsn: row.useConfigHsn,
         exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
       }),
     ),
@@ -1383,6 +1396,7 @@ async function downloadInvoicePdfTemplate({
   financialYear,
   serial,
   invoiceType = "commercial",
+  taxConfig,
 }: {
   client: ClientRecord;
   companyConfig: CompanyConfig;
@@ -1394,6 +1408,7 @@ async function downloadInvoicePdfTemplate({
   financialYear: string;
   serial: number;
   invoiceType?: InvoiceType;
+  taxConfig: TaxConfig;
 }) {
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -1554,7 +1569,7 @@ async function downloadInvoicePdfTemplate({
   cursorY = Math.max(leftEnd, rightEnd) + 3;
 
   // === STATEMENT OF CHARGES ===
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
   const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const cgstTotal = lineItems.reduce((sum, item) => sum + Number(item.cgst || 0), 0);
   const sgstTotal = lineItems.reduce((sum, item) => sum + Number(item.sgst || 0), 0);
@@ -1844,9 +1859,7 @@ function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxT
 
 function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean, taxConfig: TaxConfig): OverviewInvoiceRow[] {
   const defaultTaxType: RowTaxType = taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic";
-  const defaultRate = defaultTaxType === "International"
-    ? `${taxConfig.igstPercentage || 18}%`
-    : `${Number(taxConfig.cgstPercentage || 9) + Number(taxConfig.sgstPercentage || 9)}%`;
+  const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
   const breakdown = calculateInvoiceCommercials(client, txnCount);
   const variableCharge = Math.max(
     breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
@@ -1984,6 +1997,7 @@ function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[
       hsn: row.hsn,
       rate: row.rate,
       cgst: row.cgst,
+      useConfigHsn: row.useConfigHsn,
       sgst: row.sgst,
       igst: row.igst,
       align: row.align,
@@ -2519,9 +2533,7 @@ function ClientOverviewScreen({
   taxConfig: TaxConfig;
 }) {
   const defaultTaxType = taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic";
-  const defaultRate = defaultTaxType === "International"
-    ? `${taxConfig.igstPercentage || 18}%`
-    : `${Number(taxConfig.cgstPercentage || 9) + Number(taxConfig.sgstPercentage || 9)}%`;
+  const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
   const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
   const [taxType, setTaxType] = useState<RowTaxType>(defaultTaxType);
@@ -2529,7 +2541,7 @@ function ClientOverviewScreen({
   const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
     client.customInvoiceRows && client.customInvoiceRows.length > 0
       ? [...client.customInvoiceRows]
-      : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType }],
+      : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType, useConfigHsn: false }],
   );
 
   useEffect(() => {
@@ -2543,7 +2555,7 @@ function ClientOverviewScreen({
     setCustomRowsDraft(
       client.customInvoiceRows && client.customInvoiceRows.length > 0
         ? [...client.customInvoiceRows]
-        : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType }],
+        : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType, useConfigHsn: false }],
     );
   }, [client.id, client.clientType, client.customInvoiceRows]);
 
@@ -2572,11 +2584,11 @@ function ClientOverviewScreen({
   const fixedCharges = client.fixedBilling + client.additionalPlatformFee + client.integrationFee + commercialSummary.setupFeeDue;
   const awsMargin = commercialSummary.awsMarkup;
   const variableCharges = Math.max(commercialSummary.transactionBase - client.fixedBilling - awsMargin - client.additionalPlatformFee - client.integrationFee, 0);
-  const tax = invoiceDraft * 0.18;
+  const tax = invoiceDraft * (Number(taxConfig.invoiceRatePercentage || 18) / 100);
   const finalPayable = invoiceDraft + tax;
 
   const addCustomRow = () => {
-    setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType }]);
+    setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType, useConfigHsn: false }]);
   };
 
   const updateCustomRow = (index: number, key: keyof CustomInvoiceRow, value: string | number) => {
@@ -2637,6 +2649,7 @@ function ClientOverviewScreen({
         amount: 0,
         hsn: "",
         rate: defaultRate,
+        useConfigHsn: false,
         cgst: 0,
         sgst: 0,
         igst: 0,
@@ -3037,7 +3050,19 @@ function ClientOverviewScreen({
                           )}
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
-                          <Input value={row.hsn} onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="998314" />
+                          <div className="space-y-1.5">
+                          <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <Checkbox checked={Boolean(row.useConfigHsn)} onCheckedChange={(checked) => updateOverviewRow(index, "useConfigHsn", Boolean(checked))} />
+                            Use config HSN
+                          </label>
+                          <Input
+                            value={row.useConfigHsn ? (taxConfig.invoiceHsnCode || "") : row.hsn}
+                            onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)}
+                            readOnly={Boolean(row.useConfigHsn)}
+                            className={`h-8 text-xs ${alignClass}`}
+                            placeholder={taxConfig.invoiceHsnCode || "998314"}
+                          />
+                        </div>
                         </TableCell>
                         <TableCell className="px-2 py-2 align-top">
                           <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="18%" />
@@ -4463,6 +4488,7 @@ export default function InvoiceManagement() {
         month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
         financialYear: serialInfo.financialYear,
         serial: serialInfo.serial,
+        taxConfig,
       });
       toast({ title: "PDF exported", description: `${client.name} overview PDF downloaded.` });
     } catch (error: any) {
@@ -4485,6 +4511,7 @@ export default function InvoiceManagement() {
         month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
         financialYear: serialInfo.financialYear,
         serial: serialInfo.serial,
+        taxConfig,
       });
       toast({ title: "DOCX exported", description: `${client.name} overview DOCX downloaded.` });
     } catch (error: any) {
@@ -4777,6 +4804,7 @@ export default function InvoiceManagement() {
         financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
         serial: Number(invoice.serial || invoiceSerialState.serial || 1),
         invoiceType: invoice.invoiceType || "commercial",
+        taxConfig,
       });
       toast({ title: "PDF downloaded", description: `${invoiceNumber} PDF downloaded.` });
     } catch (error: any) {
@@ -4806,6 +4834,7 @@ export default function InvoiceManagement() {
         financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
         serial: Number(invoice.serial || invoiceSerialState.serial || 1),
         invoiceType: invoice.invoiceType || "commercial",
+        taxConfig,
       });
       toast({ title: "DOCX downloaded", description: `${invoiceNumber} DOCX downloaded.` });
     } catch (error: any) {
@@ -5649,6 +5678,26 @@ export default function InvoiceManagement() {
                     value={taxConfig.igstPercentage}
                     onChange={(e) => setTaxConfig((prev) => ({ ...prev, igstPercentage: Number(e.target.value) || 0 }))}
                     placeholder="18"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Invoice Rate (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={taxConfig.invoiceRatePercentage}
+                    onChange={(e) => setTaxConfig((prev) => ({ ...prev, invoiceRatePercentage: Number(e.target.value) || 0 }))}
+                    placeholder="18"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>HSN Number</Label>
+                  <Input
+                    value={taxConfig.invoiceHsnCode}
+                    onChange={(e) => setTaxConfig((prev) => ({ ...prev, invoiceHsnCode: e.target.value }))}
+                    placeholder="998314"
                   />
                 </div>
                 <div className="space-y-2">

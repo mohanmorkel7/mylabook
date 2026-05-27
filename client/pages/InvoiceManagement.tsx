@@ -153,15 +153,18 @@ const INVOICE_THEME = {
   secondaryHex: "1f295c",
 };
 const INVOICE_AMOUNT_IN_WORDS = "(Rupees One lakh forty-seven thousand five hundred Only)";
-const INVOICE_DECLARATION_LINES = [
-  "We hereby declare that",
-  "1. We have obtained approval for a lower TDS deduction, and going forward, TDS should be deducted at the rate of 1.60 % only.",
-  "2. We are registered under the Micro, Small, and Medium Enterprises Development Act, 2006 (MSME).",
-  "MSME No of Mindeed: UDYAM-TN-02-0113863",
-  "GST No of Mindeed: 33AAMCM6618H1ZB",
-  "PAN No of Mindeed: AAMCM6618H",
-  "Payment Terms: 15 days from the date of Invoice.",
-];
+const DEFAULT_INVOICE_DECLARATION_TEXT = `We hereby declare that
+1. We have obtained approval for a lower TDS deduction, and going forward, TDS should be deducted at the rate of 1.60 % only.
+2. We are registered under the Micro, Small, and Medium Enterprises Development Act, 2006 (MSME).
+MSME No of Mindeed: UDYAM-TN-02-0113863
+GST No of Mindeed: 33AAMCM6618H1ZB
+PAN No of Mindeed: AAMCM6618H
+Payment Terms: 15 days from the date of Invoice.`;
+const getInvoiceDeclarationLines = (companyConfig: CompanyConfig) =>
+  (companyConfig.declarationText || DEFAULT_INVOICE_DECLARATION_TEXT)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 const MYLAPAY_FOOTER_LINES = [
   "MYLAPAY Incorporated as Mindeed Technologies and Services Private Limited.",
   "# 17/3, Pembroke House, Second Floor, Shafee Mohammed Road, Nungambakkam, Chennai 600 006.",
@@ -287,6 +290,7 @@ interface CompanyConfig {
   email: string;
   phone: string;
   website: string;
+  declarationText: string;
 }
 
 interface TaxConfig {
@@ -327,6 +331,7 @@ const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
   email: "contact@mylapay.com",
   phone: "+91 44 XXXX XXXX",
   website: "www.mylapay.com",
+  declarationText: DEFAULT_INVOICE_DECLARATION_TEXT,
 };
 
 const DEFAULT_TAX_CONFIG: TaxConfig = {
@@ -1078,7 +1083,7 @@ async function downloadInvoiceDocxTemplate({
             children: [new Docx.TextRun({ text: "Declaration", bold: true, color: INVOICE_THEME.secondaryHex, size: 12 })],
             spacing: { after: 2 },
           }),
-          ...INVOICE_DECLARATION_LINES.map((line, index) =>
+          ...getInvoiceDeclarationLines(companyConfig).map((line, index, lines) =>
             new Docx.Paragraph({
               children: [
                 new Docx.TextRun({
@@ -1088,7 +1093,7 @@ async function downloadInvoiceDocxTemplate({
                   color: INVOICE_THEME.secondaryHex,
                 }),
               ],
-              spacing: { after: index === INVOICE_DECLARATION_LINES.length - 1 ? 2 : 1 },
+              spacing: { after: index === lines.length - 1 ? 2 : 1 },
             }),
           ),
           new Docx.Table({
@@ -1622,7 +1627,7 @@ async function downloadInvoicePdfTemplate({
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.4);
-  INVOICE_DECLARATION_LINES.forEach((line) => {
+  getInvoiceDeclarationLines(companyConfig).forEach((line) => {
     const lines = wrap(line, contentWidth);
     ensureSpace(lines.length * 3.8 + 2);
     setText(SECONDARY);
@@ -5417,6 +5422,16 @@ export default function InvoiceManagement() {
                     value={companyConfig.cinNumber}
                     onChange={(e) => setCompanyConfig((prev) => ({ ...prev, cinNumber: e.target.value }))}
                     placeholder="U72900TN2019PTC129197"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Declaration Text</Label>
+                  <Textarea
+                    value={companyConfig.declarationText}
+                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, declarationText: e.target.value }))}
+                    placeholder={`We hereby declare that\n1. We have obtained approval for a lower TDS deduction, and going forward, TDS should be deducted at the rate of 1.60 % only.\n2. We are registered under the Micro, Small, and Medium Enterprises Development Act, 2006 (MSME).\nMSME No of Mindeed: UDYAM-TN-02-0113863\nGST No of Mindeed: 33AAMCM6618H1ZB\nPAN No of Mindeed: AAMCM6618H\nPayment Terms: 15 days from the date of Invoice.`}
+                    className="min-h-[180px] resize-y"
+                    rows={8}
                   />
                 </div>
               </div>

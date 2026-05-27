@@ -4405,6 +4405,7 @@ export default function InvoiceManagement() {
     invoiceType: InvoiceType = "commercial",
     amountOverride?: number,
     txnCountOverride?: number,
+    invoiceDateOverride?: string,
   ) => {
     console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name, invoiceType);
 
@@ -4415,7 +4416,7 @@ export default function InvoiceManagement() {
     }
 
     try {
-      const generatedDate = new Date().toISOString().split("T")[0];
+      const generatedDate = invoiceDateOverride || new Date().toISOString().split("T")[0];
       console.log("[Invoice] generateInvoiceForClient - Generated date:", generatedDate);
 
       if (invoiceType === "setup_fee" && (client.invoiceHistory || []).some((invoice) => invoice.invoiceType === "setup_fee")) {
@@ -4452,7 +4453,7 @@ export default function InvoiceManagement() {
         invoiceNumber: serialInfo.invoiceNumber,
         serial: serialInfo.serial,
         financialYear: serialInfo.financialYear,
-        month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+        month: new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" }),
         client: client.name,
         amount: generatedAmount,
         status: "Waiting for approval",
@@ -4649,6 +4650,7 @@ export default function InvoiceManagement() {
       ...item,
       amount: invoiceAmountDraft,
       month: invoiceMonthDraft,
+      generatedDate: invoiceDateDraft || item.generatedDate,
       status: "Generated",
     }));
     setInvoiceModalOpen(false);
@@ -5074,13 +5076,24 @@ export default function InvoiceManagement() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Invoice Month</Label>
-                  <Input
-                    value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
-                    onChange={(e) => setInvoiceMonthDraft(e.target.value)}
-                    readOnly={invoiceModalMode !== "edit"}
-                  />
-                </div>
+                <Label>Invoice Date</Label>
+                <Input
+                  type="date"
+                  value={invoiceDateDraft || new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setInvoiceDateDraft(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  PDF format: {formatInvoicePdfDate(invoiceDateDraft || new Date().toISOString().split("T")[0])}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Invoice Month</Label>
+                <Input
+                  value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
+                  onChange={(e) => setInvoiceMonthDraft(e.target.value)}
+                  readOnly={invoiceModalMode !== "edit"}
+                />
+              </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Input value={invoiceModalMode === "edit" ? "Generated" : "Waiting for approval"} readOnly />
@@ -5112,7 +5125,7 @@ export default function InvoiceManagement() {
                     if (invoiceModalMode === "edit") {
                       saveInvoiceUpdate();
                     } else {
-                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount);
+                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount, invoiceDateDraft || new Date().toISOString().split("T")[0]);
                     }
                     setInvoiceModalOpen(false);
                   }}
@@ -5847,6 +5860,17 @@ export default function InvoiceManagement() {
                 )}
               </div>
               <div className="space-y-2">
+                <Label>Invoice Date</Label>
+                <Input
+                  type="date"
+                  value={invoiceDateDraft || new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setInvoiceDateDraft(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  PDF format: {formatInvoicePdfDate(invoiceDateDraft || new Date().toISOString().split("T")[0])}
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label>Invoice Month</Label>
                 <Input
                   value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
@@ -5872,7 +5896,13 @@ export default function InvoiceManagement() {
                   if (invoiceModalMode === "edit") {
                     saveInvoiceUpdate();
                   } else {
-                    generateInvoiceForClient(selectedClient, "commercial", invoiceAmountDraft, txnInput);
+                    generateInvoiceForClient(
+                      selectedClient,
+                      "commercial",
+                      invoiceAmountDraft,
+                      txnInput,
+                      invoiceDateDraft || new Date().toISOString().split("T")[0],
+                    );
                   }
                   setInvoiceModalOpen(false);
                 }}

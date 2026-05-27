@@ -173,6 +173,29 @@ const formatInvoicePdfDate = (dateStr: string) => {
   return `${String(day).padStart(2, "0")}-${monthNames[month - 1]}-${year}`;
 };
 
+const formatInvoiceServicePeriod = (month: string, generatedDate: string) => {
+  const trimmedMonth = normalizeInlineText(month).split("·")[0].trim();
+  if (trimmedMonth) return trimmedMonth;
+  if (!generatedDate) return "—";
+  const date = new Date(`${generatedDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return generatedDate;
+  return date.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
+};
+
+const extractStateFromAddress = (address?: string) => {
+  const parts = String(address || "")
+    .split(/[\n,]/)
+    .map((part) => normalizeInlineText(part))
+    .filter(Boolean)
+    .filter((part) => !/^(india|inr)$/i.test(part) && !/^\d{5,6}$/.test(part));
+
+  if (parts.length === 0) return "";
+  return parts[parts.length - 1];
+};
+
+const getClientPlaceOfSupply = (client: ClientRecord) =>
+  normalizeInlineText(client.billingState || extractStateFromAddress(client.billingAddress)) || "—";
+
 const INVOICE_SERIAL_CONFIG_KEY = "invoice-serial-config";
 const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
 const COMPANY_CONFIG_KEY = "company-config";
@@ -982,27 +1005,27 @@ async function downloadInvoiceDocxTemplate({
                       }),
                       new Docx.Paragraph({
                         alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: `Invoice No.: ${invoiceNumber}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 8.2 })],
+                        children: [new Docx.TextRun({ text: `Invoice No.: ${invoiceNumber}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
                         spacing: { after: 0 },
                       }),
                       new Docx.Paragraph({
                         alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: `Issue Date: ${generatedDate}`, color: INVOICE_THEME.secondaryHex, size: 7.8 })],
+                        children: [new Docx.TextRun({ text: `Invoice Date: ${formatInvoicePdfDate(generatedDate)}`, color: INVOICE_THEME.secondaryHex, size: 7 })],
                         spacing: { after: 0 },
                       }),
                       new Docx.Paragraph({
                         alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: `Period: ${month} · FY ${financialYear}`, color: INVOICE_THEME.secondaryHex, size: 7.8 })],
+                        children: [new Docx.TextRun({ text: `Service Period: ${formatInvoiceServicePeriod(month, generatedDate)}`, color: INVOICE_THEME.secondaryHex, size: 7 })],
                         spacing: { after: 0 },
                       }),
                       new Docx.Paragraph({
                         alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: `Status: ${status}`, color: INVOICE_THEME.secondaryHex, size: 7.8 })],
+                        children: [new Docx.TextRun({ text: `Currency: ${client.currency || "INR"}`, color: INVOICE_THEME.secondaryHex, size: 7 })],
                         spacing: { after: 0 },
                       }),
                       new Docx.Paragraph({
                         alignment: Docx.AlignmentType.RIGHT,
-                        children: [new Docx.TextRun({ text: `Amount: INR ${formatCurrency(amount)}`, bold: true, color: INVOICE_THEME.primaryHex, size: 8.2 })],
+                        children: [new Docx.TextRun({ text: `Place of Supply: ${getClientPlaceOfSupply(client)}`, color: INVOICE_THEME.secondaryHex, size: 7 })],
                         spacing: { after: 0 },
                       }),
                     ],
@@ -1413,18 +1436,26 @@ async function downloadInvoicePdfTemplate({
   doc.setFontSize(6.1);
   doc.text("TAX INVOICE", pageWidth - margin, cursorY + 9.7, { align: "right" });
 
+  const invoiceCurrency = client.currency || "INR";
+  const servicePeriod = formatInvoiceServicePeriod(month, generatedDate);
+  const placeOfSupply = getClientPlaceOfSupply(client);
+
   setText(MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.1);
-  doc.text("Invoice No.", pageWidth - margin - 38, cursorY + 17.8);
-  doc.text("Invoice Date", pageWidth - margin - 38, cursorY + 21.4);
-  doc.text("Period", pageWidth - margin - 38, cursorY + 25.0);
+  doc.setFontSize(6.6);
+  doc.text("Invoice No", pageWidth - margin - 42, cursorY + 17.2);
+  doc.text("Invoice Date", pageWidth - margin - 42, cursorY + 20.6);
+  doc.text("Service Period", pageWidth - margin - 42, cursorY + 24.0);
+  doc.text("Currency", pageWidth - margin - 42, cursorY + 27.4);
+  doc.text("Place of Supply", pageWidth - margin - 42, cursorY + 30.8);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.0);
-  doc.text(invoiceNumber, pageWidth - margin, cursorY + 17.8, { align: "right" });
-  doc.text(formatInvoicePdfDate(generatedDate), pageWidth - margin, cursorY + 21.4, { align: "right" });
-  doc.text(`${month} · FY ${financialYear}`, pageWidth - margin, cursorY + 25.0, { align: "right" });
+  doc.setFontSize(7.7);
+  doc.text(invoiceNumber, pageWidth - margin, cursorY + 17.2, { align: "right" });
+  doc.text(formatInvoicePdfDate(generatedDate), pageWidth - margin, cursorY + 20.6, { align: "right" });
+  doc.text(servicePeriod, pageWidth - margin, cursorY + 24.0, { align: "right" });
+  doc.text(invoiceCurrency, pageWidth - margin, cursorY + 27.4, { align: "right" });
+  doc.text(placeOfSupply, pageWidth - margin, cursorY + 30.8, { align: "right" });
 
   cursorY += headerHeight + 2;
 

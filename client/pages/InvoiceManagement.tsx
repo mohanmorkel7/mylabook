@@ -3359,11 +3359,16 @@ function InvoiceConfigEditor({
   };
 
   const submit = () => {
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim();
+    if (!trimmedName || !trimmedCode) {
+      return;
+    }
     onSave({
       id: client?.id,
       clientId: client?.clientId,
-      name,
-      code,
+      name: trimmedName,
+      code: trimmedCode,
       status,
       priority,
       fixedBilling,
@@ -4248,13 +4253,14 @@ export default function InvoiceManagement() {
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
+      const hasIdentity = String(client.name || "").trim().length > 0 || String(client.code || "").trim().length > 0;
       const matchesSearch =
         search.trim().length === 0 ||
         client.name.toLowerCase().includes(search.toLowerCase()) ||
         client.code.toLowerCase().includes(search.toLowerCase());
       const matchesService =
         serviceFilter === "all" || client.services.some((service) => service === serviceFilter);
-      return matchesSearch && matchesService;
+      return hasIdentity && matchesSearch && matchesService;
     });
   }, [clients, search, serviceFilter]);
 
@@ -4793,8 +4799,18 @@ export default function InvoiceManagement() {
 
   const saveConfig = async (payload: any) => {
     try {
+      const trimmedName = String(payload.name || "").trim();
+      const trimmedCode = String(payload.code || "").trim();
+      if (!trimmedName || !trimmedCode) {
+        toast({
+          title: "Missing details",
+          description: "Client name and client code are required before saving.",
+          variant: "destructive",
+        });
+        return;
+      }
       // For editing: use clientId (unique identifier), for new: use code as identifier
-      const clientId = payload.clientId || payload.code?.toLowerCase();
+      const clientId = payload.clientId || trimmedCode.toLowerCase();
       const baseId = clientId || payload.id || `client-${Date.now()}`;
 
       console.log("[Invoice] saveConfig - payload:", { id: payload.id, clientId: payload.clientId, code: payload.code, baseId });
@@ -4802,8 +4818,8 @@ export default function InvoiceManagement() {
       const nextClient: ClientRecord = {
         id: baseId,
         clientId: clientId,
-        code: payload.code,
-        name: payload.name,
+        code: trimmedCode,
+        name: trimmedName,
         status: payload.status,
         priority: payload.priority,
         services: payload.services,
@@ -4819,7 +4835,7 @@ export default function InvoiceManagement() {
         integrationFee: payload.integrationFee,
         billingCycle: payload.billingCycle,
         lastInvoiceGenerated: new Date().toISOString().split("T")[0],
-        logo: String(payload.name || "C").charAt(0).toUpperCase(),
+        logo: String(trimmedName || "C").charAt(0).toUpperCase(),
         logoClass: "from-indigo-500 to-purple-600",
         color: "indigo",
         transactionSlabs: payload.transactionSlabs,
@@ -4857,8 +4873,8 @@ export default function InvoiceManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: clientId,
-          clientCode: payload.code,
-          clientName: payload.name,
+          clientCode: trimmedCode,
+          clientName: trimmedName,
           status: payload.status,
           priority: payload.priority,
           services: payload.services,
@@ -4874,7 +4890,7 @@ export default function InvoiceManagement() {
           integrationFee: payload.integrationFee,
           billingCycle: payload.billingCycle,
           lastInvoiceGenerated: new Date().toISOString().split("T")[0],
-          logo: String(payload.name || "C").charAt(0).toUpperCase(),
+          logo: String(trimmedName || "C").charAt(0).toUpperCase(),
           logoClass: "from-indigo-500 to-purple-600",
           color: "indigo",
           gstin: payload.gstin,
@@ -4924,7 +4940,7 @@ export default function InvoiceManagement() {
 
       toast({
         title: `Configuration ${payload.clientId ? "updated" : "created"}`,
-        description: `${payload.name} commercial configuration saved successfully to database (encrypted).`,
+        description: `${trimmedName} commercial configuration saved successfully to database (encrypted).`,
       });
 
       navigate(`/invoice-management/client/${clientId || baseId}`);

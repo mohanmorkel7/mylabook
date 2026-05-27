@@ -165,6 +165,13 @@ const getInvoiceDeclarationLines = (companyConfig: CompanyConfig) =>
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+const formatInvoicePdfDate = (dateStr: string) => {
+  if (!dateStr) return "—";
+  const [year, month, day] = dateStr.split("-").map((part) => Number(part));
+  if (!year || !month || !day) return dateStr;
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${String(day).padStart(2, "0")}-${monthNames[month - 1]}-${year}`;
+};
 const MYLAPAY_FOOTER_LINES = [
   "MYLAPAY Incorporated as Mindeed Technologies and Services Private Limited.",
   "# 17/3, Pembroke House, Second Floor, Shafee Mohammed Road, Nungambakkam, Chennai 600 006.",
@@ -1418,13 +1425,13 @@ async function downloadInvoicePdfTemplate({
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.1);
   doc.text("Invoice No.", pageWidth - margin - 38, cursorY + 17.8);
-  doc.text("Issue Date", pageWidth - margin - 38, cursorY + 21.4);
+  doc.text("Invoice Date", pageWidth - margin - 38, cursorY + 21.4);
   doc.text("Period", pageWidth - margin - 38, cursorY + 25.0);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.0);
   doc.text(invoiceNumber, pageWidth - margin, cursorY + 17.8, { align: "right" });
-  doc.text(generatedDate, pageWidth - margin, cursorY + 21.4, { align: "right" });
+  doc.text(formatInvoicePdfDate(generatedDate), pageWidth - margin, cursorY + 21.4, { align: "right" });
   doc.text(`${month} · FY ${financialYear}`, pageWidth - margin, cursorY + 25.0, { align: "right" });
 
   cursorY += headerHeight + 2;
@@ -3868,6 +3875,7 @@ export default function InvoiceManagement() {
   const [invoiceAmountDraft, setInvoiceAmountDraft] = useState(0);
   const [pendingInvoiceAmount, setPendingInvoiceAmount] = useState(0);
   const [pendingInvoiceTxnCount, setPendingInvoiceTxnCount] = useState(0);
+  const [invoiceDateDraft, setInvoiceDateDraft] = useState("");
   const [invoiceMonthDraft, setInvoiceMonthDraft] = useState("");
   const [invoiceSerialConfig, setInvoiceSerialConfig] = useState<InvoiceSerialConfig>(() => {
     try {
@@ -4123,10 +4131,12 @@ export default function InvoiceManagement() {
           : Math.round(estimateInvoiceFromSlabs(client, effectiveTxnCount));
 
       console.log("[Invoice] openInvoiceCreateModal - Estimated amount:", estimated);
+      const defaultInvoiceDate = new Date().toISOString().split("T")[0];
       setInvoiceAmountDraft(estimated);
       setPendingInvoiceAmount(estimated);
       setPendingInvoiceTxnCount(effectiveTxnCount);
-      setInvoiceMonthDraft(new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }));
+      setInvoiceDateDraft(defaultInvoiceDate);
+      setInvoiceMonthDraft(new Date(defaultInvoiceDate).toLocaleString("en-IN", { month: "short", year: "numeric" }));
       setInvoiceModalOpen(true);
       console.log("[Invoice] openInvoiceCreateModal - Modal opened");
     } catch (error) {
@@ -4144,6 +4154,7 @@ export default function InvoiceManagement() {
     setInvoiceModalMode("edit");
     setSelectedInvoice(invoice);
     setInvoiceAmountDraft(Number(invoice.amount || matchedClient?.monthlyInvoiceEstimate || 0));
+    setInvoiceDateDraft(invoice.generatedDate || new Date().toISOString().split("T")[0]);
     setInvoiceMonthDraft(invoice.month);
     setInvoiceModalOpen(true);
   };

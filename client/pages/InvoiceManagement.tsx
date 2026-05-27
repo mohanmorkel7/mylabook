@@ -941,29 +941,8 @@ async function downloadInvoiceDocxTemplate({
                         children: [new Docx.TextRun({ text: companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd", bold: true, color: INVOICE_THEME.secondaryHex, size: 9.2 })],
                         spacing: { after: 0 },
                       }),
-                      ...getCompanyDisplayAddress(companyConfig)
-                        .split("\n")
-                        .filter(Boolean)
-                        .map((line) =>
-                          new Docx.Paragraph({
-                            children: [new Docx.TextRun({ text: line, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
-                            spacing: { after: 0 },
-                          }),
-                        ),
                       new Docx.Paragraph({
-                        children: [new Docx.TextRun({ text: companyConfig.email || "contact@mylapay.com", color: INVOICE_THEME.secondaryHex, size: 7.4 })],
-                        spacing: { after: 0 },
-                      }),
-                      new Docx.Paragraph({
-                        children: [new Docx.TextRun({ text: companyConfig.phone || "+91 44 XXXX XXXX", color: INVOICE_THEME.secondaryHex, size: 7.4 })],
-                        spacing: { after: 0 },
-                      }),
-                      new Docx.Paragraph({
-                        children: [new Docx.TextRun({ text: `GSTIN: ${companyConfig.gstNumber || "—"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
-                        spacing: { after: 0 },
-                      }),
-                      new Docx.Paragraph({
-                        children: [new Docx.TextRun({ text: `LUT: ${companyConfig.lutNumber || "—"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
+                        children: [new Docx.TextRun({ text: getCompanyHeaderAddressLine(companyConfig) || getCompanyDisplayAddress(companyConfig), color: INVOICE_THEME.secondaryHex, size: 7.4 })],
                         spacing: { after: 0 },
                       }),
                       new Docx.Paragraph({
@@ -971,7 +950,23 @@ async function downloadInvoiceDocxTemplate({
                         spacing: { after: 0 },
                       }),
                       new Docx.Paragraph({
-                        children: [new Docx.TextRun({ text: `Website: ${companyConfig.website || "—"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
+                        children: [new Docx.TextRun({ text: `GSTIN: ${companyConfig.gstNumber || "—"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
+                        spacing: { after: 0 },
+                      }),
+                      new Docx.Paragraph({
+                        children: [new Docx.TextRun({ text: `PAN: ${companyConfig.panNumber || "—"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
+                        spacing: { after: 0 },
+                      }),
+                      new Docx.Paragraph({
+                        children: [new Docx.TextRun({ text: getCompanyHeaderContactLine(companyConfig) || `${companyConfig.email || "contact@mylapay.com"} | ${companyConfig.phone || "+91 44 XXXX XXXX"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
+                        spacing: { after: 0 },
+                      }),
+                      new Docx.Paragraph({
+                        children: [new Docx.TextRun({ text: `Website: ${getCompanyHeaderWebsiteLine(companyConfig) || companyConfig.website || "—"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
+                        spacing: { after: 0 },
+                      }),
+                      new Docx.Paragraph({
+                        children: [new Docx.TextRun({ text: `LUT: ${companyConfig.lutNumber || "—"}`, color: INVOICE_THEME.secondaryHex, size: 7.4 })],
                         spacing: { after: 0 },
                       }),
                     ],
@@ -1276,8 +1271,26 @@ function getClientDisplayBillingName(client: ClientRecord) {
   return client.name;
 }
 
+function normalizeInlineText(value: string | undefined | null) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getClientBillToAddress(client: ClientRecord) {
-  return client.billingAddress || "—";
+  return normalizeInlineText(client.billingAddress) || "—";
+}
+
+function getCompanyHeaderAddressLine(companyConfig: CompanyConfig) {
+  return normalizeInlineText([companyConfig.address, companyConfig.city, companyConfig.state, companyConfig.pincode].filter(Boolean).join(", "));
+}
+
+function getCompanyHeaderContactLine(companyConfig: CompanyConfig) {
+  return [companyConfig.email, companyConfig.phone].filter(Boolean).join(" | ");
+}
+
+function getCompanyHeaderWebsiteLine(companyConfig: CompanyConfig) {
+  return normalizeInlineText(companyConfig.website);
 }
 
 function getClientGstin(client: ClientRecord) {
@@ -1384,7 +1397,7 @@ async function downloadInvoicePdfTemplate({
 
   // === HEADER ===
   const headerHeight = 38;
-  const headerLeftWidth = contentWidth * 0.46;
+  const headerLeftWidth = contentWidth * 0.5;
   if (logoData) {
     try {
       doc.addImage(logoData, "PNG", margin, cursorY, 28, 9.5);
@@ -1393,10 +1406,12 @@ async function downloadInvoicePdfTemplate({
 
   const headerLeftLines = [
     companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd",
-    ...wrap(getCompanyDisplayAddress(companyConfig), headerLeftWidth),
-    companyConfig.email || "contact@mylapay.com",
-    companyConfig.phone || "+91 44 XXXX XXXX",
+    getCompanyHeaderAddressLine(companyConfig) || getCompanyDisplayAddress(companyConfig),
+    `CIN: ${companyConfig.cinNumber || "—"}`,
     `GSTIN: ${companyConfig.gstNumber || "—"}`,
+    `PAN: ${companyConfig.panNumber || "—"}`,
+    getCompanyHeaderContactLine(companyConfig) || companyConfig.email || companyConfig.phone || "—",
+    getCompanyHeaderWebsiteLine(companyConfig) || companyConfig.website || "—",
     `LUT: ${companyConfig.lutNumber || "—"}`,
   ];
 

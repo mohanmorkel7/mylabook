@@ -360,6 +360,7 @@ interface CompanyConfig {
   email: string;
   phone: string;
   website: string;
+  signatureImage: string;
   declarationText: string;
 }
 
@@ -401,6 +402,7 @@ const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
   email: "contact@mylapay.com",
   phone: "+91 44 XXXX XXXX",
   website: "www.mylapay.com",
+  signatureImage: "",
   declarationText: DEFAULT_INVOICE_DECLARATION_TEXT,
 };
 
@@ -1203,6 +1205,20 @@ async function downloadInvoiceDocxTemplate({
                           }),
                         ],
                       }),
+                      ...(getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage)
+                        ? [
+                            new Docx.Paragraph({
+                              alignment: Docx.AlignmentType.RIGHT,
+                              children: [
+                                new Docx.ImageRun({
+                                  data: getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage),
+                                  transformation: { width: 72, height: 36 },
+                                }),
+                              ],
+                              spacing: { after: 1 },
+                            }),
+                          ]
+                        : []),
                       new Docx.Paragraph({
                         alignment: Docx.AlignmentType.RIGHT,
                         children: [new Docx.TextRun({ text: getClientSignatureName(client), bold: true, color: INVOICE_THEME.secondaryHex, size: 8 })],
@@ -1731,6 +1747,7 @@ async function downloadInvoicePdfTemplate({
   const sigW = 70;
   const sigX = pageWidth - margin - sigW;
   const signatoryName = (client.signatoryName || "").trim();
+  const signatoryImage = getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage);
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
@@ -1738,6 +1755,11 @@ async function downloadInvoicePdfTemplate({
   cursorY += 10;
   setStroke(SECONDARY);
   doc.setLineWidth(0.35);
+  if (signatoryImage) {
+    try {
+      doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + 4, cursorY - 10, 18, 18);
+    } catch {}
+  }
   doc.line(sigX, cursorY, sigX + sigW, cursorY);
   if (signatoryName) {
     setText(SECONDARY);
@@ -5582,6 +5604,24 @@ export default function InvoiceManagement() {
                     onChange={(e) => setCompanyConfig((prev) => ({ ...prev, cinNumber: e.target.value }))}
                     placeholder="U72900TN2019PTC129197"
                   />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Signature Image</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const dataUrl = await readFileDataUrl(file);
+                      setCompanyConfig((prev) => ({ ...prev, signatureImage: dataUrl }));
+                    }}
+                  />
+                  {companyConfig.signatureImage && (
+                    <div className="mt-2 rounded-xl border bg-muted/20 p-3">
+                      <img src={companyConfig.signatureImage} alt="Company signature preview" className="max-h-24 object-contain" />
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Declaration Text</Label>

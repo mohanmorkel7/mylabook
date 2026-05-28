@@ -3442,6 +3442,12 @@ function ClientOverviewScreen({
               <Table className="min-w-[1220px] table-fixed">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-16 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Expt
+                      </span>
+                    </TableHead>
                     <TableHead className="w-12 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">No.</TableHead>
                     <TableHead className="w-[300px] px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
@@ -3474,12 +3480,6 @@ function ClientOverviewScreen({
                     </TableHead>
                     <TableHead className="w-16 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        Expt
-                      </span>
-                    </TableHead>
-                    <TableHead className="w-16 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
                         <Trash2 className="h-3.5 w-3.5" />
                         Act
                       </span>
@@ -3493,6 +3493,12 @@ function ClientOverviewScreen({
                     const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
                     return (
                       <TableRow key={row.id}>
+                        <TableCell className="px-2 py-2 text-center align-top">
+                          <label className="flex items-center justify-center" title="Include in export">
+                            <Checkbox checked={row.exportEnabled !== false} onCheckedChange={(checked) => updateOverviewRow(index, "exportEnabled", Boolean(checked))} />
+                            <span className="sr-only">Export</span>
+                          </label>
+                        </TableCell>
                         <TableCell className="px-2 py-2 font-medium text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</TableCell>
                         <TableCell className="align-top px-2 py-2">
                           <div className="space-y-1.5">
@@ -3563,12 +3569,6 @@ function ClientOverviewScreen({
                               <SelectItem value="right">Right</SelectItem>
                             </SelectContent>
                           </Select>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-center align-top">
-                          <label className="flex items-center justify-center" title="Include in export">
-                            <Checkbox checked={row.exportEnabled !== false} onCheckedChange={(checked) => updateOverviewRow(index, "exportEnabled", Boolean(checked))} />
-                            <span className="sr-only">Export</span>
-                          </label>
                         </TableCell>
                         <TableCell className="px-2 py-2 text-center align-top">
                           {row.kind === "custom" ? (

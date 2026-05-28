@@ -249,7 +249,7 @@ const CURRENCY_CONFIG_KEY = "currency-config";
 const CONFIG_CHANGE_REQUESTS_KEY = "config-change-requests";
 const CONFIG_AUDIT_LOG_KEY = "config-audit-log";
 
-type InvoiceNumberFormat = "PREFIX/FY/SEQ" | "PREFIX-FY-SEQ" | "FY/SEQ";
+type InvoiceNumberFormat = "PREFIX/FY/SEQ" | "PREFIX-FY-SEQ" | "FY/SEQ" | "PREFIX/SEQ/FY";
 type ClientType = "Domestic" | "International";
 type BillingModel = "transaction" | "mmc";
 type CurrencyType = "INR" | "USD" | "AED" | "SAR" | "KWD" | "OMR" | "QAR" | "BHD";
@@ -459,6 +459,8 @@ function buildInvoiceNumber(
   switch (config.format) {
     case "FY/SEQ":
       return `${financialYear}${config.separator}${serialPart}`;
+    case "PREFIX/SEQ/FY":
+      return `${config.prefix}${config.separator}${serialPart}${config.separator}${financialYear}`;
     case "PREFIX-FY-SEQ":
       return `${config.prefix}-${financialYear}-${serialPart}`;
     case "PREFIX/FY/SEQ":
@@ -473,6 +475,14 @@ function getCurrentInvoiceNumberPreview(config: InvoiceSerialConfig) {
     config.financialYearStartMonth,
   );
   return buildInvoiceNumber(config, financialYear, 1);
+}
+
+function getClientInvoiceSerialCurrent(client: ClientRecord) {
+  const historyMax = (client.invoiceHistory || []).reduce(
+    (max, invoice) => Math.max(max, Number(invoice.serial || 0)),
+    0,
+  );
+  return Math.max(Number(client.invoiceCurrentSerial || 0), historyMax);
 }
 
 const CLIENTS = [
@@ -660,6 +670,8 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   signatoryName?: string;
   signatoryImage?: string;
   invoiceHistory?: InvoiceRecord[];
+  invoicePrefix?: string;
+  invoiceCurrentSerial?: number;
   clientType?: ClientType;
   currency?: CurrencyType;
   billingModel?: BillingModel;
@@ -1806,7 +1818,24 @@ function getInvoiceNumberForClient(
   state: InvoiceSerialState,
 ) {
   const financialYear = getFinancialYearLabel(getIstNow(), config.financialYearStartMonth);
-  const serial = state.financialYear === financialYear ? state.serial + 1 : 1;
+  const hasClientSerialConfig = Boolean(normalizeInlineText(client.invoicePrefix) || Number(client.invoiceCurrentSerial || 0) > 0);
+  const historySerial = getClientInvoiceSerialCurrent(client);
+  const serial = hasClientSerialConfig
+    ? Math.max(historySerial, Number(client.invoiceCurrentSerial || 0)) + 1
+    : state.financialYear === financialYear
+      ? state.serial + 1
+      : 1;
+
+  if (hasClientSerialConfig) {
+    const prefix = normalizeInlineText(client.invoicePrefix) || config.prefix;
+    const serialPart = formatInvoiceSerial(serial, config.serialDigits);
+    return {
+      invoiceNumber: `${prefix}${config.separator}${serialPart}${config.separator}${financialYear}`,
+      financialYear,
+      serial,
+    };
+  }
+
   return {
     invoiceNumber: buildInvoiceNumber(config, financialYear, serial),
     financialYear,
@@ -3435,6 +3464,8 @@ function InvoiceConfigEditor({
   const [lutNumber, setLutNumber] = useState(client?.lutNumber || "");
   const [billingAddress, setBillingAddress] = useState(client?.billingAddress || "");
   const [billingEmail, setBillingEmail] = useState(client?.billingEmail || "");
+  const [invoicePrefix, setInvoicePrefix] = useState(client?.invoicePrefix || "MYL");
+  const [invoiceCurrentSerial, setInvoiceCurrentSerial] = useState(Number(client?.invoiceCurrentSerial || 0));
   const [signatoryName, setSignatoryName] = useState(client?.signatoryName || "");
   const [signatoryImage, setSignatoryImage] = useState(client?.signatoryImage || "");
   const [notes, setNotes] = useState(client?.notes || "");
@@ -3542,6 +3573,8 @@ function InvoiceConfigEditor({
       services: selectedServices,
       transactionSlabs: slabs,
       notes,
+      invoicePrefix,
+      invoiceCurrentSerial,
       gstin,
       lutNumber,
       billingAddress,
@@ -3555,6 +3588,8 @@ function InvoiceConfigEditor({
       customInvoiceRows: customInvoiceRows.filter(
         (row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0,
       ),
+      invoicePrefix: String(invoicePrefix || "").trim(),
+      invoiceCurrentSerial: Number(invoiceCurrentSerial || 0),
     });
   };
 
@@ -3650,6 +3685,14 @@ function InvoiceConfigEditor({
                     <div className="space-y-2">
                       <Label>GSTIN</Label>
                       <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="GST identification number" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Invoice Prefix</Label>
+                      <Input value={invoicePrefix} onChange={(e) => setInvoicePrefix(e.target.value.toUpperCase())} placeholder="IE / MY" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Current Serial Number</Label>
+                      <Input type="number" min={0} value={invoiceCurrentSerial} onChange={(e) => setInvoiceCurrentSerial(Number(e.target.value) || 0)} placeholder="17" />
                     </div>
                     <div className="space-y-2">
                       <Label>LUT Number</Label>
@@ -4367,6 +4410,8 @@ export default function InvoiceManagement() {
               logo: data.logo,
               logoClass: data.logoClass,
               color: data.color,
+              invoicePrefix: data.invoicePrefix,
+              invoiceCurrentSerial: Number(data.invoiceCurrentSerial || 0),
               transactionSlabs: data.transactionSlabs || [],
               aws: data.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
               notes: data.notes,
@@ -4664,16 +4709,19 @@ export default function InvoiceManagement() {
             ? {
                 ...item,
                 lastInvoiceGenerated: generatedDate,
+                invoiceCurrentSerial: serialInfo.serial,
                 invoiceHistory: [nextInvoice, ...(item.invoiceHistory || [])],
               }
             : item,
         ),
       );
-      setInvoiceSerialState({
-        financialYear: serialInfo.financialYear,
-        serial: serialInfo.serial,
-        lastIssuedAt: new Date().toISOString(),
-      });
+      if (!normalizeInlineText(client.invoicePrefix)) {
+        setInvoiceSerialState({
+          financialYear: serialInfo.financialYear,
+          serial: serialInfo.serial,
+          lastIssuedAt: new Date().toISOString(),
+        });
+      }
       setInvoiceModalOpen(false);
 
       console.log("[Invoice] generateInvoiceForClient - Invoice generated successfully");
@@ -5022,6 +5070,8 @@ export default function InvoiceManagement() {
         aws: payload.aws,
         notes: payload.notes,
         signatoryImage: payload.signatoryImage,
+        invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
+        invoiceCurrentSerial: Number(payload.invoiceCurrentSerial || 0),
         invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
         gstin: payload.gstin,
         lutNumber: payload.lutNumber,
@@ -5080,6 +5130,8 @@ export default function InvoiceManagement() {
           billingEmail: payload.billingEmail,
           signatoryName: payload.signatoryName,
           signatoryImage: payload.signatoryImage,
+          invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
+          invoiceCurrentSerial: Number(payload.invoiceCurrentSerial || 0),
           clientType: payload.clientType || "Domestic",
           currency: payload.clientCurrency || "INR",
           notes: payload.notes,

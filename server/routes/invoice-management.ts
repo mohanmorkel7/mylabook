@@ -131,6 +131,8 @@ export async function initializeInvoiceSchema() {
         mmc_year_3            TEXT,
         custom_invoice_rows   TEXT,
         invoice_table_config  TEXT,
+        invoice_prefix        TEXT,
+        invoice_current_serial TEXT,
         last_invoice_generated TEXT,
         logo                  TEXT,
         logo_class            TEXT,
@@ -171,6 +173,8 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS infra_cost_note TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS invoice_table_config TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS invoice_prefix TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS invoice_current_serial TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS signatory_image TEXT`);
       console.log("[Invoice] ✓ Added missing columns to invoice_clients");
     } catch (err) {
@@ -300,6 +304,8 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       infraCostNote: decrypt(client.infra_cost_note) || "",
       customInvoiceRows: safeParseJson(decrypt(client.custom_invoice_rows), []),
       invoiceTableConfig: safeParseJson(decrypt(client.invoice_table_config), []),
+      invoicePrefix: decrypt(client.invoice_prefix),
+      invoiceCurrentSerial: parseInt(decrypt(client.invoice_current_serial) || "0"),
       lastInvoiceGenerated: decrypt(client.last_invoice_generated),
       logo: decrypt(client.logo),
       logoClass: decrypt(client.logo_class),
@@ -361,6 +367,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       infraCostNote,
       customInvoiceRows,
       invoiceTableConfig,
+      invoicePrefix,
+      invoiceCurrentSerial,
       lastInvoiceGenerated,
       logo,
       logoClass,
@@ -391,6 +399,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       network_cert_note, infra_cost_note,
       custom_invoice_rows,
       invoice_table_config,
+      invoice_prefix,
+      invoice_current_serial,
       last_invoice_generated, logo, logo_class, color,
       gstin, lut_number, billing_address, billing_email, signatory_name, signatory_image,
       client_type, currency, notes, transaction_slabs, aws_config
@@ -427,6 +437,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       infra_cost_note = EXCLUDED.infra_cost_note,
       custom_invoice_rows = EXCLUDED.custom_invoice_rows,
       invoice_table_config = EXCLUDED.invoice_table_config,
+      invoice_prefix = EXCLUDED.invoice_prefix,
+      invoice_current_serial = EXCLUDED.invoice_current_serial,
       last_invoice_generated = EXCLUDED.last_invoice_generated,
       logo = EXCLUDED.logo,
       logo_class = EXCLUDED.logo_class,
@@ -477,6 +489,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(String(infraCostNote || "")),
       encrypt(JSON.stringify(Array.isArray(customInvoiceRows) ? customInvoiceRows : [])),
       encrypt(JSON.stringify(Array.isArray(invoiceTableConfig) ? invoiceTableConfig : [])),
+      encrypt(String(invoicePrefix || "")),
+      encrypt(String(invoiceCurrentSerial || 0)),
       encrypt(lastInvoiceGenerated),
       encrypt(logo),
       encrypt(logoClass),
@@ -528,6 +542,8 @@ router.post("/clients", async (req: Request, res: Response) => {
       infra_cost_note: String(infraCostNote || ""),
       custom_invoice_rows: Array.isArray(customInvoiceRows) ? customInvoiceRows : [],
       invoice_table_config: Array.isArray(invoiceTableConfig) ? invoiceTableConfig : [],
+      invoice_prefix: String(invoicePrefix || ""),
+      invoice_current_serial: String(invoiceCurrentSerial || 0),
       last_invoice_generated: lastInvoiceGenerated,
       logo: logo,
       logo_class: logoClass,
@@ -636,6 +652,8 @@ router.get("/clients", async (req: Request, res: Response) => {
           infraCostNote: decrypt(client.infra_cost_note) || "",
           customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
           invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
+          invoicePrefix: decrypt(client.invoice_prefix),
+          invoiceCurrentSerial: parseInt(decrypt(client.invoice_current_serial) || "0"),
           lastInvoiceGenerated: decrypt(client.last_invoice_generated),
           logo: decrypt(client.logo),
           logoClass: decrypt(client.logo_class),
@@ -689,6 +707,8 @@ router.get("/clients", async (req: Request, res: Response) => {
       mmcYear3: parseInt(client.mmc_year_3 || "0"),
       customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
       invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
+      invoicePrefix: client.invoice_prefix,
+      invoiceCurrentSerial: parseInt(client.invoice_current_serial || "0"),
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,
@@ -749,6 +769,8 @@ router.get("/clients", async (req: Request, res: Response) => {
       mmcYear3: parseInt(client.mmc_year_3 || "0"),
       customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
       invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
+      invoicePrefix: client.invoice_prefix,
+      invoiceCurrentSerial: parseInt(client.invoice_current_serial || "0"),
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,

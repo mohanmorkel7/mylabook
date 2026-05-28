@@ -1977,7 +1977,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
         align: "left",
         editable: false,
         narrationMode: "multiline",
-        exportEnabled: mmcFloor !== 0,
+        exportEnabled: mmcFloor >= transactionBreakdown.amount,
       },
       {
         id: "variable-slab",
@@ -1992,7 +1992,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
         align: "left",
         editable: false,
         narrationMode: "multiline",
-        exportEnabled: transactionBreakdown.amount !== 0,
+        exportEnabled: transactionBreakdown.amount > mmcFloor,
       },
     ].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
   }

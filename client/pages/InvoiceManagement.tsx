@@ -742,6 +742,7 @@ interface InvoiceRecord {
   customInvoiceRows?: CustomInvoiceRow[];
   billingModel?: BillingModel;
   invoiceType?: InvoiceType;
+  mmcInvoiceTitle?: string;
 }
 
 const INVOICES: InvoiceRecord[] = [
@@ -2893,7 +2894,7 @@ function ClientOverviewScreen({
   onExportPdf: (amountOverride?: number, txnCountOverride?: number) => void;
   onExportCsv: () => void;
   onExportDocx: () => void;
-  onGenerateInvoice: (amountOverride?: number, txnCountOverride?: number) => void;
+  onGenerateInvoice: (amountOverride?: number, txnCountOverride?: number, mmcInvoiceTitle?: string) => void;
   onGenerateSetupFeeInvoice: () => void;
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord) => void;
@@ -3150,7 +3151,7 @@ function ClientOverviewScreen({
           )}
           <Button
             className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500"
-            onClick={() => onGenerateInvoice(invoiceDraft, txnInput)}
+            onClick={() => onGenerateInvoice(invoiceDraft, txnInput, mmcInvoiceTitle)}
           >
             <ReceiptText className="h-4 w-4" /> Generate Invoice
           </Button>
@@ -3186,7 +3187,20 @@ function ClientOverviewScreen({
               <div className="rounded-2xl border border-blue-200/70 bg-white/80 p-4">
                 <div className="space-y-2">
                   <Label>Invoice title</Label>
-                  <Input value={mmcInvoiceTitle} onChange={(e) => setMmcInvoiceTitle(e.target.value)} placeholder="MMC (Year 1)" />
+                  <Input
+                    value={mmcInvoiceTitle}
+                    onChange={(e) => {
+                      const nextTitle = e.target.value;
+                      setMmcInvoiceTitle(nextTitle);
+                      onSaveOverviewConfig({
+                        ...client,
+                        mmcInvoiceTitle: nextTitle,
+                        clientCurrency: client.currency || "INR",
+                        customInvoiceRows: client.customInvoiceRows || [],
+                      });
+                    }}
+                    placeholder="MMC (Year 1)"
+                  />
                   <p className="text-xs text-muted-foreground">This title is used in the statement of charges table and the generated PDF.</p>
                 </div>
               </div>
@@ -4361,6 +4375,7 @@ export default function InvoiceManagement() {
   const [invoiceAmountDraft, setInvoiceAmountDraft] = useState(0);
   const [pendingInvoiceAmount, setPendingInvoiceAmount] = useState(0);
   const [pendingInvoiceTxnCount, setPendingInvoiceTxnCount] = useState(0);
+  const [pendingInvoiceMmcTitle, setPendingInvoiceMmcTitle] = useState("");
   const [invoiceDateDraft, setInvoiceDateDraft] = useState("");
   const [invoiceMonthDraft, setInvoiceMonthDraft] = useState("");
   const [invoiceSerialConfig, setInvoiceSerialConfig] = useState<InvoiceSerialConfig>(() => {
@@ -4763,7 +4778,7 @@ export default function InvoiceManagement() {
     Number(modalPrefixSettings.currentSerial || 0) + 1,
   );
 
-  const openInvoiceCreateModal = (client: ClientRecord, amountOverride?: number, txnCountOverride?: number) => {
+  const openInvoiceCreateModal = (client: ClientRecord, amountOverride?: number, txnCountOverride?: number, mmcInvoiceTitleOverride?: string) => {
     console.log("[Invoice] openInvoiceCreateModal - Opening for client:", client?.name, client, { amountOverride, txnCountOverride });
 
     if (!client) {
@@ -4794,6 +4809,7 @@ export default function InvoiceManagement() {
       setPendingInvoiceTxnCount(effectiveTxnCount);
       setInvoiceDateDraft(defaultInvoiceDate);
       setInvoiceMonthDraft(new Date(defaultInvoiceDate).toLocaleString("en-IN", { month: "short", year: "numeric" }));
+      setPendingInvoiceMmcTitle(normalizeInlineText(mmcInvoiceTitleOverride || client.mmcInvoiceTitle || ""));
       setInvoiceModalOpen(true);
       console.log("[Invoice] openInvoiceCreateModal - Modal opened");
     } catch (error) {
@@ -5135,6 +5151,7 @@ export default function InvoiceManagement() {
     amountOverride?: number,
     txnCountOverride?: number,
     invoiceDateOverride?: string,
+    mmcInvoiceTitleOverride?: string,
   ) => {
     console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name, invoiceType);
 
@@ -5190,6 +5207,7 @@ export default function InvoiceManagement() {
         customInvoiceRows: invoiceType === "setup_fee" ? [] : client.customInvoiceRows || [],
         billingModel: client.billingModel || "transaction",
         invoiceType,
+        mmcInvoiceTitle: normalizeInlineText(mmcInvoiceTitleOverride || client.mmcInvoiceTitle || ""),
       };
 
       console.log("[Invoice] generateInvoiceForClient - Next invoice object:", nextInvoice);
@@ -5214,6 +5232,7 @@ export default function InvoiceManagement() {
             customInvoiceRows: nextInvoice.customInvoiceRows || [],
             billingModel: nextInvoice.billingModel || "transaction",
             invoiceType: nextInvoice.invoiceType || "commercial",
+            mmcInvoiceTitle: nextInvoice.mmcInvoiceTitle || "",
           }),
         });
         console.log("[Invoice] generateInvoiceForClient - Successfully saved to database");
@@ -5424,7 +5443,7 @@ export default function InvoiceManagement() {
     try {
       const invoiceNumber = getInvoiceDisplayNumber(invoice);
       await downloadInvoicePdfTemplate({
-        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction" },
+        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction", mmcInvoiceTitle: invoice.mmcInvoiceTitle || client.mmcInvoiceTitle || "" },
         companyConfig,
         invoiceNumber,
         generatedDate: invoice.generatedDate,
@@ -5454,7 +5473,7 @@ export default function InvoiceManagement() {
     try {
       const invoiceNumber = getInvoiceDisplayNumber(invoice);
       await downloadInvoiceDocxTemplate({
-        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction" },
+        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction", mmcInvoiceTitle: invoice.mmcInvoiceTitle || client.mmcInvoiceTitle || "" },
         companyConfig,
         invoiceNumber,
         generatedDate: invoice.generatedDate,
@@ -5851,7 +5870,7 @@ export default function InvoiceManagement() {
           onExportPdf={(amountOverride, txnCountOverride) => exportClientPdf(selectedClient, amountOverride, txnCountOverride)}
           onExportCsv={() => exportClientsCsv([selectedClient])}
           onExportDocx={() => exportClientDocx(selectedClient)}
-          onGenerateInvoice={(amountOverride, txnCountOverride) => openInvoiceCreateModal(selectedClient, amountOverride, txnCountOverride)}
+          onGenerateInvoice={(amountOverride, txnCountOverride) => openInvoiceCreateModal(selectedClient, amountOverride, txnCountOverride, mmcInvoiceTitle)}
           onGenerateSetupFeeInvoice={() => generateSetupFeeInvoiceForClient(selectedClient)}
           onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
           onDownloadPdf={downloadInvoicePdf}
@@ -5963,7 +5982,7 @@ export default function InvoiceManagement() {
                     if (invoiceModalMode === "edit") {
                       saveInvoiceUpdate();
                     } else {
-                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount, invoiceDateDraft || new Date().toISOString().split("T")[0]);
+                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount, invoiceDateDraft || new Date().toISOString().split("T")[0], pendingInvoiceMmcTitle);
                     }
                     setInvoiceModalOpen(false);
                   }}

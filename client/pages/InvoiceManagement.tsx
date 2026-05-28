@@ -2269,7 +2269,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
   return (
-    <Badge variant="outline" className={cn("rounded-full border", INVOICE_STATUS_META[status])}>
+    <Badge variant="outline" className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", INVOICE_STATUS_META[status])}>
       {status}
     </Badge>
   );
@@ -2307,13 +2307,13 @@ function InvoiceRowActions({
   const canEdit = generated;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <div className="w-[170px] shrink-0 rounded-2xl border bg-muted/20 px-2.5 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</p>
+      <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
+        <div className="w-[148px] shrink-0 rounded-2xl border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</p>
           <select
             value={invoice.status}
             onChange={(e) => onStatusChange(e.target.value as InvoiceStatus)}
-            className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-background px-3 text-sm outline-none ring-0 transition focus:border-primary"
+            className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-background px-2 text-[12px] outline-none ring-0 transition focus:border-primary"
           >
             {[
               "Waiting for approval",
@@ -2341,7 +2341,7 @@ function InvoiceRowActions({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 shrink-0 rounded-lg gap-1 border-emerald-200 bg-emerald-50 px-2.5 text-emerald-700 hover:bg-emerald-100"
+              className="h-7 shrink-0 rounded-lg gap-1 border-emerald-200 bg-emerald-50 px-2 text-[12px] text-emerald-700 hover:bg-emerald-100"
               onClick={onApprove}
               title="Approve invoice"
             >
@@ -2351,7 +2351,7 @@ function InvoiceRowActions({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 shrink-0 rounded-lg gap-1 border-rose-200 bg-rose-50 px-2.5 text-rose-700 hover:bg-rose-100"
+              className="h-7 shrink-0 rounded-lg gap-1 border-rose-200 bg-rose-50 px-2 text-[12px] text-rose-700 hover:bg-rose-100"
               onClick={onReject}
               title="Reject invoice"
             >
@@ -2378,7 +2378,7 @@ function InvoiceRowActions({
         <Button variant="outline" size="icon" className="h-7 w-7 shrink-0 rounded-lg" onClick={onDownloadPdf} title="Export PDF">
           <Download className="h-4 w-4" />
         </Button>
-        <Button variant="outline" size="sm" className="h-7 shrink-0 rounded-lg gap-1 px-2" onClick={onDownloadDocx} title="Export DOCX">
+        <Button variant="outline" size="sm" className="h-7 shrink-0 rounded-lg gap-1 px-2 text-[12px]" onClick={onDownloadDocx} title="Export DOCX">
           <FileDown className="h-4 w-4" /> DOCX
         </Button>
         <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0 rounded-lg border-rose-200 text-rose-600" onClick={() => void onDelete()} title="Delete invoice">
@@ -3386,12 +3386,12 @@ function ClientOverviewScreen({
                   {(client.invoiceHistory || []).length > 0 ? (
                     (client.invoiceHistory || []).map((invoice) => (
                     <TableRow key={invoice.invoiceId}>
-                      <TableCell className="font-medium">{getInvoiceDisplayNumber(invoice)}</TableCell>
-                      <TableCell>{invoice.month}</TableCell>
-                      <TableCell>{currencyLabel(invoice.amount, client.currency || "INR")}</TableCell>
+                      <TableCell className="font-medium text-[12px]">{getInvoiceDisplayNumber(invoice)}</TableCell>
+                      <TableCell className="text-[12px]">{invoice.month}</TableCell>
+                      <TableCell className="text-[12px]">{currencyLabel(invoice.amount, client.currency || "INR")}</TableCell>
                       <TableCell><InvoiceStatusBadge status={invoice.status} /></TableCell>
-                      <TableCell>{invoice.generatedDate}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-[12px]">{invoice.generatedDate}</TableCell>
+                      <TableCell className="align-top">
                         <InvoiceRowActions
                           invoice={invoice}
                           onEdit={() => openInvoiceEditModal(invoice)}
@@ -3410,7 +3410,7 @@ function ClientOverviewScreen({
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-6 text-[12px] text-muted-foreground">
                         No invoices yet. Generate your first invoice to get started.
                       </TableCell>
                     </TableRow>

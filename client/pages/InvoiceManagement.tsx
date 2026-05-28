@@ -1696,6 +1696,7 @@ async function downloadInvoicePdfTemplate({
   doc.text("AMOUNT", colPositions.total + columns.total - 3, cursorY + 5.2, { align: "right" });
   cursorY += headerH;
 
+  doc.setLineHeightFactor(1.08);
   lineItems.forEach((item, idx) => {
     const narrationLines = wrapParagraph(item.description, columns.narration - 6);
     const rowH = Math.max(11, narrationLines.length * 4.2 + 5);
@@ -1728,7 +1729,7 @@ async function downloadInvoicePdfTemplate({
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.9);
-    doc.text(narrationLines, colPositions.narration + 3, cursorY + 5.7, { align: "left" });
+    doc.text(narrationLines, colPositions.narration + 4, cursorY + 4.9, { align: "left", baseline: "top" });
 
     doc.setFont("helvetica", "bold");
     doc.text(formatInvoiceAmount(item.amount, invoiceCurrency), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
@@ -1742,6 +1743,7 @@ async function downloadInvoicePdfTemplate({
     doc.text(formatInvoiceAmount(item.totalAmount, invoiceCurrency), colPositions.total + columns.total - 3, cursorY + 5.9, { align: "right" });
     cursorY += rowH;
   });
+  doc.setLineHeightFactor(1.15);
 
   setStroke(SOFT);
   doc.setLineWidth(0.3);

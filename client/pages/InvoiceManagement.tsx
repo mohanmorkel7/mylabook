@@ -52,6 +52,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth-context";
 import {
   Activity,
   AlertTriangle,
@@ -2263,6 +2264,7 @@ function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
 
 function InvoiceRowActions({
   invoice,
+  canManageApprovalActions,
   onEdit,
   onApprove,
   onReject,
@@ -2275,6 +2277,7 @@ function InvoiceRowActions({
   onDelete,
 }: {
   invoice: InvoiceRecord;
+  canManageApprovalActions: boolean;
   onEdit: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -2322,7 +2325,7 @@ function InvoiceRowActions({
             <Edit3 className="h-4 w-4" />
           </Button>
         )}
-        {waiting && (
+        {canManageApprovalActions && waiting && (
           <>
             <Button
               variant="outline"
@@ -2382,6 +2385,7 @@ function InvoiceHistoryTable({
   showClient = false,
   currencyCode = "INR",
   emptyMessage = "No invoices yet. Generate your first invoice to get started.",
+  canManageApprovalActions,
   onEdit,
   onApprove,
   onReject,
@@ -2399,6 +2403,7 @@ function InvoiceHistoryTable({
   showClient?: boolean;
   currencyCode?: CurrencyType;
   emptyMessage?: string;
+  canManageApprovalActions: boolean;
   onEdit: (invoice: InvoiceRecord & { client?: string }) => void;
   onApprove: (invoice: InvoiceRecord & { client?: string }) => void;
   onReject: (invoice: InvoiceRecord & { client?: string }) => void;
@@ -2567,6 +2572,7 @@ function InvoiceHistoryTable({
                       <TableCell className="align-top">
                         <InvoiceRowActions
                           invoice={normalizedInvoice}
+                          canManageApprovalActions={canManageApprovalActions}
                           onEdit={() => onEdit(normalizedInvoice)}
                           onApprove={() => onApprove(normalizedInvoice)}
                           onReject={() => onReject(normalizedInvoice)}
@@ -2742,11 +2748,13 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
 
 function ClientConfigCard({
   client,
+  canManageConfigActions,
   onEdit,
   onDelete,
   onOverview,
 }: {
   client: ClientRecord;
+  canManageConfigActions: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onOverview: () => void;
@@ -2766,14 +2774,16 @@ function ClientConfigCard({
                 <CardDescription>{client.code} · {client.billingCycle}</CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2 opacity-100 transition-opacity md:opacity-70 md:group-hover:opacity-100">
-              <Button variant="ghost" size="icon" onClick={onEdit}>
-                <Edit3 className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
+            {canManageConfigActions && (
+              <div className="flex items-center gap-2 opacity-100 transition-opacity md:opacity-70 md:group-hover:opacity-100">
+                <Button variant="ghost" size="icon" onClick={onEdit}>
+                  <Edit3 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onDelete}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <StatusBadge status={client.status} />
@@ -2842,6 +2852,13 @@ function ClientOverviewScreen({
   onDownloadPdf,
   onDownloadDocx,
   onDeleteInvoice,
+  onEditInvoice,
+  onApproveInvoice,
+  onRejectInvoice,
+  onSendInvoice,
+  onPaidInvoice,
+  onCloseInvoice,
+  canManageApprovalActions,
   onSaveCustomRows,
   onSaveOverviewConfig,
   taxConfig,
@@ -2857,6 +2874,13 @@ function ClientOverviewScreen({
   onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
   onDeleteInvoice: (invoiceId: string) => void | Promise<void>;
+  onEditInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
+  onApproveInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
+  onRejectInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
+  onSendInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
+  onPaidInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
+  onCloseInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
+  canManageApprovalActions: boolean;
   onSaveCustomRows: (rows: CustomInvoiceRow[]) => void;
   onSaveOverviewConfig: (payload: any) => void;
   taxConfig: TaxConfig;
@@ -3589,15 +3613,16 @@ function ClientOverviewScreen({
           subtitle="Invoice numbers, status workflow, generated dates and download/send actions"
           invoices={client.invoiceHistory || []}
           currencyCode={client.currency || "INR"}
-          onEdit={(invoice) => openInvoiceEditModal(invoice)}
-          onApprove={(invoice) => approveInvoice(invoice)}
-          onReject={(invoice) => rejectInvoice(invoice)}
-          onSend={(invoice) => sendInvoice(invoice)}
-          onPaid={(invoice) => markInvoicePaid(invoice)}
-          onClose={(invoice) => closeInvoice(invoice)}
+          canManageApprovalActions={canManageApprovalActions}
+          onEdit={onEditInvoice}
+          onApprove={onApproveInvoice}
+          onReject={onRejectInvoice}
+          onSend={onSendInvoice}
+          onPaid={onPaidInvoice}
+          onClose={onCloseInvoice}
           onStatusChange={(invoice, status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
-          onDownloadPdf={(invoice) => onDownloadPdf(invoice)}
-          onDownloadDocx={(invoice) => onDownloadDocx(invoice)}
+          onDownloadPdf={onDownloadPdf}
+          onDownloadDocx={onDownloadDocx}
           onDelete={(invoice) => onDeleteInvoice(invoice.invoiceId)}
         />
       </div>
@@ -4344,8 +4369,14 @@ export default function InvoiceManagement() {
     }
   });
 
-  const currentUser = "admin@mylapay.com";
-  const currentUserRole = "admin";
+  const { user } = useAuth();
+  const currentUser = user?.email || "admin@mylapay.com";
+  const isAdmin = user?.role === "admin";
+  const isFinance = user?.role === "finance";
+  const isFinanceDeptAdmin =
+    user?.department_admin === true && String(user?.admin_for_department || "").toLowerCase() === "finance";
+  const canManageInvoiceApprovalActions = isAdmin || isFinance || isFinanceDeptAdmin;
+  const canManageClientConfigActions = isAdmin || isFinance || isFinanceDeptAdmin;
 
   useEffect(() => {
     try {
@@ -5750,6 +5781,13 @@ export default function InvoiceManagement() {
           onDownloadPdf={downloadInvoicePdf}
           onDownloadDocx={downloadInvoiceDocx}
           onDeleteInvoice={deleteInvoiceById}
+          onEditInvoice={openInvoiceEditModal}
+          onApproveInvoice={approveInvoice}
+          onRejectInvoice={rejectInvoice}
+          onSendInvoice={sendInvoice}
+          onPaidInvoice={markInvoicePaid}
+          onCloseInvoice={closeInvoice}
+          canManageApprovalActions={canManageInvoiceApprovalActions}
           onSaveCustomRows={(rows) =>
             saveConfig({
               ...selectedClient,
@@ -5880,12 +5918,12 @@ export default function InvoiceManagement() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(currentUserRole === "admin" || currentUserRole === "finance-admin") && (
+            {canManageClientConfigActions && (
               <Button
                 variant="outline"
                 size="icon"
                 onClick={() => setSettingsViewOpen(true)}
-                title="Configuration settings (Admin only)"
+                title="Configuration settings (Admin and finance admin only)"
               >
                 <Settings className="h-4 w-4" />
               </Button>
@@ -6548,6 +6586,7 @@ export default function InvoiceManagement() {
                 <ClientConfigCard
                   key={client.clientId || client.id}
                   client={client}
+                  canManageConfigActions={canManageClientConfigActions}
                   onEdit={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}/edit`)}
                   onDelete={() => requestDeleteClient(client)}
                   onOverview={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}`)}
@@ -6594,6 +6633,7 @@ export default function InvoiceManagement() {
         subtitle="Statuses, generated dates and delivery actions"
         invoices={allInvoicesFromClients}
         showClient
+        canManageApprovalActions={canManageInvoiceApprovalActions}
         onEdit={(invoice) => openInvoiceEditModal(invoice)}
         onApprove={(invoice) => approveInvoice(invoice)}
         onReject={(invoice) => rejectInvoice(invoice)}

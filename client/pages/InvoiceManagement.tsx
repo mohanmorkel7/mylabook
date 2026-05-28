@@ -3349,8 +3349,8 @@ function ClientOverviewScreen({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <Card>
+      <div className="grid gap-6">
+        <Card className="w-full">
           <CardHeader>
             <CardTitle>Invoice History Table</CardTitle>
             <CardDescription>Invoice numbers, status workflow, generated dates and download/send actions</CardDescription>
@@ -3403,44 +3403,6 @@ function ClientOverviewScreen({
                   )}
                 </TableBody>
               </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Commercial Notes & Status Workflow</CardTitle>
-            <CardDescription>Waiting for approval → Generated → Send → Paid → Rejected → Overdue → Closed</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {["Waiting for approval", "Generated", "Send", "Paid", "Rejected", "Overdue", "Closed"].map((step) => (
-                <InvoiceStatusBadge key={step} status={step as InvoiceStatus} />
-              ))}
-            </div>
-            <div className="rounded-2xl border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
-              <p className="font-medium text-foreground">Service description preview</p>
-              <p className="mt-2">{client.notes || "No description added yet."}</p>
-            </div>
-            <div className="space-y-3 rounded-2xl border bg-background p-4">
-              <div className="rounded-2xl border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
-                <p className="font-medium text-foreground">Inline row editing is now in the invoice table above.</p>
-                <p className="mt-2">Use the table section to add rows, edit narration, amount, HSN, tax split and alignment, then save the overview.</p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span>AWS infra recovery</span>
-                <span className="font-medium">{currencyLabel(client.awsInfraRecovery, client.currency || "INR")}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span>Recon services revenue</span>
-                <span className="font-medium">{currencyLabel(client.reconRevenue, client.currency || "INR")}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span>Profitability services revenue</span>
-                <span className="font-medium">{currencyLabel(client.profitabilityRevenue, client.currency || "INR")}</span>
-              </div>
             </div>
           </CardContent>
         </Card>

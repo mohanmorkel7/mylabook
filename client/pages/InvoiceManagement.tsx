@@ -4477,6 +4477,25 @@ export default function InvoiceManagement() {
     [invoiceSerialConfig, selectedPrefixKey, selectedPrefixSettings.period, selectedPrefixSettings.currentSerial, selectedPrefixDefaultPeriod],
   );
 
+  const modalPrefixKey = normalizeInlineText(selectedClient?.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
+  const modalPrefixSettings = (() => {
+    const config = prefixSerialConfigs[modalPrefixKey];
+    const currentSerial = Math.max(
+      Number(config?.currentSerial || 0),
+      Number(selectedClient?.invoiceCurrentSerial || 0),
+      getSharedInvoiceSerialCurrent(clients, modalPrefixKey, selectedPrefixDefaultPeriod),
+    );
+    return {
+      currentSerial,
+      period: config?.period || selectedPrefixDefaultPeriod,
+    };
+  })();
+  const modalInvoicePreview = buildInvoiceNumber(
+    { ...invoiceSerialConfig, prefix: modalPrefixKey || invoiceSerialConfig.prefix },
+    modalPrefixSettings.period || selectedPrefixDefaultPeriod,
+    Number(modalPrefixSettings.currentSerial || 0) + 1,
+  );
+
   const openInvoiceCreateModal = (client: ClientRecord, amountOverride?: number, txnCountOverride?: number) => {
     console.log("[Invoice] openInvoiceCreateModal - Opening for client:", client?.name, client, { amountOverride, txnCountOverride });
 
@@ -4834,7 +4853,7 @@ export default function InvoiceManagement() {
 
       console.log("[Invoice] generateInvoiceForClient - Generated amount:", generatedAmount);
 
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs, selectedSerialPrefix || client.invoicePrefix || invoiceSerialConfig.prefix);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs, client.invoicePrefix || selectedSerialPrefix || invoiceSerialConfig.prefix);
       console.log("[Invoice] generateInvoiceForClient - Serial info:", serialInfo);
 
       const nextInvoice: InvoiceRecord = {
@@ -5580,7 +5599,7 @@ export default function InvoiceManagement() {
               <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-foreground">Invoice Number Preview:</span>
-                  <span className="font-mono text-foreground">{buildInvoiceNumber({ ...invoiceSerialConfig, prefix: selectedPrefixKey || invoiceSerialConfig.prefix }, selectedPrefixSettings.period || selectedPrefixDefaultPeriod, Number(selectedPrefixSettings.currentSerial || 0))}</span>
+                  <span className="font-mono text-foreground">{modalInvoicePreview}</span>
                 </div>
                 <p className="mt-2 text-xs">
                   Current serial used for this prefix is shown above and will be printed in the PDF.

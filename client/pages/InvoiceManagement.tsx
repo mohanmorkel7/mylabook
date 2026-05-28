@@ -4706,7 +4706,14 @@ export default function InvoiceManagement() {
   const exportClientPdf = async (client = selectedClient, amountOverride?: number, txnCountOverride?: number) => {
     if (!client) return;
     try {
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
+      const latestInvoice = (client.invoiceHistory || [])[0];
+      const serialInfo = latestInvoice
+        ? {
+            invoiceNumber: getInvoiceDisplayNumber(latestInvoice),
+            financialYear: latestInvoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+            serial: Number(latestInvoice.serial || 0),
+          }
+        : getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
       const exportAmount =
         typeof amountOverride === "number" && amountOverride > 0
           ? amountOverride
@@ -4715,10 +4722,10 @@ export default function InvoiceManagement() {
         client,
         companyConfig,
         invoiceNumber: serialInfo.invoiceNumber,
-        generatedDate: new Date().toISOString().split("T")[0],
+        generatedDate: latestInvoice?.generatedDate || new Date().toISOString().split("T")[0],
         amount: exportAmount,
-        status: "Waiting for approval",
-        month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+        status: latestInvoice?.status || "Waiting for approval",
+        month: latestInvoice?.month || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
         financialYear: serialInfo.financialYear,
         serial: serialInfo.serial,
         taxConfig,
@@ -4733,15 +4740,22 @@ export default function InvoiceManagement() {
   const exportClientDocx = async (client = selectedClient) => {
     if (!client) return;
     try {
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
+      const latestInvoice = (client.invoiceHistory || [])[0];
+      const serialInfo = latestInvoice
+        ? {
+            invoiceNumber: getInvoiceDisplayNumber(latestInvoice),
+            financialYear: latestInvoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+            serial: Number(latestInvoice.serial || 0),
+          }
+        : getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
       await downloadInvoiceDocxTemplate({
         client,
         companyConfig,
         invoiceNumber: serialInfo.invoiceNumber,
-        generatedDate: new Date().toISOString().split("T")[0],
+        generatedDate: latestInvoice?.generatedDate || new Date().toISOString().split("T")[0],
         amount: client.monthlyInvoiceEstimate,
-        status: "Waiting for approval",
-        month: new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
+        status: latestInvoice?.status || "Waiting for approval",
+        month: latestInvoice?.month || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" }),
         financialYear: serialInfo.financialYear,
         serial: serialInfo.serial,
         taxConfig,

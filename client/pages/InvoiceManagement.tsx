@@ -5069,11 +5069,11 @@ export default function InvoiceManagement() {
       // For editing: use clientId (unique identifier), for new: use code as identifier
       const clientId = payload.clientId || trimmedCode.toLowerCase();
       const baseId = clientId || payload.id || `client-${Date.now()}`;
-      const savedPrefix = normalizeInlineText(payload.invoicePrefix || invoiceSerialConfig.prefix);
-      const existingSharedSerial = savedPrefix
+      const resolvedInvoicePrefix = normalizeInlineText(payload.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
+      const existingSharedSerial = resolvedInvoicePrefix
         ? getSharedInvoiceSerialCurrent(
             clients,
-            savedPrefix,
+            resolvedInvoicePrefix,
             getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
           )
         : 0;
@@ -5108,7 +5108,7 @@ export default function InvoiceManagement() {
         aws: payload.aws,
         notes: payload.notes,
         signatoryImage: payload.signatoryImage,
-        invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
+        invoicePrefix: resolvedInvoicePrefix,
         invoiceCurrentSerial: resolvedInvoiceSerial,
         invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
         gstin: payload.gstin,
@@ -5168,8 +5168,8 @@ export default function InvoiceManagement() {
           billingEmail: payload.billingEmail,
           signatoryName: payload.signatoryName,
           signatoryImage: payload.signatoryImage,
-          invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
-        invoiceCurrentSerial: resolvedInvoiceSerial,
+          invoicePrefix: resolvedInvoicePrefix,
+          invoiceCurrentSerial: resolvedInvoiceSerial,
           clientType: payload.clientType || "Domestic",
           currency: payload.clientCurrency || "INR",
           notes: payload.notes,
@@ -5201,17 +5201,16 @@ export default function InvoiceManagement() {
             client.id === payload.id ||
             client.clientId === payload.clientId,
         );
-        const savedPrefix = normalizeInlineText(payload.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
         return exists
           ? prev.map((client) => {
               const clientPrefix = normalizeInlineText(client.invoicePrefix).toUpperCase();
               if (client.id === baseId || client.clientId === baseId || client.id === payload.id || client.clientId === payload.clientId) {
                 return nextClient;
               }
-              if (savedPrefix && clientPrefix === savedPrefix) {
+              if (resolvedInvoicePrefix && clientPrefix === resolvedInvoicePrefix) {
                 return {
                   ...client,
-                  invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
+                  invoicePrefix: resolvedInvoicePrefix,
                   invoiceCurrentSerial: resolvedInvoiceSerial,
                 };
               }

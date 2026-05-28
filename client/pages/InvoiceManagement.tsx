@@ -5778,6 +5778,7 @@ export default function InvoiceManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PREFIX/FY/SEQ">Prefix / FY / Serial</SelectItem>
+                  <SelectItem value="PREFIX/SEQ/FY">Prefix / Serial / FY</SelectItem>
                   <SelectItem value="PREFIX-FY-SEQ">Prefix-FY-Serial</SelectItem>
                   <SelectItem value="FY/SEQ">FY / Serial</SelectItem>
                 </SelectContent>

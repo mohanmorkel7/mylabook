@@ -2121,11 +2121,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
   }));
 
   const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
-  const billingModel = getBillingModel(client);
   if (savedRows.length > 0) {
-    return savedRows
-      .filter((row) => billingModel === "mmc" || row.id !== "mmc-core")
-      .map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
+    return savedRows.map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
   }
 
   if (billingModel === "mmc") {

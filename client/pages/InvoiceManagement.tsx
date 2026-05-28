@@ -1852,7 +1852,7 @@ function getInvoiceNumberForClient(
     const prefixKey = normalizeInlineText(prefix).toUpperCase();
     const prefixConfig = prefixSerialConfigs[prefixKey];
     const currentSerial = getSharedInvoiceSerialCurrent(clients, prefix, financialYear);
-    const serial = currentSerial + 1;
+    const serial = currentSerial > 0 ? currentSerial : 1;
     const serialPart = formatInvoiceSerial(serial, config.serialDigits);
     const period = prefixConfig?.period || financialYear;
     return {
@@ -4873,7 +4873,7 @@ export default function InvoiceManagement() {
           return {
             ...item,
             lastInvoiceGenerated: generatedDate,
-            invoiceCurrentSerial: serialInfo.serial,
+            invoiceCurrentSerial: serialInfo.serial + 1,
             invoiceHistory: item.id === client.id ? [nextInvoice, ...(item.invoiceHistory || [])] : item.invoiceHistory || [],
           };
         }),
@@ -4890,7 +4890,7 @@ export default function InvoiceManagement() {
             ...prev,
             [generatedPrefix]: {
               ...existing,
-              currentSerial: serialInfo.serial,
+              currentSerial: serialInfo.serial + 1,
               period: existing.applyPeriodToAllPrefixes ? serialInfo.financialYear : existing.period || serialInfo.financialYear,
             },
           };
@@ -4905,7 +4905,7 @@ export default function InvoiceManagement() {
       if (!generatedPrefix) {
         setInvoiceSerialState({
           financialYear: serialInfo.financialYear,
-          serial: serialInfo.serial,
+          serial: serialInfo.serial + 1,
           lastIssuedAt: new Date().toISOString(),
         });
       }
@@ -5560,6 +5560,15 @@ export default function InvoiceManagement() {
                   <Label>Status</Label>
                   <Input value={invoiceModalMode === "edit" ? "Generated" : "Waiting for approval"} readOnly />
                 </div>
+              </div>
+              <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-foreground">Invoice Number Preview:</span>
+                  <span className="font-mono text-foreground">{buildInvoiceNumber({ ...invoiceSerialConfig, prefix: selectedPrefixKey || invoiceSerialConfig.prefix }, selectedPrefixSettings.period || selectedPrefixDefaultPeriod, Number(selectedPrefixSettings.currentSerial || 0))}</span>
+                </div>
+                <p className="mt-2 text-xs">
+                  Current serial used for this prefix is shown above and will be printed in the PDF.
+                </p>
               </div>
               <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                 {invoiceModalMode === "edit"

@@ -4018,6 +4018,7 @@ export default function InvoiceManagement() {
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [pendingDeleteClient, setPendingDeleteClient] = useState<{ clientIdToDelete: string; clientName: string } | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [invoiceModalMode, setInvoiceModalMode] = useState<"create" | "edit">("create");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
@@ -5151,6 +5152,17 @@ export default function InvoiceManagement() {
     }
   };
 
+  const requestDeleteClient = (client: ClientRecord) => {
+    setPendingDeleteClient({ clientIdToDelete: client.id, clientName: client.name });
+  };
+
+  const confirmDeleteClient = async () => {
+    if (!pendingDeleteClient) return;
+    const { clientIdToDelete } = pendingDeleteClient;
+    setPendingDeleteClient(null);
+    await handleDeleteClient(clientIdToDelete);
+  };
+
   const pageTitle = isCreateRoute ? "Create Config" : isEditRoute ? "Edit Config" : isOverviewRoute ? "Client Overview" : "Invoice Management";
 
   if (isCreateRoute || isEditRoute) {
@@ -5928,7 +5940,7 @@ export default function InvoiceManagement() {
                   key={client.clientId || client.id}
                   client={client}
                   onEdit={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}/edit`)}
-                  onDelete={() => handleDeleteClient(client.id)}
+                  onDelete={() => requestDeleteClient(client)}
                   onOverview={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}`)}
                 />
               ))}
@@ -5945,6 +5957,28 @@ export default function InvoiceManagement() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(pendingDeleteClient)} onOpenChange={(open) => !open && setPendingDeleteClient(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Are you Sure?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete <span className="font-medium text-foreground">{pendingDeleteClient?.clientName || "this client"}</span> and its configuration.
+            </p>
+            <Separator />
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setPendingDeleteClient(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => void confirmDeleteClient()}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-muted/60 shadow-sm">
         <CardHeader>

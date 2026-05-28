@@ -3098,6 +3098,11 @@ function ClientOverviewScreen({
   }, [client.id, client.billingYear, client.mmcInvoiceTitle]);
 
   useEffect(() => {
+    if (getBillingModel(client) === "mmc") {
+      setOverviewRows(buildOverviewInvoiceRows(client, txnInput, false, taxConfig));
+      return;
+    }
+
     setOverviewRows((prev) =>
       prev.map((row) => {
         if (row.id !== "variable-slab") return row;
@@ -3109,7 +3114,7 @@ function ClientOverviewScreen({
         return applyOverviewRowTaxes({ ...row, amount: transactionBased ? variableCharge : 0 }, resolvedTaxType, taxConfig);
       }),
     );
-  }, [txnInput, transactionBased, resolvedTaxType, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws, client.gstin]);
+  }, [txnInput, transactionBased, resolvedTaxType, taxConfig, client]);
 
   useEffect(() => {
     setOverviewRows((prev) => prev.map((row) => applyOverviewRowTaxes(row, taxType, taxConfig)));

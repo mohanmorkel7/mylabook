@@ -707,6 +707,7 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   mmcYear1?: number;
   mmcYear2?: number;
   mmcYear3?: number;
+  mmcInvoiceTitle?: string;
   transactionFeeRate?: number;
   vapMipConnectivityFee?: number;
   changeManagementFeeRate?: number;
@@ -1330,7 +1331,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const setupRows = breakdown.setupFeeDue > 0 ? [makeRow({ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue, useConfigHsn: false })] : [];
 
   if (getBillingModel(client) === "mmc") {
-    const mmcLabel = `MMC (Year ${client.billingYear || 1}) or Transaction Fee whichever is higher`;
+    const mmcLabel = `${getMmcInvoiceTitle(client)} or Transaction Fee whichever is higher`;
     const coreCommercial = Math.max(invoiceAmount - breakdown.setupFeeDue - breakdown.customRowsTotal, 0);
     return [
       ...setupRows,
@@ -2065,6 +2066,25 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     return savedRows.map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
   }
 
+  if (getBillingModel(client) === "mmc") {
+    const mmcRow: OverviewInvoiceRow = {
+      id: "mmc-core",
+      kind: "derived",
+      narration: `${getMmcInvoiceTitle(client)} or Transaction Fee whichever is higher`,
+      amount: Math.max(breakdown.transactionBase, breakdown.mmcFloor),
+      hsn: "",
+      rate: defaultRate,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: false,
+      narrationMode: "title",
+      exportEnabled: Math.max(breakdown.transactionBase, breakdown.mmcFloor) !== 0,
+    };
+    return [...baseRows, mmcRow, ...customRows].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
+  }
+
   return [...baseRows, ...customRows].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
 }
 
@@ -2093,6 +2113,11 @@ function getActiveMmcAmount(client: ClientRecord): number {
   if (year >= 3) return Number(client.mmcYear3 || client.mmcYear2 || client.mmcYear1 || 0);
   if (year === 2) return Number(client.mmcYear2 || client.mmcYear1 || 0);
   return Number(client.mmcYear1 || 0);
+}
+
+function getMmcInvoiceTitle(client: ClientRecord): string {
+  const year = client.billingYear || 1;
+  return normalizeInlineText(client.mmcInvoiceTitle) || `MMC (Year ${year})`;
 }
 
 function calculateInvoiceCommercials(client: ClientRecord, txnCount: number) {
@@ -2913,6 +2938,7 @@ function ClientOverviewScreen({
   const [mmcWinnerLabel, setMmcWinnerLabel] = useState("wins");
   const [mmcNetworkNote, setMmcNetworkNote] = useState(client.networkCertificationNote || "To be borne by client/bank as per actuals");
   const [mmcInfraNote, setMmcInfraNote] = useState(client.infraCostNote || "To be borne by client/bank as per actuals");
+  const [mmcInvoiceTitle, setMmcInvoiceTitle] = useState(() => getMmcInvoiceTitle(client));
 
   useEffect(() => {
     setTxnInput(client.monthlyTransactionVolume);
@@ -2928,6 +2954,10 @@ function ClientOverviewScreen({
         : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType, useConfigHsn: false }],
     );
   }, [client.id, client.clientType, client.customInvoiceRows]);
+
+  useEffect(() => {
+    setMmcInvoiceTitle(getMmcInvoiceTitle(client));
+  }, [client.id, client.billingYear, client.mmcInvoiceTitle]);
 
   useEffect(() => {
     setOverviewRows((prev) =>
@@ -3061,6 +3091,7 @@ function ClientOverviewScreen({
       invoiceTableConfig: normalizedRows,
       networkCertificationNote: mmcNetworkNote,
       infraCostNote: mmcInfraNote,
+      mmcInvoiceTitle,
     });
   };
 
@@ -3079,24 +3110,6 @@ function ClientOverviewScreen({
   });
   const priority = getPriorityForScoring(client);
 
-  useEffect(() => {
-    setMmcNetworkNote(client.networkCertificationNote || "To be borne by client/bank as per actuals");
-    setMmcInfraNote(client.infraCostNote || "To be borne by client/bank as per actuals");
-    setEditMmcTexts(false);
-    setMmcSectionTitle("MMC (Monthly Minimum Commitment) Configuration");
-    setMmcSectionDescription("Bill whichever is higher: MMC floor or Transaction-based amount.");
-    setMmcSetupFeeLabel("Onetime Setup Fee");
-    setMmcTransactionFeeLabel("Transaction Fee");
-    setMmcFloorLabel("MMC (Monthly Minimum Commitment)");
-    setMmcFloorNote("Note: MMC or Transaction fee whichever is higher");
-    setMmcVapLabel("VAP/MIP Connectivity Fee");
-    setMmcChangeLabel("Change Management Fee");
-    setMmcNetworkLabel("Network / Certification / Tools (one time & recurring)");
-    setMmcInfraLabel("Infra Cost & Compliance Certification (if dedicated setup required)");
-    setMmcCalcTitle("Calculation for current period");
-    setMmcBilledLabel("Billed amount (whichever is higher)");
-    setMmcWinnerLabel("wins");
-  }, [client.id, client.networkCertificationNote, client.infraCostNote]);
 
   return (
     <div className="space-y-6">
@@ -3160,7 +3173,7 @@ function ClientOverviewScreen({
                   onClick={() => setEditMmcTexts((current) => !current)}
                 >
                   <Edit3 className="h-4 w-4" />
-                  {editMmcTexts ? "Done" : "Edit text"}
+                  {editMmcTexts ? "Done" : "Edit title"}
                 </Button>
                 <Badge className="rounded-full bg-blue-600 hover:bg-blue-700">
                   Active Year {client.billingYear || 1}
@@ -3170,66 +3183,11 @@ function ClientOverviewScreen({
           </CardHeader>
           {editMmcTexts && (
             <CardContent className="pt-0">
-              <div className="grid gap-3 rounded-2xl border border-blue-200/70 bg-white/80 p-4 md:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
-                  <Label>MMC section title</Label>
-                  <Input value={mmcSectionTitle} onChange={(e) => setMmcSectionTitle(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>MMC section description</Label>
-                  <Input value={mmcSectionDescription} onChange={(e) => setMmcSectionDescription(e.target.value)} />
-                </div>
+              <div className="rounded-2xl border border-blue-200/70 bg-white/80 p-4">
                 <div className="space-y-2">
-                  <Label>Setup fee label</Label>
-                  <Input value={mmcSetupFeeLabel} onChange={(e) => setMmcSetupFeeLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Transaction fee label</Label>
-                  <Input value={mmcTransactionFeeLabel} onChange={(e) => setMmcTransactionFeeLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>MMC row label</Label>
-                  <Input value={mmcFloorLabel} onChange={(e) => setMmcFloorLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>MMC note text</Label>
-                  <Input value={mmcFloorNote} onChange={(e) => setMmcFloorNote(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>VAP / MIP label</Label>
-                  <Input value={mmcVapLabel} onChange={(e) => setMmcVapLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Change management label</Label>
-                  <Input value={mmcChangeLabel} onChange={(e) => setMmcChangeLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Network / Certification / Tools label</Label>
-                  <Input value={mmcNetworkLabel} onChange={(e) => setMmcNetworkLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Infra Cost / Compliance label</Label>
-                  <Input value={mmcInfraLabel} onChange={(e) => setMmcInfraLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Calculation title</Label>
-                  <Input value={mmcCalcTitle} onChange={(e) => setMmcCalcTitle(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Billed amount label</Label>
-                  <Input value={mmcBilledLabel} onChange={(e) => setMmcBilledLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Winner suffix</Label>
-                  <Input value={mmcWinnerLabel} onChange={(e) => setMmcWinnerLabel(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Network / Certification / Tools note</Label>
-                  <Input value={mmcNetworkNote} onChange={(e) => setMmcNetworkNote(e.target.value)} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Infra Cost / Compliance note</Label>
-                  <Input value={mmcInfraNote} onChange={(e) => setMmcInfraNote(e.target.value)} />
+                  <Label>Invoice title</Label>
+                  <Input value={mmcInvoiceTitle} onChange={(e) => setMmcInvoiceTitle(e.target.value)} placeholder="MMC (Year 1)" />
+                  <p className="text-xs text-muted-foreground">This title is used in the statement of charges table and the generated PDF.</p>
                 </div>
               </div>
             </CardContent>
@@ -3272,7 +3230,7 @@ function ClientOverviewScreen({
                         </TableRow>
                         <TableRow className="bg-blue-50/40">
                           <TableCell className="font-medium">
-                            <div>{mmcFloorLabel}</div>
+                            <div>{getMmcInvoiceTitle(client)} or Transaction Fee whichever is higher</div>
                             <div className="text-xs text-muted-foreground">{mmcFloorNote}</div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -3313,7 +3271,7 @@ function ClientOverviewScreen({
 
                   <div className="rounded-2xl border bg-white p-4 space-y-3">
                     <p className="text-sm font-semibold text-blue-900">
-                      {mmcCalcTitle} ({txnVolume.toLocaleString("en-IN")} transactions)
+                      Statement of Charges ({txnVolume.toLocaleString("en-IN")} transactions)
                     </p>
                     <div className="grid gap-2 text-sm md:grid-cols-2">
                       <div className="rounded-xl bg-muted/30 p-3">
@@ -4603,6 +4561,7 @@ export default function InvoiceManagement() {
             invoiceTableConfig: client.invoiceTableConfig || [],
             invoicePrefix: client.invoicePrefix || "",
             invoiceCurrentSerial: Number(client.invoiceCurrentSerial || 0),
+            mmcInvoiceTitle: client.mmcInvoiceTitle || "",
           }));
           console.log("[InvoiceManagement] Mapped clients:", dbClients);
           setClients(dbClients);
@@ -4904,6 +4863,7 @@ export default function InvoiceManagement() {
               color: data.color,
               invoicePrefix: data.invoicePrefix,
               invoiceCurrentSerial: Number(data.invoiceCurrentSerial || 0),
+              mmcInvoiceTitle: data.mmcInvoiceTitle || "",
               transactionSlabs: data.transactionSlabs || [],
               aws: data.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
               notes: data.notes,
@@ -5624,6 +5584,7 @@ export default function InvoiceManagement() {
       const clientId = payload.clientId || trimmedCode.toLowerCase();
       const baseId = clientId || payload.id || `client-${Date.now()}`;
       const resolvedInvoicePrefix = normalizeInlineText(payload.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
+      const resolvedMmcInvoiceTitle = normalizeInlineText(payload.mmcInvoiceTitle) || "";
       const existingClientForPrefix = clients.find(
         (client) =>
           normalizeInlineText(client.invoicePrefix).toUpperCase() === resolvedInvoicePrefix ||
@@ -5664,6 +5625,7 @@ export default function InvoiceManagement() {
         signatoryImage: payload.signatoryImage,
         invoicePrefix: resolvedInvoicePrefix,
         invoiceCurrentSerial: resolvedInvoiceSerial,
+        mmcInvoiceTitle: resolvedMmcInvoiceTitle,
         invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
         gstin: payload.gstin,
         lutNumber: payload.lutNumber,
@@ -5724,6 +5686,7 @@ export default function InvoiceManagement() {
           signatoryImage: payload.signatoryImage,
           invoicePrefix: resolvedInvoicePrefix,
           invoiceCurrentSerial: resolvedInvoiceSerial,
+          mmcInvoiceTitle: resolvedMmcInvoiceTitle,
           clientType: payload.clientType || "Domestic",
           currency: payload.clientCurrency || "INR",
           notes: payload.notes,
@@ -5766,6 +5729,7 @@ export default function InvoiceManagement() {
                   ...client,
                   invoicePrefix: resolvedInvoicePrefix,
                   invoiceCurrentSerial: resolvedInvoiceSerial,
+                  mmcInvoiceTitle: resolvedMmcInvoiceTitle,
                 };
               }
               return client;

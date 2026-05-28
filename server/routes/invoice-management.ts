@@ -133,6 +133,7 @@ export async function initializeInvoiceSchema() {
         invoice_table_config  TEXT,
         invoice_prefix        TEXT,
         invoice_current_serial TEXT,
+        mmc_invoice_title     TEXT,
         last_invoice_generated TEXT,
         logo                  TEXT,
         logo_class            TEXT,
@@ -175,6 +176,7 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS invoice_table_config TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS invoice_prefix TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS invoice_current_serial TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS mmc_invoice_title TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS signatory_image TEXT`);
       console.log("[Invoice] ✓ Added missing columns to invoice_clients");
     } catch (err) {
@@ -301,6 +303,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         invoiceTableConfig: safeParseJson(cachedClient.invoice_table_config, []),
         invoicePrefix: cachedClient.invoice_prefix || "",
         invoiceCurrentSerial: parseInt(cachedClient.invoice_current_serial || "0"),
+        mmcInvoiceTitle: cachedClient.mmc_invoice_title || "",
         lastInvoiceGenerated: cachedClient.last_invoice_generated,
         logo: cachedClient.logo,
         logoClass: cachedClient.logo_class,
@@ -472,6 +475,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       invoiceTableConfig,
       invoicePrefix,
       invoiceCurrentSerial,
+      mmcInvoiceTitle,
       lastInvoiceGenerated,
       logo,
       logoClass,
@@ -504,6 +508,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       invoice_table_config,
       invoice_prefix,
       invoice_current_serial,
+      mmc_invoice_title,
       last_invoice_generated, logo, logo_class, color,
       gstin, lut_number, billing_address, billing_email, signatory_name, signatory_image,
       client_type, currency, notes, transaction_slabs, aws_config
@@ -594,6 +599,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(JSON.stringify(Array.isArray(invoiceTableConfig) ? invoiceTableConfig : [])),
       encrypt(String(invoicePrefix || "")),
       encrypt(String(invoiceCurrentSerial || 0)),
+      encrypt(String(mmcInvoiceTitle || "")),
       encrypt(lastInvoiceGenerated),
       encrypt(logo),
       encrypt(logoClass),
@@ -647,6 +653,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       invoice_table_config: Array.isArray(invoiceTableConfig) ? invoiceTableConfig : [],
       invoice_prefix: String(invoicePrefix || ""),
       invoice_current_serial: String(invoiceCurrentSerial || 0),
+      mmc_invoice_title: String(mmcInvoiceTitle || ""),
       last_invoice_generated: lastInvoiceGenerated,
       logo: logo,
       logo_class: logoClass,
@@ -756,8 +763,9 @@ router.get("/clients", async (req: Request, res: Response) => {
           customInvoiceRows: safeParseJson(client.custom_invoice_rows, []),
           invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
           invoicePrefix: decrypt(client.invoice_prefix),
-          invoiceCurrentSerial: parseInt(decrypt(client.invoice_current_serial) || "0"),
-          lastInvoiceGenerated: decrypt(client.last_invoice_generated),
+        invoiceCurrentSerial: parseInt(decrypt(client.invoice_current_serial) || "0"),
+        mmcInvoiceTitle: decrypt(client.mmc_invoice_title) || "",
+        lastInvoiceGenerated: decrypt(client.last_invoice_generated),
           logo: decrypt(client.logo),
           logoClass: decrypt(client.logo_class),
           color: decrypt(client.color),
@@ -812,6 +820,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
       invoicePrefix: client.invoice_prefix,
       invoiceCurrentSerial: parseInt(client.invoice_current_serial || "0"),
+      mmcInvoiceTitle: client.mmc_invoice_title || "",
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,
@@ -878,6 +887,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       invoiceTableConfig: safeParseJson(client.invoice_table_config, []),
       invoicePrefix: client.invoice_prefix,
       invoiceCurrentSerial: parseInt(client.invoice_current_serial || "0"),
+      mmcInvoiceTitle: client.mmc_invoice_title || "",
       lastInvoiceGenerated: client.last_invoice_generated,
       logo: client.logo,
       logoClass: client.logo_class,

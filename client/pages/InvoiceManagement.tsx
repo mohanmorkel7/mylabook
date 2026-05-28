@@ -2191,10 +2191,10 @@ function getMmcFixedChargesTotal(client: ClientRecord) {
 function getMmcFixedChargeDetailLines(client: ClientRecord) {
   const base = Number(client.fixedBilling || getActiveMmcAmount(client) || 0);
   return [
-    `Fixed Amount: ${formatCurrency(base, client.currency || "INR")}`,
-    `Additional Platform Fee: ${formatCurrency(Number(client.additionalPlatformFee || 0), client.currency || "INR")}`,
-    `Integration Fee: ${formatCurrency(Number(client.integrationFee || 0), client.currency || "INR")}`,
-  ];
+    base !== 0 ? `Fixed Amount: ${formatCurrency(base, client.currency || "INR")}` : null,
+    Number(client.additionalPlatformFee || 0) !== 0 ? `Additional Platform Fee: ${formatCurrency(Number(client.additionalPlatformFee || 0), client.currency || "INR")}` : null,
+    Number(client.integrationFee || 0) !== 0 ? `Integration Fee: ${formatCurrency(Number(client.integrationFee || 0), client.currency || "INR")}` : null,
+  ].filter(Boolean) as string[];
 }
 
 function formatTxnCountCompact(value: number) {

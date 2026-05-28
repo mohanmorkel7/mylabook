@@ -1396,7 +1396,9 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
 }
 
 function getClientDisplayBillingName(client: ClientRecord) {
-  return client.name;
+  const name = normalizeInlineText(client.name);
+  if (!name) return "—";
+  return name.toLowerCase().startsWith("m/s.") ? name : `M/s. ${name}`;
 }
 
 function normalizeInlineText(value: string | undefined | null) {

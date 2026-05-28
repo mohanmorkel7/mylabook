@@ -1695,10 +1695,10 @@ async function downloadInvoicePdfTemplate({
   doc.text("AMOUNT", colPositions.total + columns.total - 3, cursorY + 5.2, { align: "right" });
   cursorY += headerH;
 
-  doc.setLineHeightFactor(1.18);
+  doc.setLineHeightFactor(1.3);
   lineItems.forEach((item, idx) => {
-    const narrationLines = wrapParagraph(item.description, columns.narration - 5);
-    const rowH = Math.max(12, narrationLines.length * 4.8 + 6);
+    const narrationLines = wrapParagraph(item.description, columns.narration - 4);
+    const rowH = Math.max(12, narrationLines.length * 5.2 + 7);
     ensureSpace(rowH + 2);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
@@ -1728,7 +1728,7 @@ async function downloadInvoicePdfTemplate({
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.9);
-    doc.text(narrationLines, colPositions.narration + 7, cursorY + 5.2, { align: "left", baseline: "top" });
+    doc.text(narrationLines, colPositions.narration + 9, cursorY + 5.4, { align: "left", baseline: "top" });
 
     doc.setFont("helvetica", "bold");
     doc.text(formatInvoiceAmount(item.amount, invoiceCurrency), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
@@ -2125,7 +2125,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     const mmcRow: OverviewInvoiceRow = {
       id: "mmc-core",
       kind: "derived",
-      narration: `${getMmcInvoiceTitle(client)} or Transaction Fee whichever is higher`,
+      narration: transactionBreakdown.detailLines.join("\n"),
       amount: Math.max(breakdown.transactionBase, breakdown.mmcFloor),
       hsn: "",
       rate: defaultRate,
@@ -2134,7 +2134,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       igst: 0,
       align: "left",
       editable: false,
-      narrationMode: "title",
+      narrationMode: "multiline",
       exportEnabled: Math.max(breakdown.transactionBase, breakdown.mmcFloor) !== 0,
     };
     return [applyOverviewRowTaxes(mmcRow, defaultTaxType, taxConfig)];

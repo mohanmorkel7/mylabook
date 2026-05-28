@@ -2233,9 +2233,11 @@ function getMmcTransactionChargeBreakdown(client: ClientRecord, txnCount: number
     const slabAmount = Math.round(covered * Number(slab.rate || 0) * unitMultiplier);
     amount += slabAmount;
 
-    const fromLabel = from === 0 ? "Minimum Guarantee" : `From ${formatTxnCountCompact(from)}`;
-    const toLabel = Number.isFinite(slabEnd) ? `to ${formatTxnCountCompact(slabEnd)} Txn` : `above ${formatTxnCountCompact(from)} Txn`;
-    const rangeLabel = from === 0 ? `${fromLabel} (${formatTxnCountCompact(Number(slab.to || 0))} Txn)` : `${fromLabel} ${toLabel}`;
+    if (slabAmount <= 0) return;
+
+    const startLabel = from === 0 ? "Minimum Guarantee" : `From ${formatTxnCountCompact(from)}`;
+    const endLabel = Number.isFinite(slabEnd) ? `${formatTxnCountCompact(slabEnd)} Txn` : `Above ${formatTxnCountCompact(from)} Txn`;
+    const rangeLabel = from === 0 ? `${startLabel} (${endLabel})` : `${startLabel} to ${endLabel}`;
     slabLines.push(`${rangeLabel}\n${covered.toLocaleString("en-IN")} × ${Number(slab.rate || 0).toFixed(2)} = ${formatCurrency(slabAmount, client.currency || "INR")}`);
   });
 

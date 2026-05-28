@@ -1961,13 +1961,13 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
   const billingModel = getBillingModel(client);
 
   if (billingModel === "mmc") {
-    const mmcFloor = getActiveMmcAmount(client);
+    const mmcFloor = getMmcFixedChargesTotal(client);
     const transactionBreakdown = getMmcTransactionChargeBreakdown(client, txnCount);
     return [
       {
         id: "mmc-floor",
         kind: "derived",
-        narration: getMmcMinimumGuaranteeLabel(client),
+        narration: [getMmcMinimumGuaranteeLabel(client), ...getMmcFixedChargeDetailLines(client)].join("\n"),
         amount: mmcFloor,
         hsn: "",
         rate: defaultRate,
@@ -1976,7 +1976,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
         igst: 0,
         align: "left",
         editable: false,
-        narrationMode: "title",
+        narrationMode: "multiline",
         exportEnabled: mmcFloor !== 0,
       },
       {
@@ -2183,6 +2183,20 @@ function getMmcMinimumGuaranteeLabel(client: ClientRecord): string {
   return `Minimum Guarantee (Year ${client.billingYear || 1})`;
 }
 
+function getMmcFixedChargesTotal(client: ClientRecord) {
+  const base = Number(client.fixedBilling || getActiveMmcAmount(client) || 0);
+  return base + Number(client.additionalPlatformFee || 0) + Number(client.integrationFee || 0);
+}
+
+function getMmcFixedChargeDetailLines(client: ClientRecord) {
+  const base = Number(client.fixedBilling || getActiveMmcAmount(client) || 0);
+  return [
+    `Fixed Amount: ${formatCurrency(base, client.currency || "INR")}`,
+    `Additional Platform Fee: ${formatCurrency(Number(client.additionalPlatformFee || 0), client.currency || "INR")}`,
+    `Integration Fee: ${formatCurrency(Number(client.integrationFee || 0), client.currency || "INR")}`,
+  ];
+}
+
 function formatTxnCountCompact(value: number) {
   const count = Number(value || 0);
   if (!count) return "0";
@@ -2243,7 +2257,7 @@ function formatMmcTransactionDetails(client: ClientRecord, txnCount: number) {
 
 function calculateInvoiceCommercials(client: ClientRecord, txnCount: number) {
   if (getBillingModel(client) === "mmc") {
-    const mmcFloor = getActiveMmcAmount(client);
+    const mmcFloor = getMmcFixedChargesTotal(client);
     const transactionBase = getMmcTransactionChargeBreakdown(client, txnCount).amount;
     const coreCommercial = Math.max(transactionBase, mmcFloor);
     return {

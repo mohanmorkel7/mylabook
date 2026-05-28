@@ -1851,8 +1851,8 @@ function getInvoiceNumberForClient(
     const prefix = normalizeInlineText(client.invoicePrefix) || config.prefix;
     const prefixKey = normalizeInlineText(prefix).toUpperCase();
     const prefixConfig = prefixSerialConfigs[prefixKey];
-    const currentSerial = getSharedInvoiceSerialCurrent(clients, prefix, financialYear);
-    const serial = currentSerial > 0 ? currentSerial : 1;
+    const currentSerial = Number(prefixConfig?.currentSerial ?? client.invoiceCurrentSerial ?? 0);
+    const serial = currentSerial > 0 ? currentSerial + 1 : 1;
     const serialPart = formatInvoiceSerial(serial, config.serialDigits);
     const period = prefixConfig?.period || financialYear;
     return {
@@ -4412,7 +4412,12 @@ export default function InvoiceManagement() {
       for (const prefix of invoicePrefixOptions) {
         const normalizedPrefix = normalizeInlineText(prefix).toUpperCase();
         if (!normalizedPrefix) continue;
-        const currentSerial = getSharedInvoiceSerialCurrent(clients, normalizedPrefix, selectedPrefixDefaultPeriod);
+        const currentSerial = Math.max(
+          ...clients
+            .filter((client) => normalizeInlineText(client.invoicePrefix).toUpperCase() === normalizedPrefix)
+            .map((client) => Number(client.invoiceCurrentSerial || 0)),
+          0,
+        );
         const existing = next[normalizedPrefix];
         if (!existing) {
           next[normalizedPrefix] = {
@@ -4873,7 +4878,7 @@ export default function InvoiceManagement() {
           return {
             ...item,
             lastInvoiceGenerated: generatedDate,
-            invoiceCurrentSerial: serialInfo.serial + 1,
+            invoiceCurrentSerial: serialInfo.serial,
             invoiceHistory: item.id === client.id ? [nextInvoice, ...(item.invoiceHistory || [])] : item.invoiceHistory || [],
           };
         }),
@@ -4890,7 +4895,7 @@ export default function InvoiceManagement() {
             ...prev,
             [generatedPrefix]: {
               ...existing,
-              currentSerial: serialInfo.serial + 1,
+              currentSerial: serialInfo.serial,
               period: existing.applyPeriodToAllPrefixes ? serialInfo.financialYear : existing.period || serialInfo.financialYear,
             },
           };
@@ -4905,7 +4910,7 @@ export default function InvoiceManagement() {
       if (!generatedPrefix) {
         setInvoiceSerialState({
           financialYear: serialInfo.financialYear,
-          serial: serialInfo.serial + 1,
+          serial: serialInfo.serial,
           lastIssuedAt: new Date().toISOString(),
         });
       }
@@ -5228,14 +5233,14 @@ export default function InvoiceManagement() {
       const clientId = payload.clientId || trimmedCode.toLowerCase();
       const baseId = clientId || payload.id || `client-${Date.now()}`;
       const resolvedInvoicePrefix = normalizeInlineText(payload.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
-      const existingSharedSerial = resolvedInvoicePrefix
-        ? getSharedInvoiceSerialCurrent(
-            clients,
-            resolvedInvoicePrefix,
-            getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
-          )
-        : 0;
-      const resolvedInvoiceSerial = Math.max(existingSharedSerial, Number(payload.invoiceCurrentSerial || 0));
+      const existingClientForPrefix = clients.find(
+        (client) =>
+          normalizeInlineText(client.invoicePrefix).toUpperCase() === resolvedInvoicePrefix ||
+          String(client.clientId || client.id || "").toLowerCase() === String(payload.clientId || payload.id || "").toLowerCase(),
+      );
+      const resolvedInvoiceSerial = Number(
+        payload.invoiceCurrentSerial ?? existingClientForPrefix?.invoiceCurrentSerial ?? 0,
+      );
 
       console.log("[Invoice] saveConfig - payload:", { id: payload.id, clientId: payload.clientId, code: payload.code, baseId });
 

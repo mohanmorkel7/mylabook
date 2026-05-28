@@ -2897,6 +2897,22 @@ function ClientOverviewScreen({
       ? [...client.customInvoiceRows]
       : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType, useConfigHsn: false }],
   );
+  const [editMmcTexts, setEditMmcTexts] = useState(false);
+  const [mmcSectionTitle, setMmcSectionTitle] = useState("MMC (Monthly Minimum Commitment) Configuration");
+  const [mmcSectionDescription, setMmcSectionDescription] = useState("Bill whichever is higher: MMC floor or Transaction-based amount.");
+  const [mmcSetupFeeLabel, setMmcSetupFeeLabel] = useState("Onetime Setup Fee");
+  const [mmcTransactionFeeLabel, setMmcTransactionFeeLabel] = useState("Transaction Fee");
+  const [mmcFloorLabel, setMmcFloorLabel] = useState("MMC (Monthly Minimum Commitment)");
+  const [mmcFloorNote, setMmcFloorNote] = useState("Note: MMC or Transaction fee whichever is higher");
+  const [mmcVapLabel, setMmcVapLabel] = useState("VAP/MIP Connectivity Fee");
+  const [mmcChangeLabel, setMmcChangeLabel] = useState("Change Management Fee");
+  const [mmcNetworkLabel, setMmcNetworkLabel] = useState("Network / Certification / Tools (one time & recurring)");
+  const [mmcInfraLabel, setMmcInfraLabel] = useState("Infra Cost & Compliance Certification (if dedicated setup required)");
+  const [mmcCalcTitle, setMmcCalcTitle] = useState("Calculation for current period");
+  const [mmcBilledLabel, setMmcBilledLabel] = useState("Billed amount (whichever is higher)");
+  const [mmcWinnerLabel, setMmcWinnerLabel] = useState("wins");
+  const [mmcNetworkNote, setMmcNetworkNote] = useState(client.networkCertificationNote || "To be borne by client/bank as per actuals");
+  const [mmcInfraNote, setMmcInfraNote] = useState(client.infraCostNote || "To be borne by client/bank as per actuals");
 
   useEffect(() => {
     setTxnInput(client.monthlyTransactionVolume);
@@ -3043,6 +3059,8 @@ function ClientOverviewScreen({
       customInvoiceRows: customRows,
       monthlyInvoiceEstimate,
       invoiceTableConfig: normalizedRows,
+      networkCertificationNote: mmcNetworkNote,
+      infraCostNote: mmcInfraNote,
     });
   };
 
@@ -3060,6 +3078,25 @@ function ClientOverviewScreen({
     finalPayable,
   });
   const priority = getPriorityForScoring(client);
+
+  useEffect(() => {
+    setMmcNetworkNote(client.networkCertificationNote || "To be borne by client/bank as per actuals");
+    setMmcInfraNote(client.infraCostNote || "To be borne by client/bank as per actuals");
+    setEditMmcTexts(false);
+    setMmcSectionTitle("MMC (Monthly Minimum Commitment) Configuration");
+    setMmcSectionDescription("Bill whichever is higher: MMC floor or Transaction-based amount.");
+    setMmcSetupFeeLabel("Onetime Setup Fee");
+    setMmcTransactionFeeLabel("Transaction Fee");
+    setMmcFloorLabel("MMC (Monthly Minimum Commitment)");
+    setMmcFloorNote("Note: MMC or Transaction fee whichever is higher");
+    setMmcVapLabel("VAP/MIP Connectivity Fee");
+    setMmcChangeLabel("Change Management Fee");
+    setMmcNetworkLabel("Network / Certification / Tools (one time & recurring)");
+    setMmcInfraLabel("Infra Cost & Compliance Certification (if dedicated setup required)");
+    setMmcCalcTitle("Calculation for current period");
+    setMmcBilledLabel("Billed amount (whichever is higher)");
+    setMmcWinnerLabel("wins");
+  }, [client.id, client.networkCertificationNote, client.infraCostNote]);
 
   return (
     <div className="space-y-6">
@@ -3110,18 +3147,93 @@ function ClientOverviewScreen({
       {getBillingModel(client) === "mmc" && (
         <Card className="border-blue-200/50 bg-gradient-to-br from-blue-50/40 to-indigo-50/30 shadow-sm">
           <CardHeader className="space-y-2">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle className="text-blue-900">MMC (Monthly Minimum Commitment) Configuration</CardTitle>
-                <CardDescription>
-                  Bill whichever is higher: MMC floor or Transaction-based amount.
-                </CardDescription>
+                <CardTitle className="text-blue-900">{mmcSectionTitle}</CardTitle>
+                <CardDescription>{mmcSectionDescription}</CardDescription>
               </div>
-              <Badge className="bg-blue-600 hover:bg-blue-700 rounded-full">
-                Active Year {client.billingYear || 1}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 rounded-lg border-blue-200 bg-white/80 text-[12px] text-blue-700 hover:bg-blue-50"
+                  onClick={() => setEditMmcTexts((current) => !current)}
+                >
+                  <Edit3 className="h-4 w-4" />
+                  {editMmcTexts ? "Done" : "Edit text"}
+                </Button>
+                <Badge className="rounded-full bg-blue-600 hover:bg-blue-700">
+                  Active Year {client.billingYear || 1}
+                </Badge>
+              </div>
             </div>
           </CardHeader>
+          {editMmcTexts && (
+            <CardContent className="pt-0">
+              <div className="grid gap-3 rounded-2xl border border-blue-200/70 bg-white/80 p-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>MMC section title</Label>
+                  <Input value={mmcSectionTitle} onChange={(e) => setMmcSectionTitle(e.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>MMC section description</Label>
+                  <Input value={mmcSectionDescription} onChange={(e) => setMmcSectionDescription(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Setup fee label</Label>
+                  <Input value={mmcSetupFeeLabel} onChange={(e) => setMmcSetupFeeLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Transaction fee label</Label>
+                  <Input value={mmcTransactionFeeLabel} onChange={(e) => setMmcTransactionFeeLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>MMC row label</Label>
+                  <Input value={mmcFloorLabel} onChange={(e) => setMmcFloorLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>MMC note text</Label>
+                  <Input value={mmcFloorNote} onChange={(e) => setMmcFloorNote(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>VAP / MIP label</Label>
+                  <Input value={mmcVapLabel} onChange={(e) => setMmcVapLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Change management label</Label>
+                  <Input value={mmcChangeLabel} onChange={(e) => setMmcChangeLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Network / Certification / Tools label</Label>
+                  <Input value={mmcNetworkLabel} onChange={(e) => setMmcNetworkLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Infra Cost / Compliance label</Label>
+                  <Input value={mmcInfraLabel} onChange={(e) => setMmcInfraLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Calculation title</Label>
+                  <Input value={mmcCalcTitle} onChange={(e) => setMmcCalcTitle(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Billed amount label</Label>
+                  <Input value={mmcBilledLabel} onChange={(e) => setMmcBilledLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Winner suffix</Label>
+                  <Input value={mmcWinnerLabel} onChange={(e) => setMmcWinnerLabel(e.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Network / Certification / Tools note</Label>
+                  <Input value={mmcNetworkNote} onChange={(e) => setMmcNetworkNote(e.target.value)} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Infra Cost / Compliance note</Label>
+                  <Input value={mmcInfraNote} onChange={(e) => setMmcInfraNote(e.target.value)} />
+                </div>
+              </div>
+            </CardContent>
+          )}
           <CardContent className="space-y-5">
             {(() => {
               const txnFee = Number(client.transactionFeeRate || 0);
@@ -3151,17 +3263,17 @@ function ClientOverviewScreen({
                       </TableHeader>
                       <TableBody>
                         <TableRow>
-                          <TableCell className="font-medium">Onetime Setup Fee</TableCell>
+                          <TableCell className="font-medium">{mmcSetupFeeLabel}</TableCell>
                           <TableCell className="text-right">{currencyLabel(setupFee, client.currency || "INR")}</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell className="font-medium">Transaction Fee</TableCell>
+                          <TableCell className="font-medium">{mmcTransactionFeeLabel}</TableCell>
                           <TableCell className="text-right">INR {txnFee.toFixed(2)} / transaction</TableCell>
                         </TableRow>
                         <TableRow className="bg-blue-50/40">
                           <TableCell className="font-medium">
-                            <div>MMC (Monthly Minimum Commitment)</div>
-                            <div className="text-xs text-muted-foreground">Note: MMC or Transaction fee whichever is higher</div>
+                            <div>{mmcFloorLabel}</div>
+                            <div className="text-xs text-muted-foreground">{mmcFloorNote}</div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className={cn("text-xs", (client.billingYear || 1) === 1 ? "font-semibold text-blue-700" : "text-muted-foreground")}>
@@ -3176,23 +3288,23 @@ function ClientOverviewScreen({
                           </TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell className="font-medium">VAP/MIP Connectivity Fee</TableCell>
+                          <TableCell className="font-medium">{mmcVapLabel}</TableCell>
                           <TableCell className="text-right">{currencyLabel(vapFee, client.currency || "INR")} / month</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell className="font-medium">Change Management Fee</TableCell>
+                          <TableCell className="font-medium">{mmcChangeLabel}</TableCell>
                           <TableCell className="text-right">{currencyLabel(cmRate, client.currency || "INR")} / man-day</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell className="font-medium">Network / Certification / Tools (one time &amp; recurring)</TableCell>
+                          <TableCell className="font-medium">{mmcNetworkLabel}</TableCell>
                           <TableCell className="text-right text-xs italic text-muted-foreground">
-                            {client.networkCertificationNote || "To be borne by client/bank as per actuals"}
+                            {mmcNetworkNote || "To be borne by client/bank as per actuals"}
                           </TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell className="font-medium">Infra Cost &amp; Compliance Certification (if dedicated setup required)</TableCell>
+                          <TableCell className="font-medium">{mmcInfraLabel}</TableCell>
                           <TableCell className="text-right text-xs italic text-muted-foreground">
-                            {client.infraCostNote || "To be borne by client/bank as per actuals"}
+                            {mmcInfraNote || "To be borne by client/bank as per actuals"}
                           </TableCell>
                         </TableRow>
                       </TableBody>
@@ -3201,7 +3313,7 @@ function ClientOverviewScreen({
 
                   <div className="rounded-2xl border bg-white p-4 space-y-3">
                     <p className="text-sm font-semibold text-blue-900">
-                      Calculation for current period ({txnVolume.toLocaleString("en-IN")} transactions)
+                      {mmcCalcTitle} ({txnVolume.toLocaleString("en-IN")} transactions)
                     </p>
                     <div className="grid gap-2 text-sm md:grid-cols-2">
                       <div className="rounded-xl bg-muted/30 p-3">
@@ -3215,10 +3327,10 @@ function ClientOverviewScreen({
                         <div className="mt-1 text-base font-semibold">{currencyLabel(transactionBasedTotal, client.currency || "INR")}</div>
                       </div>
                       <div className="rounded-xl bg-blue-50 p-3 border border-blue-200 md:col-span-2">
-                        <div className="text-xs uppercase tracking-wide text-blue-700">Billed amount (whichever is higher)</div>
+                        <div className="text-xs uppercase tracking-wide text-blue-700">{mmcBilledLabel}</div>
                         <div className="mt-1 flex items-baseline gap-2">
                           <span className="text-lg font-bold text-blue-900">{currencyLabel(billedFloor, client.currency || "INR")}</span>
-                          <span className="text-xs text-blue-700">— {winner} wins</span>
+                          <span className="text-xs text-blue-700">— {winner} {mmcWinnerLabel}</span>
                         </div>
                       </div>
                       <div className="rounded-xl bg-muted/30 p-3">

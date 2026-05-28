@@ -1361,11 +1361,10 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   if (getBillingModel(client) === "mmc") {
     const mmcFloor = getActiveMmcAmount(client);
     const transactionBreakdown = getMmcTransactionChargeBreakdown(client, Number(client.monthlyTransactionVolume || 0));
-    const mmcLabel = `${getMmcInvoiceTitle(client)} or Transaction Fee whichever is higher`;
     return [
       ...setupRows,
       makeRow({ description: getMmcMinimumGuaranteeLabel(client), amount: mmcFloor, useConfigHsn: false }),
-      makeRow({ description: `${mmcLabel}\n${transactionBreakdown.detailLines.join("\n")}`, amount: transactionBreakdown.amount, useConfigHsn: false }),
+      makeRow({ description: transactionBreakdown.detailLines.join("\n"), amount: transactionBreakdown.amount, useConfigHsn: false }),
     ];
   }
 
@@ -1696,10 +1695,10 @@ async function downloadInvoicePdfTemplate({
   doc.text("AMOUNT", colPositions.total + columns.total - 3, cursorY + 5.2, { align: "right" });
   cursorY += headerH;
 
-  doc.setLineHeightFactor(1.08);
+  doc.setLineHeightFactor(1.18);
   lineItems.forEach((item, idx) => {
-    const narrationLines = wrapParagraph(item.description, columns.narration - 6);
-    const rowH = Math.max(11, narrationLines.length * 4.2 + 5);
+    const narrationLines = wrapParagraph(item.description, columns.narration - 5);
+    const rowH = Math.max(12, narrationLines.length * 4.8 + 6);
     ensureSpace(rowH + 2);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
@@ -1729,7 +1728,7 @@ async function downloadInvoicePdfTemplate({
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.9);
-    doc.text(narrationLines, colPositions.narration + 4, cursorY + 4.9, { align: "left", baseline: "top" });
+    doc.text(narrationLines, colPositions.narration + 7, cursorY + 5.2, { align: "left", baseline: "top" });
 
     doc.setFont("helvetica", "bold");
     doc.text(formatInvoiceAmount(item.amount, invoiceCurrency), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
@@ -2218,6 +2217,7 @@ function getMmcTransactionChargeBreakdown(client: ClientRecord, txnCount: number
       detailLines: [
         `Transactions Processed: ${count.toLocaleString("en-IN")}`,
         `Chargeable Amount: ${formatCurrency(amount, client.currency || "INR")}`,
+        "",
       ],
       slabLines: [] as string[],
     };
@@ -2248,6 +2248,7 @@ function getMmcTransactionChargeBreakdown(client: ClientRecord, txnCount: number
     detailLines: [
       `Transactions Processed: ${count.toLocaleString("en-IN")}`,
       `Chargeable Amount: ${formatCurrency(amount, client.currency || "INR")}`,
+      "",
       "Slab-wise Calculation:",
       ...slabLines,
     ],

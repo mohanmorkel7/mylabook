@@ -446,6 +446,32 @@ function getIstNow() {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
 }
 
+function formatInvoiceGeneratedDateTime(value?: string) {
+  if (!value) return "—";
+  const raw = String(value);
+  const date = new Date(raw.includes("T") ? raw : `${raw}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(date);
+
+  const getPart = (type: Intl.DateTimeFormatPart["type"]) => parts.find((part) => part.type === type)?.value || "";
+  const day = getPart("day");
+  const month = getPart("month");
+  const year = getPart("year");
+  const hour = getPart("hour");
+  const minute = getPart("minute");
+  const dayPeriod = getPart("dayPeriod").toUpperCase();
+  return `${day}-${month}-${year} ${hour}:${minute} ${dayPeriod}`.trim();
+}
+
 function getFinancialYearLabel(date = getIstNow(), startMonth = 4) {
   const month = date.getUTCMonth() + 1;
   const year = date.getUTCFullYear();
@@ -743,6 +769,7 @@ interface InvoiceRecord {
   billingModel?: BillingModel;
   invoiceType?: InvoiceType;
   mmcInvoiceTitle?: string;
+  createdAt?: string;
 }
 
 const INVOICES: InvoiceRecord[] = [
@@ -2063,11 +2090,14 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
   }));
 
   const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
+  const billingModel = getBillingModel(client);
   if (savedRows.length > 0) {
-    return savedRows.map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
+    return savedRows
+      .filter((row) => billingModel === "mmc" || row.id !== "mmc-core")
+      .map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
   }
 
-  if (getBillingModel(client) === "mmc") {
+  if (billingModel === "mmc") {
     const mmcRow: OverviewInvoiceRow = {
       id: "mmc-core",
       kind: "derived",
@@ -2501,7 +2531,7 @@ function InvoiceHistoryTable({
           return String(a.client || "").localeCompare(String(b.client || "")) * direction;
         case "generatedDate":
         default:
-          return (new Date(a.generatedDate || 0).getTime() - new Date(b.generatedDate || 0).getTime()) * direction;
+          return (new Date(a.createdAt || a.generatedDate || 0).getTime() - new Date(b.createdAt || b.generatedDate || 0).getTime()) * direction;
       }
     });
   }, [normalizedInvoices, searchTerm, statusFilter, sortField, sortDirection]);
@@ -2594,7 +2624,7 @@ function InvoiceHistoryTable({
                       {showClient && <TableCell className="text-[12px]">{normalizedInvoice.client || "—"}</TableCell>}
                       <TableCell className="text-[12px]">{currencyLabel(normalizedInvoice.amount, currencyCode)}</TableCell>
                       <TableCell><InvoiceStatusBadge status={normalizedInvoice.status} /></TableCell>
-                      <TableCell className="text-[12px]">{normalizedInvoice.generatedDate}</TableCell>
+                      <TableCell className="text-[12px]">{formatInvoiceGeneratedDateTime(normalizedInvoice.createdAt || normalizedInvoice.generatedDate)}</TableCell>
                       <TableCell className="align-top">
                         <InvoiceRowActions
                           invoice={normalizedInvoice}
@@ -4924,7 +4954,12 @@ export default function InvoiceManagement() {
               console.log("[Invoice] Invoice history fetched:", invoiceHistory);
               setClients(prev => prev.map((c) =>
                 (c.clientId === clientId || c.id === clientId)
-                  ? { ...c, invoiceHistory: Array.isArray(invoiceHistory) ? invoiceHistory : [] }
+                  ? {
+                      ...c,
+                      invoiceHistory: Array.isArray(invoiceHistory)
+                        ? invoiceHistory.map((invoice: any) => ({ ...invoice, status: normalizeInvoiceStatus(invoice.status) }))
+                        : [],
+                    }
                   : c
               ));
             });
@@ -4967,7 +5002,7 @@ export default function InvoiceManagement() {
         });
       }
     });
-    return allInvoices.sort((a, b) => new Date(b.generatedDate).getTime() - new Date(a.generatedDate).getTime());
+    return allInvoices.sort((a, b) => new Date(b.createdAt || b.generatedDate || 0).getTime() - new Date(a.createdAt || a.generatedDate || 0).getTime());
   }, [clients]);
 
   const dashboardAnalytics = useMemo(() => {
@@ -5208,6 +5243,7 @@ export default function InvoiceManagement() {
         billingModel: client.billingModel || "transaction",
         invoiceType,
         mmcInvoiceTitle: normalizeInlineText(mmcInvoiceTitleOverride || client.mmcInvoiceTitle || ""),
+        createdAt: new Date().toISOString(),
       };
 
       console.log("[Invoice] generateInvoiceForClient - Next invoice object:", nextInvoice);
@@ -5233,6 +5269,7 @@ export default function InvoiceManagement() {
             billingModel: nextInvoice.billingModel || "transaction",
             invoiceType: nextInvoice.invoiceType || "commercial",
             mmcInvoiceTitle: nextInvoice.mmcInvoiceTitle || "",
+            createdAt: nextInvoice.createdAt || new Date().toISOString(),
           }),
         });
         console.log("[Invoice] generateInvoiceForClient - Successfully saved to database");
@@ -6840,6 +6877,7 @@ export default function InvoiceManagement() {
                       invoiceAmountDraft,
                       txnInput,
                       invoiceDateDraft || new Date().toISOString().split("T")[0],
+                      pendingInvoiceMmcTitle,
                     );
                   }
                   setInvoiceModalOpen(false);

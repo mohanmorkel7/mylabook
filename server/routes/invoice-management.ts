@@ -263,12 +263,13 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         amount: parseInt(decrypt(row.amount) || "0"),
         status: decrypt(row.status),
         generatedDate: decrypt(row.generated_date),
+        createdAt: row.created_at,
         financialYear: decrypt(row.financial_year),
         serial: parseInt(decrypt(row.serial) || "0"),
         billingModel: normalizeBillingModel(decrypt(row.billing_model)),
         invoiceType: String(decrypt(row.invoice_type) || "commercial") as "commercial" | "setup_fee",
-      customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
-      mmcInvoiceTitle: decrypt(row.mmc_invoice_title) || "",
+        customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
+        mmcInvoiceTitle: decrypt(row.mmc_invoice_title) || "",
       }));
     } catch (invoiceErr: any) {
       console.warn("[Invoice] Failed to fetch invoice history for", clientId, invoiceErr?.message);
@@ -988,6 +989,7 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
       amount: parseInt(decrypt(row.amount) || "0"),
       status: decrypt(row.status),
       generatedDate: decrypt(row.generated_date),
+      createdAt: row.created_at,
       financialYear: decrypt(row.financial_year),
       serial: parseInt(decrypt(row.serial) || "0"),
       billingModel: normalizeBillingModel(decrypt(row.billing_model)),

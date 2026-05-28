@@ -243,6 +243,7 @@ const getClientPlaceOfSupply = (client: ClientRecord) =>
 
 const INVOICE_SERIAL_CONFIG_KEY = "invoice-serial-config";
 const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
+const INVOICE_PREFIX_SERIAL_CONFIGS_KEY = "invoice-prefix-serial-configs";
 const COMPANY_CONFIG_KEY = "company-config";
 const TAX_CONFIG_KEY = "tax-config";
 const CURRENCY_CONFIG_KEY = "currency-config";
@@ -347,6 +348,12 @@ interface InvoiceSerialState {
   financialYear: string;
   serial: number;
   lastIssuedAt: string;
+}
+
+interface PrefixSerialConfig {
+  currentSerial: number;
+  period: string;
+  applyPeriodToAllPrefixes: boolean;
 }
 
 interface CompanyConfig {
@@ -469,8 +476,8 @@ function buildInvoiceNumber(
   }
 }
 
-function getCurrentInvoiceNumberPreview(config: InvoiceSerialConfig) {
-  const financialYear = getFinancialYearLabel(
+function getCurrentInvoiceNumberPreview(config: InvoiceSerialConfig, financialYearOverride?: string) {
+  const financialYear = financialYearOverride || getFinancialYearLabel(
     getIstNow(),
     config.financialYearStartMonth,
   );
@@ -1835,18 +1842,22 @@ function getInvoiceNumberForClient(
   config: InvoiceSerialConfig,
   state: InvoiceSerialState,
   clients: ClientRecord[],
+  prefixSerialConfigs: Record<string, PrefixSerialConfig>,
 ) {
   const financialYear = getFinancialYearLabel(getIstNow(), config.financialYearStartMonth);
   const hasClientSerialConfig = Boolean(normalizeInlineText(client.invoicePrefix) || Number(client.invoiceCurrentSerial || 0) > 0);
 
   if (hasClientSerialConfig) {
     const prefix = normalizeInlineText(client.invoicePrefix) || config.prefix;
-    const currentSerial = getSharedInvoiceSerialCurrent(clients, prefix, financialYear);
-    const serial = Math.max(currentSerial, Number(client.invoiceCurrentSerial || 0)) + 1;
+    const prefixKey = normalizeInlineText(prefix).toUpperCase();
+    const prefixConfig = prefixSerialConfigs[prefixKey];
+    const currentSerial = prefixConfig ? Number(prefixConfig.currentSerial || 0) : getSharedInvoiceSerialCurrent(clients, prefix, financialYear);
+    const serial = currentSerial + 1;
     const serialPart = formatInvoiceSerial(serial, config.serialDigits);
+    const period = prefixConfig?.period || financialYear;
     return {
-      invoiceNumber: `${prefix}${config.separator}${serialPart}${config.separator}${financialYear}`,
-      financialYear,
+      invoiceNumber: `${prefix}${config.separator}${serialPart}${config.separator}${period}`,
+      financialYear: period,
       serial,
     };
   }
@@ -4116,6 +4127,15 @@ export default function InvoiceManagement() {
       return { financialYear: getFinancialYearLabel(getIstNow(), DEFAULT_INVOICE_SERIAL_CONFIG.financialYearStartMonth), serial: 0, lastIssuedAt: new Date().toISOString() };
     }
   });
+  const [prefixSerialConfigs, setPrefixSerialConfigs] = useState<Record<string, PrefixSerialConfig>>(() => {
+    try {
+      const raw = localStorage.getItem(INVOICE_PREFIX_SERIAL_CONFIGS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [selectedSerialPrefix, setSelectedSerialPrefix] = useState<string>(DEFAULT_INVOICE_SERIAL_CONFIG.prefix);
 
   const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(() => {
     try {
@@ -4179,6 +4199,12 @@ export default function InvoiceManagement() {
       localStorage.setItem(INVOICE_SERIAL_STATE_KEY, JSON.stringify(invoiceSerialState));
     } catch {}
   }, [invoiceSerialState]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(INVOICE_PREFIX_SERIAL_CONFIGS_KEY, JSON.stringify(prefixSerialConfigs));
+    } catch {}
+  }, [prefixSerialConfigs]);
 
   useEffect(() => {
     try {
@@ -4329,18 +4355,110 @@ export default function InvoiceManagement() {
     const invoicePrefix = normalizeInlineText(found.invoicePrefix);
     if (!invoicePrefix) return found;
 
+    const prefixKey = invoicePrefix.toUpperCase();
+    const configuredSerial = prefixSerialConfigs[prefixKey]?.currentSerial;
+
     return {
       ...found,
-      invoiceCurrentSerial: getSharedInvoiceSerialCurrent(
-        clients,
-        invoicePrefix,
-        getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+      invoiceCurrentSerial: Number(
+        typeof configuredSerial === "number"
+          ? configuredSerial
+          : getSharedInvoiceSerialCurrent(
+              clients,
+              invoicePrefix,
+              getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+            ),
       ),
     };
-  }, [clients, editingClientId, clientId, invoiceSerialConfig.financialYearStartMonth]);
+  }, [clients, editingClientId, clientId, invoiceSerialConfig.financialYearStartMonth, prefixSerialConfigs]);
+
+  const invoicePrefixOptions = useMemo(() => {
+    const values = new Set<string>();
+    const defaultPrefix = normalizeInlineText(invoiceSerialConfig.prefix).toUpperCase();
+    if (defaultPrefix) values.add(defaultPrefix);
+    Object.keys(prefixSerialConfigs).forEach((prefix) => {
+      if (normalizeInlineText(prefix)) values.add(normalizeInlineText(prefix).toUpperCase());
+    });
+    clients.forEach((client) => {
+      const prefix = normalizeInlineText(client.invoicePrefix).toUpperCase();
+      if (prefix) values.add(prefix);
+    });
+    return Array.from(values).sort();
+  }, [clients, invoiceSerialConfig.prefix, prefixSerialConfigs]);
+
+  useEffect(() => {
+    const normalizedSelected = normalizeInlineText(selectedSerialPrefix).toUpperCase();
+    if (invoicePrefixOptions.length === 0) return;
+    if (!normalizedSelected || !invoicePrefixOptions.includes(normalizedSelected)) {
+      const nextPrefix = invoicePrefixOptions[0];
+      setSelectedSerialPrefix(nextPrefix);
+      setInvoiceSerialConfig((prev) => ({ ...prev, prefix: nextPrefix }));
+    }
+  }, [invoicePrefixOptions, selectedSerialPrefix]);
+
+  const selectedPrefixKey = normalizeInlineText(selectedSerialPrefix || invoiceSerialConfig.prefix).toUpperCase();
+  const selectedPrefixDefaultPeriod = getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth);
+  const selectedPrefixSettings = prefixSerialConfigs[selectedPrefixKey] || {
+    currentSerial: getSharedInvoiceSerialCurrent(clients, selectedPrefixKey, selectedPrefixDefaultPeriod),
+    period: selectedPrefixDefaultPeriod,
+    applyPeriodToAllPrefixes: false,
+  };
+
+  useEffect(() => {
+    if (invoicePrefixOptions.length === 0) return;
+    setPrefixSerialConfigs((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const prefix of invoicePrefixOptions) {
+        const normalizedPrefix = normalizeInlineText(prefix).toUpperCase();
+        if (!normalizedPrefix) continue;
+        const currentSerial = getSharedInvoiceSerialCurrent(clients, normalizedPrefix, selectedPrefixDefaultPeriod);
+        const existing = next[normalizedPrefix];
+        if (!existing) {
+          next[normalizedPrefix] = {
+            currentSerial,
+            period: selectedPrefixDefaultPeriod,
+            applyPeriodToAllPrefixes: false,
+          };
+          changed = true;
+          continue;
+        }
+        if (currentSerial > Number(existing.currentSerial || 0)) {
+          next[normalizedPrefix] = { ...existing, currentSerial };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [clients, invoicePrefixOptions, selectedPrefixDefaultPeriod]);
+
+  const updateSelectedPrefixSettings = (updater: (current: PrefixSerialConfig) => PrefixSerialConfig) => {
+    const prefixKey = selectedPrefixKey || normalizeInlineText(invoiceSerialConfig.prefix).toUpperCase();
+    if (!prefixKey) return;
+    setPrefixSerialConfigs((prev) => {
+      const current = prev[prefixKey] || {
+        currentSerial: getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
+        period: selectedPrefixDefaultPeriod,
+        applyPeriodToAllPrefixes: false,
+      };
+      const nextCurrent = updater(current);
+      const next = { ...prev, [prefixKey]: nextCurrent };
+      if (nextCurrent.applyPeriodToAllPrefixes) {
+        Object.keys(next).forEach((key) => {
+          next[key] = { ...next[key], period: nextCurrent.period };
+        });
+      }
+      return next;
+    });
+  };
+
   const invoiceNumberPreview = useMemo(
-    () => getCurrentInvoiceNumberPreview(invoiceSerialConfig),
-    [invoiceSerialConfig],
+    () => buildInvoiceNumber(
+      { ...invoiceSerialConfig, prefix: selectedPrefixKey || invoiceSerialConfig.prefix },
+      selectedPrefixSettings.period || selectedPrefixDefaultPeriod,
+      Number(selectedPrefixSettings.currentSerial || 0) + 1,
+    ),
+    [invoiceSerialConfig, selectedPrefixKey, selectedPrefixSettings.period, selectedPrefixSettings.currentSerial, selectedPrefixDefaultPeriod],
   );
 
   const openInvoiceCreateModal = (client: ClientRecord, amountOverride?: number, txnCountOverride?: number) => {
@@ -4588,7 +4706,7 @@ export default function InvoiceManagement() {
   const exportClientPdf = async (client = selectedClient, amountOverride?: number, txnCountOverride?: number) => {
     if (!client) return;
     try {
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
       const exportAmount =
         typeof amountOverride === "number" && amountOverride > 0
           ? amountOverride
@@ -4615,7 +4733,7 @@ export default function InvoiceManagement() {
   const exportClientDocx = async (client = selectedClient) => {
     if (!client) return;
     try {
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
       await downloadInvoiceDocxTemplate({
         client,
         companyConfig,
@@ -4686,7 +4804,7 @@ export default function InvoiceManagement() {
 
       console.log("[Invoice] generateInvoiceForClient - Generated amount:", generatedAmount);
 
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
       console.log("[Invoice] generateInvoiceForClient - Serial info:", serialInfo);
 
       const nextInvoice: InvoiceRecord = {
@@ -4746,7 +4864,31 @@ export default function InvoiceManagement() {
           };
         }),
       );
-      if (!normalizeInlineText(client.invoicePrefix)) {
+      const generatedPrefix = normalizeInlineText(client.invoicePrefix).toUpperCase();
+      if (generatedPrefix) {
+        setPrefixSerialConfigs((prev) => {
+          const existing = prev[generatedPrefix] || {
+            currentSerial: 0,
+            period: serialInfo.financialYear,
+            applyPeriodToAllPrefixes: false,
+          };
+          const next = {
+            ...prev,
+            [generatedPrefix]: {
+              ...existing,
+              currentSerial: serialInfo.serial,
+              period: existing.applyPeriodToAllPrefixes ? serialInfo.financialYear : existing.period || serialInfo.financialYear,
+            },
+          };
+          if (existing.applyPeriodToAllPrefixes) {
+            Object.keys(next).forEach((key) => {
+              next[key] = { ...next[key], period: serialInfo.financialYear };
+            });
+          }
+          return next;
+        });
+      }
+      if (!generatedPrefix) {
         setInvoiceSerialState({
           financialYear: serialInfo.financialYear,
           serial: serialInfo.serial,
@@ -5220,6 +5362,30 @@ export default function InvoiceManagement() {
             })
           : [nextClient, ...prev];
       });
+      setPrefixSerialConfigs((prev) => {
+        if (!resolvedInvoicePrefix) return prev;
+        const existing = prev[resolvedInvoicePrefix] || {
+          currentSerial: 0,
+          period:
+            prefixSerialConfigs[resolvedInvoicePrefix]?.period ||
+            selectedPrefixSettings.period ||
+            getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+          applyPeriodToAllPrefixes: false,
+        };
+        const next = {
+          ...prev,
+          [resolvedInvoicePrefix]: {
+            ...existing,
+            currentSerial: resolvedInvoiceSerial,
+          },
+        };
+        if (existing.applyPeriodToAllPrefixes) {
+          Object.keys(next).forEach((key) => {
+            next[key] = { ...next[key], period: existing.period };
+          });
+        }
+        return next;
+      });
 
       toast({
         title: `Configuration ${payload.clientId ? "updated" : "created"}`,
@@ -5493,13 +5659,25 @@ export default function InvoiceManagement() {
           <div className="grid gap-4 xl:grid-cols-4">
             <div className="space-y-2">
               <Label>Prefix</Label>
-              <Input
-                value={invoiceSerialConfig.prefix}
-                onChange={(e) =>
-                  setInvoiceSerialConfig((prev) => ({ ...prev, prefix: e.target.value }))
-                }
-                placeholder="MYL"
-              />
+              <Select
+                value={selectedSerialPrefix || invoiceSerialConfig.prefix}
+                onValueChange={(value) => {
+                  const normalized = normalizeInlineText(value).toUpperCase();
+                  setSelectedSerialPrefix(normalized);
+                  setInvoiceSerialConfig((prev) => ({ ...prev, prefix: normalized }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose prefix" />
+                </SelectTrigger>
+                <SelectContent>
+                  {invoicePrefixOptions.map((prefix) => (
+                    <SelectItem key={prefix} value={prefix}>
+                      {prefix}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Separator</Label>
@@ -5567,6 +5745,47 @@ export default function InvoiceManagement() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Current Serial Number</Label>
+              <Input
+                value={formatInvoiceSerial(Number(selectedPrefixSettings.currentSerial || 0), invoiceSerialConfig.serialDigits)}
+                onChange={(e) => {
+                  const nextSerial = Number(String(e.target.value).replace(/\D/g, "")) || 0;
+                  updateSelectedPrefixSettings((current) => ({ ...current, currentSerial: nextSerial }));
+                }}
+                placeholder="0017"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Period</Label>
+              <Input
+                value={selectedPrefixSettings.period}
+                onChange={(e) => {
+                  const nextPeriod = e.target.value;
+                  updateSelectedPrefixSettings((current) => ({ ...current, period: nextPeriod }));
+                }}
+                placeholder="26-27"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center gap-2 rounded-2xl border px-4 py-3">
+                <Checkbox
+                  checked={Boolean(selectedPrefixSettings.applyPeriodToAllPrefixes)}
+                  onCheckedChange={(checked) =>
+                    updateSelectedPrefixSettings((current) => ({
+                      ...current,
+                      applyPeriodToAllPrefixes: Boolean(checked),
+                    }))
+                  }
+                />
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Apply period to all prefixes</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, the selected period is copied to every prefix configuration.
+                  </p>
+                </div>
+              </div>
+            </div>
             <div className="space-y-2 md:col-span-2">
               <Label>Next Invoice Number Preview</Label>
               <div className="rounded-2xl border bg-muted/20 px-4 py-3 font-mono text-sm font-medium">
@@ -5577,22 +5796,21 @@ export default function InvoiceManagement() {
               <Label>Counter Controls</Label>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="rounded-full">
-                  Current Serial: {invoiceSerialState.serial}
+                  Current Serial: {formatInvoiceSerial(Number(selectedPrefixSettings.currentSerial || 0), invoiceSerialConfig.serialDigits)}
                 </Badge>
                 <Badge variant="outline" className="rounded-full">
-                  Last Issued FY: {invoiceSerialState.financialYear || "—"}
+                  Prefix: {selectedPrefixKey || invoiceSerialConfig.prefix}
+                </Badge>
+                <Badge variant="outline" className="rounded-full">
+                  Period: {selectedPrefixSettings.period || "—"}
                 </Badge>
                 <Button
                   variant="outline"
                   onClick={() =>
-                    setInvoiceSerialState({
-                      financialYear: getFinancialYearLabel(
-                        getIstNow(),
-                        invoiceSerialConfig.financialYearStartMonth,
-                      ),
-                      serial: 0,
-                      lastIssuedAt: new Date().toISOString(),
-                    })
+                    updateSelectedPrefixSettings((current) => ({
+                      ...current,
+                      currentSerial: 0,
+                    }))
                   }
                 >
                   Reset Serial Now
@@ -5606,11 +5824,11 @@ export default function InvoiceManagement() {
                     Auto reset rule
                   </div>
                   <div className="mt-1 text-sm text-white/90">
-                    Serial resets on FY rollover. Example format updates with your config and next invoice uses the current fiscal year series.
+                    Configure the selected prefix serial and period here. You can also copy the same period to every prefix with the checkbox.
                   </div>
                 </div>
                 <Badge variant="outline" className="rounded-full border-white/20 bg-white/10 text-white">
-                  {invoiceSerialConfig.format}
+                  {invoiceNumberPreview}
                 </Badge>
               </div>
             </div>

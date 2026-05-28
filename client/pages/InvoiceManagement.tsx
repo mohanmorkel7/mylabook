@@ -2338,11 +2338,25 @@ function InvoiceRowActions({
         )}
         {waiting && (
           <>
-            <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-emerald-200 text-emerald-700" onClick={onApprove} title="Approve invoice">
-              <CheckCircle2 className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-xl gap-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              onClick={onApprove}
+              title="Approve invoice"
+            >
+              <BadgeCheck className="h-4 w-4" />
+              Approve
             </Button>
-            <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-rose-200 text-rose-600" onClick={onReject} title="Reject invoice">
-              <Trash2 className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-xl gap-2 border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+              onClick={onReject}
+              title="Reject invoice"
+            >
+              <XCircle className="h-4 w-4" />
+              Reject
             </Button>
           </>
         )}

@@ -139,7 +139,7 @@ const INVOICE_STATUS_META: Record<string, string> = {
   "Waiting for approval": "bg-amber-500/10 text-amber-700 border-amber-200",
   Generated: "bg-indigo-500/10 text-indigo-700 border-indigo-200",
   Send: "bg-cyan-500/10 text-cyan-700 border-cyan-200",
-  Paid: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
+  Received: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
   Rejected: "bg-rose-500/10 text-rose-700 border-rose-200",
   Overdue: "bg-red-500/10 text-red-700 border-red-200",
   Closed: "bg-slate-500/10 text-slate-700 border-slate-200",
@@ -540,7 +540,7 @@ const CLIENTS = [
     aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
     notes: "Recon end-to-end with fixed commercial and stepped variable rate beyond 1M transactions.",
     invoiceHistory: [
-      { invoiceId: "INV-2026-041", month: "Apr 2026", amount: 208000, status: "Paid", generatedDate: "2026-04-30" },
+      { invoiceId: "INV-2026-041", month: "Apr 2026", amount: 208000, status: "Received", generatedDate: "2026-04-30" },
       { invoiceId: "INV-2026-042", month: "May 2026", amount: 212500, status: "Send", generatedDate: "2026-05-01" },
       { invoiceId: "INV-2026-043", month: "Jun 2026", amount: 214800, status: "Waiting for approval", generatedDate: "2026-06-01" },
     ],
@@ -574,7 +574,7 @@ const CLIENTS = [
     aws: { enabled: true, vendorCost: 59000, marginPercentage: 25 },
     notes: "Large enterprise account with recon, profitability, and infra recovery layers.",
     invoiceHistory: [
-      { invoiceId: "INV-2026-101", month: "Apr 2026", amount: 1218000, status: "Paid", generatedDate: "2026-04-30" },
+      { invoiceId: "INV-2026-101", month: "Apr 2026", amount: 1218000, status: "Received", generatedDate: "2026-04-30" },
       { invoiceId: "INV-2026-102", month: "May 2026", amount: 1245000, status: "Generated", generatedDate: "2026-05-01" },
       { invoiceId: "INV-2026-103", month: "Jun 2026", amount: 1292000, status: "Approved", generatedDate: "2026-06-01" },
     ],
@@ -645,7 +645,7 @@ const CLIENTS = [
     aws: { enabled: false, vendorCost: 0, marginPercentage: 0 },
     notes: "Mixed recon and integration stack with platform fees for India / international flows.",
     invoiceHistory: [
-      { invoiceId: "INV-2026-301", month: "Apr 2026", amount: 870000, status: "Paid", generatedDate: "2026-04-28" },
+      { invoiceId: "INV-2026-301", month: "Apr 2026", amount: 870000, status: "Received", generatedDate: "2026-04-28" },
       { invoiceId: "INV-2026-302", month: "May 2026", amount: 890000, status: "Generated", generatedDate: "2026-05-01" },
       { invoiceId: "INV-2026-303", month: "Jun 2026", amount: 915000, status: "Waiting for approval", generatedDate: "2026-06-01" },
     ],
@@ -679,7 +679,7 @@ const CLIENTS = [
     aws: { enabled: true, vendorCost: 24000, marginPercentage: 25 },
     notes: "FX / currency conversion led commercial with profitability and APB pass-through components.",
     invoiceHistory: [
-      { invoiceId: "INV-2026-401", month: "Apr 2026", amount: 515000, status: "Paid", generatedDate: "2026-04-20" },
+      { invoiceId: "INV-2026-401", month: "Apr 2026", amount: 515000, status: "Received", generatedDate: "2026-04-20" },
       { invoiceId: "INV-2026-402", month: "May 2026", amount: 528000, status: "Generated", generatedDate: "2026-05-01" },
       { invoiceId: "INV-2026-403", month: "Jun 2026", amount: 536000, status: "Send", generatedDate: "2026-06-01" },
     ],
@@ -720,7 +720,7 @@ type InvoiceStatus =
   | "Waiting for approval"
   | "Generated"
   | "Send"
-  | "Paid"
+  | "Received"
   | "Rejected"
   | "Overdue"
   | "Closed";
@@ -743,7 +743,7 @@ interface InvoiceRecord {
 }
 
 const INVOICES: InvoiceRecord[] = [
-  { invoiceId: "INV-2026-041", month: "Apr 2026", client: "Payswiff", amount: 208000, status: "Paid", generatedDate: "2026-04-30" },
+  { invoiceId: "INV-2026-041", month: "Apr 2026", client: "Payswiff", amount: 208000, status: "Received", generatedDate: "2026-04-30" },
   { invoiceId: "INV-2026-102", month: "May 2026", client: "Razorpay", amount: 1245000, status: "Generated", generatedDate: "2026-05-01" },
   { invoiceId: "INV-2026-202", month: "May 2026", client: "RZPX Razorpay UPI", amount: 975000, status: "Waiting for approval", generatedDate: "2026-05-01" },
   { invoiceId: "INV-2026-303", month: "Jun 2026", client: "Juspay", amount: 915000, status: "Send", generatedDate: "2026-06-01" },
@@ -758,33 +758,6 @@ const NOTIFICATIONS = [
   { title: "Invoice approval queue", description: "Waiting-for-approval invoices must be approved by FinOps admin before edit or send actions.", tone: "emerald", icon: FileText },
 ] as const;
 
-const MONTHLY_TREND = [
-  { month: "Jan", fixed: 145, variable: 52, total: 197 },
-  { month: "Feb", fixed: 150, variable: 59, total: 209 },
-  { month: "Mar", fixed: 171, variable: 70, total: 241 },
-  { month: "Apr", fixed: 176, variable: 74, total: 250 },
-  { month: "May", fixed: 183, variable: 83, total: 266 },
-  { month: "Jun", fixed: 196, variable: 92, total: 288 },
-];
-
-const TRANSACTION_VOLUME = [
-  { month: "Jan", value: 18 },
-  { month: "Feb", value: 21 },
-  { month: "Mar", value: 25 },
-  { month: "Apr", value: 29 },
-  { month: "May", value: 31 },
-  { month: "Jun", value: 36 },
-];
-
-const SERVICE_CATEGORY = [
-  { category: "Recon", value: 34 },
-  { category: "Profitability", value: 22 },
-  { category: "Clearing", value: 12 },
-  { category: "Currency Conversion", value: 15 },
-  { category: "AWS Infra", value: 10 },
-  { category: "APB", value: 7 },
-  { category: "FIRC", value: 8 },
-];
 
 function getCurrencySymbol(currencyCode: CurrencyType = "INR"): string {
   const currencyMap: Record<CurrencyType, string> = {
@@ -1267,6 +1240,18 @@ async function downloadInvoiceDocxTemplate({
 
 function getInvoiceDisplayNumber(invoice: any) {
   return invoice.invoiceNumber || invoice.invoice_id || invoice.invoiceId || "—";
+}
+
+function normalizeInvoiceStatus(status?: string): InvoiceStatus {
+  if (status === "Received") return "Received" as InvoiceStatus;
+  if (status === "Received") return "Received" as InvoiceStatus;
+  if (status === "Waiting for approval") return "Waiting for approval";
+  if (status === "Generated") return "Generated";
+  if (status === "Send") return "Send";
+  if (status === "Rejected") return "Rejected";
+  if (status === "Overdue") return "Overdue";
+  if (status === "Closed") return "Closed";
+  return "Waiting for approval";
 }
 
 function isInvoiceEditable(status: InvoiceStatus) {
@@ -2268,9 +2253,10 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
+  const normalizedStatus = normalizeInvoiceStatus(status);
   return (
-    <Badge variant="outline" className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", INVOICE_STATUS_META[status])}>
-      {status}
+    <Badge variant="outline" className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", INVOICE_STATUS_META[normalizedStatus])}>
+      {normalizedStatus}
     </Badge>
   );
 }
@@ -2303,7 +2289,7 @@ function InvoiceRowActions({
   const waiting = isInvoiceAwaitingApproval(invoice.status);
   const generated = invoice.status === "Generated";
   const sent = invoice.status === "Send";
-  const paid = invoice.status === "Paid";
+  const paid = invoice.status === "Received";
   const canEdit = generated;
   return (
     <div className="flex flex-col gap-3">
@@ -2319,7 +2305,7 @@ function InvoiceRowActions({
               "Waiting for approval",
               "Generated",
               "Send",
-              "Paid",
+              "Received",
               "Rejected",
               "Overdue",
               "Closed",
@@ -2389,6 +2375,240 @@ function InvoiceRowActions({
   );
 }
 
+function InvoiceHistoryTable({
+  title,
+  subtitle,
+  invoices,
+  showClient = false,
+  currencyCode = "INR",
+  emptyMessage = "No invoices yet. Generate your first invoice to get started.",
+  onEdit,
+  onApprove,
+  onReject,
+  onSend,
+  onPaid,
+  onClose,
+  onStatusChange,
+  onDownloadPdf,
+  onDownloadDocx,
+  onDelete,
+}: {
+  title: string;
+  subtitle: string;
+  invoices: Array<InvoiceRecord & { client?: string }>;
+  showClient?: boolean;
+  currencyCode?: CurrencyType;
+  emptyMessage?: string;
+  onEdit: (invoice: InvoiceRecord & { client?: string }) => void;
+  onApprove: (invoice: InvoiceRecord & { client?: string }) => void;
+  onReject: (invoice: InvoiceRecord & { client?: string }) => void;
+  onSend: (invoice: InvoiceRecord & { client?: string }) => void;
+  onPaid: (invoice: InvoiceRecord & { client?: string }) => void;
+  onClose: (invoice: InvoiceRecord & { client?: string }) => void;
+  onStatusChange: (invoice: InvoiceRecord & { client?: string }, status: InvoiceStatus) => void;
+  onDownloadPdf: (invoice: InvoiceRecord & { client?: string }) => void;
+  onDownloadDocx: (invoice: InvoiceRecord & { client?: string }) => void;
+  onDelete: (invoice: InvoiceRecord & { client?: string }) => void;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
+  const [sortField, setSortField] = useState<"generatedDate" | "invoiceNumber" | "amount" | "status" | "month" | "client">("generatedDate");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const normalizedInvoices = useMemo(
+    () => invoices.map((invoice) => ({ ...invoice, status: normalizeInvoiceStatus(invoice.status) })),
+    [invoices],
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, sortField, sortDirection, pageSize, invoices]);
+
+  const filteredInvoices = useMemo(() => {
+    const query = normalizeInlineText(searchTerm).toLowerCase();
+    const statusRank: Record<InvoiceStatus, number> = {
+      "Waiting for approval": 0,
+      Generated: 1,
+      Send: 2,
+      Received: 3,
+      Rejected: 4,
+      Overdue: 5,
+      Closed: 6,
+    };
+
+    const filtered = normalizedInvoices.filter((invoice) => {
+      const status = normalizeInvoiceStatus(invoice.status);
+      const haystack = [
+        getInvoiceDisplayNumber(invoice),
+        invoice.month,
+        invoice.client || "",
+        String(invoice.amount || ""),
+        status,
+        invoice.generatedDate,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return (query.length === 0 || haystack.includes(query)) && (statusFilter === "all" || status === statusFilter);
+    });
+
+    return filtered.sort((a, b) => {
+      const direction = sortDirection === "asc" ? 1 : -1;
+      const aStatus = normalizeInvoiceStatus(a.status);
+      const bStatus = normalizeInvoiceStatus(b.status);
+      switch (sortField) {
+        case "amount":
+          return (Number(a.amount || 0) - Number(b.amount || 0)) * direction;
+        case "invoiceNumber":
+          return getInvoiceDisplayNumber(a).localeCompare(getInvoiceDisplayNumber(b)) * direction;
+        case "month":
+          return String(a.month || "").localeCompare(String(b.month || "")) * direction;
+        case "status":
+          return (statusRank[aStatus] - statusRank[bStatus]) * direction;
+        case "client":
+          return String(a.client || "").localeCompare(String(b.client || "")) * direction;
+        case "generatedDate":
+        default:
+          return (new Date(a.generatedDate || 0).getTime() - new Date(b.generatedDate || 0).getTime()) * direction;
+      }
+    });
+  }, [normalizedInvoices, searchTerm, statusFilter, sortField, sortDirection]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedInvoices = filteredInvoices.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const fromIndex = filteredInvoices.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const toIndex = Math.min(safePage * pageSize, filteredInvoices.length);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  return (
+    <Card className="border-muted/60 shadow-sm">
+      <CardHeader className="space-y-4">
+        <div>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{subtitle}</CardDescription>
+        </div>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 xl:flex-1">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search invoices" className="pl-9 text-[12px]" />
+            </div>
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as InvoiceStatus | "all") }>
+              <SelectTrigger className="text-[12px]"><SelectValue placeholder="Filter status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {["Waiting for approval", "Generated", "Send", "Received", "Rejected", "Overdue", "Closed"].map((status) => (
+                  <SelectItem key={status} value={status}>{status}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortField} onValueChange={(value) => setSortField(value as any)}>
+              <SelectTrigger className="text-[12px]"><SelectValue placeholder="Sort by" /></SelectTrigger>
+              <SelectContent>
+                {[
+                  ["generatedDate", "Generated Date"],
+                  ["invoiceNumber", "Invoice No"],
+                  ["amount", "Amount"],
+                  ["status", "Status"],
+                  ["month", "Month"],
+                  ...(showClient ? ([["client", "Client"]] as const) : []),
+                ].map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" className="justify-between text-[12px]" onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}>
+              {sortDirection === "asc" ? "Ascending" : "Descending"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value) || 10)}>
+              <SelectTrigger className="w-[120px] text-[12px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[10, 20, 50, 100].map((size) => (
+                  <SelectItem key={size} value={String(size)}>{size} / page</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice Number</TableHead>
+                <TableHead>Month</TableHead>
+                {showClient && <TableHead>Client</TableHead>}
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Generated Date</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedInvoices.length > 0 ? (
+                paginatedInvoices.map((invoice) => {
+                  const normalizedInvoice = { ...invoice, status: normalizeInvoiceStatus(invoice.status) };
+                  return (
+                    <TableRow key={invoice.invoiceId}>
+                      <TableCell className="font-medium text-[12px]">{getInvoiceDisplayNumber(normalizedInvoice)}</TableCell>
+                      <TableCell className="text-[12px]">{normalizedInvoice.month}</TableCell>
+                      {showClient && <TableCell className="text-[12px]">{normalizedInvoice.client || "—"}</TableCell>}
+                      <TableCell className="text-[12px]">{currencyLabel(normalizedInvoice.amount, currencyCode)}</TableCell>
+                      <TableCell><InvoiceStatusBadge status={normalizedInvoice.status} /></TableCell>
+                      <TableCell className="text-[12px]">{normalizedInvoice.generatedDate}</TableCell>
+                      <TableCell className="align-top">
+                        <InvoiceRowActions
+                          invoice={normalizedInvoice}
+                          onEdit={() => onEdit(normalizedInvoice)}
+                          onApprove={() => onApprove(normalizedInvoice)}
+                          onReject={() => onReject(normalizedInvoice)}
+                          onSend={() => onSend(normalizedInvoice)}
+                          onPaid={() => onPaid(normalizedInvoice)}
+                          onClose={() => onClose(normalizedInvoice)}
+                          onStatusChange={(status) => onStatusChange(normalizedInvoice, status)}
+                          onDownloadPdf={() => onDownloadPdf(normalizedInvoice)}
+                          onDownloadDocx={() => onDownloadDocx(normalizedInvoice)}
+                          onDelete={() => onDelete(normalizedInvoice)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={showClient ? 7 : 6} className="text-center py-6 text-[12px] text-muted-foreground">
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+      <div className="flex flex-col gap-3 border-t px-4 py-3 text-[12px] text-muted-foreground md:flex-row md:items-center md:justify-between">
+        <div>Showing {fromIndex}-{toIndex} of {filteredInvoices.length}</div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8 px-3 text-[12px]" disabled={safePage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>
+            Previous
+          </Button>
+          <span className="min-w-[92px] text-center">Page {safePage} of {totalPages}</span>
+          <Button variant="outline" size="sm" className="h-8 px-3 text-[12px]" disabled={safePage >= totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>
+            Next
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function ServiceChip({ label }: { label: string }) {
   return (
     <Badge
@@ -2417,26 +2637,26 @@ function ClientRevenuePie({ data }: { data: { name: string; value: number }[] })
   );
 }
 
-function RevenueTrendChart() {
+function RevenueTrendChart({ data }: { data: { month: string; received: number; pending: number }[] }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={MONTHLY_TREND}>
+      <LineChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
         <XAxis dataKey="month" stroke="currentColor" />
         <YAxis stroke="currentColor" />
-        <Tooltip formatter={(value: any) => `${value} L`} />
+        <Tooltip formatter={(value: any) => currencyLabel(Number(value))} />
         <Legend />
-        <Line type="monotone" dataKey="fixed" stroke="#6366f1" strokeWidth={3} dot={false} />
-        <Line type="monotone" dataKey="variable" stroke="#10b981" strokeWidth={3} dot={false} />
+        <Line type="monotone" dataKey="received" name="Received" stroke="#6366f1" strokeWidth={3} dot={false} />
+        <Line type="monotone" dataKey="pending" name="Pending" stroke="#10b981" strokeWidth={3} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );
 }
 
-function TransactionVolumeChart() {
+function TransactionVolumeChart({ data }: { data: { month: string; value: number }[] }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <AreaChart data={TRANSACTION_VOLUME}>
+      <AreaChart data={data}>
         <defs>
           <linearGradient id="txnVolume" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
@@ -2446,17 +2666,17 @@ function TransactionVolumeChart() {
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
         <XAxis dataKey="month" stroke="currentColor" />
         <YAxis stroke="currentColor" />
-        <Tooltip formatter={(value: any) => `${value}M`} />
+        <Tooltip formatter={(value: any) => `${value} invoices`} />
         <Area type="monotone" dataKey="value" stroke="#8b5cf6" fill="url(#txnVolume)" strokeWidth={3} />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-function ServiceCategoryChart() {
+function ServiceCategoryChart({ data }: { data: { category: string; value: number }[] }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={SERVICE_CATEGORY}>
+      <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
         <XAxis dataKey="category" stroke="currentColor" />
         <YAxis stroke="currentColor" />
@@ -3364,62 +3584,22 @@ function ClientOverviewScreen({
       </div>
 
       <div className="grid gap-6">
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle>Invoice History Table</CardTitle>
-            <CardDescription>Invoice numbers, status workflow, generated dates and download/send actions</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Invoice Number</TableHead>
-                    <TableHead>Month</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Generated Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(client.invoiceHistory || []).length > 0 ? (
-                    (client.invoiceHistory || []).map((invoice) => (
-                    <TableRow key={invoice.invoiceId}>
-                      <TableCell className="font-medium text-[12px]">{getInvoiceDisplayNumber(invoice)}</TableCell>
-                      <TableCell className="text-[12px]">{invoice.month}</TableCell>
-                      <TableCell className="text-[12px]">{currencyLabel(invoice.amount, client.currency || "INR")}</TableCell>
-                      <TableCell><InvoiceStatusBadge status={invoice.status} /></TableCell>
-                      <TableCell className="text-[12px]">{invoice.generatedDate}</TableCell>
-                      <TableCell className="align-top">
-                        <InvoiceRowActions
-                          invoice={invoice}
-                          onEdit={() => openInvoiceEditModal(invoice)}
-                          onApprove={() => approveInvoice(invoice)}
-                          onReject={() => rejectInvoice(invoice)}
-                          onSend={() => sendInvoice(invoice)}
-                          onPaid={() => markInvoicePaid(invoice)}
-                          onClose={() => closeInvoice(invoice)}
-                          onStatusChange={(status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
-                          onDownloadPdf={() => onDownloadPdf(invoice)}
-                          onDownloadDocx={() => onDownloadDocx(invoice)}
-                          onDelete={() => onDeleteInvoice(invoice.invoiceId)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-[12px] text-muted-foreground">
-                        No invoices yet. Generate your first invoice to get started.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+        <InvoiceHistoryTable
+          title="Invoice History Table"
+          subtitle="Invoice numbers, status workflow, generated dates and download/send actions"
+          invoices={client.invoiceHistory || []}
+          currencyCode={client.currency || "INR"}
+          onEdit={(invoice) => openInvoiceEditModal(invoice)}
+          onApprove={(invoice) => approveInvoice(invoice)}
+          onReject={(invoice) => rejectInvoice(invoice)}
+          onSend={(invoice) => sendInvoice(invoice)}
+          onPaid={(invoice) => markInvoicePaid(invoice)}
+          onClose={(invoice) => closeInvoice(invoice)}
+          onStatusChange={(invoice, status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
+          onDownloadPdf={(invoice) => onDownloadPdf(invoice)}
+          onDownloadDocx={(invoice) => onDownloadDocx(invoice)}
+          onDelete={(invoice) => onDeleteInvoice(invoice.invoiceId)}
+        />
       </div>
     </div>
   );
@@ -4252,7 +4432,9 @@ export default function InvoiceManagement() {
             transactionSlabs: client.transactionSlabs || [],
             aws: client.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
             notes: client.notes,
-            invoiceHistory: [],
+            invoiceHistory: Array.isArray(client.invoiceHistory)
+              ? client.invoiceHistory.map((invoice: any) => ({ ...invoice, status: normalizeInvoiceStatus(invoice.status) }))
+              : [],
             gstin: client.gstin,
             lutNumber: client.lutNumber,
             billingAddress: client.billingAddress,
@@ -4289,7 +4471,12 @@ export default function InvoiceManagement() {
                 const res = await fetch(`/api/invoice-management/invoices/${client.clientId}`);
                 if (!res.ok) return client;
                 const invoiceHistory = await res.json();
-                return { ...client, invoiceHistory: Array.isArray(invoiceHistory) ? invoiceHistory : [] };
+                return {
+          ...client,
+          invoiceHistory: Array.isArray(invoiceHistory)
+            ? invoiceHistory.map((invoice: any) => ({ ...invoice, status: normalizeInvoiceStatus(invoice.status) }))
+            : [],
+        };
               } catch (err) {
                 console.warn("[InvoiceManagement] Failed to load invoices for client:", client.clientId, err);
                 return client;
@@ -4577,7 +4764,9 @@ export default function InvoiceManagement() {
               transactionSlabs: data.transactionSlabs || [],
               aws: data.aws || { enabled: false, vendorCost: 0, marginPercentage: 0 },
               notes: data.notes,
-              invoiceHistory: data.invoiceHistory || [],
+              invoiceHistory: Array.isArray(data.invoiceHistory)
+                ? data.invoiceHistory.map((invoice: any) => ({ ...invoice, status: normalizeInvoiceStatus(invoice.status) }))
+                : [],
               gstin: data.gstin,
               lutNumber: data.lutNumber,
               billingAddress: data.billingAddress,
@@ -4653,6 +4842,7 @@ export default function InvoiceManagement() {
         client.invoiceHistory.forEach((inv) => {
           allInvoices.push({
             ...inv,
+            status: normalizeInvoiceStatus(inv.status),
             client: client.name,
           });
         });
@@ -4660,6 +4850,56 @@ export default function InvoiceManagement() {
     });
     return allInvoices.sort((a, b) => new Date(b.generatedDate).getTime() - new Date(a.generatedDate).getTime());
   }, [clients]);
+
+  const dashboardAnalytics = useMemo(() => {
+    const monthlyMap = new Map<string, { sortKey: number; month: string; received: number; pending: number; count: number }>();
+
+    allInvoicesFromClients.forEach((invoice) => {
+      const rawDate = invoice.generatedDate || invoice.month || "";
+      const date = new Date(`${String(rawDate).includes("T") ? rawDate : `${rawDate}T00:00:00Z`}`);
+      const sortKey = Number.isNaN(date.getTime()) ? 0 : date.getTime();
+      const month = Number.isNaN(date.getTime())
+        ? normalizeInlineText(invoice.month || rawDate)
+        : date.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
+      const key = Number.isNaN(date.getTime()) ? month : `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+      const current = monthlyMap.get(key) || { sortKey, month, received: 0, pending: 0, count: 0 };
+      const amount = Number(invoice.amount || 0);
+      const status = normalizeInvoiceStatus(invoice.status);
+      current.sortKey = Math.max(current.sortKey, sortKey);
+      current.month = month;
+      current.count += 1;
+      if (status === "Received" || status === "Closed") {
+        current.received += amount;
+      } else {
+        current.pending += amount;
+      }
+      monthlyMap.set(key, current);
+    });
+
+    const monthlySeries = Array.from(monthlyMap.values())
+      .sort((a, b) => a.sortKey - b.sortKey)
+      .slice(-6);
+
+    const serviceCounts = SERVICE_OPTIONS.map((service) => ({
+      category: service,
+      value: clients.reduce((sum, client) => sum + (client.services.includes(service) ? 1 : 0), 0),
+    })).filter((item) => item.value > 0);
+
+    return {
+      revenueTrend: monthlySeries.map((entry) => ({
+        month: entry.month,
+        received: entry.received,
+        pending: entry.pending,
+      })),
+      invoiceVolume: monthlySeries.map((entry) => ({
+        month: entry.month,
+        value: entry.count,
+      })),
+      serviceCategory: serviceCounts,
+      revenueSpark: monthlySeries.map((entry) => Math.round((entry.received + entry.pending) / 1000)),
+      invoiceSpark: monthlySeries.map((entry) => entry.count),
+    };
+  }, [allInvoicesFromClients, clients]);
 
   const metrics = useMemo(() => {
     const totalRevenue = clients.reduce((sum, client) => sum + client.monthlyInvoiceEstimate, 0);
@@ -4681,10 +4921,10 @@ export default function InvoiceManagement() {
       awsRecovery,
       reconRevenue,
       profitabilityRevenue,
-      revenueSpark: [72, 80, 86, 83, 91, 98],
-      invoiceSpark: [44, 50, 56, 61, 65, 69],
+      revenueSpark: dashboardAnalytics.revenueSpark,
+      invoiceSpark: dashboardAnalytics.invoiceSpark,
     };
-  }, [clients, allInvoicesFromClients]);
+  }, [clients, allInvoicesFromClients, dashboardAnalytics]);
 
   const pieData = useMemo(
     () =>
@@ -5046,8 +5286,8 @@ export default function InvoiceManagement() {
 
   const markInvoicePaid = (invoice: InvoiceRecord) => {
     const invoiceNumber = getInvoiceDisplayNumber(invoice);
-    updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status: "Paid" }));
-    toast({ title: "Invoice paid", description: `${invoiceNumber} marked as Paid.` });
+    updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status: "Received" }));
+    toast({ title: "Invoice received", description: `${invoiceNumber} marked as Received.` });
   };
 
   const closeInvoice = (invoice: InvoiceRecord) => {
@@ -5134,7 +5374,7 @@ export default function InvoiceManagement() {
     const invoiceNumber = getInvoiceDisplayNumber(invoice);
     updateInvoiceByNumber(invoiceNumber, (item) => ({
       ...item,
-      status: item.status === "Paid" ? item.status : "Send",
+      status: item.status === "Received" ? item.status : "Send",
     }));
     toast({ title: "Invoice sent", description: `${invoiceNumber} marked as Send.` });
   };
@@ -6240,10 +6480,10 @@ export default function InvoiceManagement() {
             <Card className="border-muted/60">
               <CardHeader>
                 <CardTitle className="text-base">Revenue Trend Graph</CardTitle>
-                <CardDescription>Fixed vs variable revenue growth over time</CardDescription>
+                <CardDescription>Received vs pending invoice value from the database</CardDescription>
               </CardHeader>
               <CardContent>
-                <RevenueTrendChart />
+                <RevenueTrendChart data={dashboardAnalytics.revenueTrend} />
               </CardContent>
             </Card>
             <Card className="border-muted/60">
@@ -6257,20 +6497,20 @@ export default function InvoiceManagement() {
             </Card>
             <Card className="border-muted/60">
               <CardHeader>
-                <CardTitle className="text-base">Transaction Volume Area Graph</CardTitle>
-                <CardDescription>Daily / monthly transaction processing trend</CardDescription>
+                <CardTitle className="text-base">Invoice Activity Area Graph</CardTitle>
+                <CardDescription>Monthly invoice count from the database</CardDescription>
               </CardHeader>
               <CardContent>
-                <TransactionVolumeChart />
+                <TransactionVolumeChart data={dashboardAnalytics.invoiceVolume} />
               </CardContent>
             </Card>
             <Card className="border-muted/60">
               <CardHeader>
                 <CardTitle className="text-base">Service Category Bar Chart</CardTitle>
-                <CardDescription>Recon, Profitability, Clearing, Currency Conversion, AWS, APB and FIRC</CardDescription>
+                <CardDescription>Service distribution from database-backed client configurations</CardDescription>
               </CardHeader>
               <CardContent>
-                <ServiceCategoryChart />
+                <ServiceCategoryChart data={dashboardAnalytics.serviceCategory} />
               </CardContent>
             </Card>
           </div>
@@ -6349,58 +6589,22 @@ export default function InvoiceManagement() {
         </DialogContent>
       </Dialog>
 
-      <Card className="border-muted/60 shadow-sm">
-        <CardHeader>
-          <SectionTitle
-            title="Invoice History Table"
-            subtitle="Statuses, generated dates and delivery actions"
-          />
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice Number</TableHead>
-                  <TableHead>Month</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Generated Date</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allInvoicesFromClients.map((invoice) => (
-                  <TableRow key={invoice.invoiceId}>
-                    <TableCell className="font-medium">{getInvoiceDisplayNumber(invoice)}</TableCell>
-                    <TableCell>{invoice.month}</TableCell>
-                    <TableCell>{invoice.client}</TableCell>
-                    <TableCell>{currencyLabel(invoice.amount)}</TableCell>
-                    <TableCell><InvoiceStatusBadge status={invoice.status} /></TableCell>
-                    <TableCell>{invoice.generatedDate}</TableCell>
-                    <TableCell>
-                      <InvoiceRowActions
-                        invoice={invoice}
-                        onEdit={() => openInvoiceEditModal(invoice)}
-                        onApprove={() => approveInvoice(invoice)}
-                        onReject={() => rejectInvoice(invoice)}
-                        onSend={() => sendInvoice(invoice)}
-                        onPaid={() => markInvoicePaid(invoice)}
-                        onClose={() => closeInvoice(invoice)}
-                        onStatusChange={(status) => updateInvoiceByNumber(getInvoiceDisplayNumber(invoice), (item) => ({ ...item, status }))}
-                        onDownloadPdf={() => downloadInvoicePdf(invoice)}
-                        onDownloadDocx={() => downloadInvoiceDocx(invoice)}
-                        onDelete={() => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <InvoiceHistoryTable
+        title="Invoice History Table"
+        subtitle="Statuses, generated dates and delivery actions"
+        invoices={allInvoicesFromClients}
+        showClient
+        onEdit={(invoice) => openInvoiceEditModal(invoice)}
+        onApprove={(invoice) => approveInvoice(invoice)}
+        onReject={(invoice) => rejectInvoice(invoice)}
+        onSend={(invoice) => sendInvoice(invoice)}
+        onPaid={(invoice) => markInvoicePaid(invoice)}
+        onClose={(invoice) => closeInvoice(invoice)}
+        onStatusChange={(invoice, status) => updateInvoiceByNumber(getInvoiceDisplayNumber(invoice), (item) => ({ ...item, status }))}
+        onDownloadPdf={(invoice) => downloadInvoicePdf(invoice)}
+        onDownloadDocx={(invoice) => downloadInvoiceDocx(invoice)}
+        onDelete={(invoice) => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
+      />
 
       <Card className="border-muted/60 shadow-sm">
         <CardHeader>

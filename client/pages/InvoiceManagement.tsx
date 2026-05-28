@@ -1259,7 +1259,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
 
   const configHsn = normalizeInlineText(taxConfig?.invoiceHsnCode);
   const configRate = `${Number(taxConfig?.invoiceRatePercentage || 18)}%`;
-  const defaultTaxType: RowTaxType = client.clientType === "International" ? "International" : "Domestic";
+  const defaultTaxType: RowTaxType = getTaxTypeFromGstin(client.gstin) || (client.clientType === "International" ? "International" : "Domestic");
   const makeRow = (item: Partial<InvoiceExportLineItem> & Pick<InvoiceExportLineItem, "description" | "amount">): InvoiceExportLineItem => {
     const taxType = item.taxType || defaultTaxType;
     const taxes = calculateRowTaxes(Number(item.amount || 0), item.rate || configRate, taxType);
@@ -1280,7 +1280,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   };
 
   if (invoiceType === "setup_fee") {
-    return [makeRow({ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, taxType: client.clientType === "International" ? "International" : "Domestic" })];
+    return [makeRow({ description: "One time Setup Fee", amount: invoiceAmount || setupFeeDue, taxType: defaultTaxType })];
   }
 
   const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
@@ -1386,6 +1386,16 @@ function getCompanyHeaderWebsiteLine(companyConfig: CompanyConfig) {
 
 function getClientGstin(client: ClientRecord) {
   return client.gstin || "—";
+}
+
+function getTaxTypeFromGstin(gstin?: string): RowTaxType | null {
+  const normalized = normalizeInlineText(gstin).replace(/[^0-9A-Za-z]/g, "");
+  if (normalized.length < 2) return null;
+  return normalized.startsWith("33") ? "Domestic" : "International";
+}
+
+function getClientTaxType(client: ClientRecord, fallback: RowTaxType): RowTaxType {
+  return getTaxTypeFromGstin(client.gstin) || fallback;
 }
 
 function getClientLut(client: ClientRecord) {
@@ -1879,7 +1889,7 @@ function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxT
 }
 
 function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean, taxConfig: TaxConfig): OverviewInvoiceRow[] {
-  const defaultTaxType: RowTaxType = taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic";
+  const defaultTaxType: RowTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
   const breakdown = calculateInvoiceCommercials(client, txnCount);
   const variableCharge = Math.max(
@@ -2558,11 +2568,12 @@ function ClientOverviewScreen({
   onSaveOverviewConfig: (payload: any) => void;
   taxConfig: TaxConfig;
 }) {
-  const defaultTaxType = taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic";
+  const defaultTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
   const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
   const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
   const [taxType, setTaxType] = useState<RowTaxType>(defaultTaxType);
+  const resolvedTaxType = getClientTaxType(client, taxType);
   const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() => buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));
   const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
     client.customInvoiceRows && client.customInvoiceRows.length > 0
@@ -2575,7 +2586,7 @@ function ClientOverviewScreen({
     setTransactionBased(getBillingModel(client) === "transaction");
     setTaxType(defaultTaxType);
     setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));
-  }, [client.id, defaultTaxType, taxConfig, client.monthlyTransactionVolume, client.customInvoiceRows, client.invoiceTableConfig, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs]);
+  }, [client.id, defaultTaxType, taxConfig, client.monthlyTransactionVolume, client.customInvoiceRows, client.invoiceTableConfig, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs, client.gstin]);
 
   useEffect(() => {
     setCustomRowsDraft(
@@ -2594,10 +2605,10 @@ function ClientOverviewScreen({
           breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
           0,
         );
-        return applyOverviewRowTaxes({ ...row, amount: transactionBased ? variableCharge : 0 }, taxType, taxConfig);
+        return applyOverviewRowTaxes({ ...row, amount: transactionBased ? variableCharge : 0 }, resolvedTaxType, taxConfig);
       }),
     );
-  }, [txnInput, transactionBased, taxType, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws]);
+  }, [txnInput, transactionBased, resolvedTaxType, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.transactionSlabs, client.aws, client.gstin]);
 
   useEffect(() => {
     setOverviewRows((prev) => prev.map((row) => applyOverviewRowTaxes(row, taxType, taxConfig)));
@@ -2646,7 +2657,7 @@ function ClientOverviewScreen({
 
   const updateOverviewRow = (index: number, key: keyof OverviewInvoiceRow, value: string | number | boolean) => {
     setOverviewRows((prev) => {
-      const nextTaxType = key === "taxType" ? (String(value) as RowTaxType) : taxType;
+      const nextTaxType = key === "taxType" ? (String(value) as RowTaxType) : resolvedTaxType;
       if (key === "taxType") setTaxType(nextTaxType);
       return prev.map((row, i) => {
         const nextRow =
@@ -2693,7 +2704,7 @@ function ClientOverviewScreen({
   };
 
   const saveOverviewConfig = () => {
-    const normalizedRows = overviewRows.map((row) => applyOverviewRowTaxes(row, taxType, taxConfig));
+    const normalizedRows = overviewRows.map((row) => applyOverviewRowTaxes(row, resolvedTaxType, taxConfig));
     const customRows = overviewRowsToCustomRows(normalizedRows);
     const fixedBilling = normalizedRows.find((row) => row.id === "fixed-billing")?.amount ?? client.fixedBilling;
     const additionalPlatformFee = normalizedRows.find((row) => row.id === "additional-platform-fee")?.amount ?? client.additionalPlatformFee;
@@ -2706,7 +2717,7 @@ function ClientOverviewScreen({
     onSaveOverviewConfig({
       ...client,
       billingModel: transactionBased ? "transaction" : "mmc",
-      clientType: taxType,
+      clientType: resolvedTaxType,
       monthlyTransactionVolume: txnInput,
       fixedBilling,
       additionalPlatformFee,
@@ -2937,7 +2948,7 @@ function ClientOverviewScreen({
             </label>
             <div className="min-w-[180px] space-y-2">
               <Label className="text-sm font-medium">Tax Type</Label>
-              <Select value={taxType} onValueChange={(value) => setTaxType(value as RowTaxType)}>
+              <Select value={resolvedTaxType} onValueChange={(value) => setTaxType(value as RowTaxType)}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
@@ -2946,6 +2957,7 @@ function ClientOverviewScreen({
                   <SelectItem value="International">International</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">GSTIN starting with 33 uses SGST + CGST; all others use IGST.</p>
             </div>
             {transactionBased && (
               <div className="flex flex-1 flex-wrap items-center gap-3">
@@ -3037,7 +3049,7 @@ function ClientOverviewScreen({
                 </TableHeader>
                 <TableBody>
                   {overviewRows.map((row, index) => {
-                    const rowTaxes = calculateRowTaxes(row.amount, row.rate, taxType);
+                    const rowTaxes = calculateRowTaxes(row.amount, row.rate, resolvedTaxType);
                     const rowTotal = rowTaxes.totalAmount;
                     const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
                     return (

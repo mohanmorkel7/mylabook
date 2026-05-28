@@ -233,11 +233,12 @@ export async function initializeInvoiceSchema() {
 router.get("/clients/:clientId", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.params;
+    const cachedClient = memoryCache.get(clientId);
     const result = await queryWithRetry(
       () => pool.query("SELECT * FROM invoice_clients WHERE client_id = $1", [clientId])
     );
 
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0 && !cachedClient) {
       return res.status(404).json({ error: "Client not found" });
     }
 
@@ -267,6 +268,56 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
     } catch (invoiceErr: any) {
       console.warn("[Invoice] Failed to fetch invoice history for", clientId, invoiceErr?.message);
       invoices = [];
+    }
+
+    if (!client && cachedClient) {
+      return res.json({
+        id: cachedClient.id || cachedClient.client_id,
+        clientId: cachedClient.client_id,
+        code: cachedClient.client_code,
+        name: cachedClient.client_name,
+        status: cachedClient.status,
+        priority: cachedClient.priority,
+        services: cachedClient.services || [],
+        fixedBilling: cachedClient.fixed_billing || 0,
+        monthlyInvoiceEstimate: cachedClient.monthly_invoice_est || 0,
+        monthlyTransactionVolume: cachedClient.monthly_txn_volume || 0,
+        variableRevenueGenerated: cachedClient.variable_revenue || 0,
+        awsInfraRecovery: cachedClient.aws_infra_recovery || 0,
+        reconRevenue: cachedClient.recon_revenue || 0,
+        profitabilityRevenue: cachedClient.profitability_revenue || 0,
+        minimumGuarantee: cachedClient.min_guarantee || 0,
+        additionalPlatformFee: cachedClient.additional_fee || 0,
+        integrationFee: cachedClient.integration_fee || 0,
+        billingCycle: cachedClient.billing_cycle,
+        billingModel: normalizeBillingModel(cachedClient.billing_model),
+        billingYear: parseInt(cachedClient.billing_year || "1"),
+        setupFee: parseInt(cachedClient.setup_fee || "0"),
+        setupFeePaid: parseInt(cachedClient.setup_fee_paid || "0"),
+        mmcYear1: parseInt(cachedClient.mmc_year_1 || "0"),
+        mmcYear2: parseInt(cachedClient.mmc_year_2 || "0"),
+        mmcYear3: parseInt(cachedClient.mmc_year_3 || "0"),
+        customInvoiceRows: safeParseJson(cachedClient.custom_invoice_rows, []),
+        invoiceTableConfig: safeParseJson(cachedClient.invoice_table_config, []),
+        invoicePrefix: cachedClient.invoice_prefix || "",
+        invoiceCurrentSerial: parseInt(cachedClient.invoice_current_serial || "0"),
+        lastInvoiceGenerated: cachedClient.last_invoice_generated,
+        logo: cachedClient.logo,
+        logoClass: cachedClient.logo_class,
+        color: cachedClient.color,
+        gstin: cachedClient.gstin,
+        lutNumber: cachedClient.lut_number,
+        billingAddress: cachedClient.billing_address,
+        billingEmail: cachedClient.billing_email,
+        signatoryName: cachedClient.signatory_name,
+        signatoryImage: cachedClient.signatory_image,
+        clientType: cachedClient.client_type,
+        currency: cachedClient.currency,
+        notes: cachedClient.notes,
+        transactionSlabs: cachedClient.transaction_slabs || [],
+        aws: cachedClient.aws_config || { enabled: false, vendorCost: 0, marginPercentage: 0 },
+        invoiceHistory: invoices,
+      });
     }
 
     // Decrypt all fields - use consistent field names with the list endpoint
@@ -323,6 +374,58 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       aws: JSON.parse(decrypt(client.aws_config) || '{"enabled":false,"vendorCost":0,"marginPercentage":0}'),
       invoiceHistory: invoices,
     };
+
+    if (cachedClient) {
+      const merged = {
+        ...decrypted,
+        clientId: cachedClient.client_id,
+        code: cachedClient.client_code,
+        name: cachedClient.client_name,
+        status: cachedClient.status,
+        priority: cachedClient.priority,
+        services: cachedClient.services || [],
+        fixedBilling: cachedClient.fixed_billing || 0,
+        monthlyInvoiceEstimate: cachedClient.monthly_invoice_est || 0,
+        monthlyTransactionVolume: cachedClient.monthly_txn_volume || 0,
+        variableRevenueGenerated: cachedClient.variable_revenue || 0,
+        awsInfraRecovery: cachedClient.aws_infra_recovery || 0,
+        reconRevenue: cachedClient.recon_revenue || 0,
+        profitabilityRevenue: cachedClient.profitability_revenue || 0,
+        minimumGuarantee: cachedClient.min_guarantee || 0,
+        additionalPlatformFee: cachedClient.additional_fee || 0,
+        integrationFee: cachedClient.integration_fee || 0,
+        billingCycle: cachedClient.billing_cycle,
+        billingModel: normalizeBillingModel(cachedClient.billing_model),
+        billingYear: parseInt(cachedClient.billing_year || "1"),
+        setupFee: parseInt(cachedClient.setup_fee || "0"),
+        setupFeePaid: parseInt(cachedClient.setup_fee_paid || "0"),
+        mmcYear1: parseInt(cachedClient.mmc_year_1 || "0"),
+        mmcYear2: parseInt(cachedClient.mmc_year_2 || "0"),
+        mmcYear3: parseInt(cachedClient.mmc_year_3 || "0"),
+        customInvoiceRows: safeParseJson(cachedClient.custom_invoice_rows, []),
+        invoiceTableConfig: safeParseJson(cachedClient.invoice_table_config, []),
+        invoicePrefix: cachedClient.invoice_prefix || decrypted.invoicePrefix,
+        invoiceCurrentSerial: parseInt(cachedClient.invoice_current_serial || "0"),
+        lastInvoiceGenerated: cachedClient.last_invoice_generated || decrypted.lastInvoiceGenerated,
+        logo: cachedClient.logo,
+        logoClass: cachedClient.logo_class,
+        color: cachedClient.color,
+        gstin: cachedClient.gstin,
+        lutNumber: cachedClient.lut_number,
+        billingAddress: cachedClient.billing_address,
+        billingEmail: cachedClient.billing_email,
+        signatoryName: cachedClient.signatory_name,
+        signatoryImage: cachedClient.signatory_image,
+        clientType: cachedClient.client_type,
+        currency: cachedClient.currency,
+        notes: cachedClient.notes,
+        transactionSlabs: cachedClient.transaction_slabs || [],
+        aws: cachedClient.aws_config || { enabled: false, vendorCost: 0, marginPercentage: 0 },
+        invoiceHistory: invoices,
+      };
+
+      return res.json(merged);
+    }
 
     res.json(decrypted);
   } catch (error) {
@@ -726,10 +829,14 @@ router.get("/clients", async (req: Request, res: Response) => {
       aws: client.aws_config || { enabled: false, vendorCost: 0, marginPercentage: 0 },
     }));
 
-    // Merge: DB clients first (they're authoritative), then cache-only clients
-    const mergedClients = dbClients.slice();
+    // Merge cache over DB when the same client exists so the freshest saved values win
+    const mergedClients = dbClients.map((dbClient) => {
+      const cacheClient = cacheClients.find((cache) => cache.clientId === dbClient.clientId);
+      return cacheClient ? { ...dbClient, ...cacheClient } : dbClient;
+    });
+
     for (const cacheClient of cacheClients) {
-      if (!mergedClients.some(db => db.clientId === cacheClient.clientId)) {
+      if (!mergedClients.some((db) => db.clientId === cacheClient.clientId)) {
         mergedClients.push(cacheClient);
         console.log("[Invoice] GET /clients - Added cached client:", cacheClient.clientId);
       }

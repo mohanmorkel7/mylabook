@@ -4271,6 +4271,8 @@ export default function InvoiceManagement() {
             infraCostNote: client.infraCostNote || "",
             customInvoiceRows: client.customInvoiceRows || [],
             invoiceTableConfig: client.invoiceTableConfig || [],
+            invoicePrefix: client.invoicePrefix || "",
+            invoiceCurrentSerial: Number(client.invoiceCurrentSerial || 0),
           }));
           console.log("[InvoiceManagement] Mapped clients:", dbClients);
           setClients(dbClients);
@@ -5289,6 +5291,7 @@ export default function InvoiceManagement() {
           </div>
         </div>
         <InvoiceConfigEditor
+          key={editingClient ? `${editingClient.clientId || editingClient.id}-${normalizeInlineText(editingClient.invoicePrefix) || "no-prefix"}-${editingClient.invoiceCurrentSerial || 0}` : `${isCreateRoute ? "create" : "edit"}-${clientId || "new"}`}
           mode={isCreateRoute ? "create" : "edit"}
           client={editingClient}
           onCancel={() => navigate("/invoice-management")}

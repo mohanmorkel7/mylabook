@@ -1360,17 +1360,12 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
 
   if (getBillingModel(client) === "mmc") {
     const mmcFloor = getActiveMmcAmount(client);
-    const transactionBase = Math.max(Number(client.monthlyTransactionVolume || 0) * Number(client.transactionFeeRate || 0), 0);
-    const coreCommercial = Math.max(transactionBase, mmcFloor);
+    const transactionBreakdown = getMmcTransactionChargeBreakdown(client, Number(client.monthlyTransactionVolume || 0));
     const mmcLabel = `${getMmcInvoiceTitle(client)} or Transaction Fee whichever is higher`;
-    const detailLines = [
-      `Minimum Guarantee: ${formatCurrency(mmcFloor, client.currency || "INR")}`,
-      `Transaction Count: ${Number(client.monthlyTransactionVolume || 0).toLocaleString("en-IN")} × ${Number(client.transactionFeeRate || 0).toFixed(2)} = ${formatCurrency(transactionBase, client.currency || "INR")}`,
-      formatMmcTransactionDetails(client, Number(client.monthlyTransactionVolume || 0)),
-    ].join("\n");
     return [
       ...setupRows,
-      makeRow({ description: `${mmcLabel}\n${detailLines}`, amount: coreCommercial, useConfigHsn: false }),
+      makeRow({ description: getMmcMinimumGuaranteeLabel(client), amount: mmcFloor, useConfigHsn: false }),
+      makeRow({ description: `${mmcLabel}\n${transactionBreakdown.detailLines.join("\n")}`, amount: transactionBreakdown.amount, useConfigHsn: false }),
     ];
   }
 
@@ -1967,12 +1962,12 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
 
   if (billingModel === "mmc") {
     const mmcFloor = getActiveMmcAmount(client);
-    const transactionBase = Math.max(Number(txnCount || 0) * Number(client.transactionFeeRate || 0), 0);
+    const transactionBreakdown = getMmcTransactionChargeBreakdown(client, txnCount);
     return [
       {
         id: "mmc-floor",
         kind: "derived",
-        narration: `Minimum Guarantee (Year ${client.billingYear || 1})`,
+        narration: getMmcMinimumGuaranteeLabel(client),
         amount: mmcFloor,
         hsn: "",
         rate: defaultRate,
@@ -1987,8 +1982,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       {
         id: "variable-slab",
         kind: "derived",
-        narration: `Transaction Count Amount\n${formatMmcTransactionDetails(client, txnCount)}`,
-        amount: transactionBase,
+        narration: `Transaction Count Amount\n${transactionBreakdown.detailLines.join("\n")}`,
+        amount: transactionBreakdown.amount,
         hsn: "",
         rate: defaultRate,
         cgst: 0,
@@ -1997,7 +1992,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
         align: "left",
         editable: false,
         narrationMode: "multiline",
-        exportEnabled: transactionBase !== 0,
+        exportEnabled: transactionBreakdown.amount !== 0,
       },
     ].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
   }
@@ -2179,6 +2174,15 @@ function getMmcInvoiceTitle(client: ClientRecord): string {
   return normalizeInlineText(client.mmcInvoiceTitle) || `MMC (Year ${year})`;
 }
 
+function getMmcMinimumGuaranteeLabel(client: ClientRecord): string {
+  const firstSlab = Array.isArray(client.transactionSlabs) ? client.transactionSlabs[0] : undefined;
+  const slabEnd = Number(firstSlab?.to || 0);
+  if (slabEnd > 0) {
+    return `Minimum Guarantee (${formatTxnCountCompact(slabEnd)} Txn)`;
+  }
+  return `Minimum Guarantee (Year ${client.billingYear || 1})`;
+}
+
 function formatTxnCountCompact(value: number) {
   const count = Number(value || 0);
   if (!count) return "0";
@@ -2186,28 +2190,61 @@ function formatTxnCountCompact(value: number) {
   return Number.isInteger(inMillions) ? `${inMillions} Mn` : `${inMillions.toFixed(1)} Mn`;
 }
 
-function formatMmcTransactionDetails(client: ClientRecord, txnCount: number) {
-  const txnFee = Number(client.transactionFeeRate || 0);
-  const lines = [`Transaction Count: ${Number(txnCount || 0).toLocaleString("en-IN")}`];
-  lines.push(`${Number(txnCount || 0).toLocaleString("en-IN")} × ${txnFee.toFixed(2)} = ${formatCurrency(Math.round(Number(txnCount || 0) * txnFee))}`);
-
+function getMmcTransactionChargeBreakdown(client: ClientRecord, txnCount: number) {
+  const count = Number(txnCount || 0);
   const slabs = Array.isArray(client.transactionSlabs) ? client.transactionSlabs : [];
-  if (slabs.length > 0) {
-    lines.push("Transaction slab details:");
-    slabs.forEach((slab) => {
-      const from = formatTxnCountCompact(Number(slab.from || 0));
-      const to = slab.to == null || Number(slab.to) <= Number(slab.from || 0) ? `Above ${from}` : `${formatTxnCountCompact(Number(slab.to))}`;
-      lines.push(Number(slab.from || 0) === 0 ? `Minimum Guarantee (${to} Txn)` : `From ${from} to ${to} Txn`);
-    });
+
+  if (slabs.length === 0) {
+    const rate = Number(client.transactionFeeRate || 0);
+    const amount = Math.round(count * rate);
+    return {
+      amount,
+      detailLines: [
+        `Transaction Count: ${count.toLocaleString("en-IN")}`,
+        `Transaction Count Amount: ${formatCurrency(amount, client.currency || "INR")}`,
+      ],
+      slabLines: [] as string[],
+    };
   }
 
-  return lines.join("\n");
+  const slabLines: string[] = [];
+  let amount = 0;
+
+  slabs.forEach((slab, index) => {
+    const from = Number(slab.from || 0);
+    const isLastSlab = index === slabs.length - 1;
+    const slabEnd = isLastSlab || slab.to == null || Number(slab.to) <= from ? Number.POSITIVE_INFINITY : Number(slab.to);
+    const covered = Math.max(0, Math.min(count, slabEnd) - from);
+    const unitMultiplier = slab.unit === "paisa" ? 0.01 : 1;
+    const slabAmount = Math.round(covered * Number(slab.rate || 0) * unitMultiplier);
+    amount += slabAmount;
+
+    const fromLabel = from === 0 ? "Minimum Guarantee" : `From ${formatTxnCountCompact(from)}`;
+    const toLabel = Number.isFinite(slabEnd) ? `to ${formatTxnCountCompact(slabEnd)} Txn` : `above ${formatTxnCountCompact(from)} Txn`;
+    const rangeLabel = from === 0 ? `${fromLabel} (${formatTxnCountCompact(Number(slab.to || 0))} Txn)` : `${fromLabel} ${toLabel}`;
+    slabLines.push(`${rangeLabel}\n${covered.toLocaleString("en-IN")} × ${Number(slab.rate || 0).toFixed(2)} = ${formatCurrency(slabAmount, client.currency || "INR")}`);
+  });
+
+  return {
+    amount,
+    detailLines: [
+      `Transaction Count: ${count.toLocaleString("en-IN")}`,
+      `${count.toLocaleString("en-IN")} = ${formatCurrency(amount, client.currency || "INR")}`,
+      "Transaction slab details:",
+      ...slabLines,
+    ],
+    slabLines,
+  };
+}
+
+function formatMmcTransactionDetails(client: ClientRecord, txnCount: number) {
+  return getMmcTransactionChargeBreakdown(client, txnCount).detailLines.join("\n");
 }
 
 function calculateInvoiceCommercials(client: ClientRecord, txnCount: number) {
   if (getBillingModel(client) === "mmc") {
     const mmcFloor = getActiveMmcAmount(client);
-    const transactionBase = Math.max(Number(txnCount || 0) * Number(client.transactionFeeRate || 0), 0);
+    const transactionBase = getMmcTransactionChargeBreakdown(client, txnCount).amount;
     const coreCommercial = Math.max(transactionBase, mmcFloor);
     return {
       variable: 0,

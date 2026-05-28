@@ -1851,8 +1851,7 @@ function getInvoiceNumberForClient(
     const prefix = normalizeInlineText(client.invoicePrefix) || config.prefix;
     const prefixKey = normalizeInlineText(prefix).toUpperCase();
     const prefixConfig = prefixSerialConfigs[prefixKey];
-    const dbCurrentSerial = Number(client.invoiceCurrentSerial || 0);
-    const currentSerial = dbCurrentSerial > 0 ? dbCurrentSerial : prefixConfig ? Number(prefixConfig.currentSerial || 0) : getSharedInvoiceSerialCurrent(clients, prefix, financialYear);
+    const currentSerial = getSharedInvoiceSerialCurrent(clients, prefix, financialYear);
     const serial = currentSerial + 1;
     const serialPart = formatInvoiceSerial(serial, config.serialDigits);
     const period = prefixConfig?.period || financialYear;
@@ -4413,12 +4412,7 @@ export default function InvoiceManagement() {
       for (const prefix of invoicePrefixOptions) {
         const normalizedPrefix = normalizeInlineText(prefix).toUpperCase();
         if (!normalizedPrefix) continue;
-        const currentSerial = Math.max(
-          ...clients
-            .filter((client) => normalizeInlineText(client.invoicePrefix).toUpperCase() === normalizedPrefix)
-            .map((client) => Number(client.invoiceCurrentSerial || 0)),
-          0,
-        );
+        const currentSerial = getSharedInvoiceSerialCurrent(clients, normalizedPrefix, selectedPrefixDefaultPeriod);
         const existing = next[normalizedPrefix];
         if (!existing) {
           next[normalizedPrefix] = {

@@ -2307,8 +2307,8 @@ function InvoiceRowActions({
   const canEdit = generated;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="min-w-[210px] rounded-2xl border bg-muted/20 px-3 py-2">
+      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
+        <div className="min-w-[180px] shrink-0 rounded-2xl border bg-muted/20 px-3 py-2">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Status</p>
           <select
             value={invoice.status}
@@ -2332,7 +2332,7 @@ function InvoiceRowActions({
         </div>
 
         {canEdit && (
-          <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={onEdit} title="Edit invoice">
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl" onClick={onEdit} title="Edit invoice">
             <Edit3 className="h-4 w-4" />
           </Button>
         )}
@@ -2341,7 +2341,7 @@ function InvoiceRowActions({
             <Button
               variant="outline"
               size="sm"
-              className="h-9 rounded-xl gap-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              className="h-8 shrink-0 rounded-xl gap-1.5 border-emerald-200 bg-emerald-50 px-3 text-emerald-700 hover:bg-emerald-100"
               onClick={onApprove}
               title="Approve invoice"
             >
@@ -2351,7 +2351,7 @@ function InvoiceRowActions({
             <Button
               variant="outline"
               size="sm"
-              className="h-9 rounded-xl gap-2 border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+              className="h-8 shrink-0 rounded-xl gap-1.5 border-rose-200 bg-rose-50 px-3 text-rose-700 hover:bg-rose-100"
               onClick={onReject}
               title="Reject invoice"
             >
@@ -2361,27 +2361,27 @@ function InvoiceRowActions({
           </>
         )}
         {generated && (
-          <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={onSend} title="Send invoice">
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl" onClick={onSend} title="Send invoice">
             <FileText className="h-4 w-4" />
           </Button>
         )}
         {(generated || sent) && (
-          <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={onPaid} title="Mark as paid">
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl" onClick={onPaid} title="Mark as paid">
             <CheckCircle2 className="h-4 w-4" />
           </Button>
         )}
         {paid && (
-          <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={onClose} title="Close invoice">
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl" onClick={onClose} title="Close invoice">
             <ShieldCheck className="h-4 w-4" />
           </Button>
         )}
-        <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl" onClick={onDownloadPdf} title="Export PDF">
+        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl" onClick={onDownloadPdf} title="Export PDF">
           <Download className="h-4 w-4" />
         </Button>
-        <Button variant="outline" size="sm" className="h-9 rounded-xl gap-2" onClick={onDownloadDocx} title="Export DOCX">
+        <Button variant="outline" size="sm" className="h-8 shrink-0 rounded-xl gap-1.5 px-2.5" onClick={onDownloadDocx} title="Export DOCX">
           <FileDown className="h-4 w-4" /> DOCX
         </Button>
-        <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl border-rose-200 text-rose-600" onClick={() => void onDelete()} title="Delete invoice">
+        <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-xl border-rose-200 text-rose-600" onClick={() => void onDelete()} title="Delete invoice">
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>

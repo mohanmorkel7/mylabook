@@ -1843,12 +1843,13 @@ function getInvoiceNumberForClient(
   state: InvoiceSerialState,
   clients: ClientRecord[],
   prefixSerialConfigs: Record<string, PrefixSerialConfig>,
+  preferredPrefix?: string,
 ) {
   const financialYear = getFinancialYearLabel(getIstNow(), config.financialYearStartMonth);
-  const hasClientSerialConfig = Boolean(normalizeInlineText(client.invoicePrefix) || Number(client.invoiceCurrentSerial || 0) > 0);
+  const prefix = normalizeInlineText(preferredPrefix || client.invoicePrefix || config.prefix) || config.prefix;
+  const hasClientSerialConfig = Boolean(prefix || Number(client.invoiceCurrentSerial || 0) > 0);
 
   if (hasClientSerialConfig) {
-    const prefix = normalizeInlineText(client.invoicePrefix) || config.prefix;
     const prefixKey = normalizeInlineText(prefix).toUpperCase();
     const prefixConfig = prefixSerialConfigs[prefixKey];
     const currentSerial = Number(prefixConfig?.currentSerial ?? client.invoiceCurrentSerial ?? 0);
@@ -4398,11 +4399,18 @@ export default function InvoiceManagement() {
 
   const selectedPrefixKey = normalizeInlineText(selectedSerialPrefix || invoiceSerialConfig.prefix).toUpperCase();
   const selectedPrefixDefaultPeriod = getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth);
-  const selectedPrefixSettings = prefixSerialConfigs[selectedPrefixKey] || {
-    currentSerial: getSharedInvoiceSerialCurrent(clients, selectedPrefixKey, selectedPrefixDefaultPeriod),
-    period: selectedPrefixDefaultPeriod,
-    applyPeriodToAllPrefixes: false,
-  };
+  const selectedPrefixSettings = (() => {
+    const config = prefixSerialConfigs[selectedPrefixKey];
+    const currentSerial = Math.max(
+      Number(config?.currentSerial || 0),
+      getSharedInvoiceSerialCurrent(clients, selectedPrefixKey, selectedPrefixDefaultPeriod),
+    );
+    return {
+      currentSerial,
+      period: config?.period || selectedPrefixDefaultPeriod,
+      applyPeriodToAllPrefixes: Boolean(config?.applyPeriodToAllPrefixes),
+    };
+  })();
 
   useEffect(() => {
     if (invoicePrefixOptions.length === 0) return;
@@ -4442,7 +4450,10 @@ export default function InvoiceManagement() {
     if (!prefixKey) return;
     setPrefixSerialConfigs((prev) => {
       const current = prev[prefixKey] || {
-        currentSerial: getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
+        currentSerial: Math.max(
+          Number(prefixSerialConfigs[prefixKey]?.currentSerial || 0),
+          getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
+        ),
         period: selectedPrefixDefaultPeriod,
         applyPeriodToAllPrefixes: false,
       };
@@ -4718,7 +4729,7 @@ export default function InvoiceManagement() {
             financialYear: latestInvoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
             serial: Number(latestInvoice.serial || 0),
           }
-        : getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
+        : getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs, selectedSerialPrefix || client.invoicePrefix || invoiceSerialConfig.prefix);
       const exportAmount =
         typeof amountOverride === "number" && amountOverride > 0
           ? amountOverride
@@ -4752,7 +4763,7 @@ export default function InvoiceManagement() {
             financialYear: latestInvoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
             serial: Number(latestInvoice.serial || 0),
           }
-        : getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
+        : getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs, selectedSerialPrefix || client.invoicePrefix || invoiceSerialConfig.prefix);
       await downloadInvoiceDocxTemplate({
         client,
         companyConfig,
@@ -4823,7 +4834,7 @@ export default function InvoiceManagement() {
 
       console.log("[Invoice] generateInvoiceForClient - Generated amount:", generatedAmount);
 
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs, selectedSerialPrefix || client.invoicePrefix || invoiceSerialConfig.prefix);
       console.log("[Invoice] generateInvoiceForClient - Serial info:", serialInfo);
 
       const nextInvoice: InvoiceRecord = {

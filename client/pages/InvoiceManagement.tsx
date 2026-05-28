@@ -1984,7 +1984,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       {
         id: "variable-slab",
         kind: "derived",
-        narration: `Transaction Count Amount\n${transactionBreakdown.detailLines.join("\n")}`,
+        narration: `Transaction Charges\n${transactionBreakdown.detailLines.join("\n")}`,
         amount: transactionBreakdown.amount,
         hsn: "",
         rate: defaultRate,
@@ -2193,7 +2193,7 @@ function getMmcFixedChargesTotal(client: ClientRecord) {
 function getMmcFixedChargeDetailLines(client: ClientRecord) {
   const base = Number(client.fixedBilling || getActiveMmcAmount(client) || 0);
   return [
-    base !== 0 ? `Fixed Amount: ${formatCurrency(base, client.currency || "INR")}` : null,
+    base !== 0 ? `Fixed Commitment Amount: ${formatCurrency(base, client.currency || "INR")}` : null,
     Number(client.additionalPlatformFee || 0) !== 0 ? `Additional Platform Fee: ${formatCurrency(Number(client.additionalPlatformFee || 0), client.currency || "INR")}` : null,
     Number(client.integrationFee || 0) !== 0 ? `Integration Fee: ${formatCurrency(Number(client.integrationFee || 0), client.currency || "INR")}` : null,
   ].filter(Boolean) as string[];
@@ -2216,8 +2216,8 @@ function getMmcTransactionChargeBreakdown(client: ClientRecord, txnCount: number
     return {
       amount,
       detailLines: [
-        `Transaction Count: ${count.toLocaleString("en-IN")}`,
-        `Transaction Count Amount: ${formatCurrency(amount, client.currency || "INR")}`,
+        `Transactions Processed: ${count.toLocaleString("en-IN")}`,
+        `Chargeable Amount: ${formatCurrency(amount, client.currency || "INR")}`,
       ],
       slabLines: [] as string[],
     };
@@ -2246,9 +2246,9 @@ function getMmcTransactionChargeBreakdown(client: ClientRecord, txnCount: number
   return {
     amount,
     detailLines: [
-      `Transaction Count: ${count.toLocaleString("en-IN")}`,
-      `${count.toLocaleString("en-IN")} = ${formatCurrency(amount, client.currency || "INR")}`,
-      "Transaction slab details:",
+      `Transactions Processed: ${count.toLocaleString("en-IN")}`,
+      `Chargeable Amount: ${formatCurrency(amount, client.currency || "INR")}`,
+      "Slab-wise Calculation:",
       ...slabLines,
     ],
     slabLines,

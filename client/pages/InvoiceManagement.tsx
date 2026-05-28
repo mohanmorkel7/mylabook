@@ -1359,26 +1359,18 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const setupRows = breakdown.setupFeeDue > 0 ? [makeRow({ description: "Onetime Setup Fee (pending)", amount: breakdown.setupFeeDue, useConfigHsn: false })] : [];
 
   if (getBillingModel(client) === "mmc") {
+    const mmcFloor = getActiveMmcAmount(client);
+    const transactionBase = Math.max(Number(client.monthlyTransactionVolume || 0) * Number(client.transactionFeeRate || 0), 0);
+    const coreCommercial = Math.max(transactionBase, mmcFloor);
     const mmcLabel = `${getMmcInvoiceTitle(client)} or Transaction Fee whichever is higher`;
-    const coreCommercial = Math.max(invoiceAmount - breakdown.setupFeeDue - breakdown.customRowsTotal, 0);
+    const detailLines = [
+      `Minimum Guarantee: ${formatCurrency(mmcFloor, client.currency || "INR")}`,
+      `Transaction Count: ${Number(client.monthlyTransactionVolume || 0).toLocaleString("en-IN")} × ${Number(client.transactionFeeRate || 0).toFixed(2)} = ${formatCurrency(transactionBase, client.currency || "INR")}`,
+      formatMmcTransactionDetails(client, Number(client.monthlyTransactionVolume || 0)),
+    ].join("\n");
     return [
       ...setupRows,
-      makeRow({ description: mmcLabel, amount: coreCommercial, useConfigHsn: false }),
-      ...customRows.map((row) =>
-        makeRow({
-          description: formatCustomInvoiceRowParagraph(row),
-          amount: Number(row.amount || 0),
-          hsn: String(row.hsn || ""),
-          rate: String(row.rate || configRate),
-          cgst: Number(row.cgst || 0),
-          sgst: Number(row.sgst || 0),
-          igst: Number(row.igst || 0),
-          align: row.align || "left",
-          taxType: row.taxType,
-          useConfigHsn: row.useConfigHsn,
-          exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
-        }),
-      ),
+      makeRow({ description: `${mmcLabel}\n${detailLines}`, amount: coreCommercial, useConfigHsn: false }),
     ];
   }
 
@@ -1971,6 +1963,45 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     0,
   );
   const setupFeeDue = breakdown.setupFeeDue;
+  const billingModel = getBillingModel(client);
+
+  if (billingModel === "mmc") {
+    const mmcFloor = getActiveMmcAmount(client);
+    const transactionBase = Math.max(Number(txnCount || 0) * Number(client.transactionFeeRate || 0), 0);
+    return [
+      {
+        id: "mmc-floor",
+        kind: "derived",
+        narration: `Minimum Guarantee (Year ${client.billingYear || 1})`,
+        amount: mmcFloor,
+        hsn: "",
+        rate: defaultRate,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        align: "left",
+        editable: false,
+        narrationMode: "title",
+        exportEnabled: mmcFloor !== 0,
+      },
+      {
+        id: "variable-slab",
+        kind: "derived",
+        narration: `Transaction Count Amount\n${formatMmcTransactionDetails(client, txnCount)}`,
+        amount: transactionBase,
+        hsn: "",
+        rate: defaultRate,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        align: "left",
+        editable: false,
+        narrationMode: "multiline",
+        exportEnabled: transactionBase !== 0,
+      },
+    ].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
+  }
+
   const baseRows: OverviewInvoiceRow[] = [
     {
       id: "fixed-billing",
@@ -2151,7 +2182,49 @@ function getMmcInvoiceTitle(client: ClientRecord): string {
   return normalizeInlineText(client.mmcInvoiceTitle) || `MMC (Year ${year})`;
 }
 
+function formatTxnCountCompact(value: number) {
+  const count = Number(value || 0);
+  if (!count) return "0";
+  const inMillions = count / 1000000;
+  return Number.isInteger(inMillions) ? `${inMillions} Mn` : `${inMillions.toFixed(1)} Mn`;
+}
+
+function formatMmcTransactionDetails(client: ClientRecord, txnCount: number) {
+  const txnFee = Number(client.transactionFeeRate || 0);
+  const lines = [`Transaction Count: ${Number(txnCount || 0).toLocaleString("en-IN")}`];
+  lines.push(`${Number(txnCount || 0).toLocaleString("en-IN")} × ${txnFee.toFixed(2)} = ${formatCurrency(Math.round(Number(txnCount || 0) * txnFee))}`);
+
+  const slabs = Array.isArray(client.transactionSlabs) ? client.transactionSlabs : [];
+  if (slabs.length > 0) {
+    lines.push("Transaction slab details:");
+    slabs.forEach((slab) => {
+      const from = formatTxnCountCompact(Number(slab.from || 0));
+      const to = slab.to == null || Number(slab.to) <= Number(slab.from || 0) ? `Above ${from}` : `${formatTxnCountCompact(Number(slab.to))}`;
+      lines.push(Number(slab.from || 0) === 0 ? `Minimum Guarantee (${to} Txn)` : `From ${from} to ${to} Txn`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
 function calculateInvoiceCommercials(client: ClientRecord, txnCount: number) {
+  if (getBillingModel(client) === "mmc") {
+    const mmcFloor = getActiveMmcAmount(client);
+    const transactionBase = Math.max(Number(txnCount || 0) * Number(client.transactionFeeRate || 0), 0);
+    const coreCommercial = Math.max(transactionBase, mmcFloor);
+    return {
+      variable: 0,
+      awsMarkup: 0,
+      transactionBase,
+      setupFeeDue: 0,
+      customRows: [],
+      customRowsTotal: 0,
+      mmcFloor,
+      coreCommercial,
+      subtotal: coreCommercial,
+    };
+  }
+
   const slabs = client.transactionSlabs || [];
   const variable = slabs.reduce((sum, slab, index) => {
     const slabStart = slab.from;
@@ -2179,8 +2252,8 @@ function calculateInvoiceCommercials(client: ClientRecord, txnCount: number) {
   const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
   const customRows = getCustomInvoiceRows(client);
   const customRowsTotal = customRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const mmcFloor = getBillingModel(client) === "mmc" ? getActiveMmcAmount(client) : 0;
-  const coreCommercial = getBillingModel(client) === "mmc" ? Math.max(transactionBase, mmcFloor) : transactionBase;
+  const mmcFloor = 0;
+  const coreCommercial = transactionBase;
   const subtotal = Math.max(coreCommercial + setupFeeDue + customRowsTotal, Number(client.minimumGuarantee || 0));
 
   return {
@@ -3106,11 +3179,14 @@ function ClientOverviewScreen({
     const setupFeeRow = normalizedRows.find((row) => row.id === "setup-fee")?.amount;
     const setupFeePaid = Number(client.setupFeePaid || 0);
     const setupFee = setupFeeRow !== undefined ? Math.max(Number(setupFeeRow || 0) + setupFeePaid, setupFeePaid) : Number(client.setupFee || 0);
-    const monthlyInvoiceEstimate = normalizedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const billingMode = transactionBased ? "transaction" : "mmc";
+    const monthlyInvoiceEstimate = billingMode === "mmc"
+      ? calculateInvoiceCommercials({ ...client, billingModel: "mmc" } as ClientRecord, txnInput).subtotal
+      : normalizedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
     onSaveOverviewConfig({
       ...client,
-      billingModel: transactionBased ? "transaction" : "mmc",
+      billingModel: billingMode,
       clientType: resolvedTaxType,
       monthlyTransactionVolume: txnInput,
       fixedBilling,

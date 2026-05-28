@@ -5870,7 +5870,9 @@ export default function InvoiceManagement() {
           onExportPdf={(amountOverride, txnCountOverride) => exportClientPdf(selectedClient, amountOverride, txnCountOverride)}
           onExportCsv={() => exportClientsCsv([selectedClient])}
           onExportDocx={() => exportClientDocx(selectedClient)}
-          onGenerateInvoice={(amountOverride, txnCountOverride) => openInvoiceCreateModal(selectedClient, amountOverride, txnCountOverride, mmcInvoiceTitle)}
+          onGenerateInvoice={(amountOverride, txnCountOverride, mmcInvoiceTitle) =>
+            openInvoiceCreateModal(selectedClient, amountOverride, txnCountOverride, mmcInvoiceTitle)
+          }
           onGenerateSetupFeeInvoice={() => generateSetupFeeInvoiceForClient(selectedClient)}
           onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
           onDownloadPdf={downloadInvoicePdf}

@@ -477,12 +477,30 @@ function getCurrentInvoiceNumberPreview(config: InvoiceSerialConfig) {
   return buildInvoiceNumber(config, financialYear, 1);
 }
 
-function getClientInvoiceSerialCurrent(client: ClientRecord) {
-  const historyMax = (client.invoiceHistory || []).reduce(
-    (max, invoice) => Math.max(max, Number(invoice.serial || 0)),
-    0,
-  );
-  return Math.max(Number(client.invoiceCurrentSerial || 0), historyMax);
+function getInvoicePrefixFromNumber(invoiceNumber?: string) {
+  const normalized = normalizeInlineText(invoiceNumber);
+  if (!normalized) return "";
+  return normalizeInlineText(normalized.split(/[/-]/)[0]);
+}
+
+function getSharedInvoiceSerialCurrent(clients: ClientRecord[], prefix: string, financialYear: string) {
+  const targetPrefix = normalizeInlineText(prefix).toUpperCase();
+  if (!targetPrefix) return 0;
+
+  return clients.reduce((max, client) => {
+    const clientPrefix = normalizeInlineText(client.invoicePrefix).toUpperCase();
+    if (clientPrefix !== targetPrefix) return max;
+
+    const ownCurrent = Number(client.invoiceCurrentSerial || 0);
+    const historyMax = (client.invoiceHistory || []).reduce((historyMaxValue, invoice) => {
+      const invoicePrefix = getInvoicePrefixFromNumber(getInvoiceDisplayNumber(invoice)).toUpperCase();
+      if (invoicePrefix && invoicePrefix !== targetPrefix) return historyMaxValue;
+      if (invoice.financialYear && invoice.financialYear !== financialYear) return historyMaxValue;
+      return Math.max(historyMaxValue, Number(invoice.serial || 0));
+    }, 0);
+
+    return Math.max(max, ownCurrent, historyMax);
+  }, 0);
 }
 
 const CLIENTS = [
@@ -1816,18 +1834,15 @@ function getInvoiceNumberForClient(
   client: ClientRecord,
   config: InvoiceSerialConfig,
   state: InvoiceSerialState,
+  clients: ClientRecord[],
 ) {
   const financialYear = getFinancialYearLabel(getIstNow(), config.financialYearStartMonth);
   const hasClientSerialConfig = Boolean(normalizeInlineText(client.invoicePrefix) || Number(client.invoiceCurrentSerial || 0) > 0);
-  const historySerial = getClientInvoiceSerialCurrent(client);
-  const serial = hasClientSerialConfig
-    ? Math.max(historySerial, Number(client.invoiceCurrentSerial || 0)) + 1
-    : state.financialYear === financialYear
-      ? state.serial + 1
-      : 1;
 
   if (hasClientSerialConfig) {
     const prefix = normalizeInlineText(client.invoicePrefix) || config.prefix;
+    const currentSerial = getSharedInvoiceSerialCurrent(clients, prefix, financialYear);
+    const serial = Math.max(currentSerial, Number(client.invoiceCurrentSerial || 0)) + 1;
     const serialPart = formatInvoiceSerial(serial, config.serialDigits);
     return {
       invoiceNumber: `${prefix}${config.separator}${serialPart}${config.separator}${financialYear}`,
@@ -1836,6 +1851,7 @@ function getInvoiceNumberForClient(
     };
   }
 
+  const serial = state.financialYear === financialYear ? state.serial + 1 : 1;
   return {
     invoiceNumber: buildInvoiceNumber(config, financialYear, serial),
     financialYear,
@@ -3691,7 +3707,7 @@ function InvoiceConfigEditor({
                       <Input value={invoicePrefix} onChange={(e) => setInvoicePrefix(e.target.value.toUpperCase())} placeholder="IE / MY" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Current Serial Number</Label>
+                      <Label>Current Serial Number (by prefix)</Label>
                       <Input type="number" min={0} value={invoiceCurrentSerial} onChange={(e) => setInvoiceCurrentSerial(Number(e.target.value) || 0)} placeholder="17" />
                     </div>
                     <div className="space-y-2">
@@ -4301,12 +4317,25 @@ export default function InvoiceManagement() {
   }, [clients, clientId]);
   const editingClient = useMemo(() => {
     const routeId = String(editingClientId || clientId || "").toLowerCase();
-    return clients.find((item) =>
+    const found = clients.find((item) =>
       String(item.id) === String(editingClientId || clientId) ||
       String(item.clientId || "").toLowerCase() === routeId ||
       String(item.code || "").toLowerCase() === routeId,
-    ) || undefined;
-  }, [clients, editingClientId, clientId]);
+    );
+    if (!found) return undefined;
+
+    const invoicePrefix = normalizeInlineText(found.invoicePrefix);
+    if (!invoicePrefix) return found;
+
+    return {
+      ...found,
+      invoiceCurrentSerial: getSharedInvoiceSerialCurrent(
+        clients,
+        invoicePrefix,
+        getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+      ),
+    };
+  }, [clients, editingClientId, clientId, invoiceSerialConfig.financialYearStartMonth]);
   const invoiceNumberPreview = useMemo(
     () => getCurrentInvoiceNumberPreview(invoiceSerialConfig),
     [invoiceSerialConfig],
@@ -4557,7 +4586,7 @@ export default function InvoiceManagement() {
   const exportClientPdf = async (client = selectedClient, amountOverride?: number, txnCountOverride?: number) => {
     if (!client) return;
     try {
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients);
       const exportAmount =
         typeof amountOverride === "number" && amountOverride > 0
           ? amountOverride
@@ -4584,7 +4613,7 @@ export default function InvoiceManagement() {
   const exportClientDocx = async (client = selectedClient) => {
     if (!client) return;
     try {
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients);
       await downloadInvoiceDocxTemplate({
         client,
         companyConfig,
@@ -4655,7 +4684,7 @@ export default function InvoiceManagement() {
 
       console.log("[Invoice] generateInvoiceForClient - Generated amount:", generatedAmount);
 
-      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState);
+      const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients);
       console.log("[Invoice] generateInvoiceForClient - Serial info:", serialInfo);
 
       const nextInvoice: InvoiceRecord = {
@@ -4704,16 +4733,16 @@ export default function InvoiceManagement() {
 
       setInvoices((prev) => [nextInvoice, ...prev]);
       setClients((prev) =>
-        prev.map((item) =>
-          item.id === client.id
-            ? {
-                ...item,
-                lastInvoiceGenerated: generatedDate,
-                invoiceCurrentSerial: serialInfo.serial,
-                invoiceHistory: [nextInvoice, ...(item.invoiceHistory || [])],
-              }
-            : item,
-        ),
+        prev.map((item) => {
+          const matchesPrefix = normalizeInlineText(item.invoicePrefix).toUpperCase() === normalizeInlineText(client.invoicePrefix).toUpperCase();
+          if (item.id !== client.id && !matchesPrefix) return item;
+          return {
+            ...item,
+            lastInvoiceGenerated: generatedDate,
+            invoiceCurrentSerial: serialInfo.serial,
+            invoiceHistory: item.id === client.id ? [nextInvoice, ...(item.invoiceHistory || [])] : item.invoiceHistory || [],
+          };
+        }),
       );
       if (!normalizeInlineText(client.invoicePrefix)) {
         setInvoiceSerialState({
@@ -5040,6 +5069,15 @@ export default function InvoiceManagement() {
       // For editing: use clientId (unique identifier), for new: use code as identifier
       const clientId = payload.clientId || trimmedCode.toLowerCase();
       const baseId = clientId || payload.id || `client-${Date.now()}`;
+      const savedPrefix = normalizeInlineText(payload.invoicePrefix || invoiceSerialConfig.prefix);
+      const existingSharedSerial = savedPrefix
+        ? getSharedInvoiceSerialCurrent(
+            clients,
+            savedPrefix,
+            getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
+          )
+        : 0;
+      const resolvedInvoiceSerial = Math.max(existingSharedSerial, Number(payload.invoiceCurrentSerial || 0));
 
       console.log("[Invoice] saveConfig - payload:", { id: payload.id, clientId: payload.clientId, code: payload.code, baseId });
 
@@ -5071,7 +5109,7 @@ export default function InvoiceManagement() {
         notes: payload.notes,
         signatoryImage: payload.signatoryImage,
         invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
-        invoiceCurrentSerial: Number(payload.invoiceCurrentSerial || 0),
+        invoiceCurrentSerial: resolvedInvoiceSerial,
         invoiceHistory: payload.id ? (clients.find((client) => client.id === payload.id)?.invoiceHistory || []) : [],
         gstin: payload.gstin,
         lutNumber: payload.lutNumber,
@@ -5131,7 +5169,7 @@ export default function InvoiceManagement() {
           signatoryName: payload.signatoryName,
           signatoryImage: payload.signatoryImage,
           invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
-          invoiceCurrentSerial: Number(payload.invoiceCurrentSerial || 0),
+        invoiceCurrentSerial: resolvedInvoiceSerial,
           clientType: payload.clientType || "Domestic",
           currency: payload.clientCurrency || "INR",
           notes: payload.notes,
@@ -5163,12 +5201,22 @@ export default function InvoiceManagement() {
             client.id === payload.id ||
             client.clientId === payload.clientId,
         );
+        const savedPrefix = normalizeInlineText(payload.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
         return exists
-          ? prev.map((client) =>
-              client.id === baseId || client.clientId === baseId || client.id === payload.id || client.clientId === payload.clientId
-                ? nextClient
-                : client,
-            )
+          ? prev.map((client) => {
+              const clientPrefix = normalizeInlineText(client.invoicePrefix).toUpperCase();
+              if (client.id === baseId || client.clientId === baseId || client.id === payload.id || client.clientId === payload.clientId) {
+                return nextClient;
+              }
+              if (savedPrefix && clientPrefix === savedPrefix) {
+                return {
+                  ...client,
+                  invoicePrefix: payload.invoicePrefix || invoiceSerialConfig.prefix,
+                  invoiceCurrentSerial: resolvedInvoiceSerial,
+                };
+              }
+              return client;
+            })
           : [nextClient, ...prev];
       });
 

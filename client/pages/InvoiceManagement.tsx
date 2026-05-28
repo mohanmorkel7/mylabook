@@ -4882,9 +4882,10 @@ export default function InvoiceManagement() {
       }
 
       setInvoices((prev) => [nextInvoice, ...prev]);
+      const generatedPrefix = normalizeInlineText(selectedSerialPrefix || client.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
       setClients((prev) =>
         prev.map((item) => {
-          const matchesPrefix = normalizeInlineText(item.invoicePrefix).toUpperCase() === normalizeInlineText(client.invoicePrefix).toUpperCase();
+          const matchesPrefix = normalizeInlineText(item.invoicePrefix).toUpperCase() === generatedPrefix;
           if (item.id !== client.id && !matchesPrefix) return item;
           return {
             ...item,
@@ -4894,7 +4895,6 @@ export default function InvoiceManagement() {
           };
         }),
       );
-      const generatedPrefix = normalizeInlineText(client.invoicePrefix).toUpperCase();
       if (generatedPrefix) {
         setPrefixSerialConfigs((prev) => {
           const existing = prev[generatedPrefix] || {

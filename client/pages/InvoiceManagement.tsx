@@ -1892,7 +1892,7 @@ async function downloadInvoicePdfTemplate({
   setText(MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.8);
-  doc.text("Authorized Signatory", sigX + sigW, cursorY + 1, { align: "right" });
+  doc.text("Authorized Signatory", sigX + sigW, cursorY + 6, { align: "right" });
 
   drawFooter();
   doc.save(`${invoiceNumber}.pdf`);

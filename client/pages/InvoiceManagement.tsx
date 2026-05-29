@@ -95,6 +95,7 @@ const SERVICE_OPTIONS = [
   "Database Maintenance",
   "Manpower Support",
   "Chargeback Services",
+  "Other",
 ];
 
 const SERVICE_COLOR: Record<string, string> = {
@@ -108,6 +109,7 @@ const SERVICE_COLOR: Record<string, string> = {
   "Database Maintenance": "bg-zinc-500/10 text-zinc-700 border-zinc-200",
   "Manpower Support": "bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-200",
   "Chargeback Services": "bg-rose-500/10 text-rose-700 border-rose-200",
+  Other: "bg-slate-500/10 text-slate-700 border-slate-200",
 };
 
 const PRIORITY_META = {
@@ -721,6 +723,7 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   billingEmail?: string;
   signatoryName?: string;
   signatoryImage?: string;
+  serviceTypeOther?: string;
   invoiceHistory?: InvoiceRecord[];
   invoicePrefix?: string;
   invoiceCurrentSerial?: number;
@@ -3795,6 +3798,7 @@ function InvoiceConfigEditor({
   const [awsVendorCost, setAwsVendorCost] = useState(client?.aws.vendorCost || 0);
   const [awsMarginPercentage, setAwsMarginPercentage] = useState(client?.aws.marginPercentage || 25);
   const [selectedServices, setSelectedServices] = useState<string[]>(client?.services ? [...client.services] : []);
+  const [serviceTypeOther, setServiceTypeOther] = useState(client?.serviceTypeOther || "");
   const [slabs, setSlabs] = useState(client?.transactionSlabs ? [...client.transactionSlabs] : [
     { from: 0, to: 5000000, rate: 0.04, unit: "paisa" as const },
   ]);
@@ -3848,9 +3852,11 @@ function InvoiceConfigEditor({
   const removeSlab = (index: number) => setSlabs((prev) => prev.filter((_, i) => i !== index));
 
   const toggleService = (service: string) => {
-    setSelectedServices((prev) =>
-      prev.includes(service) ? prev.filter((item) => item !== service) : [...prev, service],
-    );
+    setSelectedServices((prev) => {
+      const next = prev.includes(service) ? prev.filter((item) => item !== service) : [...prev, service];
+      if (!next.includes("Other")) setServiceTypeOther("");
+      return next;
+    });
   };
 
   const addCustomInvoiceRow = () => {
@@ -3909,6 +3915,7 @@ function InvoiceConfigEditor({
       integrationFee,
       aws: { enabled: awsEnabled, vendorCost: awsVendorCost, marginPercentage: awsMarginPercentage },
       services: selectedServices,
+      serviceTypeOther: selectedServices.includes("Other") ? serviceTypeOther.trim() : "",
       transactionSlabs: slabs,
       notes,
       invoicePrefix,
@@ -4076,6 +4083,12 @@ function InvoiceConfigEditor({
                           </label>
                         ))}
                       </div>
+                      {selectedServices.includes("Other") && (
+                        <div className="space-y-2">
+                          <Label>Other service</Label>
+                          <Input value={serviceTypeOther} onChange={(e) => setServiceTypeOther(e.target.value)} placeholder="Enter other service type" />
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-3 md:col-span-2 rounded-2xl border bg-muted/20 p-4">
                       <Label>Billing Mode</Label>
@@ -4315,7 +4328,12 @@ function InvoiceConfigEditor({
             <div className="space-y-2">
               <p className="text-sm font-medium">Services selected</p>
               <div className="flex flex-wrap gap-2">
-                {selectedServices.length > 0 ? selectedServices.map((service) => <ServiceChip key={service} label={service} />) : <span className="text-sm text-muted-foreground">No services selected</span>}
+                {selectedServices.length > 0 ? selectedServices.map((service) => (
+                  <ServiceChip
+                    key={service}
+                    label={service === "Other" && serviceTypeOther.trim() ? `Other: ${serviceTypeOther.trim()}` : service}
+                  />
+                )) : <span className="text-sm text-muted-foreground">No services selected</span>}
               </div>
             </div>
             <div className="grid gap-3 rounded-2xl border p-4 text-sm md:grid-cols-2">
@@ -4848,6 +4866,7 @@ export default function InvoiceManagement() {
               status: data.status,
               priority: data.priority,
               services: data.services || [],
+              serviceTypeOther: data.serviceTypeOther || "",
               fixedBilling: data.fixedBilling || 0,
               monthlyInvoiceEstimate: data.monthlyInvoiceEstimate || 0,
               monthlyTransactionVolume: data.monthlyTransactionVolume || 0,
@@ -5616,6 +5635,7 @@ export default function InvoiceManagement() {
         status: payload.status,
         priority: payload.priority,
         services: payload.services,
+        serviceTypeOther: payload.serviceTypeOther || "",
         fixedBilling: payload.fixedBilling,
         monthlyInvoiceEstimate: payload.monthlyInvoiceEstimate,
         monthlyTransactionVolume: payload.monthlyTransactionVolume,
@@ -5675,6 +5695,7 @@ export default function InvoiceManagement() {
           status: payload.status,
           priority: payload.priority,
           services: payload.services,
+          serviceTypeOther: payload.serviceTypeOther || "",
           fixedBilling: payload.fixedBilling,
           monthlyInvoiceEstimate: payload.monthlyInvoiceEstimate,
           monthlyTransactionVolume: payload.monthlyTransactionVolume,

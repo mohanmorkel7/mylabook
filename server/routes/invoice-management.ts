@@ -111,6 +111,7 @@ export async function initializeInvoiceSchema() {
         status                TEXT NOT NULL,
         priority              TEXT,
         services              TEXT NOT NULL DEFAULT '',
+        service_type_other    TEXT,
         fixed_billing         TEXT,
         monthly_invoice_est   TEXT,
         monthly_txn_volume    TEXT,
@@ -158,6 +159,7 @@ export async function initializeInvoiceSchema() {
     // Add missing columns if they don't exist (for existing tables)
     try {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS transaction_slabs TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS service_type_other TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS aws_config TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS billing_model TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS billing_year TEXT`);
@@ -285,6 +287,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         status: cachedClient.status,
         priority: cachedClient.priority,
         services: cachedClient.services || [],
+        serviceTypeOther: cachedClient.service_type_other || "",
         fixedBilling: cachedClient.fixed_billing || 0,
         monthlyInvoiceEstimate: cachedClient.monthly_invoice_est || 0,
         monthlyTransactionVolume: cachedClient.monthly_txn_volume || 0,
@@ -336,6 +339,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       status: decrypt(client.status),
       priority: decrypt(client.priority),
       services: JSON.parse(decrypt(client.services) || "[]"),
+      serviceTypeOther: decrypt(client.service_type_other) || "",
       fixedBilling: parseInt(decrypt(client.fixed_billing) || "0"),
       monthlyInvoiceEstimate: parseInt(decrypt(client.monthly_invoice_est) || "0"),
       monthlyTransactionVolume: parseInt(decrypt(client.monthly_txn_volume) || "0"),
@@ -391,6 +395,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         status: cachedClient.status,
         priority: cachedClient.priority,
         services: cachedClient.services || [],
+        serviceTypeOther: cachedClient.service_type_other || "",
         fixedBilling: cachedClient.fixed_billing || 0,
         monthlyInvoiceEstimate: cachedClient.monthly_invoice_est || 0,
         monthlyTransactionVolume: cachedClient.monthly_txn_volume || 0,
@@ -451,6 +456,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       status,
       priority,
       services,
+      serviceTypeOther,
       fixedBilling,
       monthlyInvoiceEstimate,
       monthlyTransactionVolume,
@@ -499,8 +505,9 @@ router.post("/clients", async (req: Request, res: Response) => {
 
     const id = clientId || `client-${Date.now()}`;
 
+    const insertPlaceholders = Array.from({ length: 51 }, (_, index) => `$${index + 1}`).join(", ");
     const query = `INSERT INTO invoice_clients (
-      client_id, client_code, client_name, status, priority, services,
+      client_id, client_code, client_name, status, priority, services, service_type_other,
       fixed_billing, monthly_invoice_est, monthly_txn_volume,
       variable_revenue, aws_infra_recovery, recon_revenue,
       profitability_revenue, min_guarantee, additional_fee, integration_fee,
@@ -516,13 +523,14 @@ router.post("/clients", async (req: Request, res: Response) => {
       last_invoice_generated, logo, logo_class, color,
       gstin, lut_number, billing_address, billing_email, signatory_name, signatory_image,
       client_type, currency, notes, transaction_slabs, aws_config
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47)
+    ) VALUES (${insertPlaceholders})
     ON CONFLICT (client_id) DO UPDATE SET
       client_code = EXCLUDED.client_code,
       client_name = EXCLUDED.client_name,
       status = EXCLUDED.status,
       priority = EXCLUDED.priority,
       services = EXCLUDED.services,
+      service_type_other = EXCLUDED.service_type_other,
       fixed_billing = EXCLUDED.fixed_billing,
       monthly_invoice_est = EXCLUDED.monthly_invoice_est,
       monthly_txn_volume = EXCLUDED.monthly_txn_volume,
@@ -575,6 +583,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(status),
       encrypt(priority),
       encrypt(JSON.stringify(services)),
+      encrypt(String(serviceTypeOther || "")),
       encrypt(String(fixedBilling)),
       encrypt(String(monthlyInvoiceEstimate)),
       encrypt(String(monthlyTransactionVolume)),
@@ -629,6 +638,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       status: status,
       priority: priority,
       services: services,
+      service_type_other: serviceTypeOther || "",
       fixed_billing: fixedBilling,
       monthly_invoice_est: monthlyInvoiceEstimate,
       monthly_txn_volume: monthlyTransactionVolume,
@@ -740,6 +750,7 @@ router.get("/clients", async (req: Request, res: Response) => {
           status: decrypt(client.status),
           priority: decrypt(client.priority),
           services: JSON.parse(decrypt(client.services) || "[]"),
+          serviceTypeOther: decrypt(client.service_type_other) || "",
           fixedBilling: parseInt(decrypt(client.fixed_billing) || "0"),
           monthlyInvoiceEstimate: parseInt(decrypt(client.monthly_invoice_est) || "0"),
           monthlyTransactionVolume: parseInt(decrypt(client.monthly_txn_volume) || "0"),
@@ -802,6 +813,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       status: client.status,
       priority: client.priority,
       services: client.services || [],
+      serviceTypeOther: client.service_type_other || "",
       fixedBilling: client.fixed_billing || 0,
       monthlyInvoiceEstimate: client.monthly_invoice_est || 0,
       monthlyTransactionVolume: client.monthly_txn_volume || 0,
@@ -869,6 +881,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       status: client.status,
       priority: client.priority,
       services: client.services || [],
+      serviceTypeOther: client.service_type_other || "",
       fixedBilling: client.fixed_billing || 0,
       monthlyInvoiceEstimate: client.monthly_invoice_est || 0,
       monthlyTransactionVolume: client.monthly_txn_volume || 0,

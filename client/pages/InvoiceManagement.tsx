@@ -1873,8 +1873,8 @@ async function downloadInvoicePdfTemplate({
   cursorY += 1;
 
   if (signatoryImage) {
-    const imageW = 50;
-    const imageH = 30;
+    const imageW = 42;
+    const imageH = 24;
     try {
       doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + sigW - imageW - 2, cursorY, imageW, imageH);
     } catch {}

@@ -244,9 +244,41 @@ const extractStateFromAddress = (address?: string) => {
 const getClientPlaceOfSupply = (client: ClientRecord) =>
   normalizeInlineText(client.billingState || extractStateFromAddress(client.billingAddress)) || "—";
 
+function readClientOverviewCache() {
+  try {
+    const raw = localStorage.getItem(CLIENT_OVERVIEW_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeClientOverviewCache(clientId: string, cache: { invoiceTableConfig?: any[]; customInvoiceRows?: any[] }) {
+  try {
+    const current = readClientOverviewCache();
+    current[String(clientId)] = {
+      invoiceTableConfig: Array.isArray(cache.invoiceTableConfig) ? cache.invoiceTableConfig : [],
+      customInvoiceRows: Array.isArray(cache.customInvoiceRows) ? cache.customInvoiceRows : [],
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(CLIENT_OVERVIEW_CACHE_KEY, JSON.stringify(current));
+  } catch {}
+}
+
+function mergeClientOverviewCache<T extends { clientId?: string; id?: string; invoiceTableConfig?: any[]; customInvoiceRows?: any[] }>(client: T): T {
+  const cache = readClientOverviewCache()[String(client.clientId || client.id || "")];
+  if (!cache) return client;
+  return {
+    ...client,
+    invoiceTableConfig: Array.isArray(cache.invoiceTableConfig) ? cache.invoiceTableConfig : client.invoiceTableConfig || [],
+    customInvoiceRows: Array.isArray(cache.customInvoiceRows) ? cache.customInvoiceRows : client.customInvoiceRows || [],
+  };
+}
+
 const INVOICE_SERIAL_CONFIG_KEY = "invoice-serial-config";
 const INVOICE_SERIAL_STATE_KEY = "invoice-serial-state";
 const INVOICE_PREFIX_SERIAL_CONFIGS_KEY = "invoice-prefix-serial-configs";
+const CLIENT_OVERVIEW_CACHE_KEY = "invoice-client-overview-cache";
 const COMPANY_CONFIG_KEY = "company-config";
 const TAX_CONFIG_KEY = "tax-config";
 const CURRENCY_CONFIG_KEY = "currency-config";
@@ -4559,7 +4591,7 @@ export default function InvoiceManagement() {
       .then(data => {
         console.log("[InvoiceManagement] Fetched clients from DB:", data);
         if (Array.isArray(data)) {
-          const dbClients: ClientRecord[] = data.map((client: any) => ({
+          const dbClients: ClientRecord[] = data.map((client: any) => mergeClientOverviewCache({
             id: client.clientId,
             clientId: client.clientId,
             code: client.code,
@@ -4897,7 +4929,7 @@ export default function InvoiceManagement() {
           // Update the local client record with the decrypted data from database
           setClients(prev => {
             const exists = prev.some(c => c.id === data.clientId || c.id === data.id);
-            const updatedClient: ClientRecord = {
+            const updatedClient: ClientRecord = mergeClientOverviewCache({
               id: data.id || data.clientId,
               clientId: data.clientId,
               code: data.code || data.clientCode,
@@ -4952,7 +4984,7 @@ export default function InvoiceManagement() {
               infraCostNote: data.infraCostNote || "",
               customInvoiceRows: data.customInvoiceRows || [],
               invoiceTableConfig: data.invoiceTableConfig || [],
-            };
+            } as ClientRecord);
             console.log("[Invoice] Updated client object:", updatedClient);
             return exists ? prev.map(c => (c.id === data.id || c.id === data.clientId) ? updatedClient : c) : [updatedClient, ...prev];
           });
@@ -5780,6 +5812,11 @@ export default function InvoiceManagement() {
           customInvoiceRows: payload.customInvoiceRows || [],
           invoiceTableConfig: payload.invoiceTableConfig || [],
         }),
+      });
+
+      writeClientOverviewCache(baseId, {
+        invoiceTableConfig: payload.invoiceTableConfig || [],
+        customInvoiceRows: payload.customInvoiceRows || [],
       });
 
       setClients((prev) => {

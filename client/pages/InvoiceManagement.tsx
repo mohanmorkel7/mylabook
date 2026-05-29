@@ -448,6 +448,27 @@ function getIstNow() {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
 }
 
+function parseInvoiceDateValue(value?: string) {
+  if (!value) return 0;
+  const raw = String(value).trim();
+  if (!raw) return 0;
+
+  const direct = new Date(raw);
+  if (!Number.isNaN(direct.getTime())) return direct.getTime();
+
+  const isoLike = new Date(raw.includes("T") ? raw : `${raw}T00:00:00Z`);
+  if (!Number.isNaN(isoLike.getTime())) return isoLike.getTime();
+
+  const match = raw.match(/^(\d{2})-(\d{2})-(\d{4})/);
+  if (match) {
+    const [, dd, mm, yyyy] = match;
+    const parsed = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)));
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+
+  return 0;
+}
+
 function formatInvoiceGeneratedDateTime(value?: string) {
   if (!value) return "—";
   const raw = String(value);
@@ -2637,6 +2658,8 @@ function InvoiceHistoryTable({
         String(invoice.amount || ""),
         status,
         invoice.generatedDate,
+        invoice.createdAt,
+        formatInvoiceGeneratedDateTime(invoice.createdAt || invoice.generatedDate),
       ]
         .join(" ")
         .toLowerCase();
@@ -2660,7 +2683,7 @@ function InvoiceHistoryTable({
           return String(a.client || "").localeCompare(String(b.client || "")) * direction;
         case "generatedDate":
         default:
-          return (new Date(a.createdAt || a.generatedDate || 0).getTime() - new Date(b.createdAt || b.generatedDate || 0).getTime()) * direction;
+          return (parseInvoiceDateValue(a.createdAt || a.generatedDate) - parseInvoiceDateValue(b.createdAt || b.generatedDate)) * direction;
       }
     });
   }, [normalizedInvoices, searchTerm, statusFilter, sortField, sortDirection]);
@@ -4993,7 +5016,7 @@ export default function InvoiceManagement() {
         });
       }
     });
-    return allInvoices.sort((a, b) => new Date(b.createdAt || b.generatedDate || 0).getTime() - new Date(a.createdAt || a.generatedDate || 0).getTime());
+    return allInvoices.sort((a, b) => parseInvoiceDateValue(b.createdAt || b.generatedDate) - parseInvoiceDateValue(a.createdAt || a.generatedDate));
   }, [clients]);
 
   const dashboardAnalytics = useMemo(() => {

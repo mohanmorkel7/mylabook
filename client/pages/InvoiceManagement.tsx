@@ -1861,7 +1861,7 @@ async function downloadInvoicePdfTemplate({
   cursorY += 1;
 
   // === SIGNATURE ===
-  ensureSpace(16);
+  ensureSpace(12);
   const sigW = 92;
   const sigX = pageWidth - margin - sigW;
   const signatoryName = (client.signatoryName || "").trim();
@@ -1870,15 +1870,15 @@ async function downloadInvoicePdfTemplate({
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
   doc.text(`For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, sigX + sigW, cursorY, { align: "right" });
-  cursorY += 3;
+  cursorY += 1;
 
   if (signatoryImage) {
     const imageW = 50;
-    const imageH = 38;
+    const imageH = 30;
     try {
       doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + sigW - imageW - 2, cursorY, imageW, imageH);
     } catch {}
-    cursorY += imageH;
+    cursorY += imageH - 2;
   } else {
     cursorY += 1;
   }
@@ -1892,7 +1892,7 @@ async function downloadInvoicePdfTemplate({
   setText(MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.8);
-  doc.text("Authorized Signatory", sigX + sigW, cursorY + 2, { align: "right" });
+  doc.text("Authorized Signatory", sigX + sigW, cursorY + 1, { align: "right" });
 
   drawFooter();
   doc.save(`${invoiceNumber}.pdf`);

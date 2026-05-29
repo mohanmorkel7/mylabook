@@ -4441,6 +4441,7 @@ export default function InvoiceManagement() {
   const isOverviewRoute = Boolean(clientId) && !isEditRoute;
 
   const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [clientsHydrated, setClientsHydrated] = useState(false);
   const [invoices, setInvoices] = useState(INVOICES);
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -4679,6 +4680,7 @@ export default function InvoiceManagement() {
           ).then((clientsWithHistory) => {
             console.log("[InvoiceManagement] Clients with invoice history:", clientsWithHistory);
             setClients(clientsWithHistory);
+            setClientsHydrated(true);
           });
         } else {
           console.warn("[InvoiceManagement] API did not return an array");
@@ -4686,6 +4688,7 @@ export default function InvoiceManagement() {
       })
       .catch(err => {
         console.error("[InvoiceManagement] Failed to load clients from database:", err);
+        setClientsHydrated(true);
         toast({
           title: "Warning",
           description: "Could not load clients from database. Please refresh the page.",
@@ -5089,10 +5092,12 @@ export default function InvoiceManagement() {
       .sort((a, b) => a.sortKey - b.sortKey)
       .slice(-6);
 
-    const serviceCounts = SERVICE_OPTIONS.map((service) => ({
-      category: service,
-      value: clients.reduce((sum, client) => sum + (client.services.includes(service) ? 1 : 0), 0),
-    })).filter((item) => item.value > 0);
+    const serviceCounts = clientsHydrated
+      ? SERVICE_OPTIONS.map((service) => ({
+          category: service,
+          value: clients.reduce((sum, client) => sum + (client.services.includes(service) ? 1 : 0), 0),
+        })).filter((item) => item.value > 0)
+      : [];
 
     return {
       revenueTrend: monthlySeries.map((entry) => ({
@@ -5110,7 +5115,7 @@ export default function InvoiceManagement() {
     };
   }, [allInvoicesFromClients, clients]);
 
-  const hasInvoiceData = allInvoicesFromClients.length > 0;
+  const hasInvoiceData = clientsHydrated && allInvoicesFromClients.length > 0;
   const metrics = useMemo(() => {
     const approvedInvoices = allInvoicesFromClients.filter((invoice) => isApprovedInvoiceStatus(invoice.status));
     const approvedInvoiceAmountWithoutGst = approvedInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
@@ -5139,14 +5144,19 @@ export default function InvoiceManagement() {
     };
   }, [clients, allInvoicesFromClients, dashboardAnalytics]);
 
-  const pieData = useMemo(
-    () =>
-      clients.map((client) => ({
-        name: client.name,
-        value: Math.round(client.monthlyInvoiceEstimate / 1000),
-      })),
-    [clients],
-  );
+  const pieData = useMemo(() => {
+    if (!clientsHydrated) return [];
+    const approvedByClient = new Map<string, number>();
+    allInvoicesFromClients.forEach((invoice) => {
+      if (!isApprovedInvoiceStatus(invoice.status)) return;
+      const key = invoice.client || "Unknown";
+      approvedByClient.set(key, (approvedByClient.get(key) || 0) + Number(invoice.amount || 0));
+    });
+    return Array.from(approvedByClient.entries())
+      .map(([name, value]) => ({ name, value: Math.round(value / 1000) }))
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [allInvoicesFromClients, clientsHydrated]);
 
   const exportClientsCsv = (targetClients = filteredClients) => {
     const rows = targetClients.map((client) => ({

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
@@ -3099,6 +3099,16 @@ function ClientOverviewScreen({
   const [mmcNetworkNote, setMmcNetworkNote] = useState(client.networkCertificationNote || "To be borne by client/bank as per actuals");
   const [mmcInfraNote, setMmcInfraNote] = useState(client.infraCostNote || "To be borne by client/bank as per actuals");
   const [mmcInvoiceTitle, setMmcInvoiceTitle] = useState(() => getMmcInvoiceTitle(client));
+  const overviewRootRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    overviewRootRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      overviewRootRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+  }, [client.clientId, client.clientId]);
 
   useEffect(() => {
     setTxnInput(client.monthlyTransactionVolume);
@@ -3280,7 +3290,7 @@ function ClientOverviewScreen({
 
 
   return (
-    <div className="space-y-6">
+    <div ref={overviewRootRef} className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="icon" onClick={onBack}>

@@ -2388,6 +2388,7 @@ function estimateInvoiceFromSlabs(client: ClientRecord, txnCount: number) {
 }
 
 function Sparkline({ values, className }: { values: number[]; className?: string }) {
+  if (!values.length) return null;
   const width = 120;
   const height = 38;
   const min = Math.min(...values);
@@ -2449,9 +2450,11 @@ function MetricCard({
               <Icon className="h-6 w-6 text-white" />
             </div>
           </div>
-          <div className="mt-4 text-white/90">
-            <Sparkline values={sparkline} />
-          </div>
+          {sparkline.length > 0 && (
+            <div className="mt-4 text-white/90">
+              <Sparkline values={sparkline} />
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
@@ -5107,6 +5110,7 @@ export default function InvoiceManagement() {
     };
   }, [allInvoicesFromClients, clients]);
 
+  const hasInvoiceData = allInvoicesFromClients.length > 0;
   const metrics = useMemo(() => {
     const approvedInvoices = allInvoicesFromClients.filter((invoice) => isApprovedInvoiceStatus(invoice.status));
     const approvedInvoiceAmountWithoutGst = approvedInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
@@ -6663,16 +6667,16 @@ export default function InvoiceManagement() {
       {!settingsViewOpen && (
         <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-        <MetricCard title="Total Revenue" value={currencyLabel(metrics.totalRevenue)} change={`${metrics.approvedInvoiceCount} approved invoices`} icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={metrics.revenueSpark} />
-        <MetricCard title="Monthly Invoice Value" value={currencyLabel(metrics.monthlyInvoiceValue)} change={`${metrics.approvedInvoiceCount} approved invoices`} icon={ReceiptText} accent="bg-gradient-to-br from-sky-500 to-indigo-600" sparkline={metrics.invoiceSpark} />
-        <MetricCard title="Active Clients" value={String(metrics.activeClients)} change="+2 onboarded" icon={Building2} accent="bg-gradient-to-br from-emerald-500 to-cyan-600" sparkline={[8, 8, 9, 9, 10, 10]} />
-        <MetricCard title="Pending Invoices" value={String(metrics.pendingInvoices)} change="-3 overdue risk" icon={AlertTriangle} accent="bg-gradient-to-br from-orange-500 to-rose-600" sparkline={[5, 5, 4, 4, 3, 2]} />
-        <MetricCard title="Transaction Volume" value={metrics.transactionVolume.toLocaleString()} change="+21% volume" icon={BarChart3} accent="bg-gradient-to-br from-fuchsia-500 to-violet-600" sparkline={[18, 21, 25, 29, 31, 36]} />
-        <MetricCard title="Variable Revenue" value={currencyLabel(metrics.variableRevenue)} change="+16.4%" icon={TrendingUp} accent="bg-gradient-to-br from-emerald-500 to-teal-600" sparkline={[40, 45, 48, 54, 58, 63]} />
-        <MetricCard title="High Priority Clients" value={String(metrics.highPriorityClients)} change="+1 critical" icon={ShieldCheck} accent="bg-gradient-to-br from-red-500 to-orange-600" sparkline={[2, 2, 3, 3, 4, 4]} />
-        <MetricCard title="AWS Infra Recovery" value={currencyLabel(metrics.awsRecovery)} change="+9.3%" icon={Warehouse} accent="bg-gradient-to-br from-slate-600 to-sky-700" sparkline={[12, 14, 15, 18, 19, 21]} />
-        <MetricCard title="Recon Revenue" value={currencyLabel(metrics.reconRevenue)} change="+7.6%" icon={Activity} accent="bg-gradient-to-br from-cyan-500 to-blue-600" sparkline={[30, 31, 33, 35, 36, 34]} />
-        <MetricCard title="Profitability Revenue" value={currencyLabel(metrics.profitabilityRevenue)} change="+5.1%" icon={Sparkles} accent="bg-gradient-to-br from-violet-500 to-fuchsia-600" sparkline={[18, 19, 20, 21, 22, 23]} />
+        <MetricCard title="Total Revenue" value={hasInvoiceData ? currencyLabel(metrics.totalRevenue) : "—"} change={hasInvoiceData ? `${metrics.approvedInvoiceCount} approved invoices` : "No approved invoices"} icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={hasInvoiceData ? metrics.revenueSpark : []} />
+        <MetricCard title="Monthly Invoice Value" value={hasInvoiceData ? currencyLabel(metrics.monthlyInvoiceValue) : "—"} change={hasInvoiceData ? `${metrics.approvedInvoiceCount} approved invoices` : "No approved invoices"} icon={ReceiptText} accent="bg-gradient-to-br from-sky-500 to-indigo-600" sparkline={hasInvoiceData ? metrics.invoiceSpark : []} />
+        <MetricCard title="Active Clients" value={hasInvoiceData ? String(metrics.activeClients) : "—"} change={hasInvoiceData ? "+2 onboarded" : "No invoice data"} icon={Building2} accent="bg-gradient-to-br from-emerald-500 to-cyan-600" sparkline={hasInvoiceData ? [8, 8, 9, 9, 10, 10] : []} />
+        <MetricCard title="Pending Invoices" value={hasInvoiceData ? String(metrics.pendingInvoices) : "—"} change={hasInvoiceData ? "-3 overdue risk" : "No invoice data"} icon={AlertTriangle} accent="bg-gradient-to-br from-orange-500 to-rose-600" sparkline={hasInvoiceData ? [5, 5, 4, 4, 3, 2] : []} />
+        <MetricCard title="Transaction Volume" value={hasInvoiceData ? metrics.transactionVolume.toLocaleString() : "—"} change={hasInvoiceData ? "+21% volume" : "No invoice data"} icon={BarChart3} accent="bg-gradient-to-br from-fuchsia-500 to-violet-600" sparkline={hasInvoiceData ? [18, 21, 25, 29, 31, 36] : []} />
+        <MetricCard title="Variable Revenue" value={hasInvoiceData ? currencyLabel(metrics.variableRevenue) : "—"} change={hasInvoiceData ? "+16.4%" : "No invoice data"} icon={TrendingUp} accent="bg-gradient-to-br from-emerald-500 to-teal-600" sparkline={hasInvoiceData ? [40, 45, 48, 54, 58, 63] : []} />
+        <MetricCard title="High Priority Clients" value={hasInvoiceData ? String(metrics.highPriorityClients) : "—"} change={hasInvoiceData ? "+1 critical" : "No invoice data"} icon={ShieldCheck} accent="bg-gradient-to-br from-red-500 to-orange-600" sparkline={hasInvoiceData ? [2, 2, 3, 3, 4, 4] : []} />
+        <MetricCard title="AWS Infra Recovery" value={hasInvoiceData ? currencyLabel(metrics.awsRecovery) : "—"} change={hasInvoiceData ? "+9.3%" : "No invoice data"} icon={Warehouse} accent="bg-gradient-to-br from-slate-600 to-sky-700" sparkline={hasInvoiceData ? [12, 14, 15, 18, 19, 21] : []} />
+        <MetricCard title="Recon Revenue" value={hasInvoiceData ? currencyLabel(metrics.reconRevenue) : "—"} change={hasInvoiceData ? "+7.6%" : "No invoice data"} icon={Activity} accent="bg-gradient-to-br from-cyan-500 to-blue-600" sparkline={hasInvoiceData ? [30, 31, 33, 35, 36, 34] : []} />
+        <MetricCard title="Profitability Revenue" value={hasInvoiceData ? currencyLabel(metrics.profitabilityRevenue) : "—"} change={hasInvoiceData ? "+5.1%" : "No invoice data"} icon={Sparkles} accent="bg-gradient-to-br from-violet-500 to-fuchsia-600" sparkline={hasInvoiceData ? [18, 19, 20, 21, 22, 23] : []} />
       </div>
 
       <Card className="border-muted/60 shadow-sm">

@@ -1348,6 +1348,11 @@ function isInvoiceAwaitingApproval(status: InvoiceStatus) {
   return status === "Waiting for approval";
 }
 
+function isApprovedInvoiceStatus(status?: string) {
+  const normalized = normalizeInvoiceStatus(status);
+  return normalized === "Generated" || normalized === "Send" || normalized === "Received" || normalized === "Closed";
+}
+
 function updateInvoiceCollection(
   invoices: InvoiceRecord[],
   targetInvoiceNumber: string,
@@ -5052,7 +5057,7 @@ export default function InvoiceManagement() {
   }, [clients]);
 
   const dashboardAnalytics = useMemo(() => {
-    const monthlyMap = new Map<string, { sortKey: number; month: string; received: number; pending: number; count: number }>();
+    const monthlyMap = new Map<string, { sortKey: number; month: string; approvedWithoutGst: number; pendingWithoutGst: number; approvedCount: number; pendingCount: number }>();
 
     allInvoicesFromClients.forEach((invoice) => {
       const rawDate = invoice.generatedDate || invoice.month || "";
@@ -5062,16 +5067,17 @@ export default function InvoiceManagement() {
         ? normalizeInlineText(invoice.month || rawDate)
         : date.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
       const key = Number.isNaN(date.getTime()) ? month : `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-      const current = monthlyMap.get(key) || { sortKey, month, received: 0, pending: 0, count: 0 };
+      const current = monthlyMap.get(key) || { sortKey, month, approvedWithoutGst: 0, pendingWithoutGst: 0, approvedCount: 0, pendingCount: 0 };
       const amount = Number(invoice.amount || 0);
       const status = normalizeInvoiceStatus(invoice.status);
       current.sortKey = Math.max(current.sortKey, sortKey);
       current.month = month;
-      current.count += 1;
-      if (status === "Received" || status === "Closed") {
-        current.received += amount;
+      if (isApprovedInvoiceStatus(status)) {
+        current.approvedWithoutGst += amount;
+        current.approvedCount += 1;
       } else {
-        current.pending += amount;
+        current.pendingWithoutGst += amount;
+        current.pendingCount += 1;
       }
       monthlyMap.set(key, current);
     });
@@ -5088,22 +5094,24 @@ export default function InvoiceManagement() {
     return {
       revenueTrend: monthlySeries.map((entry) => ({
         month: entry.month,
-        received: entry.received,
-        pending: entry.pending,
+        received: Math.round(entry.approvedWithoutGst * 1.18),
+        pending: entry.pendingWithoutGst,
       })),
       invoiceVolume: monthlySeries.map((entry) => ({
         month: entry.month,
-        value: entry.count,
+        value: entry.approvedCount,
       })),
       serviceCategory: serviceCounts,
-      revenueSpark: monthlySeries.map((entry) => Math.round((entry.received + entry.pending) / 1000)),
-      invoiceSpark: monthlySeries.map((entry) => entry.count),
+      revenueSpark: monthlySeries.map((entry) => Math.round((entry.approvedWithoutGst + entry.pendingWithoutGst) / 1000)),
+      invoiceSpark: monthlySeries.map((entry) => entry.approvedCount),
     };
   }, [allInvoicesFromClients, clients]);
 
   const metrics = useMemo(() => {
-    const totalRevenue = clients.reduce((sum, client) => sum + client.monthlyInvoiceEstimate, 0);
-    const pendingInvoices = allInvoicesFromClients.filter((invoice) => invoice.status === "Waiting for approval" || invoice.status === "Generated" || invoice.status === "Send" || invoice.status === "Overdue").length;
+    const approvedInvoices = allInvoicesFromClients.filter((invoice) => isApprovedInvoiceStatus(invoice.status));
+    const approvedInvoiceAmountWithoutGst = approvedInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
+    const approvedInvoiceAmountWithGst = approvedInvoices.reduce((sum, invoice) => sum + Math.round(Number(invoice.amount || 0) * 1.18), 0);
+    const pendingInvoices = allInvoicesFromClients.filter((invoice) => !isApprovedInvoiceStatus(invoice.status)).length;
     const transactionVolume = clients.reduce((sum, client) => sum + client.monthlyTransactionVolume, 0);
     const variableRevenue = clients.reduce((sum, client) => sum + client.variableRevenueGenerated, 0);
     const awsRecovery = clients.reduce((sum, client) => sum + client.awsInfraRecovery, 0);
@@ -5111,8 +5119,9 @@ export default function InvoiceManagement() {
     const profitabilityRevenue = clients.reduce((sum, client) => sum + client.profitabilityRevenue, 0);
     const highPriorityClients = clients.filter((client) => getPriorityForScoring(client) === "Critical" || getPriorityForScoring(client) === "High").length;
     return {
-      totalRevenue,
-      monthlyInvoiceValue: totalRevenue,
+      totalRevenue: approvedInvoiceAmountWithGst,
+      monthlyInvoiceValue: approvedInvoiceAmountWithoutGst,
+      approvedInvoiceCount: approvedInvoices.length,
       activeClients: clients.filter((client) => client.status === "active").length,
       pendingInvoices,
       transactionVolume,
@@ -6654,8 +6663,8 @@ export default function InvoiceManagement() {
       {!settingsViewOpen && (
         <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-        <MetricCard title="Total Revenue" value={currencyLabel(metrics.totalRevenue)} change="+18.2% MoM" icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={metrics.revenueSpark} />
-        <MetricCard title="Monthly Invoice Value" value={currencyLabel(metrics.monthlyInvoiceValue)} change="+12.8% MoM" icon={ReceiptText} accent="bg-gradient-to-br from-sky-500 to-indigo-600" sparkline={metrics.invoiceSpark} />
+        <MetricCard title="Total Revenue" value={currencyLabel(metrics.totalRevenue)} change={`${metrics.approvedInvoiceCount} approved invoices`} icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={metrics.revenueSpark} />
+        <MetricCard title="Monthly Invoice Value" value={currencyLabel(metrics.monthlyInvoiceValue)} change={`${metrics.approvedInvoiceCount} approved invoices`} icon={ReceiptText} accent="bg-gradient-to-br from-sky-500 to-indigo-600" sparkline={metrics.invoiceSpark} />
         <MetricCard title="Active Clients" value={String(metrics.activeClients)} change="+2 onboarded" icon={Building2} accent="bg-gradient-to-br from-emerald-500 to-cyan-600" sparkline={[8, 8, 9, 9, 10, 10]} />
         <MetricCard title="Pending Invoices" value={String(metrics.pendingInvoices)} change="-3 overdue risk" icon={AlertTriangle} accent="bg-gradient-to-br from-orange-500 to-rose-600" sparkline={[5, 5, 4, 4, 3, 2]} />
         <MetricCard title="Transaction Volume" value={metrics.transactionVolume.toLocaleString()} change="+21% volume" icon={BarChart3} accent="bg-gradient-to-br from-fuchsia-500 to-violet-600" sparkline={[18, 21, 25, 29, 31, 36]} />

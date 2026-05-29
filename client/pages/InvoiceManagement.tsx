@@ -1297,7 +1297,7 @@ async function downloadInvoiceDocxTemplate({
                   children: [
                     new Docx.ImageRun({
                       data: getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage),
-                      transformation: { width: 72, height: 72 },
+                      transformation: { width: 84, height: 72 },
                     }),
                   ],
                   spacing: { after: 1 },
@@ -1754,8 +1754,8 @@ async function downloadInvoicePdfTemplate({
   doc.setLineHeightFactor(1.1);
   lineItems.forEach((item, idx) => {
     const narrationLines = wrapParagraph(item.description, columns.narration - 4);
-    const rowH = Math.max(10, narrationLines.length * 4.2 + 4);
-    ensureSpace(rowH + 2);
+    const rowH = Math.max(8, narrationLines.length * 3.8 + 2);
+    ensureSpace(rowH + 1);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
       doc.rect(margin, cursorY, tableW, rowH, "F");
@@ -1784,7 +1784,7 @@ async function downloadInvoicePdfTemplate({
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.9);
-    doc.text(narrationLines, colPositions.narration + 7, cursorY + 4.4, { align: "left", baseline: "top" });
+    doc.text(narrationLines, colPositions.narration + 7, cursorY + 3.8, { align: "left", baseline: "top" });
 
     doc.setFont("helvetica", "bold");
     doc.text(formatInvoiceAmount(item.amount, invoiceCurrency), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
@@ -1806,7 +1806,7 @@ async function downloadInvoicePdfTemplate({
   cursorY += 2;
 
   // === TOTALS ===
-  ensureSpace(20);
+  ensureSpace(14);
   const totalsW = 88;
   const totalsX = pageWidth - margin - totalsW;
   const lineRow = (label: string, value: string, opts?: { bold?: boolean; bg?: boolean }) => {
@@ -1862,7 +1862,7 @@ async function downloadInvoicePdfTemplate({
 
   // === SIGNATURE ===
   ensureSpace(16);
-  const sigW = 78;
+  const sigW = 92;
   const sigX = pageWidth - margin - sigW;
   const signatoryName = (client.signatoryName || "").trim();
   const signatoryImage = getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage);
@@ -1873,7 +1873,7 @@ async function downloadInvoicePdfTemplate({
   cursorY += 3;
 
   if (signatoryImage) {
-    const imageW = 38;
+    const imageW = 50;
     const imageH = 38;
     try {
       doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + sigW - imageW - 2, cursorY, imageW, imageH);

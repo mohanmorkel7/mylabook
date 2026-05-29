@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
@@ -4843,11 +4843,11 @@ export default function InvoiceManagement() {
     }
   }, [isCreateRoute]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isOverviewRoute && selectedClient) {
       window.scrollTo({ top: 0, behavior: "auto" });
     }
-  }, [isOverviewRoute, selectedClient?.id]);
+  }, [isOverviewRoute, selectedClient?.id, location.pathname]);
 
   // Fetch client data from database when editing or viewing a specific client
   useEffect(() => {

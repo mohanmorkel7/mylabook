@@ -4843,6 +4843,12 @@ export default function InvoiceManagement() {
     }
   }, [isCreateRoute]);
 
+  useEffect(() => {
+    if (isOverviewRoute && selectedClient) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+  }, [isOverviewRoute, selectedClient?.id]);
+
   // Fetch client data from database when editing or viewing a specific client
   useEffect(() => {
     console.log("[Invoice] useEffect - Checking conditions:", { isEditRoute, isOverviewRoute, clientId, pathEndsWith: location.pathname });

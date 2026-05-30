@@ -275,11 +275,13 @@ const UserStackedScrollChart = React.memo(function UserStackedScrollChart({
                 height={65}
               />
               <YAxis
+                scale="sqrt"
                 allowDecimals={false}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 10, fill: "#94a3b8" }}
-                width={28}
+                width={32}
+                tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))}
               />
               <Tooltip
                 cursor={{ fill: "rgba(99,102,241,0.06)" }}
@@ -327,7 +329,7 @@ const UserStackedScrollChart = React.memo(function UserStackedScrollChart({
                   stackId="s"
                   fill={statusColor(status, idx)}
                   isAnimationActive={false}
-                  minPointSize={2}
+                  minPointSize={8}
                   radius={idx === statusKeys.length - 1 ? [6, 6, 0, 0] : 0}
                 >
                   {/* Show active total count on top of the last stack segment */}

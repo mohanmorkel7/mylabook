@@ -3135,7 +3135,7 @@ function ClientOverviewScreen({
 }) {
   const defaultTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
-  const [txnInput, setTxnInput] = useState(client.monthlyTransactionVolume);
+  const [txnInput, setTxnInput] = useState(Number(client.monthlyTransactionVolume ?? 0));
   const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
   const [taxType, setTaxType] = useState<RowTaxType>(defaultTaxType);
   const resolvedTaxType = getClientTaxType(client, taxType);
@@ -3174,7 +3174,7 @@ function ClientOverviewScreen({
   }, [client.clientId, client.clientId]);
 
   useEffect(() => {
-    setTxnInput(client.monthlyTransactionVolume);
+    setTxnInput(Number(client.monthlyTransactionVolume ?? 0));
     setTransactionBased(getBillingModel(client) === "transaction");
     setTaxType(defaultTaxType);
     setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));

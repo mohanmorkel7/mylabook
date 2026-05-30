@@ -1373,11 +1373,13 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
   const configHsn = normalizeInlineText(taxConfig?.invoiceHsnCode);
   const configRate = `${Number(taxConfig?.invoiceRatePercentage || 18)}%`;
   const defaultTaxType: RowTaxType = getTaxTypeFromGstin(client.gstin) || (client.clientType === "International" ? "International" : "Domestic");
+  const defaultUseConfigHsn = Boolean(configHsn);
   const makeRow = (item: Partial<InvoiceExportLineItem> & Pick<InvoiceExportLineItem, "description" | "amount">): InvoiceExportLineItem => {
     const taxType = item.taxType || defaultTaxType;
     const taxes = calculateRowTaxes(Number(item.amount || 0), item.rate || configRate, taxType);
+    const applyConfigHsn = typeof item.useConfigHsn === "boolean" ? item.useConfigHsn : defaultUseConfigHsn;
     return {
-      hsn: item.useConfigHsn ? configHsn : (item.hsn || ""),
+      hsn: applyConfigHsn ? configHsn : (item.hsn || ""),
       rate: item.rate || configRate,
       cgst: taxes.cgst,
       sgst: taxes.sgst,
@@ -1388,7 +1390,7 @@ function getInvoiceHistoryLineItemSummary(client: ClientRecord, invoiceAmount: n
       totalAmount: taxes.totalAmount,
       description: item.description,
       amount: Number(item.amount || 0),
-      useConfigHsn: item.useConfigHsn,
+      useConfigHsn: applyConfigHsn,
     };
   };
 
@@ -3135,6 +3137,7 @@ function ClientOverviewScreen({
 }) {
   const defaultTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
+  const defaultUseConfigHsn = Boolean(taxConfig.invoiceHsnCode);
   const normalizeVolume = (value?: number | string) => {
     const parsed = Number(value ?? 0);
     if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -3296,7 +3299,7 @@ function ClientOverviewScreen({
         amount: 0,
         hsn: "",
         rate: defaultRate,
-        useConfigHsn: false,
+        useConfigHsn: defaultUseConfigHsn,
         cgst: 0,
         sgst: 0,
         igst: 0,

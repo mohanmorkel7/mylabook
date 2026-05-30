@@ -3375,15 +3375,29 @@ function ClientOverviewScreen({
     });
   };
 
+  const syncAwsRows = (cost: number, margin: number) => {
+    const markup = cost * (margin / 100);
+    setOverviewRows((prev) =>
+      prev.map((row) => {
+        if (row.id === "aws-vendor-cost") {
+          return applyOverviewRowTaxes({ ...row, amount: cost }, resolvedTaxType, taxConfig);
+        }
+        if (row.id === "aws-pass-through") {
+          return applyOverviewRowTaxes({ ...row, amount: markup }, resolvedTaxType, taxConfig);
+        }
+        return row;
+      }),
+    );
+  };
+
   const handleAwsVendorCostDraftChange = (value: number) => {
     setAwsVendorCostDraft(value);
-    setOverviewRows((prev) =>
-      prev.map((row) =>
-        row.id === "aws-vendor-cost"
-          ? applyOverviewRowTaxes({ ...row, amount: value }, resolvedTaxType, taxConfig)
-          : row,
-      ),
-    );
+    syncAwsRows(value, awsMarginDraft);
+  };
+
+  const handleAwsMarginDraftChange = (value: number) => {
+    setAwsMarginDraft(value);
+    syncAwsRows(awsVendorCostDraft, value);
   };
 
   const addOverviewRow = () => {
@@ -3963,7 +3977,7 @@ function ClientOverviewScreen({
               <Input
                 type="number"
                 value={awsMarginDraft}
-                onChange={(e) => setAwsMarginDraft(Number(e.target.value) || 0)}
+                onChange={(e) => handleAwsMarginDraftChange(Number(e.target.value) || 0)}
                 placeholder="25"
               />
               <p className="text-xs text-muted-foreground">Used to calculate the AWS markup row.</p>

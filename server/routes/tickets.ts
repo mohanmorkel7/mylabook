@@ -235,8 +235,8 @@ router.get("/", async (req: Request, res: Response) => {
     // Protect the route from extremely slow DB calls by racing with a timeout
     // If client requests simple listing (raw tickets table), run a lightweight query
     if (String(req.query.simple || "").trim() === "1") {
+      const queryStartMs = Date.now();
       try {
-        const queryStartMs = Date.now();
         console.log("[GET /api/tickets] Using simple query mode");
         const isExport = String(req.query.export || "").trim() === "1";
         const offset = (page - 1) * effectiveLimit;
@@ -649,9 +649,11 @@ router.get("/summary", async (req: Request, res: Response) => {
         a.id,
         CONCAT(a.first_name, ' ', a.last_name) AS name,
         a.email,
-        COUNT(t.id) AS count
+        COUNT(t.id) AS count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
       FROM users a
-      LEFT JOIN tickets t ON t.assigned_to = a.id ${where}
+      LEFT JOIN tickets t ON t.assigned_to = a.id
+      LEFT JOIN clients c ON t.related_client_id = c.id ${where}
       GROUP BY a.id, a.first_name, a.last_name, a.email
       ORDER BY count DESC, name
     `;
@@ -661,13 +663,18 @@ router.get("/summary", async (req: Request, res: Response) => {
       name: row.name,
       email: row.email,
       count: Number(row.count),
+      client_names: row.client_names || [],
     }));
 
     // 2. Statuses
     const statusQuery = `
-      SELECT ts.name as status_name, COUNT(*) as count
+      SELECT
+        ts.name as status_name,
+        COUNT(*) as count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
       FROM tickets t
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN clients c ON t.related_client_id = c.id
       ${where}
       GROUP BY ts.name
       ORDER BY ts.name
@@ -676,6 +683,7 @@ router.get("/summary", async (req: Request, res: Response) => {
     const statuses = statusRes.rows.map((r: any) => ({
       status: r.status_name || "Unknown",
       count: Number(r.count),
+      client_names: r.client_names || [],
     }));
 
     console.log("[GET /api/tickets/summary] statuses:", statuses);
@@ -825,10 +833,12 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
         COALESCE(CONCAT(a.first_name, ' ', a.last_name), 'Unassigned') as user_name,
         ts.id as status_id,
         ts.name as status_name,
-        COUNT(*) as count
+        COUNT(*) as count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
       FROM tickets t
       LEFT JOIN users a ON t.assigned_to = a.id
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN clients c ON t.related_client_id = c.id
       ${where}
       GROUP BY a.id, a.first_name, a.last_name, ts.id, ts.name
       ORDER BY user_name, status_name
@@ -841,6 +851,7 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
       status_id: row.status_id,
       status_name: row.status_name,
       count: Number(row.count),
+      client_names: row.client_names || [],
     }));
     console.log(
       `[GET /api/tickets/summary/user-status] Returning ${responseData.length} rows`,
@@ -937,9 +948,11 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
           ELSE 'Manual'
         END AS tag,
         COALESCE(ts.name, 'Unknown') AS status_name,
-        COUNT(*)::INT AS count
+        COUNT(*)::INT AS count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
       FROM tickets t
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN clients c ON t.related_client_id = c.id
       ${where}
       GROUP BY 1, 2
       ORDER BY 1, 2
@@ -947,15 +960,27 @@ router.get("/summary/by-tag", async (req: Request, res: Response) => {
 
     const result = await pool.query(query, values);
     const grouped: Record<string, Record<string, number>> = {};
+    const clientNamesByTag: Record<string, string[]> = {};
     for (const row of result.rows as any[]) {
       const tag = String(row.tag || 'Manual');
       const statusName = String(row.status_name || 'Unknown');
       if (!grouped[tag]) grouped[tag] = {};
       grouped[tag][statusName] = Number(row.count || 0);
+      if (!clientNamesByTag[tag]) clientNamesByTag[tag] = [];
+      const clients = Array.isArray(row.client_names) ? row.client_names : [];
+      clients.forEach((clientName: string) => {
+        if (clientName && !clientNamesByTag[tag].includes(clientName)) {
+          clientNamesByTag[tag].push(clientName);
+        }
+      });
     }
 
     const payload = {
-      tags: Object.entries(grouped).map(([tag, counts]) => ({ tag, counts })),
+      tags: Object.entries(grouped).map(([tag, counts]) => ({
+        tag,
+        counts,
+        client_names: clientNamesByTag[tag] || [],
+      })),
     };
     ticketTagSummaryCache.set(cacheKey, {
       data: payload,
@@ -1202,12 +1227,8 @@ router.delete("/:id", async (req: Request, res: Response) => {
       try {
         const ticket = await TicketRepository.getById(id);
         // If we get here, ticket exists, proceed with deletion
-        const success = await TicketRepository.delete(id);
-        if (success) {
-          res.json({ message: "Ticket deleted successfully" });
-        } else {
-          res.status(500).json({ error: "Failed to delete ticket" });
-        }
+        await TicketRepository.delete(id);
+        res.json({ message: "Ticket deleted successfully" });
       } catch (getByIdError: any) {
         // getById throws "Ticket not found" error if ticket doesn't exist
         if (getByIdError?.message?.includes("Ticket not found")) {

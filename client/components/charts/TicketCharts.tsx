@@ -1,4 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import api from "@/lib/api";
 
 interface AssignedCount {
@@ -10,6 +23,52 @@ interface AssignedCount {
 interface StatusCount {
   status: string;
   count: number;
+  client_names?: string[];
+}
+
+interface GroupedStatusCount {
+  user_id: number | string | null;
+  name: string;
+  counts: Record<string, number>;
+  client_names?: string[];
+}
+
+const CHART_COLORS = [
+  "#2563eb",
+  "#0f766e",
+  "#f59e0b",
+  "#ef4444",
+  "#7c3aed",
+  "#0891b2",
+  "#db2777",
+  "#16a34a",
+];
+
+const STATUS_ORDER = ["Open", "In Progress", "Pending", "Overdue", "Closed"];
+
+function normalizeClientNames(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [] as string[];
+}
+
+function getStatusRank(status?: string) {
+  const name = String(status || "Unknown").trim();
+  const order = STATUS_ORDER.findIndex(
+    (item) => item.toLowerCase() === name.toLowerCase(),
+  );
+  return order === -1 ? STATUS_ORDER.length + (name.toLowerCase().charCodeAt(0) || 0) : order;
 }
 
 export default function TicketCharts({
@@ -27,8 +86,8 @@ export default function TicketCharts({
 }) {
   const [assigned, setAssigned] = useState<AssignedCount[]>([]);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);
-  const [userStatus, setUserStatus] = useState<any[]>([]); // [{ user_id, name, counts: { statusName: count } }]
-  const [tagStatus, setTagStatus] = useState<any[]>([]); // [{ tag, counts: { statusName: count } }]
+  const [userStatus, setUserStatus] = useState<GroupedStatusCount[]>([]);
+  const [tagStatus, setTagStatus] = useState<GroupedStatusCount[]>([]);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<"all" | "today" | "7days" | "month">(
     "all",
@@ -128,7 +187,7 @@ export default function TicketCharts({
         if (!mounted) return;
 
         if (summaryResp.status === "fulfilled") {
-          const summaryPayload = summaryResp.value?.data ?? summaryResp.value;
+          const summaryPayload = (summaryResp.value as any)?.data ?? summaryResp.value;
           setAssigned(summaryPayload.assigned || []);
           setStatuses(summaryPayload.statuses || []);
           if (onSummaryFetched) {
@@ -141,23 +200,37 @@ export default function TicketCharts({
         }
 
         if (userStatusResp.status === "fulfilled") {
-          const userStatusPayload = userStatusResp.value?.data ?? userStatusResp.value;
+          const userStatusPayload = (userStatusResp.value as any)?.data ?? userStatusResp.value;
           const rawData = Array.isArray(userStatusPayload)
             ? userStatusPayload
             : userStatusPayload?.data || [];
-          const grouped: Record<number, { user_id: number; name: string; counts: Record<string, number> }> = {};
+          const grouped: Record<
+            number,
+            { user_id: number; name: string; counts: Record<string, number>; client_names: string[] }
+          > = {};
           rawData.forEach((row: any) => {
             const userId = row.user_id || 0;
             if (!grouped[userId]) {
-              grouped[userId] = { user_id: userId, name: row.user_name || "Unknown", counts: {} };
+              grouped[userId] = {
+                user_id: userId,
+                name: row.user_name || "Unknown",
+                counts: {},
+                client_names: [],
+              };
             }
             const statusName = row.status_name || "Unknown";
             grouped[userId].counts[statusName] = row.count || 0;
+            const clientNames = normalizeClientNames(row.client_names);
+            clientNames.forEach((clientName) => {
+              if (!grouped[userId].client_names.includes(clientName)) {
+                grouped[userId].client_names.push(clientName);
+              }
+            });
           });
           if (mounted) setUserStatus(Object.values(grouped));
         }
 
-        const buildTagSummaryFromTickets = () => {
+        const buildTagSummaryFromTickets = (): GroupedStatusCount[] => {
           const grouped: Record<string, Record<string, number>> = {};
           const sourceTickets = Array.isArray(tickets) ? tickets : [];
           for (const ticket of sourceTickets) {
@@ -166,15 +239,27 @@ export default function TicketCharts({
             if (!grouped[tag]) grouped[tag] = {};
             grouped[tag][statusName] = (grouped[tag][statusName] || 0) + 1;
           }
-          return Object.entries(grouped).map(([tag, counts]) => ({ tag, counts }));
+          return Object.entries(grouped).map(([tag, counts]) => ({
+            user_id: tag,
+            name: tag,
+            counts,
+            client_names: [],
+          }));
         };
 
         if (tagResp.status === "fulfilled") {
-          const tagPayload = tagResp.value?.data ?? tagResp.value;
+          const tagPayload = (tagResp.value as any)?.data ?? tagResp.value;
           const tags = Array.isArray(tagPayload) ? tagPayload : tagPayload?.tags || [];
           if (mounted) {
             if (tags.length > 0) {
-              setTagStatus(tags);
+              setTagStatus(
+                tags.map((tagRow: any) => ({
+                  user_id: tagRow.tag,
+                  name: tagRow.tag,
+                  counts: tagRow.counts || {},
+                  client_names: normalizeClientNames(tagRow.client_names),
+                })),
+              );
             } else {
               setTagStatus(buildTagSummaryFromTickets());
             }
@@ -196,7 +281,6 @@ export default function TicketCharts({
     };
   }, [dateFrom, dateTo, range]);
 
-  // Vertical bar chart component
   const VerticalBarChart = ({
     items,
     labelKey,
@@ -206,82 +290,59 @@ export default function TicketCharts({
     labelKey: string;
     valueKey: string;
   }) => {
-    const max = items.reduce((m, it) => Math.max(m, it[valueKey] || 0), 0) || 1;
-    const MAX_PX = 160;
-    const MIN_PX = 8;
+    const data = [...items]
+      .map((item) => ({
+        ...item,
+        clientNames: normalizeClientNames(item.client_names),
+      }))
+      .sort((a, b) => Number(b[valueKey] || 0) - Number(a[valueKey] || 0));
 
-    // Color palettes for better visual distinction
-    const palette = [
-      "#3B82F6",
-      "#10B981",
-      "#F59E0B",
-      "#EF4444",
-      "#8B5CF6",
-      "#06B6D4",
-      "#F472B6",
-      "#7C3AED",
-    ];
+    const tooltip = ({ active, payload, label }: any) => {
+      if (!active || !payload?.length) return null;
+      const row = payload[0]?.payload || {};
+      const clients = normalizeClientNames(row.clientNames || row.client_names);
+      const count = Number(row[valueKey] || payload[0]?.value || 0);
+
+      return (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+          <div className="text-sm font-semibold text-slate-900">{label || row[labelKey]}</div>
+          <div className="mt-1 text-xs text-slate-600">Tickets: {count}</div>
+          {clients.length > 0 && (
+            <div className="mt-2 max-w-[240px] text-xs text-slate-500">
+              <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
+              {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
+            </div>
+          )}
+        </div>
+      );
+    };
 
     return (
-      <div className="flex flex-col">
-        <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
-          {items.map((it, idx) => {
-            const val = Number(it[valueKey] || 0);
-            const h = Math.max(MIN_PX, Math.round((val / max) * MAX_PX));
-            const color = palette[idx % palette.length];
-            return (
-              <div key={idx} className="flex-1 flex flex-col items-center">
-                <div className="text-sm text-gray-700 mb-2">{val}</div>
-                <div
-                  className="w-full flex items-end justify-center"
-                  style={{ minHeight: 0 }}
-                >
-                  <div
-                    style={{
-                      width: 28,
-                      height: h,
-                      background: color,
-                      borderTopLeftRadius: 6,
-                      borderTopRightRadius: 6,
-                    }}
-                    title={`${it[labelKey]}: ${val}`}
-                    className="transition-all"
-                  />
-                </div>
-                <div
-                  className="mt-2 text-xs text-center text-gray-700 truncate"
-                  style={{ maxWidth: "6rem" }}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: color,
-                        display: "inline-block",
-                        borderRadius: 4,
-                      }}
-                    />
-                    <span
-                      style={{
-                        maxWidth: 80,
-                        display: "inline-block",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {it[labelKey]}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div className="h-[260px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+            <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+            <YAxis
+              dataKey={labelKey}
+              type="category"
+              width={126}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 12 }}
+            />
+            <Tooltip content={tooltip} cursor={{ fill: "rgba(37, 99, 235, 0.08)" }} />
+            <Bar dataKey={valueKey} radius={[0, 10, 10, 0]} barSize={20}>
+              {data.map((entry, idx) => (
+                <Cell key={`${entry[labelKey] || idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     );
   };
 
-  // Donut chart component for status distribution
   const DonutChart = ({
     items,
     labelKey,
@@ -291,101 +352,70 @@ export default function TicketCharts({
     labelKey: string;
     valueKey: string;
   }) => {
-    const total =
-      items.reduce((s, it) => s + Number(it[valueKey] || 0), 0) || 1;
-    const radius = 72; // larger donut
-    const stroke = 24;
-    const normalizedRadius = radius - stroke / 2;
-    const circumference = 2 * Math.PI * normalizedRadius;
+    const data = [...items]
+      .map((item) => ({
+        ...item,
+        clientNames: normalizeClientNames(item.client_names),
+      }))
+      .sort(
+        (a, b) =>
+          getStatusRank(a[labelKey]) - getStatusRank(b[labelKey]) ||
+          Number(b[valueKey] || 0) - Number(a[valueKey] || 0),
+      );
 
-    const palette = [
-      "#3B82F6",
-      "#10B981",
-      "#F59E0B",
-      "#EF4444",
-      "#8B5CF6",
-      "#06B6D4",
-      "#F472B6",
-      "#7C3AED",
-    ];
+    const total = data.reduce((sum, item) => sum + Number(item[valueKey] || 0), 0);
 
-    let cumulative = 0;
+    const tooltip = ({ active, payload }: any) => {
+      if (!active || !payload?.length) return null;
+      const row = payload[0]?.payload || {};
+      const clients = normalizeClientNames(row.clientNames || row.client_names);
+      const count = Number(row[valueKey] || 0);
+      const percent = total ? Math.round((count / total) * 100) : 0;
+
+      return (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+          <div className="text-sm font-semibold text-slate-900">{row[labelKey]}</div>
+          <div className="mt-1 text-xs text-slate-600">
+            {count} tickets • {percent}% of total
+          </div>
+          {clients.length > 0 && (
+            <div className="mt-2 max-w-[240px] text-xs text-slate-500">
+              <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
+              {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
+            </div>
+          )}
+        </div>
+      );
+    };
 
     return (
-      <div className="flex flex-col items-center gap-3">
-        <div style={{ width: radius * 2, height: radius * 2 }}>
-          <svg
-            height={radius * 2}
-            width={radius * 2}
-            style={{ transform: "rotate(-90deg)" }}
-          >
-            {items.map((it, i) => {
-              const val = Number(it[valueKey] || 0);
-              const fraction = val / total;
-              const dash = fraction * circumference;
-              const dashArray = `${dash} ${circumference - dash}`;
-              const offset = circumference * (1 - cumulative);
-              const color = palette[i % palette.length];
-              cumulative += fraction;
-              return (
-                <circle
-                  key={i}
-                  r={normalizedRadius}
-                  cx={radius}
-                  cy={radius}
-                  fill="transparent"
-                  stroke={color}
-                  strokeWidth={stroke}
-                  strokeDasharray={dashArray}
-                  strokeDashoffset={offset}
-                  strokeLinecap="butt"
-                />
-              );
-            })}
-            <circle
-              r={normalizedRadius - stroke}
-              cx={radius}
-              cy={radius}
-              fill="#fff"
-            />
-            <text
-              x="50%"
-              y="50%"
-              dominantBaseline="middle"
-              textAnchor="middle"
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                transform: "rotate(90deg)",
-                transformOrigin: `${radius}px ${radius}px`,
-              }}
+      <div className="relative h-[260px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Tooltip content={tooltip} />
+            <Legend verticalAlign="bottom" height={36} iconType="circle" />
+            <Pie
+              data={data}
+              dataKey={valueKey}
+              nameKey={labelKey}
+              innerRadius={58}
+              outerRadius={88}
+              paddingAngle={3}
+              stroke="rgba(255,255,255,0.9)"
+              strokeWidth={2}
             >
-              {total}
-            </text>
-          </svg>
-        </div>
+              {data.map((entry, idx) => (
+                <Cell key={`${entry[labelKey] || idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-[220px]">
-          {items.map((it, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 text-xs text-gray-700"
-            >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  background: palette[i % palette.length],
-                  display: "inline-block",
-                  borderRadius: 3,
-                }}
-              />
-              <span className="truncate" style={{ minWidth: 60 }}>
-                {it[labelKey]}
-              </span>
-              <span className="text-gray-500 ml-2">{it[valueKey]}</span>
-            </div>
-          ))}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="rounded-full bg-white/95 px-4 py-3 text-center shadow-sm ring-1 ring-slate-200">
+            <div className="text-2xl font-semibold text-slate-900">{total}</div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Tickets</div>
+          </div>
         </div>
       </div>
     );
@@ -394,210 +424,103 @@ export default function TicketCharts({
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
 
-  // Grouped side-by-side vertical bars per user (each user's column contains bars for each status)
   const GroupedBarChart = ({
     users,
     statuses,
   }: {
-    users: any[];
+    users: GroupedStatusCount[];
     statuses: StatusCount[];
   }) => {
-    const MAX_PX = 140; // reduced to make room for count labels at top
-    const MIN_PX = 10; // visible but not too tall
-    // compute union of status names from both statuses list and users' counts
-    const derivedFromUsers = Array.from(
-      new Set(users.flatMap((u) => (u.counts ? Object.keys(u.counts) : []))),
-    );
     const statusNames = Array.from(
-      new Set([...(statuses || []).map((s) => s.status), ...derivedFromUsers]),
-    );
+      new Set([
+        ...(statuses || []).map((item) => item.status),
+        ...users.flatMap((user) => Object.keys(user.counts || {})),
+      ]),
+    ).sort((a, b) => getStatusRank(a) - getStatusRank(b) || a.localeCompare(b));
 
-    // fixed bar width and gap
-    const gap = 8;
-    const fixedBarWidth = 28; // px per small bar
-    const totalColWidth = Math.max(
-      56,
-      statusNames.length * (fixedBarWidth + gap) + 8,
-    );
+    const data = users
+      .map((user) => {
+        const row: Record<string, any> = {
+          name: user.name || `User ${user.user_id}`,
+          clientNames: normalizeClientNames(user.client_names),
+        };
 
-    const palette = [
-      "#3B82F6",
-      "#10B981",
-      "#F59E0B",
-      "#EF4444",
-      "#8B5CF6",
-      "#06B6D4",
-      "#F472B6",
-      "#7C3AED",
-    ];
+        let total = 0;
+        statusNames.forEach((status) => {
+          const value = Number(user.counts?.[status] || 0);
+          row[status] = value;
+          total += value;
+        });
+        row.total = total;
+        return row;
+      })
+      .sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
 
-    // stable color map for statuses
-    const colorMap: Record<string, string> = {};
-    statusNames.forEach((st, i) => {
-      colorMap[st] = palette[i % palette.length];
-    });
+    const tooltip = ({ active, payload, label }: any) => {
+      if (!active || !payload?.length) return null;
+      const row = payload[0]?.payload || {};
+      const clients = normalizeClientNames(row.clientNames || row.client_names);
+      const values = statusNames
+        .map((status, index) => ({
+          status,
+          value: Number(row[status] || 0),
+          color: CHART_COLORS[index % CHART_COLORS.length],
+        }))
+        .filter((item) => item.value > 0);
 
-    // global max value across all users/statuses for consistent scaling
-    const maxVal = Math.max(
-      1,
-      ...users.flatMap((u) =>
-        statusNames.map((st) => Number((u.counts && u.counts[st]) || 0)),
-      ),
-    );
-
-    const barWidth = fixedBarWidth;
+      return (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+          <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
+          <div className="mt-1 text-xs text-slate-600">Total tickets: {Number(row.total || 0)}</div>
+          <div className="mt-2 space-y-1">
+            {values.map((item) => (
+              <div key={item.status} className="flex items-center justify-between gap-4 text-xs">
+                <span className="inline-flex items-center gap-2 text-slate-600">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: item.color }} />
+                  {item.status}
+                </span>
+                <span className="font-medium text-slate-900">{item.value}</span>
+              </div>
+            ))}
+          </div>
+          {clients.length > 0 && (
+            <div className="mt-2 max-w-[260px] text-xs text-slate-500">
+              <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
+              {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
+            </div>
+          )}
+        </div>
+      );
+    };
 
     return (
-      <div className="flex flex-col">
-        <div
-          className="flex items-end gap-4 px-2"
-          style={{ height: MAX_PX + 24, paddingTop: 24 }}
-        >
-          {users.map((u, ui) => {
-            const name = u.name || `User ${u.user_id}`;
-            // Per-user scaling: ensure every non-zero status gets a minimum visible height
-            const userMax = Math.max(
-              1,
-              ...statusNames.map((st) =>
-                Number((u.counts && u.counts[st]) || 0),
-              ),
-            );
-            const nonZeroMinHeight = Math.round(MAX_PX * 0.22); // ~22% of chart height
-            const zeroHeight = Math.max(4, Math.round(nonZeroMinHeight * 0.18));
-
-            const bars = statusNames.map((st, idx) => {
-              const val = Number((u.counts && u.counts[st]) || 0);
-              let h = 0;
-              if (val === 0) {
-                h = zeroHeight;
-              } else {
-                const proportion = val / userMax;
-                h = Math.max(nonZeroMinHeight, Math.round(proportion * MAX_PX));
-              }
-              return {
-                val,
-                h,
-                color: colorMap[st] || palette[idx % palette.length],
-                status: st,
-              };
-            });
-
-            return (
-              <div key={ui} className="flex-1 flex flex-col items-center">
-                <div className="text-sm text-gray-700 mb-2">
-                  {statusNames.reduce(
-                    (s, st) => s + Number((u.counts && u.counts[st]) || 0),
-                    0,
-                  )}
-                </div>
-                <div
-                  className="w-full flex items-end justify-center"
-                  style={{ minHeight: 0 }}
-                >
-                  <div
-                    style={{ width: totalColWidth }}
-                    title={`${name}`}
-                    className="overflow-hidden"
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-end",
-                        justifyContent: "center",
-                        gap: 6,
-                        minWidth: Math.max(
-                          120,
-                          statusNames.length * (barWidth + gap),
-                        ),
-                      }}
-                    >
-                      {bars.map((bar, bi) => (
-                        <div
-                          key={bi}
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            minHeight: "100%",
-                            justifyContent: "flex-end",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 10,
-                              color: "#374151",
-                              marginBottom: 4,
-                              height: 14,
-                              minWidth: barWidth,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            {bar.val}
-                          </div>
-                          <div
-                            style={{
-                              width: barWidth,
-                              height: bar.h,
-                              background: bar.color,
-                              borderTopLeftRadius: 4,
-                              borderTopRightRadius: 4,
-                              boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-                              border: "1px solid rgba(0,0,0,0.04)",
-                            }}
-                            title={`${name} - ${bar.status}: ${bar.val}`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="mt-2 text-xs text-center text-gray-700 truncate"
-                  style={{ maxWidth: "6rem" }}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: "#666",
-                        display: "inline-block",
-                        borderRadius: 4,
-                      }}
-                    />
-                    <span
-                      style={{
-                        maxWidth: 80,
-                        display: "inline-block",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {name}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {statusNames.map((st, i) => (
-            <div key={st} className="text-xs inline-flex items-center gap-2">
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  background: colorMap[st] || palette[i % palette.length],
-                  display: "inline-block",
-                  borderRadius: 3,
-                }}
+      <div className="h-[320px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, left: 12, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+            <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+            <YAxis
+              dataKey="name"
+              type="category"
+              width={132}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 12 }}
+            />
+            <Tooltip content={tooltip} cursor={{ fill: "rgba(15, 23, 42, 0.06)" }} />
+            <Legend verticalAlign="bottom" height={34} iconType="circle" />
+            {statusNames.map((status, index) => (
+              <Bar
+                key={status}
+                dataKey={status}
+                stackId="tickets"
+                fill={CHART_COLORS[index % CHART_COLORS.length]}
+                radius={index === statusNames.length - 1 ? [0, 10, 10, 0] : 0}
+                barSize={18}
               />
-              <span className="text-gray-700">{st}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     );
   };
@@ -628,112 +551,100 @@ export default function TicketCharts({
         </div>
       </div>
 
-      {/* Three cards in a single row */}
-      <div className="flex gap-4 items-stretch flex-col md:flex-row">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {/* Assigned To Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">Assigned To</h4>
-            <div className="text-sm text-gray-600">
-              Total:{" "}
-              <span className="font-medium text-gray-900">{totalAssigned}</span>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">Assigned To</h4>
+              <p className="text-xs text-slate-500">Tickets by assignee, sorted high to low</p>
+            </div>
+            <div className="text-sm text-slate-600">
+              Total: {" "}
+              <span className="font-medium text-slate-900">{totalAssigned}</span>
             </div>
           </div>
-          <div style={{ overflowX: "auto", overflowY: "visible" }}>
+          <div className="pt-2">
             {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
+              <div className="text-sm text-slate-500">Loading…</div>
             ) : assigned.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
+              <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <div className="min-w-[220px]" style={{ marginTop: 50 }}>
-                <VerticalBarChart
-                  items={assigned}
-                  labelKey="name"
-                  valueKey="count"
-                />
-              </div>
+              <VerticalBarChart items={assigned} labelKey="name" valueKey="count" />
             )}
           </div>
         </div>
 
         {/* Status Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">Status</h4>
-            <div className="text-sm text-gray-600">
-              Total:{" "}
-              <span className="font-medium text-gray-900">{totalTickets}</span>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">Status</h4>
+              <p className="text-xs text-slate-500">Overall ticket mix with client context on hover</p>
+            </div>
+            <div className="text-sm text-slate-600">
+              Total: {" "}
+              <span className="font-medium text-slate-900">{totalTickets}</span>
             </div>
           </div>
-          <div>
+          <div className="pt-2">
             {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
+              <div className="text-sm text-slate-500">Loading…</div>
             ) : statuses.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
+              <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <div>
-                <DonutChart
-                  items={statuses.filter((s) => s.status?.toLowerCase() !== "closed")}
-                  labelKey="status"
-                  valueKey="count"
-                />
-              </div>
+              <DonutChart items={statuses} labelKey="status" valueKey="count" />
             )}
           </div>
         </div>
 
         {/* By User (Status) Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">By User (Status)</h4>
-            <div className="text-sm text-gray-600">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">By User (Status)</h4>
+              <p className="text-xs text-slate-500">Stacked status mix per assignee</p>
+            </div>
+            <div className="text-sm text-slate-600">
               Users:{" "}
-              <span className="font-medium text-gray-900">
+              <span className="font-medium text-slate-900">
                 {userStatus.length}
               </span>
             </div>
           </div>
-          <div style={{ overflowX: "auto", overflowY: "visible" }}>
+          <div className="pt-2">
             {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
+              <div className="text-sm text-slate-500">Loading…</div>
             ) : userStatus.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
+              <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <div className="min-w-[320px]" style={{ marginTop: 50 }}>
-                <GroupedBarChart users={userStatus} statuses={statuses} />
-              </div>
+              <GroupedBarChart users={userStatus} statuses={statuses} />
             )}
           </div>
         </div>
 
         {/* Tag (Status) Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0 mt-4 md:mt-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">By Tag (Status)</h4>
-            <div className="text-sm text-gray-600">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-1">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">By Tag (Status)</h4>
+              <p className="text-xs text-slate-500">Ticket tags with status breakdown</p>
+            </div>
+            <div className="text-sm text-slate-600">
               Tags:{" "}
-              <span className="font-medium text-gray-900">
+              <span className="font-medium text-slate-900">
                 {tagStatus.length}
               </span>
             </div>
           </div>
 
-          <div style={{ overflowX: "auto", overflowY: "visible" }}>
+          <div className="pt-2">
             {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
+              <div className="text-sm text-slate-500">Loading…</div>
             ) : tagStatus.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
+              <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <div className="min-w-[320px]" style={{ marginTop: 50 }}>
-                <GroupedBarChart
-                  users={tagStatus.map((t: any) => ({
-                    user_id: t.tag,
-                    name: t.tag,
-                    counts: t.counts,
-                  }))}
-                  statuses={statuses}
-                />
-              </div>
+              <GroupedBarChart users={tagStatus} statuses={statuses} />
             )}
           </div>
         </div>

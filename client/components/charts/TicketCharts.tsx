@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Bar,
   BarChart,
@@ -131,90 +132,126 @@ const AssigneeChart = React.memo(function AssigneeChart({
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const innerW = Math.max(data.length * SLOT_W, 280);
-  return (
-    <div style={{ overflowX: "auto", overflowY: "hidden" }}>
-      <div style={{ width: innerW, height: 300 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
-            barCategoryGap="35%"
-          >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-            <XAxis
-              dataKey="name"
-              tickLine={false}
-              axisLine={false}
-              tick={<CustomXTick />}
-              interval={0}
-              height={65}
-            />
-            <YAxis
-              allowDecimals={false}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fontSize: 10, fill: "#94a3b8" }}
-              width={28}
-            />
-            <Tooltip
-              cursor={{ fill: "rgba(99,102,241,0.06)" }}
-              content={({ active, payload }: any) => {
-                if (!active || !payload?.length) return null;
-                const row = payload[0]?.payload || {};
-                const pct = total ? Math.round((row.value / total) * 100) : 0;
-                const clients = normalizeClientNames(row.client_names)
-                  .filter(c => c.toLowerCase() !== "unknown client");
-                const breakdown: Record<string, number> = row.statusBreakdown || {};
-                const hasBreakdown = allStatusKeys.some(st => Number(breakdown[st] || 0) > 0);
-                return (
-                  <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur" style={{ minWidth: 180 }}>
-                    <p className="text-sm font-semibold text-slate-800">{row.name}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {Number(row.value).toLocaleString()} tickets
-                      {pct > 0 && <span className="ml-2 font-medium text-slate-700">{pct}% of total</span>}
-                    </p>
-                    {hasBreakdown && (
-                      <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
-                        {allStatusKeys.map((status, idx) => {
-                          const val = Number(breakdown[status] || 0);
-                          if (!val) return null;
-                          return (
-                            <div key={status} className="flex items-center justify-between gap-4 text-xs">
-                              <span className="flex items-center gap-1.5 text-slate-600">
-                                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
-                                {status}
-                              </span>
-                              <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {clients.length > 0 && (
-                      <p className="mt-2 text-[11px] text-slate-400">
-                        {clients.slice(0, 3).join(", ")}{clients.length > 3 ? ` +${clients.length - 3} more` : ""}
-                      </p>
-                    )}
-                  </div>
-                );
-              }}
-            />
-            <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false} minPointSize={3}>
-              {data.map((entry, idx) => (
-                <Cell key={`${entry.name}-${idx}`} fill={ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
-              ))}
-              <LabelList
-                dataKey="value"
-                position="top"
-                fill="#64748b"
-                fontSize={10}
-                formatter={(v: number) => v.toLocaleString()}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+
+  // Portal tooltip state – escapes the overflow container entirely
+  const [tip, setTip] = useState<{ visible: boolean; x: number; y: number; row: any }>({
+    visible: false, x: 0, y: 0, row: null,
+  });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const tipEl = tip.visible && tip.row ? (
+    <div
+      className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl"
+      style={{
+        position: "fixed",
+        left: tip.x + 14,
+        top: tip.y - 8,
+        transform: "translateY(-100%)",
+        zIndex: 9999,
+        pointerEvents: "none",
+        minWidth: 200,
+      }}
+    >
+      <p className="text-sm font-semibold text-slate-800">{tip.row.name}</p>
+      <p className="mt-0.5 text-xs text-slate-500">
+        {Number(tip.row.value).toLocaleString()} tickets
+        {total > 0 && (
+          <span className="ml-2 font-medium text-slate-700">
+            {Math.round((tip.row.value / total) * 100)}% of total
+          </span>
+        )}
+      </p>
+      {allStatusKeys.some(st => Number((tip.row.statusBreakdown || {})[st] || 0) > 0) && (
+        <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
+          {allStatusKeys.map((status, idx) => {
+            const val = Number((tip.row.statusBreakdown || {})[status] || 0);
+            if (!val) return null;
+            return (
+              <div key={status} className="flex items-center justify-between gap-4 text-xs">
+                <span className="flex items-center gap-1.5 text-slate-600">
+                  <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                  {status}
+                </span>
+                <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {(() => {
+        const clients = normalizeClientNames(tip.row.client_names)
+          .filter(c => c.toLowerCase() !== "unknown client");
+        return clients.length > 0 ? (
+          <p className="mt-2 text-[11px] text-slate-400">
+            {clients.slice(0, 3).join(", ")}{clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+          </p>
+        ) : null;
+      })()}
     </div>
+  ) : null;
+
+  return (
+    <>
+      <div
+        ref={containerRef}
+        style={{ overflowX: "auto", overflowY: "hidden" }}
+        onMouseMove={e => setTip(t => ({ ...t, x: e.clientX, y: e.clientY }))}
+        onMouseLeave={() => setTip(t => ({ ...t, visible: false }))}
+      >
+        <div style={{ width: innerW, height: 300 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
+              barCategoryGap="35%"
+              onMouseMove={(state: any) => {
+                if (state?.activePayload?.[0]?.payload) {
+                  setTip(t => ({ ...t, visible: true, row: state.activePayload[0].payload }));
+                }
+              }}
+              onMouseLeave={() => setTip(t => ({ ...t, visible: false }))}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                tick={<CustomXTick />}
+                interval={0}
+                height={65}
+              />
+              <YAxis
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                width={28}
+              />
+              {/* No Recharts Tooltip — we render via portal to escape overflow */}
+              <Bar
+                dataKey="value"
+                radius={[6, 6, 0, 0]}
+                isAnimationActive={false}
+                minPointSize={3}
+                cursor="pointer"
+              >
+                {data.map((entry, idx) => (
+                  <Cell key={`${entry.name}-${idx}`} fill={ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
+                ))}
+                <LabelList
+                  dataKey="value"
+                  position="top"
+                  fill="#64748b"
+                  fontSize={10}
+                  formatter={(v: number) => v.toLocaleString()}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      {typeof document !== "undefined" && tipEl && createPortal(tipEl, document.body)}
+    </>
   );
 });
 

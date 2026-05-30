@@ -92,7 +92,29 @@ function fmtTooltip({ label, count, pct, clients }: { label: string; count: numb
   );
 }
 
-// ─── Chart: Assignee (horizontal bar) ─────────────────────────────────────────
+// ─── Custom X-axis tick with truncation ───────────────────────────────────────
+
+function CustomXTick({ x, y, payload }: any) {
+  const name: string = payload?.value ?? "";
+  const short = name.length > 10 ? name.slice(0, 9) + "…" : name;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={12}
+        textAnchor="middle"
+        fill="#475569"
+        fontSize={11}
+        fontFamily="inherit"
+      >
+        {short}
+      </text>
+    </g>
+  );
+}
+
+// ─── Chart: Assignee (vertical bar) ───────────────────────────────────────────
 
 const AssigneeChart = React.memo(function AssigneeChart({
   data,
@@ -100,39 +122,51 @@ const AssigneeChart = React.memo(function AssigneeChart({
   data: { name: string; value: number; client_names?: string[] }[];
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
+  // Cap at top 10 to keep bars readable
+  const display = data.slice(0, 10);
   return (
     <div style={{ width: "100%", height: 280 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          data={data}
-          layout="vertical"
-          margin={{ top: 4, right: 52, left: 8, bottom: 4 }}
-          barCategoryGap="30%"
+          data={display}
+          margin={{ top: 20, right: 12, left: 0, bottom: 36 }}
+          barCategoryGap="35%"
         >
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
-          <YAxis
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <XAxis
             dataKey="name"
-            type="category"
-            width={128}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 12, fill: "#475569" }}
+            tick={<CustomXTick />}
+            interval={0}
+          />
+          <YAxis
+            allowDecimals={false}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            width={32}
           />
           <Tooltip
             cursor={{ fill: "rgba(99,102,241,0.06)" }}
-            content={({ active, payload, label }: any) => {
+            content={({ active, payload }: any) => {
               if (!active || !payload?.length) return null;
               const row = payload[0]?.payload || {};
               const pct = total ? Math.round((row.value / total) * 100) : 0;
-              return fmtTooltip({ label: label || row.name, count: row.value, pct, clients: normalizeClientNames(row.client_names) });
+              return fmtTooltip({ label: row.name, count: row.value, pct, clients: normalizeClientNames(row.client_names) });
             }}
           />
-          <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={16} isAnimationActive={false} minPointSize={3}>
-            {data.map((entry, idx) => (
+          <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false} minPointSize={3}>
+            {display.map((entry, idx) => (
               <Cell key={`${entry.name}-${idx}`} fill={ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
             ))}
-            <LabelList dataKey="value" position="right" fill="#64748b" fontSize={11} formatter={(v: number) => v.toLocaleString()} />
+            <LabelList
+              dataKey="value"
+              position="top"
+              fill="#64748b"
+              fontSize={10}
+              formatter={(v: number) => v.toLocaleString()}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -203,7 +237,7 @@ const StatusDonut = React.memo(function StatusDonut({
   );
 });
 
-// ─── Chart: Stacked bar (user / tag) ─────────────────────────────────────────
+// ─── Chart: Stacked bar (user / tag) — vertical ───────────────────────────────
 
 const StackedChart = React.memo(function StackedChart({
   data,
@@ -212,34 +246,40 @@ const StackedChart = React.memo(function StackedChart({
   data: StackedRow[];
   statusKeys: string[];
 }) {
+  // Cap at top 10 for readability
+  const display = data.slice(0, 10);
   return (
     <div style={{ width: "100%", height: 280 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          data={data}
-          layout="vertical"
-          margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
-          barCategoryGap="30%"
+          data={display}
+          margin={{ top: 20, right: 12, left: 0, bottom: 56 }}
+          barCategoryGap="35%"
         >
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
-          <YAxis
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <XAxis
             dataKey="name"
-            type="category"
-            width={136}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 12, fill: "#475569" }}
+            tick={<CustomXTick />}
+            interval={0}
+          />
+          <YAxis
+            allowDecimals={false}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            width={32}
           />
           <Tooltip
             cursor={{ fill: "rgba(6,182,212,0.06)" }}
-            content={({ active, payload, label }: any) => {
+            content={({ active, payload }: any) => {
               if (!active || !payload?.length) return null;
               const row = payload[0]?.payload || {};
               const clients = normalizeClientNames(row.client_names);
               return (
                 <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
-                  <p className="text-sm font-semibold text-slate-800">{label || row.name}</p>
+                  <p className="text-sm font-semibold text-slate-800">{row.name}</p>
                   <p className="mt-1 text-xs text-slate-500">{Number(row.total || 0).toLocaleString()} total tickets</p>
                   <div className="mt-2 space-y-1">
                     {statusKeys.map((status, idx) => {
@@ -270,6 +310,7 @@ const StackedChart = React.memo(function StackedChart({
             verticalAlign="bottom"
             iconType="circle"
             iconSize={8}
+            wrapperStyle={{ paddingTop: 4 }}
             formatter={(value: string) => <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>}
           />
           {statusKeys.map((status, idx) => (
@@ -279,9 +320,8 @@ const StackedChart = React.memo(function StackedChart({
               stackId="s"
               fill={statusColor(status, idx)}
               isAnimationActive={false}
-              barSize={16}
               minPointSize={2}
-              radius={idx === statusKeys.length - 1 ? [0, 6, 6, 0] : 0}
+              radius={idx === statusKeys.length - 1 ? [6, 6, 0, 0] : 0}
             />
           ))}
         </BarChart>
@@ -325,7 +365,7 @@ function ChartCard({
   return (
     <div
       className="flex-shrink-0 flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-sm"
-      style={{ width: 380 }}
+      style={{ width: 420 }}
     >
       <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
         <div>

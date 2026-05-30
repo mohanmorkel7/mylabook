@@ -6,8 +6,6 @@ import {
   Cell,
   LabelList,
   Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -116,7 +114,11 @@ function CustomXTick({ x, y, payload }: any) {
   );
 }
 
-// ─── Chart: Assignee (vertical bar) ───────────────────────────────────────────
+// ─── Shared constants ────────────────────────────────────────────────────────
+
+const SLOT_W = 54; // px per bar slot for scrollable charts
+
+// ─── Chart: Assignee — vertical bars, ALL agents, horizontal scroll ────────────
 
 const AssigneeChart = React.memo(function AssigneeChart({
   data,
@@ -124,15 +126,75 @@ const AssigneeChart = React.memo(function AssigneeChart({
   data: { name: string; value: number; client_names?: string[] }[];
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
-  // Cap at top 10 to keep bars readable
-  const display = data.slice(0, 10);
+  const innerW = Math.max(data.length * SLOT_W, 280);
+  return (
+    <div style={{ overflowX: "auto", overflowY: "hidden" }}>
+      <div style={{ width: innerW, height: 300 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={data}
+            margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
+            barCategoryGap="35%"
+          >
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis
+              dataKey="name"
+              tickLine={false}
+              axisLine={false}
+              tick={<CustomXTick />}
+              interval={0}
+              height={65}
+            />
+            <YAxis
+              allowDecimals={false}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              width={28}
+            />
+            <Tooltip
+              cursor={{ fill: "rgba(99,102,241,0.06)" }}
+              content={({ active, payload }: any) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0]?.payload || {};
+                const pct = total ? Math.round((row.value / total) * 100) : 0;
+                return fmtTooltip({ label: row.name, count: row.value, pct, clients: normalizeClientNames(row.client_names) });
+              }}
+            />
+            <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false} minPointSize={3}>
+              {data.map((entry, idx) => (
+                <Cell key={`${entry.name}-${idx}`} fill={ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
+              ))}
+              <LabelList
+                dataKey="value"
+                position="top"
+                fill="#64748b"
+                fontSize={10}
+                formatter={(v: number) => v.toLocaleString()}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+});
+
+// ─── Chart: Status — vertical bar, Closed excluded ───────────────────────────
+
+const StatusBar = React.memo(function StatusBar({
+  data,
+}: {
+  data: { name: string; value: number }[];
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
   return (
     <div style={{ width: "100%", height: 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          data={display}
-          margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
-          barCategoryGap="35%"
+          data={data}
+          margin={{ top: 20, right: 8, left: 0, bottom: 55 }}
+          barCategoryGap="40%"
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
           <XAxis
@@ -141,7 +203,7 @@ const AssigneeChart = React.memo(function AssigneeChart({
             axisLine={false}
             tick={<CustomXTick />}
             interval={0}
-            height={65}
+            height={55}
           />
           <YAxis
             allowDecimals={false}
@@ -156,12 +218,12 @@ const AssigneeChart = React.memo(function AssigneeChart({
               if (!active || !payload?.length) return null;
               const row = payload[0]?.payload || {};
               const pct = total ? Math.round((row.value / total) * 100) : 0;
-              return fmtTooltip({ label: row.name, count: row.value, pct, clients: normalizeClientNames(row.client_names) });
+              return fmtTooltip({ label: row.name, count: row.value, pct });
             }}
           />
           <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false} minPointSize={3}>
-            {display.map((entry, idx) => (
-              <Cell key={`${entry.name}-${idx}`} fill={ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
+            {data.map((entry, idx) => (
+              <Cell key={`${entry.name}-${idx}`} fill={STATUS_COLORS[entry.name] ?? ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
             ))}
             <LabelList
               dataKey="value"
@@ -177,66 +239,101 @@ const AssigneeChart = React.memo(function AssigneeChart({
   );
 });
 
-// ─── Chart: Status (donut) ────────────────────────────────────────────────────
+// ─── Chart: By User — vertical stacked bars, Closed excluded, horizontal scroll ─
 
-const StatusDonut = React.memo(function StatusDonut({
+const UserStackedScrollChart = React.memo(function UserStackedScrollChart({
   data,
+  statusKeys,
 }: {
-  data: { name: string; value: number }[];
+  data: StackedRow[];
+  statusKeys: string[]; // Closed already excluded by caller
 }) {
-  const total = data.reduce((s, d) => s + d.value, 0);
-  const RADIAN = Math.PI / 180;
-
-  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) => {
-    if (percent < 0.05) return null;
-    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + r * Math.cos(-midAngle * RADIAN);
-    const y = cy + r * Math.sin(-midAngle * RADIAN);
-    return (
-      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={10} fontWeight="600">
-        {`${Math.round(percent * 100)}%`}
-      </text>
-    );
-  };
-
+  const innerW = Math.max(data.length * SLOT_W, 280);
   return (
-    <div style={{ width: "100%", height: 300 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="46%"
-            innerRadius={60}
-            outerRadius={94}
-            paddingAngle={3}
-            labelLine={false}
-            label={renderLabel}
-            isAnimationActive={false}
-          >
-            {data.map((entry, idx) => (
-              <Cell key={`${entry.name}-${idx}`} fill={statusColor(entry.name, idx)} />
-            ))}
-          </Pie>
-          <Tooltip
-            content={({ active, payload }: any) => {
-              if (!active || !payload?.length) return null;
-              const row = payload[0]?.payload || {};
-              const pct = total ? Math.round((row.value / total) * 100) : 0;
-              return fmtTooltip({ label: row.name, count: row.value, pct });
-            }}
-          />
-          <Legend
-            verticalAlign="bottom"
-            iconType="circle"
-            iconSize={8}
-            formatter={(value: string) => <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
+    <>
+      <div style={{ overflowX: "auto", overflowY: "hidden" }}>
+        <div style={{ width: innerW, height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
+              barCategoryGap="35%"
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                tick={<CustomXTick />}
+                interval={0}
+                height={65}
+              />
+              <YAxis
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                width={28}
+              />
+              <Tooltip
+                cursor={{ fill: "rgba(99,102,241,0.06)" }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload || {};
+                  const clients = normalizeClientNames(row.client_names);
+                  return (
+                    <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+                      <p className="text-sm font-semibold text-slate-800">{row.name}</p>
+                      <div className="mt-2 space-y-1">
+                        {statusKeys.map((status, idx) => {
+                          const val = Number(row[status] || 0);
+                          if (!val) return null;
+                          return (
+                            <div key={status} className="flex items-center justify-between gap-6 text-xs">
+                              <span className="flex items-center gap-1.5 text-slate-600">
+                                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                                {status}
+                              </span>
+                              <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {clients.length > 0 && (
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {clients.slice(0, 3).join(", ")}
+                          {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+              {statusKeys.map((status, idx) => (
+                <Bar
+                  key={status}
+                  dataKey={status}
+                  stackId="s"
+                  fill={statusColor(status, idx)}
+                  isAnimationActive={false}
+                  minPointSize={2}
+                  radius={idx === statusKeys.length - 1 ? [6, 6, 0, 0] : 0}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      {/* pinned legend */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 pt-2">
+        {statusKeys.map((status, idx) => (
+          <span key={status} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+            {status}
+          </span>
+        ))}
+      </div>
+    </>
   );
 });
 
@@ -686,6 +783,18 @@ function TicketCharts({
     [statusKeys, userStackData, tagStackData],
   );
 
+  // Status keys for By User — exclude Closed
+  const userStatusKeys = useMemo(
+    () => activeStatusKeys.filter(st => st !== "Closed"),
+    [activeStatusKeys],
+  );
+
+  // Status data for Status chart — exclude Closed
+  const activeStatusData = useMemo(
+    () => statusData.filter(d => d.name !== "Closed"),
+    [statusData],
+  );
+
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
   // Active = everything except Closed (for badges)
   const totalActive = statuses
@@ -746,7 +855,7 @@ function TicketCharts({
           loading={loading}
           hasData={statusData.length > 0}
         >
-          <StatusDonut data={statusData} />
+          <StatusBar data={activeStatusData} />
         </ChartCard>
 
         {/* 3 – By User (Status) — scrollable, all users */}
@@ -758,7 +867,7 @@ function TicketCharts({
           hasData={userStackData.length > 0}
           wide
         >
-          <UserScrollChart data={userStackData} statusKeys={activeStatusKeys} />
+          <UserStackedScrollChart data={userStackData} statusKeys={userStatusKeys} />
         </ChartCard>
 
         {/* 4 – By Tag (Status) */}

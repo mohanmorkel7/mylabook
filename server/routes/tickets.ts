@@ -44,8 +44,7 @@ let statusCachePromise: Promise<void> | null = null;
 const normalizeStatusKey = (value: string): string =>
   String(value || "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+    .replace(/[^a-z0-9]+/g, "");
 
 async function ensureStatusLookupCache() {
   if (

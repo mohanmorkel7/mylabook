@@ -375,6 +375,11 @@ export default function ManageTickets() {
     }
   }
 
+  const normalizeStatusToken = (value: any) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+
   function formatProviderNameFromDomain(domain: string): string {
     const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
     const main = stripped.split(".")[0] || stripped;
@@ -721,10 +726,7 @@ export default function ManageTickets() {
           filters.status !== undefined &&
           String(filters.status).trim() !== ""
         ) {
-          const key = String(filters.status || "").toLowerCase();
-          const normalizedKey = key
-            .replace(/[^a-z0-9]+/g, "_")
-            .replace(/^_+|_+$/g, "");
+          const normalizedKey = normalizeStatusToken(filters.status);
           const sid = statusesMap[normalizedKey];
           if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid)))
             serverFilters.status_id = Number(sid);
@@ -871,15 +873,14 @@ export default function ManageTickets() {
       // Status filter - skip if empty or "All"
       const statusValue = String(filters.status || "").trim();
       if (statusValue && statusValue !== "All") {
-        const normalize = (s: any) =>
-          String(s || "")
+        const normalizeStatusToken = (value: any) =>
+          String(value || "")
             .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "_")
-            .replace(/^_+|_+$/g, "");
+            .replace(/[^a-z0-9]+/g, "");
+        const filterToken = normalizeStatusToken(statusValue);
         filtered = filtered.filter((t) => {
           const statusName = (t.status as any)?.name || t.status || "";
-          const token = normalize(statusName);
-          return token === normalize(statusValue);
+          return normalizeStatusToken(statusName) === filterToken;
         });
       }
 
@@ -1962,14 +1963,12 @@ export default function ManageTickets() {
         if (mounted) {
           setStatusesList(statuses);
           const map: Record<string, number> = {};
-          for (const s of statuses) {
-            const key = String(s.name || "")
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "_")
-              .replace(/^_+|_+$/g, "");
-            map[key] = Number(s.id);
-          }
-          setStatusesMap(map);
+    for (const s of statuses) {
+      const key = normalizeStatusToken(s.name || "");
+      if (key) map[key] = Number(s.id);
+      map[String(s.id)] = Number(s.id);
+    }
+    setStatusesMap(map);
         }
         const overdue = statuses.find((s: any) =>
           String(s.name).toLowerCase().includes("overdue"),

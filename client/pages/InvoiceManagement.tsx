@@ -4159,11 +4159,8 @@ function InvoiceConfigEditor({
                       inputMode="numeric"
                       pattern="\d*"
                       value={invoiceCurrentSerial}
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/\D+/g, "");
-                        setInvoiceCurrentSerial(digits);
-                      }}
-                      placeholder="17"
+                      onChange={(e) => setInvoiceCurrentSerial(e.target.value)}
+                      placeholder="0017"
                     />
                   </div>
                     <div className="space-y-2">

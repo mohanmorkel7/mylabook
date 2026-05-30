@@ -4589,7 +4589,7 @@ export default function InvoiceManagement() {
   const isFinanceDeptAdmin =
     user?.department_admin === true && String(user?.admin_for_department || "").toLowerCase() === "finance";
   const canManageInvoiceApprovalActions = isAdmin || isFinance || isFinanceDeptAdmin;
-  const canManageClientConfigActions = isAdmin || isFinance || isFinanceDeptAdmin;
+  const canManageClientConfigActions = isAdmin;
 
   useEffect(() => {
     try {

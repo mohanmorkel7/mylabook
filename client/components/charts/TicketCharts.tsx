@@ -96,17 +96,19 @@ function fmtTooltip({ label, count, pct, clients }: { label: string; count: numb
 
 function CustomXTick({ x, y, payload }: any) {
   const name: string = payload?.value ?? "";
-  const short = name.length > 10 ? name.slice(0, 9) + "…" : name;
+  const short = name.length > 13 ? name.slice(0, 12) + "…" : name;
   return (
-    <g transform={`translate(${x},${y})`}>
+    <g transform={`translate(${x},${y + 4})`}>
       <text
         x={0}
         y={0}
-        dy={12}
-        textAnchor="middle"
+        dy={4}
+        dx={-2}
+        textAnchor="end"
         fill="#475569"
-        fontSize={11}
+        fontSize={10}
         fontFamily="inherit"
+        transform="rotate(-38)"
       >
         {short}
       </text>
@@ -125,11 +127,11 @@ const AssigneeChart = React.memo(function AssigneeChart({
   // Cap at top 10 to keep bars readable
   const display = data.slice(0, 10);
   return (
-    <div style={{ width: "100%", height: 280 }}>
+    <div style={{ width: "100%", height: 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={display}
-          margin={{ top: 20, right: 12, left: 0, bottom: 36 }}
+          margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
           barCategoryGap="35%"
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -139,13 +141,14 @@ const AssigneeChart = React.memo(function AssigneeChart({
             axisLine={false}
             tick={<CustomXTick />}
             interval={0}
+            height={65}
           />
           <YAxis
             allowDecimals={false}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: "#94a3b8" }}
-            width={32}
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            width={28}
           />
           <Tooltip
             cursor={{ fill: "rgba(99,102,241,0.06)" }}
@@ -197,7 +200,7 @@ const StatusDonut = React.memo(function StatusDonut({
   };
 
   return (
-    <div style={{ width: "100%", height: 280 }}>
+    <div style={{ width: "100%", height: 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -249,11 +252,11 @@ const StackedChart = React.memo(function StackedChart({
   // Cap at top 10 for readability
   const display = data.slice(0, 10);
   return (
-    <div style={{ width: "100%", height: 280 }}>
+    <div style={{ width: "100%", height: 300 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={display}
-          margin={{ top: 20, right: 12, left: 0, bottom: 56 }}
+          margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
           barCategoryGap="35%"
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -263,13 +266,14 @@ const StackedChart = React.memo(function StackedChart({
             axisLine={false}
             tick={<CustomXTick />}
             interval={0}
+            height={65}
           />
           <YAxis
             allowDecimals={false}
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: "#94a3b8" }}
-            width={32}
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            width={28}
           />
           <Tooltip
             cursor={{ fill: "rgba(6,182,212,0.06)" }}
@@ -365,7 +369,7 @@ function ChartCard({
   return (
     <div
       className="flex-shrink-0 flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-sm"
-      style={{ width: 420 }}
+      style={{ minWidth: 200, flex: "1 1 0" }}
     >
       <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
         <div>
@@ -383,7 +387,7 @@ function ChartCard({
         {loading ? (
           <div className="px-3"><ChartSkeleton /></div>
         ) : !hasData ? (
-          <div className="flex h-[280px] items-center justify-center text-sm text-slate-400">
+          <div className="flex h-[300px] items-center justify-center text-sm text-slate-400">
             No data available
           </div>
         ) : (
@@ -602,7 +606,7 @@ function TicketCharts({
       </div>
 
       {/* Single scrollable row of cards */}
-      <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
+      <div className="flex gap-3 w-full">
         {/* 1 – Assigned To */}
         <ChartCard
           title="Assigned To"

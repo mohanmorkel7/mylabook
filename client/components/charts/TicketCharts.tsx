@@ -15,6 +15,8 @@ import {
 } from "recharts";
 import api from "@/lib/api";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface AssignedCount {
   user_id: number | null;
   name: string;
@@ -35,109 +37,102 @@ interface GroupedStatusCount {
   client_names?: string[];
 }
 
-const CHART_COLORS = [
-  "#2563eb",
-  "#0f766e",
-  "#f59e0b",
-  "#ef4444",
-  "#7c3aed",
-  "#0891b2",
-  "#db2777",
-  "#16a34a",
-];
+type StackedRow = { name: string; total: number; client_names?: string[] } & Record<string, any>;
+
+// ─── Palette ──────────────────────────────────────────────────────────────────
 
 const STATUS_ORDER = ["Open", "In Progress", "Pending", "Overdue", "Closed"];
 
-function normalizeClientNames(value: unknown) {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => String(item || "").trim())
-      .filter(Boolean);
-  }
+const STATUS_COLORS: Record<string, string> = {
+  Open: "#6366f1",
+  "In Progress": "#06b6d4",
+  Pending: "#f59e0b",
+  Overdue: "#f43f5e",
+  Closed: "#10b981",
+};
 
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
+const ASSIGNEE_COLORS = [
+  "#6366f1", "#06b6d4", "#f59e0b", "#f43f5e", "#10b981",
+  "#8b5cf6", "#0ea5e9", "#ec4899", "#14b8a6", "#f97316",
+];
 
-  return [] as string[];
+function statusColor(status: string, idx: number): string {
+  return STATUS_COLORS[status] ?? ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length];
 }
 
-function getStatusRank(status?: string) {
-  const name = String(status || "Unknown").trim();
-  const order = STATUS_ORDER.findIndex(
-    (item) => item.toLowerCase() === name.toLowerCase(),
+function statusRank(status?: string): number {
+  const n = String(status || "").trim();
+  const i = STATUS_ORDER.findIndex(s => s.toLowerCase() === n.toLowerCase());
+  return i === -1 ? STATUS_ORDER.length : i;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function normalizeClientNames(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(v => String(v || "").trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map(v => v.trim()).filter(Boolean);
+  return [];
+}
+
+function fmtTooltip({ label, count, pct, clients }: { label: string; count: number; pct?: number; clients?: string[] }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+      <p className="text-sm font-semibold text-slate-800">{label}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        {count.toLocaleString()} ticket{count !== 1 ? "s" : ""}
+        {pct != null ? <span className="ml-2 font-medium text-slate-700">{pct}%</span> : null}
+      </p>
+      {clients && clients.length > 0 && (
+        <p className="mt-1.5 text-[11px] text-slate-400">
+          {clients.slice(0, 3).join(", ")}
+          {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+        </p>
+      )}
+    </div>
   );
-  return order === -1
-    ? STATUS_ORDER.length + (name.toLowerCase().charCodeAt(0) || 0)
-    : order;
 }
 
-function getStatusColor(status: string, index: number) {
-  const palette: Record<string, string> = {
-    Open: "#2563eb",
-    "In Progress": "#0f766e",
-    Pending: "#f59e0b",
-    Overdue: "#ef4444",
-    Closed: "#7c3aed",
-  };
-  return palette[status] || CHART_COLORS[index % CHART_COLORS.length];
-}
+// ─── Chart: Assignee (horizontal bar) ─────────────────────────────────────────
 
-const HorizontalTicketBarChart = React.memo(function HorizontalTicketBarChart({
+const AssigneeChart = React.memo(function AssigneeChart({
   data,
-  height,
-  valueLabel,
 }: {
   data: { name: string; value: number; client_names?: string[] }[];
-  height: number;
-  valueLabel: string;
 }) {
-  const sorted = [...data].sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
-
+  const total = data.reduce((s, d) => s + d.value, 0);
   return (
-    <div className="h-full w-full" style={{ minHeight: height }}>
+    <div style={{ width: "100%", height: 280 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={sorted} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 52, left: 8, bottom: 4 }}
+          barCategoryGap="30%"
+        >
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
           <YAxis
             dataKey="name"
             type="category"
-            width={140}
+            width={128}
             tickLine={false}
             axisLine={false}
             tick={{ fontSize: 12, fill: "#475569" }}
           />
           <Tooltip
-            cursor={{ fill: "rgba(37, 99, 235, 0.06)" }}
+            cursor={{ fill: "rgba(99,102,241,0.06)" }}
             content={({ active, payload, label }: any) => {
               if (!active || !payload?.length) return null;
               const row = payload[0]?.payload || {};
-              const clients = normalizeClientNames(row.client_names);
-              return (
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                  <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
-                  <div className="mt-1 text-xs text-slate-600">
-                    {valueLabel}: {Number(row.value || 0)}
-                  </div>
-                  {clients.length > 0 && (
-                    <div className="mt-2 max-w-[260px] text-xs text-slate-500">
-                      <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
-                      {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
-                    </div>
-                  )}
-                </div>
-              );
+              const pct = total ? Math.round((row.value / total) * 100) : 0;
+              return fmtTooltip({ label: label || row.name, count: row.value, pct, clients: normalizeClientNames(row.client_names) });
             }}
           />
-          <Bar dataKey="value" radius={[0, 12, 12, 0]} barSize={18} minPointSize={4} isAnimationActive={false}>
-            {sorted.map((entry, idx) => (
-              <Cell key={`${entry.name}-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+          <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={16} isAnimationActive={false} minPointSize={3}>
+            {data.map((entry, idx) => (
+              <Cell key={`${entry.name}-${idx}`} fill={ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
             ))}
-            <LabelList dataKey="value" position="right" fill="#334155" fontSize={11} />
+            <LabelList dataKey="value" position="right" fill="#64748b" fontSize={11} formatter={(v: number) => v.toLocaleString()} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -145,21 +140,89 @@ const HorizontalTicketBarChart = React.memo(function HorizontalTicketBarChart({
   );
 });
 
-const StatusDistributionChart = React.memo(function StatusDistributionChart({
+// ─── Chart: Status (donut) ────────────────────────────────────────────────────
+
+const StatusDonut = React.memo(function StatusDonut({
   data,
-  height,
 }: {
-  data: { name: string; value: number; client_names?: string[] }[];
-  height: number;
+  data: { name: string; value: number }[];
 }) {
-  const sorted = [...data].sort((a, b) => getStatusRank(a.name) - getStatusRank(b.name));
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const RADIAN = Math.PI / 180;
+
+  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) => {
+    if (percent < 0.05) return null;
+    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + r * Math.cos(-midAngle * RADIAN);
+    const y = cy + r * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={10} fontWeight="600">
+        {`${Math.round(percent * 100)}%`}
+      </text>
+    );
+  };
 
   return (
-    <div className="h-full w-full" style={{ minHeight: height }}>
+    <div style={{ width: "100%", height: 280 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={sorted} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="46%"
+            innerRadius={60}
+            outerRadius={94}
+            paddingAngle={3}
+            labelLine={false}
+            label={renderLabel}
+            isAnimationActive={false}
+          >
+            {data.map((entry, idx) => (
+              <Cell key={`${entry.name}-${idx}`} fill={statusColor(entry.name, idx)} />
+            ))}
+          </Pie>
+          <Tooltip
+            content={({ active, payload }: any) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload || {};
+              const pct = total ? Math.round((row.value / total) * 100) : 0;
+              return fmtTooltip({ label: row.name, count: row.value, pct });
+            }}
+          />
+          <Legend
+            verticalAlign="bottom"
+            iconType="circle"
+            iconSize={8}
+            formatter={(value: string) => <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+// ─── Chart: Stacked bar (user / tag) ─────────────────────────────────────────
+
+const StackedChart = React.memo(function StackedChart({
+  data,
+  statusKeys,
+}: {
+  data: StackedRow[];
+  statusKeys: string[];
+}) {
+  return (
+    <div style={{ width: "100%", height: 280 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+          barCategoryGap="30%"
+        >
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
           <YAxis
             dataKey="name"
             type="category"
@@ -169,111 +232,56 @@ const StatusDistributionChart = React.memo(function StatusDistributionChart({
             tick={{ fontSize: 12, fill: "#475569" }}
           />
           <Tooltip
-            cursor={{ fill: "rgba(239, 68, 68, 0.06)" }}
-            content={({ active, payload, label }: any) => {
-              if (!active || !payload?.length) return null;
-              const row = payload[0]?.payload || {};
-              const percentTotal = sorted.reduce((sum, item) => sum + Number(item.value || 0), 0);
-              const pct = percentTotal ? Math.round((Number(row.value || 0) / percentTotal) * 100) : 0;
-              return (
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                  <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
-                  <div className="mt-1 text-xs text-slate-600">
-                    {Number(row.value || 0)} tickets • {pct}% of total
-                  </div>
-                </div>
-              );
-            }}
-          />
-          <Bar dataKey="value" radius={[0, 12, 12, 0]} barSize={20} minPointSize={4} isAnimationActive={false}>
-            {sorted.map((entry, idx) => (
-              <Cell key={`${entry.name}-${idx}`} fill={getStatusColor(entry.name, idx)} />
-            ))}
-            <LabelList dataKey="value" position="right" fill="#334155" fontSize={11} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-});
-
-type StackedStatusRow = {
-  name: string;
-  total: number;
-  client_names?: string[];
-} & Record<string, any>;
-
-const StackedStatusChart = React.memo(function StackedStatusChart({
-  data,
-  statusKeys,
-  height,
-}: {
-  data: StackedStatusRow[];
-  statusKeys: string[];
-  height: number;
-}) {
-  const sorted = [...data].sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
-
-  return (
-    <div className="h-full w-full" style={{ minHeight: height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={sorted} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-          <YAxis
-            dataKey="name"
-            type="category"
-            width={144}
-            tickLine={false}
-            axisLine={false}
-            tick={{ fontSize: 12, fill: "#475569" }}
-          />
-          <Tooltip
-            cursor={{ fill: "rgba(15, 118, 110, 0.06)" }}
+            cursor={{ fill: "rgba(6,182,212,0.06)" }}
             content={({ active, payload, label }: any) => {
               if (!active || !payload?.length) return null;
               const row = payload[0]?.payload || {};
               const clients = normalizeClientNames(row.client_names);
               return (
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
-                  <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
-                  <div className="mt-1 text-xs text-slate-600">Total tickets: {Number(row.total || 0)}</div>
+                <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+                  <p className="text-sm font-semibold text-slate-800">{label || row.name}</p>
+                  <p className="mt-1 text-xs text-slate-500">{Number(row.total || 0).toLocaleString()} total tickets</p>
                   <div className="mt-2 space-y-1">
                     {statusKeys.map((status, idx) => {
-                      const value = Number(row[status] || 0);
-                      if (!value) return null;
+                      const val = Number(row[status] || 0);
+                      if (!val) return null;
                       return (
-                        <div key={status} className="flex items-center justify-between gap-4 text-xs">
-                          <span className="inline-flex items-center gap-2 text-slate-600">
-                            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: getStatusColor(status, idx) }} />
+                        <div key={status} className="flex items-center justify-between gap-6 text-xs">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
                             {status}
                           </span>
-                          <span className="font-medium text-slate-900">{value}</span>
+                          <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
                         </div>
                       );
                     })}
                   </div>
                   {clients.length > 0 && (
-                    <div className="mt-2 max-w-[260px] text-xs text-slate-500">
-                      <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
-                      {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
-                    </div>
+                    <p className="mt-2 text-[11px] text-slate-400">
+                      {clients.slice(0, 3).join(", ")}
+                      {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+                    </p>
                   )}
                 </div>
               );
             }}
           />
-          <Legend verticalAlign="bottom" height={36} iconType="circle" />
+          <Legend
+            verticalAlign="bottom"
+            iconType="circle"
+            iconSize={8}
+            formatter={(value: string) => <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>}
+          />
           {statusKeys.map((status, idx) => (
             <Bar
               key={status}
               dataKey={status}
-              stackId="status"
-              fill={getStatusColor(status, idx)}
-              minPointSize={2}
+              stackId="s"
+              fill={statusColor(status, idx)}
               isAnimationActive={false}
-              radius={idx === statusKeys.length - 1 ? [0, 12, 12, 0] : 0}
-              barSize={18}
+              barSize={16}
+              minPointSize={2}
+              radius={idx === statusKeys.length - 1 ? [0, 6, 6, 0] : 0}
             />
           ))}
         </BarChart>
@@ -281,6 +289,72 @@ const StackedStatusChart = React.memo(function StackedStatusChart({
     </div>
   );
 });
+
+// ─── Skeleton loader ───────────────────────────────────────────────────────────
+
+function ChartSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3 pt-4">
+      {[80, 60, 90, 50, 70].map((w, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <div className="h-3 rounded bg-slate-100" style={{ width: 110 }} />
+          <div className="h-5 rounded-lg bg-slate-100" style={{ width: `${w}%` }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Card wrapper ─────────────────────────────────────────────────────────────
+
+function ChartCard({
+  title,
+  subtitle,
+  badge,
+  loading,
+  hasData,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  badge?: React.ReactNode;
+  loading?: boolean;
+  hasData?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="flex-shrink-0 flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-sm"
+      style={{ width: 380 }}
+    >
+      <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">{title}</p>
+          <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>
+        </div>
+        {badge && (
+          <span className="mt-0.5 shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600">
+            {badge}
+          </span>
+        )}
+      </div>
+
+      <div className="px-2 pb-4">
+        {loading ? (
+          <div className="px-3"><ChartSkeleton /></div>
+        ) : !hasData ? (
+          <div className="flex h-[280px] items-center justify-center text-sm text-slate-400">
+            No data available
+          </div>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 function TicketCharts({
   dateFrom,
@@ -300,59 +374,25 @@ function TicketCharts({
   const [userStatus, setUserStatus] = useState<GroupedStatusCount[]>([]);
   const [tagStatus, setTagStatus] = useState<GroupedStatusCount[]>([]);
   const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState<"all" | "today" | "7days" | "month">(
-    "all",
-  );
+  const [range, setRange] = useState<"all" | "today" | "7days" | "month">("all");
 
-  // Compute date_from/date_to based on selected range (IST day handling)
+  // IST-aware date range helper
   const computeRange = () => {
-    if (range === "all")
-      return {
-        df: undefined as string | undefined,
-        dt: undefined as string | undefined,
-      };
+    if (range === "all") return { df: undefined as string | undefined, dt: undefined as string | undefined };
     const now = new Date();
-    const istOffsetMs = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(now.getTime() + istOffsetMs);
-    const yyyy = istNow.getUTCFullYear();
-    const mm = String(istNow.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(istNow.getUTCDate()).padStart(2, "0");
-
-    const isoDate = (y: number, m: number, d: number) =>
-      `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-
-    if (range === "today") {
-      return {
-        df: isoDate(yyyy, Number(mm), Number(dd)),
-        dt: isoDate(yyyy, Number(mm), Number(dd)),
-      };
-    }
-
+    const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const y = istNow.getUTCFullYear();
+    const m = istNow.getUTCMonth() + 1;
+    const d = istNow.getUTCDate();
+    const fmt = (yy: number, mm: number, dd: number) =>
+      `${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+    const today = fmt(y, m, d);
+    if (range === "today") return { df: today, dt: today };
     if (range === "7days") {
-      const past = new Date(istNow.getTime() - 6 * 24 * 3600 * 1000); // include today => last 7 days
-      const pY = past.getUTCFullYear();
-      const pM = past.getUTCMonth() + 1;
-      const pD = past.getUTCDate();
-      return {
-        df: isoDate(pY, pM, pD),
-        dt: isoDate(yyyy, Number(mm), Number(dd)),
-      };
+      const past = new Date(istNow.getTime() - 6 * 24 * 3600 * 1000);
+      return { df: fmt(past.getUTCFullYear(), past.getUTCMonth() + 1, past.getUTCDate()), dt: today };
     }
-
-    if (range === "month") {
-      const start = new Date(Date.UTC(yyyy, istNow.getUTCMonth(), 1));
-      const sY = start.getUTCFullYear();
-      const sM = start.getUTCMonth() + 1;
-      const sD = 1;
-      return {
-        df: isoDate(sY, sM, sD),
-        dt: isoDate(yyyy, Number(mm), Number(dd)),
-      };
-    }
-    return {
-      df: undefined as string | undefined,
-      dt: undefined as string | undefined,
-    };
+    return { df: fmt(y, m, 1), dt: today };
   };
 
   const { df: computedFrom, dt: computedTo } = computeRange();
@@ -360,484 +400,160 @@ function TicketCharts({
   useEffect(() => {
     let mounted = true;
 
-    // Always fetch from summary API — it covers ALL tickets, not just the current page
-    // Local summaries from the 50-ticket page would show wrong counts (e.g. Total: 50 instead of 5251)
-
     const fetchData = async () => {
       try {
         setLoading(true);
-        console.log("TicketCharts: fetchData called with", {
-          range,
-          dateFrom,
-          dateTo,
-          computedFrom,
-          computedTo,
-        });
         const params = new URLSearchParams();
-        const useFrom =
-          dateFrom && String(dateFrom).trim()
-            ? dateFrom
-            : range === "all"
-              ? undefined
-              : computedFrom;
-        const useTo =
-          dateTo && String(dateTo).trim()
-            ? dateTo
-            : range === "all"
-              ? undefined
-              : computedTo;
+        const useFrom = (dateFrom && String(dateFrom).trim()) ? dateFrom : (range === "all" ? undefined : computedFrom);
+        const useTo = (dateTo && String(dateTo).trim()) ? dateTo : (range === "all" ? undefined : computedTo);
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
-        const query = params.toString() ? `?${params.toString()}` : "";
+        const q = params.toString() ? `?${params.toString()}` : "";
+
         const [summaryResp, userStatusResp, tagResp] = await Promise.allSettled([
-          api.get(`/tickets/summary${query}`),
-          api.get(`/tickets/summary/user-status${query}`),
-          api.get(`/tickets/summary/by-tag${query}`),
+          api.get(`/tickets/summary${q}`),
+          api.get(`/tickets/summary/user-status${q}`),
+          api.get(`/tickets/summary/by-tag${q}`),
         ]);
 
         if (!mounted) return;
 
         if (summaryResp.status === "fulfilled") {
-          const summaryPayload = (summaryResp.value as any)?.data ?? summaryResp.value;
-          setAssigned(summaryPayload.assigned || []);
-          setStatuses(summaryPayload.statuses || []);
-          if (onSummaryFetched) {
-            try {
-              onSummaryFetched(summaryPayload);
-            } catch (e) {
-              console.warn("onSummaryFetched callback failed", e);
-            }
-          }
+          const payload = (summaryResp.value as any)?.data ?? summaryResp.value;
+          setAssigned(payload.assigned || []);
+          setStatuses(payload.statuses || []);
+          try { onSummaryFetched?.(payload); } catch {}
         }
 
         if (userStatusResp.status === "fulfilled") {
-          const userStatusPayload = (userStatusResp.value as any)?.data ?? userStatusResp.value;
-          const rawData = Array.isArray(userStatusPayload)
-            ? userStatusPayload
-            : userStatusPayload?.data || [];
-          const grouped: Record<
-            number,
-            { user_id: number; name: string; counts: Record<string, number>; client_names: string[] }
-          > = {};
+          const payload = (userStatusResp.value as any)?.data ?? userStatusResp.value;
+          const rawData = Array.isArray(payload) ? payload : payload?.data || [];
+          const grouped: Record<number, GroupedStatusCount & { client_names: string[] }> = {};
           rawData.forEach((row: any) => {
-            const userId = row.user_id || 0;
-            if (!grouped[userId]) {
-              grouped[userId] = {
-                user_id: userId,
-                name: row.user_name || "Unknown",
-                counts: {},
-                client_names: [],
-              };
+            const uid = row.user_id || 0;
+            if (!grouped[uid]) {
+              grouped[uid] = { user_id: uid, name: row.user_name || "Unknown", counts: {}, client_names: [] };
             }
-            const statusName = row.status_name || "Unknown";
-            grouped[userId].counts[statusName] = row.count || 0;
-            const clientNames = normalizeClientNames(row.client_names);
-            clientNames.forEach((clientName) => {
-              if (!grouped[userId].client_names.includes(clientName)) {
-                grouped[userId].client_names.push(clientName);
-              }
+            grouped[uid].counts[row.status_name || "Unknown"] = Number(row.count || 0);
+            normalizeClientNames(row.client_names).forEach(cn => {
+              if (!grouped[uid].client_names.includes(cn)) grouped[uid].client_names.push(cn);
             });
           });
           if (mounted) setUserStatus(Object.values(grouped));
         }
 
-        const buildTagSummaryFromTickets = (): GroupedStatusCount[] => {
+        const buildTagFromTickets = (): GroupedStatusCount[] => {
           const grouped: Record<string, Record<string, number>> = {};
-          const sourceTickets = Array.isArray(tickets) ? tickets : [];
-          for (const ticket of sourceTickets) {
-            const tag = classifyTicketTag ? classifyTicketTag(ticket) : "Manual";
-            const statusName = ticket?.status?.name || ticket?.status_name || "Unknown";
+          for (const t of Array.isArray(tickets) ? tickets : []) {
+            const tag = classifyTicketTag ? classifyTicketTag(t) : "Manual";
+            const status = t?.status?.name || t?.status_name || "Unknown";
             if (!grouped[tag]) grouped[tag] = {};
-            grouped[tag][statusName] = (grouped[tag][statusName] || 0) + 1;
+            grouped[tag][status] = (grouped[tag][status] || 0) + 1;
           }
-          return Object.entries(grouped).map(([tag, counts]) => ({
-            user_id: tag,
-            name: tag,
-            counts,
-            client_names: [],
-          }));
+          return Object.entries(grouped).map(([tag, counts]) => ({ user_id: tag, name: tag, counts, client_names: [] }));
         };
 
         if (tagResp.status === "fulfilled") {
-          const tagPayload = (tagResp.value as any)?.data ?? tagResp.value;
-          const tags = Array.isArray(tagPayload) ? tagPayload : tagPayload?.tags || [];
+          const payload = (tagResp.value as any)?.data ?? tagResp.value;
+          const tags: any[] = Array.isArray(payload) ? payload : payload?.tags || [];
           if (mounted) {
-            if (tags.length > 0) {
-              setTagStatus(
-                tags.map((tagRow: any) => ({
-                  user_id: tagRow.tag,
-                  name: tagRow.tag,
-                  counts: tagRow.counts || {},
-                  client_names: normalizeClientNames(tagRow.client_names),
-                })),
-              );
-            } else {
-              setTagStatus(buildTagSummaryFromTickets());
-            }
+            setTagStatus(
+              tags.length > 0
+                ? tags.map((r: any) => ({
+                    user_id: r.tag, name: r.tag, counts: r.counts || {},
+                    client_names: normalizeClientNames(r.client_names),
+                  }))
+                : buildTagFromTickets(),
+            );
           }
         } else if (mounted) {
-          setTagStatus(buildTagSummaryFromTickets());
+          setTagStatus(buildTagFromTickets());
         }
       } catch (e) {
-        console.error("TicketCharts: failed to fetch summary", e);
+        console.error("TicketCharts: fetch failed", e);
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
     fetchData();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [dateFrom, dateTo, range]);
 
-  const VerticalBarChart = ({
-    items,
-    labelKey,
-    valueKey,
-  }: {
-    items: any[];
-    labelKey: string;
-    valueKey: string;
-  }) => {
-    const data = [...items]
-      .map((item) => ({
-        ...item,
-        clientNames: normalizeClientNames(item.client_names),
-      }))
-      .sort((a, b) => Number(b[valueKey] || 0) - Number(a[valueKey] || 0));
+  // ── Computed data (memoised, zero-values filtered out) ─────────────────────
 
-    const tooltip = ({ active, payload, label }: any) => {
-      if (!active || !payload?.length) return null;
-      const row = payload[0]?.payload || {};
-      const clients = normalizeClientNames(row.clientNames || row.client_names);
-      const count = Number(row[valueKey] || payload[0]?.value || 0);
+  const statusKeys = useMemo(() => {
+    const keys = new Set<string>(STATUS_ORDER);
+    statuses.forEach(s => { if (s.status) keys.add(s.status); });
+    userStatus.forEach(r => Object.keys(r.counts).forEach(k => keys.add(k)));
+    tagStatus.forEach(r => Object.keys(r.counts).forEach(k => keys.add(k)));
+    return Array.from(keys).sort((a, b) => statusRank(a) - statusRank(b));
+  }, [statuses, userStatus, tagStatus]);
 
-      return (
-        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-          <div className="text-sm font-semibold text-slate-900">{label || row[labelKey]}</div>
-          <div className="mt-1 text-xs text-slate-600">Tickets: {count}</div>
-          {clients.length > 0 && (
-            <div className="mt-2 max-w-[240px] text-xs text-slate-500">
-              <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
-              {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
-            </div>
-          )}
-        </div>
-      );
-    };
+  const assignedData = useMemo(
+    () => assigned
+      .map(a => ({ name: a.name || "Unknown", value: Number(a.count || 0), client_names: a.client_names || [] }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value),
+    [assigned],
+  );
 
-    return (
-      <div className="h-[260px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
-            <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-            <YAxis
-              dataKey={labelKey}
-              type="category"
-              width={126}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fontSize: 12 }}
-            />
-            <Tooltip content={tooltip} cursor={{ fill: "rgba(37, 99, 235, 0.08)" }} />
-            <Bar dataKey={valueKey} radius={[0, 10, 10, 0]} barSize={20}>
-              {data.map((entry, idx) => (
-                <Cell key={`${entry[labelKey] || idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  };
+  const statusData = useMemo(
+    () => statuses
+      .map(s => ({ name: s.status || "Unknown", value: Number(s.count || 0) }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => statusRank(a.name) - statusRank(b.name)),
+    [statuses],
+  );
 
-  const DonutChart = ({
-    items,
-    labelKey,
-    valueKey,
-  }: {
-    items: any[];
-    labelKey: string;
-    valueKey: string;
-  }) => {
-    const data = [...items]
-      .map((item) => ({
-        ...item,
-        clientNames: normalizeClientNames(item.client_names),
-      }))
-      .sort(
-        (a, b) =>
-          getStatusRank(a[labelKey]) - getStatusRank(b[labelKey]) ||
-          Number(b[valueKey] || 0) - Number(a[valueKey] || 0),
-      );
+  const userStackData = useMemo(
+    () => userStatus.map(row => {
+      const r: StackedRow = { name: row.name || "Unknown", total: 0, client_names: row.client_names || [] };
+      statusKeys.forEach(st => { const v = Number(row.counts?.[st] || 0); r[st] = v; r.total += v; });
+      return r;
+    }).filter(r => r.total > 0).sort((a, b) => b.total - a.total),
+    [statusKeys, userStatus],
+  );
 
-    const total = data.reduce((sum, item) => sum + Number(item[valueKey] || 0), 0);
+  const tagStackData = useMemo(
+    () => tagStatus.map(row => {
+      const r: StackedRow = { name: row.name || String(row.user_id || "Unknown"), total: 0, client_names: row.client_names || [] };
+      statusKeys.forEach(st => { const v = Number(row.counts?.[st] || 0); r[st] = v; r.total += v; });
+      return r;
+    }).filter(r => r.total > 0).sort((a, b) => b.total - a.total),
+    [statusKeys, tagStatus],
+  );
 
-    const tooltip = ({ active, payload }: any) => {
-      if (!active || !payload?.length) return null;
-      const row = payload[0]?.payload || {};
-      const clients = normalizeClientNames(row.clientNames || row.client_names);
-      const count = Number(row[valueKey] || 0);
-      const percent = total ? Math.round((count / total) * 100) : 0;
-
-      return (
-        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-          <div className="text-sm font-semibold text-slate-900">{row[labelKey]}</div>
-          <div className="mt-1 text-xs text-slate-600">
-            {count} tickets • {percent}% of total
-          </div>
-          {clients.length > 0 && (
-            <div className="mt-2 max-w-[240px] text-xs text-slate-500">
-              <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
-              {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    return (
-      <div className="relative h-[260px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Tooltip content={tooltip} />
-            <Legend verticalAlign="bottom" height={36} iconType="circle" />
-            <Pie
-              data={data}
-              dataKey={valueKey}
-              nameKey={labelKey}
-              innerRadius={58}
-              outerRadius={88}
-              paddingAngle={3}
-              stroke="rgba(255,255,255,0.9)"
-              strokeWidth={2}
-            >
-              {data.map((entry, idx) => (
-                <Cell key={`${entry[labelKey] || idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="rounded-full bg-white/95 px-4 py-3 text-center shadow-sm ring-1 ring-slate-200">
-            <div className="text-2xl font-semibold text-slate-900">{total}</div>
-            <div className="text-[11px] uppercase tracking-wide text-slate-500">Tickets</div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Only include status keys that actually have non-zero values in user/tag data
+  const activeStatusKeys = useMemo(
+    () => statusKeys.filter(st =>
+      userStackData.some(r => Number(r[st] || 0) > 0) ||
+      tagStackData.some(r => Number(r[st] || 0) > 0),
+    ),
+    [statusKeys, userStackData, tagStackData],
+  );
 
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
 
-  const statusKeys = useMemo(() => {
-    const keys = new Set<string>(STATUS_ORDER);
-    statuses.forEach((item) => {
-      if (item.status) keys.add(item.status);
-    });
-    userStatus.forEach((row) => {
-      Object.keys(row.counts || {}).forEach((key) => keys.add(key));
-    });
-    tagStatus.forEach((row) => {
-      Object.keys(row.counts || {}).forEach((key) => keys.add(key));
-    });
-    return Array.from(keys).sort((a, b) => getStatusRank(a) - getStatusRank(b));
-  }, [statuses, userStatus, tagStatus]);
-
-  const assignedChartData = useMemo(
-    () =>
-      assigned
-        .map((item) => ({
-          name: item.name || "Unknown",
-          value: Number(item.count || 0),
-          client_names: item.client_names || [],
-        }))
-        .sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
-    [assigned],
-  );
-
-  const statusChartData = useMemo(
-    () =>
-      statusKeys.map((status) => {
-        const item = statuses.find(
-          (entry) => String(entry.status || "").toLowerCase() === status.toLowerCase(),
-        );
-        return {
-          name: status,
-          value: Number(item?.count || 0),
-          client_names: item?.client_names || [],
-        };
-      }),
-    [statusKeys, statuses],
-  );
-
-  const userStackedData = useMemo(
-    () =>
-      userStatus
-        .map((row) => {
-          const normalized: StackedStatusRow = {
-            name: row.name || "Unknown",
-            total: 0,
-            client_names: row.client_names || [],
-          };
-          statusKeys.forEach((status) => {
-            const value = Number(row.counts?.[status] || 0);
-            normalized[status] = value;
-            normalized.total += value;
-          });
-          return normalized;
-        })
-        .filter((row) => Number(row.total || 0) > 0)
-        .sort((a, b) => Number(b.total || 0) - Number(a.total || 0)),
-    [statusKeys, userStatus],
-  );
-
-  const tagStackedData = useMemo(
-    () =>
-      tagStatus
-        .map((row) => {
-          const normalized: StackedStatusRow = {
-            name: row.name || String(row.user_id || "Unknown"),
-            total: 0,
-            client_names: row.client_names || [],
-          };
-          statusKeys.forEach((status) => {
-            const value = Number(row.counts?.[status] || 0);
-            normalized[status] = value;
-            normalized.total += value;
-          });
-          return normalized;
-        })
-        .filter((row) => Number(row.total || 0) > 0)
-        .sort((a, b) => Number(b.total || 0) - Number(a.total || 0)),
-    [statusKeys, tagStatus],
-  );
-
-  const GroupedBarChart = ({
-    users,
-    statuses,
-  }: {
-    users: GroupedStatusCount[];
-    statuses: StatusCount[];
-  }) => {
-    const statusNames = Array.from(
-      new Set([
-        ...(statuses || []).map((item) => item.status),
-        ...users.flatMap((user) => Object.keys(user.counts || {})),
-      ]),
-    ).sort((a, b) => getStatusRank(a) - getStatusRank(b) || a.localeCompare(b));
-
-    const data = users
-      .map((user) => {
-        const row: Record<string, any> = {
-          name: user.name || `User ${user.user_id}`,
-          clientNames: normalizeClientNames(user.client_names),
-        };
-
-        let total = 0;
-        statusNames.forEach((status) => {
-          const value = Number(user.counts?.[status] || 0);
-          row[status] = value;
-          total += value;
-        });
-        row.total = total;
-        return row;
-      })
-      .sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
-
-    const tooltip = ({ active, payload, label }: any) => {
-      if (!active || !payload?.length) return null;
-      const row = payload[0]?.payload || {};
-      const clients = normalizeClientNames(row.clientNames || row.client_names);
-      const values = statusNames
-        .map((status, index) => ({
-          status,
-          value: Number(row[status] || 0),
-          color: CHART_COLORS[index % CHART_COLORS.length],
-        }))
-        .filter((item) => item.value > 0);
-
-      return (
-        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
-          <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
-          <div className="mt-1 text-xs text-slate-600">Total tickets: {Number(row.total || 0)}</div>
-          <div className="mt-2 space-y-1">
-            {values.map((item) => (
-              <div key={item.status} className="flex items-center justify-between gap-4 text-xs">
-                <span className="inline-flex items-center gap-2 text-slate-600">
-                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: item.color }} />
-                  {item.status}
-                </span>
-                <span className="font-medium text-slate-900">{item.value}</span>
-              </div>
-            ))}
-          </div>
-          {clients.length > 0 && (
-            <div className="mt-2 max-w-[260px] text-xs text-slate-500">
-              <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
-              {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    return (
-      <div className="h-[320px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, left: 12, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
-            <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-            <YAxis
-              dataKey="name"
-              type="category"
-              width={132}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fontSize: 12 }}
-            />
-            <Tooltip content={tooltip} cursor={{ fill: "rgba(15, 23, 42, 0.06)" }} />
-            <Legend verticalAlign="bottom" height={34} iconType="circle" />
-            {statusNames.map((status, index) => (
-              <Bar
-                key={status}
-                dataKey={status}
-                stackId="tickets"
-                fill={CHART_COLORS[index % CHART_COLORS.length]}
-                radius={index === statusNames.length - 1 ? [0, 10, 10, 0] : 0}
-                barSize={18}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  };
-
   return (
-    <div className="mb-6">
-      <div className="flex items-start justify-between mb-4">
+    <div className="mb-8">
+      {/* Header row */}
+      <div className="mb-5 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Tickets Overview</h3>
-          <div className="text-sm text-gray-600">
-            Total:{" "}
-            <span className="font-medium text-gray-900">{totalTickets}</span>
-          </div>
+          <h3 className="text-base font-semibold text-slate-800">Tickets Overview</h3>
+          <p className="text-xs text-slate-500">
+            {totalTickets.toLocaleString()} total tickets across all agents and tags
+          </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <label className="text-sm text-gray-600">Range</label>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Range</span>
           <select
             value={range}
-            onChange={(e) => setRange(e.target.value as any)}
-            className="border rounded px-2 py-1 text-sm"
+            onChange={e => setRange(e.target.value as any)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
           >
-            <option value="all">All</option>
+            <option value="all">All time</option>
             <option value="today">Today</option>
             <option value="7days">Last 7 days</option>
             <option value="month">This month</option>
@@ -845,94 +561,51 @@ function TicketCharts({
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Assigned To Card */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[420px]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h4 className="text-sm font-semibold text-slate-900">Assigned To</h4>
-              <p className="mt-1 text-xs text-slate-500">Highest assignee volume at the top</p>
-            </div>
-            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-              Total <span className="ml-1 text-slate-900">{totalAssigned}</span>
-            </div>
-          </div>
-          <div className="mt-4">
-            {loading ? (
-              <div className="text-sm text-slate-500">Loading…</div>
-            ) : assignedChartData.length === 0 ? (
-              <div className="text-sm text-slate-500">No data</div>
-            ) : (
-              <HorizontalTicketBarChart data={assignedChartData} height={340} valueLabel="Tickets" />
-            )}
-          </div>
-        </div>
+      {/* Single scrollable row of cards */}
+      <div className="flex gap-4 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
+        {/* 1 – Assigned To */}
+        <ChartCard
+          title="Assigned To"
+          subtitle={`${assignedData.length} agents with tickets`}
+          badge={totalAssigned.toLocaleString()}
+          loading={loading}
+          hasData={assignedData.length > 0}
+        >
+          <AssigneeChart data={assignedData} />
+        </ChartCard>
 
-        {/* Status Card */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[420px]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h4 className="text-sm font-semibold text-slate-900">Status</h4>
-              <p className="mt-1 text-xs text-slate-500">Status rows always include zero-count states</p>
-            </div>
-            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-              Total <span className="ml-1 text-slate-900">{totalTickets}</span>
-            </div>
-          </div>
-          <div className="mt-4">
-            {loading ? (
-              <div className="text-sm text-slate-500">Loading…</div>
-            ) : statusChartData.length === 0 ? (
-              <div className="text-sm text-slate-500">No data</div>
-            ) : (
-              <StatusDistributionChart data={statusChartData} height={340} />
-            )}
-          </div>
-        </div>
+        {/* 2 – Status Distribution */}
+        <ChartCard
+          title="Status"
+          subtitle="Ticket distribution by current status"
+          badge={totalTickets.toLocaleString()}
+          loading={loading}
+          hasData={statusData.length > 0}
+        >
+          <StatusDonut data={statusData} />
+        </ChartCard>
 
-        {/* By User (Status) Card */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[460px]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h4 className="text-sm font-semibold text-slate-900">By User (Status)</h4>
-              <p className="mt-1 text-xs text-slate-500">Stacked bars with the same color order everywhere</p>
-            </div>
-            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-              Users <span className="ml-1 text-slate-900">{userStackedData.length}</span>
-            </div>
-          </div>
-          <div className="mt-4">
-            {loading ? (
-              <div className="text-sm text-slate-500">Loading…</div>
-            ) : userStackedData.length === 0 ? (
-              <div className="text-sm text-slate-500">No data</div>
-            ) : (
-              <StackedStatusChart data={userStackedData} statusKeys={statusKeys} height={380} />
-            )}
-          </div>
-        </div>
+        {/* 3 – By User (Status) */}
+        <ChartCard
+          title="By User"
+          subtitle={`${userStackData.length} agents · stacked by status`}
+          badge={`${userStackData.length} users`}
+          loading={loading}
+          hasData={userStackData.length > 0}
+        >
+          <StackedChart data={userStackData} statusKeys={activeStatusKeys} />
+        </ChartCard>
 
-        {/* By Tag (Status) Card */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[460px]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h4 className="text-sm font-semibold text-slate-900">By Tag (Status)</h4>
-              <p className="mt-1 text-xs text-slate-500">Only tags with tickets are shown</p>
-            </div>
-            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-              Tags <span className="ml-1 text-slate-900">{tagStackedData.length}</span>
-            </div>
-          </div>
-          <div className="mt-4">
-            {loading ? (
-              <div className="text-sm text-slate-500">Loading…</div>
-            ) : tagStackedData.length === 0 ? (
-              <div className="text-sm text-slate-500">No data</div>
-            ) : (
-              <StackedStatusChart data={tagStackedData} statusKeys={statusKeys} height={380} />
-            )}
-          </div>
-        </div>
+        {/* 4 – By Tag (Status) */}
+        <ChartCard
+          title="By Tag"
+          subtitle="Ticket source tags with status breakdown"
+          badge={`${tagStackData.length} tags`}
+          loading={loading}
+          hasData={tagStackData.length > 0}
+        >
+          <StackedChart data={tagStackData} statusKeys={activeStatusKeys} />
+        </ChartCard>
       </div>
     </div>
   );

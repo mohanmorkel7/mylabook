@@ -444,15 +444,18 @@ export default function TicketDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => {
-            // Prefer returning to the originating tickets list path stored in location.state.from
-            const from = (location && (location.state as any)?.from) || null;
-            if (from) {
-              navigate(from);
-            } else {
-              navigate(-1);
-            }
-          }}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              const from = (location.state as any)?.from;
+              const fallbackPath = `/tickets${location.search || ""}`;
+              if (from && typeof from === "string") {
+                navigate(from);
+              } else {
+                navigate(fallbackPath);
+              }
+            }}
+          >
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Tickets
           </Button>
           <Button

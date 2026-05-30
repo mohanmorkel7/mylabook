@@ -2707,14 +2707,19 @@ export default function ManageTickets() {
                     <Card
                       key={t.id}
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
-                      onClick={() => navigate(`/tickets/${t.id}${location.search}`)}
+                      onClick={() =>
+                        navigate(`/tickets/${t.id}${location.search}`, {
+                          state: { from: `${location.pathname}${location.search}` },
+                        })
+                      }
                     >
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
                             <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
-                                to={`/tickets/${t.id}${location.search}` }
+                                to={`/tickets/${t.id}${location.search}`}
+                                state={{ from: `${location.pathname}${location.search}` }}
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -3079,14 +3084,19 @@ export default function ManageTickets() {
                     <Card
                       key={ct.id}
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
-                      onClick={() => navigate(`/tickets/${t.id}${location.search}`)}
+                      onClick={() =>
+                        navigate(`/tickets/${t.id}${location.search}`, {
+                          state: { from: `${location.pathname}${location.search}` },
+                        })
+                      }
                     >
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
                             <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
-                                to={`/tickets/${t.id}${location.search}` }
+                                to={`/tickets/${t.id}${location.search}`}
+                                state={{ from: `${location.pathname}${location.search}` }}
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >

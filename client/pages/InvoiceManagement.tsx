@@ -3229,7 +3229,7 @@ function ClientOverviewScreen({
 }: {
   client: ClientRecord;
   onBack: () => void;
-  onExportPdf: (amountOverride?: number, txnCountOverride?: number) => void;
+  onExportPdf: (amountOverride?: number, txnCountOverride?: number, rowsOverride?: OverviewInvoiceRow[]) => void;
   onExportCsv: () => void;
   onExportDocx: () => void;
   onGenerateInvoice: (amountOverride?: number, txnCountOverride?: number, mmcInvoiceTitle?: string) => void;
@@ -3582,7 +3582,7 @@ function ClientOverviewScreen({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => onExportPdf(invoiceDraft, txnInput)}>
+          <Button variant="outline" className="gap-2" onClick={() => onExportPdf(invoiceDraft, txnInput, overviewRows)}>
             <Download className="h-4 w-4" /> Export PDF
           </Button>
           <Button variant="outline" className="gap-2" onClick={onExportCsv}>
@@ -5450,7 +5450,12 @@ export default function InvoiceManagement() {
     toast({ title: "CSV exported", description: `${rows.length} client rows downloaded.` });
   };
 
-  const exportClientPdf = async (client = selectedClient, amountOverride?: number, txnCountOverride?: number) => {
+  const exportClientPdf = async (
+    client = selectedClient,
+    amountOverride?: number,
+    txnCountOverride?: number,
+    rowsOverride?: OverviewInvoiceRow[],
+  ) => {
     if (!client) return;
     try {
       const latestInvoice = (client.invoiceHistory || [])[0];
@@ -5465,8 +5470,18 @@ export default function InvoiceManagement() {
         typeof amountOverride === "number" && amountOverride > 0
           ? amountOverride
           : estimateInvoiceFromSlabs(client, (typeof txnCountOverride === "number" && txnCountOverride > 0 ? txnCountOverride : client.monthlyTransactionVolume) || 0);
+      const exportRows = Array.isArray(rowsOverride)
+        ? rowsOverride.filter((row) => row.exportEnabled !== false)
+        : undefined;
+      const exportClient = exportRows
+        ? {
+            ...client,
+            invoiceTableConfig: exportRows,
+            customInvoiceRows: overviewRowsToCustomRows(exportRows),
+          }
+        : client;
       await downloadInvoicePdfTemplate({
-        client,
+        client: exportClient,
         companyConfig,
         invoiceNumber: serialInfo.invoiceNumber,
         generatedDate: latestInvoice?.generatedDate || new Date().toISOString().split("T")[0],
@@ -6284,7 +6299,9 @@ export default function InvoiceManagement() {
           client={selectedClient}
           taxConfig={taxConfig}
           onBack={() => navigate("/invoice-management")}
-          onExportPdf={(amountOverride, txnCountOverride) => exportClientPdf(selectedClient, amountOverride, txnCountOverride)}
+          onExportPdf={(amountOverride, txnCountOverride, rowsOverride) =>
+            exportClientPdf(selectedClient, amountOverride, txnCountOverride, rowsOverride)
+          }
           onExportCsv={() => exportClientsCsv([selectedClient])}
           onExportDocx={() => exportClientDocx(selectedClient)}
           onGenerateInvoice={(amountOverride, txnCountOverride, mmcInvoiceTitle) =>

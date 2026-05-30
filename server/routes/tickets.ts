@@ -36,6 +36,62 @@ const ticketSummaryCache = new Map<string, { data: any; expiresAt: number }>();
 const ticketUserStatusCache = new Map<string, { data: any; expiresAt: number }>();
 const ticketTagSummaryCache = new Map<string, { data: any; expiresAt: number }>();
 
+const STATUS_CACHE_TTL_MS = 5 * 60_000;
+let statusLookupCache: Map<string, number> | null = null;
+let statusCacheRefreshedAt = 0;
+let statusCachePromise: Promise<void> | null = null;
+
+const normalizeStatusKey = (value: string): string =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+async function ensureStatusLookupCache() {
+  if (
+    statusLookupCache &&
+    Date.now() - statusCacheRefreshedAt < STATUS_CACHE_TTL_MS
+  ) {
+    return;
+  }
+
+  if (!statusCachePromise) {
+    statusCachePromise = (async () => {
+      const statuses = await TicketRepository.getStatuses();
+      const map = new Map<string, number>();
+      for (const status of statuses) {
+        const normalized = normalizeStatusKey(status.name || "");
+        if (normalized) {
+          map.set(normalized, Number(status.id));
+        }
+        map.set(String(status.id), Number(status.id));
+      }
+      statusLookupCache = map;
+      statusCacheRefreshedAt = Date.now();
+    })();
+  }
+
+  try {
+    await statusCachePromise;
+  } finally {
+    statusCachePromise = null;
+  }
+}
+
+async function resolveStatusIdFromQuery(value: string | undefined) {
+  if (!value) return undefined;
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return undefined;
+  const numeric = Number(trimmed);
+  if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+    return Math.floor(numeric);
+  }
+  await ensureStatusLookupCache();
+  const normalized = normalizeStatusKey(trimmed);
+  if (!normalized || !statusLookupCache) return undefined;
+  return statusLookupCache.get(normalized);
+}
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -198,6 +254,18 @@ router.get("/", async (req: Request, res: Response) => {
           : undefined,
       source: req.query.source ? String(req.query.source) : undefined,
     };
+
+    if (!filters.status_id) {
+      const statusFromParam = await resolveStatusIdFromQuery(
+        req.query.status as string | undefined,
+      );
+      if (
+        typeof statusFromParam === "number" &&
+        !Number.isNaN(statusFromParam)
+      ) {
+        filters.status_id = statusFromParam;
+      }
+    }
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;

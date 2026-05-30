@@ -2288,29 +2288,6 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     useConfigHsn: row.useConfigHsn ?? defaultUseConfigHsn,
   }));
 
-  const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
-  if (savedRows.length > 0) {
-    return savedRows.map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
-  }
-
-  if (billingModel === "mmc") {
-    const mmcRow: OverviewInvoiceRow = {
-      id: "mmc-core",
-      kind: "derived",
-      narration: transactionBreakdown.detailLines.join("\n"),
-      amount: Math.max(breakdown.transactionBase, breakdown.mmcFloor),
-      hsn: "",
-      rate: defaultRate,
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      align: "left",
-      editable: false,
-      narrationMode: "multiline",
-      exportEnabled: Math.max(breakdown.transactionBase, breakdown.mmcFloor) !== 0,
-    };
-    return [applyOverviewRowTaxes(mmcRow, defaultTaxType, taxConfig)];
-  }
 
   return [...baseRows, ...customRows].map((row) => applyOverviewRowTaxes(row, defaultTaxType, taxConfig));
 }

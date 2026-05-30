@@ -71,7 +71,7 @@ function getStatusRank(status?: string) {
   return order === -1 ? STATUS_ORDER.length + (name.toLowerCase().charCodeAt(0) || 0) : order;
 }
 
-export default function TicketCharts({
+function TicketCharts({
   dateFrom,
   dateTo,
   onSummaryFetched,
@@ -652,3 +652,5 @@ export default function TicketCharts({
     </div>
   );
 }
+
+export default React.memo(TicketCharts);

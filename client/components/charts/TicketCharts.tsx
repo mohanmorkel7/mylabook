@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Pie,
   PieChart,
@@ -18,6 +19,7 @@ interface AssignedCount {
   user_id: number | null;
   name: string;
   count: number;
+  client_names?: string[];
 }
 
 interface StatusCount {
@@ -68,8 +70,217 @@ function getStatusRank(status?: string) {
   const order = STATUS_ORDER.findIndex(
     (item) => item.toLowerCase() === name.toLowerCase(),
   );
-  return order === -1 ? STATUS_ORDER.length + (name.toLowerCase().charCodeAt(0) || 0) : order;
+  return order === -1
+    ? STATUS_ORDER.length + (name.toLowerCase().charCodeAt(0) || 0)
+    : order;
 }
+
+function getStatusColor(status: string, index: number) {
+  const palette: Record<string, string> = {
+    Open: "#2563eb",
+    "In Progress": "#0f766e",
+    Pending: "#f59e0b",
+    Overdue: "#ef4444",
+    Closed: "#7c3aed",
+  };
+  return palette[status] || CHART_COLORS[index % CHART_COLORS.length];
+}
+
+const HorizontalTicketBarChart = React.memo(function HorizontalTicketBarChart({
+  data,
+  height,
+  valueLabel,
+}: {
+  data: { name: string; value: number; client_names?: string[] }[];
+  height: number;
+  valueLabel: string;
+}) {
+  const sorted = [...data].sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+
+  return (
+    <div className="h-full w-full" style={{ minHeight: height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={sorted} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+          <YAxis
+            dataKey="name"
+            type="category"
+            width={140}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 12, fill: "#475569" }}
+          />
+          <Tooltip
+            cursor={{ fill: "rgba(37, 99, 235, 0.06)" }}
+            content={({ active, payload, label }: any) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload || {};
+              const clients = normalizeClientNames(row.client_names);
+              return (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                  <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
+                  <div className="mt-1 text-xs text-slate-600">
+                    {valueLabel}: {Number(row.value || 0)}
+                  </div>
+                  {clients.length > 0 && (
+                    <div className="mt-2 max-w-[260px] text-xs text-slate-500">
+                      <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
+                      {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
+                    </div>
+                  )}
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="value" radius={[0, 12, 12, 0]} barSize={18} minPointSize={4} isAnimationActive={false}>
+            {sorted.map((entry, idx) => (
+              <Cell key={`${entry.name}-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+            ))}
+            <LabelList dataKey="value" position="right" fill="#334155" fontSize={11} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+const StatusDistributionChart = React.memo(function StatusDistributionChart({
+  data,
+  height,
+}: {
+  data: { name: string; value: number; client_names?: string[] }[];
+  height: number;
+}) {
+  const sorted = [...data].sort((a, b) => getStatusRank(a.name) - getStatusRank(b.name));
+
+  return (
+    <div className="h-full w-full" style={{ minHeight: height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={sorted} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+          <YAxis
+            dataKey="name"
+            type="category"
+            width={136}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 12, fill: "#475569" }}
+          />
+          <Tooltip
+            cursor={{ fill: "rgba(239, 68, 68, 0.06)" }}
+            content={({ active, payload, label }: any) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload || {};
+              const percentTotal = sorted.reduce((sum, item) => sum + Number(item.value || 0), 0);
+              const pct = percentTotal ? Math.round((Number(row.value || 0) / percentTotal) * 100) : 0;
+              return (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                  <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
+                  <div className="mt-1 text-xs text-slate-600">
+                    {Number(row.value || 0)} tickets • {pct}% of total
+                  </div>
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="value" radius={[0, 12, 12, 0]} barSize={20} minPointSize={4} isAnimationActive={false}>
+            {sorted.map((entry, idx) => (
+              <Cell key={`${entry.name}-${idx}`} fill={getStatusColor(entry.name, idx)} />
+            ))}
+            <LabelList dataKey="value" position="right" fill="#334155" fontSize={11} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+type StackedStatusRow = {
+  name: string;
+  total: number;
+  client_names?: string[];
+} & Record<string, any>;
+
+const StackedStatusChart = React.memo(function StackedStatusChart({
+  data,
+  statusKeys,
+  height,
+}: {
+  data: StackedStatusRow[];
+  statusKeys: string[];
+  height: number;
+}) {
+  const sorted = [...data].sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
+
+  return (
+    <div className="h-full w-full" style={{ minHeight: height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={sorted} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+          <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+          <YAxis
+            dataKey="name"
+            type="category"
+            width={144}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 12, fill: "#475569" }}
+          />
+          <Tooltip
+            cursor={{ fill: "rgba(15, 118, 110, 0.06)" }}
+            content={({ active, payload, label }: any) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload || {};
+              const clients = normalizeClientNames(row.client_names);
+              return (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
+                  <div className="text-sm font-semibold text-slate-900">{label || row.name}</div>
+                  <div className="mt-1 text-xs text-slate-600">Total tickets: {Number(row.total || 0)}</div>
+                  <div className="mt-2 space-y-1">
+                    {statusKeys.map((status, idx) => {
+                      const value = Number(row[status] || 0);
+                      if (!value) return null;
+                      return (
+                        <div key={status} className="flex items-center justify-between gap-4 text-xs">
+                          <span className="inline-flex items-center gap-2 text-slate-600">
+                            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: getStatusColor(status, idx) }} />
+                            {status}
+                          </span>
+                          <span className="font-medium text-slate-900">{value}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {clients.length > 0 && (
+                    <div className="mt-2 max-w-[260px] text-xs text-slate-500">
+                      <span className="font-medium text-slate-700">Clients:</span> {clients.slice(0, 4).join(", ")}
+                      {clients.length > 4 ? ` +${clients.length - 4} more` : ""}
+                    </div>
+                  )}
+                </div>
+              );
+            }}
+          />
+          <Legend verticalAlign="bottom" height={36} iconType="circle" />
+          {statusKeys.map((status, idx) => (
+            <Bar
+              key={status}
+              dataKey={status}
+              stackId="status"
+              fill={getStatusColor(status, idx)}
+              minPointSize={2}
+              isAnimationActive={false}
+              radius={idx === statusKeys.length - 1 ? [0, 12, 12, 0] : 0}
+              barSize={18}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
 
 function TicketCharts({
   dateFrom,
@@ -424,6 +635,89 @@ function TicketCharts({
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
 
+  const statusKeys = useMemo(() => {
+    const keys = new Set<string>(STATUS_ORDER);
+    statuses.forEach((item) => {
+      if (item.status) keys.add(item.status);
+    });
+    userStatus.forEach((row) => {
+      Object.keys(row.counts || {}).forEach((key) => keys.add(key));
+    });
+    tagStatus.forEach((row) => {
+      Object.keys(row.counts || {}).forEach((key) => keys.add(key));
+    });
+    return Array.from(keys).sort((a, b) => getStatusRank(a) - getStatusRank(b));
+  }, [statuses, userStatus, tagStatus]);
+
+  const assignedChartData = useMemo(
+    () =>
+      assigned
+        .map((item) => ({
+          name: item.name || "Unknown",
+          value: Number(item.count || 0),
+          client_names: item.client_names || [],
+        }))
+        .sort((a, b) => Number(b.value || 0) - Number(a.value || 0)),
+    [assigned],
+  );
+
+  const statusChartData = useMemo(
+    () =>
+      statusKeys.map((status) => {
+        const item = statuses.find(
+          (entry) => String(entry.status || "").toLowerCase() === status.toLowerCase(),
+        );
+        return {
+          name: status,
+          value: Number(item?.count || 0),
+          client_names: item?.client_names || [],
+        };
+      }),
+    [statusKeys, statuses],
+  );
+
+  const userStackedData = useMemo(
+    () =>
+      userStatus
+        .map((row) => {
+          const normalized: StackedStatusRow = {
+            name: row.name || "Unknown",
+            total: 0,
+            client_names: row.client_names || [],
+          };
+          statusKeys.forEach((status) => {
+            const value = Number(row.counts?.[status] || 0);
+            normalized[status] = value;
+            normalized.total += value;
+          });
+          return normalized;
+        })
+        .filter((row) => Number(row.total || 0) > 0)
+        .sort((a, b) => Number(b.total || 0) - Number(a.total || 0)),
+    [statusKeys, userStatus],
+  );
+
+  const tagStackedData = useMemo(
+    () =>
+      tagStatus
+        .map((row) => {
+          const normalized: StackedStatusRow = {
+            name: row.name || String(row.user_id || "Unknown"),
+            total: 0,
+            client_names: row.client_names || [],
+          };
+          statusKeys.forEach((status) => {
+            const value = Number(row.counts?.[status] || 0);
+            normalized[status] = value;
+            normalized.total += value;
+          });
+          return normalized;
+        })
+        .filter((row) => Number(row.total || 0) > 0)
+        .sort((a, b) => Number(b.total || 0) - Number(a.total || 0)),
+    [statusKeys, tagStatus],
+  );
+
   const GroupedBarChart = ({
     users,
     statuses,
@@ -551,100 +845,91 @@ function TicketCharts({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* Assigned To Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[420px]">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h4 className="text-sm font-semibold text-slate-900">Assigned To</h4>
-              <p className="text-xs text-slate-500">Tickets by assignee, sorted high to low</p>
+              <p className="mt-1 text-xs text-slate-500">Highest assignee volume at the top</p>
             </div>
-            <div className="text-sm text-slate-600">
-              Total: {" "}
-              <span className="font-medium text-slate-900">{totalAssigned}</span>
+            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+              Total <span className="ml-1 text-slate-900">{totalAssigned}</span>
             </div>
           </div>
-          <div className="pt-2">
+          <div className="mt-4">
             {loading ? (
               <div className="text-sm text-slate-500">Loading…</div>
-            ) : assigned.length === 0 ? (
+            ) : assignedChartData.length === 0 ? (
               <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <VerticalBarChart items={assigned} labelKey="name" valueKey="count" />
+              <HorizontalTicketBarChart data={assignedChartData} height={340} valueLabel="Tickets" />
             )}
           </div>
         </div>
 
         {/* Status Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[420px]">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h4 className="text-sm font-semibold text-slate-900">Status</h4>
-              <p className="text-xs text-slate-500">Overall ticket mix with client context on hover</p>
+              <p className="mt-1 text-xs text-slate-500">Status rows always include zero-count states</p>
             </div>
-            <div className="text-sm text-slate-600">
-              Total: {" "}
-              <span className="font-medium text-slate-900">{totalTickets}</span>
+            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+              Total <span className="ml-1 text-slate-900">{totalTickets}</span>
             </div>
           </div>
-          <div className="pt-2">
+          <div className="mt-4">
             {loading ? (
               <div className="text-sm text-slate-500">Loading…</div>
-            ) : statuses.length === 0 ? (
+            ) : statusChartData.length === 0 ? (
               <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <DonutChart items={statuses} labelKey="status" valueKey="count" />
+              <StatusDistributionChart data={statusChartData} height={340} />
             )}
           </div>
         </div>
 
         {/* By User (Status) Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[460px]">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h4 className="text-sm font-semibold text-slate-900">By User (Status)</h4>
-              <p className="text-xs text-slate-500">Stacked status mix per assignee</p>
+              <p className="mt-1 text-xs text-slate-500">Stacked bars with the same color order everywhere</p>
             </div>
-            <div className="text-sm text-slate-600">
-              Users:{" "}
-              <span className="font-medium text-slate-900">
-                {userStatus.length}
-              </span>
+            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+              Users <span className="ml-1 text-slate-900">{userStackedData.length}</span>
             </div>
           </div>
-          <div className="pt-2">
+          <div className="mt-4">
             {loading ? (
               <div className="text-sm text-slate-500">Loading…</div>
-            ) : userStatus.length === 0 ? (
+            ) : userStackedData.length === 0 ? (
               <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <GroupedBarChart users={userStatus} statuses={statuses} />
+              <StackedStatusChart data={userStackedData} statusKeys={statusKeys} height={380} />
             )}
           </div>
         </div>
 
-        {/* Tag (Status) Card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-1">
-          <div className="flex items-start justify-between gap-3 mb-2">
+        {/* By Tag (Status) Card */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm min-h-[460px]">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h4 className="text-sm font-semibold text-slate-900">By Tag (Status)</h4>
-              <p className="text-xs text-slate-500">Ticket tags with status breakdown</p>
+              <p className="mt-1 text-xs text-slate-500">Only tags with tickets are shown</p>
             </div>
-            <div className="text-sm text-slate-600">
-              Tags:{" "}
-              <span className="font-medium text-slate-900">
-                {tagStatus.length}
-              </span>
+            <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+              Tags <span className="ml-1 text-slate-900">{tagStackedData.length}</span>
             </div>
           </div>
-
-          <div className="pt-2">
+          <div className="mt-4">
             {loading ? (
               <div className="text-sm text-slate-500">Loading…</div>
-            ) : tagStatus.length === 0 ? (
+            ) : tagStackedData.length === 0 ? (
               <div className="text-sm text-slate-500">No data</div>
             ) : (
-              <GroupedBarChart users={tagStatus} statuses={statuses} />
+              <StackedStatusChart data={tagStackedData} statusKeys={statusKeys} height={380} />
             )}
           </div>
         </div>

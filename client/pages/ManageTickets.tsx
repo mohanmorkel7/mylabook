@@ -162,7 +162,7 @@ export default function ManageTickets() {
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [serverOverdueCounts, setServerOverdueCounts] = useState<any>(null);
 
-  const handleSummaryFetched = (summary: any) => {
+  const handleSummaryFetched = useCallback((summary: any) => {
     try {
       // Map statuses array to statusCounts object
       if (summary && Array.isArray(summary.statuses)) {
@@ -179,7 +179,7 @@ export default function ManageTickets() {
     } catch (e) {
       console.warn("handleSummaryFetched failed", e);
     }
-  };
+  }, []);
 
   // Helper to robustly read status counts from server summary with several key variants
   function getStatusCount(name: string): number {

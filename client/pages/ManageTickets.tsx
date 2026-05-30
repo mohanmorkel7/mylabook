@@ -2049,12 +2049,15 @@ export default function ManageTickets() {
             return parsed.getTime() - clientNowMs;
           }
 
-          // Otherwise treat as IST wall time (YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS)
+          // The DB stores sla_time as TIMESTAMP (no timezone).
+          // The server computes it as `Date.now() + SLA_hours` in UTC and saves via
+          // toISOString(). PostgreSQL strips the 'Z' but the VALUE is UTC.
+          // Therefore, treat timestamps without timezone marker as UTC (not IST).
           const tsPart = s.includes("T")
             ? s.split("T")[0] + "T" + s.split("T")[1]
-            : s;
+            : s.replace(" ", "T");
           const match = tsPart.match(
-            /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/,
+            /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?/,
           );
           if (!match) return null;
           const y = Number(match[1]);
@@ -2063,9 +2066,8 @@ export default function ManageTickets() {
           const hh = Number(match[4] || 0);
           const mm = Number(match[5] || 0);
           const ss = Number(match[6] || 0);
-          const IST_OFFSET_MS = 5.5 * 3600 * 1000;
-          // Compute UTC epoch for the IST wall-time by subtracting IST offset
-          const dueUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss) - IST_OFFSET_MS;
+          // Treat as UTC (server stored UTC epoch, no IST offset needed)
+          const dueUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss);
           return dueUtcMs - clientNowMs;
         } catch (e) {
           return null;

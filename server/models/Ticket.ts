@@ -1078,8 +1078,9 @@ export class TicketRepository {
           if (s instanceof Date) return s.toISOString();
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
-          if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return TicketRepository.convertISTToUTC(str);
+          // sla_time stored as UTC in TIMESTAMP (no TZ) column — just append Z.
+          if (/\d{4}-\d{2}-\d{2}[ T]/.test(str))
+            return str.replace(" ", "T").replace(/(\.[0-9]+)?$/, "Z");
           return str;
         } catch (e) {
           return null;
@@ -1340,8 +1341,9 @@ export class TicketRepository {
           if (s instanceof Date) return s.toISOString();
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
-          if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return TicketRepository.convertISTToUTC(str);
+          // sla_time stored as UTC in TIMESTAMP (no TZ) column — just append Z.
+          if (/\d{4}-\d{2}-\d{2}[ T]/.test(str))
+            return str.replace(" ", "T").replace(/(\.[0-9]+)?$/, "Z");
           return str;
         } catch (e) {
           return null;

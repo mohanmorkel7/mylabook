@@ -240,7 +240,7 @@ const StatusDonut = React.memo(function StatusDonut({
   );
 });
 
-// ─── Chart: Stacked bar (user / tag) — vertical ───────────────────────────────
+// ─── Chart: Stacked bar vertical (By Tag) ────────────────────────────────────
 
 const StackedChart = React.memo(function StackedChart({
   data,
@@ -249,7 +249,6 @@ const StackedChart = React.memo(function StackedChart({
   data: StackedRow[];
   statusKeys: string[];
 }) {
-  // Cap at top 10 for readability
   const display = data.slice(0, 10);
   return (
     <div style={{ width: "100%", height: 300 }}>
@@ -280,11 +279,10 @@ const StackedChart = React.memo(function StackedChart({
             content={({ active, payload }: any) => {
               if (!active || !payload?.length) return null;
               const row = payload[0]?.payload || {};
-              const clients = normalizeClientNames(row.client_names);
               return (
                 <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
                   <p className="text-sm font-semibold text-slate-800">{row.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{Number(row.total || 0).toLocaleString()} total tickets</p>
+                  <p className="mt-1 text-xs text-slate-500">{Number(row.total || 0).toLocaleString()} total</p>
                   <div className="mt-2 space-y-1">
                     {statusKeys.map((status, idx) => {
                       const val = Number(row[status] || 0);
@@ -300,12 +298,6 @@ const StackedChart = React.memo(function StackedChart({
                       );
                     })}
                   </div>
-                  {clients.length > 0 && (
-                    <p className="mt-2 text-[11px] text-slate-400">
-                      {clients.slice(0, 3).join(", ")}
-                      {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
-                    </p>
-                  )}
                 </div>
               );
             }}
@@ -334,6 +326,121 @@ const StackedChart = React.memo(function StackedChart({
   );
 });
 
+// ─── Chart: Scrollable horizontal stacked bars (By User — all users) ──────────
+
+const UserScrollChart = React.memo(function UserScrollChart({
+  data,
+  statusKeys,
+}: {
+  data: StackedRow[];
+  statusKeys: string[];
+}) {
+  const ROW_H = 30;
+  const chartHeight = data.length * ROW_H + 24; // 24 = top/bottom margin
+
+  return (
+    <>
+      {/* scrollable chart area */}
+      <div style={{ overflowY: "auto", overflowX: "hidden", maxHeight: 252 }}>
+        <div style={{ width: "100%", height: Math.max(chartHeight, 100) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              layout="vertical"
+              margin={{ top: 4, right: 48, left: 4, bottom: 4 }}
+              barCategoryGap="20%"
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+              <XAxis
+                type="number"
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+              />
+              <YAxis
+                dataKey="name"
+                type="category"
+                width={112}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11, fill: "#475569" }}
+                tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 13) + "…" : v}
+              />
+              <Tooltip
+                cursor={{ fill: "rgba(99,102,241,0.06)" }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload || {};
+                  const clients = normalizeClientNames(row.client_names);
+                  return (
+                    <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+                      <p className="text-sm font-semibold text-slate-800">{row.name}</p>
+                      <p className="mt-1 text-xs text-slate-500">{Number(row.total || 0).toLocaleString()} total tickets</p>
+                      <div className="mt-2 space-y-1">
+                        {statusKeys.map((status, idx) => {
+                          const val = Number(row[status] || 0);
+                          if (!val) return null;
+                          return (
+                            <div key={status} className="flex items-center justify-between gap-6 text-xs">
+                              <span className="flex items-center gap-1.5 text-slate-600">
+                                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                                {status}
+                              </span>
+                              <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {clients.length > 0 && (
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {clients.slice(0, 3).join(", ")}
+                          {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+              {statusKeys.map((status, idx) => (
+                <Bar
+                  key={status}
+                  dataKey={status}
+                  stackId="s"
+                  fill={statusColor(status, idx)}
+                  isAnimationActive={false}
+                  barSize={16}
+                  minPointSize={2}
+                  radius={idx === statusKeys.length - 1 ? [0, 4, 4, 0] : 0}
+                >
+                  {idx === statusKeys.length - 1 && (
+                    <LabelList
+                      dataKey="total"
+                      position="right"
+                      fill="#64748b"
+                      fontSize={10}
+                      formatter={(v: number) => v > 0 ? v.toLocaleString() : ""}
+                    />
+                  )}
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      {/* legend pinned below scroll area */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-2">
+        {statusKeys.map((status, idx) => (
+          <span key={status} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+            {status}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+});
+
 // ─── Skeleton loader ───────────────────────────────────────────────────────────
 
 function ChartSkeleton() {
@@ -357,6 +464,7 @@ function ChartCard({
   badge,
   loading,
   hasData,
+  wide,
   children,
 }: {
   title: string;
@@ -364,12 +472,13 @@ function ChartCard({
   badge?: React.ReactNode;
   loading?: boolean;
   hasData?: boolean;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div
       className="flex-shrink-0 flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-sm"
-      style={{ minWidth: 200, flex: "1 1 0" }}
+      style={{ minWidth: 200, flex: wide ? "2 1 0" : "1 1 0" }}
     >
       <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
         <div>
@@ -578,7 +687,18 @@ function TicketCharts({
   );
 
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
+  // Active = everything except Closed (for badges)
+  const totalActive = statuses
+    .filter(s => s.status !== "Closed")
+    .reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
+  const totalAssignedActive = useMemo(
+    () => userStackData.reduce((s, r) => {
+      const closed = Number(r["Closed"] || 0);
+      return s + Number(r.total || 0) - closed;
+    }, 0),
+    [userStackData],
+  );
 
   return (
     <div className="mb-8">
@@ -587,7 +707,7 @@ function TicketCharts({
         <div>
           <h3 className="text-base font-semibold text-slate-800">Tickets Overview</h3>
           <p className="text-xs text-slate-500">
-            {totalTickets.toLocaleString()} total tickets across all agents and tags
+            {totalActive.toLocaleString()} active tickets · {totalTickets.toLocaleString()} total
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -611,7 +731,7 @@ function TicketCharts({
         <ChartCard
           title="Assigned To"
           subtitle={`${assignedData.length} agents with tickets`}
-          badge={totalAssigned.toLocaleString()}
+          badge={totalAssignedActive.toLocaleString() + " active"}
           loading={loading}
           hasData={assignedData.length > 0}
         >
@@ -622,22 +742,23 @@ function TicketCharts({
         <ChartCard
           title="Status"
           subtitle="Ticket distribution by current status"
-          badge={totalTickets.toLocaleString()}
+          badge={totalActive.toLocaleString() + " active"}
           loading={loading}
           hasData={statusData.length > 0}
         >
           <StatusDonut data={statusData} />
         </ChartCard>
 
-        {/* 3 – By User (Status) */}
+        {/* 3 – By User (Status) — scrollable, all users */}
         <ChartCard
           title="By User"
-          subtitle={`${userStackData.length} agents · stacked by status`}
+          subtitle={`${userStackData.length} agents · scroll to see all`}
           badge={`${userStackData.length} users`}
           loading={loading}
           hasData={userStackData.length > 0}
+          wide
         >
-          <StackedChart data={userStackData} statusKeys={activeStatusKeys} />
+          <UserScrollChart data={userStackData} statusKeys={activeStatusKeys} />
         </ChartCard>
 
         {/* 4 – By Tag (Status) */}

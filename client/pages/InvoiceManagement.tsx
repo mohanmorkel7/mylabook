@@ -39,12 +39,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Tooltip as UiTooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -3168,12 +3162,11 @@ function ClientOverviewScreen({
   const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
   const [taxType, setTaxType] = useState<RowTaxType>(defaultTaxType);
   const hasTransactionSlabConfig = Array.isArray(client.transactionSlabs) && client.transactionSlabs.length > 0;
-  const slabTooltipMessage = "There is no slab configured";
-  const handleTxnInputChange = (value: number) => {
+  const sliderMax = Math.max((Number(client.monthlyTransactionVolume || 0) * 2) || 0, 1000000);
+  const updateTxnInput = (value: number) => {
     if (!hasTransactionSlabConfig) return;
     setTxnInput(value);
   };
-  const sliderMax = Math.max((Number(client.monthlyTransactionVolume || 0) * 2) || 0, 1000000);
   const resolvedTaxType = getClientTaxType(client, taxType);
   const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() =>
     buildOverviewInvoiceRows(client, normalizeVolume(client.monthlyTransactionVolume), getBillingModel(client) === "transaction", taxConfig),
@@ -3525,49 +3518,29 @@ function ClientOverviewScreen({
                     <Label htmlFor="txn-based-count">Transaction Count</Label>
                     <span className="text-muted-foreground">{txnInput.toLocaleString()}</span>
                   </div>
-                  <TooltipProvider>
-                    <UiTooltip>
-                      <TooltipTrigger asChild>
-                        <Input
-                          id="txn-based-count"
-                          type="number"
-                          min={0}
-                          step={100000}
-                          value={txnInput}
-                          onChange={(e) => handleTxnInputChange(Number(e.target.value) || 0)}
-                          disabled={!hasTransactionSlabConfig}
-                        />
-                      </TooltipTrigger>
-                      {!hasTransactionSlabConfig && (
-                        <TooltipContent side="top" align="center">
-                          {slabTooltipMessage}
-                        </TooltipContent>
-                      )}
-                    </UiTooltip>
-                  </TooltipProvider>
+                  <Input
+                    id="txn-based-count"
+                    type="number"
+                    min={0}
+                    step={100000}
+                    value={txnInput}
+                    onChange={(e) => updateTxnInput(Number(e.target.value) || 0)}
+                    disabled={!hasTransactionSlabConfig}
+                    title={!hasTransactionSlabConfig ? "There is no slab configured" : undefined}
+                  />
                 </div>
                 <div className="min-w-[260px] flex-[2]">
-                  <TooltipProvider>
-                    <UiTooltip>
-                      <TooltipTrigger asChild>
-                        <input
-                          type="range"
-                          min={0}
-                          max={sliderMax}
-                          step={100000}
-                          value={txnInput}
-                          onChange={(e) => handleTxnInputChange(Number(e.target.value))}
-                          disabled={!hasTransactionSlabConfig}
-                          className="w-full accent-primary"
-                        />
-                      </TooltipTrigger>
-                      {!hasTransactionSlabConfig && (
-                        <TooltipContent side="top" align="center">
-                          {slabTooltipMessage}
-                        </TooltipContent>
-                      )}
-                    </UiTooltip>
-                  </TooltipProvider>
+                  <input
+                    type="range"
+                    min={0}
+                    max={sliderMax}
+                    step={100000}
+                    value={txnInput}
+                    onChange={(e) => updateTxnInput(Number(e.target.value))}
+                    disabled={!hasTransactionSlabConfig}
+                    className="w-full accent-primary"
+                    title={!hasTransactionSlabConfig ? "There is no slab configured" : undefined}
+                  />
                   <p className="mt-2 text-xs text-muted-foreground">Move the slider or type a number. The variable row updates automatically.</p>
                 </div>
               </div>
@@ -3795,51 +3768,31 @@ function ClientOverviewScreen({
                 <Label>Monthly transaction slider</Label>
                 <span className="text-sm text-muted-foreground">{txnInput.toLocaleString()}</span>
               </div>
-              <TooltipProvider>
-                <UiTooltip>
-                  <TooltipTrigger asChild>
-                    <input
-                      type="range"
-                      min={0}
-                      max={sliderMax}
-                      step={100000}
-                      value={txnInput}
-                      onChange={(e) => handleTxnInputChange(Number(e.target.value))}
-                      disabled={!hasTransactionSlabConfig}
-                      className="w-full accent-primary"
-                    />
-                  </TooltipTrigger>
-                  {!hasTransactionSlabConfig && (
-                    <TooltipContent side="top" align="center">
-                      {slabTooltipMessage}
-                    </TooltipContent>
-                  )}
-                </UiTooltip>
-              </TooltipProvider>
+              <input
+                type="range"
+                min={0}
+                max={sliderMax}
+                step={100000}
+                value={txnInput}
+                onChange={(e) => updateTxnInput(Number(e.target.value))}
+                disabled={!hasTransactionSlabConfig}
+                className="w-full accent-primary"
+                title={!hasTransactionSlabConfig ? "There is no slab configured" : undefined}
+              />
               <div className="grid gap-2 md:grid-cols-[1fr_160px] md:items-end">
                 <div className="space-y-2">
                   <Label htmlFor="txn-input">Transaction count</Label>
-                  <TooltipProvider>
-                    <UiTooltip>
-                      <TooltipTrigger asChild>
-                        <Input
-                          id="txn-input"
-                          type="number"
-                          min={0}
-                          step={100000}
-                          value={txnInput}
-                          onChange={(e) => handleTxnInputChange(Number(e.target.value) || 0)}
-                          disabled={!hasTransactionSlabConfig}
-                          className="h-11"
-                        />
-                      </TooltipTrigger>
-                      {!hasTransactionSlabConfig && (
-                        <TooltipContent side="top" align="center">
-                          {slabTooltipMessage}
-                        </TooltipContent>
-                      )}
-                    </UiTooltip>
-                  </TooltipProvider>
+                  <Input
+                    id="txn-input"
+                    type="number"
+                    min={0}
+                    step={100000}
+                    value={txnInput}
+                    onChange={(e) => updateTxnInput(Number(e.target.value) || 0)}
+                    disabled={!hasTransactionSlabConfig}
+                    className="h-11"
+                    title={!hasTransactionSlabConfig ? "There is no slab configured" : undefined}
+                  />
                 </div>
                 <div className="rounded-2xl border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
                   Type a value or move the slider to recalculate instantly.

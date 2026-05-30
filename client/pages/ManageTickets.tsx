@@ -2779,6 +2779,14 @@ export default function ManageTickets() {
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
 
+                          {/* Live HH:MM:SS timer — only for Overdue status */}
+                          {normalizedStatusName === "overdue" && slaMs !== null && slaMs < 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-mono font-bold text-red-700 border border-red-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                              {formatRemaining(Math.abs(slaMs))}
+                            </span>
+                          )}
+
                           {getTicketTag(t) !== "Manual" && (
                             <Badge variant="secondary">{getTicketTag(t)}</Badge>
                           )}
@@ -3121,6 +3129,14 @@ export default function ManageTickets() {
                           <Badge>
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
+
+                          {/* Live HH:MM:SS timer — only for Overdue status */}
+                          {normalizedStatusName === "overdue" && slaMs !== null && slaMs < 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-mono font-bold text-red-700 border border-red-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                              {formatRemaining(Math.abs(slaMs))}
+                            </span>
+                          )}
 
                           {getTicketTag(t) !== "Manual" && (
                             <Badge variant="secondary">{getTicketTag(t)}</Badge>

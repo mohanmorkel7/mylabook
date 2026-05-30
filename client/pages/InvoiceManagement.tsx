@@ -2016,6 +2016,7 @@ function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxT
 function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transactionBased: boolean, taxConfig: TaxConfig): OverviewInvoiceRow[] {
   const defaultTaxType: RowTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
+  const defaultUseConfigHsn = Boolean(taxConfig.invoiceHsnCode);
   const breakdown = calculateInvoiceCommercials(client, txnCount);
   const variableCharge = Math.max(
     breakdown.transactionBase - Number(client.fixedBilling || 0) - breakdown.awsMarkup - Number(client.additionalPlatformFee || 0) - Number(client.integrationFee || 0),
@@ -2076,6 +2077,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       editable: true,
       narrationMode: "title",
       exportEnabled: Number(client.fixedBilling || 0) !== 0,
+      useConfigHsn: defaultUseConfigHsn,
     },
   ];
 
@@ -2099,50 +2101,53 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
 
   baseRows.push(
     {
-      id: "aws-pass-through",
-      kind: "derived",
-      narration: "AWS Infra Pass-through",
-      amount: breakdown.awsMarkup,
-      hsn: "",
-      rate: defaultRate,
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      align: "left",
-      editable: false,
-      narrationMode: "subtitle",
-      exportEnabled: breakdown.awsMarkup !== 0,
-    },
-    {
-      id: "additional-platform-fee",
-      kind: "derived",
-      narration: "Additional Platform Fee",
-      amount: Number(client.additionalPlatformFee || 0),
-      hsn: "",
-      rate: defaultRate,
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      align: "left",
-      editable: true,
-      narrationMode: "title",
-      exportEnabled: Number(client.additionalPlatformFee || 0) !== 0,
-    },
-    {
-      id: "integration-fee",
-      kind: "derived",
-      narration: "Integration Fee",
-      amount: Number(client.integrationFee || 0),
-      hsn: "",
-      rate: defaultRate,
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      align: "left",
-      editable: true,
-      narrationMode: "title",
-      exportEnabled: Number(client.integrationFee || 0) !== 0,
-    },
+        id: "aws-pass-through",
+        kind: "derived",
+        narration: "AWS Infra Pass-through",
+        amount: breakdown.awsMarkup,
+        hsn: "",
+        rate: defaultRate,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        align: "left",
+        editable: false,
+        narrationMode: "subtitle",
+        exportEnabled: breakdown.awsMarkup !== 0,
+        useConfigHsn: defaultUseConfigHsn,
+      },
+      {
+        id: "additional-platform-fee",
+        kind: "derived",
+        narration: "Additional Platform Fee",
+        amount: Number(client.additionalPlatformFee || 0),
+        hsn: "",
+        rate: defaultRate,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        align: "left",
+        editable: true,
+        narrationMode: "title",
+        exportEnabled: Number(client.additionalPlatformFee || 0) !== 0,
+        useConfigHsn: defaultUseConfigHsn,
+      },
+      {
+        id: "integration-fee",
+        kind: "derived",
+        narration: "Integration Fee",
+        amount: Number(client.integrationFee || 0),
+        hsn: "",
+        rate: defaultRate,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        align: "left",
+        editable: true,
+        narrationMode: "title",
+        exportEnabled: Number(client.integrationFee || 0) !== 0,
+        useConfigHsn: defaultUseConfigHsn,
+      },
   );
 
   if (setupFeeDue > 0) {
@@ -2160,6 +2165,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       editable: true,
       narrationMode: "title",
       exportEnabled: setupFeeDue !== 0,
+      useConfigHsn: defaultUseConfigHsn,
     });
   }
 
@@ -2177,6 +2183,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     editable: true,
     narrationMode: row.narrationMode || "multiline",
     exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
+    useConfigHsn: row.useConfigHsn ?? defaultUseConfigHsn,
   }));
 
   const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];

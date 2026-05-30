@@ -4157,7 +4157,6 @@ function InvoiceConfigEditor({
                     <Input
                       type="text"
                       inputMode="numeric"
-                      pattern="\d*"
                       value={invoiceCurrentSerial}
                       onChange={(e) => setInvoiceCurrentSerial(e.target.value)}
                       placeholder="0017"

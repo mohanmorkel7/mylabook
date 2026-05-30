@@ -377,7 +377,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         typeof userDepartment === "string" &&
         userDepartment.toLowerCase() === "finance";
 
-      if (isFinanceDepartment && item.name !== "Finance Management") {
+      if (
+        isFinanceDepartment &&
+        item.name !== "Finance Management" &&
+        item.name !== "Invoice Management"
+      ) {
         return null;
       }
 

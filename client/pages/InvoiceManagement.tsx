@@ -65,6 +65,7 @@ import {
   ChevronRight,
   Download,
   Edit3,
+  Eye,
   FileDown,
   FileText,
   Layers3,
@@ -1351,7 +1352,13 @@ function isInvoiceAwaitingApproval(status: InvoiceStatus) {
 
 function isApprovedInvoiceStatus(status?: string) {
   const normalized = normalizeInvoiceStatus(status);
-  return normalized === "Generated" || normalized === "Send" || normalized === "Received" || normalized === "Closed";
+  return (
+    normalized === "Generated" ||
+    normalized === "Send" ||
+    normalized === "Received" ||
+    normalized === "Closed" ||
+    normalized === "Overdue"
+  );
 }
 
 function updateInvoiceCollection(
@@ -1532,6 +1539,7 @@ async function downloadInvoicePdfTemplate({
   serial,
   invoiceType = "commercial",
   taxConfig,
+  outputMode = "download",
 }: {
   client: ClientRecord;
   companyConfig: CompanyConfig;
@@ -1544,7 +1552,8 @@ async function downloadInvoicePdfTemplate({
   serial: number;
   invoiceType?: InvoiceType;
   taxConfig: TaxConfig;
-}) {
+  outputMode?: "download" | "preview";
+}): Promise<jsPDF | string> {
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -1903,7 +1912,11 @@ async function downloadInvoicePdfTemplate({
   doc.text("Authorized Signatory", sigX + sigW, cursorY + 6, { align: "right" });
 
   drawFooter();
+  if (outputMode === "preview") {
+    return doc.output("datauristring");
+  }
   doc.save(`${invoiceNumber}.pdf`);
+  return doc;
 }
 
 function getInvoiceNumberForClient(
@@ -2538,6 +2551,7 @@ function InvoiceRowActions({
   onStatusChange,
   onDownloadPdf,
   onDownloadDocx,
+  onPreview,
   onDelete,
 }: {
   invoice: InvoiceRecord;
@@ -2551,6 +2565,7 @@ function InvoiceRowActions({
   onStatusChange: (status: InvoiceStatus) => void;
   onDownloadPdf: () => void;
   onDownloadDocx: () => void;
+  onPreview: () => void;
   onDelete: () => void;
 }) {
   const waiting = isInvoiceAwaitingApproval(invoice.status);
@@ -2558,6 +2573,10 @@ function InvoiceRowActions({
   const sent = invoice.status === "Send";
   const paid = invoice.status === "Received";
   const canEdit = generated;
+  const normalizedStatus = normalizeInvoiceStatus(invoice.status);
+  const pdfReady = isApprovedInvoiceStatus(normalizedStatus);
+  const pdfButtonTitle = pdfReady ? "Export PDF" : "Approve invoice to unlock PDF export";
+  const previewButtonTitle = pdfReady ? "Preview PDF" : "Approve invoice to unlock PDF preview";
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
@@ -2628,7 +2647,24 @@ function InvoiceRowActions({
             <ShieldCheck className="h-4 w-4" />
           </Button>
         )}
-        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0 rounded-lg" onClick={onDownloadPdf} title="Export PDF">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-7 w-7 shrink-0 rounded-lg"
+          onClick={onPreview}
+          disabled={!pdfReady}
+          title={previewButtonTitle}
+        >
+          <Eye className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-7 w-7 shrink-0 rounded-lg"
+          onClick={onDownloadPdf}
+          disabled={!pdfReady}
+          title={pdfButtonTitle}
+        >
           <Download className="h-4 w-4" />
         </Button>
         <Button variant="outline" size="sm" className="h-7 shrink-0 rounded-lg gap-1 px-2 text-[12px]" onClick={onDownloadDocx} title="Export DOCX">
@@ -2659,6 +2695,7 @@ function InvoiceHistoryTable({
   onStatusChange,
   onDownloadPdf,
   onDownloadDocx,
+  onPreview,
   onDelete,
 }: {
   title: string;
@@ -2677,6 +2714,7 @@ function InvoiceHistoryTable({
   onStatusChange: (invoice: InvoiceRecord & { client?: string }, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord & { client?: string }) => void;
   onDownloadDocx: (invoice: InvoiceRecord & { client?: string }) => void;
+  onPreview: (invoice: InvoiceRecord & { client?: string }) => void;
   onDelete: (invoice: InvoiceRecord & { client?: string }) => void;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -2848,6 +2886,7 @@ function InvoiceHistoryTable({
                           onStatusChange={(status) => onStatusChange(normalizedInvoice, status)}
                           onDownloadPdf={() => onDownloadPdf(normalizedInvoice)}
                           onDownloadDocx={() => onDownloadDocx(normalizedInvoice)}
+                          onPreview={() => onPreview(normalizedInvoice)}
                           onDelete={() => onDelete(normalizedInvoice)}
                         />
                       </TableCell>
@@ -3868,6 +3907,7 @@ function ClientOverviewScreen({
           onStatusChange={(invoice, status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
           onDownloadPdf={onDownloadPdf}
           onDownloadDocx={onDownloadDocx}
+          onPreview={(invoice) => previewInvoicePdf(invoice)}
           onDelete={(invoice) => onDeleteInvoice(invoice.invoiceId)}
         />
       </div>
@@ -4499,6 +4539,9 @@ export default function InvoiceManagement() {
   const [pendingDeleteClient, setPendingDeleteClient] = useState<{ clientIdToDelete: string; clientName: string } | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [invoiceModalMode, setInvoiceModalMode] = useState<"create" | "edit">("create");
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewingInvoice, setPreviewingInvoice] = useState<InvoiceRecord | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [invoiceAmountDraft, setInvoiceAmountDraft] = useState(0);
   const [pendingInvoiceAmount, setPendingInvoiceAmount] = useState(0);
@@ -4585,10 +4628,9 @@ export default function InvoiceManagement() {
   const { user } = useAuth();
   const currentUser = user?.email || "admin@mylapay.com";
   const isAdmin = user?.role === "admin";
-  const isFinance = user?.role === "finance";
   const isFinanceDeptAdmin =
     user?.department_admin === true && String(user?.admin_for_department || "").toLowerCase() === "finance";
-  const canManageInvoiceApprovalActions = isAdmin || isFinance || isFinanceDeptAdmin;
+  const canManageInvoiceApprovalActions = isAdmin || isFinanceDeptAdmin;
   const canManageClientConfigActions = isAdmin;
 
   useEffect(() => {
@@ -5588,60 +5630,93 @@ export default function InvoiceManagement() {
     toast({ title: "Invoice updated", description: `${invoiceNumber} has been updated.` });
   };
 
-  const downloadInvoicePdf = async (invoice: any) => {
+  const resolveInvoiceClientRecord = (invoice: any) => {
     const invoiceClientId = invoice.clientId || invoice.clientID || invoice.client_id;
     const invoiceClientName = invoice.clientName || invoice.client;
-    const client =
+    return (
       clients.find((item) => item.clientId === invoiceClientId || item.id === invoiceClientId) ||
       clients.find((item) => item.name === invoiceClientName) ||
-      selectedClient;
-    if (!client) return;
+      selectedClient
+    );
+  };
+
+  const buildInvoicePdfPayload = (invoice: any, client: ClientRecord) => {
+    const invoiceNumber = getInvoiceDisplayNumber(invoice);
+    const generatedDate = invoice.generatedDate || new Date().toISOString().split("T")[0];
+    const financialYearFallback = getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth);
+    const serialCandidate = Number(invoice.serial ?? invoiceSerialState.serial ?? 0) || 1;
+    return {
+      client: {
+        ...client,
+        customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [],
+        billingModel: invoice.billingModel || client.billingModel || "transaction",
+        mmcInvoiceTitle: invoice.mmcInvoiceTitle || client.mmcInvoiceTitle || "",
+      },
+      companyConfig,
+      invoiceNumber,
+      generatedDate,
+      amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
+      status: invoice.status,
+      month:
+        invoice.month ||
+        new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" }),
+      financialYear: invoice.financialYear || financialYearFallback,
+      serial: serialCandidate,
+      invoiceType: invoice.invoiceType || "commercial",
+      taxConfig,
+    };
+  };
+
+  const downloadInvoicePdf = async (invoice: any) => {
+    const client = resolveInvoiceClientRecord(invoice);
+    if (!client) {
+      toast({ title: "Client missing", description: "Could not locate client configuration for this invoice.", variant: "destructive" });
+      return;
+    }
     try {
-      const invoiceNumber = getInvoiceDisplayNumber(invoice);
-      await downloadInvoicePdfTemplate({
-        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction", mmcInvoiceTitle: invoice.mmcInvoiceTitle || client.mmcInvoiceTitle || "" },
-        companyConfig,
-        invoiceNumber,
-        generatedDate: invoice.generatedDate,
-        amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
-        status: invoice.status,
-        month: invoice.month,
-        financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
-        serial: Number(invoice.serial || invoiceSerialState.serial || 1),
-        invoiceType: invoice.invoiceType || "commercial",
-        taxConfig,
-      });
-      toast({ title: "PDF downloaded", description: `${invoiceNumber} PDF downloaded.` });
+      const payload = buildInvoicePdfPayload(invoice, client);
+      await downloadInvoicePdfTemplate(payload);
+      toast({ title: "PDF downloaded", description: `${payload.invoiceNumber} PDF downloaded.` });
     } catch (error: any) {
       console.error("[Invoice] downloadInvoicePdf error:", error);
       toast({ title: "Error", description: error?.message || "Failed to download PDF", variant: "destructive" });
     }
   };
 
-  const downloadInvoiceDocx = async (invoice: any) => {
-    const invoiceClientId = invoice.clientId || invoice.clientID || invoice.client_id;
-    const invoiceClientName = invoice.clientName || invoice.client;
-    const client =
-      clients.find((item) => item.clientId === invoiceClientId || item.id === invoiceClientId) ||
-      clients.find((item) => item.name === invoiceClientName) ||
-      selectedClient;
-    if (!client) return;
+  const previewInvoicePdf = async (invoice: any) => {
+    if (!isApprovedInvoiceStatus(invoice.status)) {
+      toast({ title: "Awaiting approval", description: "Only approved invoices can be previewed.", variant: "warning" });
+      return;
+    }
+    const client = resolveInvoiceClientRecord(invoice);
+    if (!client) {
+      toast({ title: "Client missing", description: "Could not locate client configuration for this invoice.", variant: "destructive" });
+      return;
+    }
     try {
-      const invoiceNumber = getInvoiceDisplayNumber(invoice);
-      await downloadInvoiceDocxTemplate({
-        client: { ...client, customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [], billingModel: invoice.billingModel || client.billingModel || "transaction", mmcInvoiceTitle: invoice.mmcInvoiceTitle || client.mmcInvoiceTitle || "" },
-        companyConfig,
-        invoiceNumber,
-        generatedDate: invoice.generatedDate,
-        amount: Number(invoice.amount || client.monthlyInvoiceEstimate),
-        status: invoice.status,
-        month: invoice.month,
-        financialYear: invoice.financialYear || getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth),
-        serial: Number(invoice.serial || invoiceSerialState.serial || 1),
-        invoiceType: invoice.invoiceType || "commercial",
-        taxConfig,
-      });
-      toast({ title: "DOCX downloaded", description: `${invoiceNumber} DOCX downloaded.` });
+      const payload = buildInvoicePdfPayload(invoice, client);
+      const previewResult = await downloadInvoicePdfTemplate({ ...payload, outputMode: "preview" });
+      if (typeof previewResult === "string") {
+        setPreviewingInvoice(invoice);
+        setPdfPreviewUrl(previewResult);
+        setPreviewModalOpen(true);
+      }
+    } catch (error: any) {
+      console.error("[Invoice] previewInvoicePdf error:", error);
+      toast({ title: "Error", description: error?.message || "Failed to preview PDF", variant: "destructive" });
+    }
+  };
+
+  const downloadInvoiceDocx = async (invoice: any) => {
+    const client = resolveInvoiceClientRecord(invoice);
+    if (!client) {
+      toast({ title: "Client missing", description: "Could not locate client configuration for this invoice.", variant: "destructive" });
+      return;
+    }
+    try {
+      const payload = buildInvoicePdfPayload(invoice, client);
+      await downloadInvoiceDocxTemplate(payload);
+      toast({ title: "DOCX downloaded", description: `${payload.invoiceNumber} DOCX downloaded.` });
     } catch (error: any) {
       console.error("[Invoice] downloadInvoiceDocx error:", error);
       toast({ title: "Error", description: error?.message || "Failed to download DOCX", variant: "destructive" });
@@ -6903,8 +6978,43 @@ export default function InvoiceManagement() {
         onStatusChange={(invoice, status) => updateInvoiceByNumber(getInvoiceDisplayNumber(invoice), (item) => ({ ...item, status }))}
         onDownloadPdf={(invoice) => downloadInvoicePdf(invoice)}
         onDownloadDocx={(invoice) => downloadInvoiceDocx(invoice)}
+        onPreview={(invoice) => previewInvoicePdf(invoice)}
         onDelete={(invoice) => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
       />
+
+      <Dialog
+        open={previewModalOpen}
+        onOpenChange={(open) => {
+          setPreviewModalOpen(open);
+          if (!open) {
+            setPdfPreviewUrl(null);
+            setPreviewingInvoice(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-[1200px] w-full p-0">
+          <DialogHeader className="flex items-center justify-between gap-2 border-b px-4 py-3">
+            <div>
+              <DialogTitle className="text-lg">
+                {previewingInvoice ? getInvoiceDisplayNumber(previewingInvoice) : "Invoice preview"}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">Full-screen PDF preview (read-only)</p>
+            </div>
+            <Button variant="outline" size="icon" onClick={() => setPreviewModalOpen(false)} title="Close preview">
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </DialogHeader>
+          <div className="h-[calc(90vh-64px)] w-full bg-muted">
+            {pdfPreviewUrl ? (
+              <iframe src={pdfPreviewUrl} className="h-full w-full border-0" title="Invoice PDF preview" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Preparing preview…
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-muted/60 shadow-sm">
         <CardHeader>

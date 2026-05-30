@@ -3135,11 +3135,19 @@ function ClientOverviewScreen({
 }) {
   const defaultTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
-  const [txnInput, setTxnInput] = useState(Number(client.monthlyTransactionVolume ?? 0));
+  const normalizeVolume = (value?: number | string) => {
+    const parsed = Number(value ?? 0);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    if (parsed === 1000000) return 0;
+    return parsed;
+  };
+  const [txnInput, setTxnInput] = useState(() => normalizeVolume(client.monthlyTransactionVolume));
   const [transactionBased, setTransactionBased] = useState(getBillingModel(client) === "transaction");
   const [taxType, setTaxType] = useState<RowTaxType>(defaultTaxType);
   const resolvedTaxType = getClientTaxType(client, taxType);
-  const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() => buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));
+  const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() =>
+    buildOverviewInvoiceRows(client, normalizeVolume(client.monthlyTransactionVolume), getBillingModel(client) === "transaction", taxConfig),
+  );
   const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
     client.customInvoiceRows && client.customInvoiceRows.length > 0
       ? [...client.customInvoiceRows]
@@ -3174,10 +3182,11 @@ function ClientOverviewScreen({
   }, [client.clientId, client.clientId]);
 
   useEffect(() => {
-    setTxnInput(Number(client.monthlyTransactionVolume ?? 0));
+    const normalizedVolume = normalizeVolume(client.monthlyTransactionVolume);
+    setTxnInput(normalizedVolume);
     setTransactionBased(getBillingModel(client) === "transaction");
     setTaxType(defaultTaxType);
-    setOverviewRows(buildOverviewInvoiceRows(client, client.monthlyTransactionVolume || 0, getBillingModel(client) === "transaction", taxConfig));
+    setOverviewRows(buildOverviewInvoiceRows(client, normalizedVolume, getBillingModel(client) === "transaction", taxConfig));
   }, [client.id, defaultTaxType, taxConfig, client.monthlyTransactionVolume, client.customInvoiceRows, client.invoiceTableConfig, client.billingModel, client.fixedBilling, client.additionalPlatformFee, client.integrationFee, client.setupFee, client.setupFeePaid, client.aws, client.transactionSlabs, client.gstin]);
 
   useEffect(() => {

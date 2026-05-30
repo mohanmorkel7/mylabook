@@ -795,7 +795,14 @@ function TicketCharts({
       const r: StackedRow = { name: row.name || "Unknown", total: 0, client_names: row.client_names || [] };
       statusKeys.forEach(st => { const v = Number(row.counts?.[st] || 0); r[st] = v; r.total += v; });
       return r;
-    }).filter(r => r.total > 0).sort((a, b) => b.total - a.total),
+    })
+    .filter(r => r.total > 0)
+    // sort by active (non-Closed) count, highest first
+    .sort((a, b) => {
+      const aActive = a.total - Number(a["Closed"] || 0);
+      const bActive = b.total - Number(b["Closed"] || 0);
+      return bActive - aActive;
+    }),
     [statusKeys, userStatus],
   );
 
@@ -823,9 +830,9 @@ function TicketCharts({
     [activeStatusKeys],
   );
 
-  // Status data for Status chart — exclude Closed
+  // Status data for Status donut — exclude Closed (case-insensitive)
   const activeStatusData = useMemo(
-    () => statusData.filter(d => d.name !== "Closed"),
+    () => statusData.filter(d => d.name.toLowerCase() !== "closed"),
     [statusData],
   );
 

@@ -91,6 +91,7 @@ interface Ticket {
   tags?: string[];
   custom_fields?: any;
   sla_time?: string;
+  sla_time_epoch_ms?: number | null;
   sla_remaining_ms?: number;
   resolved_at?: string;
   closed_at?: string;
@@ -2034,40 +2035,23 @@ export default function ManageTickets() {
       // entirely on the client side.
       const clientNowMs = Date.now();
 
-      // If server provided a precomputed remaining ms, ignore it here because it
-      // can be based on server time and may not reflect the client-side IST check.
+      // Prefer server-provided epoch_ms (EXTRACT(EPOCH FROM sla_time AT TIME ZONE 'UTC') — unambiguous)
+      if (ticket.sla_time_epoch_ms != null && !isNaN(Number(ticket.sla_time_epoch_ms))) {
+        return Number(ticket.sla_time_epoch_ms) - clientNowMs;
+      }
 
-      // Fallback to using sla_time timestamp if available. Interpret the incoming
-      // sla_time is stored as UTC in the DB and sent as UTC ISO string (ending in Z).
+      // Fallback: parse sla_time string. DB stores UTC via toISOString(), treat as UTC.
       if (ticket.sla_time) {
         try {
           const s = String(ticket.sla_time || "").trim();
-          // If timestamp contains timezone info or a trailing 'Z', treat it as UTC
           if (/[Tt].*Z$/.test(s) || /[+\-]\d{2}:?\d{2}$/.test(s)) {
             const parsed = new Date(s);
             if (isNaN(parsed.getTime())) return null;
             return parsed.getTime() - clientNowMs;
           }
-
-          // The DB stores sla_time as TIMESTAMP (no timezone).
-          // The server computes it as `Date.now() + SLA_hours` in UTC and saves via
-          // toISOString(). PostgreSQL strips the 'Z' but the VALUE is UTC.
-          // Therefore, treat timestamps without timezone marker as UTC (not IST).
-          const tsPart = s.includes("T")
-            ? s.split("T")[0] + "T" + s.split("T")[1]
-            : s.replace(" ", "T");
-          const match = tsPart.match(
-            /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?/,
-          );
-          if (!match) return null;
-          const y = Number(match[1]);
-          const m = Number(match[2]);
-          const d = Number(match[3]);
-          const hh = Number(match[4] || 0);
-          const mm = Number(match[5] || 0);
-          const ss = Number(match[6] || 0);
-          // Treat as UTC (server stored UTC epoch, no IST offset needed)
-          const dueUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss);
+          const iso = s.includes("T") ? s : s.replace(" ", "T");
+          const dueUtcMs = new Date(iso + "Z").getTime();
+          if (isNaN(dueUtcMs)) return null;
           return dueUtcMs - clientNowMs;
         } catch (e) {
           return null;
@@ -2789,6 +2773,28 @@ export default function ManageTickets() {
                             </span>
                           )}
 
+                          {/* SLA deadline label for overdue tickets */}
+                          {normalizedStatusName === "overdue" && (t.sla_time_epoch_ms || t.sla_time) && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-red-500 font-medium">
+                              {"SLA: "}
+                              {(() => {
+                                const epochMs = t.sla_time_epoch_ms != null ? Number(t.sla_time_epoch_ms) : null;
+                                const d = epochMs ? new Date(epochMs) : t.sla_time ? new Date(t.sla_time) : null;
+                                if (!d || isNaN(d.getTime())) return "-";
+                                return d.toLocaleString("en-IN", {
+                                  timeZone: "Asia/Kolkata",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                });
+                              })()}
+                            </span>
+                          )}
+
                           {getTicketTag(t) !== "Manual" && (
                             <Badge variant="secondary">{getTicketTag(t)}</Badge>
                           )}
@@ -3137,6 +3143,28 @@ export default function ManageTickets() {
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-mono font-bold text-red-700 border border-red-200">
                               <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
                               {formatRemaining(Math.abs(slaMs))}
+                            </span>
+                          )}
+
+                          {/* SLA deadline label for overdue tickets */}
+                          {normalizedStatusName === "overdue" && (t.sla_time_epoch_ms || t.sla_time) && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-red-500 font-medium">
+                              {"SLA: "}
+                              {(() => {
+                                const epochMs = t.sla_time_epoch_ms != null ? Number(t.sla_time_epoch_ms) : null;
+                                const d = epochMs ? new Date(epochMs) : t.sla_time ? new Date(t.sla_time) : null;
+                                if (!d || isNaN(d.getTime())) return "-";
+                                return d.toLocaleString("en-IN", {
+                                  timeZone: "Asia/Kolkata",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                });
+                              })()}
                             </span>
                           )}
 

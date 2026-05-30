@@ -260,6 +260,7 @@ router.get("/", async (req: Request, res: Response) => {
               t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
               to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
               to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
+              EXTRACT(EPOCH FROM t.sla_time AT TIME ZONE 'UTC') * 1000 AS sla_time_epoch_ms,
               to_char(t.sla_time, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
               tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
               ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
@@ -325,6 +326,7 @@ router.get("/", async (req: Request, res: Response) => {
           created_at: r.created_at_iso || r.created_at,
           updated_at: r.updated_at_iso || r.updated_at,
           sla_time: r.sla_time_iso || r.sla_time,
+          sla_time_epoch_ms: r.sla_time_epoch_ms != null ? Number(r.sla_time_epoch_ms) : null,
           demand: r.demand,
           mail_config_id: r.mail_config_id,
           priority: r.priority_id_join

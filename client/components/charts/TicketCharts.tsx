@@ -6,6 +6,8 @@ import {
   Cell,
   LabelList,
   Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -180,40 +182,50 @@ const AssigneeChart = React.memo(function AssigneeChart({
   );
 });
 
-// ─── Chart: Status — vertical bar, Closed excluded ───────────────────────────
+// ─── Chart: Status — donut, Closed excluded ──────────────────────────────────
 
-const StatusBar = React.memo(function StatusBar({
+const StatusDonut = React.memo(function StatusDonut({
   data,
 }: {
   data: { name: string; value: number }[];
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
+  const RADIAN = Math.PI / 180;
+
+  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent < 0.04) return null;
+    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + r * Math.cos(-midAngle * RADIAN);
+    const y = cy + r * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="600">
+        {`${Math.round(percent * 100)}%`}
+      </text>
+    );
+  };
+
   return (
     <div style={{ width: "100%", height: 300 }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={data}
-          margin={{ top: 20, right: 8, left: 0, bottom: 55 }}
-          barCategoryGap="40%"
-        >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-          <XAxis
-            dataKey="name"
-            tickLine={false}
-            axisLine={false}
-            tick={<CustomXTick />}
-            interval={0}
-            height={55}
-          />
-          <YAxis
-            allowDecimals={false}
-            tickLine={false}
-            axisLine={false}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
-            width={28}
-          />
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="44%"
+            innerRadius={62}
+            outerRadius={98}
+            paddingAngle={3}
+            labelLine={false}
+            label={renderLabel}
+            isAnimationActive={false}
+          >
+            {data.map((entry, idx) => (
+              <Cell key={`${entry.name}-${idx}`} fill={statusColor(entry.name, idx)} />
+            ))}
+          </Pie>
           <Tooltip
-            cursor={{ fill: "rgba(99,102,241,0.06)" }}
             content={({ active, payload }: any) => {
               if (!active || !payload?.length) return null;
               const row = payload[0]?.payload || {};
@@ -221,19 +233,13 @@ const StatusBar = React.memo(function StatusBar({
               return fmtTooltip({ label: row.name, count: row.value, pct });
             }}
           />
-          <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false} minPointSize={3}>
-            {data.map((entry, idx) => (
-              <Cell key={`${entry.name}-${idx}`} fill={STATUS_COLORS[entry.name] ?? ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
-            ))}
-            <LabelList
-              dataKey="value"
-              position="top"
-              fill="#64748b"
-              fontSize={10}
-              formatter={(v: number) => v.toLocaleString()}
-            />
-          </Bar>
-        </BarChart>
+          <Legend
+            verticalAlign="bottom"
+            iconType="circle"
+            iconSize={8}
+            formatter={(value: string) => <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>}
+          />
+        </PieChart>
       </ResponsiveContainer>
     </div>
   );
@@ -280,10 +286,15 @@ const UserStackedScrollChart = React.memo(function UserStackedScrollChart({
                 content={({ active, payload }: any) => {
                   if (!active || !payload?.length) return null;
                   const row = payload[0]?.payload || {};
-                  const clients = normalizeClientNames(row.client_names);
+                  // filter out placeholder "Unknown Client" — only show real client names
+                  const clients = normalizeClientNames(row.client_names)
+                    .filter(c => c.toLowerCase() !== "unknown client");
                   return (
                     <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
                       <p className="text-sm font-semibold text-slate-800">{row.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {statusKeys.reduce((s, st) => s + Number(row[st] || 0), 0).toLocaleString()} active tickets
+                      </p>
                       <div className="mt-2 space-y-1">
                         {statusKeys.map((status, idx) => {
                           const val = Number(row[status] || 0);
@@ -318,7 +329,30 @@ const UserStackedScrollChart = React.memo(function UserStackedScrollChart({
                   isAnimationActive={false}
                   minPointSize={2}
                   radius={idx === statusKeys.length - 1 ? [6, 6, 0, 0] : 0}
-                />
+                >
+                  {/* Show active total count on top of the last stack segment */}
+                  {idx === statusKeys.length - 1 && (
+                    <LabelList
+                      content={({ x, y, width, index }: any) => {
+                        const row = data[index];
+                        if (!row) return null;
+                        const activeTotal = statusKeys.reduce((s, st) => s + Number(row[st] || 0), 0);
+                        if (!activeTotal) return null;
+                        return (
+                          <text
+                            x={Number(x) + Number(width) / 2}
+                            y={Number(y) - 4}
+                            textAnchor="middle"
+                            fill="#64748b"
+                            fontSize={9}
+                          >
+                            {activeTotal.toLocaleString()}
+                          </text>
+                        );
+                      }}
+                    />
+                  )}
+                </Bar>
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -855,7 +889,7 @@ function TicketCharts({
           loading={loading}
           hasData={statusData.length > 0}
         >
-          <StatusBar data={activeStatusData} />
+          <StatusDonut data={activeStatusData} />
         </ChartCard>
 
         {/* 3 – By User (Status) — scrollable, all users */}

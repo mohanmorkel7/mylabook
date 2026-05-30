@@ -2121,23 +2121,42 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     });
   }
 
+  if (client.aws?.enabled) {
+    baseRows.push({
+      id: "aws-vendor-cost",
+      kind: "derived",
+      narration: "AWS Vendor Cost",
+      amount: Number(client.aws.vendorCost || 0),
+      hsn: "",
+      rate: defaultRate,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: true,
+      narrationMode: "title",
+      exportEnabled: Number(client.aws.vendorCost || 0) !== 0,
+      useConfigHsn: defaultUseConfigHsn,
+    });
+  }
+
   baseRows.push(
     {
-        id: "aws-pass-through",
-        kind: "derived",
-        narration: "AWS Infra Pass-through",
-        amount: breakdown.awsMarkup,
-        hsn: "",
-        rate: defaultRate,
-        cgst: 0,
-        sgst: 0,
-        igst: 0,
-        align: "left",
-        editable: false,
-        narrationMode: "subtitle",
-        exportEnabled: breakdown.awsMarkup !== 0,
-        useConfigHsn: defaultUseConfigHsn,
-      },
+      id: "aws-pass-through",
+      kind: "derived",
+      narration: "AWS Infra Pass-through",
+      amount: breakdown.awsMarkup,
+      hsn: "",
+      rate: defaultRate,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      align: "left",
+      editable: false,
+      narrationMode: "subtitle",
+      exportEnabled: breakdown.awsMarkup !== 0,
+      useConfigHsn: defaultUseConfigHsn,
+    },
       {
         id: "additional-platform-fee",
         kind: "derived",
@@ -3209,6 +3228,8 @@ function ClientOverviewScreen({
     setTxnInput(value);
   };
   const resolvedTaxType = getClientTaxType(client, taxType);
+  const [awsVendorCostDraft, setAwsVendorCostDraft] = useState(() => Number(client.aws?.vendorCost || 0));
+  const [awsMarginDraft, setAwsMarginDraft] = useState(() => Number(client.aws?.marginPercentage || 0));
   const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() =>
     buildOverviewInvoiceRows(client, normalizeVolume(client.monthlyTransactionVolume), getBillingModel(client) === "transaction", taxConfig),
   );
@@ -3234,6 +3255,10 @@ function ClientOverviewScreen({
   const [mmcNetworkNote, setMmcNetworkNote] = useState(client.networkCertificationNote || "To be borne by client/bank as per actuals");
   const [mmcInfraNote, setMmcInfraNote] = useState(client.infraCostNote || "To be borne by client/bank as per actuals");
   const [mmcInvoiceTitle, setMmcInvoiceTitle] = useState(() => getMmcInvoiceTitle(client));
+  useEffect(() => {
+    setAwsVendorCostDraft(Number(client.aws?.vendorCost || 0));
+    setAwsMarginDraft(Number(client.aws?.marginPercentage || 0));
+  }, [client.id, client.aws?.vendorCost, client.aws?.marginPercentage]);
   const overviewRootRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
@@ -3350,6 +3375,17 @@ function ClientOverviewScreen({
     });
   };
 
+  const handleAwsVendorCostDraftChange = (value: number) => {
+    setAwsVendorCostDraft(value);
+    setOverviewRows((prev) =>
+      prev.map((row) =>
+        row.id === "aws-vendor-cost"
+          ? applyOverviewRowTaxes({ ...row, amount: value }, resolvedTaxType, taxConfig)
+          : row,
+      ),
+    );
+  };
+
   const addOverviewRow = () => {
     setOverviewRows((prev) => [
       ...prev,
@@ -3390,6 +3426,15 @@ function ClientOverviewScreen({
     const monthlyInvoiceEstimate = billingMode === "mmc"
       ? calculateInvoiceCommercials({ ...client, billingModel: "mmc" } as ClientRecord, txnInput).subtotal
       : normalizedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const awsVendorCostRow = normalizedRows.find((row) => row.id === "aws-vendor-cost");
+    const awsVendorCostAmount = Number(awsVendorCostRow?.amount || 0);
+    const awsEnabled = Boolean(client.aws?.enabled);
+    const awsSettings = {
+      ...client.aws,
+      enabled: awsEnabled,
+      vendorCost: awsEnabled ? awsVendorCostAmount : 0,
+      marginPercentage: awsEnabled ? awsMarginDraft : 0,
+    };
 
     onSaveOverviewConfig({
       ...client,
@@ -3406,6 +3451,7 @@ function ClientOverviewScreen({
       networkCertificationNote: mmcNetworkNote,
       infraCostNote: mmcInfraNote,
       mmcInvoiceTitle,
+      aws: awsSettings,
     });
   };
 
@@ -3891,6 +3937,46 @@ function ClientOverviewScreen({
         </Card>
       </div>
 
+      {client.aws?.enabled && (
+        <Card className="border-muted/60 shadow-sm">
+          <CardHeader>
+            <div>
+              <CardTitle>AWS Infra breakdown</CardTitle>
+              <CardDescription>
+                Update the vendor cost and margin percentage that drive the AWS rows in the invoice table.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-1">
+              <Label>Vendor Cost</Label>
+              <Input
+                type="number"
+                value={awsVendorCostDraft}
+                onChange={(e) => handleAwsVendorCostDraftChange(Number(e.target.value) || 0)}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">Linked to the AWS Vendor Cost row in the invoice table.</p>
+            </div>
+            <div className="space-y-1">
+              <Label>Margin Percentage</Label>
+              <Input
+                type="number"
+                value={awsMarginDraft}
+                onChange={(e) => setAwsMarginDraft(Number(e.target.value) || 0)}
+                placeholder="25"
+              />
+              <p className="text-xs text-muted-foreground">Used to calculate the AWS markup row.</p>
+            </div>
+            <div className="flex items-end">
+              <Button className="w-full" onClick={saveOverviewConfig}>
+                Save AWS settings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6">
         <InvoiceHistoryTable
           title="Invoice History Table"
@@ -3952,6 +4038,11 @@ function InvoiceConfigEditor({
   const [awsEnabled, setAwsEnabled] = useState(Boolean(client?.aws.enabled));
   const [awsVendorCost, setAwsVendorCost] = useState(client?.aws.vendorCost || 0);
   const [awsMarginPercentage, setAwsMarginPercentage] = useState(client?.aws.marginPercentage || 25);
+  useEffect(() => {
+    setAwsEnabled(Boolean(client?.aws.enabled));
+    setAwsVendorCost(client?.aws.vendorCost || 0);
+    setAwsMarginPercentage(client?.aws.marginPercentage || 25);
+  }, [client?.id, client?.aws.enabled, client?.aws.vendorCost, client?.aws.marginPercentage]);
   const [selectedServices, setSelectedServices] = useState<string[]>(client?.services ? [...client.services] : []);
   const [serviceTypeOther, setServiceTypeOther] = useState(client?.serviceTypeOther || "");
   const [slabs, setSlabs] = useState(client?.transactionSlabs ? [...client.transactionSlabs] : [

@@ -3922,7 +3922,11 @@ function InvoiceConfigEditor({
   const [billingAddress, setBillingAddress] = useState(client?.billingAddress || "");
   const [billingEmail, setBillingEmail] = useState(client?.billingEmail || "");
   const [invoicePrefix, setInvoicePrefix] = useState(client?.invoicePrefix || "MYL");
-  const [invoiceCurrentSerial, setInvoiceCurrentSerial] = useState(Number(client?.invoiceCurrentSerial || 0));
+  const [invoiceCurrentSerial, setInvoiceCurrentSerial] = useState(
+    client?.invoiceCurrentSerial !== undefined && client?.invoiceCurrentSerial !== null
+      ? String(client.invoiceCurrentSerial)
+      : "",
+  );
   const [signatoryName, setSignatoryName] = useState(client?.signatoryName || "");
   const [signatoryImage, setSignatoryImage] = useState(client?.signatoryImage || "");
   const [notes, setNotes] = useState(client?.notes || "");
@@ -4033,8 +4037,8 @@ function InvoiceConfigEditor({
       serviceTypeOther: selectedServices.includes("Other") ? serviceTypeOther.trim() : "",
       transactionSlabs: slabs,
       notes,
-      invoicePrefix,
-      invoiceCurrentSerial,
+      invoicePrefix: String(invoicePrefix || "").trim(),
+      invoiceCurrentSerial: Number(invoiceCurrentSerial || 0),
       gstin,
       lutNumber,
       billingAddress,
@@ -4048,8 +4052,6 @@ function InvoiceConfigEditor({
       customInvoiceRows: customInvoiceRows.filter(
         (row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0,
       ),
-      invoicePrefix: String(invoicePrefix || "").trim(),
-      invoiceCurrentSerial: Number(invoiceCurrentSerial || 0),
     });
   };
 
@@ -4149,11 +4151,21 @@ function InvoiceConfigEditor({
                     <div className="space-y-2">
                       <Label>Invoice Prefix</Label>
                       <Input value={invoicePrefix} onChange={(e) => setInvoicePrefix(e.target.value.toUpperCase())} placeholder="IE / MY" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Current Serial Number (by prefix)</Label>
-                      <Input type="number" min={0} value={invoiceCurrentSerial} onChange={(e) => setInvoiceCurrentSerial(Number(e.target.value) || 0)} placeholder="17" />
-                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Current Serial Number (by prefix)</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      value={invoiceCurrentSerial}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D+/g, "");
+                        setInvoiceCurrentSerial(digits);
+                      }}
+                      placeholder="17"
+                    />
+                  </div>
                     <div className="space-y-2">
                       <Label>LUT Number</Label>
                       <Input value={lutNumber} onChange={(e) => setLutNumber(e.target.value)} placeholder="LUT reference number" />

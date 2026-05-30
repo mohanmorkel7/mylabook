@@ -3353,15 +3353,41 @@ function ClientOverviewScreen({
     setOverviewRows((prev) => prev.map((row) => applyOverviewRowTaxes(row, taxType, taxConfig)));
   }, [taxType, taxConfig]);
 
-  const commercialSummary = useMemo(() => calculateInvoiceCommercials(client, txnInput), [client, txnInput]);
+  const checkedRows = useMemo(() => overviewRows.filter((row) => row.exportEnabled !== false), [overviewRows]);
+  const summaryTotals = useMemo(() => {
+    const rowTotals = checkedRows.map((row) => ({
+      id: row.id,
+      amount: Number(row.amount || 0),
+      tax: Number(row.cgst || 0) + Number(row.sgst || 0) + Number(row.igst || 0),
+    }));
+    const subtotal = rowTotals.reduce((sum, row) => sum + row.amount, 0);
+    const tax = rowTotals.reduce((sum, row) => sum + row.tax, 0);
+    const fixedCharges = rowTotals
+      .filter((row) => ["fixed-billing", "additional-platform-fee", "integration-fee", "setup-fee", "mmc-floor", "aws-vendor-cost"].includes(row.id))
+      .reduce((sum, row) => sum + row.amount, 0);
+    const variableCharges = rowTotals
+      .filter((row) => row.id === "variable-slab")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const awsMargin = rowTotals
+      .filter((row) => row.id === "aws-pass-through")
+      .reduce((sum, row) => sum + row.amount, 0);
+    return {
+      subtotal,
+      tax,
+      fixedCharges,
+      variableCharges,
+      awsMargin,
+      finalPayable: subtotal + tax,
+    };
+  }, [checkedRows]);
   const setupFeeDue = Math.max(Number(client.setupFee || 0) - Number(client.setupFeePaid || 0), 0);
   const setupFeeInvoiceExists = (client.invoiceHistory || []).some((invoice) => invoice.invoiceType === "setup_fee");
-  const invoiceDraft = commercialSummary.subtotal;
-  const fixedCharges = client.fixedBilling + client.additionalPlatformFee + client.integrationFee + commercialSummary.setupFeeDue;
-  const awsMargin = commercialSummary.awsMarkup;
-  const variableCharges = Math.max(commercialSummary.transactionBase - client.fixedBilling - awsMargin - client.additionalPlatformFee - client.integrationFee, 0);
-  const tax = invoiceDraft * (Number(taxConfig.invoiceRatePercentage || 18) / 100);
-  const finalPayable = invoiceDraft + tax;
+  const invoiceDraft = summaryTotals.subtotal;
+  const fixedCharges = summaryTotals.fixedCharges;
+  const awsMargin = summaryTotals.awsMargin;
+  const variableCharges = summaryTotals.variableCharges;
+  const tax = summaryTotals.tax;
+  const finalPayable = summaryTotals.finalPayable;
 
   const addCustomRow = () => {
     setCustomRowsDraft((prev) => [...prev, { name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType, useConfigHsn: false }]);
@@ -3420,10 +3446,10 @@ function ClientOverviewScreen({
     setOverviewRows((prev) =>
       prev.map((row) => {
         if (row.id === "aws-vendor-cost") {
-          return applyOverviewRowTaxes({ ...row, amount: cost }, resolvedTaxType, taxConfig);
+          return applyOverviewRowTaxes({ ...row, amount: cost, exportEnabled: cost !== 0 }, resolvedTaxType, taxConfig);
         }
         if (row.id === "aws-pass-through") {
-          return applyOverviewRowTaxes({ ...row, amount: markup }, resolvedTaxType, taxConfig);
+          return applyOverviewRowTaxes({ ...row, amount: markup, exportEnabled: markup !== 0 }, resolvedTaxType, taxConfig);
         }
         return row;
       }),

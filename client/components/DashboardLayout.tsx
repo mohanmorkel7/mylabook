@@ -144,6 +144,13 @@ const navigationItems: NavigationItem[] = [
     href: "/finops",
     icon: DollarSign,
     roles: ["admin", "finance", "finops"],
+    submenu: [
+      {
+        name: "Invoice Management",
+        href: "/invoice-management",
+        roles: ["admin", "finance", "finops"],
+      },
+    ],
   },
   // i2) Finance Management (finance + admin ONLY)
   {

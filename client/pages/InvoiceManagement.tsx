@@ -327,6 +327,7 @@ interface OverviewInvoiceRow {
   narrationMode?: NarrationMode;
   exportEnabled: boolean;
   useConfigHsn?: boolean;
+  narrationDetails?: string[];
 }
 
 interface InvoiceExportLineItem {
@@ -2033,7 +2034,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       {
         id: "mmc-floor",
         kind: "derived",
-        narration: [getMmcMinimumGuaranteeLabel(client), ...getMmcFixedChargeDetailLines(client)].join("\n"),
+        narration: getMmcMinimumGuaranteeLabel(client),
+        narrationDetails: getMmcFixedChargeDetailLines(client),
         amount: mmcFloor,
         hsn: "",
         rate: defaultRate,

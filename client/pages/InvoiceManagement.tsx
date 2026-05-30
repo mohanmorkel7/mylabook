@@ -3450,8 +3450,13 @@ function ClientOverviewScreen({
       marginPercentage: awsEnabled ? awsMarginDraft : 0,
     };
 
-    onSaveOverviewConfig({
+    const updatedClientSnapshot = {
       ...client,
+      aws: awsSettings,
+    } as ClientRecord;
+
+    onSaveOverviewConfig({
+      ...updatedClientSnapshot,
       billingModel: billingMode,
       clientType: resolvedTaxType,
       monthlyTransactionVolume: txnInput,
@@ -3465,8 +3470,11 @@ function ClientOverviewScreen({
       networkCertificationNote: mmcNetworkNote,
       infraCostNote: mmcInfraNote,
       mmcInvoiceTitle,
-      aws: awsSettings,
     });
+
+    setOverviewRows(
+      buildOverviewInvoiceRows(updatedClientSnapshot, txnInput, billingMode === "transaction", taxConfig),
+    );
   };
 
   // Logging for debugging Commercial Summary Panel calculations

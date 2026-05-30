@@ -1,5 +1,21 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import * as Docx from "docx";
@@ -80,8 +96,8 @@ import {
   Wallet,
   Warehouse,
   Settings,
-  CheckCircle,
   Clock,
+  GripVertical,
   XCircle,
 } from "lucide-react";
 
@@ -2039,6 +2055,11 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
   );
   const setupFeeDue = breakdown.setupFeeDue;
   const billingModel = getBillingModel(client);
+  const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
+
+  if (savedRows.length > 0) {
+    return savedRows.map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
+  }
 
   if (billingModel === "mmc") {
     const mmcFloor = getMmcFixedChargesTotal(client);
@@ -2312,6 +2333,27 @@ function overviewRowsToCustomRows(rows: OverviewInvoiceRow[]): CustomInvoiceRow[
       exportEnabled: row.exportEnabled,
     }))
     .filter((row) => String(row.name || "").trim().length > 0 || String(row.narration || "").trim().length > 0);
+}
+
+function SortableOverviewRow({
+  row,
+  index,
+  children,
+}: {
+  row: OverviewInvoiceRow;
+  index: number;
+  children: (args: { attributes: any; listeners: any; isDragging: boolean }) => React.ReactNode;
+}) {
+  const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: row.id });
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "relative z-10 bg-background shadow-lg")}
+    >
+      {children({ attributes, listeners, isDragging })}
+    </TableRow>
+  );
 }
 
 function getActiveMmcAmount(client: ClientRecord): number {
@@ -3273,6 +3315,10 @@ function ClientOverviewScreen({
   const [overviewRows, setOverviewRows] = useState<OverviewInvoiceRow[]>(() =>
     buildOverviewInvoiceRows(client, normalizeVolume(client.monthlyTransactionVolume), getBillingModel(client) === "transaction", taxConfig),
   );
+  const overviewSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+  const overviewRowIds = useMemo(() => overviewRows.map((row) => row.id), [overviewRows]);
   const [customRowsDraft, setCustomRowsDraft] = useState<CustomInvoiceRow[]>(
     client.customInvoiceRows && client.customInvoiceRows.length > 0
       ? [...client.customInvoiceRows]
@@ -3441,6 +3487,19 @@ function ClientOverviewScreen({
     });
   };
 
+  const handleOverviewDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setOverviewRows((prev) => {
+      const oldIndex = prev.findIndex((row) => row.id === active.id);
+      const newIndex = prev.findIndex((row) => row.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      return arrayMove(prev, oldIndex, newIndex).map((row, index) =>
+        applyOverviewRowTaxes({ ...row, exportEnabled: row.exportEnabled !== false }, resolvedTaxType, taxConfig),
+      );
+    });
+  };
+
   const syncAwsRows = (cost: number, margin: number) => {
     const markup = cost * (margin / 100);
     setOverviewRows((prev) =>
@@ -3519,10 +3578,6 @@ function ClientOverviewScreen({
     const updatedClientSnapshot = {
       ...client,
       aws: awsSettings,
-    } as ClientRecord;
-
-    onSaveOverviewConfig({
-      ...updatedClientSnapshot,
       billingModel: billingMode,
       clientType: resolvedTaxType,
       monthlyTransactionVolume: txnInput,
@@ -3536,7 +3591,9 @@ function ClientOverviewScreen({
       networkCertificationNote: mmcNetworkNote,
       infraCostNote: mmcInfraNote,
       mmcInvoiceTitle,
-    });
+    } as ClientRecord;
+
+    onSaveOverviewConfig(updatedClientSnapshot);
 
     setOverviewRows(
       buildOverviewInvoiceRows(updatedClientSnapshot, txnInput, billingMode === "transaction", taxConfig),
@@ -3736,8 +3793,8 @@ function ClientOverviewScreen({
                   <TableRow>
                     <TableHead className="w-16 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        Expt
+                        <GripVertical className="h-3.5 w-3.5" />
+                        Order
                       </span>
                     </TableHead>
                     <TableHead className="w-12 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">No.</TableHead>
@@ -3778,103 +3835,125 @@ function ClientOverviewScreen({
                     </TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {overviewRows.map((row, index) => {
-                    const rowTaxes = calculateRowTaxes(row.amount, row.rate, resolvedTaxType);
-                    const rowTotal = rowTaxes.totalAmount;
-                    const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
-                    return (
-                      <TableRow key={row.id}>
-                        <TableCell className="px-2 py-2 text-center align-top">
-                          <label className="flex items-center justify-center" title="Include in export">
-                            <Checkbox checked={row.exportEnabled !== false} onCheckedChange={(checked) => updateOverviewRow(index, "exportEnabled", Boolean(checked))} />
-                            <span className="sr-only">Export</span>
-                          </label>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 font-medium text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</TableCell>
-                        <TableCell className="align-top px-2 py-2">
-                          <div className="space-y-1.5">
-                            <Select value={row.narrationMode || "multiline"} onValueChange={(value) => updateOverviewRow(index, "narrationMode", value as NarrationMode)}>
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder="Mode" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="title">Title</SelectItem>
-                                <SelectItem value="subtitle">Subtitle</SelectItem>
-                                <SelectItem value="multiline">Multiline</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Textarea
-                              value={row.narration}
-                              onChange={(e) => updateOverviewRow(index, "narration", e.target.value)}
-                              className={`min-h-20 resize-none w-full text-xs leading-5 ${alignClass}`}
-                              placeholder={row.narrationMode === "title" ? "Title text" : row.narrationMode === "subtitle" ? "Subtitle text" : "Multiline narration"}
-                            />
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-right align-top">
-                          <Input
-                            type="number"
-                            value={row.amount}
-                            onChange={(e) => updateOverviewRow(index, "amount", e.target.value)}
-                            readOnly={row.id === "variable-slab" && transactionBased}
-                            className="h-8 text-right text-xs"
-                          />
-                          {row.id === "variable-slab" && transactionBased && (
-                            <p className="mt-1 text-[11px] text-muted-foreground">Calculated from transaction count</p>
-                          )}
-                        </TableCell>
-                        <TableCell className="px-2 py-2 align-top">
-                          <div className="space-y-1.5">
-                          <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                            <Checkbox checked={Boolean(row.useConfigHsn)} onCheckedChange={(checked) => updateOverviewRow(index, "useConfigHsn", Boolean(checked))} />
-                            Use config HSN
-                          </label>
-                          <Input
-                            value={row.useConfigHsn ? (taxConfig.invoiceHsnCode || "") : row.hsn}
-                            onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)}
-                            readOnly={Boolean(row.useConfigHsn)}
-                            className={`h-8 text-xs ${alignClass}`}
-                            placeholder={taxConfig.invoiceHsnCode || "998314"}
-                          />
-                        </div>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 align-top">
-                          <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="18%" />
-                        </TableCell>
-                        <TableCell className="px-2 py-2 align-top">
-                          <Input type="text" value={Math.round(rowTaxes.cgst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
-                        </TableCell>
-                        <TableCell className="px-2 py-2 align-top">
-                          <Input type="text" value={Math.round(rowTaxes.sgst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
-                        </TableCell>
-                        <TableCell className="px-2 py-2 align-top">
-                          <Input type="text" value={Math.round(rowTaxes.igst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-right align-top whitespace-nowrap text-xs font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
-                        <TableCell className="px-2 py-2 align-top">
-                          <Select value={row.align} onValueChange={(value) => updateOverviewRow(index, "align", value as RowAlign)}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="left">Left</SelectItem>
-                              <SelectItem value="center">Center</SelectItem>
-                              <SelectItem value="right">Right</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-center align-top">
-                          {row.kind === "custom" ? (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" title="Remove row" onClick={() => removeOverviewRow(index)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground">Locked</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
+                <DndContext sensors={overviewSensors} collisionDetection={closestCenter} onDragEnd={handleOverviewDragEnd} modifiers={[restrictToVerticalAxis]}>
+                  <SortableContext items={overviewRowIds} strategy={verticalListSortingStrategy}>
+                    <TableBody>
+                      {overviewRows.map((row, index) => {
+                        const rowTaxes = calculateRowTaxes(row.amount, row.rate, resolvedTaxType);
+                        const rowTotal = rowTaxes.totalAmount;
+                        const alignClass = row.align === "right" ? "text-right" : row.align === "center" ? "text-center" : "text-left";
+                        return (
+                          <SortableOverviewRow key={row.id} row={row} index={index}>
+                            {({ attributes, listeners }) => (
+                              <>
+                                <TableCell className="px-2 py-2 text-center align-top">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <label className="flex items-center justify-center" title="Include in export">
+                                      <Checkbox checked={row.exportEnabled !== false} onCheckedChange={(checked) => updateOverviewRow(index, "exportEnabled", Boolean(checked))} />
+                                      <span className="sr-only">Export</span>
+                                    </label>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 cursor-grab active:cursor-grabbing"
+                                      title="Drag to reorder"
+                                      {...attributes}
+                                      {...listeners}
+                                    >
+                                      <GripVertical className="h-4 w-4" />
+                                      <span className="sr-only">Drag row {index + 1}</span>
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-2 py-2 font-medium text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</TableCell>
+                                <TableCell className="align-top px-2 py-2">
+                                  <div className="space-y-1.5">
+                                    <Select value={row.narrationMode || "multiline"} onValueChange={(value) => updateOverviewRow(index, "narrationMode", value as NarrationMode)}>
+                                      <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Mode" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="title">Title</SelectItem>
+                                        <SelectItem value="subtitle">Subtitle</SelectItem>
+                                        <SelectItem value="multiline">Multiline</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <Textarea
+                                      value={row.narration}
+                                      onChange={(e) => updateOverviewRow(index, "narration", e.target.value)}
+                                      className={`min-h-20 resize-none w-full text-xs leading-5 ${alignClass}`}
+                                      placeholder={row.narrationMode === "title" ? "Title text" : row.narrationMode === "subtitle" ? "Subtitle text" : "Multiline narration"}
+                                    />
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-2 py-2 text-right align-top">
+                                  <Input
+                                    type="number"
+                                    value={row.amount}
+                                    onChange={(e) => updateOverviewRow(index, "amount", e.target.value)}
+                                    readOnly={row.id === "variable-slab" && transactionBased}
+                                    className="h-8 text-right text-xs"
+                                  />
+                                  {row.id === "variable-slab" && transactionBased && (
+                                    <p className="mt-1 text-[11px] text-muted-foreground">Calculated from transaction count</p>
+                                  )}
+                                </TableCell>
+                                <TableCell className="px-2 py-2 align-top">
+                                  <div className="space-y-1.5">
+                                  <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                    <Checkbox checked={Boolean(row.useConfigHsn)} onCheckedChange={(checked) => updateOverviewRow(index, "useConfigHsn", Boolean(checked))} />
+                                    Use config HSN
+                                  </label>
+                                  <Input
+                                    value={row.useConfigHsn ? (taxConfig.invoiceHsnCode || "") : row.hsn}
+                                    onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)}
+                                    readOnly={Boolean(row.useConfigHsn)}
+                                    className={`h-8 text-xs ${alignClass}`}
+                                    placeholder={taxConfig.invoiceHsnCode || "998314"}
+                                  />
+                                </div>
+                                </TableCell>
+                                <TableCell className="px-2 py-2 align-top">
+                                  <Input value={row.rate} onChange={(e) => updateOverviewRow(index, "rate", e.target.value)} className={`h-8 text-xs ${alignClass}`} placeholder="18%" />
+                                </TableCell>
+                                <TableCell className="px-2 py-2 align-top">
+                                  <Input type="text" value={Math.round(rowTaxes.cgst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
+                                </TableCell>
+                                <TableCell className="px-2 py-2 align-top">
+                                  <Input type="text" value={Math.round(rowTaxes.sgst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
+                                </TableCell>
+                                <TableCell className="px-2 py-2 align-top">
+                                  <Input type="text" value={Math.round(rowTaxes.igst).toLocaleString("en-IN")} readOnly className="h-8 min-w-[5.5rem] text-right text-xs tabular-nums bg-muted/20" />
+                                </TableCell>
+                                <TableCell className="px-2 py-2 text-right align-top whitespace-nowrap text-xs font-semibold">{currencyLabel(rowTotal, client.currency || "INR")}</TableCell>
+                                <TableCell className="px-2 py-2 align-top">
+                                  <Select value={row.align} onValueChange={(value) => updateOverviewRow(index, "align", value as RowAlign)}>
+                                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="left">Left</SelectItem>
+                                      <SelectItem value="center">Center</SelectItem>
+                                      <SelectItem value="right">Right</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell className="px-2 py-2 text-center align-top">
+                                  {row.kind === "custom" ? (
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Remove row" onClick={() => removeOverviewRow(index)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  ) : (
+                                    <span className="text-[11px] text-muted-foreground">Locked</span>
+                                  )}
+                                </TableCell>
+                              </>
+                            )}
+                          </SortableOverviewRow>
+                        );
+                      })}
+                    </TableBody>
+                  </SortableContext>
+                </DndContext>
               </Table>
           </div>
         </CardContent>

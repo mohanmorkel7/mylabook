@@ -255,6 +255,7 @@ router.get("/", async (req: Request, res: Response) => {
           : `LIMIT $${restrictToViewer && viewerId ? 2 : 1} OFFSET $${restrictToViewer && viewerId ? 3 : 2}`;
         const simpleSql = `SELECT
               t.id, t.track_id, t.subject,
+              LEFT(split_part(t.description, E'\n', 1), 200) AS description,
               t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
               t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
               to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
@@ -315,6 +316,7 @@ router.get("/", async (req: Request, res: Response) => {
           id: r.id,
           track_id: r.track_id,
           subject: r.subject,
+          description: r.description || null,
           priority_id: r.priority_id,
           status_id: r.status_id,
           category_id: r.category_id,

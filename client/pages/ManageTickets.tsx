@@ -126,7 +126,7 @@ interface User {
   type?: string;
 }
 
-interface FilterOptions {
+export interface FilterOptions {
   searchText: string;
   priority: string;
   status: string;
@@ -135,6 +135,23 @@ interface FilterOptions {
   dateFrom: string;
   dateTo: string;
 }
+
+type TicketListLocationState = {
+  filters?: Partial<FilterOptions>;
+  activeTab?: "all" | "created";
+};
+
+const normalizeFilterOptions = (
+  candidate: Partial<FilterOptions> | undefined,
+): FilterOptions => ({
+  searchText: String(candidate?.searchText ?? ""),
+  priority: String(candidate?.priority ?? ""),
+  status: String(candidate?.status ?? ""),
+  assignedTo: String(candidate?.assignedTo ?? ""),
+  source: String(candidate?.source ?? ""),
+  dateFrom: String(candidate?.dateFrom ?? ""),
+  dateTo: String(candidate?.dateTo ?? ""),
+});
 
 const PRIORITY_OPTIONS = {
   1: { name: "Low", color: "bg-blue-100 text-blue-800" },
@@ -511,8 +528,19 @@ export default function ManageTickets() {
     dateTo: "",
   });
   const [filtersInitialized, setFiltersInitialized] = useState(false);
+  const locationState = (location.state as TicketListLocationState) || {};
+  const filtersFromLocationState = locationState.filters;
+  const activeTabFromLocationState = locationState.activeTab;
 
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
+  const detailNavigationState = useMemo(
+    () => ({
+      from: `${location.pathname}${location.search}`,
+      filters: { ...filters },
+      activeTab,
+    }),
+    [location.pathname, location.search, filters, activeTab],
+  );
   const { toast } = useToast();
 
   // Show/hide filters and pagination state
@@ -522,6 +550,28 @@ export default function ManageTickets() {
 
   // Initialize filters from URL on mount and when URL changes (e.g., going back in history)
   useEffect(() => {
+    if (!filtersFromLocationState && !activeTabFromLocationState) return;
+    if (filtersFromLocationState) {
+      setFilters(normalizeFilterOptions(filtersFromLocationState));
+      setFiltersInitialized(true);
+    }
+    if (activeTabFromLocationState) {
+      setActiveTab(activeTabFromLocationState);
+    }
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+  }, [
+    filtersFromLocationState,
+    activeTabFromLocationState,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
+
+  useEffect(() => {
+    if (filtersFromLocationState) return;
     const restored = {
       searchText: searchParams.get("searchText") ?? "",
       priority: searchParams.get("priority") ?? "",
@@ -538,7 +588,7 @@ export default function ManageTickets() {
       setFilters(restored);
       setFiltersInitialized(true);
     }
-  }, [searchParams]);
+  }, [filtersFromLocationState, searchParams, filtersInitialized]);
 
   useEffect(() => {
     if (!filtersInitialized) return;
@@ -2708,7 +2758,7 @@ export default function ManageTickets() {
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
                       onClick={() =>
                         navigate(`/tickets/${t.id}${location.search}`, {
-                          state: { from: `${location.pathname}${location.search}` },
+                          state: detailNavigationState,
                         })
                       }
                     >
@@ -2718,7 +2768,7 @@ export default function ManageTickets() {
                             <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
                                 to={`/tickets/${t.id}${location.search}`}
-                                state={{ from: `${location.pathname}${location.search}` }}
+                                state={detailNavigationState}
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -3085,7 +3135,7 @@ export default function ManageTickets() {
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
                       onClick={() =>
                         navigate(`/tickets/${t.id}${location.search}`, {
-                          state: { from: `${location.pathname}${location.search}` },
+                          state: detailNavigationState,
                         })
                       }
                     >
@@ -3095,7 +3145,7 @@ export default function ManageTickets() {
                             <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
                                 to={`/tickets/${t.id}${location.search}`}
-                                state={{ from: `${location.pathname}${location.search}` }}
+                                state={detailNavigationState}
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >

@@ -2043,7 +2043,47 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
   if (billingModel === "mmc") {
     const mmcFloor = getMmcFixedChargesTotal(client);
     const transactionBreakdown = getMmcTransactionChargeBreakdown(client, txnCount);
+    const awsVendorCost = Number(client.aws?.vendorCost || 0);
+    const awsMarginAmount = client.aws?.enabled
+      ? Math.round(awsVendorCost * (Number(client.aws?.marginPercentage || 0) / 100))
+      : 0;
     const mmcRows: OverviewInvoiceRow[] = [
+      ...(client.aws?.enabled
+        ? [
+            {
+              id: "aws-vendor-cost",
+              kind: "derived",
+              narration: "AWS Vendor Cost",
+              amount: awsVendorCost,
+              hsn: "",
+              rate: defaultRate,
+              cgst: 0,
+              sgst: 0,
+              igst: 0,
+              align: "left",
+              editable: true,
+              narrationMode: "title",
+              exportEnabled: awsVendorCost !== 0,
+              useConfigHsn: defaultUseConfigHsn,
+            },
+            {
+              id: "aws-pass-through",
+              kind: "derived",
+              narration: "AWS Margin Amount",
+              amount: awsMarginAmount,
+              hsn: "",
+              rate: defaultRate,
+              cgst: 0,
+              sgst: 0,
+              igst: 0,
+              align: "left",
+              editable: true,
+              narrationMode: "title",
+              exportEnabled: awsMarginAmount !== 0,
+              useConfigHsn: defaultUseConfigHsn,
+            },
+          ]
+        : []),
       {
         id: "mmc-floor",
         kind: "derived",

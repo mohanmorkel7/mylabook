@@ -154,13 +154,6 @@ const navigationItems: NavigationItem[] = [
   },
   // j) Invoice Management
   {
-    name: "Finance Management",
-    href: "/finance-management",
-    icon: Briefcase,
-    roles: ["admin", "finance"],
-  },
-  // j) Invoice Management
-  {
     name: "Invoice Management",
     href: "/invoice-management",
     icon: ReceiptText,

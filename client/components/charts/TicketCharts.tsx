@@ -124,8 +124,10 @@ const SLOT_W = 54; // px per bar slot for scrollable charts
 
 const AssigneeChart = React.memo(function AssigneeChart({
   data,
+  allStatusKeys,
 }: {
-  data: { name: string; value: number; client_names?: string[] }[];
+  data: { name: string; value: number; client_names?: string[]; statusBreakdown?: Record<string, number> }[];
+  allStatusKeys: string[];
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const innerW = Math.max(data.length * SLOT_W, 280);
@@ -160,7 +162,41 @@ const AssigneeChart = React.memo(function AssigneeChart({
                 if (!active || !payload?.length) return null;
                 const row = payload[0]?.payload || {};
                 const pct = total ? Math.round((row.value / total) * 100) : 0;
-                return fmtTooltip({ label: row.name, count: row.value, pct, clients: normalizeClientNames(row.client_names) });
+                const clients = normalizeClientNames(row.client_names)
+                  .filter(c => c.toLowerCase() !== "unknown client");
+                const breakdown: Record<string, number> = row.statusBreakdown || {};
+                const hasBreakdown = allStatusKeys.some(st => Number(breakdown[st] || 0) > 0);
+                return (
+                  <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur" style={{ minWidth: 180 }}>
+                    <p className="text-sm font-semibold text-slate-800">{row.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {Number(row.value).toLocaleString()} tickets
+                      {pct > 0 && <span className="ml-2 font-medium text-slate-700">{pct}% of total</span>}
+                    </p>
+                    {hasBreakdown && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
+                        {allStatusKeys.map((status, idx) => {
+                          const val = Number(breakdown[status] || 0);
+                          if (!val) return null;
+                          return (
+                            <div key={status} className="flex items-center justify-between gap-4 text-xs">
+                              <span className="flex items-center gap-1.5 text-slate-600">
+                                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                                {status}
+                              </span>
+                              <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {clients.length > 0 && (
+                      <p className="mt-2 text-[11px] text-slate-400">
+                        {clients.slice(0, 3).join(", ")}{clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+                      </p>
+                    )}
+                  </div>
+                );
               }}
             />
             <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false} minPointSize={3}>
@@ -776,14 +812,6 @@ function TicketCharts({
     return Array.from(keys).sort((a, b) => statusRank(a) - statusRank(b));
   }, [statuses, userStatus, tagStatus]);
 
-  const assignedData = useMemo(
-    () => assigned
-      .map(a => ({ name: a.name || "Unknown", value: Number(a.count || 0), client_names: a.client_names || [] }))
-      .filter(d => d.value > 0)
-      .sort((a, b) => b.value - a.value),
-    [assigned],
-  );
-
   const statusData = useMemo(
     () => statuses
       .map(s => ({ name: s.status || "Unknown", value: Number(s.count || 0) }))
@@ -815,6 +843,23 @@ function TicketCharts({
       return r;
     }).filter(r => r.total > 0).sort((a, b) => b.total - a.total),
     [statusKeys, tagStatus],
+  );
+
+  const assignedData = useMemo(
+    () => assigned
+      .map(a => {
+        const name = a.name || "Unknown";
+        // Merge status breakdown from user-status data (matched by name)
+        const userRow = userStackData.find(r => r.name === name);
+        const statusBreakdown: Record<string, number> = {};
+        if (userRow) {
+          statusKeys.forEach(st => { statusBreakdown[st] = Number(userRow[st] || 0); });
+        }
+        return { name, value: Number(a.count || 0), client_names: a.client_names || [], statusBreakdown };
+      })
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value),
+    [assigned, userStackData, statusKeys],
   );
 
   // Only include status keys that actually have non-zero values in user/tag data
@@ -887,7 +932,7 @@ function TicketCharts({
           loading={loading}
           hasData={assignedData.length > 0}
         >
-          <AssigneeChart data={assignedData} />
+          <AssigneeChart data={assignedData} allStatusKeys={statusKeys} />
         </ChartCard>
 
         {/* 2 – Status Distribution */}

@@ -210,6 +210,17 @@ export async function initializeInvoiceSchema() {
     `);
     console.log("[Invoice] ✓ invoice_records table created");
 
+    console.log("[Invoice] Creating invoice_settings table...");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invoice_settings (
+        id SERIAL PRIMARY KEY,
+        setting_key TEXT NOT NULL UNIQUE,
+        setting_value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[Invoice] ✓ invoice_settings table created");
+
     // Add missing columns for invoice_records if table already existed
     try {
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS billing_model TEXT`);
@@ -234,6 +245,55 @@ export async function initializeInvoiceSchema() {
     // (tables might already exist)
   }
 }
+
+const upsertInvoiceSetting = async (settingKey: string, settingValue: any) => {
+  await queryWithRetry(() =>
+    pool.query(
+      `INSERT INTO invoice_settings (setting_key, setting_value, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (setting_key)
+       DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+      [settingKey, JSON.stringify(settingValue ?? {})],
+    ),
+  );
+};
+
+// ── GET stored configuration ──────────────────────────────────────────────
+router.get("/settings", async (_req: Request, res: Response) => {
+  try {
+    const result = await queryWithRetry(() => pool.query(`SELECT setting_key, setting_value FROM invoice_settings`));
+    const settings = result.rows.reduce((acc: Record<string, any>, row: any) => {
+      acc[row.setting_key] = safeParseJson(row.setting_value, {});
+      return acc;
+    }, {});
+    return res.json(settings);
+  } catch (error) {
+    console.error("Error fetching invoice settings:", error);
+    res.status(500).json({ error: "Failed to fetch invoice settings" });
+  }
+});
+
+router.post("/settings/invoice-serial", async (req: Request, res: Response) => {
+  try {
+    const { invoiceSerialConfig, prefixSerialConfigs } = req.body || {};
+    await upsertInvoiceSetting("invoice-serial-config", { invoiceSerialConfig, prefixSerialConfigs });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error saving invoice serial config:", error);
+    res.status(500).json({ error: "Failed to save invoice serial config" });
+  }
+});
+
+router.post("/settings/mylapay", async (req: Request, res: Response) => {
+  try {
+    const { companyConfig, taxConfig, currencyConfig } = req.body || {};
+    await upsertInvoiceSetting("mylapay-configuration", { companyConfig, taxConfig, currencyConfig });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error saving mylapay config:", error);
+    res.status(500).json({ error: "Failed to save mylapay configuration" });
+  }
+});
 
 // ── GET client details ────────────────────────────────────────────────────
 router.get("/clients/:clientId", async (req: Request, res: Response) => {

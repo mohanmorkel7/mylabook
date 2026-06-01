@@ -4812,6 +4812,8 @@ export default function InvoiceManagement() {
     }
   });
   const [selectedSerialPrefix, setSelectedSerialPrefix] = useState<string>(DEFAULT_INVOICE_SERIAL_CONFIG.prefix);
+  const [isSavingInvoiceSerialConfig, setIsSavingInvoiceSerialConfig] = useState(false);
+  const [isSavingMylapayConfig, setIsSavingMylapayConfig] = useState(false);
 
   const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(() => {
     try {
@@ -4916,6 +4918,38 @@ export default function InvoiceManagement() {
       localStorage.setItem(CONFIG_AUDIT_LOG_KEY, JSON.stringify(auditLog));
     } catch {}
   }, [auditLog]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/invoice-management/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const invoiceSerialSettings = data["invoice-serial-config"];
+        if (invoiceSerialSettings?.invoiceSerialConfig) {
+          setInvoiceSerialConfig((prev) => ({ ...prev, ...invoiceSerialSettings.invoiceSerialConfig }));
+        }
+        if (invoiceSerialSettings?.prefixSerialConfigs) {
+          setPrefixSerialConfigs(invoiceSerialSettings.prefixSerialConfigs);
+          const savedPrefix = normalizeInlineText(invoiceSerialSettings.invoiceSerialConfig?.prefix || "").toUpperCase();
+          if (savedPrefix) setSelectedSerialPrefix(savedPrefix);
+        }
+        const mylapaySettings = data["mylapay-configuration"];
+        if (mylapaySettings?.companyConfig) {
+          setCompanyConfig((prev) => ({ ...prev, ...mylapaySettings.companyConfig }));
+        }
+        if (mylapaySettings?.taxConfig) {
+          setTaxConfig((prev) => ({ ...prev, ...mylapaySettings.taxConfig }));
+        }
+        if (mylapaySettings?.currencyConfig) {
+          setCurrencyConfig((prev) => ({ ...prev, ...mylapaySettings.currencyConfig }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load all clients from database on component mount
   useEffect(() => {
@@ -6065,6 +6099,42 @@ export default function InvoiceManagement() {
     });
   };
 
+  const saveInvoiceSerialConfiguration = async () => {
+    setIsSavingInvoiceSerialConfig(true);
+    try {
+      const response = await fetch("/api/invoice-management/settings/invoice-serial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceSerialConfig, prefixSerialConfigs }),
+      });
+      if (!response.ok) throw new Error("Failed to save invoice serial configuration");
+      toast({ title: "Configuration saved", description: "Invoice serial settings stored in the database." });
+    } catch (error) {
+      console.error("[Invoice] saveInvoiceSerialConfiguration error:", error);
+      toast({ title: "Error", description: "Failed to save invoice serial settings", variant: "destructive" });
+    } finally {
+      setIsSavingInvoiceSerialConfig(false);
+    }
+  };
+
+  const saveMylapayConfiguration = async () => {
+    setIsSavingMylapayConfig(true);
+    try {
+      const response = await fetch("/api/invoice-management/settings/mylapay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyConfig, taxConfig, currencyConfig }),
+      });
+      if (!response.ok) throw new Error("Failed to save Mylapay configuration");
+      toast({ title: "Configuration saved", description: "Mylapay settings stored in the database." });
+    } catch (error) {
+      console.error("[Invoice] saveMylapayConfiguration error:", error);
+      toast({ title: "Error", description: "Failed to save Mylapay settings", variant: "destructive" });
+    } finally {
+      setIsSavingMylapayConfig(false);
+    }
+  };
+
   const saveConfig = async (payload: any) => {
     try {
       const trimmedName = String(payload.name || "").trim();
@@ -6551,9 +6621,18 @@ export default function InvoiceManagement() {
               Auto-resets every financial year and controls invoice number format
             </CardDescription>
           </div>
-          <Badge variant="outline" className="rounded-full">
-            Current FY: {getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth)}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="rounded-full">
+              Current FY: {getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth)}
+            </Badge>
+            <Button
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+              onClick={saveInvoiceSerialConfiguration}
+              disabled={isSavingInvoiceSerialConfig}
+            >
+              {isSavingInvoiceSerialConfig ? "Saving..." : "Save Configuration"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 xl:grid-cols-4">
@@ -6741,16 +6820,25 @@ export default function InvoiceManagement() {
 
       <Card className="border-muted/60 shadow-sm">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle>Mylapay Configuration</CardTitle>
               <CardDescription>
                 Company details, tax settings, and currency management (click settings icon for change requests)
               </CardDescription>
             </div>
-            <Badge variant="outline" className="rounded-full">
-              3 sections
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-full">
+                3 sections
+              </Badge>
+              <Button
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                onClick={saveMylapayConfiguration}
+                disabled={isSavingMylapayConfig}
+              >
+                {isSavingMylapayConfig ? "Saving..." : "Save Configuration"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

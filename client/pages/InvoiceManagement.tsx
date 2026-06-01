@@ -404,7 +404,7 @@ interface InvoiceSerialState {
 }
 
 interface PrefixSerialConfig {
-  currentSerial: number;
+  currentSerial: string;
   period: string;
   applyPeriodToAllPrefixes: boolean;
 }
@@ -4432,6 +4432,7 @@ function InvoiceConfigEditor({
                     <Input
                       type="text"
                       inputMode="numeric"
+                      maxLength={4}
                       value={invoiceCurrentSerial}
                       onChange={(e) => setInvoiceCurrentSerial(e.target.value)}
                       placeholder="0017"
@@ -5095,7 +5096,7 @@ export default function InvoiceManagement() {
       getSharedInvoiceSerialCurrent(clients, selectedPrefixKey, selectedPrefixDefaultPeriod),
     );
     return {
-      currentSerial,
+      currentSerial: String(currentSerial),
       period: config?.period || selectedPrefixDefaultPeriod,
       applyPeriodToAllPrefixes: Boolean(config?.applyPeriodToAllPrefixes),
     };
@@ -5139,9 +5140,11 @@ export default function InvoiceManagement() {
     if (!prefixKey) return;
     setPrefixSerialConfigs((prev) => {
       const current = prev[prefixKey] || {
-        currentSerial: Math.max(
-          Number(prefixSerialConfigs[prefixKey]?.currentSerial || 0),
-          getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
+        currentSerial: String(
+          Math.max(
+            Number(prefixSerialConfigs[prefixKey]?.currentSerial || 0),
+            getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
+          ),
         ),
         period: selectedPrefixDefaultPeriod,
         applyPeriodToAllPrefixes: false,
@@ -5705,7 +5708,7 @@ export default function InvoiceManagement() {
       if (generatedPrefix) {
         setPrefixSerialConfigs((prev) => {
           const existing = prev[generatedPrefix] || {
-            currentSerial: 0,
+            currentSerial: "0",
             period: serialInfo.financialYear,
             applyPeriodToAllPrefixes: false,
           };
@@ -5713,7 +5716,7 @@ export default function InvoiceManagement() {
             ...prev,
             [generatedPrefix]: {
               ...existing,
-              currentSerial: serialInfo.serial,
+              currentSerial: String(serialInfo.serial),
               period: existing.applyPeriodToAllPrefixes ? serialInfo.financialYear : existing.period || serialInfo.financialYear,
             },
           };
@@ -6246,7 +6249,7 @@ export default function InvoiceManagement() {
       setPrefixSerialConfigs((prev) => {
         if (!resolvedInvoicePrefix) return prev;
         const existing = prev[resolvedInvoicePrefix] || {
-          currentSerial: 0,
+          currentSerial: "0",
           period:
             prefixSerialConfigs[resolvedInvoicePrefix]?.period ||
             selectedPrefixSettings.period ||
@@ -6257,7 +6260,7 @@ export default function InvoiceManagement() {
           ...prev,
           [resolvedInvoicePrefix]: {
             ...existing,
-            currentSerial: resolvedInvoiceSerial,
+            currentSerial: String(resolvedInvoiceSerial),
           },
         };
         if (existing.applyPeriodToAllPrefixes) {
@@ -6650,9 +6653,12 @@ export default function InvoiceManagement() {
             <div className="space-y-2">
               <Label>Current Serial Number</Label>
               <Input
-                value={formatInvoiceSerial(Number(selectedPrefixSettings.currentSerial || 0), invoiceSerialConfig.serialDigits)}
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={selectedPrefixSettings.currentSerial}
                 onChange={(e) => {
-                  const nextSerial = Number(String(e.target.value).replace(/\D/g, "")) || 0;
+                  const nextSerial = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
                   updateSelectedPrefixSettings((current) => ({ ...current, currentSerial: nextSerial }));
                 }}
                 placeholder="0017"
@@ -6711,7 +6717,7 @@ export default function InvoiceManagement() {
                   onClick={() =>
                     updateSelectedPrefixSettings((current) => ({
                       ...current,
-                      currentSerial: 0,
+                      currentSerial: "0",
                     }))
                   }
                 >

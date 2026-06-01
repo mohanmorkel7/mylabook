@@ -5091,12 +5091,8 @@ export default function InvoiceManagement() {
   const selectedPrefixDefaultPeriod = getFinancialYearLabel(getIstNow(), invoiceSerialConfig.financialYearStartMonth);
   const selectedPrefixSettings = (() => {
     const config = prefixSerialConfigs[selectedPrefixKey];
-    const currentSerial = Math.max(
-      Number(config?.currentSerial || 0),
-      getSharedInvoiceSerialCurrent(clients, selectedPrefixKey, selectedPrefixDefaultPeriod),
-    );
     return {
-      currentSerial: formatInvoiceSerial(currentSerial, 4),
+      currentSerial: config?.currentSerial || formatInvoiceSerial(getSharedInvoiceSerialCurrent(clients, selectedPrefixKey, selectedPrefixDefaultPeriod), 4),
       period: config?.period || selectedPrefixDefaultPeriod,
       applyPeriodToAllPrefixes: Boolean(config?.applyPeriodToAllPrefixes),
     };
@@ -5140,11 +5136,8 @@ export default function InvoiceManagement() {
     if (!prefixKey) return;
     setPrefixSerialConfigs((prev) => {
       const current = prev[prefixKey] || {
-        currentSerial: formatInvoiceSerial(
-          Math.max(
-            Number(prefixSerialConfigs[prefixKey]?.currentSerial || 0),
-            getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
-          ),
+        currentSerial: prefixSerialConfigs[prefixKey]?.currentSerial || formatInvoiceSerial(
+          getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
           4,
         ),
         period: selectedPrefixDefaultPeriod,
@@ -6659,8 +6652,7 @@ export default function InvoiceManagement() {
                 maxLength={4}
                 value={selectedPrefixSettings.currentSerial}
                 onChange={(e) => {
-                  const nextSerial = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
-                  updateSelectedPrefixSettings((current) => ({ ...current, currentSerial: nextSerial }));
+                  updateSelectedPrefixSettings((current) => ({ ...current, currentSerial: e.target.value }));
                 }}
                 placeholder="0017"
               />

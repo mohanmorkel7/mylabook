@@ -3607,7 +3607,15 @@ function ClientOverviewScreen({
     <div ref={overviewRootRef} className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" onClick={onBack}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              console.log("[Overview] Back button clicked, navigating away");
+              onBack();
+            }}
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -3976,7 +3984,14 @@ function ClientOverviewScreen({
               <CardTitle>Commercial Summary Panel</CardTitle>
               <CardDescription>Fixed charges, variable slabs, AWS pass-through and tax preview</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setShowSummaryModal(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                console.log("[Overview] View Details button clicked, opening modal");
+                setShowSummaryModal(true);
+              }}
+            >
               View Details
             </Button>
           </CardHeader>
@@ -4157,11 +4172,28 @@ function ClientOverviewScreen({
         />
       </div>
 
-      <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
+      <Dialog
+        open={showSummaryModal}
+        onOpenChange={(open) => {
+          console.log("[Overview] Summary modal state changed to:", open);
+          setShowSummaryModal(open);
+        }}
+      >
         <DialogOverlay className="z-40 bg-black/40" />
         <DialogContent className="max-w-2xl">
-          <DialogHeader>
+          <DialogHeader className="flex items-center justify-between">
             <DialogTitle>Commercial Summary Breakdown</DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSummaryModal(false);
+              }}
+              className="h-6 w-6"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
           </DialogHeader>
           <div className="grid gap-6">
             <div className="space-y-4">

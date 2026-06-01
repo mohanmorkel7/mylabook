@@ -111,6 +111,7 @@ export async function initializeInvoiceSchema() {
         status                TEXT NOT NULL,
         priority              TEXT,
         services              TEXT NOT NULL DEFAULT '',
+        service_options       TEXT,
         service_type_other    TEXT,
         fixed_billing         TEXT,
         monthly_invoice_est   TEXT,
@@ -159,6 +160,7 @@ export async function initializeInvoiceSchema() {
     // Add missing columns if they don't exist (for existing tables)
     try {
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS transaction_slabs TEXT`);
+      await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS service_options TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS service_type_other TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS aws_config TEXT`);
       await pool.query(`ALTER TABLE invoice_clients ADD COLUMN IF NOT EXISTS billing_model TEXT`);
@@ -446,6 +448,11 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         status: cachedClient.status,
         priority: cachedClient.priority,
         services: cachedClient.services || [],
+        serviceOptions: Array.isArray(cachedClient.service_options)
+          ? cachedClient.service_options
+          : cachedClient.service_options
+            ? safeParseJson(cachedClient.service_options, cachedClient.services || [])
+            : (cachedClient.services || []),
         serviceTypeOther: cachedClient.service_type_other || "",
         fixedBilling: cachedClient.fixed_billing || 0,
         monthlyInvoiceEstimate: cachedClient.monthly_invoice_est || 0,
@@ -498,6 +505,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
       status: decrypt(client.status),
       priority: decrypt(client.priority),
       services: JSON.parse(decrypt(client.services) || "[]"),
+      serviceOptions: JSON.parse(decrypt(client.service_options) || "[]"),
       serviceTypeOther: decrypt(client.service_type_other) || "",
       fixedBilling: parseInt(decrypt(client.fixed_billing) || "0"),
       monthlyInvoiceEstimate: parseInt(decrypt(client.monthly_invoice_est) || "0"),
@@ -554,6 +562,11 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         status: cachedClient.status,
         priority: cachedClient.priority,
         services: cachedClient.services || [],
+        serviceOptions: Array.isArray(cachedClient.service_options)
+          ? cachedClient.service_options
+          : cachedClient.service_options
+            ? safeParseJson(cachedClient.service_options, cachedClient.services || [])
+            : (cachedClient.services || []),
         serviceTypeOther: cachedClient.service_type_other || "",
         fixedBilling: cachedClient.fixed_billing || 0,
         monthlyInvoiceEstimate: cachedClient.monthly_invoice_est || 0,
@@ -615,6 +628,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       status,
       priority,
       services,
+      serviceOptions,
       serviceTypeOther,
       fixedBilling,
       monthlyInvoiceEstimate,
@@ -664,9 +678,9 @@ router.post("/clients", async (req: Request, res: Response) => {
 
     const id = clientId || `client-${Date.now()}`;
 
-    const insertPlaceholders = Array.from({ length: 51 }, (_, index) => `$${index + 1}`).join(", ");
+    const insertPlaceholders = Array.from({ length: 52 }, (_, index) => `$${index + 1}`).join(", ");
     const query = `INSERT INTO invoice_clients (
-      client_id, client_code, client_name, status, priority, services, service_type_other,
+      client_id, client_code, client_name, status, priority, services, service_options, service_type_other,
       fixed_billing, monthly_invoice_est, monthly_txn_volume,
       variable_revenue, aws_infra_recovery, recon_revenue,
       profitability_revenue, min_guarantee, additional_fee, integration_fee,
@@ -689,6 +703,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       status = EXCLUDED.status,
       priority = EXCLUDED.priority,
       services = EXCLUDED.services,
+      service_options = EXCLUDED.service_options,
       service_type_other = EXCLUDED.service_type_other,
       fixed_billing = EXCLUDED.fixed_billing,
       monthly_invoice_est = EXCLUDED.monthly_invoice_est,
@@ -742,6 +757,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       encrypt(status),
       encrypt(priority),
       encrypt(JSON.stringify(services)),
+      encrypt(JSON.stringify(Array.isArray(serviceOptions) ? serviceOptions : [])),
       encrypt(String(serviceTypeOther || "")),
       encrypt(String(fixedBilling)),
       encrypt(String(monthlyInvoiceEstimate)),
@@ -797,6 +813,7 @@ router.post("/clients", async (req: Request, res: Response) => {
       status: status,
       priority: priority,
       services: services,
+      service_options: Array.isArray(serviceOptions) ? serviceOptions : [],
       service_type_other: serviceTypeOther || "",
       fixed_billing: fixedBilling,
       monthly_invoice_est: monthlyInvoiceEstimate,
@@ -909,7 +926,8 @@ router.get("/clients", async (req: Request, res: Response) => {
           status: decrypt(client.status),
           priority: decrypt(client.priority),
           services: JSON.parse(decrypt(client.services) || "[]"),
-          serviceTypeOther: decrypt(client.service_type_other) || "",
+      serviceOptions: JSON.parse(decrypt(client.service_options) || "[]"),
+      serviceTypeOther: decrypt(client.service_type_other) || "",
           fixedBilling: parseInt(decrypt(client.fixed_billing) || "0"),
           monthlyInvoiceEstimate: parseInt(decrypt(client.monthly_invoice_est) || "0"),
           monthlyTransactionVolume: parseInt(decrypt(client.monthly_txn_volume) || "0"),
@@ -972,6 +990,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       status: client.status,
       priority: client.priority,
       services: client.services || [],
+      serviceOptions: Array.isArray(client.service_options) ? client.service_options : safeParseJson(client.service_options, client.services || []),
       serviceTypeOther: client.service_type_other || "",
       fixedBilling: client.fixed_billing || 0,
       monthlyInvoiceEstimate: client.monthly_invoice_est || 0,
@@ -1040,6 +1059,7 @@ router.get("/clients", async (req: Request, res: Response) => {
       status: client.status,
       priority: client.priority,
       services: client.services || [],
+      serviceOptions: Array.isArray(client.service_options) ? client.service_options : safeParseJson(client.service_options, client.services || []),
       serviceTypeOther: client.service_type_other || "",
       fixedBilling: client.fixed_billing || 0,
       monthlyInvoiceEstimate: client.monthly_invoice_est || 0,

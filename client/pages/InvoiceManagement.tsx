@@ -270,25 +270,27 @@ function readClientOverviewCache() {
   }
 }
 
-function writeClientOverviewCache(clientId: string, cache: { invoiceTableConfig?: any[]; customInvoiceRows?: any[] }) {
+function writeClientOverviewCache(clientId: string, cache: { invoiceTableConfig?: any[]; customInvoiceRows?: any[]; serviceOptions?: any[] }) {
   try {
     const current = readClientOverviewCache();
     current[String(clientId)] = {
       invoiceTableConfig: Array.isArray(cache.invoiceTableConfig) ? cache.invoiceTableConfig : [],
       customInvoiceRows: Array.isArray(cache.customInvoiceRows) ? cache.customInvoiceRows : [],
+      serviceOptions: Array.isArray(cache.serviceOptions) ? cache.serviceOptions : [],
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(CLIENT_OVERVIEW_CACHE_KEY, JSON.stringify(current));
   } catch {}
 }
 
-function mergeClientOverviewCache<T extends { clientId?: string; id?: string; invoiceTableConfig?: any[]; customInvoiceRows?: any[] }>(client: T): T {
+function mergeClientOverviewCache<T extends { clientId?: string; id?: string; invoiceTableConfig?: any[]; customInvoiceRows?: any[]; serviceOptions?: any[] }>(client: T): T {
   const cache = readClientOverviewCache()[String(client.clientId || client.id || "")];
   if (!cache) return client;
   return {
     ...client,
     invoiceTableConfig: Array.isArray(cache.invoiceTableConfig) ? cache.invoiceTableConfig : client.invoiceTableConfig || [],
     customInvoiceRows: Array.isArray(cache.customInvoiceRows) ? cache.customInvoiceRows : client.customInvoiceRows || [],
+    serviceOptions: Array.isArray(cache.serviceOptions) ? cache.serviceOptions : client.serviceOptions || [],
   };
 }
 
@@ -795,6 +797,7 @@ type ClientRecord = (typeof CLIENTS)[number] & {
   signatoryName?: string;
   signatoryImage?: string;
   serviceTypeOther?: string;
+  serviceOptions?: string[];
   invoiceHistory?: InvoiceRecord[];
   invoicePrefix?: string;
   invoiceCurrentSerial?: number;
@@ -4324,8 +4327,31 @@ function InvoiceConfigEditor({
     setAwsVendorCost(client?.aws.vendorCost || 0);
     setAwsMarginPercentage(client?.aws.marginPercentage || 25);
   }, [client?.id, client?.aws.enabled, client?.aws.vendorCost, client?.aws.marginPercentage]);
+
+  useEffect(() => {
+    setSelectedServices(client?.services ? [...client.services] : []);
+    setServiceTypeOther(client?.serviceTypeOther || "");
+    const initial = [...SERVICE_OPTIONS];
+    const sourceOptions = client?.serviceOptions && client.serviceOptions.length > 0 ? client.serviceOptions : client?.services || [];
+    sourceOptions.forEach((service) => {
+      const value = normalizeInlineText(service);
+      if (value && !initial.some((item) => item.toLowerCase() === value.toLowerCase())) initial.push(value);
+    });
+    setServiceOptions(initial);
+  }, [client?.id, client?.services, client?.serviceTypeOther, client?.serviceOptions]);
   const [selectedServices, setSelectedServices] = useState<string[]>(client?.services ? [...client.services] : []);
   const [serviceTypeOther, setServiceTypeOther] = useState(client?.serviceTypeOther || "");
+  const [serviceOptions, setServiceOptions] = useState<string[]>(() => {
+    const initial = [...SERVICE_OPTIONS];
+    const sourceOptions = client?.serviceOptions && client.serviceOptions.length > 0 ? client.serviceOptions : client?.services || [];
+    sourceOptions.forEach((service) => {
+      const value = normalizeInlineText(service);
+      if (value && !initial.some((item) => item.toLowerCase() === value.toLowerCase())) initial.push(value);
+    });
+    return initial;
+  });
+  const [serviceOptionDialogOpen, setServiceOptionDialogOpen] = useState(false);
+  const [serviceOptionDraft, setServiceOptionDraft] = useState("");
   const [slabs, setSlabs] = useState(client?.transactionSlabs ? [...client.transactionSlabs] : [
     { from: 0, to: 5000000, rate: 0.04, unit: "paisa" as const },
   ]);
@@ -4390,6 +4416,24 @@ function InvoiceConfigEditor({
     });
   };
 
+  const addServiceOption = () => {
+    const value = normalizeInlineText(serviceOptionDraft);
+    if (!value) return;
+    setServiceOptions((prev) => {
+      if (prev.some((item) => item.toLowerCase() === value.toLowerCase())) return prev;
+      return [...prev, value];
+    });
+    setSelectedServices((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    setServiceOptionDraft("");
+    setServiceOptionDialogOpen(false);
+  };
+
+  const removeServiceOption = (service: string) => {
+    if (SERVICE_OPTIONS.includes(service)) return;
+    setServiceOptions((prev) => prev.filter((item) => item !== service));
+    setSelectedServices((prev) => prev.filter((item) => item !== service));
+  };
+
   const addCustomInvoiceRow = () => {
     setCustomInvoiceRows((prev) => [...prev, { name: "", amount: 0, taxType: clientType === "International" ? "International" : "Domestic" }]);
   };
@@ -4446,6 +4490,7 @@ function InvoiceConfigEditor({
       integrationFee,
       aws: { enabled: awsEnabled, vendorCost: awsVendorCost, marginPercentage: awsMarginPercentage },
       services: selectedServices,
+      serviceOptions,
       serviceTypeOther: selectedServices.includes("Other") ? serviceTypeOther.trim() : "",
       transactionSlabs: slabs,
       notes,
@@ -4610,14 +4655,49 @@ function InvoiceConfigEditor({
                       )}
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Service Type</Label>
+                      <div className="flex items-center justify-between gap-3">
+                        <Label>Service Type</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1"
+                          onClick={() => {
+                            setServiceOptionDraft("");
+                            setServiceOptionDialogOpen(true);
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                          + Add
+                        </Button>
+                      </div>
                       <div className="grid gap-2 md:grid-cols-2">
-                        {SERVICE_OPTIONS.map((service) => (
-                          <label key={service} className="flex items-center gap-2 rounded-xl border p-3 text-sm">
-                            <Checkbox checked={selectedServices.includes(service)} onCheckedChange={() => toggleService(service)} />
-                            {service}
-                          </label>
-                        ))}
+                        {serviceOptions.map((service) => {
+                          const removable = !SERVICE_OPTIONS.includes(service);
+                          return (
+                            <label key={service} className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm">
+                              <div className="flex items-center gap-2">
+                                <Checkbox checked={selectedServices.includes(service)} onCheckedChange={() => toggleService(service)} />
+                                <span>{service}</span>
+                              </div>
+                              {removable && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeServiceOption(service);
+                                  }}
+                                  title="Remove service option"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </label>
+                          );
+                        })}
                       </div>
                       {selectedServices.includes("Other") && (
                         <div className="space-y-2">
@@ -4626,6 +4706,34 @@ function InvoiceConfigEditor({
                         </div>
                       )}
                     </div>
+
+                    <Dialog open={serviceOptionDialogOpen} onOpenChange={setServiceOptionDialogOpen}>
+                      <DialogOverlay className="z-[90] bg-black/40" />
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Add Service Name</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="service-option-name">Service Name</Label>
+                            <Input
+                              id="service-option-name"
+                              value={serviceOptionDraft}
+                              onChange={(e) => setServiceOptionDraft(e.target.value)}
+                              placeholder="Enter service name"
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" variant="outline" onClick={() => setServiceOptionDialogOpen(false)}>
+                              Cancel
+                            </Button>
+                            <Button type="button" onClick={addServiceOption}>
+                              Add Service
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                     <div className="space-y-3 md:col-span-2 rounded-2xl border bg-muted/20 p-4">
                       <Label>Billing Mode</Label>
                       <div className="grid gap-3 md:grid-cols-2">
@@ -5107,6 +5215,7 @@ export default function InvoiceManagement() {
             status: client.status,
             priority: client.priority,
             services: client.services || [],
+            serviceOptions: client.serviceOptions || client.services || [],
             fixedBilling: client.fixedBilling || 0,
             monthlyInvoiceEstimate: client.monthlyInvoiceEstimate || 0,
             monthlyTransactionVolume: client.monthlyTransactionVolume || 0,
@@ -5443,6 +5552,7 @@ export default function InvoiceManagement() {
               status: data.status,
               priority: data.priority,
               services: data.services || [],
+              serviceOptions: data.serviceOptions || data.services || [],
               serviceTypeOther: data.serviceTypeOther || "",
               fixedBilling: data.fixedBilling || 0,
               monthlyInvoiceEstimate: data.monthlyInvoiceEstimate || 0,
@@ -6350,6 +6460,7 @@ export default function InvoiceManagement() {
         networkCertificationNote: payload.networkCertificationNote || "",
         infraCostNote: payload.infraCostNote || "",
         customInvoiceRows: payload.customInvoiceRows || [],
+        serviceOptions: payload.serviceOptions || payload.services || [],
         invoiceTableConfig: payload.invoiceTableConfig || [],
       };
 
@@ -6365,6 +6476,7 @@ export default function InvoiceManagement() {
           status: payload.status,
           priority: payload.priority,
           services: payload.services,
+          serviceOptions: payload.serviceOptions || payload.services || [],
           serviceTypeOther: payload.serviceTypeOther || "",
           fixedBilling: payload.fixedBilling,
           monthlyInvoiceEstimate: payload.monthlyInvoiceEstimate,
@@ -6416,6 +6528,7 @@ export default function InvoiceManagement() {
       writeClientOverviewCache(baseId, {
         invoiceTableConfig: payload.invoiceTableConfig || [],
         customInvoiceRows: payload.customInvoiceRows || [],
+        serviceOptions: payload.serviceOptions || payload.services || [],
       });
 
       setClients((prev) => {

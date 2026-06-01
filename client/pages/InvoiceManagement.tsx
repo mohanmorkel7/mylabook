@@ -2729,10 +2729,7 @@ function InvoiceRowActions({
           variant="outline"
           size="icon"
           className="h-7 w-7 shrink-0 rounded-lg"
-          onClick={() => {
-            console.log("[InvoiceRowActions] Eye preview button clicked, invoice:", invoice.invoiceNumber, "status:", invoice.status, "pdfReady:", pdfReady);
-            onPreview(invoice);
-          }}
+          onClick={() => onPreview(invoice)}
           disabled={!pdfReady}
           title={previewButtonTitle}
         >
@@ -4919,9 +4916,9 @@ export default function InvoiceManagement() {
   const [pendingDeleteClient, setPendingDeleteClient] = useState<{ clientIdToDelete: string; clientName: string } | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [invoiceModalMode, setInvoiceModalMode] = useState<"create" | "edit">("create");
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewingInvoice, setPreviewingInvoice] = useState<InvoiceRecord | null>(null);
+  const [previewPayload, setPreviewPayload] = useState<any>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [invoiceAmountDraft, setInvoiceAmountDraft] = useState(0);
   const [pendingInvoiceAmount, setPendingInvoiceAmount] = useState(0);
@@ -6109,34 +6106,23 @@ export default function InvoiceManagement() {
   };
 
   const previewInvoicePdf = async (invoice: any) => {
-    console.log("[Invoice] previewInvoicePdf called for invoice:", invoice.invoiceNumber);
     if (!isApprovedInvoiceStatus(invoice.status)) {
-      console.log("[Invoice] Invoice not approved, status:", invoice.status);
       toast({ title: "Awaiting approval", description: "Only approved invoices can be previewed.", variant: "warning" });
       return;
     }
     const client = resolveInvoiceClientRecord(invoice);
     if (!client) {
-      console.log("[Invoice] Client not found for invoice:", invoice.invoiceNumber);
       toast({ title: "Client missing", description: "Could not locate client configuration for this invoice.", variant: "destructive" });
       return;
     }
     try {
-      console.log("[Invoice] Opening preview modal for invoice:", invoice.invoiceNumber);
-      setPreviewingInvoice(invoice);
-      setPdfPreviewUrl(null);
-      setPreviewModalOpen(true);
       const payload = buildInvoicePdfPayload(invoice, client);
-      console.log("[Invoice] Generating preview for invoice:", invoice.invoiceNumber, "outputMode: preview");
-      const previewResult = await downloadInvoicePdfTemplate({ ...payload, outputMode: "preview" });
-      console.log("[Invoice] Preview result type:", typeof previewResult, "is string:", typeof previewResult === "string");
-      if (typeof previewResult === "string") {
-        console.log("[Invoice] Setting PDF preview URL, length:", previewResult.length);
-        setPdfPreviewUrl(previewResult);
-      }
+      setPreviewingInvoice(invoice);
+      setPreviewPayload(payload);
+      setPreviewModalOpen(true);
     } catch (error: any) {
       console.error("[Invoice] previewInvoicePdf error:", error);
-      toast({ title: "Error", description: error?.message || "Failed to preview PDF", variant: "destructive" });
+      toast({ title: "Error", description: error?.message || "Failed to open preview", variant: "destructive" });
     }
   };
 
@@ -7479,46 +7465,113 @@ export default function InvoiceManagement() {
       <Dialog
         open={previewModalOpen}
         onOpenChange={(open) => {
-          console.log("[Invoice] Preview modal state changed to:", open);
           setPreviewModalOpen(open);
           if (!open) {
-            console.log("[Invoice] Cleaning up preview modal resources");
-            if (pdfPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(pdfPreviewUrl);
-            setPdfPreviewUrl(null);
             setPreviewingInvoice(null);
+            setPreviewPayload(null);
           }
         }}
       >
         <DialogOverlay className="z-[90] bg-black/60 backdrop-blur-sm" />
-        <DialogContent className="fixed left-2 top-2 z-[100] grid h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-none overflow-hidden rounded-3xl border bg-background p-0 shadow-2xl">
-          <DialogHeader className="flex items-center justify-between gap-2 border-b bg-background px-4 py-3">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex items-center justify-between">
             <div>
-              <DialogTitle className="text-lg">
-                {previewingInvoice ? getInvoiceDisplayNumber(previewingInvoice) : "Invoice preview"}
+              <DialogTitle className="text-xl">
+                {previewingInvoice ? getInvoiceDisplayNumber(previewingInvoice) : "Invoice Preview"}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground">Full-screen PDF preview (read-only)</p>
+              <p className="text-xs text-muted-foreground mt-1">Invoice data preview</p>
             </div>
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
-              onClick={() => {
-                if (pdfPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(pdfPreviewUrl);
-                setPreviewModalOpen(false);
-              }}
-              title="Close preview"
+              onClick={() => setPreviewModalOpen(false)}
+              className="h-6 w-6"
             >
               <XCircle className="h-4 w-4" />
             </Button>
           </DialogHeader>
-          <div className="h-[calc(100%-64px)] w-full bg-muted">
-            {pdfPreviewUrl ? (
-              <iframe src={pdfPreviewUrl} className="h-full w-full border-0 bg-white" title="Invoice PDF preview" />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Preparing preview…
+
+          {previewPayload && (
+            <div className="space-y-6 bg-white p-6 rounded-lg">
+              {/* Invoice Header */}
+              <div className="border-b pb-6">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">{previewPayload.client?.name}</h2>
+                    <p className="text-sm text-gray-600">{previewPayload.client?.code}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-700">Invoice Number</p>
+                    <p className="text-lg font-bold text-gray-900">{previewPayload.invoiceNumber}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">Invoice Date</p>
+                    <p className="font-medium text-gray-900">{formatInvoicePdfDate(previewPayload.generatedDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Service Period</p>
+                    <p className="font-medium text-gray-900">{previewPayload.month}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Financial Year</p>
+                    <p className="font-medium text-gray-900">{previewPayload.financialYear}</p>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Invoice Amount */}
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-lg border border-indigo-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Invoice Amount</p>
+                    <p className="text-3xl font-bold text-gray-900">{currencyLabel(previewPayload.amount, previewPayload.client?.currency || "INR")}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600 mb-2">Status</p>
+                    <p className="text-lg font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">{previewPayload.status}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Details */}
+              <div className="border-t pt-6">
+                <h3 className="font-semibold text-gray-900 mb-4">Invoice Details</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-gray-600">Invoice Type</span>
+                    <span className="font-medium text-gray-900">{previewPayload.invoiceType}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-gray-600">Client Code</span>
+                    <span className="font-medium text-gray-900">{previewPayload.client?.code}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-gray-600">GST Number</span>
+                    <span className="font-medium text-gray-900">{previewPayload.client?.gstin || "—"}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-600">Currency</span>
+                    <span className="font-medium text-gray-900">{previewPayload.client?.currency || "INR"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Details */}
+              {previewPayload.companyConfig && (
+                <div className="border-t pt-6">
+                  <h3 className="font-semibold text-gray-900 mb-4">Company Details</h3>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <p><strong>{previewPayload.companyConfig.companyName}</strong></p>
+                    <p>{previewPayload.companyConfig.address}</p>
+                    <p>Email: {previewPayload.companyConfig.email}</p>
+                    <p>Phone: {previewPayload.companyConfig.phone}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

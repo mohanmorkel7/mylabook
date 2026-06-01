@@ -335,6 +335,32 @@ async function readInvoiceConfigurationsRow() {
   };
 }
 
+function formatInvoiceSerialForDb(serial: number, digits = 4) {
+  return String(serial || 0).padStart(Math.max(1, digits), "0");
+}
+
+async function persistInvoiceSerialProgress(invoicePrefix: string, serial: number, financialYear: string) {
+  const currentSettings = await readInvoiceConfigurationsRow();
+  const invoiceSerialConfig = currentSettings.invoiceSerialConfig || {};
+  const prefixSerialConfigs = { ...(currentSettings.prefixSerialConfigs || {}) };
+  const prefixKey = String(invoicePrefix || "").trim().toUpperCase();
+  if (!prefixKey) return;
+  const previousPrefixSettings = prefixSerialConfigs[prefixKey] || {};
+  prefixSerialConfigs[prefixKey] = {
+    ...previousPrefixSettings,
+    currentSerial: formatInvoiceSerialForDb(serial, Number(invoiceSerialConfig.serialDigits || 4)),
+    period: financialYear || previousPrefixSettings.period || "",
+    applyPeriodToAllPrefixes: Boolean(previousPrefixSettings.applyPeriodToAllPrefixes),
+  };
+  await upsertInvoiceConfigurationsRow({
+    companyConfig: currentSettings.companyConfig,
+    taxConfig: currentSettings.taxConfig,
+    currencyConfig: currentSettings.currencyConfig,
+    invoiceSerialConfig,
+    prefixSerialConfigs,
+  });
+}
+
 // ── GET stored configuration ──────────────────────────────────────────────
 router.get("/settings", async (_req: Request, res: Response) => {
   try {
@@ -1110,6 +1136,18 @@ router.post("/invoices", async (req: Request, res: Response) => {
     ];
 
     await queryWithRetry(() => pool.query(query, params));
+
+    try {
+      const clientResult = await queryWithRetry(() =>
+        pool.query(`SELECT invoice_prefix FROM invoice_clients WHERE client_id = $1 LIMIT 1`, [clientId]),
+      );
+      const invoicePrefix = decrypt(clientResult.rows[0]?.invoice_prefix || "");
+      if (invoicePrefix) {
+        await persistInvoiceSerialProgress(invoicePrefix, Number(serial || 0), String(financialYear || ""));
+      }
+    } catch (configError) {
+      console.error("[Invoice] Failed to persist invoice serial progress:", configError);
+    }
 
     res.json({ success: true, invoiceId });
   } catch (error) {

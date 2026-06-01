@@ -7346,6 +7346,15 @@ export default function InvoiceManagement() {
               </div>
             </div>
             <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-foreground">Invoice Number Preview:</span>
+                <span className="font-mono text-foreground">{modalInvoicePreview}</span>
+              </div>
+              <p className="mt-2 text-xs">
+                Current serial used for this prefix is shown above and will be printed in the PDF.
+              </p>
+            </div>
+            <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
               {invoiceModalMode === "edit"
                 ? "Only invoices approved by the FinOps admin can be edited and updated."
                 : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}

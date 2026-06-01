@@ -4199,7 +4199,7 @@ function InvoiceConfigEditor({
   const [invoicePrefix, setInvoicePrefix] = useState(client?.invoicePrefix || "MYL");
   const [invoiceCurrentSerial, setInvoiceCurrentSerial] = useState(
     client?.invoiceCurrentSerial !== undefined && client?.invoiceCurrentSerial !== null
-      ? String(client.invoiceCurrentSerial)
+      ? formatInvoiceSerial(Number(client.invoiceCurrentSerial || 0), 4)
       : "",
   );
   const [signatoryName, setSignatoryName] = useState(client?.signatoryName || "");
@@ -5096,7 +5096,7 @@ export default function InvoiceManagement() {
       getSharedInvoiceSerialCurrent(clients, selectedPrefixKey, selectedPrefixDefaultPeriod),
     );
     return {
-      currentSerial: String(currentSerial),
+      currentSerial: formatInvoiceSerial(currentSerial, 4),
       period: config?.period || selectedPrefixDefaultPeriod,
       applyPeriodToAllPrefixes: Boolean(config?.applyPeriodToAllPrefixes),
     };
@@ -5140,11 +5140,12 @@ export default function InvoiceManagement() {
     if (!prefixKey) return;
     setPrefixSerialConfigs((prev) => {
       const current = prev[prefixKey] || {
-        currentSerial: String(
+        currentSerial: formatInvoiceSerial(
           Math.max(
             Number(prefixSerialConfigs[prefixKey]?.currentSerial || 0),
             getSharedInvoiceSerialCurrent(clients, prefixKey, selectedPrefixDefaultPeriod),
           ),
+          4,
         ),
         period: selectedPrefixDefaultPeriod,
         applyPeriodToAllPrefixes: false,
@@ -5708,7 +5709,7 @@ export default function InvoiceManagement() {
       if (generatedPrefix) {
         setPrefixSerialConfigs((prev) => {
           const existing = prev[generatedPrefix] || {
-            currentSerial: "0",
+            currentSerial: formatInvoiceSerial(0, 4),
             period: serialInfo.financialYear,
             applyPeriodToAllPrefixes: false,
           };
@@ -5716,7 +5717,7 @@ export default function InvoiceManagement() {
             ...prev,
             [generatedPrefix]: {
               ...existing,
-              currentSerial: String(serialInfo.serial),
+              currentSerial: formatInvoiceSerial(serialInfo.serial, 4),
               period: existing.applyPeriodToAllPrefixes ? serialInfo.financialYear : existing.period || serialInfo.financialYear,
             },
           };
@@ -6249,7 +6250,7 @@ export default function InvoiceManagement() {
       setPrefixSerialConfigs((prev) => {
         if (!resolvedInvoicePrefix) return prev;
         const existing = prev[resolvedInvoicePrefix] || {
-          currentSerial: "0",
+          currentSerial: formatInvoiceSerial(0, 4),
           period:
             prefixSerialConfigs[resolvedInvoicePrefix]?.period ||
             selectedPrefixSettings.period ||
@@ -6260,7 +6261,7 @@ export default function InvoiceManagement() {
           ...prev,
           [resolvedInvoicePrefix]: {
             ...existing,
-            currentSerial: String(resolvedInvoiceSerial),
+            currentSerial: formatInvoiceSerial(resolvedInvoiceSerial, 4),
           },
         };
         if (existing.applyPeriodToAllPrefixes) {
@@ -6717,7 +6718,7 @@ export default function InvoiceManagement() {
                   onClick={() =>
                     updateSelectedPrefixSettings((current) => ({
                       ...current,
-                      currentSerial: "0",
+                      currentSerial: formatInvoiceSerial(0, 4),
                     }))
                   }
                 >

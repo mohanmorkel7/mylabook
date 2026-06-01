@@ -4290,11 +4290,13 @@ function InvoiceConfigEditor({
   client,
   onCancel,
   onSave,
+  canManageConfigActions,
 }: {
   mode: "create" | "edit";
   client?: ClientRecord;
   onCancel: () => void;
   onSave: (payload: any) => void;
+  canManageConfigActions: boolean;
 }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState(client?.name || "");
@@ -4352,6 +4354,7 @@ function InvoiceConfigEditor({
   });
   const [serviceOptionDialogOpen, setServiceOptionDialogOpen] = useState(false);
   const [serviceOptionDraft, setServiceOptionDraft] = useState("");
+  const [serviceOptionEditingOriginal, setServiceOptionEditingOriginal] = useState<string | null>(null);
   const [slabs, setSlabs] = useState(client?.transactionSlabs ? [...client.transactionSlabs] : [
     { from: 0, to: 5000000, rate: 0.04, unit: "paisa" as const },
   ]);
@@ -4416,15 +4419,41 @@ function InvoiceConfigEditor({
     });
   };
 
-  const addServiceOption = () => {
+  const openAddServiceOption = () => {
+    setServiceOptionEditingOriginal(null);
+    setServiceOptionDraft("");
+    setServiceOptionDialogOpen(true);
+  };
+
+  const openEditServiceOption = (service: string) => {
+    setServiceOptionEditingOriginal(service);
+    setServiceOptionDraft(service);
+    setServiceOptionDialogOpen(true);
+  };
+
+  const saveServiceOption = () => {
     const value = normalizeInlineText(serviceOptionDraft);
     if (!value) return;
+
     setServiceOptions((prev) => {
-      if (prev.some((item) => item.toLowerCase() === value.toLowerCase())) return prev;
+      const original = serviceOptionEditingOriginal;
+      const existing = prev.find((item) => item.toLowerCase() === value.toLowerCase());
+      if (original) {
+        if (existing && existing !== original) return prev;
+        return prev.map((item) => (item === original ? value : item));
+      }
+      if (existing) return prev;
       return [...prev, value];
     });
-    setSelectedServices((prev) => (prev.includes(value) ? prev : [...prev, value]));
+
+    setSelectedServices((prev) => {
+      const original = serviceOptionEditingOriginal;
+      if (original) return prev.map((item) => (item === original ? value : item));
+      return prev.includes(value) ? prev : [...prev, value];
+    });
+
     setServiceOptionDraft("");
+    setServiceOptionEditingOriginal(null);
     setServiceOptionDialogOpen(false);
   };
 
@@ -4432,6 +4461,11 @@ function InvoiceConfigEditor({
     if (SERVICE_OPTIONS.includes(service)) return;
     setServiceOptions((prev) => prev.filter((item) => item !== service));
     setSelectedServices((prev) => prev.filter((item) => item !== service));
+    if (serviceOptionEditingOriginal === service) {
+      setServiceOptionEditingOriginal(null);
+      setServiceOptionDraft("");
+      setServiceOptionDialogOpen(false);
+    }
   };
 
   const addCustomInvoiceRow = () => {
@@ -4662,40 +4696,44 @@ function InvoiceConfigEditor({
                           variant="outline"
                           size="sm"
                           className="h-8 gap-1"
-                          onClick={() => {
-                            setServiceOptionDraft("");
-                            setServiceOptionDialogOpen(true);
-                          }}
+                          onClick={openAddServiceOption}
                         >
-                          <Plus className="h-4 w-4" />
                           + Add
                         </Button>
                       </div>
                       <div className="grid gap-2 md:grid-cols-2">
                         {serviceOptions.map((service) => {
-                          const removable = !SERVICE_OPTIONS.includes(service);
                           return (
-                            <label key={service} className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm">
-                              <div className="flex items-center gap-2">
+                            <div key={service} className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm">
+                              <label className="flex min-w-0 flex-1 items-center gap-2">
                                 <Checkbox checked={selectedServices.includes(service)} onCheckedChange={() => toggleService(service)} />
-                                <span>{service}</span>
-                              </div>
-                              {removable && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeServiceOption(service);
-                                  }}
-                                  title="Remove service option"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <span className="truncate">{service}</span>
+                              </label>
+                              {canManageConfigActions && (
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                    onClick={() => openEditServiceOption(service)}
+                                    title="Edit service option"
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={() => removeServiceOption(service)}
+                                    title="Delete service option"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               )}
-                            </label>
+                            </div>
                           );
                         })}
                       </div>
@@ -4707,13 +4745,22 @@ function InvoiceConfigEditor({
                       )}
                     </div>
 
-                    <Dialog open={serviceOptionDialogOpen} onOpenChange={setServiceOptionDialogOpen}>
+                    <Dialog
+                      open={serviceOptionDialogOpen}
+                      onOpenChange={(open) => {
+                        setServiceOptionDialogOpen(open);
+                        if (!open) {
+                          setServiceOptionEditingOriginal(null);
+                          setServiceOptionDraft("");
+                        }
+                      }}
+                    >
                       <DialogContent
                         className="max-w-md w-[calc(100vw-2rem)] rounded-2xl"
                         onPointerDownOutside={(e) => e.preventDefault()}
                       >
                         <DialogHeader>
-                          <DialogTitle>Add Service Name</DialogTitle>
+                          <DialogTitle>{serviceOptionEditingOriginal ? "Edit Service Name" : "Add Service Name"}</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4">
                           <div className="space-y-2">
@@ -4726,11 +4773,19 @@ function InvoiceConfigEditor({
                             />
                           </div>
                           <div className="flex justify-end gap-2">
-                            <Button type="button" variant="outline" onClick={() => setServiceOptionDialogOpen(false)}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                setServiceOptionDialogOpen(false);
+                                setServiceOptionEditingOriginal(null);
+                                setServiceOptionDraft("");
+                              }}
+                            >
                               Cancel
                             </Button>
-                            <Button type="button" onClick={addServiceOption}>
-                              Add Service
+                            <Button type="button" onClick={saveServiceOption}>
+                              {serviceOptionEditingOriginal ? "Save Changes" : "Add Service"}
                             </Button>
                           </div>
                         </div>
@@ -6657,6 +6712,7 @@ export default function InvoiceManagement() {
           key={editingClient ? `${editingClient.clientId || editingClient.id}-${normalizeInlineText(editingClient.invoicePrefix) || "no-prefix"}-${editingClient.invoiceCurrentSerial || 0}` : `${isCreateRoute ? "create" : "edit"}-${clientId || "new"}`}
           mode={isCreateRoute ? "create" : "edit"}
           client={editingClient}
+          canManageConfigActions={canManageClientConfigActions}
           onCancel={() => navigate("/invoice-management")}
           onSave={saveConfig}
         />

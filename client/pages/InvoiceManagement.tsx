@@ -4708,8 +4708,10 @@ function InvoiceConfigEditor({
                     </div>
 
                     <Dialog open={serviceOptionDialogOpen} onOpenChange={setServiceOptionDialogOpen}>
-                      <DialogOverlay className="z-[90] bg-black/40" />
-                      <DialogContent className="max-w-md">
+                      <DialogContent
+                        className="max-w-md w-[calc(100vw-2rem)] rounded-2xl"
+                        onPointerDownOutside={(e) => e.preventDefault()}
+                      >
                         <DialogHeader>
                           <DialogTitle>Add Service Name</DialogTitle>
                         </DialogHeader>

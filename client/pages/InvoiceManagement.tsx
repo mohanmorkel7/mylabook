@@ -1929,7 +1929,7 @@ async function downloadInvoicePdfTemplate({
 
   drawFooter();
   if (outputMode === "preview") {
-    return doc.output("datauristring");
+    return URL.createObjectURL(doc.output("blob"));
   }
   doc.save(`${invoiceNumber}.pdf`);
   return doc;
@@ -5975,12 +5975,13 @@ export default function InvoiceManagement() {
       return;
     }
     try {
+      setPreviewingInvoice(invoice);
+      setPdfPreviewUrl(null);
+      setPreviewModalOpen(true);
       const payload = buildInvoicePdfPayload(invoice, client);
       const previewResult = await downloadInvoicePdfTemplate({ ...payload, outputMode: "preview" });
       if (typeof previewResult === "string") {
-        setPreviewingInvoice(invoice);
         setPdfPreviewUrl(previewResult);
-        setPreviewModalOpen(true);
       }
     } catch (error: any) {
       console.error("[Invoice] previewInvoicePdf error:", error);
@@ -7328,6 +7329,7 @@ export default function InvoiceManagement() {
         onOpenChange={(open) => {
           setPreviewModalOpen(open);
           if (!open) {
+            if (pdfPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(pdfPreviewUrl);
             setPdfPreviewUrl(null);
             setPreviewingInvoice(null);
           }
@@ -7341,7 +7343,15 @@ export default function InvoiceManagement() {
               </DialogTitle>
               <p className="text-xs text-muted-foreground">Full-screen PDF preview (read-only)</p>
             </div>
-            <Button variant="outline" size="icon" onClick={() => setPreviewModalOpen(false)} title="Close preview">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                if (pdfPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(pdfPreviewUrl);
+                setPreviewModalOpen(false);
+              }}
+              title="Close preview"
+            >
               <XCircle className="h-4 w-4" />
             </Button>
           </DialogHeader>

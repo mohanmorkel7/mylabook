@@ -3379,6 +3379,13 @@ function ClientOverviewScreen({
     setOverviewRows((prev) => prev.map((row) => applyOverviewRowTaxes(row, taxType, taxConfig)));
   }, [taxType, taxConfig]);
 
+  useEffect(() => {
+    // Ensure modal is closed when component mounts or navigates
+    return () => {
+      setShowSummaryModal(false);
+    };
+  }, [client.id]);
+
   const checkedRows = useMemo(() => overviewRows.filter((row) => row.exportEnabled !== false), [overviewRows]);
   const summaryTotals = useMemo(() => {
     const rowTotals = checkedRows.map((row) => ({

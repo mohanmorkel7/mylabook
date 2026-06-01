@@ -225,11 +225,22 @@ export async function initializeInvoiceSchema() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoice_configurations (
         id SERIAL PRIMARY KEY,
-        setting_key TEXT NOT NULL UNIQUE,
-        setting_value TEXT NOT NULL,
+        config_key TEXT NOT NULL UNIQUE,
+        company_config TEXT,
+        tax_config TEXT,
+        currency_config TEXT,
+        invoice_serial_config TEXT,
+        prefix_serial_configs TEXT,
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_key TEXT`);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS company_config TEXT`);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS tax_config TEXT`);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS currency_config TEXT`);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS invoice_serial_config TEXT`);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS prefix_serial_configs TEXT`);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
     console.log("[Invoice] ✓ invoice_configurations table created");
 
     // Add missing columns for invoice_records if table already existed
@@ -257,79 +268,69 @@ export async function initializeInvoiceSchema() {
   }
 }
 
-const CONFIG_TABLES = ["invoice_configurations", "invoice_settings"] as const;
-
-async function getConfigColumnPair(tableName: string) {
-  const columnsResult = await queryWithRetry(() =>
+async function upsertInvoiceConfigurationsRow(payload: {
+  companyConfig?: any;
+  taxConfig?: any;
+  currencyConfig?: any;
+  invoiceSerialConfig?: any;
+  prefixSerialConfigs?: any;
+}) {
+  await queryWithRetry(() =>
     pool.query(
-      `SELECT column_name
-       FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = $1
-       ORDER BY ordinal_position`,
-      [tableName],
+      `INSERT INTO invoice_configurations (
+        config_key,
+        company_config,
+        tax_config,
+        currency_config,
+        invoice_serial_config,
+        prefix_serial_configs,
+        updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ON CONFLICT (config_key) DO UPDATE SET
+        company_config = EXCLUDED.company_config,
+        tax_config = EXCLUDED.tax_config,
+        currency_config = EXCLUDED.currency_config,
+        invoice_serial_config = EXCLUDED.invoice_serial_config,
+        prefix_serial_configs = EXCLUDED.prefix_serial_configs,
+        updated_at = NOW()`,
+      [
+        "default",
+        payload.companyConfig ? JSON.stringify(payload.companyConfig) : null,
+        payload.taxConfig ? JSON.stringify(payload.taxConfig) : null,
+        payload.currencyConfig ? JSON.stringify(payload.currencyConfig) : null,
+        payload.invoiceSerialConfig ? JSON.stringify(payload.invoiceSerialConfig) : null,
+        payload.prefixSerialConfigs ? JSON.stringify(payload.prefixSerialConfigs) : null,
+      ],
     ),
   );
-  const columns = columnsResult.rows.map((row: any) => String(row.column_name));
-  const pairs = [
-    { key: "setting_key", value: "setting_value" },
-    { key: "config_key", value: "config_value" },
-    { key: "key", value: "value" },
-    { key: "name", value: "value" },
-  ];
-  return pairs.find((pair) => columns.includes(pair.key) && columns.includes(pair.value)) || null;
 }
 
-async function upsertConfigTableRecord(tableName: string, settingKey: string, settingValue: any) {
-  const pair = await getConfigColumnPair(tableName);
-  if (!pair) return;
-  const serializedValue = JSON.stringify(settingValue ?? {});
-  const updateResult = await queryWithRetry(() =>
-    pool.query(
-      `UPDATE ${tableName}
-       SET ${pair.value} = $2, updated_at = NOW()
-       WHERE ${pair.key} = $1`,
-      [settingKey, serializedValue],
-    ),
+async function readInvoiceConfigurationsRow() {
+  const result = await queryWithRetry(() =>
+    pool.query(`SELECT * FROM invoice_configurations WHERE config_key = $1 LIMIT 1`, ["default"]),
   );
-  if ((updateResult.rowCount || 0) === 0) {
-    await queryWithRetry(() =>
-      pool.query(
-        `INSERT INTO ${tableName} (${pair.key}, ${pair.value}, updated_at)
-         VALUES ($1, $2, NOW())`,
-        [settingKey, serializedValue],
-      ),
-    );
-  }
+  const row = result.rows[0];
+  if (!row) return {};
+  const companyConfig = safeParseJson(row.company_config, {});
+  const taxConfig = safeParseJson(row.tax_config, {});
+  const currencyConfig = safeParseJson(row.currency_config, {});
+  const invoiceSerialConfig = safeParseJson(row.invoice_serial_config, {});
+  const prefixSerialConfigs = safeParseJson(row.prefix_serial_configs, {});
+  return {
+    companyConfig,
+    taxConfig,
+    currencyConfig,
+    invoiceSerialConfig,
+    prefixSerialConfigs,
+    "mylapay-configuration": { companyConfig, taxConfig, currencyConfig },
+    "invoice-serial-config": { invoiceSerialConfig, prefixSerialConfigs },
+  };
 }
-
-async function readConfigTables() {
-  const merged: Record<string, any> = {};
-  for (const tableName of CONFIG_TABLES) {
-    try {
-      const pair = await getConfigColumnPair(tableName);
-      if (!pair) continue;
-      const result = await queryWithRetry(() =>
-        pool.query(`SELECT ${pair.key} AS setting_key, ${pair.value} AS setting_value FROM ${tableName}`),
-      );
-      result.rows.forEach((row: any) => {
-        merged[row.setting_key] = safeParseJson(row.setting_value, {});
-      });
-    } catch (error) {
-      console.error(`Error reading ${tableName}:`, error);
-    }
-  }
-  return merged;
-}
-
-const upsertInvoiceSetting = async (settingKey: string, settingValue: any) => {
-  await upsertConfigTableRecord("invoice_settings", settingKey, settingValue);
-  await upsertConfigTableRecord("invoice_configurations", settingKey, settingValue);
-};
 
 // ── GET stored configuration ──────────────────────────────────────────────
 router.get("/settings", async (_req: Request, res: Response) => {
   try {
-    const settings = await readConfigTables();
+    const settings = await readInvoiceConfigurationsRow();
     return res.json(settings);
   } catch (error) {
     console.error("Error fetching invoice settings:", error);
@@ -340,7 +341,7 @@ router.get("/settings", async (_req: Request, res: Response) => {
 router.post("/settings/invoice-serial", async (req: Request, res: Response) => {
   try {
     const { invoiceSerialConfig, prefixSerialConfigs } = req.body || {};
-    await upsertInvoiceSetting("invoice-serial-config", { invoiceSerialConfig, prefixSerialConfigs });
+    await upsertInvoiceConfigurationsRow({ invoiceSerialConfig, prefixSerialConfigs });
     res.json({ success: true });
   } catch (error) {
     console.error("Error saving invoice serial config:", error);
@@ -351,7 +352,7 @@ router.post("/settings/invoice-serial", async (req: Request, res: Response) => {
 router.post("/settings/mylapay", async (req: Request, res: Response) => {
   try {
     const { companyConfig, taxConfig, currencyConfig } = req.body || {};
-    await upsertInvoiceSetting("mylapay-configuration", { companyConfig, taxConfig, currencyConfig });
+    await upsertInvoiceConfigurationsRow({ companyConfig, taxConfig, currencyConfig });
     res.json({ success: true });
   } catch (error) {
     console.error("Error saving mylapay config:", error);

@@ -6439,7 +6439,9 @@ export default function InvoiceManagement() {
               <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-foreground">Invoice Number Preview:</span>
-                  <span className="font-mono text-foreground">{modalInvoicePreview}</span>
+                  <span className="font-mono text-foreground">
+                    {invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberPreview}
+                  </span>
                 </div>
                 <p className="mt-2 text-xs">
                   Current serial used for this prefix is shown above and will be printed in the PDF.
@@ -7348,7 +7350,9 @@ export default function InvoiceManagement() {
             <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-foreground">Invoice Number Preview:</span>
-                <span className="font-mono text-foreground">{modalInvoicePreview}</span>
+                <span className="font-mono text-foreground">
+                  {invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberPreview}
+                </span>
               </div>
               <p className="mt-2 text-xs">
                 Current serial used for this prefix is shown above and will be printed in the PDF.

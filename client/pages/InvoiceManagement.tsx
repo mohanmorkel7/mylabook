@@ -3234,6 +3234,7 @@ function ClientOverviewScreen({
   onStatusChange,
   onDownloadPdf,
   onDownloadDocx,
+  onPreview,
   onDeleteInvoice,
   onEditInvoice,
   onApproveInvoice,
@@ -3256,6 +3257,7 @@ function ClientOverviewScreen({
   onStatusChange: (invoiceNumber: string, status: InvoiceStatus) => void;
   onDownloadPdf: (invoice: InvoiceRecord) => void;
   onDownloadDocx: (invoice: InvoiceRecord) => void;
+  onPreview: (invoice: InvoiceRecord) => void;
   onDeleteInvoice: (invoiceId: string) => void | Promise<void>;
   onEditInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
   onApproveInvoice: (invoice: InvoiceRecord & { client?: string }) => void;
@@ -4137,7 +4139,7 @@ function ClientOverviewScreen({
           onStatusChange={(invoice, status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
           onDownloadPdf={onDownloadPdf}
           onDownloadDocx={onDownloadDocx}
-          onPreview={(invoice) => previewInvoicePdf(invoice)}
+          onPreview={onPreview}
           onDelete={(invoice) => onDeleteInvoice(invoice.invoiceId)}
         />
       </div>
@@ -6435,6 +6437,7 @@ export default function InvoiceManagement() {
           onStatusChange={(invoiceNumber, status) => updateInvoiceByNumber(invoiceNumber, (item) => ({ ...item, status }))}
           onDownloadPdf={downloadInvoicePdf}
           onDownloadDocx={downloadInvoiceDocx}
+          onPreview={previewInvoicePdf}
           onDeleteInvoice={deleteInvoiceById}
           onEditInvoice={openInvoiceEditModal}
           onApproveInvoice={approveInvoice}

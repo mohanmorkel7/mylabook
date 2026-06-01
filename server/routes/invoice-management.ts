@@ -221,6 +221,17 @@ export async function initializeInvoiceSchema() {
     `);
     console.log("[Invoice] ✓ invoice_settings table created");
 
+    console.log("[Invoice] Creating invoice_configurations table...");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invoice_configurations (
+        id SERIAL PRIMARY KEY,
+        setting_key TEXT NOT NULL UNIQUE,
+        setting_value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[Invoice] ✓ invoice_configurations table created");
+
     // Add missing columns for invoice_records if table already existed
     try {
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS billing_model TEXT`);
@@ -246,26 +257,79 @@ export async function initializeInvoiceSchema() {
   }
 }
 
-const upsertInvoiceSetting = async (settingKey: string, settingValue: any) => {
-  await queryWithRetry(() =>
+const CONFIG_TABLES = ["invoice_configurations", "invoice_settings"] as const;
+
+async function getConfigColumnPair(tableName: string) {
+  const columnsResult = await queryWithRetry(() =>
     pool.query(
-      `INSERT INTO invoice_settings (setting_key, setting_value, updated_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (setting_key)
-       DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
-      [settingKey, JSON.stringify(settingValue ?? {})],
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1
+       ORDER BY ordinal_position`,
+      [tableName],
     ),
   );
+  const columns = columnsResult.rows.map((row: any) => String(row.column_name));
+  const pairs = [
+    { key: "setting_key", value: "setting_value" },
+    { key: "config_key", value: "config_value" },
+    { key: "key", value: "value" },
+    { key: "name", value: "value" },
+  ];
+  return pairs.find((pair) => columns.includes(pair.key) && columns.includes(pair.value)) || null;
+}
+
+async function upsertConfigTableRecord(tableName: string, settingKey: string, settingValue: any) {
+  const pair = await getConfigColumnPair(tableName);
+  if (!pair) return;
+  const serializedValue = JSON.stringify(settingValue ?? {});
+  const updateResult = await queryWithRetry(() =>
+    pool.query(
+      `UPDATE ${tableName}
+       SET ${pair.value} = $2, updated_at = NOW()
+       WHERE ${pair.key} = $1`,
+      [settingKey, serializedValue],
+    ),
+  );
+  if ((updateResult.rowCount || 0) === 0) {
+    await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO ${tableName} (${pair.key}, ${pair.value}, updated_at)
+         VALUES ($1, $2, NOW())`,
+        [settingKey, serializedValue],
+      ),
+    );
+  }
+}
+
+async function readConfigTables() {
+  const merged: Record<string, any> = {};
+  for (const tableName of CONFIG_TABLES) {
+    try {
+      const pair = await getConfigColumnPair(tableName);
+      if (!pair) continue;
+      const result = await queryWithRetry(() =>
+        pool.query(`SELECT ${pair.key} AS setting_key, ${pair.value} AS setting_value FROM ${tableName}`),
+      );
+      result.rows.forEach((row: any) => {
+        merged[row.setting_key] = safeParseJson(row.setting_value, {});
+      });
+    } catch (error) {
+      console.error(`Error reading ${tableName}:`, error);
+    }
+  }
+  return merged;
+}
+
+const upsertInvoiceSetting = async (settingKey: string, settingValue: any) => {
+  await upsertConfigTableRecord("invoice_settings", settingKey, settingValue);
+  await upsertConfigTableRecord("invoice_configurations", settingKey, settingValue);
 };
 
 // ── GET stored configuration ──────────────────────────────────────────────
 router.get("/settings", async (_req: Request, res: Response) => {
   try {
-    const result = await queryWithRetry(() => pool.query(`SELECT setting_key, setting_value FROM invoice_settings`));
-    const settings = result.rows.reduce((acc: Record<string, any>, row: any) => {
-      acc[row.setting_key] = safeParseJson(row.setting_value, {});
-      return acc;
-    }, {});
+    const settings = await readConfigTables();
     return res.json(settings);
   } catch (error) {
     console.error("Error fetching invoice settings:", error);

@@ -2729,7 +2729,10 @@ function InvoiceRowActions({
           variant="outline"
           size="icon"
           className="h-7 w-7 shrink-0 rounded-lg"
-          onClick={() => onPreview(invoice)}
+          onClick={() => {
+            console.log("[Eye Button] Clicked for invoice:", invoice.invoiceNumber, "pdfReady:", pdfReady);
+            onPreview(invoice);
+          }}
           disabled={!pdfReady}
           title={previewButtonTitle}
         >
@@ -3612,7 +3615,7 @@ function ClientOverviewScreen({
             size="icon"
             onClick={(e) => {
               e.stopPropagation();
-              console.log("[Overview] Back button clicked, navigating away");
+              console.log("[Back Button] Clicked, previewModalOpen:", previewModalOpen);
               onBack();
             }}
           >
@@ -6116,10 +6119,12 @@ export default function InvoiceManagement() {
       return;
     }
     try {
+      console.log("[Preview] Opening modal for invoice:", invoice.invoiceNumber);
       const payload = buildInvoicePdfPayload(invoice, client);
       setPreviewingInvoice(invoice);
       setPreviewPayload(payload);
       setPreviewModalOpen(true);
+      console.log("[Preview] Modal state should be true now");
     } catch (error: any) {
       console.error("[Invoice] previewInvoicePdf error:", error);
       toast({ title: "Error", description: error?.message || "Failed to open preview", variant: "destructive" });

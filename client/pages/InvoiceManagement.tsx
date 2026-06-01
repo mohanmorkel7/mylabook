@@ -52,7 +52,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogOverlay, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -7338,8 +7338,9 @@ export default function InvoiceManagement() {
           }
         }}
       >
-        <DialogContent className="max-w-[1200px] w-full p-0">
-          <DialogHeader className="flex items-center justify-between gap-2 border-b px-4 py-3">
+        <DialogOverlay className="z-[90] bg-black/60 backdrop-blur-sm" />
+        <DialogContent className="fixed left-2 top-2 z-[100] grid h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-none overflow-hidden rounded-3xl border bg-background p-0 shadow-2xl">
+          <DialogHeader className="flex items-center justify-between gap-2 border-b bg-background px-4 py-3">
             <div>
               <DialogTitle className="text-lg">
                 {previewingInvoice ? getInvoiceDisplayNumber(previewingInvoice) : "Invoice preview"}
@@ -7358,9 +7359,9 @@ export default function InvoiceManagement() {
               <XCircle className="h-4 w-4" />
             </Button>
           </DialogHeader>
-          <div className="h-[calc(90vh-64px)] w-full bg-muted">
+          <div className="h-[calc(100%-64px)] w-full bg-muted">
             {pdfPreviewUrl ? (
-              <iframe src={pdfPreviewUrl} className="h-full w-full border-0" title="Invoice PDF preview" />
+              <iframe src={pdfPreviewUrl} className="h-full w-full border-0 bg-white" title="Invoice PDF preview" />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 Preparing preview…

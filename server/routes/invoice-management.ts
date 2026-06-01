@@ -225,7 +225,8 @@ export async function initializeInvoiceSchema() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoice_configurations (
         id SERIAL PRIMARY KEY,
-        config_key TEXT NOT NULL UNIQUE,
+        config_type TEXT NOT NULL DEFAULT 'default',
+        config_key TEXT NOT NULL DEFAULT 'default',
         company_config TEXT,
         tax_config TEXT,
         currency_config TEXT,
@@ -234,13 +235,14 @@ export async function initializeInvoiceSchema() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_key TEXT`);
+    await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_type TEXT NOT NULL DEFAULT 'default'`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS company_config TEXT`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS tax_config TEXT`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS currency_config TEXT`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS invoice_serial_config TEXT`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS prefix_serial_configs TEXT`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_type ON invoice_configurations(config_type)`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_key ON invoice_configurations(config_key)`);
     console.log("[Invoice] ✓ invoice_configurations table created");
 
@@ -277,11 +279,12 @@ async function upsertInvoiceConfigurationsRow(payload: {
   prefixSerialConfigs?: any;
 }) {
   await queryWithRetry(() =>
-    pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_key ON invoice_configurations(config_key)`),
+    pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_type ON invoice_configurations(config_type)`),
   );
   await queryWithRetry(() =>
     pool.query(
       `INSERT INTO invoice_configurations (
+        config_type,
         config_key,
         company_config,
         tax_config,
@@ -289,8 +292,9 @@ async function upsertInvoiceConfigurationsRow(payload: {
         invoice_serial_config,
         prefix_serial_configs,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      ON CONFLICT (config_key) DO UPDATE SET
+      ) VALUES ($1, $1, $2, $3, $4, $5, $6, NOW())
+      ON CONFLICT (config_type) DO UPDATE SET
+        config_key = EXCLUDED.config_key,
         company_config = EXCLUDED.company_config,
         tax_config = EXCLUDED.tax_config,
         currency_config = EXCLUDED.currency_config,
@@ -311,7 +315,7 @@ async function upsertInvoiceConfigurationsRow(payload: {
 
 async function readInvoiceConfigurationsRow() {
   const result = await queryWithRetry(() =>
-    pool.query(`SELECT * FROM invoice_configurations WHERE config_key = $1 LIMIT 1`, ["default"]),
+    pool.query(`SELECT * FROM invoice_configurations WHERE config_type = $1 OR config_key = $1 LIMIT 1`, ["default"]),
   );
   const row = result.rows[0];
   if (!row) return {};

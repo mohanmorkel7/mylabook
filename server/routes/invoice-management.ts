@@ -241,6 +241,7 @@ export async function initializeInvoiceSchema() {
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS invoice_serial_config TEXT`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS prefix_serial_configs TEXT`);
     await pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_key ON invoice_configurations(config_key)`);
     console.log("[Invoice] ✓ invoice_configurations table created");
 
     // Add missing columns for invoice_records if table already existed
@@ -275,6 +276,9 @@ async function upsertInvoiceConfigurationsRow(payload: {
   invoiceSerialConfig?: any;
   prefixSerialConfigs?: any;
 }) {
+  await queryWithRetry(() =>
+    pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_key ON invoice_configurations(config_key)`),
+  );
   await queryWithRetry(() =>
     pool.query(
       `INSERT INTO invoice_configurations (

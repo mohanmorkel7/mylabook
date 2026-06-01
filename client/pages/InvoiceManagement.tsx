@@ -2729,7 +2729,10 @@ function InvoiceRowActions({
           variant="outline"
           size="icon"
           className="h-7 w-7 shrink-0 rounded-lg"
-          onClick={onPreview}
+          onClick={() => {
+            console.log("[InvoiceRowActions] Eye preview button clicked, invoice:", invoice.invoiceNumber, "status:", invoice.status, "pdfReady:", pdfReady);
+            onPreview(invoice);
+          }}
           disabled={!pdfReady}
           title={previewButtonTitle}
         >
@@ -6106,22 +6109,29 @@ export default function InvoiceManagement() {
   };
 
   const previewInvoicePdf = async (invoice: any) => {
+    console.log("[Invoice] previewInvoicePdf called for invoice:", invoice.invoiceNumber);
     if (!isApprovedInvoiceStatus(invoice.status)) {
+      console.log("[Invoice] Invoice not approved, status:", invoice.status);
       toast({ title: "Awaiting approval", description: "Only approved invoices can be previewed.", variant: "warning" });
       return;
     }
     const client = resolveInvoiceClientRecord(invoice);
     if (!client) {
+      console.log("[Invoice] Client not found for invoice:", invoice.invoiceNumber);
       toast({ title: "Client missing", description: "Could not locate client configuration for this invoice.", variant: "destructive" });
       return;
     }
     try {
+      console.log("[Invoice] Opening preview modal for invoice:", invoice.invoiceNumber);
       setPreviewingInvoice(invoice);
       setPdfPreviewUrl(null);
       setPreviewModalOpen(true);
       const payload = buildInvoicePdfPayload(invoice, client);
+      console.log("[Invoice] Generating preview for invoice:", invoice.invoiceNumber, "outputMode: preview");
       const previewResult = await downloadInvoicePdfTemplate({ ...payload, outputMode: "preview" });
+      console.log("[Invoice] Preview result type:", typeof previewResult, "is string:", typeof previewResult === "string");
       if (typeof previewResult === "string") {
+        console.log("[Invoice] Setting PDF preview URL, length:", previewResult.length);
         setPdfPreviewUrl(previewResult);
       }
     } catch (error: any) {
@@ -7469,8 +7479,10 @@ export default function InvoiceManagement() {
       <Dialog
         open={previewModalOpen}
         onOpenChange={(open) => {
+          console.log("[Invoice] Preview modal state changed to:", open);
           setPreviewModalOpen(open);
           if (!open) {
+            console.log("[Invoice] Cleaning up preview modal resources");
             if (pdfPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(pdfPreviewUrl);
             setPdfPreviewUrl(null);
             setPreviewingInvoice(null);

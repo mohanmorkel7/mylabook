@@ -1347,14 +1347,14 @@ function getInvoiceDisplayNumber(invoice: any) {
 }
 
 function normalizeInvoiceStatus(status?: string): InvoiceStatus {
-  if (status === "Received") return "Received" as InvoiceStatus;
-  if (status === "Received") return "Received" as InvoiceStatus;
-  if (status === "Waiting for approval") return "Waiting for approval";
-  if (status === "Generated") return "Generated";
-  if (status === "Send") return "Send";
-  if (status === "Rejected") return "Rejected";
-  if (status === "Overdue") return "Overdue";
-  if (status === "Closed") return "Closed";
+  const normalized = normalizeInlineText(status).toLowerCase();
+  if (normalized === "received") return "Received" as InvoiceStatus;
+  if (normalized === "waiting for approval" || normalized === "waiting") return "Waiting for approval";
+  if (normalized === "generated" || normalized === "approved") return "Generated";
+  if (normalized === "send" || normalized === "sent") return "Send";
+  if (normalized === "rejected") return "Rejected";
+  if (normalized === "overdue") return "Overdue";
+  if (normalized === "closed") return "Closed";
   return "Waiting for approval";
 }
 

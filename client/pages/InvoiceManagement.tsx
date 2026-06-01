@@ -3304,6 +3304,7 @@ function ClientOverviewScreen({
       : [{ name: "", narration: "", amount: 0, hsn: "", rate: defaultRate, cgst: 0, sgst: 0, igst: 0, taxType: defaultTaxType, useConfigHsn: false }],
   );
   const [editMmcTexts, setEditMmcTexts] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [mmcSectionTitle, setMmcSectionTitle] = useState("MMC (Monthly Minimum Commitment) Configuration");
   const [mmcSectionDescription, setMmcSectionDescription] = useState("Bill whichever is higher: MMC floor or Transaction-based amount.");
   const [mmcSetupFeeLabel, setMmcSetupFeeLabel] = useState("Onetime Setup Fee");
@@ -3963,9 +3964,14 @@ function ClientOverviewScreen({
 
       <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <Card>
-          <CardHeader>
-            <CardTitle>Commercial Summary Panel</CardTitle>
-            <CardDescription>Fixed charges, variable slabs, AWS pass-through and tax preview</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Commercial Summary Panel</CardTitle>
+              <CardDescription>Fixed charges, variable slabs, AWS pass-through and tax preview</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowSummaryModal(true)}>
+              View Details
+            </Button>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
@@ -4143,6 +4149,100 @@ function ClientOverviewScreen({
           onDelete={(invoice) => onDeleteInvoice(invoice.invoiceId)}
         />
       </div>
+
+      <Dialog open={showSummaryModal} onOpenChange={setShowSummaryModal}>
+        <DialogOverlay className="z-40 bg-black/40" />
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Commercial Summary Breakdown</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-6">
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">Revenue Components</h3>
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Fixed Billing</p>
+                    <p className="text-xs text-muted-foreground">Base charges</p>
+                  </div>
+                  <p className="text-lg font-semibold">{currencyLabel(client.fixedBilling, client.currency || "INR")}</p>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Fixed Charges (Calculated)</p>
+                    <p className="text-xs text-muted-foreground">From invoice table</p>
+                  </div>
+                  <p className="text-lg font-semibold">{currencyLabel(fixedCharges, client.currency || "INR")}</p>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Variable Charges (Calculated)</p>
+                    <p className="text-xs text-muted-foreground">Based on transaction count: {txnInput.toLocaleString()}</p>
+                  </div>
+                  <p className="text-lg font-semibold">{currencyLabel(Math.max(variableCharges, 0), client.currency || "INR")}</p>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">AWS Margin Calculation</p>
+                    <p className="text-xs text-muted-foreground">Markup on vendor cost</p>
+                  </div>
+                  <p className="text-lg font-semibold">{currencyLabel(awsMargin, client.currency || "INR")}</p>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">Tax & Final Amount</h3>
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Subtotal</p>
+                    <p className="text-xs text-muted-foreground">Sum of all charges</p>
+                  </div>
+                  <p className="text-lg font-semibold">{currencyLabel(invoiceDraft, client.currency || "INR")}</p>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Tax Calculation</p>
+                    <p className="text-xs text-muted-foreground">GST/IGST applied</p>
+                  </div>
+                  <p className="text-lg font-semibold">{currencyLabel(tax, client.currency || "INR")}</p>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium font-bold">Final Payable Amount</p>
+                    <p className="text-xs text-muted-foreground">Total invoice value</p>
+                  </div>
+                  <p className="text-2xl font-bold text-primary">{currencyLabel(finalPayable, client.currency || "INR")}</p>
+                </div>
+              </div>
+            </div>
+
+            {client.transactionSlabs && client.transactionSlabs.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">Transaction Slabs Configuration</h3>
+                  <div className="space-y-2">
+                    {client.transactionSlabs.map((slab, index) => (
+                      <div key={index} className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+                        <div>
+                          <p className="font-medium">
+                            {slab.from.toLocaleString()} - {slab.to ? slab.to.toLocaleString() : "Above"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{slab.rate} {slab.unit} per transaction</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

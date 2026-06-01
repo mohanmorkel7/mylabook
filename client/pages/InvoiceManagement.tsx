@@ -3971,7 +3971,7 @@ function ClientOverviewScreen({
 
       <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Commercial Summary Panel</CardTitle>
               <CardDescription>Fixed charges, variable slabs, AWS pass-through and tax preview</CardDescription>

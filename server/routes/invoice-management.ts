@@ -87,6 +87,10 @@ function normalizeBillingModel(value: string | null | undefined) {
   return String(value || "transaction").toLowerCase() === "mmc" ? "mmc" : "transaction";
 }
 
+function normalizeLookupText(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase();
+}
+
 // ── Initialize schema asynchronously at router creation time ─────────────
 // This will start initialization but not block router creation
 setTimeout(() => {
@@ -1191,22 +1195,21 @@ router.post("/invoices", async (req: Request, res: Response) => {
 // ── GET invoice number availability ────────────────────────────────────────
 router.get("/invoices/availability", async (req: Request, res: Response) => {
   try {
-    const invoiceNumber = normalizeInlineText(String(req.query.invoiceNumber || ""));
-    const excludeInvoiceId = normalizeInlineText(String(req.query.excludeInvoiceId || "")).toUpperCase();
+    const invoiceNumber = normalizeLookupText(String(req.query.invoiceNumber || ""));
+    const excludeInvoiceId = normalizeLookupText(String(req.query.excludeInvoiceId || ""));
 
     if (!invoiceNumber) {
       return res.status(400).json({ available: false, message: "Invoice number is required" });
     }
 
     const result = await queryWithRetry(() => pool.query("SELECT invoice_id, invoice_number FROM invoice_records ORDER BY id DESC"));
-    const target = invoiceNumber.toUpperCase();
     let conflictInvoice: string | null = null;
 
     for (const row of result.rows as any[]) {
-      const rowInvoiceId = normalizeInlineText(decrypt(row.invoice_id)).toUpperCase();
-      const rowInvoiceNumber = normalizeInlineText(decrypt(row.invoice_number)).toUpperCase();
+      const rowInvoiceId = normalizeLookupText(decrypt(row.invoice_id));
+      const rowInvoiceNumber = normalizeLookupText(decrypt(row.invoice_number));
       if (excludeInvoiceId && (rowInvoiceId === excludeInvoiceId || rowInvoiceNumber === excludeInvoiceId)) continue;
-      if (rowInvoiceId === target || rowInvoiceNumber === target) {
+      if (rowInvoiceId === invoiceNumber || rowInvoiceNumber === invoiceNumber) {
         conflictInvoice = rowInvoiceNumber || rowInvoiceId || invoiceNumber;
         break;
       }

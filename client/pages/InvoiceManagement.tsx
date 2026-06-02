@@ -207,6 +207,34 @@ function normalizeDeclarationHtml(value?: string) {
     .join("");
 }
 
+function parseDeclarationStyle(value?: string) {
+  const html = normalizeDeclarationHtml(value);
+  const fallback = {
+    fontFamily: "Arial",
+    fontSize: "14",
+    lineHeight: "1.6",
+    textAlign: "left" as "left" | "center" | "right",
+    html,
+  };
+
+  if (typeof document === "undefined") return fallback;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const root = wrapper.firstElementChild as HTMLElement | null;
+
+  if (!root || root.tagName !== "DIV" || !root.getAttribute("style")) return fallback;
+
+  const rootStyle = root.style;
+  return {
+    fontFamily: (rootStyle.fontFamily || fallback.fontFamily).replace(/["']/g, ""),
+    fontSize: String(Math.round(Number.parseFloat(rootStyle.fontSize) || Number.parseFloat(fallback.fontSize))),
+    lineHeight: rootStyle.lineHeight || fallback.lineHeight,
+    textAlign: (rootStyle.textAlign as "left" | "center" | "right") || fallback.textAlign,
+    html: root.innerHTML,
+  };
+}
+
 function getInvoiceDeclarationLines(companyConfig: CompanyConfig) {
   const html = normalizeDeclarationHtml(companyConfig.declarationText);
   if (typeof document === "undefined") {
@@ -1940,7 +1968,7 @@ async function downloadInvoicePdfTemplate({
   doc.line(margin, cursorY + 1.6, margin + 28, cursorY + 1.6);
   cursorY += 8;
 
-  const declarationHtml = normalizeDeclarationHtml(companyConfig.declarationText);
+  const declarationStyles = parseDeclarationStyle(companyConfig.declarationText);
   const declarationHost = document.createElement("div");
   declarationHost.style.position = "fixed";
   declarationHost.style.left = "-10000px";
@@ -1949,14 +1977,14 @@ async function downloadInvoicePdfTemplate({
   declarationHost.style.background = "#ffffff";
   declarationHost.style.color = "rgb(31, 41, 92)";
   declarationHost.innerHTML = `
-    <div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; text-align: left; color: rgb(31, 41, 92); white-space: normal;">
+    <div style="font-family: ${declarationStyles.fontFamily}; font-size: ${declarationStyles.fontSize}px; line-height: ${declarationStyles.lineHeight}; text-align: ${declarationStyles.textAlign}; color: rgb(31, 41, 92); white-space: normal;">
       <style>
         p { margin: 0 0 4px 0; }
         div { margin: 0; }
         strong, b { font-weight: 700; }
         em, i { font-style: italic; }
       </style>
-      ${declarationHtml}
+      ${declarationStyles.html}
     </div>
   `;
   document.body.appendChild(declarationHost);
@@ -4380,25 +4408,15 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
   const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("left");
 
   useEffect(() => {
-    const html = normalizeDeclarationHtml(value);
     if (!editorRef.current) return;
 
-    const wrapper = document.createElement("div");
-    wrapper.innerHTML = html;
-    const root = wrapper.firstElementChild as HTMLElement | null;
-
-    if (root && root.tagName === "DIV" && root.getAttribute("style")) {
-      const rootStyle = root.style;
-      if (rootStyle.fontFamily) setFontFamily(rootStyle.fontFamily.replace(/["']/g, ""));
-      if (rootStyle.fontSize) setFontSize(String(Math.round(Number.parseFloat(rootStyle.fontSize) || 14)));
-      if (rootStyle.lineHeight) setLineHeight(String(rootStyle.lineHeight));
-      if (rootStyle.textAlign) setTextAlign(rootStyle.textAlign as any);
-      editorRef.current.innerHTML = root.innerHTML;
-      return;
-    }
-
-    if (editorRef.current.innerHTML !== html) {
-      editorRef.current.innerHTML = html;
+    const parsed = parseDeclarationStyle(value);
+    setFontFamily(parsed.fontFamily);
+    setFontSize(parsed.fontSize);
+    setLineHeight(parsed.lineHeight);
+    setTextAlign(parsed.textAlign);
+    if (editorRef.current.innerHTML !== parsed.html) {
+      editorRef.current.innerHTML = parsed.html;
     }
   }, [value]);
 
@@ -4410,10 +4428,6 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
     editorRef.current.style.textAlign = textAlign;
   }, [fontFamily, fontSize, lineHeight, textAlign]);
 
-  useEffect(() => {
-    if (editorRef.current?.innerHTML) syncValue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fontFamily, fontSize, lineHeight, textAlign]);
 
   const serializeHtml = (nextContentHtml?: string, overrides?: Partial<{ fontFamily: string; fontSize: string; lineHeight: string; textAlign: "left" | "center" | "right" }>) => {
     const contentHtml = nextContentHtml ?? editorRef.current?.innerHTML ?? "";

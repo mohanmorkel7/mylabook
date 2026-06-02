@@ -534,7 +534,7 @@ const DEFAULT_INVOICE_SERIAL_CONFIG: InvoiceSerialConfig = {
   prefix: "MYL",
   separator: "/",
   serialDigits: 4,
-  format: "PREFIX/FY/SEQ",
+  format: "PREFIX/SEQ/FY",
   financialYearStartMonth: 4,
 };
 
@@ -659,6 +659,20 @@ function buildInvoiceNumber(
     default:
       return `${config.prefix}${config.separator}${financialYear}${config.separator}${serialPart}`;
   }
+}
+
+function inferInvoiceNumberFormat(invoiceNumber?: string): InvoiceNumberFormat | null {
+  const value = normalizeInlineText(invoiceNumber);
+  if (!value) return null;
+  if (/^[^/-]+[/-]\d{2}-\d{2}[/-]\d+$/.test(value)) return "PREFIX/FY/SEQ";
+  if (/^[^/-]+[/-]\d+[/-]\d{2}-\d{2}$/.test(value)) return "PREFIX/SEQ/FY";
+  if (/^[^/-]+-\d{2}-\d{2}-\d+$/.test(value)) return "PREFIX-FY-SEQ";
+  if (/^\d{2}-\d{2}[/-]\d+$/.test(value)) return "FY/SEQ";
+  return null;
+}
+
+function getPreferredInvoiceNumberFormat(invoiceNumber?: string, fallback: InvoiceNumberFormat = DEFAULT_INVOICE_SERIAL_CONFIG.format): InvoiceNumberFormat {
+  return inferInvoiceNumberFormat(invoiceNumber) || fallback;
 }
 
 function getCurrentInvoiceNumberPreview(config: InvoiceSerialConfig, financialYearOverride?: string) {
@@ -2070,6 +2084,8 @@ function getInvoiceNumberForClient(
 ) {
   const financialYear = getFinancialYearLabel(getIstNow(), config.financialYearStartMonth);
   const prefix = normalizeInlineText(preferredPrefix || client.invoicePrefix || config.prefix) || config.prefix;
+  const preferredFormat = getPreferredInvoiceNumberFormat(getInvoiceDisplayNumber(client.invoiceHistory?.[0]), config.format);
+  const effectiveConfig = { ...config, prefix, format: preferredFormat };
   const hasClientSerialConfig = Boolean(prefix || Number(client.invoiceCurrentSerial || 0) > 0);
 
   if (hasClientSerialConfig) {
@@ -2077,10 +2093,9 @@ function getInvoiceNumberForClient(
     const prefixConfig = prefixSerialConfigs[prefixKey];
     const currentSerial = Number(prefixConfig?.currentSerial ?? client.invoiceCurrentSerial ?? 0);
     const serial = currentSerial > 0 ? currentSerial + 1 : 1;
-    const serialPart = formatInvoiceSerial(serial, config.serialDigits);
     const period = prefixConfig?.period || financialYear;
     return {
-      invoiceNumber: `${prefix}${config.separator}${serialPart}${config.separator}${period}`,
+      invoiceNumber: buildInvoiceNumber(effectiveConfig, period, serial),
       financialYear: period,
       serial,
     };
@@ -2088,7 +2103,7 @@ function getInvoiceNumberForClient(
 
   const serial = state.financialYear === financialYear ? state.serial + 1 : 1;
   return {
-    invoiceNumber: buildInvoiceNumber(config, financialYear, serial),
+    invoiceNumber: buildInvoiceNumber(effectiveConfig, financialYear, serial),
     financialYear,
     serial,
   };
@@ -5765,7 +5780,16 @@ export default function InvoiceManagement() {
     };
   })();
   const modalInvoicePreview = buildInvoiceNumber(
-    { ...invoiceSerialConfig, prefix: modalPrefixKey || invoiceSerialConfig.prefix },
+    {
+      ...invoiceSerialConfig,
+      prefix: modalPrefixKey || invoiceSerialConfig.prefix,
+      format: getPreferredInvoiceNumberFormat(
+        invoiceModalMode === "edit"
+          ? selectedInvoice?.invoiceNumber
+          : getInvoiceDisplayNumber((selectedClient?.invoiceHistory || [])[0]),
+        invoiceSerialConfig.format,
+      ),
+    },
     modalPrefixSettings.period || selectedPrefixDefaultPeriod,
     Number(modalPrefixSettings.currentSerial || 0) + 1,
   );
@@ -5808,7 +5832,11 @@ export default function InvoiceManagement() {
       setInvoiceDateDraft(defaultInvoiceDate);
       setInvoiceMonthDraft(new Date(defaultInvoiceDate).toLocaleString("en-IN", { month: "short", year: "numeric" }));
       const initialInvoiceNumber = buildInvoiceNumber(
-        { ...invoiceSerialConfig, prefix: modalPrefixKey || invoiceSerialConfig.prefix },
+        {
+          ...invoiceSerialConfig,
+          prefix: modalPrefixKey || invoiceSerialConfig.prefix,
+          format: getPreferredInvoiceNumberFormat(getInvoiceDisplayNumber(client.invoiceHistory?.[0]), invoiceSerialConfig.format),
+        },
         selectedPrefixSettings.period || selectedPrefixDefaultPeriod,
         Number(selectedPrefixSettings.currentSerial || 0) + 1,
       );

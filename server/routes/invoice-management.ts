@@ -7,6 +7,9 @@ const router = Router();
 let schemaInitialized = false;
 let schemaInitializing = false;
 let schemaInitPromise: Promise<void> | null = null;
+let invoiceConfigurationsInitialized = false;
+let invoiceConfigurationsInitializing = false;
+let invoiceConfigurationsInitPromise: Promise<void> | null = null;
 
 // In-memory fallback cache for when database is unavailable
 const memoryCache = new Map<string, any>();
@@ -278,31 +281,47 @@ export async function initializeInvoiceSchema() {
 }
 
 async function ensureInvoiceConfigurationsReady() {
-  await queryWithRetry(() =>
-    pool.query(`
-      CREATE TABLE IF NOT EXISTS invoice_configurations (
-        id SERIAL PRIMARY KEY,
-        config_type TEXT NOT NULL DEFAULT 'default',
-        config_key TEXT NOT NULL DEFAULT 'default',
-        company_config TEXT,
-        tax_config TEXT,
-        currency_config TEXT,
-        invoice_serial_config TEXT,
-        prefix_serial_configs TEXT,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `),
-  );
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_type TEXT NOT NULL DEFAULT 'default'`));
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_key TEXT NOT NULL DEFAULT 'default'`));
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS company_config TEXT`));
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS tax_config TEXT`));
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS currency_config TEXT`));
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS invoice_serial_config TEXT`));
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS prefix_serial_configs TEXT`));
-  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`));
-  await queryWithRetry(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_type ON invoice_configurations(config_type)`));
-  await queryWithRetry(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_key ON invoice_configurations(config_key)`));
+  if (invoiceConfigurationsInitialized) return;
+  if (invoiceConfigurationsInitializing && invoiceConfigurationsInitPromise) {
+    return invoiceConfigurationsInitPromise;
+  }
+
+  invoiceConfigurationsInitializing = true;
+  invoiceConfigurationsInitPromise = (async () => {
+    await queryWithRetry(() =>
+      pool.query(`
+        CREATE TABLE IF NOT EXISTS invoice_configurations (
+          id SERIAL PRIMARY KEY,
+          config_type TEXT NOT NULL DEFAULT 'default',
+          config_key TEXT NOT NULL DEFAULT 'default',
+          company_config TEXT,
+          tax_config TEXT,
+          currency_config TEXT,
+          invoice_serial_config TEXT,
+          prefix_serial_configs TEXT,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `),
+    );
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_type TEXT NOT NULL DEFAULT 'default'`));
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_key TEXT NOT NULL DEFAULT 'default'`));
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS company_config TEXT`));
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS tax_config TEXT`));
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS currency_config TEXT`));
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS invoice_serial_config TEXT`));
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS prefix_serial_configs TEXT`));
+    await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`));
+    await queryWithRetry(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_type ON invoice_configurations(config_type)`));
+    await queryWithRetry(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_key ON invoice_configurations(config_key)`));
+    invoiceConfigurationsInitialized = true;
+  })().catch((error) => {
+    invoiceConfigurationsInitialized = false;
+    throw error;
+  }).finally(() => {
+    invoiceConfigurationsInitializing = false;
+  });
+
+  return invoiceConfigurationsInitPromise;
 }
 
 async function upsertInvoiceConfigurationsRow(payload: {
@@ -312,7 +331,6 @@ async function upsertInvoiceConfigurationsRow(payload: {
   invoiceSerialConfig?: any;
   prefixSerialConfigs?: any;
 }) {
-  await ensureInvoiceConfigurationsReady();
   await queryWithRetry(() =>
     pool.query(
       `INSERT INTO invoice_configurations (

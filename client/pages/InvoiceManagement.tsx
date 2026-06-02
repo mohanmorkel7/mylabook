@@ -2206,7 +2206,16 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
   const savedRows = Array.isArray(client.invoiceTableConfig) ? client.invoiceTableConfig : [];
 
   if (savedRows.length > 0) {
-    return savedRows.map((row) => applyOverviewRowTaxes(row as OverviewInvoiceRow, defaultTaxType, taxConfig));
+    return savedRows.map((row) =>
+      applyOverviewRowTaxes(
+        {
+          ...row,
+          useConfigHsn: typeof row.useConfigHsn === "boolean" ? row.useConfigHsn : defaultUseConfigHsn,
+        } as OverviewInvoiceRow,
+        defaultTaxType,
+        taxConfig,
+      ),
+    );
   }
 
   if (billingModel === "mmc") {
@@ -2433,7 +2442,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
     editable: true,
     narrationMode: row.narrationMode || "multiline",
     exportEnabled: row.exportEnabled ?? Number(row.amount || 0) !== 0,
-    useConfigHsn: row.useConfigHsn ?? defaultUseConfigHsn,
+    useConfigHsn: typeof row.useConfigHsn === "boolean" ? row.useConfigHsn : defaultUseConfigHsn,
   }));
 
 
@@ -4041,13 +4050,13 @@ function ClientOverviewScreen({
                                 <TableCell className="px-2 py-2 align-top">
                                   <div className="space-y-1.5">
                                   <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                                    <Checkbox checked={Boolean(row.useConfigHsn)} onCheckedChange={(checked) => updateOverviewRow(index, "useConfigHsn", Boolean(checked))} />
+                                    <Checkbox checked={row.useConfigHsn ?? defaultUseConfigHsn} onCheckedChange={(checked) => updateOverviewRow(index, "useConfigHsn", Boolean(checked))} />
                                     Use config HSN
                                   </label>
                                   <Input
-                                    value={row.useConfigHsn ? (taxConfig.invoiceHsnCode || "") : row.hsn}
+                                    value={(row.useConfigHsn ?? defaultUseConfigHsn) ? (taxConfig.invoiceHsnCode || "") : row.hsn}
                                     onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)}
-                                    readOnly={Boolean(row.useConfigHsn)}
+                                    readOnly={Boolean(row.useConfigHsn ?? defaultUseConfigHsn)}
                                     className={`h-8 text-xs ${alignClass}`}
                                     placeholder={taxConfig.invoiceHsnCode || "998314"}
                                   />

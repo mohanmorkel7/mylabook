@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { pool, queryWithRetry } from "../database/connection";
+import { pool, queryWithRetry, isDatabaseAvailable } from "../database/connection";
 import crypto from "crypto";
 
 const router = Router();
@@ -436,6 +436,11 @@ router.post("/settings/invoice-serial", async (req: Request, res: Response) => {
 
 router.post("/settings/mylapay", async (req: Request, res: Response) => {
   try {
+    const dbAvailable = await isDatabaseAvailable();
+    if (!dbAvailable) {
+      return res.status(503).json({ error: "Database unavailable. Mylapay settings were not saved." });
+    }
+
     const { companyConfig, taxConfig, currencyConfig } = req.body || {};
     await upsertInvoiceConfigurationsRow({ companyConfig, taxConfig, currencyConfig });
     res.json({ success: true, companyConfig, taxConfig, currencyConfig });

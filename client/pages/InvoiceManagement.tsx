@@ -1137,8 +1137,10 @@ async function downloadInvoiceDocxTemplate({
   const logoResponse = await fetch(MYLAPAY_LOGO_URL);
   const logoBlob = logoResponse.ok ? await logoResponse.blob() : null;
   const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false);
-  const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
+  const statementRows = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig);
+  const lineItems = statementRows.filter((item) => item.exportEnabled !== false);
+  const printableLineItems = lineItems.length > 0 ? lineItems : statementRows;
+  const subtotal = printableLineItems.reduce((sum, item) => sum + item.amount, 0);
   const invoiceCurrency = client.currency || "INR";
   // Calculate GST (18%) - LUT exemption only applies to specific cases
   // For now, always calculate GST for proper invoicing
@@ -1815,11 +1817,13 @@ async function downloadInvoicePdfTemplate({
   cursorY = Math.max(leftEnd, rightEnd) + 3;
 
   // === STATEMENT OF CHARGES ===
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false);
-  const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const cgstTotal = lineItems.reduce((sum, item) => sum + Number(item.cgst || 0), 0);
-  const sgstTotal = lineItems.reduce((sum, item) => sum + Number(item.sgst || 0), 0);
-  const igstTotal = lineItems.reduce((sum, item) => sum + Number(item.igst || 0), 0);
+  const statementRows = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig);
+  const lineItems = statementRows.filter((item) => item.exportEnabled !== false);
+  const printableLineItems = lineItems.length > 0 ? lineItems : statementRows;
+  const subtotal = printableLineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const cgstTotal = printableLineItems.reduce((sum, item) => sum + Number(item.cgst || 0), 0);
+  const sgstTotal = printableLineItems.reduce((sum, item) => sum + Number(item.sgst || 0), 0);
+  const igstTotal = printableLineItems.reduce((sum, item) => sum + Number(item.igst || 0), 0);
   const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const totalPayable = subtotal + taxTotal;
 
@@ -1871,7 +1875,7 @@ async function downloadInvoicePdfTemplate({
   cursorY += headerH;
 
   doc.setLineHeightFactor(1.1);
-  lineItems.forEach((item, idx) => {
+  printableLineItems.forEach((item, idx) => {
     const narrationLines = wrapParagraph(item.description, columns.narration - 4);
     const rowH = Math.max(8, narrationLines.length * 3.8 + 2);
     ensureSpace(rowH + 1);

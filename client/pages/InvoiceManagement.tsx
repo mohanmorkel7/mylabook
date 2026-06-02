@@ -6230,6 +6230,7 @@ export default function InvoiceManagement() {
     invoiceDateOverride?: string,
     mmcInvoiceTitleOverride?: string,
     invoiceMonthOverride?: string,
+    invoiceNumberOverride?: string,
   ) => {
     console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name, invoiceType);
 

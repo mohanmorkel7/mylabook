@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import * as Docx from "docx";
 import {
   Area,
@@ -180,11 +181,65 @@ MSME No of Mindeed: UDYAM-TN-02-0113863
 GST No of Mindeed: 33AAMCM6618H1ZB
 PAN No of Mindeed: AAMCM6618H
 Payment Terms: 15 days from the date of Invoice.`;
-const getInvoiceDeclarationLines = (companyConfig: CompanyConfig) =>
-  (companyConfig.declarationText || DEFAULT_INVOICE_DECLARATION_TEXT)
+
+function escapeHtml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeDeclarationHtml(value?: string) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return DEFAULT_INVOICE_DECLARATION_TEXT.split(/\r?\n/)
+      .map((line) => `<p>${escapeHtml(line)}</p>`)
+      .join("");
+  }
+  if (/<[a-z][\s\S]*>/i.test(raw)) return raw;
+  return raw
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("");
+}
+
+function getInvoiceDeclarationLines(companyConfig: CompanyConfig) {
+  const html = normalizeDeclarationHtml(companyConfig.declarationText);
+  if (typeof document === "undefined") {
+    return html
+      .replace(/<[^>]+>/g, "\n")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const topLevelNodes = Array.from(wrapper.children);
+
+  if (topLevelNodes.length === 1) {
+    const root = topLevelNodes[0] as HTMLElement;
+    const nestedBlocks = Array.from(root.children);
+    if (nestedBlocks.length > 0) {
+      return nestedBlocks.map((node) => node.textContent?.trim() || "").filter(Boolean);
+    }
+    const rootText = root.textContent?.trim();
+    return rootText ? [rootText] : [];
+  }
+
+  if (topLevelNodes.length > 1) {
+    return topLevelNodes.map((node) => node.textContent?.trim() || "").filter(Boolean);
+  }
+
+  return wrapper.textContent
+    ?.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean) || [];
+}
 const formatInvoicePdfDate = (dateStr: string) => {
   if (!dateStr) return "—";
   const [year, month, day] = dateStr.split("-").map((part) => Number(part));
@@ -1885,16 +1940,42 @@ async function downloadInvoicePdfTemplate({
   doc.line(margin, cursorY + 1.6, margin + 28, cursorY + 1.6);
   cursorY += 8;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.4);
-  getInvoiceDeclarationLines(companyConfig).forEach((line) => {
-    const lines = wrap(line, contentWidth);
-    ensureSpace(lines.length * 3.8 + 2);
-    setText(SECONDARY);
-    doc.text(lines, margin, cursorY);
-    cursorY += lines.length * 3.8 + 2.2;
-  });
-  cursorY += 1;
+  const declarationHtml = normalizeDeclarationHtml(companyConfig.declarationText);
+  const declarationHost = document.createElement("div");
+  declarationHost.style.position = "fixed";
+  declarationHost.style.left = "-10000px";
+  declarationHost.style.top = "0";
+  declarationHost.style.width = `${Math.round(contentWidth * 3.78)}px`;
+  declarationHost.style.background = "#ffffff";
+  declarationHost.style.color = "rgb(31, 41, 92)";
+  declarationHost.innerHTML = `
+    <div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; text-align: left; color: rgb(31, 41, 92); white-space: normal;">
+      <style>
+        p { margin: 0 0 4px 0; }
+        div { margin: 0; }
+        strong, b { font-weight: 700; }
+        em, i { font-style: italic; }
+      </style>
+      ${declarationHtml}
+    </div>
+  `;
+  document.body.appendChild(declarationHost);
+  try {
+    const declarationCanvas = await html2canvas(declarationHost.firstElementChild as HTMLElement, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+    });
+    const declarationImgData = declarationCanvas.toDataURL("image/png");
+    const declarationImgWidth = contentWidth;
+    const declarationImgHeight = (declarationCanvas.height * declarationImgWidth) / declarationCanvas.width;
+    ensureSpace(declarationImgHeight + 4);
+    doc.addImage(declarationImgData, "PNG", margin, cursorY, declarationImgWidth, declarationImgHeight);
+    cursorY += declarationImgHeight + 2;
+  } finally {
+    declarationHost.remove();
+  }
 
   // === SIGNATURE ===
   ensureSpace(12);
@@ -4281,6 +4362,146 @@ function ClientOverviewScreen({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+type RichTextDeclarationEditorProps = {
+  value: string;
+  onChange: (nextHtml: string) => void;
+  className?: string;
+};
+
+function RichTextDeclarationEditor({ value, onChange, className }: RichTextDeclarationEditorProps) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const [fontFamily, setFontFamily] = useState("Arial");
+  const [fontSize, setFontSize] = useState("14");
+  const [lineHeight, setLineHeight] = useState("1.6");
+  const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("left");
+
+  useEffect(() => {
+    const html = normalizeDeclarationHtml(value);
+    if (!editorRef.current) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    const root = wrapper.firstElementChild as HTMLElement | null;
+
+    if (root && root.tagName === "DIV" && root.getAttribute("style")) {
+      const rootStyle = root.style;
+      if (rootStyle.fontFamily) setFontFamily(rootStyle.fontFamily.replace(/["']/g, ""));
+      if (rootStyle.fontSize) setFontSize(String(Math.round(Number.parseFloat(rootStyle.fontSize) || 14)));
+      if (rootStyle.lineHeight) setLineHeight(String(rootStyle.lineHeight));
+      if (rootStyle.textAlign) setTextAlign(rootStyle.textAlign as any);
+      editorRef.current.innerHTML = root.innerHTML;
+      return;
+    }
+
+    if (editorRef.current.innerHTML !== html) {
+      editorRef.current.innerHTML = html;
+    }
+  }, [value]);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    editorRef.current.style.fontFamily = fontFamily;
+    editorRef.current.style.fontSize = `${fontSize}px`;
+    editorRef.current.style.lineHeight = lineHeight;
+    editorRef.current.style.textAlign = textAlign;
+  }, [fontFamily, fontSize, lineHeight, textAlign]);
+
+  useEffect(() => {
+    if (editorRef.current?.innerHTML) syncValue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontFamily, fontSize, lineHeight, textAlign]);
+
+  const serializeHtml = (nextContentHtml?: string, overrides?: Partial<{ fontFamily: string; fontSize: string; lineHeight: string; textAlign: "left" | "center" | "right" }>) => {
+    const contentHtml = nextContentHtml ?? editorRef.current?.innerHTML ?? "";
+    const merged = {
+      fontFamily,
+      fontSize,
+      lineHeight,
+      textAlign,
+      ...overrides,
+    };
+    return `<div style="font-family: ${merged.fontFamily}; font-size: ${merged.fontSize}px; line-height: ${merged.lineHeight}; text-align: ${merged.textAlign};">${contentHtml}</div>`;
+  };
+
+  const syncValue = () => {
+    onChange(serializeHtml());
+  };
+
+  const applyCommand = (command: string, valueArg?: string) => {
+    editorRef.current?.focus();
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand(command, false, valueArg);
+    syncValue();
+  };
+
+  const setBlockAlign = (align: "left" | "center" | "right") => {
+    setTextAlign(align);
+    onChange(serializeHtml(undefined, { textAlign: align }));
+    applyCommand(align === "left" ? "justifyLeft" : align === "center" ? "justifyCenter" : "justifyRight");
+  };
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("bold")}>B</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("italic")}>I</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("left")}>Left</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("center")}>Center</Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("right")}>Right</Button>
+        <Select value={fontFamily} onValueChange={(next) => {
+          setFontFamily(next);
+          onChange(serializeHtml(undefined, { fontFamily: next }));
+        }}>
+          <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Font" /></SelectTrigger>
+          <SelectContent>
+            {[
+              "Arial",
+              "Georgia",
+              "Times New Roman",
+              "Verdana",
+              "Tahoma",
+              "Courier New",
+            ].map((font) => (
+              <SelectItem key={font} value={font}>{font}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={fontSize} onValueChange={(next) => {
+          setFontSize(next);
+          onChange(serializeHtml(undefined, { fontSize: next }));
+        }}>
+          <SelectTrigger className="h-9 w-[96px]"><SelectValue placeholder="Size" /></SelectTrigger>
+          <SelectContent>
+            {["12", "13", "14", "15", "16", "18", "20"].map((size) => (
+              <SelectItem key={size} value={size}>{size}px</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={lineHeight} onValueChange={(next) => {
+          setLineHeight(next);
+          onChange(serializeHtml(undefined, { lineHeight: next }));
+        }}>
+          <SelectTrigger className="h-9 w-[104px]"><SelectValue placeholder="Line" /></SelectTrigger>
+          <SelectContent>
+            {["1.2", "1.4", "1.6", "1.8", "2.0"].map((lh) => (
+              <SelectItem key={lh} value={lh}>{lh}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={syncValue}
+        onBlur={syncValue}
+        className="min-h-[180px] rounded-xl border bg-background p-4 text-sm outline-none"
+        style={{ fontFamily, fontSize: `${fontSize}px`, lineHeight, textAlign }}
+      />
     </div>
   );
 }
@@ -6804,7 +7025,6 @@ export default function InvoiceManagement() {
                   <Input
                     value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
                     onChange={(e) => setInvoiceMonthDraft(e.target.value)}
-                    readOnly={invoiceModalMode !== "edit"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -6831,14 +7051,11 @@ export default function InvoiceManagement() {
               <div className="space-y-2 rounded-2xl border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
                   <Label className="text-sm font-medium">Declaration</Label>
-                  <span className="text-xs text-muted-foreground">Editable in modal</span>
+                  <span className="text-xs text-muted-foreground">Rich text enabled</span>
                 </div>
-                <Textarea
+                <RichTextDeclarationEditor
                   value={companyConfig.declarationText}
-                  onChange={(e) => setCompanyConfig((prev) => ({ ...prev, declarationText: e.target.value }))}
-                  rows={6}
-                  className="min-h-[140px] resize-y"
-                  placeholder="We hereby declare that..."
+                  onChange={(nextHtml) => setCompanyConfig((prev) => ({ ...prev, declarationText: nextHtml }))}
                 />
               </div>
               <div className="flex justify-end gap-2">
@@ -7294,12 +7511,9 @@ export default function InvoiceManagement() {
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Declaration Text</Label>
-                  <Textarea
+                  <RichTextDeclarationEditor
                     value={companyConfig.declarationText}
-                    onChange={(e) => setCompanyConfig((prev) => ({ ...prev, declarationText: e.target.value }))}
-                    placeholder={`We hereby declare that\n1. We have obtained approval for a lower TDS deduction, and going forward, TDS should be deducted at the rate of 1.60 % only.\n2. We are registered under the Micro, Small, and Medium Enterprises Development Act, 2006 (MSME).\nMSME No of Mindeed: UDYAM-TN-02-0113863\nGST No of Mindeed: 33AAMCM6618H1ZB\nPAN No of Mindeed: AAMCM6618H\nPayment Terms: 15 days from the date of Invoice.`}
-                    className="min-h-[180px] resize-y"
-                    rows={8}
+                    onChange={(nextHtml) => setCompanyConfig((prev) => ({ ...prev, declarationText: nextHtml }))}
                   />
                 </div>
               </div>
@@ -7812,7 +8026,6 @@ export default function InvoiceManagement() {
                 <Input
                   value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
                   onChange={(e) => setInvoiceMonthDraft(e.target.value)}
-                  readOnly={invoiceModalMode !== "edit"}
                 />
               </div>
               <div className="space-y-2">

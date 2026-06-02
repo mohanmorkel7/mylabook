@@ -5337,6 +5337,7 @@ export default function InvoiceManagement() {
   const [invoiceMonthDraft, setInvoiceMonthDraft] = useState("");
   const [invoiceNumberDraft, setInvoiceNumberDraft] = useState("");
   const [invoiceNumberConflictOpen, setInvoiceNumberConflictOpen] = useState(false);
+  const [invoiceNumberAvailability, setInvoiceNumberAvailability] = useState<{ available: boolean; message: string } | null>(null);
   const [invoiceSerialConfig, setInvoiceSerialConfig] = useState<InvoiceSerialConfig>(() => {
     try {
       const raw = localStorage.getItem(INVOICE_SERIAL_CONFIG_KEY);
@@ -6375,6 +6376,28 @@ export default function InvoiceManagement() {
     return null;
   }
 
+  const checkInvoiceNumberAvailability = (invoiceNumber: string, excludeInvoiceId?: string) => {
+    const normalized = normalizeInlineText(invoiceNumber);
+    if (!normalized) {
+      const message = "Enter an invoice number first.";
+      setInvoiceNumberAvailability({ available: false, message });
+      toast({ title: "Invoice number needed", description: message, variant: "destructive" });
+      return;
+    }
+
+    const conflict = findInvoiceByNumber(normalized, excludeInvoiceId);
+    if (conflict) {
+      const message = `Already exists: ${getInvoiceDisplayNumber(conflict)}`;
+      setInvoiceNumberAvailability({ available: false, message });
+      toast({ title: "Invoice number unavailable", description: message, variant: "destructive" });
+      return;
+    }
+
+    const message = "Invoice number is available.";
+    setInvoiceNumberAvailability({ available: true, message });
+    toast({ title: "Invoice number available", description: message });
+  };
+
   const promptInvoiceNumberConflict = (action: () => void, invoiceNumber: string, excludeInvoiceId?: string) => {
     const conflict = findInvoiceByNumber(invoiceNumber, excludeInvoiceId);
     if (conflict) {
@@ -7127,16 +7150,28 @@ export default function InvoiceManagement() {
                     </Badge>
                   )}
                 </div>
-                <Input
-                  value={invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberDraftValue}
-                  onChange={(e) => setInvoiceNumberDraft(e.target.value)}
-                  readOnly={invoiceModalMode === "edit"}
-                  className="font-mono"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    value={invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberDraftValue}
+                    onChange={(e) => {
+                      setInvoiceNumberDraft(e.target.value);
+                      setInvoiceNumberAvailability(null);
+                    }}
+                    readOnly={invoiceModalMode === "edit"}
+                    className="font-mono"
+                  />
+                  {invoiceModalMode !== "edit" && (
+                    <Button type="button" variant="outline" onClick={() => checkInvoiceNumberAvailability(invoiceNumberDraftValue)}>
+                      Check availability
+                    </Button>
+                  )}
+                </div>
                 <p className="text-xs">
                   {invoiceModalMode === "edit"
                     ? "This number is saved with the existing invoice record."
-                    : "Edit the invoice number before submitting. If it already exists, we will ask before replacing it."}
+                    : invoiceNumberAvailability
+                      ? invoiceNumberAvailability.message
+                      : "Edit the invoice number before submitting. If it already exists, we will ask before replacing it."}
                 </p>
               </div>
               <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
@@ -8160,16 +8195,28 @@ export default function InvoiceManagement() {
                   </Badge>
                 )}
               </div>
-              <Input
-                value={invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberDraftValue}
-                onChange={(e) => setInvoiceNumberDraft(e.target.value)}
-                readOnly={invoiceModalMode === "edit"}
-                className="font-mono"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberDraftValue}
+                  onChange={(e) => {
+                    setInvoiceNumberDraft(e.target.value);
+                    setInvoiceNumberAvailability(null);
+                  }}
+                  readOnly={invoiceModalMode === "edit"}
+                  className="font-mono"
+                />
+                {invoiceModalMode !== "edit" && (
+                  <Button type="button" variant="outline" onClick={() => checkInvoiceNumberAvailability(invoiceNumberDraftValue)}>
+                    Check availability
+                  </Button>
+                )}
+              </div>
               <p className="text-xs">
                 {invoiceModalMode === "edit"
                   ? "This number is saved with the existing invoice record."
-                  : "Edit the invoice number before submitting. If it already exists, we will ask before replacing it."}
+                  : invoiceNumberAvailability
+                    ? invoiceNumberAvailability.message
+                    : "Edit the invoice number before submitting. If it already exists, we will ask before replacing it."}
               </p>
             </div>
             <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">

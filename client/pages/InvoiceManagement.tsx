@@ -6172,6 +6172,7 @@ export default function InvoiceManagement() {
     txnCountOverride?: number,
     invoiceDateOverride?: string,
     mmcInvoiceTitleOverride?: string,
+    invoiceMonthOverride?: string,
   ) => {
     console.log("[Invoice] generateInvoiceForClient - Starting for client:", client?.name, invoiceType);
 
@@ -6219,7 +6220,7 @@ export default function InvoiceManagement() {
         invoiceNumber: serialInfo.invoiceNumber,
         serial: serialInfo.serial,
         financialYear: serialInfo.financialYear,
-        month: new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" }),
+        month: normalizeInlineText(invoiceMonthOverride || new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" })),
         client: client.name,
         amount: generatedAmount,
         status: "Waiting for approval",
@@ -7085,7 +7086,7 @@ export default function InvoiceManagement() {
                     if (invoiceModalMode === "edit") {
                       saveInvoiceUpdate();
                     } else {
-                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount, invoiceDateDraft || new Date().toISOString().split("T")[0], pendingInvoiceMmcTitle);
+                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount, invoiceDateDraft || new Date().toISOString().split("T")[0], pendingInvoiceMmcTitle, invoiceMonthDraft);
                     }
                     setInvoiceModalOpen(false);
                   }}
@@ -8083,6 +8084,7 @@ export default function InvoiceManagement() {
                       txnInput,
                       invoiceDateDraft || new Date().toISOString().split("T")[0],
                       pendingInvoiceMmcTitle,
+                      invoiceMonthDraft,
                     );
                   }
                   setInvoiceModalOpen(false);

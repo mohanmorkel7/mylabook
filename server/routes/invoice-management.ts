@@ -443,17 +443,13 @@ router.post("/settings/invoice-serial", async (req: Request, res: Response) => {
 
 router.post("/settings/mylapay", async (req: Request, res: Response) => {
   try {
-    const dbAvailable = await isDatabaseAvailable();
-    if (!dbAvailable) {
-      return res.status(503).json({ error: "Database unavailable. Mylapay settings were not saved." });
-    }
-
     const { companyConfig, taxConfig, currencyConfig } = req.body || {};
-    console.log("[Mylapay Save] Starting upsert with timeout...");
-    // Wrap upsert in 30-second timeout (DB query is slow)
+    console.log("[Mylapay Save] Starting upsert...");
+    console.log("[Mylapay Save] Payload size:", JSON.stringify({ companyConfig, taxConfig, currencyConfig }).length, "bytes");
+    // Wrap upsert in 60-second timeout (allow slow database)
     await withTimeout(
       upsertInvoiceConfigurationsRow({ companyConfig, taxConfig, currencyConfig }),
-      30000,
+      60000,
     );
     console.log("[Mylapay Save] Successfully saved configuration");
     res.json({ success: true, companyConfig, taxConfig, currencyConfig });
@@ -467,8 +463,9 @@ router.post("/settings/mylapay", async (req: Request, res: Response) => {
 
     if (errorMsg.includes("timeout")) {
       return res.status(504).json({
-        error: "Save operation timed out after 30 seconds. Database query is taking too long.",
-        details: "The invoice_configurations table may have performance issues. Try running VACUUM ANALYZE on the table."
+        error: "Save operation timed out after 60 seconds. Database is extremely slow.",
+        details: "Run these SQL commands on PostgreSQL to fix: VACUUM ANALYZE public.invoice_configurations; REINDEX TABLE public.invoice_configurations;",
+        remediation: "1. Connect to PostgreSQL at 10.30.11.95:2019\n2. Run: VACUUM ANALYZE public.invoice_configurations;\n3. Run: REINDEX TABLE public.invoice_configurations;\n4. Check for locks: SELECT * FROM pg_locks WHERE relation = 'invoice_configurations'::regclass;"
       });
     }
 

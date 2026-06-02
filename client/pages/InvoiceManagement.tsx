@@ -1473,6 +1473,15 @@ function updateInvoiceCollection(
   return invoices.map((invoice) => (getInvoiceDisplayNumber(invoice) === targetInvoiceNumber ? updater(invoice) : invoice));
 }
 
+function upsertInvoiceCollection(invoices: InvoiceRecord[], nextInvoice: InvoiceRecord) {
+  const targetInvoiceNumber = getInvoiceDisplayNumber(nextInvoice);
+  const hasMatch = invoices.some((invoice) => getInvoiceDisplayNumber(invoice) === targetInvoiceNumber);
+  if (hasMatch) {
+    return invoices.map((invoice) => (getInvoiceDisplayNumber(invoice) === targetInvoiceNumber ? nextInvoice : invoice));
+  }
+  return [nextInvoice, ...invoices];
+}
+
 function deleteInvoiceFromCollection(invoices: InvoiceRecord[], targetInvoiceNumber: string) {
   return invoices.filter((invoice) => getInvoiceDisplayNumber(invoice) !== targetInvoiceNumber);
 }
@@ -5326,6 +5335,8 @@ export default function InvoiceManagement() {
   const [pendingInvoiceMmcTitle, setPendingInvoiceMmcTitle] = useState("");
   const [invoiceDateDraft, setInvoiceDateDraft] = useState("");
   const [invoiceMonthDraft, setInvoiceMonthDraft] = useState("");
+  const [invoiceNumberDraft, setInvoiceNumberDraft] = useState("");
+  const [invoiceNumberConflictOpen, setInvoiceNumberConflictOpen] = useState(false);
   const [invoiceSerialConfig, setInvoiceSerialConfig] = useState<InvoiceSerialConfig>(() => {
     try {
       const raw = localStorage.getItem(INVOICE_SERIAL_CONFIG_KEY);
@@ -5757,6 +5768,11 @@ export default function InvoiceManagement() {
     modalPrefixSettings.period || selectedPrefixDefaultPeriod,
     Number(modalPrefixSettings.currentSerial || 0) + 1,
   );
+  const invoiceNumberDraftValue = normalizeInlineText(invoiceNumberDraft || modalInvoicePreview);
+  const invoiceNumberConflict = useMemo(
+    () => (invoiceModalMode === "edit" ? null : findInvoiceByNumber(invoiceNumberDraftValue, selectedInvoice?.invoiceId)),
+    [invoiceModalMode, invoiceNumberDraftValue, selectedInvoice?.invoiceId, invoices, clients],
+  );
 
   const openInvoiceCreateModal = (client: ClientRecord, amountOverride?: number, txnCountOverride?: number, mmcInvoiceTitleOverride?: string) => {
     console.log("[Invoice] openInvoiceCreateModal - Opening for client:", client?.name, client, { amountOverride, txnCountOverride });
@@ -5789,7 +5805,13 @@ export default function InvoiceManagement() {
       setPendingInvoiceTxnCount(effectiveTxnCount);
       setInvoiceDateDraft(defaultInvoiceDate);
       setInvoiceMonthDraft(new Date(defaultInvoiceDate).toLocaleString("en-IN", { month: "short", year: "numeric" }));
+      const initialInvoiceNumber = buildInvoiceNumber(
+        { ...invoiceSerialConfig, prefix: modalPrefixKey || invoiceSerialConfig.prefix },
+        selectedPrefixSettings.period || selectedPrefixDefaultPeriod,
+        Number(selectedPrefixSettings.currentSerial || 0) + 1,
+      );
       setPendingInvoiceMmcTitle(normalizeInlineText(mmcInvoiceTitleOverride || client.mmcInvoiceTitle || ""));
+      setInvoiceNumberDraft(initialInvoiceNumber);
       setInvoiceModalOpen(true);
       console.log("[Invoice] openInvoiceCreateModal - Modal opened");
     } catch (error) {
@@ -5809,6 +5831,7 @@ export default function InvoiceManagement() {
     setInvoiceAmountDraft(Number(invoice.amount || matchedClient?.monthlyInvoiceEstimate || 0));
     setInvoiceDateDraft(invoice.generatedDate || new Date().toISOString().split("T")[0]);
     setInvoiceMonthDraft(invoice.month);
+    setInvoiceNumberDraft(getInvoiceDisplayNumber(invoice));
     setInvoiceModalOpen(true);
   };
 
@@ -6215,9 +6238,10 @@ export default function InvoiceManagement() {
       const serialInfo = getInvoiceNumberForClient(client, invoiceSerialConfig, invoiceSerialState, clients, prefixSerialConfigs, client.invoicePrefix || selectedSerialPrefix || invoiceSerialConfig.prefix);
       console.log("[Invoice] generateInvoiceForClient - Serial info:", serialInfo);
 
+      const resolvedInvoiceNumber = normalizeInlineText(invoiceNumberOverride || serialInfo.invoiceNumber);
       const nextInvoice: InvoiceRecord = {
-        invoiceId: serialInfo.invoiceNumber,
-        invoiceNumber: serialInfo.invoiceNumber,
+        invoiceId: resolvedInvoiceNumber,
+        invoiceNumber: resolvedInvoiceNumber,
         serial: serialInfo.serial,
         financialYear: serialInfo.financialYear,
         month: normalizeInlineText(invoiceMonthOverride || new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" })),
@@ -6264,7 +6288,7 @@ export default function InvoiceManagement() {
         console.warn("[Invoice] generateInvoiceForClient - Database save failed (will continue):", dbError);
       }
 
-      setInvoices((prev) => [nextInvoice, ...prev]);
+      setInvoices((prev) => upsertInvoiceCollection(prev, nextInvoice));
       const generatedPrefix = normalizeInlineText(selectedSerialPrefix || client.invoicePrefix || invoiceSerialConfig.prefix).toUpperCase();
       setClients((prev) =>
         prev.map((item) => {
@@ -6274,7 +6298,7 @@ export default function InvoiceManagement() {
             ...item,
             lastInvoiceGenerated: generatedDate,
             invoiceCurrentSerial: serialInfo.serial,
-            invoiceHistory: item.id === client.id ? [nextInvoice, ...(item.invoiceHistory || [])] : item.invoiceHistory || [],
+            invoiceHistory: item.id === client.id ? upsertInvoiceCollection((item.invoiceHistory || []) as InvoiceRecord[], nextInvoice) : item.invoiceHistory || [],
           };
         }),
       );
@@ -6313,7 +6337,7 @@ export default function InvoiceManagement() {
       console.log("[Invoice] generateInvoiceForClient - Invoice generated successfully");
       toast({
         title: invoiceType === "setup_fee" ? "Setup fee invoice sent for approval" : "Invoice sent for approval",
-        description: `${client.name} invoice ${serialInfo.invoiceNumber} is waiting for FinOps approval.`,
+        description: `${client.name} invoice ${nextInvoice.invoiceNumber} is waiting for FinOps approval.`,
       });
     } catch (error) {
       console.error("[Invoice] generateInvoiceForClient - Error:", error);
@@ -6327,6 +6351,39 @@ export default function InvoiceManagement() {
 
   const generateSetupFeeInvoiceForClient = async (client = selectedClient) => {
     await generateInvoiceForClient(client, "setup_fee");
+  };
+
+  const invoiceConflictActionRef = useRef<(() => void) | null>(null);
+
+  function findInvoiceByNumber(invoiceNumber: string, excludeInvoiceId?: string) {
+    const target = normalizeInlineText(invoiceNumber).toUpperCase();
+    if (!target) return null;
+    const excluded = normalizeInlineText(excludeInvoiceId).toUpperCase();
+    const records = [
+      ...invoices,
+      ...clients.flatMap((client) => client.invoiceHistory || []),
+    ];
+    const seen = new Set<string>();
+    for (const record of records) {
+      const recordNumber = normalizeInlineText(getInvoiceDisplayNumber(record)).toUpperCase();
+      if (!recordNumber || seen.has(recordNumber)) continue;
+      seen.add(recordNumber);
+      const recordId = normalizeInlineText(record.invoiceId || record.invoiceNumber).toUpperCase();
+      if (excluded && recordId === excluded) continue;
+      if (recordNumber === target || recordId === target) return record;
+    }
+    return null;
+  }
+
+  const promptInvoiceNumberConflict = (action: () => void, invoiceNumber: string, excludeInvoiceId?: string) => {
+    const conflict = findInvoiceByNumber(invoiceNumber, excludeInvoiceId);
+    if (conflict) {
+      invoiceConflictActionRef.current = action;
+      setInvoiceNumberConflictOpen(true);
+      return true;
+    }
+    action();
+    return false;
   };
 
   const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {
@@ -7001,7 +7058,16 @@ export default function InvoiceManagement() {
         />
 
         {/* Invoice Creation/Editing Modal */}
-        <Dialog open={invoiceModalOpen} onOpenChange={setInvoiceModalOpen}>
+        <Dialog
+          open={invoiceModalOpen}
+          onOpenChange={(open) => {
+            setInvoiceModalOpen(open);
+            if (!open) {
+              setInvoiceNumberConflictOpen(false);
+              invoiceConflictActionRef.current = null;
+            }
+          }}
+        >
           <DialogContent className="max-w-2xl max-h-[calc(100vh-2rem)] overflow-hidden p-6">
             <DialogHeader>
               <DialogTitle>
@@ -7052,21 +7118,33 @@ export default function InvoiceManagement() {
                   <Input value={invoiceModalMode === "edit" ? "Generated" : "Waiting for approval"} readOnly />
                 </div>
               </div>
-              <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+              <div className="space-y-2 rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-foreground">Invoice Number Preview:</span>
-                  <span className="font-mono text-foreground">
-                    {invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberPreview}
-                  </span>
+                  {invoiceModalMode !== "edit" && invoiceNumberConflict && (
+                    <Badge variant="destructive" className="rounded-full">
+                      Already generated
+                    </Badge>
+                  )}
                 </div>
-                <p className="mt-2 text-xs">
-                  Current serial used for this prefix is shown above and will be printed in the PDF.
+                <Input
+                  value={invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberDraftValue}
+                  onChange={(e) => setInvoiceNumberDraft(e.target.value)}
+                  readOnly={invoiceModalMode === "edit"}
+                  className="font-mono"
+                />
+                <p className="text-xs">
+                  {invoiceModalMode === "edit"
+                    ? "This number is saved with the existing invoice record."
+                    : "Edit the invoice number before submitting. If it already exists, we will ask before replacing it."}
                 </p>
               </div>
               <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                 {invoiceModalMode === "edit"
                   ? "Only invoices approved by the FinOps admin can be edited and updated."
-                  : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
+                  : invoiceNumberConflict
+                    ? "This invoice number already exists. You can replace the existing invoice or change the number before submitting."
+                    : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
               </div>
               <div className="space-y-2 rounded-2xl border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -7086,9 +7164,20 @@ export default function InvoiceManagement() {
                     if (invoiceModalMode === "edit") {
                       saveInvoiceUpdate();
                     } else {
-                      generateInvoiceForClient(selectedClient, "commercial", pendingInvoiceAmount, pendingInvoiceTxnCount, invoiceDateDraft || new Date().toISOString().split("T")[0], pendingInvoiceMmcTitle, invoiceMonthDraft);
+                      promptInvoiceNumberConflict(
+                        () => generateInvoiceForClient(
+                          selectedClient,
+                          "commercial",
+                          pendingInvoiceAmount,
+                          pendingInvoiceTxnCount,
+                          invoiceDateDraft || new Date().toISOString().split("T")[0],
+                          pendingInvoiceMmcTitle,
+                          invoiceMonthDraft,
+                          invoiceNumberDraftValue,
+                        ),
+                        invoiceNumberDraftValue,
+                      );
                     }
-                    setInvoiceModalOpen(false);
                   }}
                 >
                   {invoiceModalMode === "edit" ? "Update Invoice" : "Submit for approval"}
@@ -8002,7 +8091,16 @@ export default function InvoiceManagement() {
         </CardContent>
       </Card>
 
-      <Dialog open={invoiceModalOpen} onOpenChange={setInvoiceModalOpen}>
+      <Dialog
+        open={invoiceModalOpen}
+        onOpenChange={(open) => {
+          setInvoiceModalOpen(open);
+          if (!open) {
+            setInvoiceNumberConflictOpen(false);
+            invoiceConflictActionRef.current = null;
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
@@ -8053,21 +8151,33 @@ export default function InvoiceManagement() {
                 <Input value={invoiceModalMode === "edit" ? "Generated" : "Waiting for approval"} readOnly />
               </div>
             </div>
-            <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+            <div className="space-y-2 rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-foreground">Invoice Number Preview:</span>
-                <span className="font-mono text-foreground">
-                  {invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberPreview}
-                </span>
+                {invoiceModalMode !== "edit" && invoiceNumberConflict && (
+                  <Badge variant="destructive" className="rounded-full">
+                    Already generated
+                  </Badge>
+                )}
               </div>
-              <p className="mt-2 text-xs">
-                Current serial used for this prefix is shown above and will be printed in the PDF.
+              <Input
+                value={invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberDraftValue}
+                onChange={(e) => setInvoiceNumberDraft(e.target.value)}
+                readOnly={invoiceModalMode === "edit"}
+                className="font-mono"
+              />
+              <p className="text-xs">
+                {invoiceModalMode === "edit"
+                  ? "This number is saved with the existing invoice record."
+                  : "Edit the invoice number before submitting. If it already exists, we will ask before replacing it."}
               </p>
             </div>
             <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
               {invoiceModalMode === "edit"
                 ? "Only invoices approved by the FinOps admin can be edited and updated."
-                : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
+                : invoiceNumberConflict
+                  ? "This invoice number already exists. You can replace the existing invoice or change the number before submitting."
+                  : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>Close</Button>
@@ -8077,20 +8187,60 @@ export default function InvoiceManagement() {
                   if (invoiceModalMode === "edit") {
                     saveInvoiceUpdate();
                   } else {
-                    generateInvoiceForClient(
-                      selectedClient,
-                      "commercial",
-                      invoiceAmountDraft,
-                      txnInput,
-                      invoiceDateDraft || new Date().toISOString().split("T")[0],
-                      pendingInvoiceMmcTitle,
-                      invoiceMonthDraft,
+                    promptInvoiceNumberConflict(
+                      () => generateInvoiceForClient(
+                        selectedClient,
+                        "commercial",
+                        invoiceAmountDraft,
+                        txnInput,
+                        invoiceDateDraft || new Date().toISOString().split("T")[0],
+                        pendingInvoiceMmcTitle,
+                        invoiceMonthDraft,
+                        invoiceNumberDraftValue,
+                      ),
+                      invoiceNumberDraftValue,
                     );
                   }
-                  setInvoiceModalOpen(false);
                 }}
               >
                 {invoiceModalMode === "edit" ? "Update Invoice" : "Submit for approval"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={invoiceNumberConflictOpen}
+        onOpenChange={(open) => {
+          setInvoiceNumberConflictOpen(open);
+          if (!open) invoiceConflictActionRef.current = null;
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invoice number already exists</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm text-muted-foreground">
+            <p>
+              This invoice number is already generated. Choose whether to replace the existing invoice or change the number and try again.
+            </p>
+            <div className="rounded-2xl border bg-muted/20 p-3 font-mono text-foreground">
+              {invoiceNumberDraftValue}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setInvoiceNumberConflictOpen(false)}>
+                Change number
+              </Button>
+              <Button
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                onClick={() => {
+                  const action = invoiceConflictActionRef.current;
+                  invoiceConflictActionRef.current = null;
+                  setInvoiceNumberConflictOpen(false);
+                  action?.();
+                }}
+              >
+                Force submit / Replace
               </Button>
             </div>
           </div>

@@ -7235,9 +7235,19 @@ export default function InvoiceManagement() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-foreground">Invoice Number Preview:</span>
                   {invoiceModalMode !== "edit" && invoiceNumberIsUnavailable && (
-                    <Badge variant="destructive" className="rounded-full">
-                      Already generated
-                    </Badge>
+                    <>
+                      <Badge variant="destructive" className="rounded-full">
+                        Already generated
+                      </Badge>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { void handleInvoiceSubmit(true); }}
+                      >
+                        Override
+                      </Button>
+                    </>
                   )}
                 </div>
                 <div className="flex gap-2">
@@ -8264,9 +8274,19 @@ export default function InvoiceManagement() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-foreground">Invoice Number Preview:</span>
                 {invoiceModalMode !== "edit" && invoiceNumberIsUnavailable && (
-                  <Badge variant="destructive" className="rounded-full">
-                    Already generated
-                  </Badge>
+                  <>
+                    <Badge variant="destructive" className="rounded-full">
+                      Already generated
+                    </Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { void handleInvoiceSubmit(true); }}
+                    >
+                      Override
+                    </Button>
+                  </>
                 )}
               </div>
               <div className="flex gap-2">
@@ -8345,7 +8365,7 @@ export default function InvoiceManagement() {
                   action?.();
                 }}
               >
-                Force submit / Replace
+                Override
               </Button>
             </div>
           </div>

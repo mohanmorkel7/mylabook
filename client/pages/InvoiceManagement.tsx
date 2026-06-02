@@ -1131,6 +1131,16 @@ async function fetchImageDataUrl(url: string) {
   }
 }
 
+async function resolveSignatureImageDataUrl(value?: string) {
+  const normalized = normalizeInlineText(value);
+  if (!normalized) return "";
+  if (normalized.startsWith("data:image/")) return normalized;
+  const imageUrl = normalized.startsWith("http") || normalized.startsWith("/")
+    ? normalized
+    : `/uploads/${encodeURIComponent(normalized)}`;
+  return (await fetchImageDataUrl(imageUrl)) || "";
+}
+
 async function downloadInvoiceDocxTemplate({
   client,
   companyConfig,
@@ -1418,13 +1428,13 @@ async function downloadInvoiceDocxTemplate({
             children: [new Docx.TextRun({ text: `For ${companyConfig.companyName || "Mindeed Technologies and Services Pvt Ltd"}`, bold: true, color: INVOICE_THEME.secondaryHex, size: 8.2 })],
             spacing: { after: 2 },
           }),
-          ...(getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage)
+          ...(await resolveSignatureImageDataUrl(getClientSignatureImage(client) || companyConfig.signatureImage)
             ? [
                 new Docx.Paragraph({
                   alignment: Docx.AlignmentType.RIGHT,
                   children: [
                     new Docx.ImageRun({
-                      data: getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage),
+                      data: await resolveSignatureImageDataUrl(getClientSignatureImage(client) || companyConfig.signatureImage),
                       transformation: { width: 84, height: 72 },
                     }),
                   ],
@@ -2045,7 +2055,9 @@ async function downloadInvoicePdfTemplate({
   const sigW = 92;
   const sigX = pageWidth - margin - sigW;
   const signatoryName = (client.signatoryName || "").trim();
-  const signatoryImage = getClientSignatureImage(client) || normalizeInlineText(companyConfig.signatureImage);
+  const signatoryImage = await resolveSignatureImageDataUrl(
+    getClientSignatureImage(client) || companyConfig.signatureImage,
+  );
   setText(SECONDARY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
@@ -2057,7 +2069,9 @@ async function downloadInvoicePdfTemplate({
     const imageH = 24;
     try {
       doc.addImage(signatoryImage, signatoryImage.startsWith("data:image/png") ? "PNG" : "JPEG", sigX + sigW - imageW - 2, cursorY, imageW, imageH);
-    } catch {}
+    } catch (error) {
+      console.error("[Invoice PDF] Failed to render signature image:", error);
+    }
     cursorY += imageH - 2;
   } else {
     cursorY += 1;

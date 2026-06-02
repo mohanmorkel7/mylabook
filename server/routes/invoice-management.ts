@@ -442,20 +442,40 @@ router.post("/settings/mylapay", async (req: Request, res: Response) => {
     }
 
     const { companyConfig, taxConfig, currencyConfig } = req.body || {};
-    // Wrap upsert in 15-second timeout to prevent hanging
+    console.log("[Mylapay Save] Starting upsert with timeout...");
+    // Wrap upsert in 10-second timeout to fail fast
     await withTimeout(
       upsertInvoiceConfigurationsRow({ companyConfig, taxConfig, currencyConfig }),
-      15000,
+      10000,
     );
+    console.log("[Mylapay Save] Successfully saved configuration");
     res.json({ success: true, companyConfig, taxConfig, currencyConfig });
   } catch (error: any) {
     const errorMsg = error?.message || String(error);
+    const stack = error?.stack || "";
+
+    console.error("[Mylapay Save Error]");
+    console.error("Message:", errorMsg);
+    console.error("Stack:", stack.split("\n").slice(0, 3).join("\n"));
+
     if (errorMsg.includes("timeout")) {
-      console.error("Mylapay save timed out:", errorMsg);
-      return res.status(504).json({ error: "Save operation timed out. Database may be slow or unavailable." });
+      return res.status(504).json({
+        error: "Save operation timed out after 15 seconds. Database connection is not responding.",
+        details: "Check if the PostgreSQL server at 10.30.11.95:2019 is running and accessible."
+      });
     }
-    console.error("Error saving mylapay config:", error);
-    res.status(500).json({ error: "Failed to save mylapay configuration" });
+
+    if (errorMsg.includes("Connection terminated") || errorMsg.includes("connection refused")) {
+      return res.status(503).json({
+        error: "Database connection failed. Cannot save Mylapay configuration.",
+        details: "The PostgreSQL server is unreachable or the connection was dropped."
+      });
+    }
+
+    res.status(500).json({
+      error: "Failed to save Mylapay configuration",
+      details: errorMsg.substring(0, 100)
+    });
   }
 });
 

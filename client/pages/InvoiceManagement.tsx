@@ -6232,6 +6232,7 @@ export default function InvoiceManagement() {
             generatedDate: nextInvoice.generatedDate,
             financialYear: nextInvoice.financialYear,
             serial: nextInvoice.serial,
+            invoicePrefix: client.invoicePrefix || selectedSerialPrefix || invoiceSerialConfig.prefix,
             customInvoiceRows: nextInvoice.customInvoiceRows || [],
             billingModel: nextInvoice.billingModel || "transaction",
             invoiceType: nextInvoice.invoiceType || "commercial",

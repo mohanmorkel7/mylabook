@@ -1123,6 +1123,7 @@ router.post("/invoices", async (req: Request, res: Response) => {
       invoiceType,
       customInvoiceRows,
       mmcInvoiceTitle,
+      invoicePrefix,
     } = req.body;
 
     const query = `INSERT INTO invoice_records (
@@ -1157,16 +1158,27 @@ router.post("/invoices", async (req: Request, res: Response) => {
 
     await queryWithRetry(() => pool.query(query, params));
 
-    try {
-      const clientResult = await queryWithRetry(() =>
-        pool.query(`SELECT invoice_prefix FROM invoice_clients WHERE client_id = $1 LIMIT 1`, [clientId]),
-      );
-      const invoicePrefix = decrypt(clientResult.rows[0]?.invoice_prefix || "");
-      if (invoicePrefix) {
-        await persistInvoiceSerialProgress(invoicePrefix, Number(serial || 0), String(financialYear || ""));
+    const resolvedInvoicePrefix = String(invoicePrefix || "").trim();
+    if (resolvedInvoicePrefix) {
+      void persistInvoiceSerialProgress(resolvedInvoicePrefix, Number(serial || 0), String(financialYear || ""))
+        .catch((configError) => {
+          console.error("[Invoice] Failed to persist invoice serial progress:", configError);
+        });
+    } else {
+      try {
+        const clientResult = await queryWithRetry(() =>
+          pool.query(`SELECT invoice_prefix FROM invoice_clients WHERE client_id = $1 LIMIT 1`, [clientId]),
+        );
+        const fallbackInvoicePrefix = decrypt(clientResult.rows[0]?.invoice_prefix || "");
+        if (fallbackInvoicePrefix) {
+          void persistInvoiceSerialProgress(fallbackInvoicePrefix, Number(serial || 0), String(financialYear || ""))
+            .catch((configError) => {
+              console.error("[Invoice] Failed to persist invoice serial progress:", configError);
+            });
+        }
+      } catch (configError) {
+        console.error("[Invoice] Failed to resolve invoice prefix:", configError);
       }
-    } catch (configError) {
-      console.error("[Invoice] Failed to persist invoice serial progress:", configError);
     }
 
     res.json({ success: true, invoiceId });

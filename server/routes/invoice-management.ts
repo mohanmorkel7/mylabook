@@ -277,6 +277,34 @@ export async function initializeInvoiceSchema() {
   }
 }
 
+async function ensureInvoiceConfigurationsReady() {
+  await queryWithRetry(() =>
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS invoice_configurations (
+        id SERIAL PRIMARY KEY,
+        config_type TEXT NOT NULL DEFAULT 'default',
+        config_key TEXT NOT NULL DEFAULT 'default',
+        company_config TEXT,
+        tax_config TEXT,
+        currency_config TEXT,
+        invoice_serial_config TEXT,
+        prefix_serial_configs TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `),
+  );
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_type TEXT NOT NULL DEFAULT 'default'`));
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS config_key TEXT NOT NULL DEFAULT 'default'`));
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS company_config TEXT`));
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS tax_config TEXT`));
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS currency_config TEXT`));
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS invoice_serial_config TEXT`));
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS prefix_serial_configs TEXT`));
+  await queryWithRetry(() => pool.query(`ALTER TABLE invoice_configurations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`));
+  await queryWithRetry(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_type ON invoice_configurations(config_type)`));
+  await queryWithRetry(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_key ON invoice_configurations(config_key)`));
+}
+
 async function upsertInvoiceConfigurationsRow(payload: {
   companyConfig?: any;
   taxConfig?: any;
@@ -284,9 +312,7 @@ async function upsertInvoiceConfigurationsRow(payload: {
   invoiceSerialConfig?: any;
   prefixSerialConfigs?: any;
 }) {
-  await queryWithRetry(() =>
-    pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_configurations_config_type ON invoice_configurations(config_type)`),
-  );
+  await ensureInvoiceConfigurationsReady();
   await queryWithRetry(() =>
     pool.query(
       `INSERT INTO invoice_configurations (
@@ -320,6 +346,7 @@ async function upsertInvoiceConfigurationsRow(payload: {
 }
 
 async function readInvoiceConfigurationsRow() {
+  await ensureInvoiceConfigurationsReady();
   const result = await queryWithRetry(() =>
     pool.query(`SELECT * FROM invoice_configurations WHERE config_type = $1 OR config_key = $1 LIMIT 1`, ["default"]),
   );
@@ -391,11 +418,9 @@ router.post("/settings/invoice-serial", async (req: Request, res: Response) => {
 
 router.post("/settings/mylapay", async (req: Request, res: Response) => {
   try {
-    await ensureSchemaReady();
     const { companyConfig, taxConfig, currencyConfig } = req.body || {};
     await upsertInvoiceConfigurationsRow({ companyConfig, taxConfig, currencyConfig });
-    const saved = await readInvoiceConfigurationsRow();
-    res.json({ success: true, ...saved });
+    res.json({ success: true, companyConfig, taxConfig, currencyConfig });
   } catch (error) {
     console.error("Error saving mylapay config:", error);
     res.status(500).json({ error: "Failed to save mylapay configuration" });

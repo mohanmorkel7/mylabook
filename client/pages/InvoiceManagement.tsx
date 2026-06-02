@@ -7764,13 +7764,29 @@ export default function InvoiceManagement() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const dataUrl = await readFileDataUrl(file);
-                      setCompanyConfig((prev) => ({ ...prev, signatureImage: dataUrl }));
+                      // Upload image to server instead of storing as base64
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      try {
+                        const response = await fetch("/api/uploads/signature", {
+                          method: "POST",
+                          body: formData,
+                        });
+                        if (response.ok) {
+                          const { filePath } = await response.json();
+                          setCompanyConfig((prev) => ({ ...prev, signatureImage: filePath }));
+                        } else {
+                          toast({ title: "Error", description: "Failed to upload image", variant: "destructive" });
+                        }
+                      } catch (error) {
+                        console.error("Upload error:", error);
+                        toast({ title: "Error", description: "Failed to upload image", variant: "destructive" });
+                      }
                     }}
                   />
                   {companyConfig.signatureImage && (
                     <div className="mt-2 rounded-xl border bg-muted/20 p-3">
-                      <img src={companyConfig.signatureImage} alt="Company signature preview" className="max-h-24 object-contain" />
+                      <img src={companyConfig.signatureImage.startsWith("data:") ? companyConfig.signatureImage : `/uploads/${companyConfig.signatureImage}`} alt="Company signature preview" className="max-h-24 object-contain" />
                     </div>
                   )}
                 </div>

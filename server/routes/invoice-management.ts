@@ -366,7 +366,14 @@ async function upsertInvoiceConfigurationsRow(payload: {
 async function readInvoiceConfigurationsRow() {
   await ensureInvoiceConfigurationsReady();
   const result = await queryWithRetry(() =>
-    pool.query(`SELECT * FROM invoice_configurations WHERE config_type = $1 OR config_key = $1 LIMIT 1`, ["default"]),
+    pool.query(
+      `SELECT id, config_type, config_key, company_config, tax_config, currency_config, invoice_serial_config, prefix_serial_configs, updated_at
+       FROM invoice_configurations
+       WHERE config_type = $1
+       LIMIT 1`,
+      ["default"]
+    ),
+    1, // Only retry once for config reads (reduce retries for speed)
   );
   const row = result.rows[0];
   if (!row) return {};
@@ -443,10 +450,10 @@ router.post("/settings/mylapay", async (req: Request, res: Response) => {
 
     const { companyConfig, taxConfig, currencyConfig } = req.body || {};
     console.log("[Mylapay Save] Starting upsert with timeout...");
-    // Wrap upsert in 10-second timeout to fail fast
+    // Wrap upsert in 30-second timeout (DB query is slow)
     await withTimeout(
       upsertInvoiceConfigurationsRow({ companyConfig, taxConfig, currencyConfig }),
-      10000,
+      30000,
     );
     console.log("[Mylapay Save] Successfully saved configuration");
     res.json({ success: true, companyConfig, taxConfig, currencyConfig });
@@ -460,8 +467,8 @@ router.post("/settings/mylapay", async (req: Request, res: Response) => {
 
     if (errorMsg.includes("timeout")) {
       return res.status(504).json({
-        error: "Save operation timed out after 15 seconds. Database connection is not responding.",
-        details: "Check if the PostgreSQL server at 10.30.11.95:2019 is running and accessible."
+        error: "Save operation timed out after 30 seconds. Database query is taking too long.",
+        details: "The invoice_configurations table may have performance issues. Try running VACUUM ANALYZE on the table."
       });
     }
 

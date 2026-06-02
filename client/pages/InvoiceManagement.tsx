@@ -561,9 +561,17 @@ const DEFAULT_TAX_CONFIG: TaxConfig = {
   igstPercentage: 18,
   tdsPercentage: 1.6,
   defaultTaxType: "SGST+CGST",
-  invoiceHsnCode: "",
+  invoiceHsnCode: "998314",
   invoiceRatePercentage: 18,
 };
+
+function withDefaultTaxHsn(config?: Partial<TaxConfig> | null): TaxConfig {
+  return {
+    ...DEFAULT_TAX_CONFIG,
+    ...(config || {}),
+    invoiceHsnCode: normalizeInlineText(config?.invoiceHsnCode || DEFAULT_TAX_CONFIG.invoiceHsnCode),
+  };
+}
 
 const DEFAULT_CURRENCY_CONFIG: CurrencyConfig = {
   domesticCurrency: "INR",
@@ -5395,7 +5403,7 @@ export default function InvoiceManagement() {
   const [taxConfig, setTaxConfig] = useState<TaxConfig>(() => {
     try {
       const raw = localStorage.getItem(TAX_CONFIG_KEY);
-      return raw ? { ...DEFAULT_TAX_CONFIG, ...JSON.parse(raw) } : DEFAULT_TAX_CONFIG;
+      return raw ? withDefaultTaxHsn(JSON.parse(raw)) : DEFAULT_TAX_CONFIG;
     } catch {
       return DEFAULT_TAX_CONFIG;
     }
@@ -5507,7 +5515,7 @@ export default function InvoiceManagement() {
           setCompanyConfig((prev) => ({ ...prev, ...mylapaySettings.companyConfig }));
         }
         if (mylapaySettings?.taxConfig) {
-          setTaxConfig((prev) => ({ ...prev, ...mylapaySettings.taxConfig }));
+          setTaxConfig((prev) => withDefaultTaxHsn({ ...prev, ...mylapaySettings.taxConfig }));
         }
         if (mylapaySettings?.currencyConfig) {
           setCurrencyConfig((prev) => ({ ...prev, ...mylapaySettings.currencyConfig }));
@@ -6790,7 +6798,7 @@ export default function InvoiceManagement() {
     } else if (request.type === "company") {
       setCompanyConfig((prev) => ({ ...prev, ...request.changes }));
     } else if (request.type === "tax") {
-      setTaxConfig((prev) => ({ ...prev, ...request.changes }));
+      setTaxConfig((prev) => withDefaultTaxHsn({ ...prev, ...request.changes }));
     } else if (request.type === "currency") {
       setCurrencyConfig((prev) => ({ ...prev, ...request.changes }));
     }

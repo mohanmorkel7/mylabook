@@ -1188,6 +1188,41 @@ router.post("/invoices", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET invoice number availability ────────────────────────────────────────
+router.get("/invoices/availability", async (req: Request, res: Response) => {
+  try {
+    const invoiceNumber = normalizeInlineText(String(req.query.invoiceNumber || ""));
+    const excludeInvoiceId = normalizeInlineText(String(req.query.excludeInvoiceId || "")).toUpperCase();
+
+    if (!invoiceNumber) {
+      return res.status(400).json({ available: false, message: "Invoice number is required" });
+    }
+
+    const result = await queryWithRetry(() => pool.query("SELECT invoice_id, invoice_number FROM invoice_records ORDER BY id DESC"));
+    const target = invoiceNumber.toUpperCase();
+    let conflictInvoice: string | null = null;
+
+    for (const row of result.rows as any[]) {
+      const rowInvoiceId = normalizeInlineText(decrypt(row.invoice_id)).toUpperCase();
+      const rowInvoiceNumber = normalizeInlineText(decrypt(row.invoice_number)).toUpperCase();
+      if (excludeInvoiceId && (rowInvoiceId === excludeInvoiceId || rowInvoiceNumber === excludeInvoiceId)) continue;
+      if (rowInvoiceId === target || rowInvoiceNumber === target) {
+        conflictInvoice = rowInvoiceNumber || rowInvoiceId || invoiceNumber;
+        break;
+      }
+    }
+
+    if (conflictInvoice) {
+      return res.json({ available: false, message: `Already exists: ${conflictInvoice}`, conflictInvoiceNumber: conflictInvoice });
+    }
+
+    return res.json({ available: true, message: "Invoice number is available." });
+  } catch (error) {
+    console.error("Error checking invoice availability:", error);
+    res.status(500).json({ error: "Failed to check invoice availability" });
+  }
+});
+
 // ── GET invoices for client ────────────────────────────────────────────────
 router.get("/invoices/:clientId", async (req: Request, res: Response) => {
   try {

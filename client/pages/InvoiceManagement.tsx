@@ -5774,6 +5774,7 @@ export default function InvoiceManagement() {
     () => (invoiceModalMode === "edit" ? null : findInvoiceByNumber(invoiceNumberDraftValue, selectedInvoice?.invoiceId)),
     [invoiceModalMode, invoiceNumberDraftValue, selectedInvoice?.invoiceId, invoices, clients],
   );
+  const invoiceNumberIsUnavailable = invoiceModalMode !== "edit" && (invoiceNumberAvailability?.available === false || Boolean(invoiceNumberConflict));
 
   const openInvoiceCreateModal = (client: ClientRecord, amountOverride?: number, txnCountOverride?: number, mmcInvoiceTitleOverride?: string) => {
     console.log("[Invoice] openInvoiceCreateModal - Opening for client:", client?.name, client, { amountOverride, txnCountOverride });
@@ -5813,6 +5814,8 @@ export default function InvoiceManagement() {
       );
       setPendingInvoiceMmcTitle(normalizeInlineText(mmcInvoiceTitleOverride || client.mmcInvoiceTitle || ""));
       setInvoiceNumberDraft(initialInvoiceNumber);
+      setInvoiceNumberAvailability(null);
+      setInvoiceNumberConflictOpen(false);
       setInvoiceModalOpen(true);
       console.log("[Invoice] openInvoiceCreateModal - Modal opened");
     } catch (error) {
@@ -5833,6 +5836,8 @@ export default function InvoiceManagement() {
     setInvoiceDateDraft(invoice.generatedDate || new Date().toISOString().split("T")[0]);
     setInvoiceMonthDraft(invoice.month);
     setInvoiceNumberDraft(getInvoiceDisplayNumber(invoice));
+    setInvoiceNumberAvailability(null);
+    setInvoiceNumberConflictOpen(false);
     setInvoiceModalOpen(true);
   };
 
@@ -6376,26 +6381,49 @@ export default function InvoiceManagement() {
     return null;
   }
 
-  const checkInvoiceNumberAvailability = (invoiceNumber: string, excludeInvoiceId?: string) => {
+  const checkInvoiceNumberAvailability = async (invoiceNumber: string, excludeInvoiceId?: string, notify = true) => {
     const normalized = normalizeInlineText(invoiceNumber);
     if (!normalized) {
       const message = "Enter an invoice number first.";
-      setInvoiceNumberAvailability({ available: false, message });
-      toast({ title: "Invoice number needed", description: message, variant: "destructive" });
-      return;
+      const result = { available: false, message };
+      setInvoiceNumberAvailability(result);
+      if (notify) toast({ title: "Invoice number needed", description: message, variant: "destructive" });
+      return result;
+    }
+
+    try {
+      const params = new URLSearchParams({ invoiceNumber: normalized });
+      if (excludeInvoiceId) params.set("excludeInvoiceId", excludeInvoiceId);
+      const response = await fetch(`/api/invoice-management/invoices/availability?${params.toString()}`);
+      const data = response.ok ? await response.json() : null;
+      if (data && typeof data.available === "boolean") {
+        const result = { available: Boolean(data.available), message: String(data.message || "") };
+        setInvoiceNumberAvailability(result);
+        if (notify) {
+          toast(
+            result.available
+              ? { title: "Invoice number available", description: result.message }
+              : { title: "Invoice number unavailable", description: result.message, variant: "destructive" },
+          );
+        }
+        return result;
+      }
+    } catch (error) {
+      console.warn("[Invoice] availability check failed, falling back to local lookup:", error);
     }
 
     const conflict = findInvoiceByNumber(normalized, excludeInvoiceId);
     if (conflict) {
-      const message = `Already exists: ${getInvoiceDisplayNumber(conflict)}`;
-      setInvoiceNumberAvailability({ available: false, message });
-      toast({ title: "Invoice number unavailable", description: message, variant: "destructive" });
-      return;
+      const result = { available: false, message: `Already exists: ${getInvoiceDisplayNumber(conflict)}` };
+      setInvoiceNumberAvailability(result);
+      if (notify) toast({ title: "Invoice number unavailable", description: result.message, variant: "destructive" });
+      return result;
     }
 
-    const message = "Invoice number is available.";
-    setInvoiceNumberAvailability({ available: true, message });
-    toast({ title: "Invoice number available", description: message });
+    const result = { available: true, message: "Invoice number is available." };
+    setInvoiceNumberAvailability(result);
+    if (notify) toast({ title: "Invoice number available", description: result.message });
+    return result;
   };
 
   const promptInvoiceNumberConflict = (action: () => void, invoiceNumber: string, excludeInvoiceId?: string) => {
@@ -6407,6 +6435,40 @@ export default function InvoiceManagement() {
     }
     action();
     return false;
+  };
+
+  const handleInvoiceSubmit = async (forceReplace = false) => {
+    if (!selectedClient) return;
+    const resolvedInvoiceNumber = normalizeInlineText(invoiceModalMode === "edit" ? modalInvoicePreview : invoiceNumberDraftValue);
+    if (!resolvedInvoiceNumber) {
+      toast({ title: "Invoice number needed", description: "Enter an invoice number first.", variant: "destructive" });
+      return;
+    }
+
+    if (invoiceModalMode === "edit") {
+      saveInvoiceUpdate();
+      return;
+    }
+
+    if (!forceReplace) {
+      const availability = await checkInvoiceNumberAvailability(resolvedInvoiceNumber, undefined, false);
+      if (!availability?.available) {
+        invoiceConflictActionRef.current = () => void handleInvoiceSubmit(true);
+        setInvoiceNumberConflictOpen(true);
+        return;
+      }
+    }
+
+    await generateInvoiceForClient(
+      selectedClient,
+      "commercial",
+      pendingInvoiceAmount,
+      pendingInvoiceTxnCount,
+      invoiceDateDraft || new Date().toISOString().split("T")[0],
+      pendingInvoiceMmcTitle,
+      invoiceMonthDraft,
+      resolvedInvoiceNumber,
+    );
   };
 
   const updateInvoiceByNumber = (invoiceNumber: string, updater: (invoice: InvoiceRecord) => InvoiceRecord) => {
@@ -7144,7 +7206,7 @@ export default function InvoiceManagement() {
               <div className="space-y-2 rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-foreground">Invoice Number Preview:</span>
-                  {invoiceModalMode !== "edit" && invoiceNumberConflict && (
+                  {invoiceModalMode !== "edit" && invoiceNumberIsUnavailable && (
                     <Badge variant="destructive" className="rounded-full">
                       Already generated
                     </Badge>
@@ -7161,7 +7223,7 @@ export default function InvoiceManagement() {
                     className="font-mono"
                   />
                   {invoiceModalMode !== "edit" && (
-                    <Button type="button" variant="outline" onClick={() => checkInvoiceNumberAvailability(invoiceNumberDraftValue)}>
+                    <Button type="button" variant="outline" onClick={() => { void checkInvoiceNumberAvailability(invoiceNumberDraftValue); }}>
                       Check availability
                     </Button>
                   )}
@@ -7177,7 +7239,7 @@ export default function InvoiceManagement() {
               <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
                 {invoiceModalMode === "edit"
                   ? "Only invoices approved by the FinOps admin can be edited and updated."
-                  : invoiceNumberConflict
+                  : invoiceNumberIsUnavailable
                     ? "This invoice number already exists. You can replace the existing invoice or change the number before submitting."
                     : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
               </div>
@@ -7196,23 +7258,7 @@ export default function InvoiceManagement() {
                 <Button
                   className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
                   onClick={() => {
-                    if (invoiceModalMode === "edit") {
-                      saveInvoiceUpdate();
-                    } else {
-                      promptInvoiceNumberConflict(
-                        () => generateInvoiceForClient(
-                          selectedClient,
-                          "commercial",
-                          pendingInvoiceAmount,
-                          pendingInvoiceTxnCount,
-                          invoiceDateDraft || new Date().toISOString().split("T")[0],
-                          pendingInvoiceMmcTitle,
-                          invoiceMonthDraft,
-                          invoiceNumberDraftValue,
-                        ),
-                        invoiceNumberDraftValue,
-                      );
-                    }
+                    void handleInvoiceSubmit(false);
                   }}
                 >
                   {invoiceModalMode === "edit" ? "Update Invoice" : "Submit for approval"}
@@ -8189,7 +8235,7 @@ export default function InvoiceManagement() {
             <div className="space-y-2 rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-foreground">Invoice Number Preview:</span>
-                {invoiceModalMode !== "edit" && invoiceNumberConflict && (
+                {invoiceModalMode !== "edit" && invoiceNumberIsUnavailable && (
                   <Badge variant="destructive" className="rounded-full">
                     Already generated
                   </Badge>
@@ -8222,7 +8268,7 @@ export default function InvoiceManagement() {
             <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
               {invoiceModalMode === "edit"
                 ? "Only invoices approved by the FinOps admin can be edited and updated."
-                : invoiceNumberConflict
+                : invoiceNumberIsUnavailable
                   ? "This invoice number already exists. You can replace the existing invoice or change the number before submitting."
                   : "Invoice requests start in Waiting for approval. FinOps admin must approve before the invoice becomes Generated."}
             </div>
@@ -8231,23 +8277,7 @@ export default function InvoiceManagement() {
               <Button
                 className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
                 onClick={() => {
-                  if (invoiceModalMode === "edit") {
-                    saveInvoiceUpdate();
-                  } else {
-                    promptInvoiceNumberConflict(
-                      () => generateInvoiceForClient(
-                        selectedClient,
-                        "commercial",
-                        invoiceAmountDraft,
-                        txnInput,
-                        invoiceDateDraft || new Date().toISOString().split("T")[0],
-                        pendingInvoiceMmcTitle,
-                        invoiceMonthDraft,
-                        invoiceNumberDraftValue,
-                      ),
-                      invoiceNumberDraftValue,
-                    );
-                  }
+                  void handleInvoiceSubmit(false);
                 }}
               >
                 {invoiceModalMode === "edit" ? "Update Invoice" : "Submit for approval"}

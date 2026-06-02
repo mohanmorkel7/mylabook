@@ -771,15 +771,16 @@ export default function ManageTickets() {
         if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
         if (filters.dateTo) serverFilters.date_to = filters.dateTo;
 
-        // status -> map to status_id using statusesMap
-        if (
-          filters.status !== undefined &&
-          String(filters.status).trim() !== ""
-        ) {
+        // Preserve the status string so the server can resolve it even if the
+        // local status-id map is still loading after back navigation.
+        if (filters.status !== undefined && String(filters.status).trim() !== "") {
+          serverFilters.status = filters.status;
+
           const normalizedKey = normalizeStatusToken(filters.status);
           const sid = statusesMap[normalizedKey];
-          if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid)))
+          if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid))) {
             serverFilters.status_id = Number(sid);
+          }
         }
 
         // assigned to

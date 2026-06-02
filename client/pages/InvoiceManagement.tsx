@@ -1445,7 +1445,7 @@ async function downloadInvoiceDocxTemplate({
 }
 
 function getInvoiceDisplayNumber(invoice: any) {
-  return invoice.invoiceNumber || invoice.invoice_id || invoice.invoiceId || "—";
+  return invoice?.invoiceNumber || invoice?.invoice_id || invoice?.invoiceId || "—";
 }
 
 function normalizeInvoiceStatus(status?: string): InvoiceStatus {

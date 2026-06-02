@@ -391,9 +391,11 @@ router.post("/settings/invoice-serial", async (req: Request, res: Response) => {
 
 router.post("/settings/mylapay", async (req: Request, res: Response) => {
   try {
+    await ensureSchemaReady();
     const { companyConfig, taxConfig, currencyConfig } = req.body || {};
     await upsertInvoiceConfigurationsRow({ companyConfig, taxConfig, currencyConfig });
-    res.json({ success: true });
+    const saved = await readInvoiceConfigurationsRow();
+    res.json({ success: true, ...saved });
   } catch (error) {
     console.error("Error saving mylapay config:", error);
     res.status(500).json({ error: "Failed to save mylapay configuration" });

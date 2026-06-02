@@ -6846,7 +6846,11 @@ export default function InvoiceManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyConfig, taxConfig, currencyConfig }),
       });
+      const saved = response.ok ? await response.json() : null;
       if (!response.ok) throw new Error("Failed to save Mylapay configuration");
+      if (saved?.companyConfig) setCompanyConfig((prev) => ({ ...prev, ...saved.companyConfig }));
+      if (saved?.taxConfig) setTaxConfig((prev) => withDefaultTaxHsn({ ...prev, ...saved.taxConfig }));
+      if (saved?.currencyConfig) setCurrencyConfig((prev) => ({ ...prev, ...saved.currencyConfig }));
       toast({ title: "Configuration saved", description: "Mylapay settings stored in the database." });
     } catch (error) {
       console.error("[Invoice] saveMylapayConfiguration error:", error);

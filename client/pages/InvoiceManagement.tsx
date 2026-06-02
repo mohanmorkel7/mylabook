@@ -2181,6 +2181,12 @@ function calculateRowTaxes(amount: number, rate: string, taxType: RowTaxType) {
   return { cgst, sgst, igst: 0, totalAmount: Math.round((taxable + cgst + sgst) * 100) / 100 };
 }
 
+function getEffectiveOverviewRowUseConfigHsn(row: Partial<OverviewInvoiceRow>, taxConfig: TaxConfig) {
+  const configHsn = normalizeInlineText(taxConfig.invoiceHsnCode);
+  if (!configHsn) return Boolean(row.useConfigHsn);
+  return Boolean(row.useConfigHsn) || normalizeInlineText(row.hsn) === configHsn;
+}
+
 function applyOverviewRowTaxes(row: OverviewInvoiceRow, fallbackTaxType: RowTaxType, taxConfig: TaxConfig): OverviewInvoiceRow {
   const taxType = fallbackTaxType;
   const defaultRate = taxType === "International"
@@ -2195,6 +2201,7 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
   const defaultTaxType: RowTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
   const defaultUseConfigHsn = Boolean(taxConfig.invoiceHsnCode);
+  const configHsn = normalizeInlineText(taxConfig.invoiceHsnCode);
   const breakdown = calculateInvoiceCommercials(client, txnCount);
   const hasSlabConfig = Array.isArray(client.transactionSlabs) && client.transactionSlabs.length > 0;
   const variableCharge = Math.max(
@@ -2210,7 +2217,8 @@ function buildOverviewInvoiceRows(client: ClientRecord, txnCount: number, transa
       applyOverviewRowTaxes(
         {
           ...row,
-          useConfigHsn: typeof row.useConfigHsn === "boolean" ? row.useConfigHsn : defaultUseConfigHsn,
+          useConfigHsn: getEffectiveOverviewRowUseConfigHsn(row, taxConfig),
+          hsn: getEffectiveOverviewRowUseConfigHsn(row, taxConfig) ? configHsn : String(row.hsn || ""),
         } as OverviewInvoiceRow,
         defaultTaxType,
         taxConfig,
@@ -3430,6 +3438,7 @@ function ClientOverviewScreen({
   const defaultTaxType = getTaxTypeFromGstin(client.gstin) || (taxConfig.defaultTaxType === "IGST" ? "International" : "Domestic");
   const defaultRate = `${Number(taxConfig.invoiceRatePercentage || 18)}%`;
   const defaultUseConfigHsn = Boolean(taxConfig.invoiceHsnCode);
+  const configHsn = normalizeInlineText(taxConfig.invoiceHsnCode);
   const normalizeVolume = (value?: number | string) => {
     const parsed = Number(value ?? 0);
     if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -3626,7 +3635,13 @@ function ClientOverviewScreen({
                     : value,
               }
             : row;
-        return applyOverviewRowTaxes(nextRow as OverviewInvoiceRow, nextTaxType, taxConfig);
+        const normalizedRow = key === "hsn"
+          ? {
+              ...nextRow,
+              useConfigHsn: normalizeInlineText(String(value)) === configHsn || Boolean(nextRow.useConfigHsn),
+            }
+          : nextRow;
+        return applyOverviewRowTaxes(normalizedRow as OverviewInvoiceRow, nextTaxType, taxConfig);
       });
     });
   };
@@ -4050,13 +4065,13 @@ function ClientOverviewScreen({
                                 <TableCell className="px-2 py-2 align-top">
                                   <div className="space-y-1.5">
                                   <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                                    <Checkbox checked={row.useConfigHsn ?? defaultUseConfigHsn} onCheckedChange={(checked) => updateOverviewRow(index, "useConfigHsn", Boolean(checked))} />
+                                    <Checkbox checked={getEffectiveOverviewRowUseConfigHsn(row, taxConfig)} onCheckedChange={(checked) => updateOverviewRow(index, "useConfigHsn", Boolean(checked))} />
                                     Use config HSN
                                   </label>
                                   <Input
-                                    value={(row.useConfigHsn ?? defaultUseConfigHsn) ? (taxConfig.invoiceHsnCode || "") : row.hsn}
+                                    value={getEffectiveOverviewRowUseConfigHsn(row, taxConfig) ? (taxConfig.invoiceHsnCode || "") : row.hsn}
                                     onChange={(e) => updateOverviewRow(index, "hsn", e.target.value)}
-                                    readOnly={Boolean(row.useConfigHsn ?? defaultUseConfigHsn)}
+                                    readOnly={getEffectiveOverviewRowUseConfigHsn(row, taxConfig)}
                                     className={`h-8 text-xs ${alignClass}`}
                                     placeholder={taxConfig.invoiceHsnCode || "998314"}
                                   />

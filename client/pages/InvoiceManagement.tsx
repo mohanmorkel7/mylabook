@@ -7768,7 +7768,7 @@ export default function InvoiceManagement() {
                       const formData = new FormData();
                       formData.append("file", file);
                       try {
-                        const response = await fetch("/api/uploads/signature", {
+                        const response = await fetch("/api/files/uploads/signature", {
                           method: "POST",
                           body: formData,
                         });

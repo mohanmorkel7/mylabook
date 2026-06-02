@@ -1137,7 +1137,7 @@ async function downloadInvoiceDocxTemplate({
   const logoResponse = await fetch(MYLAPAY_LOGO_URL);
   const logoBlob = logoResponse.ok ? await logoResponse.blob() : null;
   const logoData = logoBlob ? await blobToUint8Array(logoBlob) : null;
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false);
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
   const invoiceCurrency = client.currency || "INR";
   // Calculate GST (18%) - LUT exemption only applies to specific cases
@@ -1815,7 +1815,7 @@ async function downloadInvoicePdfTemplate({
   cursorY = Math.max(leftEnd, rightEnd) + 3;
 
   // === STATEMENT OF CHARGES ===
-  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false && Number(item.amount || 0) !== 0);
+  const lineItems = getInvoiceHistoryLineItemSummary(client, amount, invoiceType, taxConfig).filter((item) => item.exportEnabled !== false);
   const subtotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const cgstTotal = lineItems.reduce((sum, item) => sum + Number(item.cgst || 0), 0);
   const sgstTotal = lineItems.reduce((sum, item) => sum + Number(item.sgst || 0), 0);
@@ -1977,7 +1977,7 @@ async function downloadInvoicePdfTemplate({
   declarationHost.style.background = "#ffffff";
   declarationHost.style.color = "rgb(31, 41, 92)";
   declarationHost.innerHTML = `
-    <div style="font-family: ${declarationStyles.fontFamily}; font-size: ${declarationStyles.fontSize}px; line-height: ${declarationStyles.lineHeight}; text-align: ${declarationStyles.textAlign}; color: rgb(31, 41, 92); white-space: normal;">
+    <div style="font-family: ${declarationStyles.fontFamily}; font-size: ${declarationStyles.fontSize}px; line-height: ${declarationStyles.lineHeight}; text-align: ${declarationStyles.textAlign}; color: rgb(31, 41, 92); white-space: normal; padding-bottom: 18px; box-sizing: border-box;">
       <style>
         p { margin: 0 0 4px 0; }
         div { margin: 0; }
@@ -1998,9 +1998,9 @@ async function downloadInvoicePdfTemplate({
     const declarationImgData = declarationCanvas.toDataURL("image/png");
     const declarationImgWidth = contentWidth;
     const declarationImgHeight = (declarationCanvas.height * declarationImgWidth) / declarationCanvas.width;
-    ensureSpace(declarationImgHeight + 4);
+    ensureSpace(declarationImgHeight + 10);
     doc.addImage(declarationImgData, "PNG", margin, cursorY, declarationImgWidth, declarationImgHeight);
-    cursorY += declarationImgHeight + 2;
+    cursorY += declarationImgHeight + 6;
   } finally {
     declarationHost.remove();
   }

@@ -948,6 +948,7 @@ interface InvoiceRecord {
   serial?: number;
   financialYear?: string;
   customInvoiceRows?: CustomInvoiceRow[];
+  invoiceTableConfig?: OverviewInvoiceRow[];
   billingModel?: BillingModel;
   invoiceType?: InvoiceType;
   mmcInvoiceTitle?: string;
@@ -6331,6 +6332,7 @@ export default function InvoiceManagement() {
         status: "Waiting for approval",
         generatedDate,
         customInvoiceRows: invoiceType === "setup_fee" ? [] : client.customInvoiceRows || [],
+        invoiceTableConfig: invoiceType === "setup_fee" ? [] : client.invoiceTableConfig || [],
         billingModel: client.billingModel || "transaction",
         invoiceType,
         mmcInvoiceTitle: normalizeInlineText(mmcInvoiceTitleOverride || client.mmcInvoiceTitle || ""),
@@ -6358,6 +6360,7 @@ export default function InvoiceManagement() {
             serial: nextInvoice.serial,
             invoicePrefix: client.invoicePrefix || selectedSerialPrefix || invoiceSerialConfig.prefix,
             customInvoiceRows: nextInvoice.customInvoiceRows || [],
+            invoiceTableConfig: nextInvoice.invoiceTableConfig || [],
             billingModel: nextInvoice.billingModel || "transaction",
             invoiceType: nextInvoice.invoiceType || "commercial",
             mmcInvoiceTitle: nextInvoice.mmcInvoiceTitle || "",
@@ -6587,6 +6590,7 @@ export default function InvoiceManagement() {
         financialYear: updatedInvoice.financialYear,
         serial: updatedInvoice.serial,
         customInvoiceRows: updatedInvoice.customInvoiceRows || [],
+        invoiceTableConfig: updatedInvoice.invoiceTableConfig || selectedClient?.invoiceTableConfig || [],
         billingModel: updatedInvoice.billingModel || selectedClient?.billingModel || "transaction",
         invoiceType: updatedInvoice.invoiceType || "commercial",
       }),
@@ -6692,6 +6696,7 @@ export default function InvoiceManagement() {
       client: {
         ...client,
         customInvoiceRows: invoice.customInvoiceRows || client.customInvoiceRows || [],
+        invoiceTableConfig: invoice.invoiceTableConfig || client.invoiceTableConfig || [],
         billingModel: invoice.billingModel || client.billingModel || "transaction",
         mmcInvoiceTitle: invoice.mmcInvoiceTitle || client.mmcInvoiceTitle || "",
       },

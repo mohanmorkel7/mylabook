@@ -212,6 +212,7 @@ export async function initializeInvoiceSchema() {
         billing_model       TEXT,
         invoice_type        TEXT,
         custom_invoice_rows TEXT,
+        invoice_table_config TEXT,
         mmc_invoice_title   TEXT,
         created_at          TIMESTAMPTZ DEFAULT NOW(),
         updated_at          TIMESTAMPTZ DEFAULT NOW()
@@ -260,6 +261,7 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS billing_model TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS invoice_type TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS invoice_table_config TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS mmc_invoice_title TEXT`);
     } catch (err) {
       console.log("[Invoice] invoice_records columns already exist or error:", (err as any)?.message);
@@ -519,6 +521,7 @@ router.get("/clients/:clientId", async (req: Request, res: Response) => {
         billingModel: normalizeBillingModel(decrypt(row.billing_model)),
         invoiceType: String(decrypt(row.invoice_type) || "commercial") as "commercial" | "setup_fee",
         customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
+        invoiceTableConfig: safeParseJson(decrypt(row.invoice_table_config), []),
         mmcInvoiceTitle: decrypt(row.mmc_invoice_title) || "",
       }));
     } catch (invoiceErr: any) {
@@ -1209,6 +1212,7 @@ router.post("/invoices", async (req: Request, res: Response) => {
       billingModel,
       invoiceType,
       customInvoiceRows,
+      invoiceTableConfig,
       mmcInvoiceTitle,
       invoicePrefix,
     } = req.body;
@@ -1216,13 +1220,14 @@ router.post("/invoices", async (req: Request, res: Response) => {
     const query = `INSERT INTO invoice_records (
       invoice_id, invoice_number, client_id, client_name, month,
       amount, status, generated_date, financial_year, serial,
-      billing_model, invoice_type, custom_invoice_rows, mmc_invoice_title
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      billing_model, invoice_type, custom_invoice_rows, invoice_table_config, mmc_invoice_title
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT (invoice_id) DO UPDATE SET
       status = EXCLUDED.status,
       billing_model = EXCLUDED.billing_model,
       invoice_type = EXCLUDED.invoice_type,
       custom_invoice_rows = EXCLUDED.custom_invoice_rows,
+      invoice_table_config = EXCLUDED.invoice_table_config,
       mmc_invoice_title = EXCLUDED.mmc_invoice_title,
       updated_at = NOW()`;
 
@@ -1240,6 +1245,7 @@ router.post("/invoices", async (req: Request, res: Response) => {
       encrypt(normalizeBillingModel(billingModel)),
       encrypt(String(invoiceType || "commercial")),
       encrypt(JSON.stringify(Array.isArray(customInvoiceRows) ? customInvoiceRows : [])),
+      encrypt(JSON.stringify(Array.isArray(invoiceTableConfig) ? invoiceTableConfig : [])),
       encrypt(String(mmcInvoiceTitle || "")),
     ];
 
@@ -1332,6 +1338,7 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
       billingModel: normalizeBillingModel(decrypt(row.billing_model)),
       invoiceType: String(decrypt(row.invoice_type) || "commercial") as "commercial" | "setup_fee",
       customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
+      invoiceTableConfig: safeParseJson(decrypt(row.invoice_table_config), []),
       mmcInvoiceTitle: decrypt(row.mmc_invoice_title) || "",
     }));
 

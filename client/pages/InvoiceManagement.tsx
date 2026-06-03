@@ -6869,7 +6869,10 @@ export default function InvoiceManagement() {
       const response = await fetch("/api/invoice-management/settings/invoice-serial", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceSerialConfig, prefixSerialConfigs }),
+        body: JSON.stringify({
+          invoiceSerialConfig: { ...invoiceSerialConfig, currentSerial: selectedPrefixSettings.currentSerial },
+          prefixSerialConfigs,
+        }),
       });
       if (!response.ok) throw new Error("Failed to save invoice serial configuration");
       toast({ title: "Configuration saved", description: "Invoice serial settings stored in the database." });

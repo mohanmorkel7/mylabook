@@ -401,14 +401,15 @@ function formatInvoiceSerialForDb(serial: number, digits = 4) {
 
 async function persistInvoiceSerialProgress(invoicePrefix: string, serial: number, financialYear: string) {
   const currentSettings = await readInvoiceConfigurationsRow();
-  const invoiceSerialConfig = currentSettings.invoiceSerialConfig || {};
+  const invoiceSerialConfig = { ...(currentSettings.invoiceSerialConfig || {}) };
   const prefixSerialConfigs = { ...(currentSettings.prefixSerialConfigs || {}) };
   const prefixKey = String(invoicePrefix || "").trim().toUpperCase();
   if (!prefixKey) return;
   const previousPrefixSettings = prefixSerialConfigs[prefixKey] || {};
+  const currentSerial = formatInvoiceSerialForDb(serial, Number(invoiceSerialConfig.serialDigits || 4));
   prefixSerialConfigs[prefixKey] = {
     ...previousPrefixSettings,
-    currentSerial: formatInvoiceSerialForDb(serial, Number(invoiceSerialConfig.serialDigits || 4)),
+    currentSerial,
     period: financialYear || previousPrefixSettings.period || "",
     applyPeriodToAllPrefixes: Boolean(previousPrefixSettings.applyPeriodToAllPrefixes),
   };
@@ -416,7 +417,10 @@ async function persistInvoiceSerialProgress(invoicePrefix: string, serial: numbe
     companyConfig: currentSettings.companyConfig,
     taxConfig: currentSettings.taxConfig,
     currencyConfig: currentSettings.currencyConfig,
-    invoiceSerialConfig,
+    invoiceSerialConfig: {
+      ...invoiceSerialConfig,
+      currentSerial,
+    },
     prefixSerialConfigs,
   });
 }

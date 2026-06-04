@@ -6126,6 +6126,22 @@ export default function InvoiceManagement() {
     const approvedInvoiceAmountWithoutGst = approvedInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
     const approvedInvoiceAmountWithGst = approvedInvoices.reduce((sum, invoice) => sum + Math.round(Number(invoice.amount || 0) * 1.18), 0);
     const pendingInvoices = allInvoicesFromClients.filter((invoice) => !isApprovedInvoiceStatus(invoice.status)).length;
+    const activeBillingClients = clients.filter((client) => client.status === "active");
+    const currentMonthLabel = getIstNow().toLocaleString("en-IN", { month: "short", year: "numeric" });
+    const generatedThisMonth = activeBillingClients.filter((client) =>
+      (client.invoiceHistory || []).some((invoice) => {
+        if ((invoice.invoiceType || "commercial") === "setup_fee") return false;
+        const monthLabel = normalizeInlineText(invoice.month).toLowerCase();
+        const generatedLabel = invoice.generatedDate
+          ? new Date(`${String(invoice.generatedDate).includes("T") ? invoice.generatedDate : `${invoice.generatedDate}T00:00:00Z`}`)
+              .toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })
+              .toLowerCase()
+          : "";
+        return monthLabel === currentMonthLabel.toLowerCase() || generatedLabel === currentMonthLabel.toLowerCase();
+      }),
+    ).length;
+    const totalNeedToGenerate = activeBillingClients.length;
+    const pendingNeedToGenerate = Math.max(totalNeedToGenerate - generatedThisMonth, 0);
     const transactionVolume = clients.reduce((sum, client) => sum + client.monthlyTransactionVolume, 0);
     const variableRevenue = clients.reduce((sum, client) => sum + client.variableRevenueGenerated, 0);
     const awsRecovery = clients.reduce((sum, client) => sum + client.awsInfraRecovery, 0);
@@ -6136,8 +6152,12 @@ export default function InvoiceManagement() {
       totalRevenue: approvedInvoiceAmountWithGst,
       monthlyInvoiceValue: approvedInvoiceAmountWithoutGst,
       approvedInvoiceCount: approvedInvoices.length,
-      activeClients: clients.filter((client) => client.status === "active").length,
+      activeClients: activeBillingClients.length,
       pendingInvoices,
+      totalNeedToGenerate,
+      generatedThisMonth,
+      pendingNeedToGenerate,
+      currentMonthLabel,
       transactionVolume,
       variableRevenue,
       highPriorityClients,
@@ -7968,6 +7988,14 @@ export default function InvoiceManagement() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         <MetricCard title="Total Revenue" value={hasInvoiceData ? currencyLabel(metrics.totalRevenue) : "—"} change={hasInvoiceData ? `${metrics.approvedInvoiceCount} approved invoices` : "No approved invoices"} icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={hasInvoiceData ? metrics.revenueSpark : []} />
         <MetricCard title="Monthly Invoice Value" value={hasInvoiceData ? currencyLabel(metrics.monthlyInvoiceValue) : "—"} change={hasInvoiceData ? `${metrics.approvedInvoiceCount} approved invoices` : "No approved invoices"} icon={ReceiptText} accent="bg-gradient-to-br from-sky-500 to-indigo-600" sparkline={hasInvoiceData ? metrics.invoiceSpark : []} />
+        <MetricCard
+          title="Total Need to Generate"
+          value={hasInvoiceData ? String(metrics.totalNeedToGenerate) : "—"}
+          change={hasInvoiceData ? `Generated: ${metrics.generatedThisMonth} • Pending: ${metrics.pendingNeedToGenerate} • ${metrics.currentMonthLabel}` : "No invoice data"}
+          icon={FileText}
+          accent="bg-gradient-to-br from-violet-500 to-fuchsia-600"
+          sparkline={hasInvoiceData ? [metrics.totalNeedToGenerate, metrics.generatedThisMonth, metrics.pendingNeedToGenerate] : []}
+        />
         <MetricCard title="Active Clients" value={hasInvoiceData ? String(metrics.activeClients) : "—"} change={hasInvoiceData ? "+2 onboarded" : "No invoice data"} icon={Building2} accent="bg-gradient-to-br from-emerald-500 to-cyan-600" sparkline={hasInvoiceData ? [8, 8, 9, 9, 10, 10] : []} />
         <MetricCard title="Pending Invoices" value={hasInvoiceData ? String(metrics.pendingInvoices) : "—"} change={hasInvoiceData ? "-3 overdue risk" : "No invoice data"} icon={AlertTriangle} accent="bg-gradient-to-br from-orange-500 to-rose-600" sparkline={hasInvoiceData ? [5, 5, 4, 4, 3, 2] : []} />
         <MetricCard title="Transaction Volume" value={hasInvoiceData ? metrics.transactionVolume.toLocaleString() : "—"} change={hasInvoiceData ? "+21% volume" : "No invoice data"} icon={BarChart3} accent="bg-gradient-to-br from-fuchsia-500 to-violet-600" sparkline={hasInvoiceData ? [18, 21, 25, 29, 31, 36] : []} />

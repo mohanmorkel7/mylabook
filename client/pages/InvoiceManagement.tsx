@@ -6127,13 +6127,16 @@ export default function InvoiceManagement() {
     const approvedInvoiceAmountWithoutGst = approvedInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
     const approvedInvoiceAmountWithGst = approvedInvoices.reduce((sum, invoice) => sum + Math.round(Number(invoice.amount || 0) * 1.18), 0);
     const pendingInvoices = allInvoicesFromClients.filter((invoice) => !isApprovedInvoiceStatus(invoice.status)).length;
-    const monthlyBillingClients = clients.filter((client) => normalizeInlineText(client.billingCycle).toLowerCase() === "monthly" && client.status === "active");
+    const monthlyBillingClients = clients.filter((client) => normalizeInlineText(client.billingCycle).toLowerCase() === "monthly");
     const currentMonthLabel = getIstNow().toLocaleString("en-IN", { month: "short", year: "numeric" });
     const currentMonthKey = currentMonthLabel.toLowerCase();
     const generatedClientsThisMonth = new Set(
       allInvoicesFromClients
         .filter((invoice) => {
-          if ((invoice.invoiceType || "commercial") === "setup_fee") return false;
+          if (normalizeInlineText(invoice.invoiceType).toLowerCase() === "setup_fee") return false;
+          const invoiceClientId = String(invoice.clientId || invoice.client || "");
+          const isMonthlyClient = monthlyBillingClients.some((client) => String(client.clientId || client.id || client.name || "") === invoiceClientId || String(client.name || "") === String(invoice.client || ""));
+          if (!isMonthlyClient) return false;
           const generatedLabel = invoice.generatedDate
             ? new Date(`${String(invoice.generatedDate).includes("T") ? invoice.generatedDate : `${invoice.generatedDate}T00:00:00Z`}`)
                 .toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })

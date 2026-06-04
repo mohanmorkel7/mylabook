@@ -6127,7 +6127,7 @@ export default function InvoiceManagement() {
     const approvedInvoiceAmountWithoutGst = approvedInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
     const approvedInvoiceAmountWithGst = approvedInvoices.reduce((sum, invoice) => sum + Math.round(Number(invoice.amount || 0) * 1.18), 0);
     const pendingInvoices = allInvoicesFromClients.filter((invoice) => !isApprovedInvoiceStatus(invoice.status)).length;
-    const monthlyBillingClients = clients.filter((client) => normalizeInlineText(client.billingCycle).toLowerCase() === "monthly");
+    const monthlyBillingClients = clients.filter((client) => normalizeInlineText(client.billingCycle).toLowerCase() === "monthly" && client.status === "active");
     const currentMonthLabel = getIstNow().toLocaleString("en-IN", { month: "short", year: "numeric" });
     const currentMonthKey = currentMonthLabel.toLowerCase();
     const generatedClientsThisMonth = new Set(

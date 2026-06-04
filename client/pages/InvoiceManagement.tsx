@@ -6156,7 +6156,7 @@ export default function InvoiceManagement() {
       totalRevenue: approvedInvoiceAmountWithGst,
       monthlyInvoiceValue: approvedInvoiceAmountWithoutGst,
       approvedInvoiceCount: approvedInvoices.length,
-      activeClients: activeBillingClients.length,
+      activeClients: monthlyBillingClients.length,
       pendingInvoices,
       totalNeedToGenerate,
       generatedThisMonth,

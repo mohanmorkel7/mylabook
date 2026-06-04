@@ -6128,18 +6128,15 @@ export default function InvoiceManagement() {
     const pendingInvoices = allInvoicesFromClients.filter((invoice) => !isApprovedInvoiceStatus(invoice.status)).length;
     const activeBillingClients = clients.filter((client) => client.status === "active");
     const currentMonthLabel = getIstNow().toLocaleString("en-IN", { month: "short", year: "numeric" });
-    const generatedThisMonth = activeBillingClients.filter((client) =>
-      (client.invoiceHistory || []).some((invoice) => {
-        if ((invoice.invoiceType || "commercial") === "setup_fee") return false;
-        const monthLabel = normalizeInlineText(invoice.month).toLowerCase();
-        const generatedLabel = invoice.generatedDate
-          ? new Date(`${String(invoice.generatedDate).includes("T") ? invoice.generatedDate : `${invoice.generatedDate}T00:00:00Z`}`)
-              .toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })
-              .toLowerCase()
-          : "";
-        return monthLabel === currentMonthLabel.toLowerCase() || generatedLabel === currentMonthLabel.toLowerCase();
-      }),
-    ).length;
+    const currentMonthKey = currentMonthLabel.toLowerCase();
+    const generatedThisMonth = activeBillingClients.filter((client) => {
+      const lastGeneratedLabel = client.lastInvoiceGenerated
+        ? new Date(`${String(client.lastInvoiceGenerated).includes("T") ? client.lastInvoiceGenerated : `${client.lastInvoiceGenerated}T00:00:00Z`}`)
+            .toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })
+            .toLowerCase()
+        : "";
+      return lastGeneratedLabel === currentMonthKey;
+    }).length;
     const totalNeedToGenerate = activeBillingClients.length;
     const pendingNeedToGenerate = Math.max(totalNeedToGenerate - generatedThisMonth, 0);
     const transactionVolume = clients.reduce((sum, client) => sum + client.monthlyTransactionVolume, 0);

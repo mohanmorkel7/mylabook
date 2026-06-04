@@ -6128,25 +6128,29 @@ export default function InvoiceManagement() {
     const approvedInvoiceAmountWithGst = approvedInvoices.reduce((sum, invoice) => sum + Math.round(Number(invoice.amount || 0) * 1.18), 0);
     const pendingInvoices = allInvoicesFromClients.filter((invoice) => !isApprovedInvoiceStatus(invoice.status)).length;
     const monthlyBillingClients = clients.filter((client) => normalizeInlineText(client.billingCycle).toLowerCase() === "monthly");
-    const currentMonthLabel = getIstNow().toLocaleString("en-IN", { month: "short", year: "numeric" });
-    const currentMonthKey = currentMonthLabel.toLowerCase();
-    const generatedClientsThisMonth = new Set(
+    const billingMonthDate = getIstNow();
+    billingMonthDate.setUTCMonth(billingMonthDate.getUTCMonth() - 1);
+    const billingMonthLabel = billingMonthDate.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
+    const billingMonthKey = billingMonthLabel.toLowerCase();
+    const generatedClientsForBillingMonth = new Set(
       allInvoicesFromClients
         .filter((invoice) => {
           if (normalizeInlineText(invoice.invoiceType).toLowerCase() === "setup_fee") return false;
           const invoiceClientId = String(invoice.clientId || invoice.client || "");
           const isMonthlyClient = monthlyBillingClients.some((client) => String(client.clientId || client.id || client.name || "") === invoiceClientId || String(client.name || "") === String(invoice.client || ""));
           if (!isMonthlyClient) return false;
-          const generatedLabel = invoice.generatedDate
-            ? new Date(`${String(invoice.generatedDate).includes("T") ? invoice.generatedDate : `${invoice.generatedDate}T00:00:00Z`}`)
-                .toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })
-                .toLowerCase()
-            : normalizeInlineText(invoice.month).toLowerCase();
-          return generatedLabel === currentMonthKey;
+          const invoiceBillingLabel = normalizeInlineText(invoice.month).toLowerCase() || (
+            invoice.generatedDate
+              ? new Date(`${String(invoice.generatedDate).includes("T") ? invoice.generatedDate : `${invoice.generatedDate}T00:00:00Z`}`)
+                  .toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" })
+                  .toLowerCase()
+              : ""
+          );
+          return invoiceBillingLabel === billingMonthKey;
         })
         .map((invoice) => String(invoice.clientId || invoice.client || "")),
     );
-    const generatedThisMonth = generatedClientsThisMonth.size;
+    const generatedThisMonth = generatedClientsForBillingMonth.size;
     const totalNeedToGenerate = monthlyBillingClients.length;
     const pendingNeedToGenerate = Math.max(totalNeedToGenerate - generatedThisMonth, 0);
     const transactionVolume = clients.reduce((sum, client) => sum + client.monthlyTransactionVolume, 0);
@@ -6164,7 +6168,7 @@ export default function InvoiceManagement() {
       totalNeedToGenerate,
       generatedThisMonth,
       pendingNeedToGenerate,
-      currentMonthLabel,
+      currentMonthLabel: billingMonthLabel,
       transactionVolume,
       variableRevenue,
       highPriorityClients,

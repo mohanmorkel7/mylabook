@@ -5459,6 +5459,7 @@ export default function InvoiceManagement() {
 
   const [activeConfigTab, setActiveConfigTab] = useState<"company" | "tax" | "currency">("company");
   const [settingsViewOpen, setSettingsViewOpen] = useState(false);
+  const [clientConfigTab, setClientConfigTab] = useState<"active" | "history">("active");
 
   const [configChangeRequests, setConfigChangeRequests] = useState<ConfigChangeRequest[]>(() => {
     try {
@@ -6037,8 +6038,11 @@ export default function InvoiceManagement() {
     }
   }, [isEditRoute, isOverviewRoute, clientId, toast]);
 
+  const activeConfigClients = useMemo(() => clients.filter((client) => normalizeInlineText(client.status).toLowerCase() !== "inactive"), [clients]);
+  const inactiveConfigClients = useMemo(() => clients.filter((client) => normalizeInlineText(client.status).toLowerCase() === "inactive"), [clients]);
+  const visibleConfigClients = clientConfigTab === "history" ? inactiveConfigClients : activeConfigClients;
   const filteredClients = useMemo(() => {
-    return clients.filter((client) => {
+    return visibleConfigClients.filter((client) => {
       const hasIdentity = String(client.name || "").trim().length > 0 || String(client.code || "").trim().length > 0;
       const matchesSearch =
         search.trim().length === 0 ||
@@ -6048,7 +6052,7 @@ export default function InvoiceManagement() {
         serviceFilter === "all" || client.services.some((service) => service === serviceFilter);
       return hasIdentity && matchesSearch && matchesService;
     });
-  }, [clients, search, serviceFilter]);
+  }, [visibleConfigClients, search, serviceFilter]);
 
   // Build aggregated invoice list from all clients' invoice history
   const allInvoicesFromClients = useMemo(() => {
@@ -6127,7 +6131,7 @@ export default function InvoiceManagement() {
     const approvedInvoiceAmountWithoutGst = approvedInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
     const approvedInvoiceAmountWithGst = approvedInvoices.reduce((sum, invoice) => sum + Math.round(Number(invoice.amount || 0) * 1.18), 0);
     const pendingInvoices = allInvoicesFromClients.filter((invoice) => !isApprovedInvoiceStatus(invoice.status)).length;
-    const monthlyBillingClients = clients.filter((client) => normalizeInlineText(client.billingCycle).toLowerCase() === "monthly");
+    const monthlyBillingClients = clients.filter((client) => normalizeInlineText(client.billingCycle).toLowerCase() === "monthly" && normalizeInlineText(client.status).toLowerCase() !== "inactive");
     const billingMonthDate = getIstNow();
     billingMonthDate.setUTCMonth(billingMonthDate.getUTCMonth() - 1);
     const billingMonthLabel = billingMonthDate.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
@@ -7162,25 +7166,31 @@ export default function InvoiceManagement() {
       const clientToDelete = clients.find(c => c.id === clientIdToDelete);
       const idToUse = clientToDelete?.clientId || clientIdToDelete;
 
-      // Remove from local state immediately for better UX
-      setClients((prev) => prev.filter((client) => client.id !== clientIdToDelete));
+      // Mark inactive in local state immediately for better UX
+      setClients((prev) =>
+        prev.map((client) =>
+          client.id === clientIdToDelete || client.clientId === idToUse
+            ? { ...client, status: "inactive" }
+            : client,
+        ),
+      );
 
-      // Try to delete from database (best-effort, don't block UI)
+      // Soft delete in database (best-effort, don't block UI)
       fetch(`/api/invoice-management/clients/${idToUse}`, {
         method: "DELETE",
       }).catch(err => {
-        console.warn("[Invoice] Failed to delete from database:", err);
-        // If delete fails, the data will be re-added when the page refreshes
+        console.warn("[Invoice] Failed to deactivate client in database:", err);
+        // If deactivate fails, the data will be reloaded when the page refreshes
       });
 
-      toast({ title: "Config deleted", description: "The client commercial configuration was removed." });
+      toast({ title: "Client deactivated", description: "The client was moved to History as inactive." });
 
       if (clientId === idToUse) {
         navigate("/invoice-management");
       }
     } catch (error) {
       console.error("[Invoice] handleDeleteClient error:", error);
-      toast({ title: "Error", description: "Failed to delete configuration", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to deactivate configuration", variant: "destructive" });
     }
   };
 
@@ -8108,9 +8118,33 @@ export default function InvoiceManagement() {
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <CardTitle>Client Configurations</CardTitle>
-            <CardDescription>Scrollable responsive cards with billing, slab, AWS and status details</CardDescription>
+            <CardDescription>Active client configs and admin-only inactive history</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-full border bg-muted/30 p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={clientConfigTab === "active" ? "default" : "ghost"}
+                className="rounded-full"
+                onClick={() => setClientConfigTab("active")}
+              >
+                Active
+                <Badge variant="secondary" className="ml-2 rounded-full">{activeConfigClients.length}</Badge>
+              </Button>
+              {isAdmin && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={clientConfigTab === "history" ? "default" : "ghost"}
+                  className="rounded-full"
+                  onClick={() => setClientConfigTab("history")}
+                >
+                  History
+                  <Badge variant="secondary" className="ml-2 rounded-full">{inactiveConfigClients.length}</Badge>
+                </Button>
+              )}
+            </div>
             <Badge variant="outline" className="rounded-full">{filteredClients.length} visible</Badge>
             <Button className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500" onClick={() => navigate("/invoice-management/new")}>
               <Plus className="h-4 w-4" /> Create Config
@@ -8124,7 +8158,7 @@ export default function InvoiceManagement() {
                 <ClientConfigCard
                   key={client.clientId || client.id}
                   client={client}
-                  canManageConfigActions={canManageClientConfigActions}
+                  canManageConfigActions={canManageClientConfigActions && clientConfigTab === "active"}
                   onEdit={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}/edit`)}
                   onDelete={() => requestDeleteClient(client)}
                   onOverview={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}`)}
@@ -8138,7 +8172,11 @@ export default function InvoiceManagement() {
                 <Search className="h-6 w-6 text-muted-foreground" />
               </div>
               <h3 className="mt-4 text-lg font-medium">No matching clients</h3>
-              <p className="mt-1 max-w-md text-sm text-muted-foreground">Try another search or service filter. This empty state is designed for premium enterprise dashboards.</p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                {clientConfigTab === "history"
+                  ? "No inactive clients yet. Soft-deleted clients will appear here for admins."
+                  : "Try another search or service filter. This empty state is designed for premium enterprise dashboards."}
+              </p>
             </div>
           )}
         </CardContent>
@@ -8151,7 +8189,7 @@ export default function InvoiceManagement() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              This will permanently delete <span className="font-medium text-foreground">{pendingDeleteClient?.clientName || "this client"}</span> and its configuration.
+              This will deactivate <span className="font-medium text-foreground">{pendingDeleteClient?.clientName || "this client"}</span> and move it to the admin History tab.
             </p>
             <Separator />
             <div className="flex items-center justify-end gap-2">
@@ -8159,7 +8197,7 @@ export default function InvoiceManagement() {
                 Cancel
               </Button>
               <Button variant="destructive" onClick={() => void confirmDeleteClient()}>
-                Delete
+                Deactivate
               </Button>
             </div>
           </div>

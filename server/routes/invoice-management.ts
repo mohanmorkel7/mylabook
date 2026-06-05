@@ -1372,28 +1372,31 @@ router.delete("/invoices/:invoiceId", async (req: Request, res: Response) => {
   }
 });
 
-// ── DELETE client ─────────────────────────────────────────────────────────
+// ── DELETE client (soft delete) ───────────────────────────────────────────
 router.delete("/clients/:clientId", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.params;
-    console.log("[Invoice] DELETE /clients - Deleting client:", clientId);
+    console.log("[Invoice] DELETE /clients - Deactivating client:", clientId);
 
-    // Delete from database
+    // Soft delete in database
     try {
       await queryWithRetry(
-        () => pool.query("DELETE FROM invoice_clients WHERE client_id = $1", [clientId])
+        () => pool.query("UPDATE invoice_clients SET status = $1, updated_at = NOW() WHERE client_id = $2", [encrypt("inactive"), clientId])
       );
-      console.log("[Invoice] DELETE /clients - Successfully deleted from database:", clientId);
+      console.log("[Invoice] DELETE /clients - Successfully deactivated in database:", clientId);
     } catch (dbError: any) {
-      console.warn("[Invoice] DELETE /clients - Database deletion failed:", dbError?.message);
-      // Continue to remove from memory cache anyway
+      console.warn("[Invoice] DELETE /clients - Database deactivate failed:", dbError?.message);
+      // Continue to update memory cache anyway
     }
 
-    // Remove from memory cache
-    memoryCache.delete(clientId);
-    console.log("[Invoice] DELETE /clients - Removed from memory cache:", clientId);
+    // Update memory cache
+    const cached = memoryCache.get(clientId);
+    if (cached) {
+      memoryCache.set(clientId, { ...cached, status: "inactive" });
+    }
+    console.log("[Invoice] DELETE /clients - Marked inactive in memory cache:", clientId);
 
-    res.json({ success: true, clientId });
+    res.json({ success: true, clientId, status: "inactive" });
   } catch (error: any) {
     console.error("[Invoice] DELETE /clients - Error:", error?.message || error);
     res.status(500).json({ error: "Failed to delete client", details: error?.message });

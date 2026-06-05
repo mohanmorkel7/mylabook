@@ -1566,19 +1566,6 @@ export default function LeadOverview() {
               Edit
             </Button>
             <Button
-              variant="outline"
-              onClick={() => {
-                const record = hydratedCommercialRecords[0];
-                if (record) {
-                  openCommercialForm(record);
-                }
-              }}
-              disabled={hydratedCommercialRecords.length === 0}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Commercial
-            </Button>
-            <Button
               variant="destructive"
               onClick={() => {
                 if (confirm("Delete this lead?")) {

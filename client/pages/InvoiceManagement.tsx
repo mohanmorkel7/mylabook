@@ -4644,7 +4644,7 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
   return (
     <div className={cn("space-y-3", className)}>
       <div className="rounded-2xl border bg-muted/20 p-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
           <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("bold")}>
             <strong>B</strong>
           </Button>
@@ -4667,7 +4667,7 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
           <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("right")}>Right</Button>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
           <Select value={fontFamily} onValueChange={(next) => {
             setFontFamily(next);
             onChange(serializeHtml(undefined, { fontFamily: next }));

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   DndContext,
@@ -3433,9 +3433,12 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
   const SCORE_LABELS = ["Revenue", "Tx Volume", "Services", "AWS"];
   const SCORE_MAX = [4, 4, 4, 2];
   const TOTAL_MAX = SCORE_MAX.reduce((a, b) => a + b, 0);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef({ isDragging: false, startX: 0, startScrollLeft: 0, pointerId: -1 });
+  const [isDragging, setIsDragging] = useState(false);
 
   const scored = clients
-    .filter(c => normalizeInlineText(c.status).toLowerCase() !== "inactive")
+    .filter((c) => normalizeInlineText(c.status).toLowerCase() !== "inactive")
     .map((client) => {
       const revenueScore = client.monthlyInvoiceEstimate >= 1000000 ? 4 : client.monthlyInvoiceEstimate >= 500000 ? 3 : client.monthlyInvoiceEstimate >= 250000 ? 2 : 1;
       const volumeScore = client.monthlyTransactionVolume >= 20000000 ? 4 : client.monthlyTransactionVolume >= 10000000 ? 3 : client.monthlyTransactionVolume >= 4000000 ? 2 : 1;
@@ -3450,10 +3453,40 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
 
   const getScoreColor = (score: number, max: number) => {
     const ratio = score / max;
-    if (ratio >= 0.9) return { text: "#dc2626", bar: "#ef4444", light: "rgba(239,68,68,0.08)" };
-    if (ratio >= 0.65) return { text: "#ea580c", bar: "#f97316", light: "rgba(249,115,22,0.08)" };
-    if (ratio >= 0.4) return { text: "#2563eb", bar: "#3b82f6", light: "rgba(59,130,246,0.08)" };
-    return { text: "#059669", bar: "#10b981", light: "rgba(16,185,129,0.08)" };
+    if (ratio >= 0.9) return { text: "#dc2626", bar: "#ef4444" };
+    if (ratio >= 0.65) return { text: "#ea580c", bar: "#f97316" };
+    if (ratio >= 0.4) return { text: "#2563eb", bar: "#3b82f6" };
+    return { text: "#059669", bar: "#10b981" };
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !scrollRef.current) return;
+    dragStateRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      startScrollLeft: scrollRef.current.scrollLeft,
+      pointerId: event.pointerId,
+    };
+    setIsDragging(true);
+    scrollRef.current.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragStateRef.current.isDragging || !scrollRef.current) return;
+    event.preventDefault();
+    const delta = event.clientX - dragStateRef.current.startX;
+    scrollRef.current.scrollLeft = dragStateRef.current.startScrollLeft - delta;
+  };
+
+  const endDrag = (event?: ReactPointerEvent<HTMLDivElement>) => {
+    if (scrollRef.current && dragStateRef.current.pointerId !== -1) {
+      try {
+        scrollRef.current.releasePointerCapture(dragStateRef.current.pointerId);
+      } catch {}
+    }
+    dragStateRef.current.isDragging = false;
+    dragStateRef.current.pointerId = -1;
+    setIsDragging(false);
   };
 
   if (scored.length === 0) {
@@ -3463,7 +3496,25 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
   const CARD_ICONS = ["💼", "🏦", "🔄", "⚡", "🌐"];
 
   return (
-    <div className="-mx-1 overflow-x-auto pb-2">
+    <div
+      ref={scrollRef}
+      className={cn(
+        "-mx-1 overflow-x-auto overscroll-x-contain pb-3 select-none",
+        isDragging ? "cursor-grabbing" : "cursor-grab",
+      )}
+      style={{ WebkitOverflowScrolling: "touch", scrollBehavior: "smooth" }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onPointerLeave={endDrag}
+      onWheel={(e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          scrollRef.current?.scrollBy({ left: e.deltaY, behavior: "smooth" });
+          e.preventDefault();
+        }
+      }}
+    >
       <div className="flex gap-3 px-1" style={{ width: "max-content" }}>
         {scored.map(({ client, scores, total, priority }, idx) => {
           const meta = PRIORITY_META[priority];
@@ -3471,11 +3522,7 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
           const priorityBarColor = priority === "Critical" ? "#ef4444" : priority === "High" ? "#f97316" : priority === "Medium" ? "#3b82f6" : "#10b981";
 
           return (
-            <div
-              key={client.id}
-              className="flex w-[260px] shrink-0 flex-col rounded-2xl border bg-card shadow-sm overflow-hidden"
-            >
-              {/* Card header */}
+            <div key={client.id} className="flex w-[300px] shrink-0 flex-col rounded-2xl border bg-card shadow-sm overflow-hidden">
               <div className="flex items-start justify-between gap-2 p-4 pb-3 border-b bg-muted/20">
                 <div className="min-w-0 flex items-start gap-2.5">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-background border text-base shadow-sm">
@@ -3485,20 +3532,18 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">#{idx + 1}</span>
                     </div>
-                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 mt-0.5">{client.name}</p>
-                    {client.code && <p className="text-[11px] text-muted-foreground mt-0.5">{client.code}</p>}
+                    <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-foreground">{client.name}</p>
+                    {client.code && <p className="mt-0.5 text-[11px] text-muted-foreground">{client.code}</p>}
                   </div>
                 </div>
                 <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap", meta.className)}>{priority}</span>
               </div>
 
-              {/* Client details */}
               <div className="p-4 space-y-3">
-                {/* Revenue + Billing */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-xl bg-muted/30 px-2.5 py-2">
                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Monthly Rev.</p>
-                    <p className="mt-0.5 text-xs font-bold text-foreground tabular-nums">{currencyLabel(client.monthlyInvoiceEstimate)}</p>
+                    <p className="mt-0.5 text-xs font-bold tabular-nums text-foreground">{currencyLabel(client.monthlyInvoiceEstimate)}</p>
                   </div>
                   <div className="rounded-xl bg-muted/30 px-2.5 py-2">
                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Billing</p>
@@ -3506,28 +3551,34 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
                   </div>
                 </div>
 
-                {/* Services */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Services ({client.services.length})</p>
-                  <div className="flex flex-wrap gap-1">
-                    {client.services.slice(0, 4).map((s) => (
-                      <span key={s} className="rounded-full bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">{s}</span>
-                    ))}
-                    {client.services.length > 4 && (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">+{client.services.length - 4}</span>
-                    )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-muted/30 px-2.5 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Tx Volume</p>
+                    <p className="mt-0.5 text-xs font-bold tabular-nums text-foreground">{client.monthlyTransactionVolume.toLocaleString()}</p>
+                  </div>
+                  <div className="rounded-xl bg-muted/30 px-2.5 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Priority</p>
+                    <p className="mt-0.5 text-xs font-bold text-foreground">{total} / {TOTAL_MAX}</p>
                   </div>
                 </div>
 
-                {/* Score bars */}
-                <div className="space-y-1.5">
+                <div>
+                  <p className="mb-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">Services ({client.services.length})</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {client.services.map((s) => (
+                      <span key={s} className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">{s}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   {scores.map((score, i) => {
                     const color = getScoreColor(score, SCORE_MAX[i]);
                     return (
                       <div key={SCORE_LABELS[i]} className="flex items-center gap-2">
                         <span className="w-[64px] shrink-0 text-[10px] text-muted-foreground">{SCORE_LABELS[i]}</span>
-                        <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-muted">
-                          <div className="h-full rounded-full" style={{ width: `${(score / SCORE_MAX[i]) * 100}%`, backgroundColor: color.bar }} />
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${(score / SCORE_MAX[i]) * 100}%`, backgroundColor: color.bar }} />
                         </div>
                         <span className="w-[24px] text-right text-[10px] font-semibold tabular-nums" style={{ color: color.text }}>{score}</span>
                       </div>
@@ -3535,9 +3586,8 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
                   })}
                 </div>
 
-                {/* AWS badge */}
                 {client.aws.enabled && (
-                  <div className="flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-100 px-2.5 py-1.5">
+                  <div className="flex items-center gap-1.5 rounded-xl border border-amber-100 bg-amber-50 px-2.5 py-1.5">
                     <span className="text-xs">☁️</span>
                     <span className="text-[11px] font-medium text-amber-700">AWS Infra Enabled</span>
                     <span className="ml-auto text-[10px] text-amber-600">{currencyLabel(client.aws.vendorCost)}/mo</span>
@@ -3545,11 +3595,12 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
                 )}
               </div>
 
-              {/* Card footer: total score */}
               <div className="mt-auto border-t px-4 py-3">
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-[11px] text-muted-foreground">Priority score</span>
-                  <span className="text-xs font-bold text-foreground">{total} / {TOTAL_MAX} <span className="font-normal text-muted-foreground">({totalPct}%)</span></span>
+                  <span className="text-xs font-bold text-foreground">
+                    {total} / {TOTAL_MAX} <span className="font-normal text-muted-foreground">({totalPct}%)</span>
+                  </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div className="h-full rounded-full transition-all" style={{ width: `${totalPct}%`, backgroundColor: priorityBarColor }} />

@@ -3494,6 +3494,36 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
   }
 
   const CARD_ICONS = ["💼", "🏦", "🔄", "⚡", "🌐"];
+  const loopedScored = [...scored, ...scored];
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || scored.length < 2) return;
+
+    let rafId = 0;
+    let lastTime = performance.now();
+
+    const animate = (now: number) => {
+      const el = scrollRef.current;
+      if (!el) return;
+
+      const delta = now - lastTime;
+      lastTime = now;
+
+      if (!dragStateRef.current.isDragging) {
+        el.scrollLeft += delta * 0.04;
+        const loopWidth = el.scrollWidth / 2;
+        if (loopWidth > 0 && el.scrollLeft >= loopWidth) {
+          el.scrollLeft -= loopWidth;
+        }
+      }
+
+      rafId = requestAnimationFrame(animate);
+    };
+
+    rafId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafId);
+  }, [scored.length]);
 
   return (
     <div
@@ -3502,7 +3532,7 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
         "-mx-1 overflow-x-auto overscroll-x-contain pb-3 select-none",
         isDragging ? "cursor-grabbing" : "cursor-grab",
       )}
-      style={{ WebkitOverflowScrolling: "touch", scrollBehavior: "smooth" }}
+      style={{ WebkitOverflowScrolling: "touch", scrollBehavior: "auto" }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endDrag}
@@ -3516,13 +3546,14 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
       }}
     >
       <div className="flex gap-3 px-1" style={{ width: "max-content" }}>
-        {scored.map(({ client, scores, total, priority }, idx) => {
+        {loopedScored.map(({ client, scores, total, priority }, idx) => {
           const meta = PRIORITY_META[priority];
           const totalPct = Math.round((total / TOTAL_MAX) * 100);
           const priorityBarColor = priority === "Critical" ? "#ef4444" : priority === "High" ? "#f97316" : priority === "Medium" ? "#3b82f6" : "#10b981";
+          const originalIndex = idx % scored.length;
 
           return (
-            <div key={client.id} className="flex w-[300px] shrink-0 flex-col rounded-2xl border bg-card shadow-sm overflow-hidden">
+            <div key={`${client.id}-${idx}`} className="flex w-[300px] shrink-0 flex-col rounded-2xl border bg-card shadow-sm overflow-hidden">
               <div className="flex items-start justify-between gap-2 p-4 pb-3 border-b bg-muted/20">
                 <div className="min-w-0 flex items-start gap-2.5">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-background border text-base shadow-sm">
@@ -3530,7 +3561,7 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">#{idx + 1}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">#{originalIndex + 1}</span>
                     </div>
                     <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-foreground">{client.name}</p>
                     {client.code && <p className="mt-0.5 text-[11px] text-muted-foreground">{client.code}</p>}

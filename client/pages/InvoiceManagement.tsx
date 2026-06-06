@@ -101,6 +101,7 @@ import {
   Maximize2,
   Minus,
   MoreHorizontal,
+  Plus,
   Quote,
   ReceiptText,
   RefreshCcw,

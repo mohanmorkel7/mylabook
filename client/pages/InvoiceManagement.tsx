@@ -1913,14 +1913,14 @@ async function downloadInvoicePdfTemplate({
 
   const columns = {
     no: 7,
-    narration: 72,
-    amount: 19,
-    hsn: 10,
+    narration: 68,
+    amount: 18,
+    hsn: 12,
     rate: 10,
-    cgst: 13,
-    sgst: 13,
-    igst: 13,
-    total: 22,
+    cgst: 14,
+    sgst: 14,
+    igst: 14,
+    total: 21,
   };
   const colPositions = {
     no: margin,
@@ -1939,7 +1939,7 @@ async function downloadInvoicePdfTemplate({
   doc.rect(margin, cursorY, tableW, headerH, "F");
   setText([255, 255, 255]);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.2);
+  doc.setFontSize(6.8);
   doc.text("#", colPositions.no + columns.no / 2, cursorY + 5.2, { align: "center" });
   doc.text("PARTICULARS", colPositions.narration + 3, cursorY + 5.2);
   doc.text("AMOUNT", colPositions.amount + columns.amount - 3, cursorY + 5.2, { align: "right" });
@@ -1989,6 +1989,7 @@ async function downloadInvoicePdfTemplate({
     doc.setFont("helvetica", "bold");
     doc.text(formatInvoiceAmount(item.amount, invoiceCurrency), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.2);
     doc.text(item.hsn || "-", colPositions.hsn + columns.hsn / 2, cursorY + 5.9, { align: "center" });
     doc.text(item.rate || "-", colPositions.rate + columns.rate / 2, cursorY + 5.9, { align: "center" });
     doc.text(item.cgst > 0 ? formatInvoiceAmount(item.cgst, invoiceCurrency) : "-", colPositions.cgst + columns.cgst / 2, cursorY + 5.9, { align: "center" });

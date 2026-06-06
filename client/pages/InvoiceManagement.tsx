@@ -3405,26 +3405,98 @@ function TransactionVolumeChart({ data }: { data: { month: string; value: number
   );
 }
 
-function ServiceCategoryChart({ data }: { data: { category: string; value: number }[] }) {
+function ServiceCategoryChart({ data, clients }: { data: { category: string; value: number }[]; clients: ClientRecord[] }) {
   const max = data.reduce((m, d) => Math.max(m, d.value), 0);
+  const [hoveredService, setHoveredService] = useState<string | null>(null);
+
+  const serviceClientMap = useMemo(() => {
+    const map = new Map<string, ClientRecord[]>();
+    clients.forEach((client) => {
+      client.services.forEach((service) => {
+        const list = map.get(service) || [];
+        list.push(client);
+        map.set(service, list);
+      });
+    });
+    return map;
+  }, [clients]);
+
+  const hoveredClients = hoveredService ? (serviceClientMap.get(hoveredService) || []) : [];
+
   return data.length === 0 ? (
     <p className="py-8 text-center text-sm text-muted-foreground">No service data</p>
   ) : (
-    <div className="space-y-2">
-      {data.map((item, i) => (
-        <div key={item.category} className="flex items-center gap-3">
-          <p className="w-[140px] shrink-0 truncate text-xs font-medium text-foreground">{item.category}</p>
-          <div className="flex flex-1 items-center gap-2">
-            <div className="flex-1 overflow-hidden h-2 rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-blue-500 transition-all"
-                style={{ width: max > 0 ? `${(item.value / max) * 100}%` : '0%' }}
-              />
+    <div className="relative">
+      <div className="space-y-3">
+        {data.map((item) => {
+          const serviceClients = serviceClientMap.get(item.category) || [];
+          const percent = max > 0 ? Math.round((item.value / max) * 100) : 0;
+          return (
+            <div
+              key={item.category}
+              className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40"
+              onMouseEnter={() => setHoveredService(item.category)}
+              onMouseLeave={() => setHoveredService((current) => (current === item.category ? null : current))}
+            >
+              <p className="w-[140px] shrink-0 truncate text-xs font-medium text-foreground">{item.category}</p>
+              <div className="flex flex-1 items-center gap-2">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-300 group-hover:bg-blue-600"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <Badge variant="secondary" className="shrink-0 rounded-full px-2 text-xs font-semibold">{item.value}</Badge>
+              </div>
+              <span className="w-[42px] shrink-0 text-right text-[11px] font-semibold text-muted-foreground">{percent}%</span>
             </div>
-            <Badge variant="secondary" className="shrink-0 rounded-full px-2 text-xs font-semibold">{item.value}</Badge>
+          );
+        })}
+      </div>
+
+      {hoveredService && (
+        <div className="pointer-events-none absolute right-2 top-0 z-10 w-[360px] rounded-2xl border bg-background/95 p-4 shadow-xl backdrop-blur-sm">
+          <div className="mb-3 flex items-start justify-between gap-3 border-b pb-2">
+            <div>
+              <p className="text-sm font-semibold text-foreground">{hoveredService}</p>
+              <p className="text-xs text-muted-foreground">{hoveredClients.length} clients using this service</p>
+            </div>
+            <Badge variant="outline" className="rounded-full text-[11px]">Service details</Badge>
+          </div>
+
+          <div className="space-y-2 max-h-[220px] overflow-auto pr-1">
+            {hoveredClients.slice(0, 6).map((client) => {
+              const priority = getPriorityForScoring(client);
+              return (
+                <div key={client.id} className="rounded-xl border bg-muted/20 px-3 py-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">{client.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{client.code || "No client code"} · {client.billingCycle || "—"}</p>
+                    </div>
+                    <PriorityBadge priority={priority} />
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="rounded-lg bg-background px-2 py-1">
+                      <p className="text-muted-foreground">Revenue</p>
+                      <p className="font-semibold tabular-nums">{currencyLabel(client.monthlyInvoiceEstimate)}</p>
+                    </div>
+                    <div className="rounded-lg bg-background px-2 py-1">
+                      <p className="text-muted-foreground">Tx Volume</p>
+                      <p className="font-semibold tabular-nums">{client.monthlyTransactionVolume.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {hoveredClients.length > 6 && (
+              <div className="rounded-xl border border-dashed px-3 py-2 text-center text-[11px] text-muted-foreground">
+                +{hoveredClients.length - 6} more clients
+              </div>
+            )}
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -8690,7 +8762,7 @@ export default function InvoiceManagement() {
               </div>
               <Badge variant="outline" className="rounded-full text-[11px]">{dashboardAnalytics.serviceCategory.length} services</Badge>
             </div>
-            <ServiceCategoryChart data={dashboardAnalytics.serviceCategory} />
+            <ServiceCategoryChart data={dashboardAnalytics.serviceCategory} clients={clients} />
           </div>
 
           {/* Row 4: Priority Heatmap (full width, top 5) */}

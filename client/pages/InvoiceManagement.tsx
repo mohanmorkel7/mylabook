@@ -1792,7 +1792,7 @@ async function downloadInvoicePdfTemplate({
   const headerLeftWidth = contentWidth * 0.62;
   if (logoData) {
     try {
-      doc.addImage(logoData, "PNG", margin, cursorY + 0.1, 32, 10.8);
+      doc.addImage(logoData, "PNG", margin, cursorY + 0.4, 29, 9.8);
     } catch {}
   }
 
@@ -1912,14 +1912,14 @@ async function downloadInvoicePdfTemplate({
   cursorY += 3;
 
   const columns = {
-    no: 9,
-    narration: 58,
-    amount: 24,
-    hsn: 12,
-    rate: 12,
-    cgst: 15,
-    sgst: 15,
-    igst: 15,
+    no: 7,
+    narration: 72,
+    amount: 19,
+    hsn: 10,
+    rate: 10,
+    cgst: 13,
+    sgst: 13,
+    igst: 13,
     total: 22,
   };
   const colPositions = {
@@ -1954,7 +1954,7 @@ async function downloadInvoicePdfTemplate({
   doc.setLineHeightFactor(1.1);
   printableLineItems.forEach((item, idx) => {
     const narrationLines = wrapParagraph(item.description, columns.narration - 4);
-    const rowH = Math.max(8, narrationLines.length * 3.8 + 2);
+    const rowH = Math.max(12, narrationLines.length * 4.8 + 4.5);
     ensureSpace(rowH + 1);
     if (idx % 2 === 0) {
       setFill([248, 251, 254]);
@@ -1984,7 +1984,7 @@ async function downloadInvoicePdfTemplate({
     setText(SECONDARY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.9);
-    doc.text(narrationLines, colPositions.narration + 7, cursorY + 3.8, { align: "left", baseline: "top" });
+    doc.text(narrationLines, colPositions.narration + 7, cursorY + 4.8, { align: "left", baseline: "top" });
 
     doc.setFont("helvetica", "bold");
     doc.text(formatInvoiceAmount(item.amount, invoiceCurrency), colPositions.amount + columns.amount - 3, cursorY + 5.9, { align: "right" });

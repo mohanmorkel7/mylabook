@@ -1431,4 +1431,27 @@ router.patch("/clients/:clientId/activate", async (req: Request, res: Response) 
   }
 });
 
+// ── FORCE DELETE client ───────────────────────────────────────────────────
+router.delete("/clients/:clientId/force", async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.params;
+    console.log("[Invoice] DELETE /clients/force - Permanently deleting client:", clientId);
+
+    try {
+      await queryWithRetry(() => pool.query("DELETE FROM invoice_clients WHERE client_id = $1", [clientId]));
+      console.log("[Invoice] DELETE /clients/force - Successfully deleted from database:", clientId);
+    } catch (dbError: any) {
+      console.warn("[Invoice] DELETE /clients/force - Database delete failed:", dbError?.message);
+    }
+
+    memoryCache.delete(clientId);
+    console.log("[Invoice] DELETE /clients/force - Removed from memory cache:", clientId);
+
+    res.json({ success: true, clientId, deleted: true });
+  } catch (error: any) {
+    console.error("[Invoice] DELETE /clients/force - Error:", error?.message || error);
+    res.status(500).json({ error: "Failed to force delete client", details: error?.message });
+  }
+});
+
 export default router;

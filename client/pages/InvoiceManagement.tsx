@@ -3346,10 +3346,16 @@ function ClientConfigCard({
                   Edit
                 </Button>
                 {normalizeInlineText(client.status).toLowerCase() === "inactive" ? (
-                  <Button variant="outline" size="sm" onClick={onActivate} className="gap-2">
-                    <BadgeCheck className="h-4 w-4" />
-                    Active
-                  </Button>
+                  <>
+                    <Button variant="outline" size="sm" onClick={onActivate} className="gap-2">
+                      <BadgeCheck className="h-4 w-4" />
+                      Active
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={onDelete} className="gap-2 text-red-600 hover:text-red-700">
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </>
                 ) : (
                   <Button variant="outline" size="sm" onClick={onDelete} className="gap-2 text-red-600 hover:text-red-700">
                     <Trash2 className="h-4 w-4" />
@@ -5396,6 +5402,7 @@ export default function InvoiceManagement() {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [pendingDeleteClient, setPendingDeleteClient] = useState<{ clientIdToDelete: string; clientName: string } | null>(null);
+  const [pendingForceDeleteClient, setPendingForceDeleteClient] = useState<{ clientIdToDelete: string; clientName: string } | null>(null);
   const [pendingActivateClient, setPendingActivateClient] = useState<{ clientIdToActivate: string; clientName: string } | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [invoiceModalMode, setInvoiceModalMode] = useState<"create" | "edit">("create");
@@ -7210,6 +7217,30 @@ export default function InvoiceManagement() {
     setPendingDeleteClient({ clientIdToDelete: client.id, clientName: client.name });
   };
 
+  const requestForceDeleteClient = (client: ClientRecord) => {
+    setPendingForceDeleteClient({ clientIdToDelete: client.id, clientName: client.name });
+  };
+
+  const handleForceDeleteClient = async (clientIdToDelete: string) => {
+    try {
+      const clientToDelete = clients.find((c) => c.id === clientIdToDelete);
+      const idToUse = clientToDelete?.clientId || clientIdToDelete;
+
+      setClients((prev) => prev.filter((client) => client.id !== clientIdToDelete && client.clientId !== idToUse));
+
+      fetch(`/api/invoice-management/clients/${idToUse}/force`, {
+        method: "DELETE",
+      }).catch((err) => {
+        console.warn("[Invoice] Failed to force delete client in database:", err);
+      });
+
+      toast({ title: "Client deleted", description: "The inactive client was permanently removed from History." });
+    } catch (error) {
+      console.error("[Invoice] handleForceDeleteClient error:", error);
+      toast({ title: "Error", description: "Failed to delete client", variant: "destructive" });
+    }
+  };
+
   const handleActivateClient = async (clientIdToActivate: string) => {
     try {
       const clientToActivate = clients.find((c) => c.id === clientIdToActivate);
@@ -7249,6 +7280,13 @@ export default function InvoiceManagement() {
     const { clientIdToDelete } = pendingDeleteClient;
     setPendingDeleteClient(null);
     await handleDeleteClient(clientIdToDelete);
+  };
+
+  const confirmForceDeleteClient = async () => {
+    if (!pendingForceDeleteClient) return;
+    const { clientIdToDelete } = pendingForceDeleteClient;
+    setPendingForceDeleteClient(null);
+    await handleForceDeleteClient(clientIdToDelete);
   };
 
   const confirmActivateClient = async () => {
@@ -8213,7 +8251,7 @@ export default function InvoiceManagement() {
                   client={client}
                   canManageConfigActions={canManageClientConfigActions}
                   onEdit={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}/edit`)}
-                  onDelete={() => requestDeleteClient(client)}
+                  onDelete={clientConfigTab === "history" ? () => requestForceDeleteClient(client) : () => requestDeleteClient(client)}
                   onActivate={() => requestActivateClient(client)}
                   onOverview={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}`)}
                 />
@@ -8252,6 +8290,28 @@ export default function InvoiceManagement() {
               </Button>
               <Button variant="destructive" onClick={() => void confirmDeleteClient()}>
                 Deactivate
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(pendingForceDeleteClient)} onOpenChange={(open) => !open && setPendingForceDeleteClient(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Are your Sure?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete <span className="font-medium text-foreground">{pendingForceDeleteClient?.clientName || "this client"}</span> from History.
+            </p>
+            <Separator />
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setPendingForceDeleteClient(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => void confirmForceDeleteClient()}>
+                Delete
               </Button>
             </div>
           </div>

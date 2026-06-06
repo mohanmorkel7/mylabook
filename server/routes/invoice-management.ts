@@ -1403,4 +1403,32 @@ router.delete("/clients/:clientId", async (req: Request, res: Response) => {
   }
 });
 
+// ── ACTIVATE client ───────────────────────────────────────────────────────
+router.patch("/clients/:clientId/activate", async (req: Request, res: Response) => {
+  try {
+    const { clientId } = req.params;
+    console.log("[Invoice] PATCH /clients/activate - Activating client:", clientId);
+
+    try {
+      await queryWithRetry(
+        () => pool.query("UPDATE invoice_clients SET status = $1, updated_at = NOW() WHERE client_id = $2", [encrypt("active"), clientId])
+      );
+      console.log("[Invoice] PATCH /clients/activate - Successfully activated in database:", clientId);
+    } catch (dbError: any) {
+      console.warn("[Invoice] PATCH /clients/activate - Database activate failed:", dbError?.message);
+    }
+
+    const cached = memoryCache.get(clientId);
+    if (cached) {
+      memoryCache.set(clientId, { ...cached, status: "active" });
+    }
+    console.log("[Invoice] PATCH /clients/activate - Marked active in memory cache:", clientId);
+
+    res.json({ success: true, clientId, status: "active" });
+  } catch (error: any) {
+    console.error("[Invoice] PATCH /clients/activate - Error:", error?.message || error);
+    res.status(500).json({ error: "Failed to activate client", details: error?.message });
+  }
+});
+
 export default router;

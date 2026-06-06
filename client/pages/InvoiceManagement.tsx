@@ -3314,12 +3314,14 @@ function ClientConfigCard({
   canManageConfigActions,
   onEdit,
   onDelete,
+  onActivate,
   onOverview,
 }: {
   client: ClientRecord;
   canManageConfigActions: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onActivate: () => void;
   onOverview: () => void;
 }) {
   const priority = getPriorityForScoring(client);
@@ -3338,13 +3340,22 @@ function ClientConfigCard({
               </div>
             </div>
             {canManageConfigActions && (
-              <div className="flex items-center gap-2 opacity-100 transition-opacity md:opacity-70 md:group-hover:opacity-100">
-                <Button variant="ghost" size="icon" onClick={onEdit}>
+              <div className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity md:opacity-70 md:group-hover:opacity-100">
+                <Button variant="outline" size="sm" onClick={onEdit} className="gap-2">
                   <Edit3 className="h-4 w-4" />
+                  Edit
                 </Button>
-                <Button variant="ghost" size="icon" onClick={onDelete}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {normalizeInlineText(client.status).toLowerCase() === "inactive" ? (
+                  <Button variant="outline" size="sm" onClick={onActivate} className="gap-2">
+                    <BadgeCheck className="h-4 w-4" />
+                    Active
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={onDelete} className="gap-2 text-red-600 hover:text-red-700">
+                    <Trash2 className="h-4 w-4" />
+                    Deactivate
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -5385,6 +5396,7 @@ export default function InvoiceManagement() {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [pendingDeleteClient, setPendingDeleteClient] = useState<{ clientIdToDelete: string; clientName: string } | null>(null);
+  const [pendingActivateClient, setPendingActivateClient] = useState<{ clientIdToActivate: string; clientName: string } | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [invoiceModalMode, setInvoiceModalMode] = useState<"create" | "edit">("create");
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -7198,11 +7210,52 @@ export default function InvoiceManagement() {
     setPendingDeleteClient({ clientIdToDelete: client.id, clientName: client.name });
   };
 
+  const handleActivateClient = async (clientIdToActivate: string) => {
+    try {
+      const clientToActivate = clients.find((c) => c.id === clientIdToActivate);
+      const idToUse = clientToActivate?.clientId || clientIdToActivate;
+
+      setClients((prev) =>
+        prev.map((client) =>
+          client.id === clientIdToActivate || client.clientId === idToUse
+            ? { ...client, status: "active" }
+            : client,
+        ),
+      );
+
+      fetch(`/api/invoice-management/clients/${idToUse}/activate`, {
+        method: "PATCH",
+      }).catch((err) => {
+        console.warn("[Invoice] Failed to activate client in database:", err);
+      });
+
+      toast({ title: "Client activated", description: "The client was restored to Active." });
+
+      if (clientId === idToUse) {
+        navigate("/invoice-management");
+      }
+    } catch (error) {
+      console.error("[Invoice] handleActivateClient error:", error);
+      toast({ title: "Error", description: "Failed to activate configuration", variant: "destructive" });
+    }
+  };
+
+  const requestActivateClient = (client: ClientRecord) => {
+    setPendingActivateClient({ clientIdToActivate: client.id, clientName: client.name });
+  };
+
   const confirmDeleteClient = async () => {
     if (!pendingDeleteClient) return;
     const { clientIdToDelete } = pendingDeleteClient;
     setPendingDeleteClient(null);
     await handleDeleteClient(clientIdToDelete);
+  };
+
+  const confirmActivateClient = async () => {
+    if (!pendingActivateClient) return;
+    const { clientIdToActivate } = pendingActivateClient;
+    setPendingActivateClient(null);
+    await handleActivateClient(clientIdToActivate);
   };
 
   const pageTitle = isCreateRoute ? "Create Config" : isEditRoute ? "Edit Config" : isOverviewRoute ? "Client Overview" : "Invoice Management";
@@ -8158,9 +8211,10 @@ export default function InvoiceManagement() {
                 <ClientConfigCard
                   key={client.clientId || client.id}
                   client={client}
-                  canManageConfigActions={canManageClientConfigActions && clientConfigTab === "active"}
+                  canManageConfigActions={canManageClientConfigActions}
                   onEdit={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}/edit`)}
                   onDelete={() => requestDeleteClient(client)}
+                  onActivate={() => requestActivateClient(client)}
                   onOverview={() => navigate(`/invoice-management/client/${client.clientId || client.code || client.id}`)}
                 />
               ))}
@@ -8198,6 +8252,28 @@ export default function InvoiceManagement() {
               </Button>
               <Button variant="destructive" onClick={() => void confirmDeleteClient()}>
                 Deactivate
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(pendingActivateClient)} onOpenChange={(open) => !open && setPendingActivateClient(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Are you Sure?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              This will activate <span className="font-medium text-foreground">{pendingActivateClient?.clientName || "this client"}</span> and move it back to Active configurations.
+            </p>
+            <Separator />
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => setPendingActivateClient(null)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void confirmActivateClient()}>
+                Activate
               </Button>
             </div>
           </div>

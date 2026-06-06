@@ -4617,9 +4617,7 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
     editorRef.current.style.fontSize = `${fontSize}px`;
     editorRef.current.style.lineHeight = lineHeight;
     editorRef.current.style.textAlign = textAlign;
-    editorRef.current.style.color = textColor;
-    editorRef.current.style.backgroundColor = highlightColor === "#ffffff" ? "transparent" : `${highlightColor}22`;
-  }, [fontFamily, fontSize, lineHeight, textAlign, textColor, highlightColor]);
+  }, [fontFamily, fontSize, lineHeight, textAlign]);
 
   const serializeHtml = (
     nextContentHtml?: string,
@@ -4635,7 +4633,7 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
       highlightColor,
       ...overrides,
     };
-    return `<div style="font-family: ${merged.fontFamily}; font-size: ${merged.fontSize}px; line-height: ${merged.lineHeight}; text-align: ${merged.textAlign}; color: ${merged.textColor}; background-color: ${merged.highlightColor === "#ffffff" ? "transparent" : `${merged.highlightColor}22`};">${contentHtml}</div>`;
+    return `<div style="font-family: ${merged.fontFamily}; font-size: ${merged.fontSize}px; line-height: ${merged.lineHeight}; text-align: ${merged.textAlign};">${contentHtml}</div>`;
   };
 
   const syncValue = () => {
@@ -4658,12 +4656,6 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
   const setTextStyle = (property: "foreColor" | "hiliteColor", color: string) => {
     if (property === "foreColor") setTextColor(color);
     if (property === "hiliteColor") setHighlightColor(color);
-    onChange(
-      serializeHtml(undefined, {
-        textColor: property === "foreColor" ? color : textColor,
-        highlightColor: property === "hiliteColor" ? color : highlightColor,
-      }),
-    );
     applyCommand(property, color);
   };
 
@@ -4848,7 +4840,7 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
         onInput={syncValue}
         onBlur={syncValue}
         className="min-h-[200px] rounded-2xl border bg-background p-4 text-sm outline-none shadow-inner"
-        style={{ fontFamily, fontSize: `${fontSize}px`, lineHeight, textAlign, color: textColor, backgroundColor: highlightColor === "#ffffff" ? "transparent" : `${highlightColor}22` }}
+        style={{ fontFamily, fontSize: `${fontSize}px`, lineHeight, textAlign }}
       />
     </div>
   );

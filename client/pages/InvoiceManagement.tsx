@@ -3410,6 +3410,7 @@ function ServiceCategoryChart({ data, clients }: { data: { category: string; val
   const [hoveredService, setHoveredService] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   const serviceClientMap = useMemo(() => {
     const map = new Map<string, ClientRecord[]>();
@@ -3451,10 +3452,11 @@ function ServiceCategoryChart({ data, clients }: { data: { category: string; val
                 setHoveredService(item.category);
                 updateTooltipPosition(e);
               }}
-              onMouseMove={(e) => {
-                if (hoveredService === item.category) updateTooltipPosition(e);
+              onMouseLeave={(e) => {
+                const nextTarget = e.relatedTarget as Node | null;
+                if (tooltipRef.current && nextTarget && tooltipRef.current.contains(nextTarget)) return;
+                setHoveredService((current) => (current === item.category ? null : current));
               }}
-              onMouseLeave={() => setHoveredService((current) => (current === item.category ? null : current))}
             >
               <p className="w-[140px] shrink-0 truncate text-xs font-medium text-foreground">{item.category}</p>
               <div className="flex flex-1 items-center gap-2">
@@ -3474,8 +3476,11 @@ function ServiceCategoryChart({ data, clients }: { data: { category: string; val
 
       {hoveredService && (
         <div
-          className="pointer-events-none absolute z-10 w-[360px] rounded-2xl border bg-background/95 p-4 shadow-xl backdrop-blur-sm"
+          ref={tooltipRef}
+          className="pointer-events-auto absolute z-10 w-[360px] rounded-2xl border bg-background/95 p-4 shadow-xl backdrop-blur-sm"
           style={{ left: `${tooltipPos.x}px`, top: `${tooltipPos.y}px` }}
+          onMouseEnter={() => hoveredService && setHoveredService(hoveredService)}
+          onMouseLeave={() => setHoveredService(null)}
         >
           <div className="mb-3 flex items-start justify-between gap-3 border-b pb-2">
             <div>

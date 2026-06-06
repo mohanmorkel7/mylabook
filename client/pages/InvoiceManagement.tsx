@@ -77,29 +77,59 @@ import {
   ArrowUpRight,
   BadgeCheck,
   BarChart3,
+  Bold,
   Building2,
   CheckCircle2,
   ChevronRight,
+  ClipboardPaste,
+  Code,
+  Copy,
   Download,
   Edit3,
+  Eraser,
   Eye,
   FileDown,
   FileText,
+  Highlighter,
+  Image,
+  Italic,
   Layers3,
-  Plus,
+  Link,
+  List,
+  ListOrdered,
+  LayoutGrid,
+  Maximize2,
+  Minus,
+  MoreHorizontal,
+  Quote,
   ReceiptText,
   RefreshCcw,
+  Redo2,
+  Scissors,
   Search,
   ShieldCheck,
+  Smile,
   Sparkles,
+  Square,
+  Strikethrough,
+  Table2,
   Trash2,
   TrendingUp,
+  Underline,
+  Undo2,
+  Video,
   Wallet,
   Warehouse,
   Settings,
   Clock,
   GripVertical,
+  X,
   XCircle,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Type,
 } from "lucide-react";
 
 const SERVICE_OPTIONS = [
@@ -4643,72 +4673,170 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
 
   return (
     <div className={cn("space-y-3", className)}>
-      <div className="rounded-2xl border bg-muted/20 p-3 shadow-sm">
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("bold")}>
-            <strong>B</strong>
+      <div className="rounded-2xl border bg-muted/10 p-2 shadow-sm">
+        <div className="flex flex-nowrap items-center gap-1 overflow-x-auto pb-1">
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("bold")} title="Bold">
+            <Bold className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("italic")}>
-            <em>I</em>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("italic")} title="Italic">
+            <Italic className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("underline")}>
-            <span className="underline">U</span>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("underline")} title="Underline">
+            <Underline className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("strikeThrough")}>
-            <span className="line-through">S</span>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("strikeThrough")} title="Strikethrough">
+            <Strikethrough className="h-4 w-4" />
           </Button>
           <Separator orientation="vertical" className="mx-1 h-8 shrink-0" />
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("insertUnorderedList")}>• List</Button>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("insertOrderedList")}>1. List</Button>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("removeFormat")}>Clear</Button>
-          <Separator orientation="vertical" className="mx-1 h-8 shrink-0" />
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setBlockAlign("left")}>Left</Button>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setBlockAlign("center")}>Center</Button>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setBlockAlign("right")}>Right</Button>
-          <Select value={fontFamily} onValueChange={(next) => {
-            setFontFamily(next);
-            onChange(serializeHtml(undefined, { fontFamily: next }));
-          }}>
-            <SelectTrigger className="h-9 w-[160px] shrink-0"><SelectValue placeholder="Font" /></SelectTrigger>
-            <SelectContent>
-              {[
-                "Arial",
-                "Georgia",
-                "Times New Roman",
-                "Verdana",
-                "Tahoma",
-                "Courier New",
-              ].map((font) => (
-                <SelectItem key={font} value={font}>{font}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={fontSize} onValueChange={setFontSizeCommand}>
-            <SelectTrigger className="h-9 w-[110px] shrink-0"><SelectValue placeholder="Size" /></SelectTrigger>
-            <SelectContent>
-              {["8", "9", "10", "11", "12", "13", "14", "15", "16", "18", "20", "24"].map((size) => (
-                <SelectItem key={size} value={size}>{size}px</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={lineHeight} onValueChange={(next) => {
-            setLineHeight(next);
-            onChange(serializeHtml(undefined, { lineHeight: next }));
-          }}>
-            <SelectTrigger className="h-9 w-[104px] shrink-0"><SelectValue placeholder="Line" /></SelectTrigger>
-            <SelectContent>
-              {["1.2", "1.4", "1.6", "1.8", "2.0"].map((lh) => (
-                <SelectItem key={lh} value={lh}>{lh}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertUnorderedList")} title="Bullet list">
+            <List className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertOrderedList")} title="Numbered list">
+            <ListOrdered className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("formatBlock", "blockquote")} title="Quote">
+            <Quote className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertHorizontalRule")} title="Divider">
+            <Minus className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setBlockAlign("left")} title="Align left">
+            <AlignLeft className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setBlockAlign("center")} title="Align center">
+            <AlignCenter className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setBlockAlign("right")} title="Align right">
+            <AlignRight className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("justifyFull")} title="Justify">
+            <AlignJustify className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setTextStyle("foreColor", textColor)} title="Text color">
+            <Type className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setTextStyle("hiliteColor", highlightColor)} title="Highlight">
+            <Highlighter className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="mt-2 flex flex-nowrap items-center gap-1 overflow-x-auto pb-1">
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("removeFormat")} title="Clear formatting">
+            <Eraser className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("cut")} title="Cut">
+            <Scissors className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("copy")} title="Copy">
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("paste")} title="Paste">
+            <ClipboardPaste className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("unlink")} title="Remove link">
+            <X className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("createLink", window.prompt("Enter link URL") || undefined)} title="Link">
+            <Link className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertHTML", "<table style='width:100%;border-collapse:collapse'><tr><td style='border:1px solid #cbd5e1;padding:6px'>Cell</td><td style='border:1px solid #cbd5e1;padding:6px'>Cell</td></tr></table>")} title="Table">
+            <Table2 className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => {
+            const url = window.prompt("Enter image URL");
+            if (url) applyCommand("insertHTML", `<img src=\"${url}\" alt=\"\" style=\"max-width:100%;height:auto;display:block\" />`);
+          }} title="Image">
+            <Image className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertHTML", "<div style='padding:8px 12px;border:1px dashed #cbd5e1;border-radius:10px'>Video</div>")} title="Video">
+            <Video className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertParagraph")} title="Paragraph">
+            <FileDown className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertHTML", "<div style='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px'><div style='border:1px solid #cbd5e1;padding:8px'>A</div><div style='border:1px solid #cbd5e1;padding:8px'>B</div></div>")} title="Layout">
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertHTML", "<span></span>")} title="Preview">
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("formatBlock", "pre")} title="Code">
+            <Code className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertHTML", "&nbsp;")} title="New block">
+            <Square className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => document.documentElement.requestFullscreen?.().catch(() => {})} title="Fullscreen">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("undo")} title="Undo">
+            <Undo2 className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("redo")} title="Redo">
+            <Redo2 className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => applyCommand("insertHTML", "") } title="More">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border bg-background px-2 py-1 ml-1">
+            <span className="text-xs text-muted-foreground">Font</span>
+            <Select value={fontFamily} onValueChange={(next) => {
+              setFontFamily(next);
+              onChange(serializeHtml(undefined, { fontFamily: next }));
+            }}>
+              <SelectTrigger className="h-8 w-[124px] shrink-0 border-0 bg-transparent px-0 shadow-none">
+                <SelectValue placeholder="Font" />
+              </SelectTrigger>
+              <SelectContent>
+                {[
+                  "Arial",
+                  "Georgia",
+                  "Times New Roman",
+                  "Verdana",
+                  "Tahoma",
+                  "Courier New",
+                ].map((font) => (
+                  <SelectItem key={font} value={font}>{font}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border bg-background px-2 py-1">
+            <span className="text-xs text-muted-foreground">Size</span>
+            <Select value={fontSize} onValueChange={setFontSizeCommand}>
+              <SelectTrigger className="h-8 w-[86px] shrink-0 border-0 bg-transparent px-0 shadow-none">
+                <SelectValue placeholder="Size" />
+              </SelectTrigger>
+              <SelectContent>
+                {["8", "9", "10", "11", "12", "13", "14", "15", "16", "18", "20", "24"].map((size) => (
+                  <SelectItem key={size} value={size}>{size}px</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border bg-background px-2 py-1">
+            <span className="text-xs text-muted-foreground">Line</span>
+            <Select value={lineHeight} onValueChange={(next) => {
+              setLineHeight(next);
+              onChange(serializeHtml(undefined, { lineHeight: next }));
+            }}>
+              <SelectTrigger className="h-8 w-[78px] shrink-0 border-0 bg-transparent px-0 shadow-none">
+                <SelectValue placeholder="Line" />
+              </SelectTrigger>
+              <SelectContent>
+                {["1.2", "1.4", "1.6", "1.8", "2.0"].map((lh) => (
+                  <SelectItem key={lh} value={lh}>{lh}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex shrink-0 items-center gap-2 rounded-lg border bg-background px-2 py-1">
             <span className="text-xs text-muted-foreground">Text</span>
-            <input type="color" value={textColor} onChange={(e) => setTextStyle("foreColor", e.target.value)} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0" />
+            <input type="color" value={textColor} onChange={(e) => setTextStyle("foreColor", e.target.value)} className="h-7 w-8 cursor-pointer rounded border bg-transparent p-0" />
           </div>
           <div className="flex shrink-0 items-center gap-2 rounded-lg border bg-background px-2 py-1">
             <span className="text-xs text-muted-foreground">Highlight</span>
-            <input type="color" value={highlightColor} onChange={(e) => setTextStyle("hiliteColor", e.target.value)} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0" />
+            <input type="color" value={highlightColor} onChange={(e) => setTextStyle("hiliteColor", e.target.value)} className="h-7 w-8 cursor-pointer rounded border bg-transparent p-0" />
           </div>
         </div>
       </div>

@@ -3366,15 +3366,20 @@ function ClientRevenuePie({ data }: { data: { name: string; value: number }[] })
 
 function RevenueTrendChart({ data }: { data: { month: string; received: number; pending: number }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-        <XAxis dataKey="month" stroke="currentColor" />
-        <YAxis stroke="currentColor" />
-        <Tooltip formatter={(value: any) => currencyLabel(Number(value))} />
-        <Legend />
-        <Line type="monotone" dataKey="received" name="Received" stroke="#6366f1" strokeWidth={3} dot={false} />
-        <Line type="monotone" dataKey="pending" name="Pending" stroke="#10b981" strokeWidth={3} dot={false} />
+    <ResponsiveContainer width="100%" height={260}>
+      <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="receivedGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
+            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" vertical={false} />
+        <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'currentColor' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: 'currentColor' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v/100000).toFixed(0)}L`} />
+        <Tooltip formatter={(value: any) => currencyLabel(Number(value))} contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid rgba(148,163,184,0.2)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }} />
+        <Line type="monotone" dataKey="received" name="Received" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3, fill: '#6366f1' }} activeDot={{ r: 5 }} />
+        <Line type="monotone" dataKey="pending" name="Pending" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -3382,35 +3387,45 @@ function RevenueTrendChart({ data }: { data: { month: string; received: number; 
 
 function TransactionVolumeChart({ data }: { data: { month: string; value: number }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <AreaChart data={data}>
+    <ResponsiveContainer width="100%" height={260}>
+      <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="txnVolume" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
-            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.08} />
+            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.7} />
+            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.04} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-        <XAxis dataKey="month" stroke="currentColor" />
-        <YAxis stroke="currentColor" />
-        <Tooltip formatter={(value: any) => `${value} invoices`} />
-        <Area type="monotone" dataKey="value" stroke="#8b5cf6" fill="url(#txnVolume)" strokeWidth={3} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" vertical={false} />
+        <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'currentColor' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: 'currentColor' }} axisLine={false} tickLine={false} />
+        <Tooltip formatter={(value: any) => [`${value} invoices`, 'Count']} contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid rgba(148,163,184,0.2)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }} />
+        <Area type="monotone" dataKey="value" stroke="#8b5cf6" fill="url(#txnVolume)" strokeWidth={2.5} dot={{ r: 3, fill: '#8b5cf6' }} activeDot={{ r: 5 }} />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
 function ServiceCategoryChart({ data }: { data: { category: string; value: number }[] }) {
-  return (
-    <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-        <XAxis dataKey="category" stroke="currentColor" />
-        <YAxis stroke="currentColor" />
-        <Tooltip />
-        <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#3b82f6" />
-      </BarChart>
-    </ResponsiveContainer>
+  const max = data.reduce((m, d) => Math.max(m, d.value), 0);
+  return data.length === 0 ? (
+    <p className="py-8 text-center text-sm text-muted-foreground">No service data</p>
+  ) : (
+    <div className="space-y-2">
+      {data.map((item, i) => (
+        <div key={item.category} className="flex items-center gap-3">
+          <p className="w-[140px] shrink-0 truncate text-xs font-medium text-foreground">{item.category}</p>
+          <div className="flex flex-1 items-center gap-2">
+            <div className="flex-1 overflow-hidden h-2 rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all"
+                style={{ width: max > 0 ? `${(item.value / max) * 100}%` : '0%' }}
+              />
+            </div>
+            <Badge variant="secondary" className="shrink-0 rounded-full px-2 text-xs font-semibold">{item.value}</Badge>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -8443,61 +8458,82 @@ export default function InvoiceManagement() {
       </Card>
 
       <Card className="border-muted/60 shadow-sm">
-        <CardHeader>
-          <SectionTitle
-            title="Dashboard Analytics"
-            subtitle="Revenue trends, client contribution, transaction volume and service mix"
-          />
+        <CardHeader className="border-b pb-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg font-bold">Dashboard Analytics</CardTitle>
+              <CardDescription className="mt-0.5">Revenue trends, client contribution, transaction volume and service mix</CardDescription>
+            </div>
+            <div className="flex shrink-0 items-center gap-4 text-right">
+              <div>
+                <p className="text-xs text-muted-foreground">Total Clients</p>
+                <p className="text-lg font-bold text-foreground">{clients.length}</p>
+              </div>
+              <Separator orientation="vertical" className="h-8" />
+              <div>
+                <p className="text-xs text-muted-foreground">Active</p>
+                <p className="text-lg font-bold text-emerald-600">{clients.filter(c => normalizeInlineText(c.status).toLowerCase() !== "inactive").length}</p>
+              </div>
+              <Separator orientation="vertical" className="h-8" />
+              <div>
+                <p className="text-xs text-muted-foreground">Invoices</p>
+                <p className="text-lg font-bold text-indigo-600">{allInvoicesFromClients.length}</p>
+              </div>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-6 xl:grid-cols-2">
-            <Card className="border-muted/60">
-              <CardHeader>
-                <CardTitle className="text-base">Revenue Trend Graph</CardTitle>
-                <CardDescription>Received vs pending invoice value from the database</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RevenueTrendChart data={dashboardAnalytics.revenueTrend} />
-              </CardContent>
-            </Card>
-            <div className="col-span-2">
-              <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <CardContent className="p-0">
+          {/* Row 1: Revenue Trend + Invoice Volume side by side */}
+          <div className="grid border-b xl:grid-cols-[1.6fr_1fr] divide-x divide-border">
+            <div className="p-5">
+              <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Client Revenue Pie Chart</p>
-                  <p className="text-xs text-muted-foreground">Revenue contribution and share breakdown by client</p>
+                  <p className="text-sm font-semibold text-foreground">Revenue Trend</p>
+                  <p className="text-xs text-muted-foreground">Monthly received vs pending invoice value</p>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-3 rounded-full bg-indigo-500" />Received</span>
+                  <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-3 rounded-full bg-emerald-500" />Pending</span>
                 </div>
               </div>
-              <ClientRevenuePie data={pieData} />
+              <RevenueTrendChart data={dashboardAnalytics.revenueTrend} />
             </div>
-            <Card className="border-muted/60">
-              <CardHeader>
-                <CardTitle className="text-base">Invoice Activity Area Graph</CardTitle>
-                <CardDescription>Monthly invoice count from the database</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TransactionVolumeChart data={dashboardAnalytics.invoiceVolume} />
-              </CardContent>
-            </Card>
-            <Card className="border-muted/60">
-              <CardHeader>
-                <CardTitle className="text-base">Service Category Bar Chart</CardTitle>
-                <CardDescription>Service distribution from database-backed client configurations</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ServiceCategoryChart data={dashboardAnalytics.serviceCategory} />
-              </CardContent>
-            </Card>
+            <div className="p-5">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-foreground">Invoice Activity</p>
+                <p className="text-xs text-muted-foreground">Monthly approved invoice count</p>
+              </div>
+              <TransactionVolumeChart data={dashboardAnalytics.invoiceVolume} />
+            </div>
           </div>
-          <div className="mt-6">
-            <Card className="border-muted/60">
-              <CardHeader>
-                <CardTitle className="text-base">Priority Heatmap</CardTitle>
-                <CardDescription>Priority based on invoice amount, transaction count and business criticality</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PriorityHeatmap clients={clients} />
-              </CardContent>
-            </Card>
+
+          {/* Row 2: Client Revenue Pie (full width) */}
+          <div className="border-b p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Client Revenue Breakdown</p>
+                <p className="text-xs text-muted-foreground">Revenue contribution and share breakdown by client</p>
+              </div>
+            </div>
+            <ClientRevenuePie data={pieData} />
+          </div>
+
+          {/* Row 3: Service Category + Priority Heatmap */}
+          <div className="grid xl:grid-cols-[1fr_1.4fr] divide-x divide-border">
+            <div className="p-5">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-foreground">Service Distribution</p>
+                <p className="text-xs text-muted-foreground">Active service mix across all clients</p>
+              </div>
+              <ServiceCategoryChart data={dashboardAnalytics.serviceCategory} />
+            </div>
+            <div className="p-5">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-foreground">Client Priority Heatmap</p>
+                <p className="text-xs text-muted-foreground">Priority scoring by revenue, volume and services</p>
+              </div>
+              <PriorityHeatmap clients={clients} />
+            </div>
           </div>
         </CardContent>
       </Card>

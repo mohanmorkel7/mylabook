@@ -3432,6 +3432,7 @@ function ServiceCategoryChart({ data }: { data: { category: string; value: numbe
 function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
   const SCORE_LABELS = ["Revenue", "Tx Volume", "Services", "AWS"];
   const SCORE_MAX = [4, 4, 4, 2];
+  const TOTAL_MAX = SCORE_MAX.reduce((a, b) => a + b, 0);
 
   const scored = clients
     .filter(c => normalizeInlineText(c.status).toLowerCase() !== "inactive")
@@ -3445,62 +3446,119 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
       const priority = getPriorityForScoring(client);
       return { client, scores, total, priority };
     })
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+    .sort((a, b) => b.total - a.total);
 
   const getScoreColor = (score: number, max: number) => {
     const ratio = score / max;
-    if (ratio >= 0.9) return { bg: "rgba(239,68,68,0.12)", text: "#dc2626", bar: "#ef4444" };
-    if (ratio >= 0.65) return { bg: "rgba(249,115,22,0.12)", text: "#ea580c", bar: "#f97316" };
-    if (ratio >= 0.4) return { bg: "rgba(59,130,246,0.12)", text: "#2563eb", bar: "#3b82f6" };
-    return { bg: "rgba(16,185,129,0.1)", text: "#059669", bar: "#10b981" };
+    if (ratio >= 0.9) return { text: "#dc2626", bar: "#ef4444", light: "rgba(239,68,68,0.08)" };
+    if (ratio >= 0.65) return { text: "#ea580c", bar: "#f97316", light: "rgba(249,115,22,0.08)" };
+    if (ratio >= 0.4) return { text: "#2563eb", bar: "#3b82f6", light: "rgba(59,130,246,0.08)" };
+    return { text: "#059669", bar: "#10b981", light: "rgba(16,185,129,0.08)" };
   };
 
   if (scored.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">No client data available</p>;
   }
 
+  const CARD_ICONS = ["💼", "🏦", "🔄", "⚡", "🌐"];
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      {scored.map(({ client, scores, total, priority }, idx) => {
-        const meta = PRIORITY_META[priority];
-        return (
-          <div key={client.id} className="flex flex-col rounded-2xl border bg-card p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div className="min-w-0">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">#{idx + 1}</span>
-                <p className="mt-0.5 text-sm font-semibold text-foreground leading-snug line-clamp-2">{client.name}</p>
-              </div>
-              <span className={cn("mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold", meta.className)}>{priority}</span>
-            </div>
+    <div className="-mx-1 overflow-x-auto pb-2">
+      <div className="flex gap-3 px-1" style={{ width: "max-content" }}>
+        {scored.map(({ client, scores, total, priority }, idx) => {
+          const meta = PRIORITY_META[priority];
+          const totalPct = Math.round((total / TOTAL_MAX) * 100);
+          const priorityBarColor = priority === "Critical" ? "#ef4444" : priority === "High" ? "#f97316" : priority === "Medium" ? "#3b82f6" : "#10b981";
 
-            <div className="space-y-2.5 flex-1">
-              {scores.map((score, i) => {
-                const color = getScoreColor(score, SCORE_MAX[i]);
-                return (
-                  <div key={SCORE_LABELS[i]}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] text-muted-foreground">{SCORE_LABELS[i]}</span>
-                      <span className="text-[11px] font-semibold tabular-nums" style={{ color: color.text }}>{score}/{SCORE_MAX[i]}</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${(score / SCORE_MAX[i]) * 100}%`, backgroundColor: color.bar }}
-                      />
-                    </div>
+          return (
+            <div
+              key={client.id}
+              className="flex w-[260px] shrink-0 flex-col rounded-2xl border bg-card shadow-sm overflow-hidden"
+            >
+              {/* Card header */}
+              <div className="flex items-start justify-between gap-2 p-4 pb-3 border-b bg-muted/20">
+                <div className="min-w-0 flex items-start gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-background border text-base shadow-sm">
+                    {CARD_ICONS[idx % CARD_ICONS.length]}
                   </div>
-                );
-              })}
-            </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">#{idx + 1}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 mt-0.5">{client.name}</p>
+                    {client.code && <p className="text-[11px] text-muted-foreground mt-0.5">{client.code}</p>}
+                  </div>
+                </div>
+                <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap", meta.className)}>{priority}</span>
+              </div>
 
-            <div className="mt-3 flex items-center justify-between border-t pt-3">
-              <span className="text-[11px] text-muted-foreground">Total score</span>
-              <span className="text-sm font-bold text-foreground">{total} / {SCORE_MAX.reduce((a, b) => a + b, 0)}</span>
+              {/* Client details */}
+              <div className="p-4 space-y-3">
+                {/* Revenue + Billing */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-muted/30 px-2.5 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Monthly Rev.</p>
+                    <p className="mt-0.5 text-xs font-bold text-foreground tabular-nums">{currencyLabel(client.monthlyInvoiceEstimate)}</p>
+                  </div>
+                  <div className="rounded-xl bg-muted/30 px-2.5 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Billing</p>
+                    <p className="mt-0.5 text-xs font-bold text-foreground">{client.billingCycle || "—"}</p>
+                  </div>
+                </div>
+
+                {/* Services */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Services ({client.services.length})</p>
+                  <div className="flex flex-wrap gap-1">
+                    {client.services.slice(0, 4).map((s) => (
+                      <span key={s} className="rounded-full bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">{s}</span>
+                    ))}
+                    {client.services.length > 4 && (
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">+{client.services.length - 4}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Score bars */}
+                <div className="space-y-1.5">
+                  {scores.map((score, i) => {
+                    const color = getScoreColor(score, SCORE_MAX[i]);
+                    return (
+                      <div key={SCORE_LABELS[i]} className="flex items-center gap-2">
+                        <span className="w-[64px] shrink-0 text-[10px] text-muted-foreground">{SCORE_LABELS[i]}</span>
+                        <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full" style={{ width: `${(score / SCORE_MAX[i]) * 100}%`, backgroundColor: color.bar }} />
+                        </div>
+                        <span className="w-[24px] text-right text-[10px] font-semibold tabular-nums" style={{ color: color.text }}>{score}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* AWS badge */}
+                {client.aws.enabled && (
+                  <div className="flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-100 px-2.5 py-1.5">
+                    <span className="text-xs">☁️</span>
+                    <span className="text-[11px] font-medium text-amber-700">AWS Infra Enabled</span>
+                    <span className="ml-auto text-[10px] text-amber-600">{currencyLabel(client.aws.vendorCost)}/mo</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Card footer: total score */}
+              <div className="mt-auto border-t px-4 py-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] text-muted-foreground">Priority score</span>
+                  <span className="text-xs font-bold text-foreground">{total} / {TOTAL_MAX} <span className="font-normal text-muted-foreground">({totalPct}%)</span></span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${totalPct}%`, backgroundColor: priorityBarColor }} />
+                </div>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -8558,9 +8616,9 @@ export default function InvoiceManagement() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-foreground">Client Priority Heatmap</p>
-                <p className="text-xs text-muted-foreground">Top 5 clients ranked by revenue, transaction volume, services and AWS</p>
+                <p className="text-xs text-muted-foreground">All active clients ranked by revenue, transaction volume, services and AWS — scroll to view all</p>
               </div>
-              <Badge variant="outline" className="rounded-full text-[11px]">Top 5 clients</Badge>
+              <Badge variant="outline" className="rounded-full text-[11px]">{clients.filter(c => normalizeInlineText(c.status).toLowerCase() !== "inactive").length} clients · scroll →</Badge>
             </div>
             <PriorityHeatmap clients={clients} />
           </div>

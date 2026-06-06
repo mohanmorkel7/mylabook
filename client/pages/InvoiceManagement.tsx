@@ -4645,34 +4645,31 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
     <div className={cn("space-y-3", className)}>
       <div className="rounded-2xl border bg-muted/20 p-3 shadow-sm">
         <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
-          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("bold")}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("bold")}>
             <strong>B</strong>
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("italic")}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("italic")}>
             <em>I</em>
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("underline")}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("underline")}>
             <span className="underline">U</span>
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("strikeThrough")}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("strikeThrough")}>
             <span className="line-through">S</span>
           </Button>
-          <Separator orientation="vertical" className="mx-1 h-8" />
-          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("insertUnorderedList")}>• List</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("insertOrderedList")}>1. List</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("removeFormat")}>Clear</Button>
-          <Separator orientation="vertical" className="mx-1 h-8" />
-          <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("left")}>Left</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("center")}>Center</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("right")}>Right</Button>
-        </div>
-
-        <div className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
+          <Separator orientation="vertical" className="mx-1 h-8 shrink-0" />
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("insertUnorderedList")}>• List</Button>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("insertOrderedList")}>1. List</Button>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => applyCommand("removeFormat")}>Clear</Button>
+          <Separator orientation="vertical" className="mx-1 h-8 shrink-0" />
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setBlockAlign("left")}>Left</Button>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setBlockAlign("center")}>Center</Button>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setBlockAlign("right")}>Right</Button>
           <Select value={fontFamily} onValueChange={(next) => {
             setFontFamily(next);
             onChange(serializeHtml(undefined, { fontFamily: next }));
           }}>
-            <SelectTrigger className="h-9 w-[160px]"><SelectValue placeholder="Font" /></SelectTrigger>
+            <SelectTrigger className="h-9 w-[160px] shrink-0"><SelectValue placeholder="Font" /></SelectTrigger>
             <SelectContent>
               {[
                 "Arial",
@@ -4687,7 +4684,7 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
             </SelectContent>
           </Select>
           <Select value={fontSize} onValueChange={setFontSizeCommand}>
-            <SelectTrigger className="h-9 w-[110px]"><SelectValue placeholder="Size" /></SelectTrigger>
+            <SelectTrigger className="h-9 w-[110px] shrink-0"><SelectValue placeholder="Size" /></SelectTrigger>
             <SelectContent>
               {["8", "9", "10", "11", "12", "13", "14", "15", "16", "18", "20", "24"].map((size) => (
                 <SelectItem key={size} value={size}>{size}px</SelectItem>
@@ -4698,18 +4695,18 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
             setLineHeight(next);
             onChange(serializeHtml(undefined, { lineHeight: next }));
           }}>
-            <SelectTrigger className="h-9 w-[104px]"><SelectValue placeholder="Line" /></SelectTrigger>
+            <SelectTrigger className="h-9 w-[104px] shrink-0"><SelectValue placeholder="Line" /></SelectTrigger>
             <SelectContent>
               {["1.2", "1.4", "1.6", "1.8", "2.0"].map((lh) => (
                 <SelectItem key={lh} value={lh}>{lh}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <div className="flex items-center gap-2 rounded-lg border bg-background px-2 py-1">
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border bg-background px-2 py-1">
             <span className="text-xs text-muted-foreground">Text</span>
             <input type="color" value={textColor} onChange={(e) => setTextStyle("foreColor", e.target.value)} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0" />
           </div>
-          <div className="flex items-center gap-2 rounded-lg border bg-background px-2 py-1">
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border bg-background px-2 py-1">
             <span className="text-xs text-muted-foreground">Highlight</span>
             <input type="color" value={highlightColor} onChange={(e) => setTextStyle("hiliteColor", e.target.value)} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0" />
           </div>

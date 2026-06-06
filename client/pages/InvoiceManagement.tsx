@@ -3227,40 +3227,80 @@ function ServiceChip({ label }: { label: string }) {
 function ClientRevenuePie({ data }: { data: { name: string; value: number }[] }) {
   const colors = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
   const total = data.reduce((sum, item) => sum + item.value, 0);
-  const chartData = data.length > 6 ? [...data.slice(0, 5), { name: "Others", value: data.slice(5).reduce((sum, item) => sum + item.value, 0) }] : data;
+  const chartData = data.length > 6
+    ? [...data.slice(0, 5), { name: "Others", value: data.slice(5).reduce((sum, item) => sum + item.value, 0) }]
+    : data;
   const topEntry = chartData[0];
   const topShare = total > 0 && topEntry ? Math.round((topEntry.value / total) * 100) : 0;
+  const RADIAN = Math.PI / 180;
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent < 0.04) return null;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+        {`${Math.round(percent * 100)}%`}
+      </text>
+    );
+  };
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] xl:items-stretch">
-      <div className="flex min-h-[420px] flex-col rounded-[28px] border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Revenue summary</p>
-            <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{currencyLabel(total * 1000)}</p>
-            <p className="mt-1 text-sm text-muted-foreground">Client contribution by share of overall revenue</p>
-          </div>
+    <div className="flex gap-0 divide-x divide-border rounded-2xl border bg-card shadow-sm overflow-hidden">
+      {/* Left: KPI stats */}
+      <div className="flex w-[200px] shrink-0 flex-col justify-between gap-6 bg-gradient-to-b from-indigo-600 to-violet-700 p-5">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200">Total Revenue</p>
+          <p className="mt-2 text-[1.6rem] font-bold leading-tight text-white">{currencyLabel(total * 1000)}</p>
+          <p className="mt-1.5 text-xs text-indigo-200">{chartData.length} active clients</p>
+        </div>
+        <div className="space-y-3">
           {topEntry && (
-            <div className="rounded-2xl border bg-white px-4 py-3 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Top client</p>
-              <p className="mt-1 max-w-[180px] truncate text-sm font-semibold text-foreground">{topEntry.name}</p>
-              <p className="text-xs text-muted-foreground">{topShare}% of total revenue</p>
+            <div className="rounded-xl bg-white/10 px-3 py-2.5 backdrop-blur-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-200">Top client</p>
+              <p className="mt-1 text-sm font-semibold text-white line-clamp-2">{topEntry.name}</p>
+              <p className="text-xs text-indigo-200">{currencyLabel(topEntry.value * 1000)}</p>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/20">
+                <div className="h-full rounded-full bg-white/90" style={{ width: `${topShare}%` }} />
+              </div>
+              <p className="mt-1 text-[10px] text-indigo-200">{topShare}% of total</p>
             </div>
           )}
+          {chartData[1] && (() => {
+            const p2 = total > 0 ? Math.round((chartData[1].value / total) * 100) : 0;
+            return (
+              <div className="rounded-xl bg-white/10 px-3 py-2.5 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-200">#2 client</p>
+                <p className="mt-1 text-sm font-semibold text-white line-clamp-2">{chartData[1].name}</p>
+                <p className="text-xs text-indigo-200">{currencyLabel(chartData[1].value * 1000)}</p>
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/20">
+                  <div className="h-full rounded-full bg-white/60" style={{ width: `${p2}%` }} />
+                </div>
+                <p className="mt-1 text-[10px] text-indigo-200">{p2}% of total</p>
+              </div>
+            );
+          })()}
         </div>
+      </div>
 
-        <div className="relative flex-1">
+      {/* Center: Donut chart */}
+      <div className="relative flex flex-1 flex-col items-center justify-center bg-muted/10 py-4">
+        <div className="w-full" style={{ height: 340 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={chartData}
                 dataKey="value"
                 nameKey="name"
-                innerRadius={68}
-                outerRadius={120}
+                cx="50%"
+                cy="50%"
+                innerRadius={75}
+                outerRadius={130}
                 paddingAngle={2}
                 stroke="#ffffff"
-                strokeWidth={4}
+                strokeWidth={3}
+                labelLine={false}
+                label={renderCustomLabel}
               >
                 {chartData.map((entry, index) => (
                   <Cell key={entry.name} fill={colors[index % colors.length]} />
@@ -3269,62 +3309,51 @@ function ClientRevenuePie({ data }: { data: { name: string; value: number }[] })
               <Tooltip
                 formatter={(value: any, name: any) => [currencyLabel(Number(value) * 1000), name]}
                 contentStyle={{
-                  borderRadius: 16,
-                  border: "1px solid rgba(148,163,184,0.2)",
-                  boxShadow: "0 12px 24px rgba(15,23,42,0.08)",
+                  borderRadius: 12,
+                  border: "1px solid rgba(148,163,184,0.25)",
+                  boxShadow: "0 8px 24px rgba(15,23,42,0.1)",
+                  fontSize: 13,
                 }}
               />
             </PieChart>
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <div className="rounded-full border border-slate-200 bg-white/95 px-6 py-5 shadow-sm backdrop-blur-sm">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Total</p>
-              <p className="mt-1 text-xl font-semibold text-foreground">{currencyLabel(total * 1000)}</p>
-              {topEntry && <p className="mt-1 text-xs text-muted-foreground">Top share {topShare}%</p>}
-            </div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Total</p>
+            <p className="text-2xl font-bold text-foreground">{currencyLabel(total * 1000)}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">all clients</p>
           </div>
         </div>
       </div>
 
-      <div className="flex min-h-[420px] flex-col rounded-[28px] border border-slate-200/70 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3 border-b pb-3">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Client ranking</p>
-            <p className="text-xs text-muted-foreground">Revenue share, value and relative weight</p>
-          </div>
-          <Badge variant="outline" className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium">
-            {chartData.length} clients
-          </Badge>
+      {/* Right: Client ranking */}
+      <div className="flex w-[280px] shrink-0 flex-col bg-background">
+        <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Client ranking</p>
+          <Badge variant="outline" className="rounded-full text-[11px] font-medium">{chartData.length} clients</Badge>
         </div>
-
-        <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
+        <div className="flex-1 divide-y overflow-y-auto">
           {chartData.map((entry, index) => {
             const percent = total > 0 ? Math.round((entry.value / total) * 100) : 0;
             return (
-              <div
-                key={entry.name}
-                className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-3 py-3 transition-colors hover:bg-slate-50"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex items-start gap-3">
+              <div key={entry.name} className="px-4 py-3 hover:bg-muted/40 transition-colors">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2.5">
                     <span
-                      className="mt-1.5 h-3 w-3 shrink-0 rounded-full ring-4 ring-white"
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: colors[index % colors.length] }}
                     />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium leading-5 text-foreground">{entry.name}</p>
-                      <p className="text-xs text-muted-foreground">{currencyLabel(entry.value * 1000)}</p>
-                    </div>
+                    <p className="truncate text-[13px] font-medium text-foreground">{entry.name}</p>
                   </div>
-                  <Badge variant="secondary" className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold">
-                    {percent}%
-                  </Badge>
+                  <span className="shrink-0 text-[13px] font-bold" style={{ color: colors[index % colors.length] }}>{percent}%</span>
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${percent}%`, backgroundColor: colors[index % colors.length] }}
-                  />
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="flex-1 overflow-hidden h-1.5 rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${percent}%`, backgroundColor: colors[index % colors.length] }}
+                    />
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{currencyLabel(entry.value * 1000)}</span>
                 </div>
               </div>
             );
@@ -8431,15 +8460,15 @@ export default function InvoiceManagement() {
                 <RevenueTrendChart data={dashboardAnalytics.revenueTrend} />
               </CardContent>
             </Card>
-            <Card className="border-muted/60">
-              <CardHeader>
-                <CardTitle className="text-base">Client Revenue Pie Chart</CardTitle>
-                <CardDescription>Revenue contribution by client</CardDescription>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <ClientRevenuePie data={pieData} />
-              </CardContent>
-            </Card>
+            <div className="col-span-2">
+              <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Client Revenue Pie Chart</p>
+                  <p className="text-xs text-muted-foreground">Revenue contribution and share breakdown by client</p>
+                </div>
+              </div>
+              <ClientRevenuePie data={pieData} />
+            </div>
             <Card className="border-muted/60">
               <CardHeader>
                 <CardTitle className="text-base">Invoice Activity Area Graph</CardTitle>

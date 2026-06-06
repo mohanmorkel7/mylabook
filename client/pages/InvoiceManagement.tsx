@@ -7488,7 +7488,7 @@ export default function InvoiceManagement() {
             }
           }}
         >
-          <DialogContent className="max-w-2xl max-h-[calc(100vh-2rem)] overflow-hidden p-6">
+          <DialogContent className="max-w-5xl w-[96vw] max-h-[calc(100vh-2rem)] overflow-hidden p-6">
             <DialogHeader>
               <DialogTitle>
                 {invoiceModalMode === "edit" ? "Edit Invoice" : "Invoice Generation Modal"}

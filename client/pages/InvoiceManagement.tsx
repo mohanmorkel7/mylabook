@@ -3232,21 +3232,23 @@ function ClientRevenuePie({ data }: { data: { name: string; value: number }[] })
   const topShare = total > 0 && topEntry ? Math.round((topEntry.value / total) * 100) : 0;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(300px,0.98fr)] xl:items-stretch">
-      <div className="flex min-h-[390px] flex-col rounded-2xl border bg-background/70 p-3">
-        <div className="mb-2 flex items-center justify-between gap-3">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] xl:items-stretch">
+      <div className="flex min-h-[420px] flex-col rounded-[28px] border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Total revenue</p>
-            <p className="text-sm font-semibold text-foreground">{currencyLabel(total * 1000)}</p>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Revenue summary</p>
+            <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{currencyLabel(total * 1000)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Client contribution by share of overall revenue</p>
           </div>
           {topEntry && (
-            <div className="text-right">
+            <div className="rounded-2xl border bg-white px-4 py-3 shadow-sm">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Top client</p>
-              <p className="max-w-[180px] truncate text-sm font-semibold text-foreground">{topEntry.name}</p>
-              <p className="text-xs text-muted-foreground">{topShare}% share</p>
+              <p className="mt-1 max-w-[180px] truncate text-sm font-semibold text-foreground">{topEntry.name}</p>
+              <p className="text-xs text-muted-foreground">{topShare}% of total revenue</p>
             </div>
           )}
         </div>
+
         <div className="relative flex-1">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -3254,11 +3256,11 @@ function ClientRevenuePie({ data }: { data: { name: string; value: number }[] })
                 data={chartData}
                 dataKey="value"
                 nameKey="name"
-                innerRadius={64}
-                outerRadius={112}
+                innerRadius={68}
+                outerRadius={120}
                 paddingAngle={2}
-                stroke="rgba(255,255,255,0.95)"
-                strokeWidth={3}
+                stroke="#ffffff"
+                strokeWidth={4}
               >
                 {chartData.map((entry, index) => (
                   <Cell key={entry.name} fill={colors[index % colors.length]} />
@@ -3275,33 +3277,38 @@ function ClientRevenuePie({ data }: { data: { name: string; value: number }[] })
             </PieChart>
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Total</p>
-            <p className="text-lg font-semibold text-foreground">{currencyLabel(total * 1000)}</p>
-            {topEntry && <p className="mt-1 text-xs text-muted-foreground">Top share {topShare}%</p>}
+            <div className="rounded-full border border-slate-200 bg-white/95 px-6 py-5 shadow-sm backdrop-blur-sm">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Total</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">{currencyLabel(total * 1000)}</p>
+              {topEntry && <p className="mt-1 text-xs text-muted-foreground">Top share {topShare}%</p>}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex min-h-[390px] flex-col rounded-2xl border bg-muted/20 p-3">
-        <div className="flex items-center justify-between gap-3 border-b pb-2">
+      <div className="flex min-h-[420px] flex-col rounded-[28px] border border-slate-200/70 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3 border-b pb-3">
           <div>
             <p className="text-sm font-semibold text-foreground">Client ranking</p>
-            <p className="text-xs text-muted-foreground">Share, value and contribution for each client</p>
+            <p className="text-xs text-muted-foreground">Revenue share, value and relative weight</p>
           </div>
-          <Badge variant="outline" className="rounded-full">
+          <Badge variant="outline" className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium">
             {chartData.length} clients
           </Badge>
         </div>
 
-        <div className="mt-3 space-y-2 overflow-y-auto pr-1">
+        <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
           {chartData.map((entry, index) => {
             const percent = total > 0 ? Math.round((entry.value / total) * 100) : 0;
             return (
-              <div key={entry.name} className="rounded-xl border bg-background px-3 py-2 shadow-sm">
+              <div
+                key={entry.name}
+                className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-3 py-3 transition-colors hover:bg-slate-50"
+              >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex items-start gap-2.5">
+                  <div className="min-w-0 flex items-start gap-3">
                     <span
-                      className="mt-1.5 h-3 w-3 shrink-0 rounded-full"
+                      className="mt-1.5 h-3 w-3 shrink-0 rounded-full ring-4 ring-white"
                       style={{ backgroundColor: colors[index % colors.length] }}
                     />
                     <div className="min-w-0">
@@ -3309,11 +3316,11 @@ function ClientRevenuePie({ data }: { data: { name: string; value: number }[] })
                       <p className="text-xs text-muted-foreground">{currencyLabel(entry.value * 1000)}</p>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="shrink-0 rounded-full text-xs font-semibold">
+                  <Badge variant="secondary" className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold">
                     {percent}%
                   </Badge>
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200/80">
                   <div
                     className="h-full rounded-full"
                     style={{ width: `${percent}%`, backgroundColor: colors[index % colors.length] }}

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   DndContext,
@@ -3408,6 +3408,8 @@ function TransactionVolumeChart({ data }: { data: { month: string; value: number
 function ServiceCategoryChart({ data, clients }: { data: { category: string; value: number }[]; clients: ClientRecord[] }) {
   const max = data.reduce((m, d) => Math.max(m, d.value), 0);
   const [hoveredService, setHoveredService] = useState<string | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   const serviceClientMap = useMemo(() => {
     const map = new Map<string, ClientRecord[]>();
@@ -3423,19 +3425,35 @@ function ServiceCategoryChart({ data, clients }: { data: { category: string; val
 
   const hoveredClients = hoveredService ? (serviceClientMap.get(hoveredService) || []) : [];
 
+  const updateTooltipPosition = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    setTooltipPos({
+      x: Math.min(x + 18, rect.width - 380),
+      y: Math.min(y + 18, rect.height - 260),
+    });
+  };
+
   return data.length === 0 ? (
     <p className="py-8 text-center text-sm text-muted-foreground">No service data</p>
   ) : (
-    <div className="relative">
+    <div ref={wrapperRef} className="relative">
       <div className="space-y-3">
         {data.map((item) => {
-          const serviceClients = serviceClientMap.get(item.category) || [];
           const percent = max > 0 ? Math.round((item.value / max) * 100) : 0;
           return (
             <div
               key={item.category}
               className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40"
-              onMouseEnter={() => setHoveredService(item.category)}
+              onMouseEnter={(e) => {
+                setHoveredService(item.category);
+                updateTooltipPosition(e);
+              }}
+              onMouseMove={(e) => {
+                if (hoveredService === item.category) updateTooltipPosition(e);
+              }}
               onMouseLeave={() => setHoveredService((current) => (current === item.category ? null : current))}
             >
               <p className="w-[140px] shrink-0 truncate text-xs font-medium text-foreground">{item.category}</p>
@@ -3455,7 +3473,10 @@ function ServiceCategoryChart({ data, clients }: { data: { category: string; val
       </div>
 
       {hoveredService && (
-        <div className="pointer-events-none absolute right-2 top-0 z-10 w-[360px] rounded-2xl border bg-background/95 p-4 shadow-xl backdrop-blur-sm">
+        <div
+          className="pointer-events-none absolute z-10 w-[360px] rounded-2xl border bg-background/95 p-4 shadow-xl backdrop-blur-sm"
+          style={{ left: `${tooltipPos.x}px`, top: `${tooltipPos.y}px` }}
+        >
           <div className="mb-3 flex items-start justify-between gap-3 border-b pb-2">
             <div>
               <p className="text-sm font-semibold text-foreground">{hoveredService}</p>

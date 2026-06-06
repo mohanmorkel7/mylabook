@@ -3190,19 +3190,79 @@ function ServiceChip({ label }: { label: string }) {
 }
 
 function ClientRevenuePie({ data }: { data: { name: string; value: number }[] }) {
-  const colors = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b"];
+  const colors = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const chartData = data.length > 6 ? [...data.slice(0, 5), { name: "Others", value: data.slice(5).reduce((sum, item) => sum + item.value, 0) }] : data;
+
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={72} outerRadius={110} paddingAngle={4}>
-          {data.map((entry, index) => (
-            <Cell key={entry.name} fill={colors[index % colors.length]} />
-          ))}
-        </Pie>
-        <Tooltip formatter={(value: any) => currencyLabel(Number(value) * 1000)} />
-        <Legend />
-      </PieChart>
-    </ResponsiveContainer>
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(240px,0.85fr)] xl:items-center">
+      <div className="flex items-center justify-center rounded-2xl border bg-background/70 p-4">
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart>
+            <Pie
+              data={chartData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={58}
+              outerRadius={96}
+              paddingAngle={3}
+              stroke="rgba(255,255,255,0.95)"
+              strokeWidth={3}
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={entry.name} fill={colors[index % colors.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value: any, name: any) => [currencyLabel(Number(value) * 1000), name]}
+              contentStyle={{
+                borderRadius: 16,
+                border: "1px solid rgba(148,163,184,0.2)",
+                boxShadow: "0 12px 24px rgba(15,23,42,0.08)",
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="space-y-3 rounded-2xl border bg-muted/20 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-foreground">Client ranking</p>
+          <Badge variant="outline" className="rounded-full">
+            {chartData.length} clients
+          </Badge>
+        </div>
+
+        <div className="space-y-2">
+          {chartData.map((entry, index) => {
+            const percent = total > 0 ? Math.round((entry.value / total) * 100) : 0;
+            return (
+              <div key={entry.name} className="rounded-xl border bg-background px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex items-start gap-2">
+                    <span
+                      className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: colors[index % colors.length] }}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{entry.name}</p>
+                      <p className="text-xs text-muted-foreground">{percent}% of revenue</p>
+                    </div>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold text-foreground">{currencyLabel(entry.value * 1000)}</p>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${percent}%`, backgroundColor: colors[index % colors.length] }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -8168,7 +8228,7 @@ export default function InvoiceManagement() {
                 <CardTitle className="text-base">Client Revenue Pie Chart</CardTitle>
                 <CardDescription>Revenue contribution by client</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-2">
                 <ClientRevenuePie data={pieData} />
               </CardContent>
             </Card>

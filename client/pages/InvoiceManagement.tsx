@@ -214,6 +214,8 @@ function parseDeclarationStyle(value?: string) {
     fontSize: "14",
     lineHeight: "1.6",
     textAlign: "left" as "left" | "center" | "right",
+    textColor: "#111827",
+    highlightColor: "#ffffff",
     html,
   };
 
@@ -231,6 +233,8 @@ function parseDeclarationStyle(value?: string) {
     fontSize: String(Math.round(Number.parseFloat(rootStyle.fontSize) || Number.parseFloat(fallback.fontSize))),
     lineHeight: rootStyle.lineHeight || fallback.lineHeight,
     textAlign: (rootStyle.textAlign as "left" | "center" | "right") || fallback.textAlign,
+    textColor: rootStyle.color || fallback.textColor,
+    highlightColor: rootStyle.backgroundColor || fallback.highlightColor,
     html: root.innerHTML,
   };
 }
@@ -4558,6 +4562,8 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
   const [fontSize, setFontSize] = useState("14");
   const [lineHeight, setLineHeight] = useState("1.6");
   const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("left");
+  const [textColor, setTextColor] = useState("#111827");
+  const [highlightColor, setHighlightColor] = useState("#ffffff");
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -4567,6 +4573,8 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
     setFontSize(parsed.fontSize);
     setLineHeight(parsed.lineHeight);
     setTextAlign(parsed.textAlign);
+    setTextColor(parsed.textColor);
+    setHighlightColor(parsed.highlightColor);
     if (editorRef.current.innerHTML !== parsed.html) {
       editorRef.current.innerHTML = parsed.html;
     }
@@ -4578,19 +4586,25 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
     editorRef.current.style.fontSize = `${fontSize}px`;
     editorRef.current.style.lineHeight = lineHeight;
     editorRef.current.style.textAlign = textAlign;
-  }, [fontFamily, fontSize, lineHeight, textAlign]);
+    editorRef.current.style.color = textColor;
+    editorRef.current.style.backgroundColor = highlightColor === "#ffffff" ? "transparent" : `${highlightColor}22`;
+  }, [fontFamily, fontSize, lineHeight, textAlign, textColor, highlightColor]);
 
-
-  const serializeHtml = (nextContentHtml?: string, overrides?: Partial<{ fontFamily: string; fontSize: string; lineHeight: string; textAlign: "left" | "center" | "right" }>) => {
+  const serializeHtml = (
+    nextContentHtml?: string,
+    overrides?: Partial<{ fontFamily: string; fontSize: string; lineHeight: string; textAlign: "left" | "center" | "right"; textColor: string; highlightColor: string }>,
+  ) => {
     const contentHtml = nextContentHtml ?? editorRef.current?.innerHTML ?? "";
     const merged = {
       fontFamily,
       fontSize,
       lineHeight,
       textAlign,
+      textColor,
+      highlightColor,
       ...overrides,
     };
-    return `<div style="font-family: ${merged.fontFamily}; font-size: ${merged.fontSize}px; line-height: ${merged.lineHeight}; text-align: ${merged.textAlign};">${contentHtml}</div>`;
+    return `<div style="font-family: ${merged.fontFamily}; font-size: ${merged.fontSize}px; line-height: ${merged.lineHeight}; text-align: ${merged.textAlign}; color: ${merged.textColor}; background-color: ${merged.highlightColor === "#ffffff" ? "transparent" : `${merged.highlightColor}22`};">${contentHtml}</div>`;
   };
 
   const syncValue = () => {
@@ -4610,54 +4624,96 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
     applyCommand(align === "left" ? "justifyLeft" : align === "center" ? "justifyCenter" : "justifyRight");
   };
 
+  const setTextStyle = (property: "foreColor" | "hiliteColor", color: string) => {
+    if (property === "foreColor") setTextColor(color);
+    if (property === "hiliteColor") setHighlightColor(color);
+    onChange(
+      serializeHtml(undefined, {
+        textColor: property === "foreColor" ? color : textColor,
+        highlightColor: property === "hiliteColor" ? color : highlightColor,
+      }),
+    );
+    applyCommand(property, color);
+  };
+
+  const setFontSizeCommand = (size: string) => {
+    setFontSize(size);
+    onChange(serializeHtml(undefined, { fontSize: size }));
+  };
+
   return (
     <div className={cn("space-y-3", className)}>
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("bold")}>B</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("italic")}>I</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("left")}>Left</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("center")}>Center</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("right")}>Right</Button>
-        <Select value={fontFamily} onValueChange={(next) => {
-          setFontFamily(next);
-          onChange(serializeHtml(undefined, { fontFamily: next }));
-        }}>
-          <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Font" /></SelectTrigger>
-          <SelectContent>
-            {[
-              "Arial",
-              "Georgia",
-              "Times New Roman",
-              "Verdana",
-              "Tahoma",
-              "Courier New",
-            ].map((font) => (
-              <SelectItem key={font} value={font}>{font}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={fontSize} onValueChange={(next) => {
-          setFontSize(next);
-          onChange(serializeHtml(undefined, { fontSize: next }));
-        }}>
-          <SelectTrigger className="h-9 w-[96px]"><SelectValue placeholder="Size" /></SelectTrigger>
-          <SelectContent>
-            {["12", "13", "14", "15", "16", "18", "20"].map((size) => (
-              <SelectItem key={size} value={size}>{size}px</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={lineHeight} onValueChange={(next) => {
-          setLineHeight(next);
-          onChange(serializeHtml(undefined, { lineHeight: next }));
-        }}>
-          <SelectTrigger className="h-9 w-[104px]"><SelectValue placeholder="Line" /></SelectTrigger>
-          <SelectContent>
-            {["1.2", "1.4", "1.6", "1.8", "2.0"].map((lh) => (
-              <SelectItem key={lh} value={lh}>{lh}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="rounded-2xl border bg-muted/20 p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("bold")}>
+            <strong>B</strong>
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("italic")}>
+            <em>I</em>
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("underline")}>
+            <span className="underline">U</span>
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("strikeThrough")}>
+            <span className="line-through">S</span>
+          </Button>
+          <Separator orientation="vertical" className="mx-1 h-8" />
+          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("insertUnorderedList")}>• List</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("insertOrderedList")}>1. List</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => applyCommand("removeFormat")}>Clear</Button>
+          <Separator orientation="vertical" className="mx-1 h-8" />
+          <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("left")}>Left</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("center")}>Center</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setBlockAlign("right")}>Right</Button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Select value={fontFamily} onValueChange={(next) => {
+            setFontFamily(next);
+            onChange(serializeHtml(undefined, { fontFamily: next }));
+          }}>
+            <SelectTrigger className="h-9 w-[160px]"><SelectValue placeholder="Font" /></SelectTrigger>
+            <SelectContent>
+              {[
+                "Arial",
+                "Georgia",
+                "Times New Roman",
+                "Verdana",
+                "Tahoma",
+                "Courier New",
+              ].map((font) => (
+                <SelectItem key={font} value={font}>{font}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={fontSize} onValueChange={setFontSizeCommand}>
+            <SelectTrigger className="h-9 w-[110px]"><SelectValue placeholder="Size" /></SelectTrigger>
+            <SelectContent>
+              {["8", "9", "10", "11", "12", "13", "14", "15", "16", "18", "20", "24"].map((size) => (
+                <SelectItem key={size} value={size}>{size}px</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={lineHeight} onValueChange={(next) => {
+            setLineHeight(next);
+            onChange(serializeHtml(undefined, { lineHeight: next }));
+          }}>
+            <SelectTrigger className="h-9 w-[104px]"><SelectValue placeholder="Line" /></SelectTrigger>
+            <SelectContent>
+              {["1.2", "1.4", "1.6", "1.8", "2.0"].map((lh) => (
+                <SelectItem key={lh} value={lh}>{lh}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2 rounded-lg border bg-background px-2 py-1">
+            <span className="text-xs text-muted-foreground">Text</span>
+            <input type="color" value={textColor} onChange={(e) => setTextStyle("foreColor", e.target.value)} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0" />
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border bg-background px-2 py-1">
+            <span className="text-xs text-muted-foreground">Highlight</span>
+            <input type="color" value={highlightColor} onChange={(e) => setTextStyle("hiliteColor", e.target.value)} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0" />
+          </div>
+        </div>
       </div>
       <div
         ref={editorRef}
@@ -4665,8 +4721,8 @@ function RichTextDeclarationEditor({ value, onChange, className }: RichTextDecla
         suppressContentEditableWarning
         onInput={syncValue}
         onBlur={syncValue}
-        className="min-h-[180px] rounded-xl border bg-background p-4 text-sm outline-none"
-        style={{ fontFamily, fontSize: `${fontSize}px`, lineHeight, textAlign }}
+        className="min-h-[200px] rounded-2xl border bg-background p-4 text-sm outline-none shadow-inner"
+        style={{ fontFamily, fontSize: `${fontSize}px`, lineHeight, textAlign, color: textColor, backgroundColor: highlightColor === "#ffffff" ? "transparent" : `${highlightColor}22` }}
       />
     </div>
   );

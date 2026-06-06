@@ -3430,54 +3430,77 @@ function ServiceCategoryChart({ data }: { data: { category: string; value: numbe
 }
 
 function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
-  const columns = ["Revenue", "Tx Volume", "Services", "AWS"];
+  const SCORE_LABELS = ["Revenue", "Tx Volume", "Services", "AWS"];
+  const SCORE_MAX = [4, 4, 4, 2];
+
+  const scored = clients
+    .filter(c => normalizeInlineText(c.status).toLowerCase() !== "inactive")
+    .map((client) => {
+      const revenueScore = client.monthlyInvoiceEstimate >= 1000000 ? 4 : client.monthlyInvoiceEstimate >= 500000 ? 3 : client.monthlyInvoiceEstimate >= 250000 ? 2 : 1;
+      const volumeScore = client.monthlyTransactionVolume >= 20000000 ? 4 : client.monthlyTransactionVolume >= 10000000 ? 3 : client.monthlyTransactionVolume >= 4000000 ? 2 : 1;
+      const serviceScore = client.services.length >= 6 ? 4 : client.services.length >= 4 ? 3 : client.services.length >= 2 ? 2 : 1;
+      const awsScore = client.aws.enabled ? 2 : 0;
+      const scores = [revenueScore, volumeScore, serviceScore, awsScore];
+      const total = scores.reduce((a, b) => a + b, 0);
+      const priority = getPriorityForScoring(client);
+      return { client, scores, total, priority };
+    })
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+  const getScoreColor = (score: number, max: number) => {
+    const ratio = score / max;
+    if (ratio >= 0.9) return { bg: "rgba(239,68,68,0.12)", text: "#dc2626", bar: "#ef4444" };
+    if (ratio >= 0.65) return { bg: "rgba(249,115,22,0.12)", text: "#ea580c", bar: "#f97316" };
+    if (ratio >= 0.4) return { bg: "rgba(59,130,246,0.12)", text: "#2563eb", bar: "#3b82f6" };
+    return { bg: "rgba(16,185,129,0.1)", text: "#059669", bar: "#10b981" };
+  };
+
+  if (scored.length === 0) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">No client data available</p>;
+  }
+
   return (
-    <div className="overflow-auto rounded-2xl border bg-background">
-      <table className="min-w-full text-sm">
-        <thead className="bg-muted/60">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium">Client</th>
-            {columns.map((col) => (
-              <th key={col} className="px-4 py-3 text-left font-medium">{col}</th>
-            ))}
-            <th className="px-4 py-3 text-left font-medium">Priority</th>
-          </tr>
-        </thead>
-        <tbody>
-          {clients.map((client) => {
-            const scoreCells = [
-              client.monthlyInvoiceEstimate / 250000,
-              client.monthlyTransactionVolume / 4000000,
-              client.services.length,
-              client.aws.enabled ? 4 : 1,
-            ];
-            const priority = getPriorityForScoring(client);
-            return (
-              <tr key={client.id} className="border-t">
-                <td className="px-4 py-3 font-medium">{client.name}</td>
-                {scoreCells.map((score, idx) => (
-                  <td key={idx} className="px-4 py-3">
-                    <div
-                      className="h-9 rounded-lg border"
-                      style={{
-                        background:
-                          score >= 4
-                            ? "rgba(239,68,68,0.18)"
-                            : score >= 3
-                              ? "rgba(249,115,22,0.18)"
-                              : score >= 2
-                                ? "rgba(59,130,246,0.18)"
-                                : "rgba(16,185,129,0.18)",
-                      }}
-                    />
-                  </td>
-                ))}
-                <td className="px-4 py-3"><PriorityBadge priority={priority} /></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {scored.map(({ client, scores, total, priority }, idx) => {
+        const meta = PRIORITY_META[priority];
+        return (
+          <div key={client.id} className="flex flex-col rounded-2xl border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">#{idx + 1}</span>
+                <p className="mt-0.5 text-sm font-semibold text-foreground leading-snug line-clamp-2">{client.name}</p>
+              </div>
+              <span className={cn("mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold", meta.className)}>{priority}</span>
+            </div>
+
+            <div className="space-y-2.5 flex-1">
+              {scores.map((score, i) => {
+                const color = getScoreColor(score, SCORE_MAX[i]);
+                return (
+                  <div key={SCORE_LABELS[i]}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] text-muted-foreground">{SCORE_LABELS[i]}</span>
+                      <span className="text-[11px] font-semibold tabular-nums" style={{ color: color.text }}>{score}/{SCORE_MAX[i]}</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${(score / SCORE_MAX[i]) * 100}%`, backgroundColor: color.bar }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t pt-3">
+              <span className="text-[11px] text-muted-foreground">Total score</span>
+              <span className="text-sm font-bold text-foreground">{total} / {SCORE_MAX.reduce((a, b) => a + b, 0)}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -8518,22 +8541,28 @@ export default function InvoiceManagement() {
             <ClientRevenuePie data={pieData} />
           </div>
 
-          {/* Row 3: Service Category + Priority Heatmap */}
-          <div className="grid xl:grid-cols-[1fr_1.4fr] divide-x divide-border">
-            <div className="p-5">
-              <div className="mb-3">
+          {/* Row 3: Service Distribution */}
+          <div className="border-b p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
                 <p className="text-sm font-semibold text-foreground">Service Distribution</p>
                 <p className="text-xs text-muted-foreground">Active service mix across all clients</p>
               </div>
-              <ServiceCategoryChart data={dashboardAnalytics.serviceCategory} />
+              <Badge variant="outline" className="rounded-full text-[11px]">{dashboardAnalytics.serviceCategory.length} services</Badge>
             </div>
-            <div className="p-5">
-              <div className="mb-3">
+            <ServiceCategoryChart data={dashboardAnalytics.serviceCategory} />
+          </div>
+
+          {/* Row 4: Priority Heatmap (full width, top 5) */}
+          <div className="p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
                 <p className="text-sm font-semibold text-foreground">Client Priority Heatmap</p>
-                <p className="text-xs text-muted-foreground">Priority scoring by revenue, volume and services</p>
+                <p className="text-xs text-muted-foreground">Top 5 clients ranked by revenue, transaction volume, services and AWS</p>
               </div>
-              <PriorityHeatmap clients={clients} />
+              <Badge variant="outline" className="rounded-full text-[11px]">Top 5 clients</Badge>
             </div>
+            <PriorityHeatmap clients={clients} />
           </div>
         </CardContent>
       </Card>

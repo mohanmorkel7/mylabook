@@ -3489,12 +3489,8 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
     setIsDragging(false);
   };
 
-  if (scored.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No client data available</p>;
-  }
-
   const CARD_ICONS = ["💼", "🏦", "🔄", "⚡", "🌐"];
-  const loopedScored = [...scored, ...scored];
+  const loopedScored = scored.length > 1 ? [...scored, ...scored] : scored;
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -3524,6 +3520,10 @@ function PriorityHeatmap({ clients }: { clients: ClientRecord[] }) {
     rafId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafId);
   }, [scored.length]);
+
+  if (scored.length === 0) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">No client data available</p>;
+  }
 
   return (
     <div

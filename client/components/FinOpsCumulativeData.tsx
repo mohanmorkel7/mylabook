@@ -105,7 +105,7 @@ export default function FinOpsCumulativeData() {
       overdue += metrics.overdue_subtasks || 0;
       pending += metrics.pending_subtasks || 0;
       inProgress += metrics.in_progress_subtasks || 0;
-      approved += metrics.approved_subtasks || 0;
+      approved += metrics.approve_pending_subtasks || 0;
     });
 
     return {
@@ -116,7 +116,7 @@ export default function FinOpsCumulativeData() {
       overdue_subtasks: overdue,
       pending_subtasks: pending,
       in_progress_subtasks: inProgress,
-      approved_subtasks: approved,
+      approve_pending_subtasks: approved,
       active_clients: Math.max(...byDate.map(([_, m]) => m.active_clients || 0), 0),
     };
   }, [byDate]);
@@ -131,7 +131,7 @@ export default function FinOpsCumulativeData() {
       overdue: metrics.overdue_subtasks || 0,
       pending: metrics.pending_subtasks || 0,
       in_progress: metrics.in_progress_subtasks || 0,
-      approve_pending: metrics.approved_subtasks || 0,
+      approve_pending: metrics.approve_pending_subtasks || 0,
       active_clients: metrics.active_clients || 0,
     }));
 
@@ -227,7 +227,7 @@ export default function FinOpsCumulativeData() {
                   <div className="text-xs text-gray-600">In-Progress</div>
                 </div>
                 <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
-                  <div className="text-lg font-bold text-purple-600">{metrics.approved_subtasks || 0}</div>
+                  <div className="text-lg font-bold text-purple-600">{metrics.approve_pending_subtasks || 0}</div>
                   <div className="text-xs text-gray-600">Approve Pending</div>
                 </div>
                 <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
@@ -277,7 +277,7 @@ export default function FinOpsCumulativeData() {
                 <div className="text-xs text-gray-700 font-medium">In-Progress</div>
               </div>
               <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 shadow-md border border-purple-200 flex-shrink-0 min-w-[120px]">
-                <div className="text-2xl sm:text-3xl font-bold text-purple-600">{cumulativeMetrics.approved_subtasks || 0}</div>
+                <div className="text-2xl sm:text-3xl font-bold text-purple-600">{cumulativeMetrics.approve_pending_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Approve Pending</div>
               </div>
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-4 shadow-md border border-slate-200 flex-shrink-0 min-w-[120px]">

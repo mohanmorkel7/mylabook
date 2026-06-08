@@ -1246,13 +1246,30 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
 
       console.log(`[Approve] Approval record created:`, approvalRes.rows[0]);
 
-      // Update finops_tracker to set approved_by/approved_at for today's tracker row
+      // Update finops_tracker to set approved_by/approved_at
+      // If tracker_id is provided, update that exact row; otherwise update the most recent row for this task+subtask
       try {
-        const trackerUpdateRes = await client.query(
-          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
-           RETURNING id, approved_by, approved_at`,
-          [approver_name, row.task_id, subtaskId],
-        );
+        let trackerUpdateRes;
+        if (tracker_id) {
+          trackerUpdateRes = await client.query(
+            `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW()
+             WHERE id = $2
+             RETURNING id, approved_by, approved_at`,
+            [approver_name, tracker_id],
+          );
+        } else {
+          trackerUpdateRes = await client.query(
+            `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW()
+             WHERE id = (
+               SELECT id FROM finops_tracker
+               WHERE task_id = $2 AND subtask_id = $3
+               ORDER BY run_date DESC
+               LIMIT 1
+             )
+             RETURNING id, approved_by, approved_at`,
+            [approver_name, row.task_id, subtaskId],
+          );
+        }
         console.log(`[Approve] Tracker updated:`, trackerUpdateRes.rows[0]);
       } catch (e) {
         console.warn(

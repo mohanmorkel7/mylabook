@@ -4334,11 +4334,12 @@ export default function ClientBasedFinOpsTaskManager() {
                                     )
                                   }
                                   currentUser={user}
-                                  onRefresh={() =>
+                                  onRefresh={() => {
                                     queryClient.invalidateQueries({
                                       queryKey: ["client-finops-tasks"],
-                                    })
-                                  }
+                                    });
+                                    refetch();
+                                  }}
                                   isInline={true}
                                   selectedDate={dateFilter}
                                 />

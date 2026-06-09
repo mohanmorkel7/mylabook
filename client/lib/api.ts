@@ -1588,10 +1588,11 @@ export class ApiClient {
     approver_name: string,
     note?: string,
     tracker_id?: number,
+    run_date?: string,
   ) {
     return this.request(`/finops-production/subtasks/${subtaskId}/approve`, {
       method: "POST",
-      body: JSON.stringify({ approver_name, note, tracker_id }),
+      body: JSON.stringify({ approver_name, note, tracker_id, run_date }),
     });
   }
 
@@ -1600,10 +1601,11 @@ export class ApiClient {
     rejector_name: string,
     reason: string,
     tracker_id?: number,
+    run_date?: string,
   ) {
     return this.request(`/finops-production/subtasks/${subtaskId}/reject`, {
       method: "POST",
-      body: JSON.stringify({ rejector_name, reason, tracker_id }),
+      body: JSON.stringify({ rejector_name, reason, tracker_id, run_date }),
     });
   }
 

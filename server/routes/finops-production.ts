@@ -1047,7 +1047,7 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
     const subtaskId = parseInt(req.params.id);
-    let { approver_name, note, tracker_id } = req.body || {};
+    let { approver_name, note, tracker_id, run_date } = req.body || {};
 
     // Allow approver to be provided via header x-user-name or x-user-id
     if (!approver_name || /undefined|null/i.test(String(approver_name))) {
@@ -1214,6 +1214,24 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     try {
       await client.query("BEGIN");
 
+      // Validate tracker_id belongs to the specified run_date if provided
+      if (tracker_id && run_date) {
+        const trackerCheck = await client.query(
+          `SELECT id, run_date FROM finops_tracker WHERE id = $1 LIMIT 1`,
+          [tracker_id],
+        );
+        if (trackerCheck.rows.length > 0) {
+          const trackerRow = trackerCheck.rows[0];
+          const trackerDate = new Date(trackerRow.run_date).toISOString().split("T")[0];
+          if (trackerDate !== run_date) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+              error: `Tracker date mismatch: tracker belongs to ${trackerDate} but approval requested for ${run_date}`,
+            });
+          }
+        }
+      }
+
       // Check if already approved in finops_approvals
       const existing = await client.query(
         `SELECT id, approved_by, approved_at FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 AND tracker_id IS NOT DISTINCT FROM $3 LIMIT 1`,
@@ -1329,7 +1347,7 @@ router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
     const subtaskId = parseInt(req.params.id);
-    let { rejector_name, reason, tracker_id } = req.body || {};
+    let { rejector_name, reason, tracker_id, run_date } = req.body || {};
 
     if (!rejector_name || /undefined|null/i.test(String(rejector_name))) {
       const headerName = (req.headers["x-user-name"] as string) || "";
@@ -1468,9 +1486,20 @@ router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
       let trackerRes;
       if (tracker_id && !Number.isNaN(Number(tracker_id))) {
         trackerRes = await client.query(
-          `SELECT id, status FROM finops_tracker WHERE id = $1 LIMIT 1`,
+          `SELECT id, status, run_date FROM finops_tracker WHERE id = $1 LIMIT 1`,
           [Number(tracker_id)],
         );
+
+        // Validate tracker belongs to specified run_date
+        if (trackerRes.rows.length > 0 && run_date) {
+          const trackerDate = new Date(trackerRes.rows[0].run_date).toISOString().split("T")[0];
+          if (trackerDate !== run_date) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+              error: `Tracker date mismatch: tracker belongs to ${trackerDate} but rejection requested for ${run_date}`,
+            });
+          }
+        }
       }
 
       if (!trackerRes || !trackerRes.rows.length) {

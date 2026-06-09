@@ -896,6 +896,7 @@ function SortableSubTaskItem({
                                     approverName,
                                     undefined,
                                     (subtask as any)?.tracker_id,
+                                    selectedDate,
                                   );
 
                                   onRefresh?.();
@@ -984,6 +985,7 @@ function SortableSubTaskItem({
                                   rejectorName,
                                   rejectReason.trim(),
                                   (subtask as any)?.tracker_id,
+                                  selectedDate,
                                 );
                                 setShowRejectDialog(false);
                                 setRejectReason("");

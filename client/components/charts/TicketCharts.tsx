@@ -14,6 +14,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Download } from "lucide-react";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import api from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -662,6 +665,21 @@ function ChartSkeleton() {
   );
 }
 
+// ─── Export helpers ───────────────────────────────────────────────────────────
+
+function exportToExcel(fileName: string, data: any[]) {
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Data");
+  XLSX.writeFile(wb, `${fileName}-${new Date().toISOString().split("T")[0]}.xlsx`);
+}
+
+function exportToCSV(fileName: string, data: any[]) {
+  const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(data));
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  saveAs(blob, `${fileName}-${new Date().toISOString().split("T")[0]}.csv`);
+}
+
 // ─── Card wrapper ─────────────────────────────────────────────────────────────
 
 function ChartCard({
@@ -672,6 +690,8 @@ function ChartCard({
   hasData,
   wide,
   children,
+  onExportCSV,
+  onExportExcel,
 }: {
   title: string;
   subtitle: string;
@@ -680,7 +700,11 @@ function ChartCard({
   hasData?: boolean;
   wide?: boolean;
   children: React.ReactNode;
+  onExportCSV?: () => void;
+  onExportExcel?: () => void;
 }) {
+  const [showMenu, setShowMenu] = useState(false);
+
   return (
     <div
       className="flex-shrink-0 flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-sm"
@@ -691,11 +715,50 @@ function ChartCard({
           <p className="text-sm font-semibold text-slate-800">{title}</p>
           <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>
         </div>
-        {badge && (
-          <span className="mt-0.5 shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600">
-            {badge}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {badge && (
+            <span className="mt-0.5 shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600">
+              {badge}
+            </span>
+          )}
+          {hasData && (onExportCSV || onExportExcel) && (
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Export data"
+              >
+                <Download className="w-4 h-4 text-slate-500" />
+              </button>
+              {showMenu && (
+                <div className="absolute right-0 mt-1 w-32 rounded-lg border border-slate-200 bg-white shadow-lg z-10">
+                  {onExportExcel && (
+                    <button
+                      onClick={() => {
+                        onExportExcel();
+                        setShowMenu(false);
+                      }}
+                      className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-t-lg"
+                    >
+                      Export as Excel
+                    </button>
+                  )}
+                  {onExportCSV && (
+                    <button
+                      onClick={() => {
+                        onExportCSV();
+                        setShowMenu(false);
+                      }}
+                      className={`block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 ${onExportExcel ? "" : "rounded-t-lg"} rounded-b-lg`}
+                    >
+                      Export as CSV
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="px-2 pb-4">
@@ -968,6 +1031,8 @@ function TicketCharts({
           badge={totalAssignedActive.toLocaleString() + " active"}
           loading={loading}
           hasData={assignedData.length > 0}
+          onExportExcel={() => exportToExcel("assigned-to", assignedData.map(d => ({ Name: d.name, "Ticket Count": d.value })))}
+          onExportCSV={() => exportToCSV("assigned-to", assignedData.map(d => ({ Name: d.name, "Ticket Count": d.value })))}
         >
           <AssigneeChart data={assignedData} allStatusKeys={statusKeys} />
         </ChartCard>
@@ -979,6 +1044,8 @@ function TicketCharts({
           badge={totalActive.toLocaleString() + " active"}
           loading={loading}
           hasData={statusData.length > 0}
+          onExportExcel={() => exportToExcel("status-distribution", statusData.map(d => ({ Status: d.name, "Ticket Count": d.value })))}
+          onExportCSV={() => exportToCSV("status-distribution", statusData.map(d => ({ Status: d.name, "Ticket Count": d.value })))}
         >
           <StatusDonut data={activeStatusData} />
         </ChartCard>
@@ -991,6 +1058,8 @@ function TicketCharts({
           loading={loading}
           hasData={userStackData.length > 0}
           wide
+          onExportExcel={() => exportToExcel("by-user", userStackData.map(d => ({ User: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
+          onExportCSV={() => exportToCSV("by-user", userStackData.map(d => ({ User: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
         >
           <UserStackedScrollChart data={userStackData} statusKeys={userStatusKeys} />
         </ChartCard>
@@ -1002,6 +1071,8 @@ function TicketCharts({
           badge={`${tagStackData.length} tags`}
           loading={loading}
           hasData={tagStackData.length > 0}
+          onExportExcel={() => exportToExcel("by-tag", tagStackData.map(d => ({ Tag: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
+          onExportCSV={() => exportToCSV("by-tag", tagStackData.map(d => ({ Tag: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
         >
           <StackedChart data={tagStackData} statusKeys={activeStatusKeys} />
         </ChartCard>

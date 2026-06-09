@@ -1214,20 +1214,21 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     try {
       await client.query("BEGIN");
 
-      // Validate tracker_id belongs to the specified run_date if provided
-      if (tracker_id && run_date) {
+      // If tracker_id is provided, use its actual run_date (source of truth)
+      // This ensures the approval is always for the correct date, regardless of what client sends
+      if (tracker_id) {
         const trackerCheck = await client.query(
           `SELECT id, run_date FROM finops_tracker WHERE id = $1 LIMIT 1`,
           [tracker_id],
         );
         if (trackerCheck.rows.length > 0) {
           const trackerRow = trackerCheck.rows[0];
-          const trackerDate = new Date(trackerRow.run_date).toISOString().split("T")[0];
-          if (trackerDate !== run_date) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              error: `Tracker date mismatch: tracker belongs to ${trackerDate} but approval requested for ${run_date}`,
-            });
+          const actualTrackerDate = new Date(trackerRow.run_date).toISOString().split("T")[0];
+          if (actualTrackerDate !== run_date) {
+            console.log(
+              `[Approve] Date mismatch: client sent ${run_date}, but tracker ${tracker_id} belongs to ${actualTrackerDate}. Using actual tracker date.`,
+            );
+            run_date = actualTrackerDate;
           }
         }
       }
@@ -1490,14 +1491,14 @@ router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
           [Number(tracker_id)],
         );
 
-        // Validate tracker belongs to specified run_date
-        if (trackerRes.rows.length > 0 && run_date) {
-          const trackerDate = new Date(trackerRes.rows[0].run_date).toISOString().split("T")[0];
-          if (trackerDate !== run_date) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-              error: `Tracker date mismatch: tracker belongs to ${trackerDate} but rejection requested for ${run_date}`,
-            });
+        // Use tracker's actual run_date (source of truth)
+        if (trackerRes.rows.length > 0) {
+          const actualTrackerDate = new Date(trackerRes.rows[0].run_date).toISOString().split("T")[0];
+          if (actualTrackerDate !== run_date) {
+            console.log(
+              `[Reject] Date mismatch: client sent ${run_date}, but tracker ${tracker_id} belongs to ${actualTrackerDate}. Using actual tracker date.`,
+            );
+            run_date = actualTrackerDate;
           }
         }
       }

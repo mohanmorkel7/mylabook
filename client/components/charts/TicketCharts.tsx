@@ -1058,8 +1058,28 @@ function TicketCharts({
           loading={loading}
           hasData={userStackData.length > 0}
           wide
-          onExportExcel={() => exportToExcel("by-user", userStackData.map(d => ({ User: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
-          onExportCSV={() => exportToCSV("by-user", userStackData.map(d => ({ User: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
+          onExportExcel={() => {
+            const exportData = userStackData
+              .map(d => ({
+                User: d.name,
+                "Open": Number(d["Open"] || 0),
+                "In Progress": Number(d["In Progress"] || 0),
+                "Overdue": Number(d["Overdue"] || 0),
+              }))
+              .filter(row => row.Open > 0 || row["In Progress"] > 0 || row.Overdue > 0);
+            exportToExcel("by-user", exportData);
+          }}
+          onExportCSV={() => {
+            const exportData = userStackData
+              .map(d => ({
+                User: d.name,
+                "Open": Number(d["Open"] || 0),
+                "In Progress": Number(d["In Progress"] || 0),
+                "Overdue": Number(d["Overdue"] || 0),
+              }))
+              .filter(row => row.Open > 0 || row["In Progress"] > 0 || row.Overdue > 0);
+            exportToCSV("by-user", exportData);
+          }}
         >
           <UserStackedScrollChart data={userStackData} statusKeys={userStatusKeys} />
         </ChartCard>

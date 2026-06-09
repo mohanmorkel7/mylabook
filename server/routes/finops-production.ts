@@ -1247,7 +1247,7 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
             [existingApproval.approved_by, existingApproval.approved_at, tracker_id],
           );
         }
-        await client.query("ROLLBACK");
+        await client.query("COMMIT");
         return res.json({ ok: true, approved: true, status: "approved", synced: true });
       }
 

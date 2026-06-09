@@ -1214,16 +1214,22 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     try {
       await client.query("BEGIN");
 
-      // Prevent re-approval for the same tracker
+      // Check if already approved in finops_approvals
       const existing = await client.query(
-        `SELECT 1 FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 AND tracker_id = $3 LIMIT 1`,
+        `SELECT id, approved_by, approved_at FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 AND tracker_id IS NOT DISTINCT FROM $3 LIMIT 1`,
         [row.task_id, subtaskId, tracker_id || null],
       );
       if (existing.rows.length) {
+        // Sync finops_tracker.approved_at if it's missing (data inconsistency from old records)
+        const existingApproval = existing.rows[0];
+        if (tracker_id) {
+          await client.query(
+            `UPDATE finops_tracker SET approved_by = $1, approved_at = $2 WHERE id = $3 AND approved_at IS NULL`,
+            [existingApproval.approved_by, existingApproval.approved_at, tracker_id],
+          );
+        }
         await client.query("ROLLBACK");
-        return res
-          .status(409)
-          .json({ error: "Already approved for this tracker" });
+        return res.json({ ok: true, approved: true, status: "approved", synced: true });
       }
 
       // Insert approval record

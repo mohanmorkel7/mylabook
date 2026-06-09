@@ -864,14 +864,15 @@ function SortableSubTaskItem({
                         const isAssigned = assignedTo.some(userMatchesManager);
 
                         const isApproved = Boolean((subtask as any)?.approved_at);
+                        // Admins can always approve regardless of assignment; non-admins cannot approve their own tasks
                         const canSeeApproveButton =
                           (isReporting || isEscalation || isAdmin) &&
-                          !isAssigned &&
+                          (isAdmin || !isAssigned) &&
                           Boolean((subtask as any)?.completed_at) &&
                           !isApproved;
                         const canSeeRejectButton =
                           (isReporting || isEscalation || isAdmin) &&
-                          !isAssigned &&
+                          (isAdmin || !isAssigned) &&
                           Boolean((subtask as any)?.completed_at) &&
                           !isApproved;
 
@@ -1011,20 +1012,19 @@ function SortableSubTaskItem({
                 </div>
 
                 {/* Show pending approval timer if completed but not approved */}
-                {subtask.status === "completed" &&
-                  !(subtask as any).approved_by && (
+                {(subtask as any).completed_at &&
+                  !(subtask as any).approved_at && (
                     <div className="mt-2">
                       <PendingApprovalTimer
                         taskId={task.id}
                         subtaskId={subtask.id}
-                        completedAt={subtask.completed_at}
+                        completedAt={(subtask as any).completed_at}
                       />
                     </div>
                   )}
 
                 {/* Show approval info if present */}
-                {subtask.status === "completed" &&
-                  (subtask as any).approved_by && (
+                {(subtask as any).approved_at && (
                     <div className="mt-2">
                       <Badge
                         variant="outline"

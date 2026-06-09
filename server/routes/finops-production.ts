@@ -405,8 +405,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
               ft.rejected_by,
               ft.rejected_at,
               ft.reject_reason,
-              (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_by,
-              (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_at
+              ft.approved_by,
+              ft.approved_at
             FROM finops_tracker ft
             WHERE ft.task_id = t.id AND ft.run_date = $1
 
@@ -528,8 +528,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
                 'rejected_by', ft.rejected_by,
                 'rejected_at', ft.rejected_at,
                 'reject_reason', ft.reject_reason,
-                'approved_by', (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1),
-                'approved_at', (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1)
+                'approved_by', ft.approved_by,
+                'approved_at', ft.approved_at
               ) ORDER BY ft.order_position
             ) FILTER (WHERE ft.subtask_id IS NOT NULL),
             '[]'::json

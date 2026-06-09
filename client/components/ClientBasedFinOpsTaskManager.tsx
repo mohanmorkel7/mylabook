@@ -863,16 +863,16 @@ function SortableSubTaskItem({
                         const isEscalation = escalationManagers.some(userMatchesManager);
                         const isAssigned = assignedTo.some(userMatchesManager);
 
-                        const isApproved = Boolean((subtask as any)?.approved_by);
+                        const isApproved = Boolean((subtask as any)?.approved_at);
                         const canSeeApproveButton =
                           (isReporting || isEscalation || isAdmin) &&
                           !isAssigned &&
-                          ["completed", "approved"].includes(subtask.status) &&
+                          Boolean((subtask as any)?.completed_at) &&
                           !isApproved;
                         const canSeeRejectButton =
                           (isReporting || isEscalation || isAdmin) &&
                           !isAssigned &&
-                          ["completed", "approved"].includes(subtask.status) &&
+                          Boolean((subtask as any)?.completed_at) &&
                           !isApproved;
 
                         const actionButtons: any[] = [];
@@ -3088,8 +3088,8 @@ export default function ClientBasedFinOpsTaskManager() {
           clientSummary[clientName].pending_subtasks++;
         if (subtask.status === "in_progress")
           clientSummary[clientName].in_progress_subtasks++;
-        // Approve Pending: completed_by is set AND approved_at is null
-        if (subtask.completed_by && !subtask.approved_at)
+        // Approve Pending: completed_at is set AND approved_at is null
+        if ((subtask as any).completed_at && !(subtask as any).approved_at)
           clientSummary[clientName].approved_subtasks++;
       });
     });
@@ -3497,8 +3497,8 @@ export default function ClientBasedFinOpsTaskManager() {
                         clientAgg[name].pending_subtasks++;
                       if (row.status === "in_progress")
                         clientAgg[name].in_progress_subtasks++;
-                      // Approve Pending: completed_by is set AND approved_at is null
-                      if (row.completed_by && !row.approved_at)
+                      // Approve Pending: completed_at is set AND approved_at is null
+                      if (row.completed_at && !row.approved_at)
                         clientAgg[name].approved_subtasks++;
                     });
 

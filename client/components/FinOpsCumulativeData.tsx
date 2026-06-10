@@ -234,6 +234,12 @@ export default function FinOpsCumulativeData() {
                   <div className="text-lg font-bold text-slate-600">{metrics.active_clients || 0}</div>
                   <div className="text-xs text-gray-600">Active Clients</div>
                 </div>
+                {metrics.monthly_tasks_assigned > 0 && (
+                  <div className="bg-white rounded-lg p-3 shadow-sm border border-orange-200 flex-shrink-0 min-w-[110px] bg-orange-50">
+                    <div className="text-lg font-bold text-orange-600">{metrics.monthly_tasks_assigned || 0}</div>
+                    <div className="text-xs text-gray-600">Monthly Tasks</div>
+                  </div>
+                )}
               </div>
 
             </div>

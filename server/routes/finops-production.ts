@@ -2373,12 +2373,12 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
         to_char(ft_grouped.run_date_ist::date, 'YYYY-MM-DD') as run_date,
         (COUNT(DISTINCT ft_grouped.task_id) + COALESCE(monthly_counts.count, 0))::int as total_tasks,
         (COUNT(*) + COALESCE(monthly_counts.count, 0))::int as total_subtasks,
-        COUNT(CASE WHEN ft_grouped.status = 'completed' THEN 1 END)::int as completed_subtasks,
-        COUNT(CASE WHEN ft_grouped.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
-        COUNT(CASE WHEN ft_grouped.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
-        COUNT(CASE WHEN ft_grouped.status = 'pending' THEN 1 END)::int as pending_subtasks,
-        COUNT(CASE WHEN ft_grouped.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
-        COUNT(CASE WHEN ft_grouped.completed_at IS NOT NULL AND ft_grouped.approved_at IS NULL THEN 1 END)::int as approve_pending_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'completed' THEN 1 END) + COALESCE(monthly_counts.completed, 0))::int as completed_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'delayed' THEN 1 END) + COALESCE(monthly_counts.delayed, 0))::int as delayed_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'overdue' THEN 1 END) + COALESCE(monthly_counts.overdue, 0))::int as overdue_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'pending' THEN 1 END) + COALESCE(monthly_counts.pending, 0))::int as pending_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'in_progress' THEN 1 END) + COALESCE(monthly_counts.in_progress, 0))::int as in_progress_subtasks,
+        (COUNT(CASE WHEN ft_grouped.completed_at IS NOT NULL AND ft_grouped.approved_at IS NULL THEN 1 END) + COALESCE(monthly_counts.approve_pending, 0))::int as approve_pending_subtasks,
         COUNT(DISTINCT ft_grouped.client_id)::int as active_clients,
         COALESCE(monthly_counts.count, 0)::int as monthly_tasks_assigned
       FROM (
@@ -2394,8 +2394,16 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
         WHERE ${whereConditions}
       ) ft_grouped
       LEFT JOIN LATERAL (
-        SELECT COUNT(DISTINCT mt.id) as count
+        SELECT
+          COUNT(DISTINCT mt.id) as count,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'completed' THEN fmt.task_id END) as completed,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'delayed' THEN fmt.task_id END) as delayed,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'overdue' THEN fmt.task_id END) as overdue,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'pending' THEN fmt.task_id END) as pending,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'in_progress' THEN fmt.task_id END) as in_progress,
+          COUNT(DISTINCT CASE WHEN fmt.completed_at IS NOT NULL AND fmt.approved_at IS NULL THEN fmt.task_id END) as approve_pending
         FROM finops_tasks mt
+        LEFT JOIN finops_tracker fmt ON fmt.task_id = mt.id AND (fmt.run_date AT TIME ZONE 'Asia/Kolkata')::date = ft_grouped.run_date_ist::date AND fmt.period = 'monthly'
         WHERE mt.duration = 'monthly'
         AND mt.deleted_at IS NULL
         AND mt.is_active = true

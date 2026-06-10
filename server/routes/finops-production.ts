@@ -2380,7 +2380,7 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
         COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
         COUNT(CASE WHEN ft.completed_at IS NOT NULL AND ft.approved_at IS NULL THEN 1 END)::int as approve_pending_subtasks,
         COUNT(DISTINCT t.client_id)::int as active_clients,
-        COUNT(DISTINCT CASE WHEN t.period = 'monthly' THEN t.id END)::int as monthly_tasks_assigned
+        COUNT(DISTINCT CASE WHEN ft.period = 'monthly' THEN ft.task_id END)::int as monthly_tasks_assigned
       FROM finops_tracker ft
       JOIN finops_tasks t ON t.id = ft.task_id
       WHERE ${whereConditions}

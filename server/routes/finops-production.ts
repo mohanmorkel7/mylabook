@@ -2394,13 +2394,12 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
         WHERE ${whereConditions}
       ) ft_grouped
       LEFT JOIN LATERAL (
-        SELECT COUNT(DISTINCT mt.id) as count
-        FROM finops_tasks mt
-        WHERE mt.duration = 'monthly'
-        AND mt.deleted_at IS NULL
-        AND mt.is_active = true
-        AND (mt.effective_from IS NULL OR (mt.effective_from AT TIME ZONE 'Asia/Kolkata')::date <= ft_grouped.run_date_ist::date)
-        AND EXTRACT(DAY FROM ft_grouped.run_date_ist::date) = mt.monthly_day
+        SELECT COUNT(DISTINCT ft_monthly.task_id) as count
+        FROM finops_tracker ft_monthly
+        LEFT JOIN finops_tasks t_monthly ON t_monthly.id = ft_monthly.task_id
+        WHERE ft_monthly.period = 'monthly'
+        AND (ft_monthly.run_date AT TIME ZONE 'Asia/Kolkata')::date = ft_grouped.run_date_ist::date
+        AND (t_monthly.deleted_at IS NULL OR t_monthly.id IS NULL)
       ) monthly_counts ON true
       GROUP BY ft_grouped.run_date_ist::date, monthly_counts.count
       ORDER BY ft_grouped.run_date_ist::date DESC

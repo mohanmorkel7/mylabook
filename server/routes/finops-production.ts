@@ -2371,8 +2371,8 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
     const query = `
       SELECT
         to_char(ft_grouped.run_date_ist::date, 'YYYY-MM-DD') as run_date,
-        COUNT(DISTINCT ft_grouped.task_id)::int as total_tasks,
-        COUNT(*)::int as total_subtasks,
+        (COUNT(DISTINCT ft_grouped.task_id) + COALESCE(monthly_counts.count, 0))::int as total_tasks,
+        (COUNT(*) + COALESCE(monthly_counts.count, 0))::int as total_subtasks,
         COUNT(CASE WHEN ft_grouped.status = 'completed' THEN 1 END)::int as completed_subtasks,
         COUNT(CASE WHEN ft_grouped.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
         COUNT(CASE WHEN ft_grouped.status = 'overdue' THEN 1 END)::int as overdue_subtasks,

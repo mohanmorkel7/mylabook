@@ -2410,7 +2410,7 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
         AND (mt.effective_from IS NULL OR (mt.effective_from AT TIME ZONE 'Asia/Kolkata')::date <= ft_grouped.run_date_ist::date)
         AND mt.monthly_day = EXTRACT(DAY FROM ft_grouped.run_date_ist::date)::int
       ) monthly_counts ON true
-      GROUP BY ft_grouped.run_date_ist::date, monthly_counts.count
+      GROUP BY ft_grouped.run_date_ist::date, monthly_counts.count, monthly_counts.completed, monthly_counts.delayed, monthly_counts.overdue, monthly_counts.pending, monthly_counts.in_progress, monthly_counts.approve_pending
       ORDER BY ft_grouped.run_date_ist::date DESC
     `;
 

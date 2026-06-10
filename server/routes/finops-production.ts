@@ -2370,30 +2370,40 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
     // Aggregated counts query - returns only metric counts per date, not raw task details
     const query = `
       SELECT
-        to_char((ft.run_date AT TIME ZONE 'Asia/Kolkata')::date, 'YYYY-MM-DD') as run_date,
-        COUNT(DISTINCT ft.task_id)::int as total_tasks,
+        to_char(ft_grouped.run_date_ist::date, 'YYYY-MM-DD') as run_date,
+        COUNT(DISTINCT ft_grouped.task_id)::int as total_tasks,
         COUNT(*)::int as total_subtasks,
-        COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int as completed_subtasks,
-        COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
-        COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
-        COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int as pending_subtasks,
-        COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
-        COUNT(CASE WHEN ft.completed_at IS NOT NULL AND ft.approved_at IS NULL THEN 1 END)::int as approve_pending_subtasks,
-        COUNT(DISTINCT t.client_id)::int as active_clients,
-        (
-          SELECT COUNT(DISTINCT mt.id)
-          FROM finops_tasks mt
-          WHERE mt.duration = 'monthly'
-          AND mt.deleted_at IS NULL
-          AND mt.is_active = true
-          AND (mt.effective_from IS NULL OR (mt.effective_from AT TIME ZONE 'Asia/Kolkata')::date <= (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date)
-          AND EXTRACT(DAY FROM (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date) = mt.monthly_day
-        )::int as monthly_tasks_assigned
-      FROM finops_tracker ft
-      JOIN finops_tasks t ON t.id = ft.task_id
-      WHERE ${whereConditions}
-      GROUP BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date
-      ORDER BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date DESC
+        COUNT(CASE WHEN ft_grouped.status = 'completed' THEN 1 END)::int as completed_subtasks,
+        COUNT(CASE WHEN ft_grouped.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
+        COUNT(CASE WHEN ft_grouped.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
+        COUNT(CASE WHEN ft_grouped.status = 'pending' THEN 1 END)::int as pending_subtasks,
+        COUNT(CASE WHEN ft_grouped.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
+        COUNT(CASE WHEN ft_grouped.completed_at IS NOT NULL AND ft_grouped.approved_at IS NULL THEN 1 END)::int as approve_pending_subtasks,
+        COUNT(DISTINCT ft_grouped.client_id)::int as active_clients,
+        COALESCE(monthly_counts.count, 0)::int as monthly_tasks_assigned
+      FROM (
+        SELECT
+          ft.run_date AT TIME ZONE 'Asia/Kolkata' as run_date_ist,
+          ft.task_id,
+          ft.status,
+          ft.completed_at,
+          ft.approved_at,
+          t.client_id
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ${whereConditions}
+      ) ft_grouped
+      LEFT JOIN LATERAL (
+        SELECT COUNT(DISTINCT mt.id) as count
+        FROM finops_tasks mt
+        WHERE mt.duration = 'monthly'
+        AND mt.deleted_at IS NULL
+        AND mt.is_active = true
+        AND (mt.effective_from IS NULL OR (mt.effective_from AT TIME ZONE 'Asia/Kolkata')::date <= ft_grouped.run_date_ist::date)
+        AND EXTRACT(DAY FROM ft_grouped.run_date_ist::date) = mt.monthly_day
+      ) monthly_counts ON true
+      GROUP BY ft_grouped.run_date_ist::date, monthly_counts.count
+      ORDER BY ft_grouped.run_date_ist::date DESC
     `;
 
     console.log("Cumulative aggregated query:", { fromDate, toDate });

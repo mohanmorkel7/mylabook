@@ -6053,6 +6053,10 @@ export default function InvoiceManagement() {
     }
   });
 
+  const [showExportInvoicesModal, setShowExportInvoicesModal] = useState(false);
+  const [exportMonth, setExportMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
+  const [exportYear, setExportYear] = useState(String(new Date().getFullYear()));
+
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyConfig>(() => {
     try {
       const raw = localStorage.getItem(CURRENCY_CONFIG_KEY);
@@ -8186,6 +8190,9 @@ export default function InvoiceManagement() {
             <Button variant="outline" className="gap-2" onClick={() => exportClientsCsv()}>
               <Download className="h-4 w-4" /> Export CSV
             </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setShowExportInvoicesModal(true)}>
+              <FileDown className="h-4 w-4" /> Export Invoices
+            </Button>
             <Button
               className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500"
               onClick={() => navigate("/invoice-management/new")}
@@ -9340,6 +9347,65 @@ export default function InvoiceManagement() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Export Generated Invoices Modal */}
+      <Dialog open={showExportInvoicesModal} onOpenChange={setShowExportInvoicesModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Generated Invoices</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="export-month">Month</Label>
+              <select
+                id="export-month"
+                value={exportMonth}
+                onChange={(e) => setExportMonth(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              >
+                <option value="01">January</option>
+                <option value="02">February</option>
+                <option value="03">March</option>
+                <option value="04">April</option>
+                <option value="05">May</option>
+                <option value="06">June</option>
+                <option value="07">July</option>
+                <option value="08">August</option>
+                <option value="09">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="export-year">Year</Label>
+              <Input
+                id="export-year"
+                type="number"
+                value={exportYear}
+                onChange={(e) => setExportYear(e.target.value)}
+                min="2020"
+                max={new Date().getFullYear()}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowExportInvoicesModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                onClick={() => {
+                  exportGeneratedInvoicesToExcel(exportMonth, exportYear);
+                  setShowExportInvoicesModal(false);
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" /> Export
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
         </>
       )}
 

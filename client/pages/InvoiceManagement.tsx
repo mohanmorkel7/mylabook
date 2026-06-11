@@ -21,6 +21,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import * as Docx from "docx";
 import * as XLSX from "xlsx";
+import XLSXStyle from "xlsx-js-style";
 import {
   Area,
   AreaChart,
@@ -7065,7 +7066,7 @@ export default function InvoiceManagement() {
 
         const lineItems = rawLineItems.length > 0
           ? rawLineItems
-          : [{ description: invoice.mmcInvoiceTitle || "Professional Services", amount: taxableAmount, quantity: 1, unit: "OTH" }];
+          : [{ description: invoice.mmcInvoiceTitle || "Professional Services", amount: taxableAmount, quantity: 1, unit: "OTHERS" }];
 
         lineItems.forEach((item: any, itemIdx: number) => {
           const isFirst = itemIdx === 0;
@@ -7093,7 +7094,9 @@ export default function InvoiceManagement() {
 
           // Buyer Details
           row[7]  = isFirst ? buyerGSTIN : "";
-          row[8]  = isFirst ? (invoice.clientName || clientData.name || "") : "";
+          const rawName = invoice.clientName || clientData.name || "";
+          const buyerLegalName = rawName ? (rawName.startsWith("M/s.") ? rawName : `M/s. ${rawName}`) : "";
+          row[8]  = isFirst ? buyerLegalName : "";
           row[9]  = ""; // Trade name
           row[10] = isFirst ? buyerStateName : ""; // POS = buyer state
           row[11] = isFirst ? addrParts.addr1 : "";
@@ -7115,7 +7118,7 @@ export default function InvoiceManagement() {
           row[36] = ""; // Bar code
           row[37] = Number(item.quantity) || 1; // Quantity
           row[38] = ""; // Free Quantity
-          row[39] = item.unit || "OTH"; // Unit
+          row[39] = item.unit || "OTHERS"; // Unit
           row[40] = itemTaxable; // Unit Price
           row[41] = itemTotal; // Gross Amount (total including tax)
           row[42] = ""; // Discount
@@ -7152,18 +7155,127 @@ export default function InvoiceManagement() {
         });
       }
 
-      // Assemble workbook
-      const wb2 = XLSX.utils.book_new();
-      const wsData = [row0, row1, headers, ...dataRows];
-      const ws2 = XLSX.utils.aoa_to_sheet(wsData);
+      // ── Build styled workbook with xlsx-js-style ─────────────────────────
+
+      // Cell style helpers
+      const mkStyle = (bgRgb: string, bold = false, fontRgb = "000000", fontSize = 10, align: "left"|"center"|"right" = "center", wrapText = true) => ({
+        fill: { fgColor: { rgb: bgRgb } },
+        font: { bold, color: { rgb: fontRgb }, sz: fontSize, name: "Calibri" },
+        alignment: { horizontal: align, vertical: "center", wrapText },
+        border: {
+          top:    { style: "thin", color: { rgb: "D0D0D0" } },
+          bottom: { style: "thin", color: { rgb: "D0D0D0" } },
+          left:   { style: "thin", color: { rgb: "D0D0D0" } },
+          right:  { style: "thin", color: { rgb: "D0D0D0" } },
+        },
+      });
+
+      // Color palette per section (matching GST e-invoice template)
+      const COLORS = {
+        title:       { bg: "FFFFFF", font: "1F4E79" }, // white bg, dark-blue text
+        noGroup:     { bg: "FFF2CC", font: "7F6000" }, // yellow  (cols 0-3)
+        docDetails:  { bg: "DDEBF7", font: "1F4E79" }, // light blue
+        buyerDet:    { bg: "E2EFDA", font: "375623" }, // light green
+        dispatchDet: { bg: "FCE4D6", font: "843C0C" }, // peach
+        shippingDet: { bg: "EDEDED", font: "404040" }, // light gray
+        productDet:  { bg: "FFF2CC", font: "7F6000" }, // yellow
+        batchDet:    { bg: "E8DEFF", font: "4B0082" }, // lavender
+        valueDet:    { bg: "D9E1F2", font: "17375E" }, // periwinkle
+        exportDet:   { bg: "F4CCCC", font: "990000" }, // pink-red
+        ewayDet:     { bg: "D0E4F5", font: "0B3861" }, // sky blue
+        dataRow:     { bg: "FFFFFF", font: "000000" }, // white
+      };
+
+      // Map column index → section color
+      const getSectionColor = (col: number) => {
+        if (col <= 3)  return COLORS.noGroup;
+        if (col <= 6)  return COLORS.docDetails;
+        if (col <= 17) return COLORS.buyerDet;
+        if (col <= 23) return COLORS.dispatchDet;
+        if (col <= 31) return COLORS.shippingDet;
+        if (col <= 56) return COLORS.productDet;
+        if (col <= 59) return COLORS.batchDet;
+        if (col <= 69) return COLORS.valueDet;
+        if (col <= 76) return COLORS.exportDet;
+        return COLORS.ewayDet;
+      };
+
+      // Build styled sheet from raw arrays
+      const wsData2 = [row0, row1, headers, ...dataRows];
+      const ws2 = XLSXStyle.utils.aoa_to_sheet(wsData2);
+
+      // Apply styles row by row
+      const numCols = 86;
+      const numRows = wsData2.length;
+
+      for (let R = 0; R < numRows; R++) {
+        for (let C = 0; C < numCols; C++) {
+          const cellRef = XLSXStyle.utils.encode_cell({ r: R, c: C });
+          if (!ws2[cellRef]) ws2[cellRef] = { t: "z", v: "" };
+
+          const cell = ws2[cellRef];
+          const sec = getSectionColor(C);
+
+          if (R === 0) {
+            // Title row
+            cell.s = mkStyle(COLORS.title.bg, true, COLORS.title.font, 11, "left");
+          } else if (R === 1) {
+            // Group header row
+            const v = String(cell.v || "");
+            if (v) {
+              cell.s = mkStyle(sec.bg, true, sec.font, 10, "center");
+            } else {
+              cell.s = mkStyle(sec.bg, false, sec.font, 10, "center");
+            }
+          } else if (R === 2) {
+            // Column header row — bold, colored per section
+            cell.s = mkStyle(sec.bg, true, sec.font, 9, "center");
+          } else {
+            // Data rows
+            const v = cell.v;
+            // Replace 0 with empty
+            if (v === 0 || v === "0") {
+              cell.v = "";
+              cell.t = "z";
+            }
+            cell.s = mkStyle(COLORS.dataRow.bg, false, COLORS.dataRow.font, 9, "left", false);
+          }
+        }
+      }
+
+      // Merge cells
+      ws2["!merges"] = [
+        // Title row: full width
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 85 } },
+        // Group header merges
+        { s: { r: 1, c: 0  }, e: { r: 1, c: 3  } }, // no-group
+        { s: { r: 1, c: 4  }, e: { r: 1, c: 6  } }, // Document Details
+        { s: { r: 1, c: 7  }, e: { r: 1, c: 17 } }, // Buyer Details
+        { s: { r: 1, c: 18 }, e: { r: 1, c: 23 } }, // Dispatch Details
+        { s: { r: 1, c: 24 }, e: { r: 1, c: 31 } }, // Shipping Details
+        { s: { r: 1, c: 32 }, e: { r: 1, c: 56 } }, // Product Details
+        { s: { r: 1, c: 57 }, e: { r: 1, c: 59 } }, // Batch Details
+        { s: { r: 1, c: 60 }, e: { r: 1, c: 69 } }, // Value Details
+        { s: { r: 1, c: 70 }, e: { r: 1, c: 76 } }, // Export Details
+        { s: { r: 1, c: 77 }, e: { r: 1, c: 84 } }, // E-way-bill Details
+      ];
+
+      // Row heights (pt)
+      ws2["!rows"] = [
+        { hpt: 24 }, // Row 0: title
+        { hpt: 30 }, // Row 1: group headers
+        { hpt: 30 }, // Row 2: column headers
+        ...dataRows.map(() => ({ hpt: 18 })),
+      ];
 
       // Column widths
       ws2["!cols"] = headers.map((h) => ({ wch: Math.max(String(h).length + 2, 14) }));
 
-      XLSX.utils.book_append_sheet(wb2, ws2, "Sheet1");
+      const wb2 = XLSXStyle.utils.book_new();
+      XLSXStyle.utils.book_append_sheet(wb2, ws2, "Sheet1");
 
       const monthLabel = startDate.toLocaleString("en-IN", { month: "short", year: "numeric" });
-      XLSX.writeFile(wb2, `e-invoices-${monthLabel.replace(" ", "-")}.xlsx`);
+      XLSXStyle.writeFile(wb2, `e-invoices-${monthLabel.replace(" ", "-")}.xlsx`);
 
       toast({
         title: "Invoices exported",

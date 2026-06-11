@@ -67,6 +67,7 @@
     "tippy.js": "^6.3.7",
     "wav": "^1.0.2",
     "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -110,6 +111,7 @@
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.176.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
+    "adm-zip": "^0.5.17",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -20,6 +20,7 @@ import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import * as Docx from "docx";
+import * as XLSX from "xlsx";
 import {
   Area,
   AreaChart,

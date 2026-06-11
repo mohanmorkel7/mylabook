@@ -6913,63 +6913,287 @@ export default function InvoiceManagement() {
       // Build date range for the selected month
       const startDate = new Date(`${year}-${String(month).padStart(2, "0")}-01`);
       const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
-
       const fromDate = startDate.toISOString().split("T")[0];
       const toDate = endDate.toISOString().split("T")[0];
 
-      // Fetch invoices for all clients in this month
-      const allInvoices: any[] = [];
+      // GST state code → state name mapping
+      const GST_STATE_MAP: Record<string, string> = {
+        "01": "JAMMU & KASHMIR", "02": "HIMACHAL PRADESH", "03": "PUNJAB",
+        "04": "CHANDIGARH", "05": "UTTARAKHAND", "06": "HARYANA",
+        "07": "DELHI", "08": "RAJASTHAN", "09": "UTTAR PRADESH", "10": "BIHAR",
+        "11": "SIKKIM", "12": "ARUNACHAL PRADESH", "13": "NAGALAND",
+        "14": "MANIPUR", "15": "MIZORAM", "16": "TRIPURA", "17": "MEGHALAYA",
+        "18": "ASSAM", "19": "WEST BENGAL", "20": "JHARKHAND", "21": "ODISHA",
+        "22": "CHHATTISGARH", "23": "MADHYA PRADESH", "24": "GUJARAT",
+        "26": "DADRA & NAGAR HAVELI", "27": "MAHARASHTRA", "28": "ANDHRA PRADESH",
+        "29": "KARNATAKA", "30": "GOA", "31": "LAKSHADWEEP", "32": "KERALA",
+        "33": "TAMIL NADU", "34": "PUDUCHERRY", "35": "ANDAMAN & NICOBAR ISLANDS",
+        "36": "TELANGANA", "37": "ANDHRA PRADESH", "38": "LADAKH",
+      };
 
+      const getStateFromGSTIN = (gstin: string) => {
+        if (!gstin || gstin.length < 2) return "";
+        return GST_STATE_MAP[gstin.substring(0, 2)] || "";
+      };
+
+      const fmtDate = (d: string) => {
+        if (!d) return "";
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return d;
+        const dd = String(dt.getDate()).padStart(2, "0");
+        const mm = String(dt.getMonth() + 1).padStart(2, "0");
+        return `${dd}/${mm}/${dt.getFullYear()}`;
+      };
+
+      // Parse billing address into components
+      const parseAddress = (addr: string) => {
+        if (!addr) return { addr1: "", addr2: "", location: "", pin: "", state: "" };
+        const lines = addr.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+        const pinMatch = addr.match(/\b\d{6}\b/);
+        return {
+          addr1: lines[0] || "",
+          addr2: lines[1] || "",
+          location: lines.length >= 4 ? lines[lines.length - 3] : lines[lines.length - 2] || "",
+          pin: pinMatch ? pinMatch[0] : "",
+          state: lines[lines.length - 1] || "",
+        };
+      };
+
+      // Seller GSTIN from company config
+      const sellerGSTIN = companyConfig.gstNumber || "";
+      const sellerStateCode = sellerGSTIN.substring(0, 2);
+
+      // Tax rate from taxConfig
+      const hsnCode = taxConfig.invoiceHsnCode || "998314";
+      const totalGstRate = taxConfig.invoiceRatePercentage || 18;
+      const halfRate = totalGstRate / 2;
+
+      // Fetch invoices for all clients
+      const allInvoices: any[] = [];
       for (const client of clients) {
         const res = await fetch(`/api/invoice-management/invoices/${client.clientId}`);
         if (!res.ok) continue;
-
         const invoices = await res.json();
         if (Array.isArray(invoices)) {
-          allInvoices.push(
-            ...invoices.filter((inv: any) => {
-              const invDate = inv.generatedDate || inv.createdAt || "";
-              return invDate >= fromDate && invDate <= toDate;
-            })
-          );
+          const filtered = invoices.filter((inv: any) => {
+            const invDate = inv.generatedDate || inv.createdAt || "";
+            return invDate >= fromDate && invDate <= toDate;
+          });
+          filtered.forEach((inv: any) => allInvoices.push({ ...inv, _client: client }));
         }
       }
 
       if (allInvoices.length === 0) {
-        toast({ title: "No invoices found", description: `No generated invoices found for ${startDate.toLocaleString("en-IN", { month: "short", year: "numeric" })}` });
+        toast({
+          title: "No invoices found",
+          description: `No generated invoices found for ${startDate.toLocaleString("en-IN", { month: "short", year: "numeric" })}`,
+        });
         return;
       }
 
-      // Format data for Excel
-      const rows = allInvoices.map((invoice) => ({
-        "Invoice Number": invoice.invoiceNumber || "",
-        "Client": invoice.clientName || "",
-        "Month": invoice.month || "",
-        "Amount": invoice.amount || 0,
-        "Status": invoice.status || "",
-        "Generated Date": invoice.generatedDate || invoice.createdAt || "",
-        "Financial Year": invoice.financialYear || "",
-        "Serial": invoice.serial || "",
-        "Billing Model": invoice.billingModel || "",
-        "Invoice Type": invoice.invoiceType || "",
-      }));
+      // Sort by invoice number
+      allInvoices.sort((a, b) => (a.invoiceNumber || "").localeCompare(b.invoiceNumber || "", undefined, { numeric: true }));
 
-      // Use xlsx library if available, otherwise fall back to CSV
-      if (typeof XLSX !== "undefined") {
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Invoices");
-        const monthLabel = startDate.toLocaleString("en-IN", { month: "short", year: "numeric" });
-        XLSX.writeFile(wb, `invoices-${monthLabel.replace(" ", "-")}.xlsx`);
-      } else {
-        // Fallback to CSV
-        const csv = toCsv(rows);
-        const monthLabel = startDate.toLocaleString("en-IN", { month: "short", year: "numeric" });
-        downloadTextFile(`invoices-${monthLabel.replace(" ", "-")}.csv`, csv, "text/csv;charset=utf-8");
+      // ── Build Excel rows ──────────────────────────────────────────────────
+
+      // Row 0: Title
+      const row0 = Array(86).fill("");
+      row0[1] = "E-Invoice System ";
+      row0[17] = "*  Indicates Mandatory Fields";
+
+      // Row 1: Group headers
+      const row1 = Array(86).fill("");
+      row1[4]  = "Document Details";
+      row1[7]  = "Buyer Details";
+      row1[18] = "Dispatch Details";
+      row1[24] = "Shipping Details";
+      row1[32] = "Product Details";
+      row1[57] = "Batch Details";
+      row1[60] = "Value Details";
+      row1[70] = "Export Details";
+      row1[77] = "E-way-bill Details";
+
+      // Row 2: Column headers (exact from sample)
+      const headers = [
+        "Supply Type Code *", "Reverse Charge", "e-Comm GSTIN", "Igst On Intra",
+        "Document Type *", "Document Number *", "Document Date (DD/MM/YYYY) *",
+        "Buyer GSTIN *", "Buyer Legal Name *", "Buyer Trade Name ", "Buyer POS *",
+        "Buyer Addr1 *", "Buyer Addr2", "Buyer Location *", "Buyer Pin Code", "Buyer State *",
+        "Buyer Phone Number", "Buyer Email Id",
+        "Dispatch Name ", "Dispatch Addr1 ", "Dispatch Addr2", "Dispatch Location ", "Dispatch Pin Code ", "Dispatch State ",
+        "Shipping GSTIN ", "Shipping Legal Name ", "Shipping Trade Name ", "Shipping Addr1 ", "Shipping Addr2",
+        "Shipping Location ", "Shipping Pin Code ", "Shipping State ",
+        "Sl.No. *", "Product Description", "Is_Service *", "HSN code *", "Bar code ",
+        "Quantity *", "Free Quantity", "Unit *", "Unit Price *", "Gross Amount *",
+        "Discount", "Pre Tax Value", "Taxable value *", "GST Rate (%) *",
+        "Sgst Amt(Rs)", "Cgst Amt (Rs)", "Igst Amt (Rs)",
+        "Cess Rate (%)", "Cess Amt Adval (Rs)", "Cess Non Adval Amt (Rs)",
+        "State Cess Rate (%)", "State Cess Adval Amt (Rs)", "State Cess Non-Adval Amt (Rs)",
+        "Other Charges  ", "Item Total *",
+        "Batch Name", "Batch Expiry Dt", "Warranty Dt",
+        "Total Taxable value *", "Sgst Amt", "Cgst Amt", "Igst Amt", "Cess Amt",
+        "State Cess Amt", "Discount", "Other charges", "Round off", "Total Invoice value *",
+        "Shipping Bill No", "Shipping Bill Dt", "Port", "Refund claim",
+        "Foreign Currency ", "Country Code ", "Export Duty Amount",
+        "Trans ID", "Trans Name", "Trans Mode ", "Distance ", "Trans Doc No.", "Trans Doc Date",
+        "Vehicle No.", "Vehicle Type", "Error List",
+      ];
+
+      // Row 3: Column codes (exact from sample)
+      const codes = [
+        "colSupType", "colRevCharge", "colEcomGstin", "colIgstIntra",
+        "colDoctype", "colDocno", "colDocdate",
+        "colBgstin", "colBLegalname", "colBTradname", "colPos",
+        "colBaddr1", "colBaddr2", "colBLoc", "colBPin", "colBState",
+        "colBPhno", "colBEmail",
+        "colDName", "colDaddr1", "colDaddr2", "colDLoc", "colDPin", "colDState",
+        "colSgstin", "colSLegalname", "colSTradname", "colSaddr1", "colSaddr2", "colSLoc", "colSPin", "colSState",
+        "colProdSlno", "colProddesc", "colProdservice", "colHsn", "colBar",
+        "colQuantity", "colFreeQuanty", "colUnit", "colUnitPrice", "colTotal",
+        "colDiscount", "colPreTaxValue", "colAssValue", "colGstrate",
+        "colSgst", "colCgst", "colIgst",
+        "colCessrate", "colCessadval", "colCessnonad",
+        "colStCessrate", "colStCessadval", "colStCessnonad",
+        "colOthChrgs", "colTolitemval",
+        "colBchname", "colBchExpDt", "colBchWarDt",
+        "colTotTaxval", "colTsgstval", "colTcgstval", "colTigstval", "colTcessval",
+        "colTstcessval", "colTDiscount", "colTOthChrgs", "colRoundOff", "colTinvoiceval",
+        "colShipBilNo", "colShipBilDt", "colPort", "colSupRefund",
+        "colForCur", "colCntryCode", "colExpDty",
+        "colTid", "colTName", "colTMode", "colTDistance", "colTDocNo", "colTDocDt",
+        "colTVehno", "colTVehTyp", "",
+      ];
+
+      // Build data rows
+      const dataRows: any[][] = [];
+
+      for (const invoice of allInvoices) {
+        const clientData = invoice._client || {};
+        const buyerGSTIN = clientData.gstin || "";
+        const buyerStateCode = buyerGSTIN.substring(0, 2);
+        const isInterState = sellerStateCode && buyerStateCode && sellerStateCode !== buyerStateCode;
+        const buyerStateName = getStateFromGSTIN(buyerGSTIN) || "";
+        const addrParts = parseAddress(clientData.billingAddress || "");
+
+        // Tax calculation: invoice.amount is the taxable value (pre-tax)
+        const taxableAmount = Number(invoice.amount) || 0;
+        const taxAmount = Math.round(taxableAmount * totalGstRate / 100);
+        const sgstAmt = isInterState ? 0 : Math.round(taxableAmount * halfRate / 100);
+        const cgstAmt = isInterState ? 0 : Math.round(taxableAmount * halfRate / 100);
+        const igstAmt = isInterState ? taxAmount : 0;
+        const totalInvoiceValue = taxableAmount + taxAmount;
+
+        // Line items from customInvoiceRows or single summary row
+        const rawLineItems: any[] = Array.isArray(invoice.customInvoiceRows) && invoice.customInvoiceRows.length > 0
+          ? invoice.customInvoiceRows
+          : [];
+
+        const lineItems = rawLineItems.length > 0
+          ? rawLineItems
+          : [{ description: invoice.mmcInvoiceTitle || "Professional Services", amount: taxableAmount, quantity: 1, unit: "OTH" }];
+
+        lineItems.forEach((item: any, itemIdx: number) => {
+          const isFirst = itemIdx === 0;
+          const isLast = itemIdx === lineItems.length - 1;
+
+          const itemTaxable = Number(item.amount || item.taxableAmount || item.value || 0)
+            || (isFirst && lineItems.length === 1 ? taxableAmount : 0);
+          const itemGstRate = Number(item.gstRate || totalGstRate);
+          const itemTax = Math.round(itemTaxable * itemGstRate / 100);
+          const itemSgst = isInterState ? 0 : Math.round(itemTaxable * (itemGstRate / 2) / 100);
+          const itemCgst = isInterState ? 0 : Math.round(itemTaxable * (itemGstRate / 2) / 100);
+          const itemIgst = isInterState ? itemTax : 0;
+          const itemTotal = itemTaxable + itemTax;
+
+          const row = Array(86).fill("");
+
+          // Document Details
+          row[0] = isFirst ? "B2B" : "";
+          row[1] = ""; // Reverse Charge
+          row[2] = ""; // e-Comm GSTIN
+          row[3] = ""; // Igst On Intra
+          row[4] = isFirst ? "Tax Invoice" : "";
+          row[5] = isFirst ? (invoice.invoiceNumber || "") : "";
+          row[6] = isFirst ? fmtDate(invoice.generatedDate || "") : "";
+
+          // Buyer Details
+          row[7]  = isFirst ? buyerGSTIN : "";
+          row[8]  = isFirst ? (invoice.clientName || clientData.name || "") : "";
+          row[9]  = ""; // Trade name
+          row[10] = isFirst ? buyerStateName : ""; // POS = buyer state
+          row[11] = isFirst ? addrParts.addr1 : "";
+          row[12] = isFirst ? addrParts.addr2 : "";
+          row[13] = isFirst ? addrParts.location : "";
+          row[14] = isFirst ? addrParts.pin : "";
+          row[15] = isFirst ? buyerStateName : "";
+          row[16] = ""; // Phone
+          row[17] = isFirst ? (clientData.billingEmail || "") : "";
+
+          // Dispatch & Shipping (leave blank)
+          for (let i = 18; i <= 31; i++) row[i] = "";
+
+          // Product Details
+          row[32] = itemIdx + 1; // Sl.No
+          row[33] = item.description || item.name || item.label || "";
+          row[34] = "Yes"; // Is_Service
+          row[35] = item.hsnCode || hsnCode; // HSN code
+          row[36] = ""; // Bar code
+          row[37] = Number(item.quantity) || 1; // Quantity
+          row[38] = ""; // Free Quantity
+          row[39] = item.unit || "OTH"; // Unit
+          row[40] = itemTaxable; // Unit Price
+          row[41] = itemTaxable; // Gross Amount
+          row[42] = ""; // Discount
+          row[43] = ""; // Pre Tax Value
+          row[44] = itemTaxable; // Taxable value
+          row[45] = itemGstRate; // GST Rate
+          row[46] = itemSgst; // Sgst Amt
+          row[47] = itemCgst; // Cgst Amt
+          row[48] = itemIgst; // Igst Amt
+          row[49] = ""; // Cess Rate
+          row[50] = ""; row[51] = ""; row[52] = ""; row[53] = ""; row[54] = "";
+          row[55] = ""; // Other Charges
+          row[56] = itemTotal; // Item Total
+
+          // Batch Details
+          row[57] = ""; row[58] = ""; row[59] = "";
+
+          // Value Details (totals on last item row only)
+          row[60] = isLast ? taxableAmount : "";
+          row[61] = isLast ? sgstAmt : "";
+          row[62] = isLast ? cgstAmt : "";
+          row[63] = isLast ? igstAmt : "";
+          row[64] = ""; // Cess Amt
+          row[65] = ""; // State Cess Amt
+          row[66] = ""; // Discount
+          row[67] = ""; // Other charges
+          row[68] = ""; // Round off
+          row[69] = isLast ? totalInvoiceValue : ""; // Total Invoice value
+
+          // Export Details & E-way-bill Details (leave blank)
+          for (let i = 70; i < 86; i++) row[i] = "";
+
+          dataRows.push(row);
+        });
       }
 
+      // Assemble workbook
+      const wb2 = XLSX.utils.book_new();
+      const wsData = [row0, row1, headers, codes, ...dataRows];
+      const ws2 = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Column widths
+      ws2["!cols"] = headers.map((h) => ({ wch: Math.max(String(h).length + 2, 14) }));
+
+      XLSX.utils.book_append_sheet(wb2, ws2, "Sheet1");
+
       const monthLabel = startDate.toLocaleString("en-IN", { month: "short", year: "numeric" });
-      toast({ title: "Invoices exported", description: `${allInvoices.length} invoices for ${monthLabel} exported.` });
+      XLSX.writeFile(wb2, `e-invoices-${monthLabel.replace(" ", "-")}.xlsx`);
+
+      toast({
+        title: "Invoices exported",
+        description: `${allInvoices.length} invoice(s) for ${monthLabel} exported in E-Invoice format.`,
+      });
     } catch (error: any) {
       console.error("[Invoice] exportGeneratedInvoicesToExcel error:", error);
       toast({ title: "Error", description: error?.message || "Failed to export invoices", variant: "destructive" });

@@ -6903,6 +6903,74 @@ export default function InvoiceManagement() {
     }
   };
 
+  const exportGeneratedInvoicesToExcel = async (month: string, year: string) => {
+    try {
+      // Build date range for the selected month
+      const startDate = new Date(`${year}-${String(month).padStart(2, "0")}-01`);
+      const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+
+      const fromDate = startDate.toISOString().split("T")[0];
+      const toDate = endDate.toISOString().split("T")[0];
+
+      // Fetch invoices for all clients in this month
+      const allInvoices: any[] = [];
+
+      for (const client of clients) {
+        const res = await fetch(`/api/invoice-management/invoices/${client.clientId}`);
+        if (!res.ok) continue;
+
+        const invoices = await res.json();
+        if (Array.isArray(invoices)) {
+          allInvoices.push(
+            ...invoices.filter((inv: any) => {
+              const invDate = inv.generatedDate || inv.createdAt || "";
+              return invDate >= fromDate && invDate <= toDate;
+            })
+          );
+        }
+      }
+
+      if (allInvoices.length === 0) {
+        toast({ title: "No invoices found", description: `No generated invoices found for ${startDate.toLocaleString("en-IN", { month: "short", year: "numeric" })}` });
+        return;
+      }
+
+      // Format data for Excel
+      const rows = allInvoices.map((invoice) => ({
+        "Invoice Number": invoice.invoiceNumber || "",
+        "Client": invoice.clientName || "",
+        "Month": invoice.month || "",
+        "Amount": invoice.amount || 0,
+        "Status": invoice.status || "",
+        "Generated Date": invoice.generatedDate || invoice.createdAt || "",
+        "Financial Year": invoice.financialYear || "",
+        "Serial": invoice.serial || "",
+        "Billing Model": invoice.billingModel || "",
+        "Invoice Type": invoice.invoiceType || "",
+      }));
+
+      // Use xlsx library if available, otherwise fall back to CSV
+      if (typeof XLSX !== "undefined") {
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Invoices");
+        const monthLabel = startDate.toLocaleString("en-IN", { month: "short", year: "numeric" });
+        XLSX.writeFile(wb, `invoices-${monthLabel.replace(" ", "-")}.xlsx`);
+      } else {
+        // Fallback to CSV
+        const csv = toCsv(rows);
+        const monthLabel = startDate.toLocaleString("en-IN", { month: "short", year: "numeric" });
+        downloadTextFile(`invoices-${monthLabel.replace(" ", "-")}.csv`, csv, "text/csv;charset=utf-8");
+      }
+
+      const monthLabel = startDate.toLocaleString("en-IN", { month: "short", year: "numeric" });
+      toast({ title: "Invoices exported", description: `${allInvoices.length} invoices for ${monthLabel} exported.` });
+    } catch (error: any) {
+      console.error("[Invoice] exportGeneratedInvoicesToExcel error:", error);
+      toast({ title: "Error", description: error?.message || "Failed to export invoices", variant: "destructive" });
+    }
+  };
+
   const handleSync = () => {
     setClients([...CLIENTS]);
     setInvoices(INVOICES);

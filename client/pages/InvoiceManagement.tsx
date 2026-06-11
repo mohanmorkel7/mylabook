@@ -7039,31 +7039,6 @@ export default function InvoiceManagement() {
         "Vehicle No.", "Vehicle Type", "Error List",
       ];
 
-      // Row 3: Column codes (exact from sample)
-      const codes = [
-        "colSupType", "colRevCharge", "colEcomGstin", "colIgstIntra",
-        "colDoctype", "colDocno", "colDocdate",
-        "colBgstin", "colBLegalname", "colBTradname", "colPos",
-        "colBaddr1", "colBaddr2", "colBLoc", "colBPin", "colBState",
-        "colBPhno", "colBEmail",
-        "colDName", "colDaddr1", "colDaddr2", "colDLoc", "colDPin", "colDState",
-        "colSgstin", "colSLegalname", "colSTradname", "colSaddr1", "colSaddr2", "colSLoc", "colSPin", "colSState",
-        "colProdSlno", "colProddesc", "colProdservice", "colHsn", "colBar",
-        "colQuantity", "colFreeQuanty", "colUnit", "colUnitPrice", "colTotal",
-        "colDiscount", "colPreTaxValue", "colAssValue", "colGstrate",
-        "colSgst", "colCgst", "colIgst",
-        "colCessrate", "colCessadval", "colCessnonad",
-        "colStCessrate", "colStCessadval", "colStCessnonad",
-        "colOthChrgs", "colTolitemval",
-        "colBchname", "colBchExpDt", "colBchWarDt",
-        "colTotTaxval", "colTsgstval", "colTcgstval", "colTigstval", "colTcessval",
-        "colTstcessval", "colTDiscount", "colTOthChrgs", "colRoundOff", "colTinvoiceval",
-        "colShipBilNo", "colShipBilDt", "colPort", "colSupRefund",
-        "colForCur", "colCntryCode", "colExpDty",
-        "colTid", "colTName", "colTMode", "colTDistance", "colTDocNo", "colTDocDt",
-        "colTVehno", "colTVehTyp", "",
-      ];
-
       // Build data rows
       const dataRows: any[][] = [];
 
@@ -7142,7 +7117,7 @@ export default function InvoiceManagement() {
           row[38] = ""; // Free Quantity
           row[39] = item.unit || "OTH"; // Unit
           row[40] = itemTaxable; // Unit Price
-          row[41] = itemTaxable; // Gross Amount
+          row[41] = itemTotal; // Gross Amount (total including tax)
           row[42] = ""; // Discount
           row[43] = ""; // Pre Tax Value
           row[44] = itemTaxable; // Taxable value
@@ -7179,7 +7154,7 @@ export default function InvoiceManagement() {
 
       // Assemble workbook
       const wb2 = XLSX.utils.book_new();
-      const wsData = [row0, row1, headers, codes, ...dataRows];
+      const wsData = [row0, row1, headers, ...dataRows];
       const ws2 = XLSX.utils.aoa_to_sheet(wsData);
 
       // Column widths

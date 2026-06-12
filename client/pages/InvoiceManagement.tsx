@@ -6995,6 +6995,37 @@ export default function InvoiceManagement() {
       // Sort by invoice number
       allInvoices.sort((a, b) => (a.invoiceNumber || "").localeCompare(b.invoiceNumber || "", undefined, { numeric: true }));
 
+      // ── Calculate financial year serial numbers (Apr-Mar) ────────────────
+
+      // Financial year starts in April
+      const getFinancialYear = (dateStr: string) => {
+        const d = new Date(dateStr);
+        const year = d.getFullYear();
+        const month = d.getMonth(); // 0=Jan, 3=Apr, 11=Dec
+        // If month >= April (3), FY is current year
+        // If month < April, FY is previous year
+        return month >= 3 ? year : year - 1;
+      };
+
+      // Group invoices by financial year
+      const invoicesByFY: Record<number, any[]> = {};
+      allInvoices.forEach((inv) => {
+        const fy = getFinancialYear(inv.generatedDate || "");
+        if (!invoicesByFY[fy]) invoicesByFY[fy] = [];
+        invoicesByFY[fy].push(inv);
+      });
+
+      // Assign serial numbers within each FY
+      const serialMap = new Map<string, number>(); // invoiceId → serial number
+      Object.keys(invoicesByFY)
+        .sort()
+        .forEach((fy) => {
+          let serial = 1;
+          invoicesByFY[parseInt(fy)].forEach((inv) => {
+            serialMap.set(inv.invoiceId || inv.invoiceNumber || "", serial++);
+          });
+        });
+
       // ── Build Excel rows ──────────────────────────────────────────────────
 
       // Row 0: Title
@@ -7099,8 +7130,10 @@ export default function InvoiceManagement() {
           row[8]  = isFirst ? buyerLegalName : "";
           row[9]  = ""; // Trade name
           row[10] = isFirst ? buyerStateName : ""; // POS = buyer state
-          row[11] = isFirst ? addrParts.addr1 : "";
-          row[12] = isFirst ? addrParts.addr2 : "";
+          // Combine Addr1 and Addr2 with comma
+          const fullAddr = [addrParts.addr1, addrParts.addr2].filter(Boolean).join(", ");
+          row[11] = isFirst ? fullAddr : "";
+          row[12] = ""; // Addr2 not used anymore
           row[13] = isFirst ? addrParts.location : "";
           row[14] = isFirst ? addrParts.pin : "";
           row[15] = isFirst ? buyerStateName : "";
@@ -7111,7 +7144,9 @@ export default function InvoiceManagement() {
           for (let i = 18; i <= 31; i++) row[i] = "";
 
           // Product Details
-          row[32] = itemIdx + 1; // Sl.No
+          // Use FY serial number (from serialMap) instead of item index
+          const fySerial = serialMap.get(invoice.invoiceId || invoice.invoiceNumber || "") || (itemIdx + 1);
+          row[32] = isFirst ? fySerial : ""; // Sl.No (only on first item)
           row[33] = item.description || item.name || item.label || "";
           row[34] = "Yes"; // Is_Service
           row[35] = item.hsnCode || hsnCode; // HSN code
@@ -7120,14 +7155,14 @@ export default function InvoiceManagement() {
           row[38] = ""; // Free Quantity
           row[39] = item.unit || "OTHERS"; // Unit
           row[40] = itemTaxable; // Unit Price
-          row[41] = itemTotal; // Gross Amount (total including tax)
+          row[41] = itemTaxable; // Gross Amount (without GST, taxable value only)
           row[42] = ""; // Discount
           row[43] = ""; // Pre Tax Value
           row[44] = itemTaxable; // Taxable value
           row[45] = itemGstRate; // GST Rate
-          row[46] = itemSgst; // Sgst Amt
-          row[47] = itemCgst; // Cgst Amt
-          row[48] = itemIgst; // Igst Amt
+          row[46] = itemSgst || 0; // Sgst Amt (show 0 if empty)
+          row[47] = itemCgst || 0; // Cgst Amt (show 0 if empty)
+          row[48] = itemIgst || 0; // Igst Amt (show 0 if empty)
           row[49] = ""; // Cess Rate
           row[50] = ""; row[51] = ""; row[52] = ""; row[53] = ""; row[54] = "";
           row[55] = ""; // Other Charges
@@ -7138,9 +7173,9 @@ export default function InvoiceManagement() {
 
           // Value Details (totals on last item row only)
           row[60] = isLast ? taxableAmount : "";
-          row[61] = isLast ? sgstAmt : "";
-          row[62] = isLast ? cgstAmt : "";
-          row[63] = isLast ? igstAmt : "";
+          row[61] = isLast ? (sgstAmt || 0) : "";
+          row[62] = isLast ? (cgstAmt || 0) : "";
+          row[63] = isLast ? (igstAmt || 0) : "";
           row[64] = ""; // Cess Amt
           row[65] = ""; // State Cess Amt
           row[66] = ""; // Discount

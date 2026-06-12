@@ -17,7 +17,7 @@ import {
   AlertTriangle, BadgeCheck, CheckCircle2, Clock, CreditCard,
   FileText, IndianRupee, RefreshCw, Send, TrendingUp,
   ChevronDown, ChevronUp, Eye, Wallet, DollarSign,
-  ChevronLeft, ChevronRight, FileDown, X,
+  ChevronLeft, ChevronRight, FileDown, X, XCircle, ThumbsUp, ThumbsDown, Ban,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -492,17 +492,21 @@ export default function InvoiceTracker() {
     const sent        = invoices.filter(i => i.status === "Send" || i.status === "Sent").length;
     const overdue     = invoices.filter(isOverdue).length;
     const received    = invoices.filter(i => i.status === "Received").length;
-    const totalAmt    = invoices.reduce((s, i) => s + i.amount, 0);
-    const receivedAmt = invoices.reduce((s, i) => s + i.totalPaid, 0);
-    const tdsAmt      = invoices.reduce((s, i) => s + i.totalTds, 0);
+    const rejected    = invoices.filter(i => i.status === "Rejected").length;
+    // Exclude rejected invoices from all revenue metrics
+    const activeInvoices = invoices.filter(i => i.status !== "Rejected");
+    const totalAmt    = activeInvoices.reduce((s, i) => s + i.amount, 0);
+    const receivedAmt = activeInvoices.reduce((s, i) => s + i.totalPaid, 0);
+    const tdsAmt      = activeInvoices.reduce((s, i) => s + i.totalTds, 0);
     const pendingAmt  = totalAmt - receivedAmt;
-    return { total, waiting, approved, sent, overdue, received, totalAmt, receivedAmt, tdsAmt, pendingAmt };
+    return { total, waiting, approved, sent, overdue, received, rejected, totalAmt, receivedAmt, tdsAmt, pendingAmt };
   }, [invoices]);
 
   // ── Chart data ──────────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
     const map: Record<string, { month: string; count: number; amount: number; received: number }> = {};
     invoices.forEach(inv => {
+      if (inv.status === "Rejected") return; // exclude rejected from chart
       const key = inv.month || inv.generatedDate?.substring(0, 7) || "Unknown";
       if (!map[key]) map[key] = { month: key, count: 0, amount: 0, received: 0 };
       map[key].count++;
@@ -622,10 +626,11 @@ export default function InvoiceTracker() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard icon={FileText}      label="Total Invoices"    value={metrics.total}    sub={fmtINR(metrics.totalAmt)}    color="border-l-slate-500" />
         <StatCard icon={Clock}         label="Waiting Approval"  value={metrics.waiting}                                    color="border-l-amber-500" />
         <StatCard icon={BadgeCheck}    label="Approved"          value={metrics.approved}                                   color="border-l-blue-500" />
+        <StatCard icon={Ban}           label="Rejected"          value={metrics.rejected} sub="Excluded from revenue"       color="border-l-red-600" />
         <StatCard icon={Send}          label="Sent to Client"    value={metrics.sent}                                       color="border-l-indigo-500" />
         <StatCard icon={AlertTriangle} label="Overdue >15 days"  value={metrics.overdue}                                    color="border-l-red-500" />
         <StatCard icon={CheckCircle2}  label="Received"          value={metrics.received} sub={fmtINR(metrics.receivedAmt)} color="border-l-green-500" />
@@ -758,6 +763,7 @@ export default function InvoiceTracker() {
                     <span className="flex items-center justify-end gap-1">Amount <SortIcon col="amount" /></span>
                   </th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-600">Status</th>
+                  <th className="px-3 py-2 text-center font-semibold text-gray-600">Approval</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("date")}>
                     <span className="flex items-center gap-1">Generated <SortIcon col="date" /></span>
                   </th>
@@ -770,7 +776,7 @@ export default function InvoiceTracker() {
               </thead>
               <tbody>
                 {paginated.length === 0 && (
-                  <tr><td colSpan={12} className="px-3 py-10 text-center text-muted-foreground">No invoices found</td></tr>
+                  <tr><td colSpan={13} className="px-3 py-10 text-center text-muted-foreground">No invoices found</td></tr>
                 )}
                 {paginated.map((inv, idx) => {
                   const overdue = isOverdue(inv);
@@ -798,6 +804,48 @@ export default function InvoiceTracker() {
                           </span>
                         )}
                       </td>
+
+                      {/* Approval column */}
+                      <td className="px-3 py-2.5 text-center">
+                        {(() => {
+                          if (inv.status === "Waiting for approval") {
+                            return canManage ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  title="Approve"
+                                  onClick={() => handleStatusChange(inv, "Generated")}
+                                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-300 text-blue-700 hover:bg-blue-100 text-[10px] font-semibold transition-colors"
+                                >
+                                  <ThumbsUp className="h-3 w-3" /> Approve
+                                </button>
+                                <button
+                                  title="Reject"
+                                  onClick={() => handleStatusChange(inv, "Rejected")}
+                                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 border border-red-300 text-red-700 hover:bg-red-100 text-[10px] font-semibold transition-colors"
+                                >
+                                  <ThumbsDown className="h-3 w-3" /> Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-amber-600 font-medium">Pending</span>
+                            );
+                          }
+                          if (inv.status === "Rejected") {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-200 text-red-700 text-[10px] font-semibold">
+                                <XCircle className="h-3 w-3" /> Rejected
+                              </span>
+                            );
+                          }
+                          // All other statuses = approved
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 border border-blue-200 text-blue-700 text-[10px] font-semibold">
+                              <BadgeCheck className="h-3 w-3" /> Approved
+                            </span>
+                          );
+                        })()}
+                      </td>
+
                       <td className="px-3 py-2.5 whitespace-nowrap text-gray-500">{fmtDate(inv.generatedDate)}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-gray-500">{fmtDate(inv.sentDate)}</td>
                       <td className={`px-3 py-2.5 whitespace-nowrap ${overdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
@@ -842,17 +890,6 @@ export default function InvoiceTracker() {
                               className="p-1 rounded text-gray-500 hover:bg-gray-100"
                             >
                               <CreditCard className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-
-                          {/* Approve — admin/finance admin only, when waiting */}
-                          {canManage && inv.status === "Waiting for approval" && (
-                            <button
-                              title="Approve"
-                              onClick={() => handleStatusChange(inv, "Generated")}
-                              className="p-1 rounded text-blue-600 hover:bg-blue-50"
-                            >
-                              <BadgeCheck className="h-3.5 w-3.5" />
                             </button>
                           )}
 

@@ -53,10 +53,19 @@ interface TrackerInvoice {
   sentDate: string | null;
   approvedDate: string | null;
   approvedBy: string | null;
+  customInvoiceRows: any[];
+  invoiceTableConfig: any[];
+  mmcInvoiceTitle: string;
   createdAt: string;
   payments: Payment[];
   totalPaid: number;
   totalTds: number;
+}
+
+// Prop type for the main component
+interface InvoiceTrackerProps {
+  /** When provided, "Download PDF" delegates to this instead of html2canvas */
+  onDownloadPdf?: (invoice: TrackerInvoice) => Promise<void>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -160,8 +169,13 @@ function fmtCurrency(n: number) {
 
 // ── Invoice Preview Modal — renders exact invoice format + jsPDF download ─
 function InvoicePreviewModal({
-  invoice, canDownload, onClose,
-}: { invoice: TrackerInvoice; canDownload: boolean; onClose: () => void }) {
+  invoice, canDownload, onClose, onDownloadPdf,
+}: {
+  invoice: TrackerInvoice;
+  canDownload: boolean;
+  onClose: () => void;
+  onDownloadPdf?: (inv: TrackerInvoice) => Promise<void>;
+}) {
   const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
@@ -223,8 +237,16 @@ function InvoicePreviewModal({
     return [{ desc: (invoice as any).mmcInvoiceTitle || "Professional Services", amount: taxableAmt, hsnCode }];
   }, [invoice, taxableAmt, hsnCode]);
 
-  // Download using jsPDF (draw over the rendered HTML at 2× scale)
+  // Download: delegate to the parent's existing PDF function if provided,
+  // otherwise fall back to html2canvas capture of the preview div.
   const handleDownloadPDF = async () => {
+    if (onDownloadPdf) {
+      setDownloading(true);
+      try { await onDownloadPdf(invoice); }
+      catch (e: any) { toast({ title: "Error", description: e?.message || "PDF failed", variant: "destructive" }); }
+      finally { setDownloading(false); }
+      return;
+    }
     if (!printRef.current) return;
     setDownloading(true);
     try {
@@ -615,7 +637,7 @@ function StatusDropdown({ invoice, canChangeStatus, onStatusChange }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────
-export default function InvoiceTracker() {
+export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -1129,6 +1151,7 @@ export default function InvoiceTracker() {
           invoice={previewModal}
           canDownload={canManage}
           onClose={() => setPreviewModal(null)}
+          onDownloadPdf={onDownloadPdf}
         />
       )}
     </div>

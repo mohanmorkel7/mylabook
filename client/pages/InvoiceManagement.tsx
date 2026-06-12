@@ -8576,7 +8576,29 @@ export default function InvoiceManagement() {
       </div>
 
       {/* ── Invoice Tracker tab ─────────────────────────────────────────── */}
-      {mainTab === "tracker" && !settingsViewOpen && <InvoiceTracker />}
+      {mainTab === "tracker" && !settingsViewOpen && (
+        <InvoiceTracker
+          onDownloadPdf={async (inv) => {
+            // Reuse the exact same PDF generation used in Invoice History Table
+            await downloadInvoicePdf({
+              invoiceId: inv.invoiceId,
+              clientId: inv.clientId,
+              invoiceNumber: inv.invoiceNumber,
+              generatedDate: inv.generatedDate,
+              amount: inv.amount,
+              month: inv.month,
+              financialYear: inv.financialYear,
+              serial: inv.serial,
+              invoiceType: inv.invoiceType,
+              billingModel: inv.billingModel,
+              customInvoiceRows: inv.customInvoiceRows || [],
+              invoiceTableConfig: inv.invoiceTableConfig || [],
+              mmcInvoiceTitle: inv.mmcInvoiceTitle || "",
+              status: inv.status,
+            });
+          }}
+        />
+      )}
 
       {/* Configuration sections shown when settings view is open */}
       {mainTab === "clients" && settingsViewOpen && (

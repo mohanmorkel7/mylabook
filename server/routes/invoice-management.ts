@@ -263,9 +263,32 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS custom_invoice_rows TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS invoice_table_config TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS mmc_invoice_title TEXT`);
+      // Tracker columns
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS sent_date TEXT`);
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS approved_date TEXT`);
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS approved_by TEXT`);
     } catch (err) {
       console.log("[Invoice] invoice_records columns already exist or error:", (err as any)?.message);
     }
+
+    // Create invoice_payments table for payment tracking
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invoice_payments (
+        id             SERIAL PRIMARY KEY,
+        invoice_id     TEXT NOT NULL,
+        payment_date   TEXT NOT NULL,
+        amount_paid    BIGINT NOT NULL DEFAULT 0,
+        is_tds         BOOLEAN DEFAULT FALSE,
+        tds_percentage NUMERIC(5,2) DEFAULT 0,
+        tds_amount     BIGINT DEFAULT 0,
+        is_partial     BOOLEAN DEFAULT FALSE,
+        notes          TEXT,
+        created_by     TEXT,
+        created_at     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice_id ON invoice_payments(invoice_id)`);
+    console.log("[Invoice] ✓ invoice_payments table ready");
 
     // Create indexes
     console.log("[Invoice] Creating indexes...");
@@ -1451,6 +1474,157 @@ router.delete("/clients/:clientId/force", async (req: Request, res: Response) =>
   } catch (error: any) {
     console.error("[Invoice] DELETE /clients/force - Error:", error?.message || error);
     res.status(500).json({ error: "Failed to force delete client", details: error?.message });
+  }
+});
+
+// ── PATCH invoice status ──────────────────────────────────────────────────
+router.patch("/invoices/:invoiceId/status", async (req: Request, res: Response) => {
+  try {
+    const { invoiceId } = req.params;
+    const { status, approved_by, sent_date, approved_date } = req.body;
+    if (!status) return res.status(400).json({ error: "status is required" });
+
+    await queryWithRetry(() =>
+      pool.query(
+        `UPDATE invoice_records SET
+          status = $1,
+          approved_by = $2,
+          sent_date = $3,
+          approved_date = $4,
+          updated_at = NOW()
+        WHERE invoice_id = $5`,
+        [
+          encrypt(status),
+          approved_by ? encrypt(approved_by) : null,
+          sent_date   ? encrypt(sent_date)   : null,
+          approved_date ? encrypt(approved_date) : null,
+          invoiceId,
+        ]
+      )
+    );
+    res.json({ success: true, invoiceId, status });
+  } catch (error: any) {
+    console.error("[Invoice] PATCH /invoices/status error:", error?.message);
+    res.status(500).json({ error: "Failed to update invoice status" });
+  }
+});
+
+// ── POST payment record ───────────────────────────────────────────────────
+router.post("/invoices/:invoiceId/payments", async (req: Request, res: Response) => {
+  try {
+    const { invoiceId } = req.params;
+    const { payment_date, amount_paid, is_tds, tds_percentage, tds_amount, is_partial, notes, created_by } = req.body;
+    if (!payment_date || amount_paid == null) return res.status(400).json({ error: "payment_date and amount_paid are required" });
+
+    const result = await queryWithRetry(() =>
+      pool.query(
+        `INSERT INTO invoice_payments (invoice_id, payment_date, amount_paid, is_tds, tds_percentage, tds_amount, is_partial, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        [invoiceId, payment_date, Number(amount_paid), Boolean(is_tds), Number(tds_percentage || 0), Number(tds_amount || 0), Boolean(is_partial), notes || "", created_by || ""]
+      )
+    );
+
+    // Auto update status to "Received" if not partial
+    if (!is_partial) {
+      await queryWithRetry(() =>
+        pool.query(`UPDATE invoice_records SET status = $1, updated_at = NOW() WHERE invoice_id = $2`, [encrypt("Received"), invoiceId])
+      );
+    }
+    res.json({ success: true, paymentId: result.rows[0]?.id });
+  } catch (error: any) {
+    console.error("[Invoice] POST /invoices/payments error:", error?.message);
+    res.status(500).json({ error: "Failed to record payment" });
+  }
+});
+
+// ── GET invoice tracker summary ───────────────────────────────────────────
+router.get("/tracker", async (req: Request, res: Response) => {
+  try {
+    // All invoice records
+    const recordsResult = await queryWithRetry(() =>
+      pool.query(`SELECT * FROM invoice_records ORDER BY generated_date DESC, created_at DESC`)
+    );
+    // All payments
+    const paymentsResult = await queryWithRetry(() =>
+      pool.query(`SELECT * FROM invoice_payments ORDER BY created_at ASC`)
+    );
+
+    // Index payments by invoice_id
+    const paymentsByInvoice: Record<string, any[]> = {};
+    for (const p of paymentsResult.rows) {
+      if (!paymentsByInvoice[p.invoice_id]) paymentsByInvoice[p.invoice_id] = [];
+      paymentsByInvoice[p.invoice_id].push({
+        id: p.id,
+        paymentDate: p.payment_date,
+        amountPaid: p.amount_paid,
+        isTds: p.is_tds,
+        tdsPercentage: parseFloat(p.tds_percentage || "0"),
+        tdsAmount: p.tds_amount,
+        isPartial: p.is_partial,
+        notes: p.notes,
+        createdBy: p.created_by,
+        createdAt: p.created_at,
+      });
+    }
+
+    const invoices = recordsResult.rows.map((row: any) => {
+      const invId = decrypt(row.invoice_id) || row.invoice_id;
+      const payments = paymentsByInvoice[row.invoice_id] || paymentsByInvoice[invId] || [];
+      const totalPaid = payments.reduce((s: number, p: any) => s + Number(p.amountPaid || 0), 0);
+      const totalTds  = payments.reduce((s: number, p: any) => s + Number(p.tdsAmount  || 0), 0);
+      return {
+        invoiceId: decrypt(row.invoice_id),
+        invoiceNumber: decrypt(row.invoice_number),
+        clientId: row.client_id,
+        clientName: decrypt(row.client_name),
+        month: decrypt(row.month),
+        amount: parseInt(decrypt(row.amount) || "0"),
+        status: decrypt(row.status),
+        generatedDate: decrypt(row.generated_date),
+        financialYear: decrypt(row.financial_year),
+        serial: parseInt(decrypt(row.serial) || "0"),
+        billingModel: normalizeBillingModel(decrypt(row.billing_model)),
+        invoiceType: decrypt(row.invoice_type) || "commercial",
+        sentDate: decrypt(row.sent_date) || null,
+        approvedDate: decrypt(row.approved_date) || null,
+        approvedBy: decrypt(row.approved_by) || null,
+        createdAt: row.created_at,
+        payments,
+        totalPaid,
+        totalTds,
+      };
+    });
+
+    res.json(invoices);
+  } catch (error: any) {
+    console.error("[Invoice] GET /tracker error:", error?.message);
+    res.status(500).json({ error: "Failed to fetch tracker data" });
+  }
+});
+
+// ── GET payments for a single invoice ────────────────────────────────────
+router.get("/invoices/:invoiceId/payments", async (req: Request, res: Response) => {
+  try {
+    const { invoiceId } = req.params;
+    const result = await queryWithRetry(() =>
+      pool.query(`SELECT * FROM invoice_payments WHERE invoice_id = $1 ORDER BY created_at ASC`, [invoiceId])
+    );
+    res.json(result.rows.map((p: any) => ({
+      id: p.id,
+      invoiceId: p.invoice_id,
+      paymentDate: p.payment_date,
+      amountPaid: p.amount_paid,
+      isTds: p.is_tds,
+      tdsPercentage: parseFloat(p.tds_percentage || "0"),
+      tdsAmount: p.tds_amount,
+      isPartial: p.is_partial,
+      notes: p.notes,
+      createdBy: p.created_by,
+      createdAt: p.created_at,
+    })));
+  } catch (error: any) {
+    console.error("[Invoice] GET /invoices/payments error:", error?.message);
+    res.status(500).json({ error: "Failed to fetch payments" });
   }
 });
 

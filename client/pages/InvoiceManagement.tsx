@@ -22,6 +22,7 @@ import html2canvas from "html2canvas";
 import * as Docx from "docx";
 import * as XLSX from "xlsx";
 import XLSXStyle from "xlsx-js-style";
+import InvoiceTracker from "@/components/InvoiceTracker";
 import {
   Area,
   AreaChart,
@@ -6055,6 +6056,7 @@ export default function InvoiceManagement() {
     }
   });
 
+  const [mainTab, setMainTab] = useState<"clients" | "tracker">("clients");
   const [showExportInvoicesModal, setShowExportInvoicesModal] = useState(false);
   const [exportMonth, setExportMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
   const [exportYear, setExportYear] = useState(String(new Date().getFullYear()));
@@ -8527,6 +8529,21 @@ export default function InvoiceManagement() {
             <p className="mt-1 text-sm text-muted-foreground">
               Enterprise invoice operations, commercial config management and revenue analytics
             </p>
+            {/* Main tab navigation */}
+            <div className="mt-3 flex items-center gap-1 rounded-full border bg-muted/30 p-1 w-fit">
+              <button
+                onClick={() => setMainTab("clients")}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${mainTab === "clients" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Clients</span>
+              </button>
+              <button
+                onClick={() => setMainTab("tracker")}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${mainTab === "tracker" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <span className="flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Invoice Tracker</span>
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {canManageClientConfigActions && (
@@ -8558,8 +8575,11 @@ export default function InvoiceManagement() {
         </div>
       </div>
 
+      {/* ── Invoice Tracker tab ─────────────────────────────────────────── */}
+      {mainTab === "tracker" && !settingsViewOpen && <InvoiceTracker />}
+
       {/* Configuration sections shown when settings view is open */}
-      {settingsViewOpen && (
+      {mainTab === "clients" && settingsViewOpen && (
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={() => setSettingsViewOpen(false)}>
@@ -9111,7 +9131,7 @@ export default function InvoiceManagement() {
       )}
 
       {/* Main Dashboard - hidden when settings view is open */}
-      {!settingsViewOpen && (
+      {mainTab === "clients" && !settingsViewOpen && (
         <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         <MetricCard title="Total Revenue" value={hasInvoiceData ? currencyLabel(metrics.totalRevenue) : "—"} change={hasInvoiceData ? `${metrics.approvedInvoiceCount} approved invoices` : "No approved invoices"} icon={Wallet} accent="bg-gradient-to-br from-indigo-500 to-purple-600" sparkline={hasInvoiceData ? metrics.revenueSpark : []} />

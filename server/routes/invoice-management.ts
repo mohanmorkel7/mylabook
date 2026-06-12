@@ -1540,7 +1540,20 @@ router.post("/invoices/add-payment", async (req: Request, res: Response) => {
 // ── GET invoice tracker summary ───────────────────────────────────────────
 router.get("/tracker", async (req: Request, res: Response) => {
   try {
-    // All invoice records
+    // Fetch all clients to get their active/inactive status (status is encrypted, must decrypt in code)
+    const clientsResult = await queryWithRetry(() =>
+      pool.query(`SELECT client_id, status FROM invoice_clients`)
+    );
+    // Build set of active client IDs (exclude inactive/deleted clients)
+    const activeClientIds = new Set<string>();
+    for (const c of clientsResult.rows) {
+      const status = decrypt(c.status) || "";
+      if (status.toLowerCase() !== "inactive") {
+        activeClientIds.add(c.client_id);
+      }
+    }
+
+    // Only invoice records for active clients — matches what Invoice History Table shows
     const recordsResult = await queryWithRetry(() =>
       pool.query(`SELECT * FROM invoice_records ORDER BY generated_date DESC, created_at DESC`)
     );
@@ -1567,7 +1580,12 @@ router.get("/tracker", async (req: Request, res: Response) => {
       });
     }
 
-    const invoices = recordsResult.rows.map((row: any) => {
+    // Filter to active clients only (same as Invoice History Table)
+    const activeRows = recordsResult.rows.filter((row: any) =>
+      activeClientIds.size === 0 || activeClientIds.has(row.client_id)
+    );
+
+    const invoices = activeRows.map((row: any) => {
       const invId = decrypt(row.invoice_id) || row.invoice_id;
       const payments = paymentsByInvoice[row.invoice_id] || paymentsByInvoice[invId] || [];
       const totalPaid = payments.reduce((s: number, p: any) => s + Number(p.amountPaid || 0), 0);

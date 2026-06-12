@@ -1623,6 +1623,22 @@ router.get("/tracker", async (req: Request, res: Response) => {
   }
 });
 
+// ── DELETE payments for an invoice (called when reverting from "Received") ──
+router.delete("/invoices/clear-payments", async (req: Request, res: Response) => {
+  try {
+    const { invoiceId } = req.body;
+    if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
+    const result = await queryWithRetry(() =>
+      pool.query(`DELETE FROM invoice_payments WHERE invoice_id = $1 RETURNING id`, [invoiceId])
+    );
+    console.log(`[Invoice] Cleared ${result.rowCount} payment record(s) for invoice ${invoiceId}`);
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (error: any) {
+    console.error("[Invoice] DELETE /invoices/clear-payments error:", error?.message);
+    res.status(500).json({ error: "Failed to clear payments" });
+  }
+});
+
 // ── GET payments for a single invoice (ID in query to avoid slash routing) ──
 router.get("/invoices/payments", async (req: Request, res: Response) => {
   try {

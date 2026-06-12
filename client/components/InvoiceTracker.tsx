@@ -876,11 +876,26 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
 
   // ── Actions ─────────────────────────────────────────────────────────────
   const handleStatusChange = async (inv: TrackerInvoice, newStatus: string) => {
-    // When changing to "Received", show payment modal
+    // When changing TO "Received", show payment modal
     if (newStatus === "Received") {
       setPaymentModal(inv);
       return;
     }
+
+    // When reverting FROM "Received" to any other status, clear payment records
+    // so the original invoice amount is used next time status goes to "Received"
+    if (inv.status === "Received" && inv.totalPaid > 0) {
+      try {
+        await fetch("/api/invoice-management/invoices/clear-payments", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invoiceId: inv.invoiceId }),
+        });
+      } catch {
+        // Non-fatal — proceed with status update even if clear fails
+      }
+    }
+
     const body: any = { invoiceId: inv.invoiceId, status: newStatus, approved_by: user?.email || "admin" };
     if (newStatus === "Generated") body.approved_date = new Date().toISOString().split("T")[0];
     if (newStatus === "Send")      body.sent_date      = new Date().toISOString().split("T")[0];

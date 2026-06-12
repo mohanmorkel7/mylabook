@@ -6960,6 +6960,19 @@ export default function InvoiceManagement() {
         };
       };
 
+      // Extract full address and pin/state from billing address
+      const extractAddressComponents = (addr: string) => {
+        if (!addr) return { fullAddr: "", pin: "", state: "" };
+        // Extract pin (6 digits)
+        const pinMatch = addr.match(/\b(\d{6})\b/);
+        const pin = pinMatch ? pinMatch[1] : "";
+        // Extract state (usually last word after pin)
+        const lines = addr.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+        const state = lines[lines.length - 1] || "";
+        // Full address as-is
+        return { fullAddr: addr, pin, state };
+      };
+
       // Seller GSTIN from company config
       const sellerGSTIN = companyConfig.gstNumber || "";
       const sellerStateCode = sellerGSTIN.substring(0, 2);
@@ -7080,6 +7093,8 @@ export default function InvoiceManagement() {
         const buyerStateCode = buyerGSTIN.substring(0, 2);
         const isInterState = sellerStateCode && buyerStateCode && sellerStateCode !== buyerStateCode;
         const buyerStateName = getStateFromGSTIN(buyerGSTIN) || "";
+        // Use full address as-is from database
+        const addrComponents = extractAddressComponents(clientData.billingAddress || "");
         const addrParts = parseAddress(clientData.billingAddress || "");
 
         // Tax calculation: invoice.amount is the taxable value (pre-tax)
@@ -7130,12 +7145,11 @@ export default function InvoiceManagement() {
           row[8]  = isFirst ? buyerLegalName : "";
           row[9]  = ""; // Trade name
           row[10] = isFirst ? buyerStateName : ""; // POS = buyer state
-          // Combine Addr1 and Addr2 with comma - fill both columns with full address
-          const fullAddr = [addrParts.addr1, addrParts.addr2].filter(Boolean).join(", ");
-          row[11] = isFirst ? fullAddr : ""; // Buyer Addr1
-          row[12] = isFirst ? fullAddr : ""; // Buyer Addr2 - same full address
+          // Use full address from database in both Addr1 and Addr2
+          row[11] = isFirst ? addrComponents.fullAddr : ""; // Buyer Addr1 - full address
+          row[12] = isFirst ? addrComponents.fullAddr : ""; // Buyer Addr2 - same full address
           row[13] = isFirst ? addrParts.location : "";
-          row[14] = isFirst ? addrParts.pin : "";
+          row[14] = isFirst ? addrComponents.pin : "";
           row[15] = isFirst ? buyerStateName : "";
           row[16] = ""; // Phone
           row[17] = isFirst ? (clientData.billingEmail || "") : "";

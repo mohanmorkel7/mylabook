@@ -656,6 +656,7 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
   const [historyModal, setHistoryModal] = useState<TrackerInvoice | null>(null);
   const [previewModal, setPreviewModal] = useState<TrackerInvoice | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportSelectedMonth, setExportSelectedMonth] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortCol, setSortCol] = useState<"date" | "amount" | "client">("date");
@@ -761,146 +762,115 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
   // Reset to page 1 when filter/search changes
   useEffect(() => { setPage(1); }, [statusFilter, searchQuery, sortCol, sortDir]);
 
+  // ── Available months from invoice data ───────────────────────────────────
+  const availableMonths = useMemo(() => {
+    const seen = new Set<string>();
+    invoices.forEach(inv => { if (inv.month) seen.add(inv.month); });
+    return ["ALL", ...Array.from(seen).sort((a, b) => b.localeCompare(a))];
+  }, [invoices]);
+
+  // ── Filter invoices by selected month ────────────────────────────────────
+  const filterByMonth = (list: TrackerInvoice[], month: string) =>
+    month === "ALL" ? list : list.filter(inv => inv.month === month);
+
   // ── Excel export helpers ─────────────────────────────────────────────────
   const exportToExcel = (sheets: { name: string; rows: any[] }[], filename: string) => {
     const wb = XLSX.utils.book_new();
     sheets.forEach(({ name, rows }) => {
+      if (rows.length === 0) {
+        rows = [{ "(No data)": "" }];
+      }
       const ws = XLSX.utils.json_to_sheet(rows);
       // Auto column width
-      const maxLen: number[] = [];
+      const colKeys = Object.keys(rows[0] || {});
+      const maxLen: number[] = colKeys.map(k => String(k).length + 2);
       rows.forEach(row => Object.values(row).forEach((val, i) => {
         maxLen[i] = Math.max(maxLen[i] || 10, String(val ?? "").length + 2);
       }));
-      ws["!cols"] = maxLen.map(w => ({ wch: Math.min(w, 40) }));
+      ws["!cols"] = maxLen.map(w => ({ wch: Math.min(w, 45) }));
       XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
     });
     XLSX.writeFile(wb, filename);
-    toast({ title: "Excel downloaded", description: filename });
+    toast({ title: "Excel downloaded", description: `${filename} ready.` });
   };
 
-  const exportPendingClientWise = () => {
-    const clientMap: Record<string, { client: string; invoices: number; totalAmount: number; totalPaid: number; pending: number; oldest: string }> = {};
-    invoices.filter(i => i.status !== "Received" && i.status !== "Rejected").forEach(inv => {
+  // Shared invoice detail row builder (consistent columns across all exports)
+  const buildInvoiceRow = (inv: TrackerInvoice) => ({
+    "Month": inv.month || "—",
+    "Invoice No.": inv.invoiceNumber || "—",
+    "Client": inv.clientName || "—",
+    "Invoice Amount (₹)": inv.amount,
+    "Status": isOverdue(inv) ? "Overdue" : inv.status,
+    "Generated Date": fmtDate(inv.generatedDate),
+    "Sent Date": fmtDate(inv.sentDate),
+    "Due Date": inv.sentDate ? fmtDate(new Date(new Date(inv.sentDate).getTime() + 15 * 86400000).toISOString().split("T")[0]) : "—",
+    "Amount Paid (₹)": inv.totalPaid,
+    "TDS (₹)": inv.totalTds,
+    "Pending (₹)": Math.max(0, inv.amount - inv.totalPaid),
+    "Approved By": inv.approvedBy || "—",
+    "Financial Year": inv.financialYear || "—",
+    "Billing Model": inv.billingModel || "—",
+  });
+
+  const exportPendingClientWise = (month: string) => {
+    const src = filterByMonth(
+      invoices.filter(i => i.status !== "Received" && i.status !== "Rejected"),
+      month
+    );
+    // Detailed rows — one row per invoice
+    const detailRows = src.map(buildInvoiceRow);
+
+    // Client summary
+    const clientMap: Record<string, { client: string; count: number; totalAmt: number; paid: number; pending: number; oldest: string }> = {};
+    src.forEach(inv => {
       const k = inv.clientName;
-      if (!clientMap[k]) clientMap[k] = { client: k, invoices: 0, totalAmount: 0, totalPaid: 0, pending: 0, oldest: inv.generatedDate || "" };
-      clientMap[k].invoices++;
-      clientMap[k].totalAmount += inv.amount;
-      clientMap[k].totalPaid += inv.totalPaid;
-      clientMap[k].pending = clientMap[k].totalAmount - clientMap[k].totalPaid;
+      if (!clientMap[k]) clientMap[k] = { client: k, count: 0, totalAmt: 0, paid: 0, pending: 0, oldest: inv.generatedDate || "" };
+      clientMap[k].count++;
+      clientMap[k].totalAmt += inv.amount;
+      clientMap[k].paid += inv.totalPaid;
+      clientMap[k].pending += (inv.amount - inv.totalPaid);
       if ((inv.generatedDate || "") < clientMap[k].oldest) clientMap[k].oldest = inv.generatedDate || "";
     });
-    const rows = Object.values(clientMap).sort((a, b) => b.pending - a.pending).map(r => ({
+    const summaryRows = Object.values(clientMap).sort((a, b) => b.pending - a.pending).map(r => ({
       "Client": r.client,
-      "Pending Invoices": r.invoices,
-      "Total Invoice Amount (₹)": r.totalAmount,
-      "Amount Paid (₹)": r.totalPaid,
+      "Pending Invoices": r.count,
+      "Total Invoice Amount (₹)": r.totalAmt,
+      "Amount Paid (₹)": r.paid,
       "Pending Amount (₹)": r.pending,
       "Oldest Invoice Date": fmtDate(r.oldest),
     }));
-    exportToExcel([{ name: "Pending Client-wise", rows }], `pending-client-wise-${new Date().toISOString().split("T")[0]}.xlsx`);
-  };
 
-  const exportMonthWise = () => {
-    const monthMap: Record<string, { month: string; total: number; amount: number; paid: number; pending: number; tds: number; received: number; overdue: number }> = {};
-    invoices.forEach(inv => {
-      const k = inv.month || inv.generatedDate?.substring(0, 7) || "Unknown";
-      if (!monthMap[k]) monthMap[k] = { month: k, total: 0, amount: 0, paid: 0, pending: 0, tds: 0, received: 0, overdue: 0 };
-      monthMap[k].total++;
-      monthMap[k].amount += inv.amount;
-      monthMap[k].paid += inv.totalPaid;
-      monthMap[k].tds += inv.totalTds;
-      if (inv.status === "Received") monthMap[k].received++;
-      if (isOverdue(inv)) monthMap[k].overdue++;
-      monthMap[k].pending = monthMap[k].amount - monthMap[k].paid;
-    });
-    const summaryRows = Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month)).map(r => ({
-      "Month": r.month,
-      "Total Invoices": r.total,
-      "Invoice Amount (₹)": r.amount,
-      "Amount Received (₹)": r.paid,
-      "Pending Amount (₹)": r.pending,
-      "TDS Collected (₹)": r.tds,
-      "Received Count": r.received,
-      "Overdue Count": r.overdue,
-    }));
-
-    // Details sheet per month
-    const detailRows = invoices.map(inv => ({
-      "Month": inv.month,
-      "Invoice No.": inv.invoiceNumber,
-      "Client": inv.clientName,
-      "Invoice Amount (₹)": inv.amount,
-      "Status": inv.status,
-      "Generated Date": fmtDate(inv.generatedDate),
-      "Sent Date": fmtDate(inv.sentDate),
-      "Amount Paid (₹)": inv.totalPaid,
-      "TDS (₹)": inv.totalTds,
-      "Pending (₹)": Math.max(0, inv.amount - inv.totalPaid),
-      "Approved By": inv.approvedBy || "—",
-      "Financial Year": inv.financialYear || "—",
-    }));
-
+    const label = month === "ALL" ? "all" : month.replace(" ", "-");
     exportToExcel([
-      { name: "Month-wise Summary", rows: summaryRows },
-      { name: "All Invoice Details", rows: detailRows },
-    ], `month-wise-invoices-${new Date().toISOString().split("T")[0]}.xlsx`);
+      { name: "Pending Summary", rows: summaryRows },
+      { name: "Invoice Details", rows: detailRows },
+    ], `pending-client-wise-${label}.xlsx`);
   };
 
-  const exportReceivedThisMonth = () => {
-    const now = new Date();
-    const thisMonthStr = now.toLocaleString("en-IN", { month: "short", year: "numeric" });
-    const thisYear = now.getFullYear();
-    const thisMonth = now.getMonth();
+  const exportMonthWise = (month: string) => {
+    const src = filterByMonth(invoices, month);
+    const rows = src.map(buildInvoiceRow);
+    const label = month === "ALL" ? "all" : month.replace(" ", "-");
+    exportToExcel([{ name: "Month-wise Invoices", rows }], `month-wise-${label}.xlsx`);
+  };
 
-    const receivedThisMonth = invoices.filter(inv => {
-      if (inv.status !== "Received") return false;
-      // Match by invoice month label or by payment date
-      if (inv.month === thisMonthStr) return true;
-      // Check if any payment was made this month
-      return inv.payments.some(p => {
-        const pd = new Date(p.paymentDate);
-        return pd.getFullYear() === thisYear && pd.getMonth() === thisMonth;
-      });
-    });
-
-    const rows = receivedThisMonth.map(inv => ({
-      "Invoice No.": inv.invoiceNumber,
-      "Client": inv.clientName,
-      "Month": inv.month,
-      "Invoice Amount (₹)": inv.amount,
-      "Amount Received (₹)": inv.totalPaid,
-      "TDS Deducted (₹)": inv.totalTds,
+  const exportReceivedInvoices = (month: string) => {
+    const src = filterByMonth(
+      invoices.filter(i => i.status === "Received"),
+      month
+    );
+    const rows = src.map(inv => ({
+      ...buildInvoiceRow(inv),
       "Net Received (₹)": inv.totalPaid - inv.totalTds,
-      "Generated Date": fmtDate(inv.generatedDate),
-      "Sent Date": fmtDate(inv.sentDate),
       "Payment Count": inv.payments.length,
       "Payment Dates": inv.payments.map(p => fmtDate(p.paymentDate)).join(", "),
-      "Billing Model": inv.billingModel,
-      "Financial Year": inv.financialYear || "—",
     }));
-
-    exportToExcel([{ name: "Received This Month", rows }], `received-${thisMonthStr.replace(" ", "-")}.xlsx`);
+    const label = month === "ALL" ? "all" : month.replace(" ", "-");
+    exportToExcel([{ name: "Received Invoices", rows }], `received-invoices-${label}.xlsx`);
   };
 
   const exportAllInvoices = () => {
-    const rows = invoices.map(inv => ({
-      "Invoice No.": inv.invoiceNumber,
-      "Client": inv.clientName,
-      "Month": inv.month,
-      "Invoice Amount (₹)": inv.amount,
-      "Status": isOverdue(inv) ? "Overdue" : inv.status,
-      "Generated Date": fmtDate(inv.generatedDate),
-      "Approved Date": fmtDate(inv.approvedDate),
-      "Approved By": inv.approvedBy || "—",
-      "Sent Date": fmtDate(inv.sentDate),
-      "Due Date": inv.sentDate ? fmtDate(new Date(new Date(inv.sentDate).getTime() + 15 * 86400000).toISOString().split("T")[0]) : "—",
-      "Amount Paid (₹)": inv.totalPaid,
-      "TDS (₹)": inv.totalTds,
-      "Pending (₹)": Math.max(0, inv.amount - inv.totalPaid),
-      "Billing Model": inv.billingModel,
-      "Invoice Type": inv.invoiceType,
-      "Financial Year": inv.financialYear || "—",
-    }));
+    const rows = invoices.map(buildInvoiceRow);
     exportToExcel([{ name: "All Invoices", rows }], `all-invoices-${new Date().toISOString().split("T")[0]}.xlsx`);
   };
 
@@ -1293,93 +1263,122 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
       {/* Export Modal */}
       {showExportModal && (
         <Dialog open onOpenChange={setShowExportModal}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
+          <DialogContent className="max-w-2xl w-full" style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+            <DialogHeader className="flex-shrink-0 pb-2">
               <DialogTitle className="flex items-center gap-2">
                 <Download className="h-4 w-4 text-indigo-600" /> Export Invoice Data
               </DialogTitle>
+              <p className="text-xs text-muted-foreground mt-1">Select a report type and month, then click Download. All exports include full invoice details.</p>
             </DialogHeader>
-            <p className="text-sm text-muted-foreground">Choose what to export. Each option downloads a formatted Excel file with invoice details, client info, and dates.</p>
-            <div className="space-y-3 pt-1">
-              {/* Option 1 */}
-              <button
-                onClick={() => { exportPendingClientWise(); setShowExportModal(false); }}
-                className="w-full flex items-start gap-3 p-4 border rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-colors text-left group"
-              >
-                <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200">
-                  <IndianRupee className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-800">Pending Amount — Client-wise</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Shows pending balance per client: invoices raised, amount paid, outstanding amount, oldest unpaid invoice date.</p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {["Client", "Pending Invoices", "Total Amount", "Paid", "Pending (₹)", "Oldest Date"].map(t => (
-                      <span key={t} className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-medium">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              </button>
 
-              {/* Option 2 */}
-              <button
-                onClick={() => { exportMonthWise(); setShowExportModal(false); }}
-                className="w-full flex items-start gap-3 p-4 border rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left group"
+            {/* Month selector — shared across all options except "All Invoices" */}
+            <div className="flex-shrink-0 flex items-center gap-3 bg-muted/40 rounded-lg px-3 py-2 border">
+              <label className="text-xs font-semibold text-gray-700 whitespace-nowrap">Filter by Month:</label>
+              <select
+                value={exportSelectedMonth}
+                onChange={e => setExportSelectedMonth(e.target.value)}
+                className="flex-1 text-xs border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
               >
-                <div className="p-2 bg-indigo-100 rounded-lg group-hover:bg-indigo-200">
-                  <TableProperties className="h-5 w-5 text-indigo-600" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-800">Month-wise Invoice Report</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Two sheets: monthly summary (count, amount, received, TDS, overdue) + full invoice detail list with all dates.</p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {["Month", "Invoice Count", "Amount", "Received", "Pending", "TDS", "Overdue", "All Details"].map(t => (
-                      <span key={t} className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-medium">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              </button>
-
-              {/* Option 3 */}
-              <button
-                onClick={() => { exportReceivedThisMonth(); setShowExportModal(false); }}
-                className="w-full flex items-start gap-3 p-4 border rounded-xl hover:border-green-400 hover:bg-green-50 transition-colors text-left group"
-              >
-                <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-800">Received Invoices — This Month</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">All invoices received/paid in the current month. Includes TDS details, net amount, payment dates, and client info.</p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {["Client", "Amount", "Received", "TDS", "Net Received", "Payment Dates"].map(t => (
-                      <span key={t} className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-medium">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              </button>
-
-              {/* Option 4 */}
-              <button
-                onClick={() => { exportAllInvoices(); setShowExportModal(false); }}
-                className="w-full flex items-start gap-3 p-4 border rounded-xl hover:border-slate-400 hover:bg-slate-50 transition-colors text-left group"
-              >
-                <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-slate-200">
-                  <FileText className="h-5 w-5 text-slate-600" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm text-gray-800">All Invoices — Complete Export</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Every invoice with full details: status, dates, approvals, payments, TDS, pending balance.</p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {["All Invoices", "All Dates", "Status", "Approval", "Sent", "Due", "Paid", "TDS", "Pending"].map(t => (
-                      <span key={t} className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              </button>
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>{m === "ALL" ? "All Months" : m}</option>
+                ))}
+              </select>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {exportSelectedMonth === "ALL"
+                  ? `${invoices.length} invoices`
+                  : `${invoices.filter(i => i.month === exportSelectedMonth).length} invoices`}
+              </span>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setShowExportModal(false)}>Close</Button>
+            {/* Common columns tag */}
+            <div className="flex-shrink-0">
+              <p className="text-[10px] text-muted-foreground mb-1 font-medium uppercase tracking-wide">All exports include these columns:</p>
+              <div className="flex flex-wrap gap-1">
+                {["Month","Invoice No.","Client","Invoice Amount","Status","Generated Date","Sent Date","Due Date","Amount Paid","TDS","Pending","Approved By","Financial Year"].map(c => (
+                  <span key={c} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px]">{c}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* 2-column grid of export options */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Option 1: Pending Client-wise */}
+                <button
+                  onClick={() => { exportPendingClientWise(exportSelectedMonth); setShowExportModal(false); }}
+                  className="flex flex-col gap-2 p-3 border-2 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-orange-100 rounded-lg group-hover:bg-orange-200 flex-shrink-0">
+                      <IndianRupee className="h-4 w-4 text-orange-600" />
+                    </div>
+                    <p className="font-semibold text-sm text-gray-800 leading-tight">Pending — Client-wise</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Pending balance per client with summary + individual invoice rows.</p>
+                  <div className="flex items-center gap-1 mt-auto">
+                    <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-medium">2 Sheets</span>
+                    <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px]">Summary + Details</span>
+                  </div>
+                </button>
+
+                {/* Option 2: Month-wise */}
+                <button
+                  onClick={() => { exportMonthWise(exportSelectedMonth); setShowExportModal(false); }}
+                  className="flex flex-col gap-2 p-3 border-2 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-100 rounded-lg group-hover:bg-indigo-200 flex-shrink-0">
+                      <TableProperties className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    <p className="font-semibold text-sm text-gray-800 leading-tight">Month-wise Report</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">All invoices for the selected month with every detail column.</p>
+                  <div className="flex items-center gap-1 mt-auto">
+                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-medium">1 Sheet</span>
+                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px]">Full Details</span>
+                  </div>
+                </button>
+
+                {/* Option 3: Received */}
+                <button
+                  onClick={() => { exportReceivedInvoices(exportSelectedMonth); setShowExportModal(false); }}
+                  className="flex flex-col gap-2 p-3 border-2 rounded-xl hover:border-green-400 hover:bg-green-50 transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-green-100 rounded-lg group-hover:bg-green-200 flex-shrink-0">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    </div>
+                    <p className="font-semibold text-sm text-gray-800 leading-tight">Received Invoices</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Paid invoices with TDS, net received, and payment dates.</p>
+                  <div className="flex items-center gap-1 mt-auto">
+                    <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-medium">1 Sheet</span>
+                    <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px]">+ Payment Dates</span>
+                  </div>
+                </button>
+
+                {/* Option 4: All Invoices (no month filter) */}
+                <button
+                  onClick={() => { exportAllInvoices(); setShowExportModal(false); }}
+                  className="flex flex-col gap-2 p-3 border-2 rounded-xl hover:border-slate-400 hover:bg-slate-50 transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-slate-100 rounded-lg group-hover:bg-slate-200 flex-shrink-0">
+                      <FileText className="h-4 w-4 text-slate-600" />
+                    </div>
+                    <p className="font-semibold text-sm text-gray-800 leading-tight">All Invoices</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Every invoice ever generated — ignores month filter.</p>
+                  <div className="flex items-center gap-1 mt-auto">
+                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium">1 Sheet</span>
+                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px]">{invoices.length} rows</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-shrink-0 flex justify-end pt-3 border-t">
+              <Button variant="outline" size="sm" onClick={() => setShowExportModal(false)}>Close</Button>
             </div>
           </DialogContent>
         </Dialog>

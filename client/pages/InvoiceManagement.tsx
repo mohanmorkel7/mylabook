@@ -7130,10 +7130,10 @@ export default function InvoiceManagement() {
           row[8]  = isFirst ? buyerLegalName : "";
           row[9]  = ""; // Trade name
           row[10] = isFirst ? buyerStateName : ""; // POS = buyer state
-          // Combine Addr1 and Addr2 with comma
+          // Combine Addr1 and Addr2 with comma - fill both columns with full address
           const fullAddr = [addrParts.addr1, addrParts.addr2].filter(Boolean).join(", ");
-          row[11] = isFirst ? fullAddr : "";
-          row[12] = ""; // Addr2 not used anymore
+          row[11] = isFirst ? fullAddr : ""; // Buyer Addr1
+          row[12] = isFirst ? fullAddr : ""; // Buyer Addr2 - same full address
           row[13] = isFirst ? addrParts.location : "";
           row[14] = isFirst ? addrParts.pin : "";
           row[15] = isFirst ? buyerStateName : "";
@@ -7266,13 +7266,7 @@ export default function InvoiceManagement() {
             // Column header row — bold, colored per section
             cell.s = mkStyle(sec.bg, true, sec.font, 9, "center");
           } else {
-            // Data rows
-            const v = cell.v;
-            // Replace 0 with empty
-            if (v === 0 || v === "0") {
-              cell.v = "";
-              cell.t = "z";
-            }
+            // Data rows - keep all values including 0
             cell.s = mkStyle(COLORS.dataRow.bg, false, COLORS.dataRow.font, 9, "left", false);
           }
         }

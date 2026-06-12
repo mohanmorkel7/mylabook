@@ -1477,11 +1477,11 @@ router.delete("/clients/:clientId/force", async (req: Request, res: Response) =>
   }
 });
 
-// ── PATCH invoice status ──────────────────────────────────────────────────
-router.patch("/invoices/:invoiceId/status", async (req: Request, res: Response) => {
+// ── PATCH invoice status (ID in body to avoid slash routing issues) ────────
+router.patch("/invoices/update-status", async (req: Request, res: Response) => {
   try {
-    const { invoiceId } = req.params;
-    const { status, approved_by, sent_date, approved_date } = req.body;
+    const { invoiceId, status, approved_by, sent_date, approved_date } = req.body;
+    if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
     if (!status) return res.status(400).json({ error: "status is required" });
 
     await queryWithRetry(() =>
@@ -1509,11 +1509,11 @@ router.patch("/invoices/:invoiceId/status", async (req: Request, res: Response) 
   }
 });
 
-// ── POST payment record ───────────────────────────────────────────────────
-router.post("/invoices/:invoiceId/payments", async (req: Request, res: Response) => {
+// ── POST payment record (ID in body to avoid slash routing issues) ──────────
+router.post("/invoices/add-payment", async (req: Request, res: Response) => {
   try {
-    const { invoiceId } = req.params;
-    const { payment_date, amount_paid, is_tds, tds_percentage, tds_amount, is_partial, notes, created_by } = req.body;
+    const { invoiceId, payment_date, amount_paid, is_tds, tds_percentage, tds_amount, is_partial, notes, created_by } = req.body;
+    if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
     if (!payment_date || amount_paid == null) return res.status(400).json({ error: "payment_date and amount_paid are required" });
 
     const result = await queryWithRetry(() =>
@@ -1602,10 +1602,11 @@ router.get("/tracker", async (req: Request, res: Response) => {
   }
 });
 
-// ── GET payments for a single invoice ────────────────────────────────────
-router.get("/invoices/:invoiceId/payments", async (req: Request, res: Response) => {
+// ── GET payments for a single invoice (ID in query to avoid slash routing) ──
+router.get("/invoices/payments", async (req: Request, res: Response) => {
   try {
-    const { invoiceId } = req.params;
+    const invoiceId = String(req.query.invoiceId || "");
+    if (!invoiceId) return res.status(400).json({ error: "invoiceId query param required" });
     const result = await queryWithRetry(() =>
       pool.query(`SELECT * FROM invoice_payments WHERE invoice_id = $1 ORDER BY created_at ASC`, [invoiceId])
     );

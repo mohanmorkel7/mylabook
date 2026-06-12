@@ -1308,6 +1308,26 @@ router.post("/invoices", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET payments for a single invoice — MUST be before /:clientId wildcard ──
+router.get("/invoices/payments", async (req: Request, res: Response) => {
+  try {
+    const invoiceId = String(req.query.invoiceId || "");
+    if (!invoiceId) return res.status(400).json({ error: "invoiceId query param required" });
+    const result = await queryWithRetry(() =>
+      pool.query(`SELECT * FROM invoice_payments WHERE invoice_id = $1 ORDER BY created_at ASC`, [invoiceId])
+    );
+    res.json(result.rows.map((p: any) => ({
+      id: p.id, invoiceId: p.invoice_id, paymentDate: p.payment_date,
+      amountPaid: p.amount_paid, isTds: p.is_tds,
+      tdsPercentage: parseFloat(p.tds_percentage || "0"), tdsAmount: p.tds_amount,
+      isPartial: p.is_partial, notes: p.notes, createdBy: p.created_by, createdAt: p.created_at,
+    })));
+  } catch (error: any) {
+    console.error("[Invoice] GET /invoices/payments error:", error?.message);
+    res.status(500).json({ error: "Failed to fetch payments" });
+  }
+});
+
 // ── GET invoice number availability ────────────────────────────────────────
 router.get("/invoices/availability", async (req: Request, res: Response) => {
   try {
@@ -1373,6 +1393,41 @@ router.get("/invoices/:clientId", async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching invoices:", error);
     res.status(500).json({ error: "Failed to fetch invoices" });
+  }
+});
+
+// ── DELETE payments for an invoice — MUST be before /:invoiceId wildcard ──
+router.delete("/invoices/clear-payments", async (req: Request, res: Response) => {
+  try {
+    const { invoiceId } = req.body;
+    if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
+
+    // Delete by plain text invoice_id (how payments are stored)
+    // Also try any encrypted-form matching rows in invoice_records
+    const recordsRes = await queryWithRetry(() =>
+      pool.query(`SELECT invoice_id FROM invoice_records WHERE client_id IS NOT NULL`)
+    );
+    const matchingEncrypted = recordsRes.rows
+      .filter(r => {
+        const dec = decrypt(r.invoice_id);
+        return dec === invoiceId || r.invoice_id === invoiceId;
+      })
+      .map(r => r.invoice_id);
+
+    const idsToDelete = [invoiceId, ...matchingEncrypted];
+    let totalDeleted = 0;
+    for (const id of idsToDelete) {
+      const result = await queryWithRetry(() =>
+        pool.query(`DELETE FROM invoice_payments WHERE invoice_id = $1 RETURNING id`, [id])
+      );
+      totalDeleted += result.rowCount || 0;
+    }
+
+    console.log(`[Invoice] Cleared ${totalDeleted} payment record(s) for invoice ${invoiceId}`);
+    res.json({ success: true, deleted: totalDeleted });
+  } catch (error: any) {
+    console.error("[Invoice] DELETE /invoices/clear-payments error:", error?.message);
+    res.status(500).json({ error: "Failed to clear payments" });
   }
 });
 
@@ -1620,69 +1675,6 @@ router.get("/tracker", async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("[Invoice] GET /tracker error:", error?.message);
     res.status(500).json({ error: "Failed to fetch tracker data" });
-  }
-});
-
-// ── DELETE payments for an invoice (called when reverting from "Received") ──
-router.delete("/invoices/clear-payments", async (req: Request, res: Response) => {
-  try {
-    const { invoiceId } = req.body;
-    if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
-
-    // Payments are stored with plain-text invoice_id (as passed from frontend).
-    // Also look up all encrypted variants from invoice_records to cover any mismatch.
-    const recordsRes = await queryWithRetry(() =>
-      pool.query(`SELECT invoice_id FROM invoice_records WHERE client_id IS NOT NULL`)
-    );
-    const matchingEncrypted = recordsRes.rows
-      .filter(r => {
-        const dec = decrypt(r.invoice_id);
-        return dec === invoiceId || r.invoice_id === invoiceId;
-      })
-      .map(r => r.invoice_id);
-
-    // Delete by plain invoiceId AND any matching encrypted form
-    const idsToDelete = [invoiceId, ...matchingEncrypted];
-    let totalDeleted = 0;
-    for (const id of idsToDelete) {
-      const result = await queryWithRetry(() =>
-        pool.query(`DELETE FROM invoice_payments WHERE invoice_id = $1 RETURNING id`, [id])
-      );
-      totalDeleted += result.rowCount || 0;
-    }
-
-    console.log(`[Invoice] Cleared ${totalDeleted} payment record(s) for invoice ${invoiceId}`);
-    res.json({ success: true, deleted: totalDeleted });
-  } catch (error: any) {
-    console.error("[Invoice] DELETE /invoices/clear-payments error:", error?.message);
-    res.status(500).json({ error: "Failed to clear payments" });
-  }
-});
-
-// ── GET payments for a single invoice (ID in query to avoid slash routing) ──
-router.get("/invoices/payments", async (req: Request, res: Response) => {
-  try {
-    const invoiceId = String(req.query.invoiceId || "");
-    if (!invoiceId) return res.status(400).json({ error: "invoiceId query param required" });
-    const result = await queryWithRetry(() =>
-      pool.query(`SELECT * FROM invoice_payments WHERE invoice_id = $1 ORDER BY created_at ASC`, [invoiceId])
-    );
-    res.json(result.rows.map((p: any) => ({
-      id: p.id,
-      invoiceId: p.invoice_id,
-      paymentDate: p.payment_date,
-      amountPaid: p.amount_paid,
-      isTds: p.is_tds,
-      tdsPercentage: parseFloat(p.tds_percentage || "0"),
-      tdsAmount: p.tds_amount,
-      isPartial: p.is_partial,
-      notes: p.notes,
-      createdBy: p.created_by,
-      createdAt: p.created_at,
-    })));
-  } catch (error: any) {
-    console.error("[Invoice] GET /invoices/payments error:", error?.message);
-    res.status(500).json({ error: "Failed to fetch payments" });
   }
 });
 

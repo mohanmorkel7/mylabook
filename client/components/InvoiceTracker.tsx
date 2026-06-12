@@ -136,116 +136,285 @@ function ChartTooltip({ active, payload, label, formatter }: any) {
   );
 }
 
-// ── Invoice Preview Modal (for finance users and admins) ──────────────────
+// ── Number-to-words helper (Indian numbering) ─────────────────────────────
+function numberToWords(num: number): string {
+  if (num === 0) return "Zero Only";
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const c2 = (n: number): string => n === 0 ? "" : n < 10 ? ones[n] : n < 20 ? teens[n - 10] : tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
+  const c3 = (n: number): string => { if (!n) return ""; let r = ""; const h = Math.floor(n / 100); if (h) r += ones[h] + " Hundred"; const rem = n % 100; if (rem) r += (r ? " " : "") + c2(rem); return r.trim(); };
+  if (num < 0) return "Minus " + numberToWords(Math.abs(num));
+  const crores = Math.floor(num / 10000000), lakhs = Math.floor((num % 10000000) / 100000), thousands = Math.floor((num % 100000) / 1000), rem = num % 1000;
+  const parts: string[] = [];
+  if (crores)   parts.push(c3(crores) + " Crore");
+  if (lakhs)    parts.push(c3(lakhs) + " Lakh");
+  if (thousands) parts.push(c3(thousands) + " Thousand");
+  if (rem)      parts.push(c3(rem));
+  return parts.join(" ") + " Only";
+}
+
+function fmtCurrency(n: number) {
+  return new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+// ── Invoice Preview Modal — renders exact invoice format + jsPDF download ─
 function InvoicePreviewModal({
   invoice, canDownload, onClose,
 }: { invoice: TrackerInvoice; canDownload: boolean; onClose: () => void }) {
+  const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [clientData, setClientData] = useState<any>(null);
 
+  // Load company/tax config from localStorage (same keys as InvoiceManagement)
+  const companyConfig = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem("company-config") || "{}"); } catch { return {}; }
+  }, []);
+  const taxConfig = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem("tax-config") || "{}"); } catch { return {}; }
+  }, []);
+
+  // Fetch full client data for GSTIN, address etc.
+  useEffect(() => {
+    if (!invoice.clientId) return;
+    fetch(`/api/invoice-management/clients/${invoice.clientId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setClientData(d); })
+      .catch(() => {});
+  }, [invoice.clientId]);
+
+  // Derived tax values
+  const clientGstin = clientData?.gstin || "";
+  const companyGstin = companyConfig.gstNumber || "33AAMCM6618H1ZB";
+  const isIntraState = clientGstin.startsWith(companyGstin.substring(0, 2));
+  const hsnCode = taxConfig.invoiceHsnCode || "998314";
+  const gstRate = Number(taxConfig.invoiceRatePercentage || 18);
+  const taxableAmt = invoice.amount;
+  const taxAmt = Math.round(taxableAmt * gstRate / 100);
+  const cgst = isIntraState ? Math.round(taxableAmt * (gstRate / 2) / 100) : 0;
+  const sgst = isIntraState ? Math.round(taxableAmt * (gstRate / 2) / 100) : 0;
+  const igst = !isIntraState ? taxAmt : 0;
+  const total = taxableAmt + taxAmt;
+
+  const billingAddress = clientData?.billingAddress || "";
+  const placeOfSupply = clientGstin.startsWith("29") ? "Karnataka"
+    : clientGstin.startsWith("33") ? "Tamil Nadu"
+    : clientGstin.startsWith("06") ? "Haryana"
+    : clientGstin.startsWith("27") ? "Maharashtra"
+    : clientGstin.startsWith("07") ? "Delhi"
+    : clientData?.state || "India";
+
+  const invoiceDateFormatted = (() => {
+    if (!invoice.generatedDate) return "";
+    const d = new Date(invoice.generatedDate);
+    return `${String(d.getDate()).padStart(2, "0")}-${d.toLocaleString("en-IN", { month: "short" })}-${d.getFullYear()}`;
+  })();
+
+  // Custom line items if available
+  const lineItems: { desc: string; amount: number; hsnCode: string }[] = useMemo(() => {
+    if (Array.isArray((invoice as any).customInvoiceRows) && (invoice as any).customInvoiceRows.length > 0) {
+      return (invoice as any).customInvoiceRows.map((r: any) => ({
+        desc: r.description || r.name || r.label || "Service",
+        amount: Number(r.amount || r.value || 0),
+        hsnCode: r.hsnCode || hsnCode,
+      }));
+    }
+    return [{ desc: (invoice as any).mmcInvoiceTitle || "Professional Services", amount: taxableAmt, hsnCode }];
+  }, [invoice, taxableAmt, hsnCode]);
+
+  // Download using jsPDF (draw over the rendered HTML at 2× scale)
   const handleDownloadPDF = async () => {
     if (!printRef.current) return;
     setDownloading(true);
     try {
-      const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true });
-      const img = canvas.toDataURL("image/png");
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff",
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
       const pdf = new jsPDF("p", "mm", "a4");
       const pw = pdf.internal.pageSize.getWidth();
-      const ratio = canvas.height / canvas.width;
-      pdf.addImage(img, "PNG", 0, 0, pw, pw * ratio);
+      const ph = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pw) / canvas.width;
+      let yPos = 0;
+      let remaining = imgH;
+      while (remaining > 0) {
+        if (yPos > 0) pdf.addPage();
+        const sliceH = Math.min(remaining, ph);
+        pdf.addImage(imgData, "JPEG", 0, -yPos, pw, imgH);
+        yPos += ph;
+        remaining -= sliceH;
+      }
       pdf.save(`${invoice.invoiceNumber}.pdf`);
+      toast({ title: "PDF downloaded", description: `${invoice.invoiceNumber} downloaded.` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message || "Failed to generate PDF", variant: "destructive" });
     } finally {
       setDownloading(false);
     }
   };
 
+  const primary = "#2caff6";
+  const dark = "#17375E";
+
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-indigo-600" /> {invoice.invoiceNumber}
-            </DialogTitle>
-            <div className="flex items-center gap-2">
-              {canDownload && (
-                <Button size="sm" className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white h-8"
-                  onClick={handleDownloadPDF} disabled={downloading}>
-                  <FileDown className="h-3.5 w-3.5" />
-                  {downloading ? "Generating…" : "Download PDF"}
-                </Button>
-              )}
-            </div>
+      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0">
+        {/* Action bar */}
+        <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
+          <span className="font-semibold text-sm flex items-center gap-2">
+            <FileText className="h-4 w-4 text-indigo-600" /> {invoice.invoiceNumber}
+          </span>
+          <div className="flex gap-2">
+            {canDownload && (
+              <Button size="sm" className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white h-8"
+                onClick={handleDownloadPDF} disabled={downloading}>
+                <FileDown className="h-3.5 w-3.5" />
+                {downloading ? "Generating PDF…" : "Download PDF"}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={onClose} className="h-8">Close</Button>
           </div>
-        </DialogHeader>
+        </div>
+
         <ScrollArea className="flex-1">
-          <div ref={printRef} className="p-6 space-y-4 bg-white">
-            {/* Header */}
-            <div className="flex justify-between items-start pb-4 border-b">
+          {/* A4-style invoice render */}
+          <div ref={printRef} style={{ fontFamily: "Helvetica, Arial, sans-serif", background: "#fff", padding: "28px 32px", minWidth: 600, fontSize: 11 }}>
+            {/* Top colored band */}
+            <div style={{ height: 4, background: dark, marginBottom: 1 }} />
+            <div style={{ height: 2, background: primary, marginBottom: 16 }} />
+
+            {/* Header row */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Tax Invoice</h2>
-                <p className="text-sm text-gray-500">{invoice.invoiceNumber}</p>
+                <img src="/mylapaylogo.png" alt="Mylapay" style={{ height: 32, marginBottom: 6 }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                <div style={{ color: dark, fontWeight: "bold", fontSize: 10.5 }}>{companyConfig.companyName || "Mindeed Technologies and Services Private Limited"}</div>
+                <div style={{ color: "#6b7280", fontSize: 8.5, maxWidth: 280 }}>{companyConfig.address || "#17/3, Pembroke House, Second Floor, Shafee Mohammed Road"}, {companyConfig.city || "Chennai"}, {companyConfig.state || "Tamil Nadu"}, {companyConfig.pincode || "600006"}</div>
+                <div style={{ color: "#6b7280", fontSize: 8.5 }}>CIN: {companyConfig.cinNumber || "U72900TN2019PTC129197"}</div>
+                <div style={{ color: "#6b7280", fontSize: 8.5 }}>GSTIN: {companyConfig.gstNumber || "33AAMCM6618H1ZB"} | PAN: {companyConfig.panNumber || "AAMCM6618H"}</div>
+                <div style={{ color: "#6b7280", fontSize: 8.5 }}>{companyConfig.email || "finance@mindeed.in"} | {companyConfig.phone || "+91 96776 79895"}</div>
+                <div style={{ color: "#6b7280", fontSize: 8.5 }}>{companyConfig.website || "www.mylapay.com"}</div>
               </div>
-              <div className="text-right text-sm text-gray-500">
-                <p>Generated: {fmtDate(invoice.generatedDate)}</p>
-                <p>FY: {invoice.financialYear || "—"}</p>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ color: dark, fontWeight: "bold", fontSize: 22 }}>INVOICE</div>
+                <div style={{ color: primary, fontWeight: "bold", fontSize: 8, letterSpacing: 1 }}>TAX INVOICE</div>
+                <div style={{ marginTop: 10, fontSize: 8.5, color: "#6b7280" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><span>Invoice No</span><strong style={{ color: dark }}>{invoice.invoiceNumber}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><span>Invoice Date</span><strong style={{ color: dark }}>{invoiceDateFormatted}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><span>Service Period</span><strong style={{ color: dark }}>{invoice.month}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><span>Currency</span><strong style={{ color: dark }}>{clientData?.currency || "INR"}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><span>Place of Supply</span><strong style={{ color: dark }}>{placeOfSupply}</strong></div>
+                </div>
               </div>
             </div>
 
-            {/* Bill to */}
-            <div className="grid grid-cols-2 gap-6 text-sm">
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Bill To</p>
-                <p className="font-semibold text-gray-900">{invoice.clientName}</p>
-                <p className="text-gray-500">Client ID: {invoice.clientId}</p>
+            {/* Divider */}
+            <div style={{ height: 1, background: primary, marginBottom: 12 }} />
+
+            {/* Billed To + Details */}
+            <div style={{ display: "flex", gap: 24, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#9ca3af", fontSize: 8, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>BILLED TO</div>
+                <div style={{ color: dark, fontWeight: "bold", fontSize: 11 }}>M/s. {invoice.clientName}</div>
+                <div style={{ color: "#6b7280", fontSize: 8.5, whiteSpace: "pre-wrap", maxWidth: 220 }}>{billingAddress}</div>
               </div>
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Invoice Details</p>
-                <p className="text-gray-700">Month: <span className="font-medium">{invoice.month}</span></p>
-                <p className="text-gray-700">Billing: <span className="font-medium capitalize">{invoice.billingModel}</span></p>
-                <p className="text-gray-700">Type: <span className="font-medium capitalize">{invoice.invoiceType}</span></p>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#9ca3af", fontSize: 8, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>DETAILS</div>
+                <div style={{ color: "#6b7280", fontSize: 8.5 }}>—</div>
+                {clientGstin && <div style={{ color: "#6b7280", fontSize: 8.5 }}>GSTIN: {clientGstin}</div>}
               </div>
             </div>
 
-            {/* Amount table */}
-            <table className="w-full text-sm border rounded-lg overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left font-semibold text-gray-600">Description</th>
-                  <th className="px-4 py-2 text-right font-semibold text-gray-600">Amount</th>
+            {/* Statement of Charges */}
+            <div style={{ fontWeight: "bold", fontSize: 11, color: dark, marginBottom: 8 }}>Statement of Charges</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
+              <thead>
+                <tr style={{ background: dark, color: "#fff" }}>
+                  {["#", "PARTICULARS", "AMOUNT", "HSN", "RATE", "CGST", "SGST", "IGST", "AMOUNT"].map((h, i) => (
+                    <th key={i} style={{ padding: "7px 8px", textAlign: i < 2 ? "left" : "right", fontWeight: "bold", fontSize: 8.5 }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-t">
-                  <td className="px-4 py-2 text-gray-700">Professional Services — {invoice.month}</td>
-                  <td className="px-4 py-2 text-right font-mono">{fmtINR(invoice.amount)}</td>
-                </tr>
+                {lineItems.map((item, i) => {
+                  const itemTaxable = item.amount;
+                  const itemTax = Math.round(itemTaxable * gstRate / 100);
+                  const itemCgst = isIntraState ? Math.round(itemTaxable * (gstRate / 2) / 100) : 0;
+                  const itemSgst = isIntraState ? Math.round(itemTaxable * (gstRate / 2) / 100) : 0;
+                  const itemIgst = !isIntraState ? itemTax : 0;
+                  const itemTotal = itemTaxable + itemTax;
+                  return (
+                    <tr key={i} style={{ background: i % 2 === 0 ? "#f9fafb" : "#fff" }}>
+                      <td style={{ padding: "8px", textAlign: "center", color: "#6b7280" }}>0{i + 1}</td>
+                      <td style={{ padding: "8px", color: dark }}>{item.desc}</td>
+                      <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold", color: dark }}>{fmtCurrency(itemTaxable)}</td>
+                      <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{item.hsnCode}</td>
+                      <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{gstRate}%</td>
+                      <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{itemCgst ? fmtCurrency(itemCgst) : "-"}</td>
+                      <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{itemSgst ? fmtCurrency(itemSgst) : "-"}</td>
+                      <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{itemIgst ? fmtCurrency(itemIgst) : "-"}</td>
+                      <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold", color: dark }}>{fmtCurrency(itemTotal)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
-              <tfoot className="bg-gray-50 border-t-2">
-                <tr>
-                  <td className="px-4 py-2 font-bold">Total</td>
-                  <td className="px-4 py-2 text-right font-bold text-indigo-700">{fmtINR(invoice.amount)}</td>
-                </tr>
-              </tfoot>
             </table>
 
-            {/* Status & payment */}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="bg-gray-50 rounded-lg p-3 space-y-1">
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Status</p>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLOR[invoice.status] || ""}`}>
-                  {invoice.status}
-                </span>
-                {invoice.sentDate && <p className="text-gray-500 text-xs">Sent: {fmtDate(invoice.sentDate)}</p>}
-                {invoice.approvedBy && <p className="text-gray-500 text-xs">Approved by: {invoice.approvedBy}</p>}
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3 space-y-1">
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Payment</p>
-                <p className="font-semibold text-green-600">{fmtINR(invoice.totalPaid)} received</p>
-                {invoice.totalTds > 0 && <p className="text-amber-600 text-xs">TDS: {fmtINR(invoice.totalTds)}</p>}
-                <p className="text-red-500 text-xs">Balance: {fmtINR(Math.max(0, invoice.amount - invoice.totalPaid))}</p>
+            {/* Totals */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+              <table style={{ fontSize: 9, minWidth: 220 }}>
+                <tbody>
+                  {[
+                    ["Sub Total", fmtCurrency(taxableAmt)],
+                    ["CGST", cgst ? fmtCurrency(cgst) : "-"],
+                    ["SGST", sgst ? fmtCurrency(sgst) : "-"],
+                    ["IGST", igst ? fmtCurrency(igst) : "-"],
+                  ].map(([label, val]) => (
+                    <tr key={label}>
+                      <td style={{ padding: "3px 12px", color: "#6b7280", textAlign: "right" }}>{label}</td>
+                      <td style={{ padding: "3px 12px", textAlign: "right", color: dark }}>{val}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: dark, color: "#fff" }}>
+                    <td style={{ padding: "7px 12px", fontWeight: "bold", textAlign: "right" }}>Total Amount</td>
+                    <td style={{ padding: "7px 12px", fontWeight: "bold", textAlign: "right" }}>{fmtCurrency(total)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Amount in words */}
+            <div style={{ marginTop: 12, color: dark, fontSize: 8.5, fontStyle: "italic" }}>
+              Amount in words: Rupees {numberToWords(Math.round(total))}
+            </div>
+
+            {/* Declaration */}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontWeight: "bold", fontSize: 9.5, color: dark, borderBottom: `2px solid ${primary}`, paddingBottom: 3, marginBottom: 6, display: "inline-block" }}>Declaration</div>
+              <div style={{ color: "#6b7280", fontSize: 8, lineHeight: 1.6 }}>
+                {companyConfig.declarationText
+                  ? companyConfig.declarationText.replace(/<[^>]+>/g, "")
+                  : `We hereby declare that, We are registered under the Micro, Small, and Medium Enterprises Development Act, 2006 (MSME).\nMSME No of Mindeed: UDYAM-TN-02-0113863 | GST No of Mindeed: 33AAMCM6618H1ZB | PAN No of Mindeed: AAMCM6618H`}
               </div>
             </div>
+
+            {/* Bank details */}
+            <div style={{ marginTop: 10, color: "#6b7280", fontSize: 8, lineHeight: 1.6 }}>
+              <strong style={{ color: dark }}>BANK DETAILS:</strong><br />
+              Bank Name: <em>RBL Bank</em> | Account Name: <em>MINDEED TECHNOLOGIES AND SERVICES PRIVATE LIMITED</em> | Account Number: <em>409002339628</em> | IFSC Code: <em>RATN0000180</em> | Branch Name: <em>First Floor, Rashmi Towers No. 1, Valluvar Kottam High Road, Nungambakkam, Chennai - 600034</em>
+            </div>
+
+            {/* Signatory */}
+            <div style={{ marginTop: 20, textAlign: "right" }}>
+              <div style={{ fontWeight: "bold", color: dark, fontSize: 9, marginBottom: 4 }}>For {companyConfig.companyName || "Mindeed Technologies and Services Private Limited"}</div>
+              {companyConfig.signatureImage && (
+                <img src={companyConfig.signatureImage} alt="Signature" style={{ height: 56, marginBottom: 4, marginLeft: "auto" }} />
+              )}
+              <div style={{ color: "#6b7280", fontSize: 8.5 }}>Authorized Signatory</div>
+            </div>
+
+            {/* Bottom page footer */}
+            <div style={{ marginTop: 20, paddingTop: 6, borderTop: "1px solid #e5e7eb", textAlign: "right", color: "#9ca3af", fontSize: 8 }}>Page 1</div>
           </div>
         </ScrollArea>
       </DialogContent>

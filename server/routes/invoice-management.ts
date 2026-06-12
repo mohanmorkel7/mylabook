@@ -1628,11 +1628,31 @@ router.delete("/invoices/clear-payments", async (req: Request, res: Response) =>
   try {
     const { invoiceId } = req.body;
     if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
-    const result = await queryWithRetry(() =>
-      pool.query(`DELETE FROM invoice_payments WHERE invoice_id = $1 RETURNING id`, [invoiceId])
+
+    // Payments are stored with plain-text invoice_id (as passed from frontend).
+    // Also look up all encrypted variants from invoice_records to cover any mismatch.
+    const recordsRes = await queryWithRetry(() =>
+      pool.query(`SELECT invoice_id FROM invoice_records WHERE client_id IS NOT NULL`)
     );
-    console.log(`[Invoice] Cleared ${result.rowCount} payment record(s) for invoice ${invoiceId}`);
-    res.json({ success: true, deleted: result.rowCount });
+    const matchingEncrypted = recordsRes.rows
+      .filter(r => {
+        const dec = decrypt(r.invoice_id);
+        return dec === invoiceId || r.invoice_id === invoiceId;
+      })
+      .map(r => r.invoice_id);
+
+    // Delete by plain invoiceId AND any matching encrypted form
+    const idsToDelete = [invoiceId, ...matchingEncrypted];
+    let totalDeleted = 0;
+    for (const id of idsToDelete) {
+      const result = await queryWithRetry(() =>
+        pool.query(`DELETE FROM invoice_payments WHERE invoice_id = $1 RETURNING id`, [id])
+      );
+      totalDeleted += result.rowCount || 0;
+    }
+
+    console.log(`[Invoice] Cleared ${totalDeleted} payment record(s) for invoice ${invoiceId}`);
+    res.json({ success: true, deleted: totalDeleted });
   } catch (error: any) {
     console.error("[Invoice] DELETE /invoices/clear-payments error:", error?.message);
     res.status(500).json({ error: "Failed to clear payments" });

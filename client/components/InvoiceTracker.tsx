@@ -585,17 +585,54 @@ function PaymentModal({
 }
 
 // ── Payments History Popup ────────────────────────────────────────────────
-function PaymentsHistoryModal({ invoice, onClose }: { invoice: TrackerInvoice; onClose: () => void }) {
+function PaymentsHistoryModal({
+  invoice, onClose, onCleared, isAdmin,
+}: {
+  invoice: TrackerInvoice;
+  onClose: () => void;
+  onCleared: () => void;
+  isAdmin: boolean;
+}) {
+  const { toast } = useToast();
+  const [clearing, setClearing] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const handleClearAll = async () => {
+    if (!confirmed) { setConfirmed(true); return; }
+    setClearing(true);
+    try {
+      const res = await fetch("/api/invoice-management/invoices/clear-payments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: invoice.invoiceId }),
+      });
+      if (!res.ok) throw new Error("Failed to clear payments");
+      const data = await res.json();
+      toast({
+        title: "Payments cleared",
+        description: `${data.deleted} payment record(s) deleted for ${invoice.invoiceNumber}. Paid amount reset to ₹0.`,
+      });
+      onCleared();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setClearing(false);
+      setConfirmed(false);
+    }
+  };
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Payments — {invoice.invoiceNumber}</DialogTitle></DialogHeader>
-        <div className="space-y-2 text-sm">
+        <div className="space-y-1.5 text-sm bg-muted/30 rounded-lg p-3">
           <div className="flex justify-between"><span className="text-muted-foreground">Invoice Amount</span><span className="font-semibold">{fmtINR(invoice.amount)}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Total Paid</span><span className="text-green-600 font-semibold">{fmtINR(invoice.totalPaid)}</span></div>
           {invoice.totalTds > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Total TDS</span><span className="text-amber-600 font-semibold">{fmtINR(invoice.totalTds)}</span></div>}
+          <div className="flex justify-between font-semibold border-t pt-1.5"><span>Balance</span><span className={invoice.totalPaid >= invoice.amount ? "text-green-600" : "text-red-600"}>{fmtINR(Math.max(0, invoice.amount - invoice.totalPaid))}</span></div>
         </div>
-        <ScrollArea className="max-h-60">
+        <ScrollArea className="max-h-52">
           {invoice.payments.length === 0
             ? <p className="text-sm text-center text-muted-foreground py-6">No payments recorded</p>
             : invoice.payments.map((p, i) => (
@@ -611,6 +648,29 @@ function PaymentsHistoryModal({ invoice, onClose }: { invoice: TrackerInvoice; o
             ))
           }
         </ScrollArea>
+
+        {/* Admin-only: Reset payments */}
+        {isAdmin && invoice.payments.length > 0 && (
+          <div className={`rounded-lg p-3 border text-sm ${confirmed ? "bg-red-50 border-red-300" : "bg-gray-50 border-gray-200"}`}>
+            {confirmed
+              ? <p className="text-red-700 text-xs font-medium mb-2">⚠ This will permanently delete all {invoice.payments.length} payment record(s) and reset Paid to ₹0. Click "Confirm Reset" to proceed.</p>
+              : <p className="text-gray-600 text-xs mb-2">Admin: Reset all payments for this invoice (use if payment data is incorrect).</p>
+            }
+            <div className="flex gap-2">
+              {confirmed && <Button size="sm" variant="outline" onClick={() => setConfirmed(false)} className="h-7 text-xs">Cancel</Button>}
+              <Button
+                size="sm"
+                variant={confirmed ? "destructive" : "outline"}
+                className={`h-7 text-xs ${!confirmed ? "border-red-300 text-red-600 hover:bg-red-50" : ""}`}
+                onClick={handleClearAll}
+                disabled={clearing}
+              >
+                {clearing ? "Clearing…" : confirmed ? "Confirm Reset" : "Reset All Payments"}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end"><Button variant="outline" onClick={onClose}>Close</Button></div>
       </DialogContent>
     </Dialog>
@@ -1180,7 +1240,7 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         {inv.totalPaid > 0
-                          ? <span className="text-green-600 font-medium">{fmtINR(inv.totalPaid)}</span>
+                          ? <button onClick={() => setHistoryModal(inv)} className="text-green-600 font-medium hover:underline" title="View payment history">{fmtINR(inv.totalPaid)}</button>
                           : <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-right">
@@ -1404,7 +1464,12 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
         <PaymentModal invoice={paymentModal} onClose={() => setPaymentModal(null)} onSaved={fetchData} />
       )}
       {historyModal && (
-        <PaymentsHistoryModal invoice={historyModal} onClose={() => setHistoryModal(null)} />
+        <PaymentsHistoryModal
+          invoice={historyModal}
+          onClose={() => setHistoryModal(null)}
+          onCleared={fetchData}
+          isAdmin={isAdmin}
+        />
       )}
       {previewModal && (
         <InvoicePreviewModal

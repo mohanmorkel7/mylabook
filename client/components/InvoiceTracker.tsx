@@ -305,7 +305,7 @@ function InvoicePreviewModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0">
+      <DialogContent className="max-w-3xl w-[95vw] h-[95vh] flex flex-col p-0 overflow-hidden">
         {/* Action bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
           <span className="font-semibold text-sm flex items-center gap-2">
@@ -323,7 +323,7 @@ function InvoicePreviewModal({
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           {/* A4-style invoice render */}
           <div ref={printRef} style={{ fontFamily: "Helvetica, Arial, sans-serif", background: "#fff", padding: "28px 32px", minWidth: 600, fontSize: 11 }}>
             {/* Top colored band */}
@@ -462,7 +462,7 @@ function InvoicePreviewModal({
             {/* Bottom page footer */}
             <div style={{ marginTop: 20, paddingTop: 6, borderTop: "1px solid #e5e7eb", textAlign: "right", color: "#9ca3af", fontSize: 8 }}>Page 1</div>
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

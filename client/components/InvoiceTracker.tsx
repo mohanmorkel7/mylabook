@@ -227,17 +227,39 @@ function InvoicePreviewModal({
     return `${String(d.getDate()).padStart(2, "0")}-${d.toLocaleString("en-IN", { month: "short" })}-${d.getFullYear()}`;
   })();
 
-  // Custom line items if available
-  const lineItems: { desc: string; amount: number; hsnCode: string }[] = useMemo(() => {
-    if (Array.isArray((invoice as any).customInvoiceRows) && (invoice as any).customInvoiceRows.length > 0) {
-      return (invoice as any).customInvoiceRows.map((r: any) => ({
-        desc: r.description || r.name || r.label || "Service",
-        amount: Number(r.amount || r.value || 0),
-        hsnCode: r.hsnCode || hsnCode,
+  // Build line items from invoiceTableConfig (matches actual invoice row structure)
+  // Fields: narration, amount, hsn, rate, cgst, sgst, igst
+  const lineItems: { desc: string; amount: number; hsnCode: string; rate: string; cgst: number; sgst: number; igst: number }[] = useMemo(() => {
+    // Prefer invoiceTableConfig (OverviewInvoiceRow) — has narration, hsn, cgst, sgst, igst directly
+    const tableRows = Array.isArray(invoice.invoiceTableConfig) ? invoice.invoiceTableConfig : [];
+    const exportable = tableRows.filter((r: any) => r && r.exportEnabled !== false && Number(r.amount || 0) !== 0);
+    if (exportable.length > 0) {
+      return exportable.map((r: any) => ({
+        desc: r.narration || r.description || r.name || "Service",
+        amount: Number(r.amount || 0),
+        hsnCode: r.hsn || hsnCode,
+        rate: r.rate || `${gstRate}%`,
+        cgst: Number(r.cgst || 0),
+        sgst: Number(r.sgst || 0),
+        igst: Number(r.igst || 0),
       }));
     }
-    return [{ desc: (invoice as any).mmcInvoiceTitle || "Professional Services", amount: taxableAmt, hsnCode }];
-  }, [invoice, taxableAmt, hsnCode]);
+    // Fallback: customInvoiceRows
+    const customRows = Array.isArray(invoice.customInvoiceRows) ? invoice.customInvoiceRows : [];
+    if (customRows.length > 0) {
+      return customRows.map((r: any) => ({
+        desc: r.narration || r.description || r.name || r.label || "Service",
+        amount: Number(r.amount || r.value || 0),
+        hsnCode: r.hsn || r.hsnCode || hsnCode,
+        rate: r.rate || `${gstRate}%`,
+        cgst: Number(r.cgst || 0),
+        sgst: Number(r.sgst || 0),
+        igst: Number(r.igst || 0),
+      }));
+    }
+    // Final fallback: single row from invoice total
+    return [{ desc: invoice.mmcInvoiceTitle || "Professional Services", amount: taxableAmt, hsnCode, rate: `${gstRate}%`, cgst, sgst, igst }];
+  }, [invoice, taxableAmt, hsnCode, gstRate, cgst, sgst, igst]);
 
   // Download: delegate to the parent's existing PDF function if provided,
   // otherwise fall back to html2canvas capture of the preview div.
@@ -361,19 +383,19 @@ function InvoicePreviewModal({
               </thead>
               <tbody>
                 {lineItems.map((item, i) => {
+                  // Use stored tax values if available, otherwise compute from gstRate
                   const itemTaxable = item.amount;
-                  const itemTax = Math.round(itemTaxable * gstRate / 100);
-                  const itemCgst = isIntraState ? Math.round(itemTaxable * (gstRate / 2) / 100) : 0;
-                  const itemSgst = isIntraState ? Math.round(itemTaxable * (gstRate / 2) / 100) : 0;
-                  const itemIgst = !isIntraState ? itemTax : 0;
-                  const itemTotal = itemTaxable + itemTax;
+                  const itemCgst = item.cgst > 0 ? item.cgst : (isIntraState ? Math.round(itemTaxable * (gstRate / 2) / 100) : 0);
+                  const itemSgst = item.sgst > 0 ? item.sgst : (isIntraState ? Math.round(itemTaxable * (gstRate / 2) / 100) : 0);
+                  const itemIgst = item.igst > 0 ? item.igst : (!isIntraState ? Math.round(itemTaxable * gstRate / 100) : 0);
+                  const itemTotal = itemTaxable + itemCgst + itemSgst + itemIgst;
                   return (
                     <tr key={i} style={{ background: i % 2 === 0 ? "#f9fafb" : "#fff" }}>
                       <td style={{ padding: "8px", textAlign: "center", color: "#6b7280" }}>0{i + 1}</td>
                       <td style={{ padding: "8px", color: dark }}>{item.desc}</td>
                       <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold", color: dark }}>{fmtCurrency(itemTaxable)}</td>
                       <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{item.hsnCode}</td>
-                      <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{gstRate}%</td>
+                      <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{item.rate || `${gstRate}%`}</td>
                       <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{itemCgst ? fmtCurrency(itemCgst) : "-"}</td>
                       <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{itemSgst ? fmtCurrency(itemSgst) : "-"}</td>
                       <td style={{ padding: "8px", textAlign: "right", color: "#6b7280" }}>{itemIgst ? fmtCurrency(itemIgst) : "-"}</td>
@@ -452,7 +474,19 @@ function PaymentModal({
 }: { invoice: TrackerInvoice; onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [amountPaid, setAmountPaid] = useState(String(Math.max(0, invoice.amount - invoice.totalPaid)));
+
+  // Read tax config to compute GST-inclusive total
+  const taxConfig = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem("tax-config") || "{}"); } catch { return {}; }
+  }, []);
+  const gstRate = Number(taxConfig.invoiceRatePercentage || 18);
+  const taxableBase = invoice.amount;                               // stored as pre-GST amount
+  const gstAmount  = Math.round(taxableBase * gstRate / 100);
+  const totalWithGst = taxableBase + gstAmount;                     // what client actually pays
+  const alreadyPaid  = invoice.totalPaid;
+  const balanceRemaining = Math.max(0, totalWithGst - alreadyPaid);
+
+  const [amountPaid, setAmountPaid] = useState(String(balanceRemaining));
   const [isTds, setIsTds] = useState(false);
   const [tdsPercentage, setTdsPercentage] = useState("10");
   const [isPartial, setIsPartial] = useState(false);
@@ -462,7 +496,7 @@ function PaymentModal({
 
   const tdsAmount = isTds ? Math.round((Number(amountPaid) * Number(tdsPercentage)) / 100) : 0;
   const netReceivable = Number(amountPaid) - tdsAmount;
-  const balanceDue = invoice.amount - invoice.totalPaid - Number(amountPaid);
+  const balanceDue = totalWithGst - alreadyPaid - Number(amountPaid);
 
   const handleSave = async () => {
     if (!amountPaid || Number(amountPaid) <= 0) {
@@ -508,11 +542,13 @@ function PaymentModal({
 
         <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
           <div className="flex justify-between"><span className="text-muted-foreground">Client</span><span className="font-medium">{invoice.clientName}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Invoice Amount</span><span className="font-semibold">{fmtINR(invoice.amount)}</span></div>
-          {invoice.totalPaid > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Already Paid</span><span className="font-medium text-green-600">{fmtINR(invoice.totalPaid)}</span></div>}
+          <div className="flex justify-between"><span className="text-muted-foreground">Taxable Amount</span><span className="font-medium">{fmtINR(taxableBase)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">GST ({gstRate}%)</span><span className="font-medium">{fmtINR(gstAmount)}</span></div>
+          <div className="flex justify-between font-semibold text-indigo-700 border-t pt-1"><span>Total (incl. GST)</span><span>{fmtINR(totalWithGst)}</span></div>
+          {alreadyPaid > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Already Paid</span><span className="font-medium text-green-600">{fmtINR(alreadyPaid)}</span></div>}
           <div className="flex justify-between font-semibold border-t pt-1">
             <span>Balance Due</span>
-            <span className="text-red-600">{fmtINR(Math.max(0, invoice.amount - invoice.totalPaid))}</span>
+            <span className="text-red-600">{fmtINR(balanceRemaining)}</span>
           </div>
         </div>
 
@@ -521,6 +557,7 @@ function PaymentModal({
             <div className="space-y-1">
               <Label>Amount Paid (₹) *</Label>
               <Input type="number" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} min={1} />
+              <p className="text-[11px] text-muted-foreground">{fmtINR(taxableBase)} + GST {fmtINR(gstAmount)} = <strong>{fmtINR(totalWithGst)}</strong></p>
             </div>
             <div className="space-y-1">
               <Label>Payment Date *</Label>

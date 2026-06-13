@@ -1597,12 +1597,14 @@ router.get("/tracker", async (req: Request, res: Response) => {
   try {
     // Fetch all clients to get their active/inactive status (status is encrypted, must decrypt in code)
     const clientsResult = await queryWithRetry(() =>
-      pool.query(`SELECT client_id, status FROM invoice_clients`)
+      pool.query(`SELECT client_id, status, client_code FROM invoice_clients`)
     );
-    // Build set of active client IDs (exclude inactive/deleted clients)
+    // Build set of active client IDs (exclude inactive/deleted clients) and code map
     const activeClientIds = new Set<string>();
+    const clientCodeMap: Record<string, string> = {};
     for (const c of clientsResult.rows) {
       const status = decrypt(c.status) || "";
+      clientCodeMap[c.client_id] = decrypt(c.client_code) || "";
       if (status.toLowerCase() !== "inactive") {
         activeClientIds.add(c.client_id);
       }
@@ -1649,6 +1651,7 @@ router.get("/tracker", async (req: Request, res: Response) => {
         invoiceId: decrypt(row.invoice_id),
         invoiceNumber: decrypt(row.invoice_number),
         clientId: row.client_id,
+        clientCode: clientCodeMap[row.client_id] || "",
         clientName: decrypt(row.client_name),
         month: decrypt(row.month),
         amount: parseInt(decrypt(row.amount) || "0"),

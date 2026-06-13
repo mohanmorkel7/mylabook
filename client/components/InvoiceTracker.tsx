@@ -43,6 +43,7 @@ interface TrackerInvoice {
   invoiceId: string;
   invoiceNumber: string;
   clientId: string;
+  clientCode: string;
   clientName: string;
   month: string;
   amount: number;
@@ -1182,6 +1183,7 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
                   <th className="px-3 py-2 text-left font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("client")}>
                     <span className="flex items-center gap-1">Client <SortIcon col="client" /></span>
                   </th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Client Code</th>
                   <th className="px-3 py-2 text-left font-semibold text-gray-600">Month</th>
                   <th className="px-3 py-2 text-right font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("amount")}>
                     <span className="flex items-center justify-end gap-1">Amount <SortIcon col="amount" /></span>
@@ -1200,7 +1202,7 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
               </thead>
               <tbody>
                 {paginated.length === 0 && (
-                  <tr><td colSpan={13} className="px-3 py-10 text-center text-muted-foreground">No invoices found</td></tr>
+                  <tr><td colSpan={14} className="px-3 py-10 text-center text-muted-foreground">No invoices found</td></tr>
                 )}
                 {paginated.map((inv, idx) => {
                   const overdue = isOverdue(inv);
@@ -1214,6 +1216,7 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
                       <td className="px-3 py-2.5 text-gray-400">{absIdx}</td>
                       <td className="px-3 py-2.5 font-medium text-indigo-600">{inv.invoiceNumber}</td>
                       <td className="px-3 py-2.5 max-w-[130px] truncate" title={inv.clientName}>{inv.clientName}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-500 text-xs font-mono">{inv.clientCode || "—"}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-gray-600">{inv.month}</td>
                       <td className="px-3 py-2.5 text-right font-semibold">{fmtINR(inv.amount)}</td>
                       <td className="px-3 py-2.5">

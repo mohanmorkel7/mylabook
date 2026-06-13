@@ -24,6 +24,17 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+// Hide default DialogContent close button via style injection
+const style = document.createElement('style');
+style.textContent = `
+  [role="dialog"] > button[aria-label="Close"] {
+    display: none;
+  }
+`;
+if (typeof document !== 'undefined') {
+  document.head.appendChild(style);
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────
 interface Payment {
   id: number;
@@ -306,7 +317,7 @@ function InvoicePreviewModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl w-[95vw] h-[95vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="max-w-3xl w-[95vw] h-[95vh] flex flex-col p-0 overflow-hidden" showCloseButton={false}>
         {/* Action bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0">
           <span className="font-semibold text-sm flex items-center gap-2">

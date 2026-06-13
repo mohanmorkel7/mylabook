@@ -727,7 +727,7 @@ function StatusDropdown({ invoice, canChangeStatus, onStatusChange }: {
       disabled={!canChangeStatus}
       value={invoice.status}
       onChange={e => onStatusChange(invoice, e.target.value)}
-      className={`text-xs rounded-full px-2 py-0.5 border font-medium appearance-none cursor-pointer disabled:cursor-default disabled:opacity-80
+      className={`text-[10px] rounded-full px-1.5 py-0.5 border font-medium appearance-none cursor-pointer disabled:cursor-default disabled:opacity-80 w-full truncate
         ${STATUS_COLOR[computedStatus] || "bg-gray-100 text-gray-600 border-gray-200"}
         ${canChangeStatus ? "hover:opacity-80 focus:outline-none" : ""}`}
     >
@@ -1174,30 +1174,46 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
         </CardHeader>
 
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div className="overflow-hidden">
+            <table className="w-full text-[11px] table-fixed">
+              <colgroup>
+                <col style={{width:"28px"}} />
+                <col style={{width:"88px"}} />
+                <col style={{width:"110px"}} />
+                <col style={{width:"68px"}} />
+                <col style={{width:"58px"}} />
+                <col style={{width:"82px"}} />
+                <col style={{width:"108px"}} />
+                <col style={{width:"90px"}} />
+                <col style={{width:"72px"}} />
+                <col style={{width:"62px"}} />
+                <col style={{width:"62px"}} />
+                <col style={{width:"72px"}} />
+                <col style={{width:"58px"}} />
+                <col style={{width:"72px"}} />
+              </colgroup>
               <thead>
                 <tr className="border-b bg-muted/40">
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 w-8">#</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Invoice No.</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("client")}>
-                    <span className="flex items-center gap-1">Client <SortIcon col="client" /></span>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600">#</th>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600">Invoice No.</th>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("client")}>
+                    <span className="flex items-center gap-0.5">Client <SortIcon col="client" /></span>
                   </th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Client Code</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Month</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("amount")}>
-                    <span className="flex items-center justify-end gap-1">Amount <SortIcon col="amount" /></span>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600">Code</th>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600">Month</th>
+                  <th className="px-1.5 py-2 text-right font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("amount")}>
+                    <span className="flex items-center justify-end gap-0.5">Amount <SortIcon col="amount" /></span>
                   </th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Status</th>
-                  <th className="px-3 py-2 text-center font-semibold text-gray-600">Approval</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("date")}>
-                    <span className="flex items-center gap-1">Generated <SortIcon col="date" /></span>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600">Status</th>
+                  <th className="px-1.5 py-2 text-center font-semibold text-gray-600">Approval</th>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600 cursor-pointer hover:text-indigo-600" onClick={() => sortToggle("date")}>
+                    <span className="flex items-center gap-0.5">Gen. Date <SortIcon col="date" /></span>
                   </th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Sent</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">Due Date</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">Paid</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">TDS</th>
-                  <th className="px-3 py-2 text-center font-semibold text-gray-600">Actions</th>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600">Sent</th>
+                  <th className="px-1.5 py-2 text-left font-semibold text-gray-600">Due</th>
+                  <th className="px-1.5 py-2 text-right font-semibold text-gray-600">Paid</th>
+                  <th className="px-1.5 py-2 text-right font-semibold text-gray-600">TDS</th>
+                  <th className="px-1.5 py-2 text-center font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1213,13 +1229,13 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
 
                   return (
                     <tr key={inv.invoiceId} className={`border-b transition-colors hover:bg-muted/20 ${overdue ? "bg-red-50/40" : ""}`}>
-                      <td className="px-3 py-2.5 text-gray-400">{absIdx}</td>
-                      <td className="px-3 py-2.5 font-medium text-indigo-600">{inv.invoiceNumber}</td>
-                      <td className="px-3 py-2.5 max-w-[130px] truncate" title={inv.clientName}>{inv.clientName}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-500 text-xs font-mono">{inv.clientCode || "—"}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-600">{inv.month}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold">{fmtINR(inv.amount)}</td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-1.5 py-2 text-gray-400">{absIdx}</td>
+                      <td className="px-1.5 py-2 font-medium text-indigo-600 truncate" title={inv.invoiceNumber}>{inv.invoiceNumber}</td>
+                      <td className="px-1.5 py-2 truncate text-gray-700" title={inv.clientName}>{inv.clientName}</td>
+                      <td className="px-1.5 py-2 truncate text-gray-500 font-mono">{inv.clientCode || "—"}</td>
+                      <td className="px-1.5 py-2 truncate text-gray-600">{inv.month}</td>
+                      <td className="px-1.5 py-2 text-right font-semibold truncate">{fmtINR(inv.amount)}</td>
+                      <td className="px-1.5 py-2">
                         <StatusDropdown
                           invoice={inv}
                           canChangeStatus={canManage}
@@ -1233,7 +1249,7 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
                       </td>
 
                       {/* Approval column */}
-                      <td className="px-3 py-2.5 text-center">
+                      <td className="px-1.5 py-2 text-center">
                         {(() => {
                           if (inv.status === "Waiting for approval") {
                             return canManage ? (
@@ -1273,23 +1289,23 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
                         })()}
                       </td>
 
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-500">{fmtDate(inv.generatedDate)}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-500">{fmtDate(inv.sentDate)}</td>
-                      <td className={`px-3 py-2.5 whitespace-nowrap ${overdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
+                      <td className="px-1.5 py-2 text-gray-500 truncate">{fmtDate(inv.generatedDate)}</td>
+                      <td className="px-1.5 py-2 text-gray-500 truncate">{fmtDate(inv.sentDate)}</td>
+                      <td className={`px-1.5 py-2 truncate ${overdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
                         {dueDate ? fmtDate(dueDate) : "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-1.5 py-2 text-right">
                         {inv.totalPaid > 0
-                          ? <button onClick={() => setHistoryModal(inv)} className="text-green-600 font-medium hover:underline" title="View payment history">{fmtINR(inv.totalPaid)}</button>
+                          ? <button onClick={() => setHistoryModal(inv)} className="text-green-600 font-medium hover:underline text-[11px]" title="View payment history">{fmtINR(inv.totalPaid)}</button>
                           : <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-1.5 py-2 text-right">
                         {inv.totalTds > 0
-                          ? <span className="text-amber-600">{fmtINR(inv.totalTds)}</span>
+                          ? <span className="text-amber-600 text-[11px]">{fmtINR(inv.totalTds)}</span>
                           : <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="px-1.5 py-2">
+                        <div className="flex items-center justify-center gap-0.5">
                           {/* PDF icon — always visible; finance users get eye, admin gets download */}
                           {isFinanceOnlyUser ? (
                             <button

@@ -1232,7 +1232,7 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
                       <td className="px-1.5 py-2 text-gray-400">{absIdx}</td>
                       <td className="px-1.5 py-2 font-medium text-indigo-600 truncate" title={inv.invoiceNumber}>{inv.invoiceNumber}</td>
                       <td className="px-1.5 py-2 truncate text-gray-700" title={inv.clientName}>{inv.clientName}</td>
-                      <td className="px-1.5 py-2 truncate text-gray-500 font-mono">{inv.clientCode || "—"}</td>
+                      <td className="px-1.5 py-2 truncate text-gray-500 font-mono" title={inv.clientCode || undefined}>{inv.clientCode || "—"}</td>
                       <td className="px-1.5 py-2 truncate text-gray-600">{inv.month}</td>
                       <td className="px-1.5 py-2 text-right font-semibold truncate">{fmtINR(inv.amount)}</td>
                       <td className="px-1.5 py-2">

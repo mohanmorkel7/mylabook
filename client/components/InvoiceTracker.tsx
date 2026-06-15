@@ -495,7 +495,8 @@ function PaymentModal({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const tdsAmount = isTds ? Math.round((Number(amountPaid) * Number(tdsPercentage)) / 100) : 0;
+  // TDS is calculated on the taxable base (without GST), not on the payment amount
+  const tdsAmount = isTds ? Math.round((taxableBase * Number(tdsPercentage)) / 100) : 0;
   const netReceivable = Number(amountPaid) - tdsAmount;
   const balanceDue = totalWithGst - alreadyPaid - Number(amountPaid);
 

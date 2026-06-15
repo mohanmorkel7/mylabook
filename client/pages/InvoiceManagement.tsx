@@ -4803,7 +4803,7 @@ function ClientOverviewScreen({
 
       <div className="grid gap-6">
         <InvoiceHistoryTable
-          title="Invoice History Table"
+          title="Invoice Tracker"
           subtitle="Invoice numbers, status workflow, generated dates and download/send actions"
           invoices={client.invoiceHistory || []}
           currencyCode={client.currency || "INR"}
@@ -9426,7 +9426,7 @@ export default function InvoiceManagement() {
       </Dialog>
 
       <InvoiceHistoryTable
-        title="Invoice History Table"
+        title="Invoice Tracker"
         subtitle="Statuses, generated dates and delivery actions"
         invoices={allInvoicesFromClients}
         showClient

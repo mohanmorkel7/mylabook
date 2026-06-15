@@ -742,7 +742,7 @@ function StatusDropdown({ invoice, canChangeStatus, onStatusChange }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────
-export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = {}) {
+export default function InvoiceTracker({ onDownloadPdf, initialData, filterClientId }: InvoiceTrackerProps = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 

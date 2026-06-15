@@ -69,6 +69,10 @@ interface TrackerInvoice {
 interface InvoiceTrackerProps {
   /** When provided, "Download PDF" delegates to this instead of html2canvas */
   onDownloadPdf?: (invoice: TrackerInvoice) => Promise<void>;
+  /** Optional pre-fetched invoices to use instead of fetching from API */
+  initialData?: TrackerInvoice[];
+  /** Optional client ID to filter invoices by specific client */
+  filterClientId?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -766,15 +770,18 @@ export default function InvoiceTracker({ onDownloadPdf }: InvoiceTrackerProps = 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/invoice-management/tracker");
-      if (!res.ok) throw new Error("Failed to fetch");
-      setInvoices(await res.json());
+      const data = initialData ? initialData : (
+        await fetch("/api/invoice-management/tracker")
+          .then(r => r.ok ? r.json() : Promise.reject(new Error("Failed to fetch")))
+      );
+      const filtered = filterClientId ? data.filter((inv: TrackerInvoice) => inv.clientId === filterClientId) : data;
+      setInvoices(filtered);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialData, filterClientId, toast]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

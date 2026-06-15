@@ -4802,23 +4802,9 @@ function ClientOverviewScreen({
       )}
 
       <div className="grid gap-6">
-        <InvoiceHistoryTable
-          title="Invoice Tracker"
-          subtitle="Invoice numbers, status workflow, generated dates and download/send actions"
-          invoices={client.invoiceHistory || []}
-          currencyCode={client.currency || "INR"}
-          canManageApprovalActions={canManageApprovalActions}
-          onEdit={onEditInvoice}
-          onApprove={onApproveInvoice}
-          onReject={onRejectInvoice}
-          onSend={onSendInvoice}
-          onPaid={onPaidInvoice}
-          onClose={onCloseInvoice}
-          onStatusChange={(invoice, status) => onStatusChange(getInvoiceDisplayNumber(invoice), status)}
+        <InvoiceTracker
           onDownloadPdf={onDownloadPdf}
-          onDownloadDocx={onDownloadDocx}
-          onPreview={onPreview}
-          onDelete={(invoice) => onDeleteInvoice(invoice.invoiceId)}
+          filterClientId={client.clientId}
         />
       </div>
 
@@ -9425,23 +9411,8 @@ export default function InvoiceManagement() {
         </DialogContent>
       </Dialog>
 
-      <InvoiceHistoryTable
-        title="Invoice Tracker"
-        subtitle="Statuses, generated dates and delivery actions"
-        invoices={allInvoicesFromClients}
-        showClient
-        canManageApprovalActions={canManageInvoiceApprovalActions}
-        onEdit={(invoice) => openInvoiceEditModal(invoice)}
-        onApprove={(invoice) => approveInvoice(invoice)}
-        onReject={(invoice) => rejectInvoice(invoice)}
-        onSend={(invoice) => sendInvoice(invoice)}
-        onPaid={(invoice) => markInvoicePaid(invoice)}
-        onClose={(invoice) => closeInvoice(invoice)}
-        onStatusChange={(invoice, status) => updateInvoiceByNumber(getInvoiceDisplayNumber(invoice), (item) => ({ ...item, status }))}
-        onDownloadPdf={(invoice) => downloadInvoicePdf(invoice)}
-        onDownloadDocx={(invoice) => downloadInvoiceDocx(invoice)}
-        onPreview={(invoice) => previewInvoicePdf(invoice)}
-        onDelete={(invoice) => deleteInvoiceByNumber(getInvoiceDisplayNumber(invoice))}
+      <InvoiceTracker
+        onDownloadPdf={onDownloadPdf}
       />
 
       <Dialog

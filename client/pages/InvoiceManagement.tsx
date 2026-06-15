@@ -4811,6 +4811,7 @@ function ClientOverviewScreen({
             });
           }}
           filterClientId={client.clientId}
+          tableOnly
         />
       </div>
 

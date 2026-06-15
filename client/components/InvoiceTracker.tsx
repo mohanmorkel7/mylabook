@@ -73,6 +73,8 @@ interface InvoiceTrackerProps {
   initialData?: TrackerInvoice[];
   /** Optional client ID to filter invoices by specific client */
   filterClientId?: string;
+  /** If true, show only the table without dashboard metrics and charts */
+  tableOnly?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -742,7 +744,7 @@ function StatusDropdown({ invoice, canChangeStatus, onStatusChange }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────
-export default function InvoiceTracker({ onDownloadPdf, initialData, filterClientId }: InvoiceTrackerProps = {}) {
+export default function InvoiceTracker({ onDownloadPdf, initialData, filterClientId, tableOnly = false }: InvoiceTrackerProps = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -1042,24 +1044,26 @@ export default function InvoiceTracker({ onDownloadPdf, initialData, filterClien
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">Invoice Tracker</h2>
-          <p className="text-sm text-muted-foreground">{invoices.length} invoices across all clients</p>
-        </div>
-        <div className="flex items-center gap-2 self-start">
-          <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)} className="gap-2">
-            <Download className="h-4 w-4" /> Export
-          </Button>
-          <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </Button>
-        </div>
-      </div>
+      {!tableOnly && (
+        <>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">Invoice Tracker</h2>
+              <p className="text-sm text-muted-foreground">{invoices.length} invoices across all clients</p>
+            </div>
+            <div className="flex items-center gap-2 self-start">
+              <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)} className="gap-2">
+                <Download className="h-4 w-4" /> Export
+              </Button>
+              <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+                <RefreshCw className="h-4 w-4" /> Refresh
+              </Button>
+            </div>
+          </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard icon={FileText}      label="Total Invoices"    value={metrics.total}    sub={fmtINR(metrics.totalAmt)}    color="border-l-slate-500" />
         <StatCard icon={Clock}         label="Waiting Approval"  value={metrics.waiting}                                    color="border-l-amber-500" />
         <StatCard icon={BadgeCheck}    label="Approved"          value={metrics.approved}                                   color="border-l-blue-500" />
@@ -1144,6 +1148,8 @@ export default function InvoiceTracker({ onDownloadPdf, initialData, filterClien
           </CardContent>
         </Card>
       </div>
+        </>
+      )}
 
       {/* Table */}
       <Card className="shadow-sm">

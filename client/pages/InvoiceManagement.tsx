@@ -9426,6 +9426,7 @@ export default function InvoiceManagement() {
             client: inv.clientName,
           });
         }}
+        tableOnly
       />
 
       <Dialog

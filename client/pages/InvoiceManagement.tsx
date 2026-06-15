@@ -4803,7 +4803,13 @@ function ClientOverviewScreen({
 
       <div className="grid gap-6">
         <InvoiceTracker
-          onDownloadPdf={onDownloadPdf}
+          onDownloadPdf={async (inv) => {
+            await downloadInvoicePdf({
+              ...inv,
+              invoiceNumber: inv.invoiceNumber,
+              client: inv.clientName,
+            });
+          }}
           filterClientId={client.clientId}
         />
       </div>
@@ -9412,7 +9418,13 @@ export default function InvoiceManagement() {
       </Dialog>
 
       <InvoiceTracker
-        onDownloadPdf={onDownloadPdf}
+        onDownloadPdf={async (inv) => {
+          await downloadInvoicePdf({
+            ...inv,
+            invoiceNumber: inv.invoiceNumber,
+            client: inv.clientName,
+          });
+        }}
       />
 
       <Dialog

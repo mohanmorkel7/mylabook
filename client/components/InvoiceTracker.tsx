@@ -1195,10 +1195,10 @@ export default function InvoiceTracker({ onDownloadPdf, initialData, filterClien
                 <col style={{width:"88px"}} />
                 <col style={{width:"110px"}} />
                 <col style={{width:"68px"}} />
-                <col style={{width:"58px"}} />
-                <col style={{width:"82px"}} />
-                <col style={{width:"108px"}} />
-                <col style={{width:"90px"}} />
+                <col style={{width:"50px"}} />
+                <col style={{width:"75px"}} />
+                <col style={{width:"140px"}} />
+                <col style={{width:"130px"}} />
                 <col style={{width:"72px"}} />
                 <col style={{width:"62px"}} />
                 <col style={{width:"62px"}} />
@@ -1267,20 +1267,20 @@ export default function InvoiceTracker({ onDownloadPdf, initialData, filterClien
                         {(() => {
                           if (inv.status === "Waiting for approval") {
                             return canManage ? (
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex flex-col items-center justify-center gap-0.5">
                                 <button
                                   title="Approve"
                                   onClick={() => handleStatusChange(inv, "Generated")}
-                                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 border border-blue-300 text-blue-700 hover:bg-blue-100 text-[10px] font-semibold transition-colors"
+                                  className="flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-blue-50 border border-blue-300 text-blue-700 hover:bg-blue-100 text-[9px] font-semibold transition-colors whitespace-nowrap"
                                 >
-                                  <ThumbsUp className="h-3 w-3" /> Approve
+                                  <ThumbsUp className="h-2.5 w-2.5" /> Approve
                                 </button>
                                 <button
                                   title="Reject"
                                   onClick={() => handleStatusChange(inv, "Rejected")}
-                                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 border border-red-300 text-red-700 hover:bg-red-100 text-[10px] font-semibold transition-colors"
+                                  className="flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-red-50 border border-red-300 text-red-700 hover:bg-red-100 text-[9px] font-semibold transition-colors whitespace-nowrap"
                                 >
-                                  <ThumbsDown className="h-3 w-3" /> Reject
+                                  <ThumbsDown className="h-2.5 w-2.5" /> Reject
                                 </button>
                               </div>
                             ) : (

@@ -56,6 +56,7 @@ interface TrackerInvoice {
   sentDate: string | null;
   approvedDate: string | null;
   approvedBy: string | null;
+  updatedBy: string | null;
   customInvoiceRows: any[];
   invoiceTableConfig: any[];
   mmcInvoiceTitle: string;
@@ -748,7 +749,11 @@ export default function InvoiceTracker({ onDownloadPdf, initialData, filterClien
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const isAdmin = user?.role === "admin";
+  // Special-case: grant full (admin-level) access to the Invoice List table
+  // (status dropdown, approve/reject, payment actions) for this specific user
+  const isTableAdminOverrideUser =
+    String((user as any)?.email || "").toLowerCase() === "devarajan.n@mylapay.com";
+  const isAdmin = user?.role === "admin" || isTableAdminOverrideUser;
   const isFinanceDeptAdmin =
     (user as any)?.department_admin === true &&
     String((user as any)?.admin_for_department || "").toLowerCase() === "finance";
@@ -1004,7 +1009,12 @@ export default function InvoiceTracker({ onDownloadPdf, initialData, filterClien
       }
     }
 
-    const body: any = { invoiceId: inv.invoiceId, status: newStatus, approved_by: user?.email || "admin" };
+    const body: any = {
+    invoiceId: inv.invoiceId,
+    status: newStatus,
+    approved_by: user?.email || "admin",
+    updated_by: user?.email || "admin",
+  };
     if (newStatus === "Generated") body.approved_date = new Date().toISOString().split("T")[0];
     if (newStatus === "Send")      body.sent_date      = new Date().toISOString().split("T")[0];
     try {

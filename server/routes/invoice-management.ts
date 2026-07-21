@@ -267,6 +267,7 @@ export async function initializeInvoiceSchema() {
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS sent_date TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS approved_date TEXT`);
       await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS approved_by TEXT`);
+      await pool.query(`ALTER TABLE invoice_records ADD COLUMN IF NOT EXISTS updated_by TEXT`);
     } catch (err) {
       console.log("[Invoice] invoice_records columns already exist or error:", (err as any)?.message);
     }
@@ -1535,9 +1536,11 @@ router.delete("/clients/:clientId/force", async (req: Request, res: Response) =>
 // ── PATCH invoice status (ID in body to avoid slash routing issues) ────────
 router.patch("/invoices/update-status", async (req: Request, res: Response) => {
   try {
-    const { invoiceId, status, approved_by, sent_date, approved_date } = req.body;
+    const { invoiceId, status, approved_by, sent_date, approved_date, updated_by } = req.body;
     if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
     if (!status) return res.status(400).json({ error: "status is required" });
+
+    const updatedByValue = updated_by || approved_by || null;
 
     await queryWithRetry(() =>
       pool.query(
@@ -1546,13 +1549,15 @@ router.patch("/invoices/update-status", async (req: Request, res: Response) => {
           approved_by = $2,
           sent_date = $3,
           approved_date = $4,
+          updated_by = $5,
           updated_at = NOW()
-        WHERE invoice_id = $5`,
+        WHERE invoice_id = $6`,
         [
           encrypt(status),
           approved_by ? encrypt(approved_by) : null,
           sent_date   ? encrypt(sent_date)   : null,
           approved_date ? encrypt(approved_date) : null,
+          updatedByValue ? encrypt(updatedByValue) : null,
           invoiceId,
         ]
       )
@@ -1582,7 +1587,10 @@ router.post("/invoices/add-payment", async (req: Request, res: Response) => {
     // Auto update status to "Received" if not partial
     if (!is_partial) {
       await queryWithRetry(() =>
-        pool.query(`UPDATE invoice_records SET status = $1, updated_at = NOW() WHERE invoice_id = $2`, [encrypt("Received"), invoiceId])
+        pool.query(
+          `UPDATE invoice_records SET status = $1, updated_by = $2, updated_at = NOW() WHERE invoice_id = $3`,
+          [encrypt("Received"), created_by ? encrypt(created_by) : null, invoiceId]
+        )
       );
     }
     res.json({ success: true, paymentId: result.rows[0]?.id });
@@ -1664,6 +1672,7 @@ router.get("/tracker", async (req: Request, res: Response) => {
         sentDate: decrypt(row.sent_date) || null,
         approvedDate: decrypt(row.approved_date) || null,
         approvedBy: decrypt(row.approved_by) || null,
+        updatedBy: decrypt(row.updated_by) || null,
         customInvoiceRows: safeParseJson(decrypt(row.custom_invoice_rows), []),
         invoiceTableConfig: safeParseJson(decrypt(row.invoice_table_config), []),
         mmcInvoiceTitle: decrypt(row.mmc_invoice_title) || "",

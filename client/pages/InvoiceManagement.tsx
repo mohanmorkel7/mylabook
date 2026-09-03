@@ -23,6 +23,7 @@ import * as Docx from "docx";
 import * as XLSX from "xlsx";
 import XLSXStyle from "xlsx-js-style";
 import InvoiceTracker from "@/components/InvoiceTracker";
+import CreditNotesTracker from "@/components/CreditNotesTracker";
 import {
   Area,
   AreaChart,
@@ -6066,6 +6067,7 @@ export default function InvoiceManagement() {
   const [activeConfigTab, setActiveConfigTab] = useState<"company" | "tax" | "currency">("company");
   const [settingsViewOpen, setSettingsViewOpen] = useState(false);
   const [clientConfigTab, setClientConfigTab] = useState<"active" | "history">("active");
+  const [mainTab, setMainTab] = useState<"tracker" | "clients" | "config" | "credit-notes">("tracker");
 
   const [configChangeRequests, setConfigChangeRequests] = useState<ConfigChangeRequest[]>(() => {
     try {
@@ -8523,18 +8525,24 @@ export default function InvoiceManagement() {
               Enterprise invoice operations, commercial config management and revenue analytics
             </p>
             {/* Main tab navigation */}
-            <div className="mt-3 flex items-center gap-1 rounded-full border bg-muted/30 p-1 w-fit">
+            <div className="mt-3 flex items-center gap-1 rounded-full border bg-muted/30 p-1 w-fit overflow-x-auto">
               <button
                 onClick={() => setMainTab("clients")}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${mainTab === "clients" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all whitespace-nowrap ${mainTab === "clients" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Clients</span>
               </button>
               <button
                 onClick={() => setMainTab("tracker")}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${mainTab === "tracker" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all whitespace-nowrap ${mainTab === "tracker" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 <span className="flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Invoice Tracker</span>
+              </button>
+              <button
+                onClick={() => setMainTab("credit-notes")}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all whitespace-nowrap ${mainTab === "credit-notes" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Credit Notes</span>
               </button>
             </div>
           </div>
@@ -8591,6 +8599,11 @@ export default function InvoiceManagement() {
             });
           }}
         />
+      )}
+
+      {/* ── Credit Notes tab ─────────────────────────────────────────── */}
+      {mainTab === "credit-notes" && !settingsViewOpen && (
+        <CreditNotesTracker />
       )}
 
       {/* Configuration sections shown when settings view is open */}

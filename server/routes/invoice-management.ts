@@ -1690,4 +1690,53 @@ router.get("/tracker", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET credit notes list ────────────────────────────────────────────
+router.get("/credit-notes", async (req: Request, res: Response) => {
+  try {
+    // For now, return an empty list (will be populated later with actual logic)
+    const creditNotes = [
+      {
+        id: "cn-001",
+        invoiceId: "INV-2026-001",
+        clientName: "Client A",
+        clientId: "client-1",
+        creditNoteNumber: "CN/2026/0001",
+        amount: 50000,
+        reason: "Adjustment",
+        status: "Approved",
+        generatedDate: "2026-06-10",
+        appliedDate: "2026-06-12",
+      },
+      {
+        id: "cn-002",
+        invoiceId: "INV-2026-002",
+        clientName: "Client B",
+        clientId: "client-2",
+        creditNoteNumber: "CN/2026/0002",
+        amount: 75000,
+        reason: "Service credit",
+        status: "Pending",
+        generatedDate: "2026-06-09",
+        appliedDate: null,
+      },
+      {
+        id: "cn-003",
+        invoiceId: "INV-2026-003",
+        clientName: "Client C",
+        clientId: "client-3",
+        creditNoteNumber: "CN/2026/0003",
+        amount: 25000,
+        reason: "Discount",
+        status: "Rejected",
+        generatedDate: "2026-06-08",
+        appliedDate: null,
+      },
+    ];
+    res.json(creditNotes);
+  } catch (error: any) {
+    console.error("[Invoice] GET /credit-notes error:", error?.message);
+    res.status(500).json({ error: "Failed to fetch credit notes" });
+  }
+});
+
 export default router;

@@ -6050,7 +6050,7 @@ export default function InvoiceManagement() {
     }
   });
 
-  const [mainTab, setMainTab] = useState<"clients" | "tracker">("clients");
+  const [mainTab, setMainTab] = useState<"clients" | "tracker" | "credit-notes">("clients");
   const [showExportInvoicesModal, setShowExportInvoicesModal] = useState(false);
   const [exportMonth, setExportMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
   const [exportYear, setExportYear] = useState(String(new Date().getFullYear()));
@@ -6067,7 +6067,6 @@ export default function InvoiceManagement() {
   const [activeConfigTab, setActiveConfigTab] = useState<"company" | "tax" | "currency">("company");
   const [settingsViewOpen, setSettingsViewOpen] = useState(false);
   const [clientConfigTab, setClientConfigTab] = useState<"active" | "history">("active");
-  const [mainTab, setMainTab] = useState<"tracker" | "clients" | "config" | "credit-notes">("tracker");
 
   const [configChangeRequests, setConfigChangeRequests] = useState<ConfigChangeRequest[]>(() => {
     try {

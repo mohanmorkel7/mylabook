@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Ticket,
   DollarSign,
+  ReceiptText,
   ChevronDown,
   ChevronRight,
   Megaphone,
@@ -142,7 +143,7 @@ const navigationItems: NavigationItem[] = [
     name: "FinOps",
     href: "/finops",
     icon: DollarSign,
-    roles: ["admin", "finance", "finops"],
+    roles: ["admin", "finops"],
   },
   // i2) Finance Management (finance + admin ONLY)
   {
@@ -151,7 +152,14 @@ const navigationItems: NavigationItem[] = [
     icon: Briefcase,
     roles: ["admin", "finance"],
   },
-  // j) Product Management
+  // j) Invoice Management
+  {
+    name: "Invoice Management",
+    href: "/invoice-management",
+    icon: ReceiptText,
+    roles: ["admin", "finance"],
+  },
+  // k) Product Management
   {
     name: "Product",
     href: "/product_master",
@@ -362,7 +370,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         typeof userDepartment === "string" &&
         userDepartment.toLowerCase() === "finance";
 
-      if (isFinanceDepartment && item.name !== "Finance Management") {
+      if (
+        isFinanceDepartment &&
+        item.name !== "Finance Management" &&
+        item.name !== "Invoice Management"
+      ) {
         return null;
       }
 

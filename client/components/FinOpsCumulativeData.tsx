@@ -94,6 +94,7 @@ export default function FinOpsCumulativeData() {
     let overdue = 0;
     let pending = 0;
     let inProgress = 0;
+    let approved = 0;
     const clientsSet = new Set<string>();
 
     byDate.forEach(([date, metrics]) => {
@@ -104,6 +105,7 @@ export default function FinOpsCumulativeData() {
       overdue += metrics.overdue_subtasks || 0;
       pending += metrics.pending_subtasks || 0;
       inProgress += metrics.in_progress_subtasks || 0;
+      approved += metrics.approve_pending_subtasks || 0;
     });
 
     return {
@@ -114,6 +116,7 @@ export default function FinOpsCumulativeData() {
       overdue_subtasks: overdue,
       pending_subtasks: pending,
       in_progress_subtasks: inProgress,
+      approve_pending_subtasks: approved,
       active_clients: Math.max(...byDate.map(([_, m]) => m.active_clients || 0), 0),
     };
   }, [byDate]);
@@ -128,6 +131,7 @@ export default function FinOpsCumulativeData() {
       overdue: metrics.overdue_subtasks || 0,
       pending: metrics.pending_subtasks || 0,
       in_progress: metrics.in_progress_subtasks || 0,
+      approve_pending: metrics.approve_pending_subtasks || 0,
       active_clients: metrics.active_clients || 0,
     }));
 
@@ -193,39 +197,49 @@ export default function FinOpsCumulativeData() {
               <h4 className="font-semibold text-base text-gray-900 mb-4">{formatDateString(date)}</h4>
 
               {/* Metrics Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+              <div className="flex flex-nowrap gap-2 sm:gap-3 overflow-x-auto pb-2">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
                   <div className="text-lg font-bold text-blue-600">{metrics.total_tasks || 0}</div>
                   <div className="text-xs text-gray-600">Total Tasks</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
                   <div className="text-lg font-bold text-gray-900">{metrics.total_subtasks || 0}</div>
                   <div className="text-xs text-gray-600">Total Subtasks</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
                   <div className="text-lg font-bold text-green-600">{metrics.completed_subtasks || 0}</div>
                   <div className="text-xs text-gray-600">Completed</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
                   <div className="text-lg font-bold text-yellow-600">{metrics.delayed_subtasks || 0}</div>
                   <div className="text-xs text-gray-600">Delayed</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
                   <div className="text-lg font-bold text-red-600">{metrics.overdue_subtasks || 0}</div>
                   <div className="text-xs text-gray-600">Overdue</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
                   <div className="text-lg font-bold text-indigo-600">{metrics.pending_subtasks || 0}</div>
                   <div className="text-xs text-gray-600">Pending</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
                   <div className="text-lg font-bold text-blue-600">{metrics.in_progress_subtasks || 0}</div>
                   <div className="text-xs text-gray-600">In-Progress</div>
                 </div>
-                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                  <div className="text-lg font-bold text-purple-600">{metrics.active_clients || 0}</div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
+                  <div className="text-lg font-bold text-purple-600">{metrics.approve_pending_subtasks || 0}</div>
+                  <div className="text-xs text-gray-600">Approve Pending</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100 flex-shrink-0 min-w-[110px]">
+                  <div className="text-lg font-bold text-slate-600">{metrics.active_clients || 0}</div>
                   <div className="text-xs text-gray-600">Active Clients</div>
                 </div>
+                {metrics.monthly_tasks_assigned > 0 && (
+                  <div className="bg-white rounded-lg p-3 shadow-sm border border-orange-200 flex-shrink-0 min-w-[110px] bg-orange-50">
+                    <div className="text-lg font-bold text-orange-600">{metrics.monthly_tasks_assigned || 0}</div>
+                    <div className="text-xs text-gray-600">Monthly Tasks</div>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -239,37 +253,41 @@ export default function FinOpsCumulativeData() {
               Cumulative Summary {fromDate && toDate && `(${formatDateString(fromDate)} to ${formatDateString(toDate)})`}
             </h4>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 shadow-md border border-blue-200">
-                <div className="text-3xl font-bold text-blue-600">{cumulativeMetrics.total_tasks || 0}</div>
+            <div className="flex flex-nowrap gap-2 sm:gap-3 overflow-x-auto pb-2">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 shadow-md border border-blue-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-blue-600">{cumulativeMetrics.total_tasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Total Tasks</div>
               </div>
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 shadow-md border border-gray-200">
-                <div className="text-3xl font-bold text-gray-900">{cumulativeMetrics.total_subtasks || 0}</div>
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 shadow-md border border-gray-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-gray-900">{cumulativeMetrics.total_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Total Subtasks</div>
               </div>
-              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 shadow-md border border-green-200">
-                <div className="text-3xl font-bold text-green-600">{cumulativeMetrics.completed_subtasks || 0}</div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 shadow-md border border-green-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-green-600">{cumulativeMetrics.completed_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Completed</div>
               </div>
-              <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 shadow-md border border-yellow-200">
-                <div className="text-3xl font-bold text-yellow-600">{cumulativeMetrics.delayed_subtasks || 0}</div>
+              <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 shadow-md border border-yellow-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-yellow-600">{cumulativeMetrics.delayed_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Delayed</div>
               </div>
-              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 shadow-md border border-red-200">
-                <div className="text-3xl font-bold text-red-600">{cumulativeMetrics.overdue_subtasks || 0}</div>
+              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 shadow-md border border-red-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-red-600">{cumulativeMetrics.overdue_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Overdue</div>
               </div>
-              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-4 shadow-md border border-indigo-200">
-                <div className="text-3xl font-bold text-indigo-600">{cumulativeMetrics.pending_subtasks || 0}</div>
+              <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-4 shadow-md border border-indigo-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-indigo-600">{cumulativeMetrics.pending_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Pending</div>
               </div>
-              <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-4 shadow-md border border-cyan-200">
-                <div className="text-3xl font-bold text-cyan-600">{cumulativeMetrics.in_progress_subtasks || 0}</div>
+              <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-lg p-4 shadow-md border border-cyan-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-cyan-600">{cumulativeMetrics.in_progress_subtasks || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">In-Progress</div>
               </div>
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 shadow-md border border-purple-200">
-                <div className="text-3xl font-bold text-purple-600">{cumulativeMetrics.active_clients || 0}</div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 shadow-md border border-purple-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-purple-600">{cumulativeMetrics.approve_pending_subtasks || 0}</div>
+                <div className="text-xs text-gray-700 font-medium">Approve Pending</div>
+              </div>
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg p-4 shadow-md border border-slate-200 flex-shrink-0 min-w-[120px]">
+                <div className="text-2xl sm:text-3xl font-bold text-slate-600">{cumulativeMetrics.active_clients || 0}</div>
                 <div className="text-xs text-gray-700 font-medium">Active Clients</div>
               </div>
             </div>

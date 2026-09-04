@@ -569,6 +569,7 @@ interface SortableSubTaskItemProps {
   currentUser?: any;
   onRefresh?: () => void;
   isInline?: boolean;
+  selectedDate?: string;
 }
 
 function SortableSubTaskItem({
@@ -581,7 +582,12 @@ function SortableSubTaskItem({
   currentUser,
   onRefresh,
   isInline = false,
+  selectedDate,
 }: SortableSubTaskItemProps) {
+  const todayIST = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  });
+  const shouldLockPendingForSelection = !isInline || selectedDate === todayIST;
   // console.log("Tasks : " , subtask)
   const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [delayReason, setDelayReason] = useState("");
@@ -729,6 +735,7 @@ function SortableSubTaskItem({
                       let isEditable = true;
                       try {
                         if (
+                          shouldLockPendingForSelection &&
                           subtask.start_time &&
                           subtask.status === "pending"
                         ) {
@@ -856,16 +863,17 @@ function SortableSubTaskItem({
                         const isEscalation = escalationManagers.some(userMatchesManager);
                         const isAssigned = assignedTo.some(userMatchesManager);
 
-                        const isApproved = Boolean((subtask as any)?.approved_by);
+                        const isApproved = Boolean((subtask as any)?.approved_at);
+                        // Admins can always approve regardless of assignment; non-admins cannot approve their own tasks
                         const canSeeApproveButton =
                           (isReporting || isEscalation || isAdmin) &&
-                          !isAssigned &&
-                          ["completed", "approved"].includes(subtask.status) &&
+                          (isAdmin || !isAssigned) &&
+                          Boolean((subtask as any)?.completed_at) &&
                           !isApproved;
                         const canSeeRejectButton =
                           (isReporting || isEscalation || isAdmin) &&
-                          !isAssigned &&
-                          ["completed", "approved"].includes(subtask.status) &&
+                          (isAdmin || !isAssigned) &&
+                          Boolean((subtask as any)?.completed_at) &&
                           !isApproved;
 
                         const actionButtons: any[] = [];
@@ -888,6 +896,7 @@ function SortableSubTaskItem({
                                     approverName,
                                     undefined,
                                     (subtask as any)?.tracker_id,
+                                    selectedDate,
                                   );
 
                                   onRefresh?.();
@@ -976,6 +985,7 @@ function SortableSubTaskItem({
                                   rejectorName,
                                   rejectReason.trim(),
                                   (subtask as any)?.tracker_id,
+                                  selectedDate,
                                 );
                                 setShowRejectDialog(false);
                                 setRejectReason("");
@@ -1004,20 +1014,19 @@ function SortableSubTaskItem({
                 </div>
 
                 {/* Show pending approval timer if completed but not approved */}
-                {subtask.status === "completed" &&
-                  !(subtask as any).approved_by && (
+                {(subtask as any).completed_at &&
+                  !(subtask as any).approved_at && (
                     <div className="mt-2">
                       <PendingApprovalTimer
                         taskId={task.id}
                         subtaskId={subtask.id}
-                        completedAt={subtask.completed_at}
+                        completedAt={(subtask as any).completed_at}
                       />
                     </div>
                   )}
 
                 {/* Show approval info if present */}
-                {subtask.status === "completed" &&
-                  (subtask as any).approved_by && (
+                {(subtask as any).approved_at && (
                     <div className="mt-2">
                       <Badge
                         variant="outline"
@@ -1398,6 +1407,7 @@ export default function ClientBasedFinOpsTaskManager() {
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStatusCard, setSelectedStatusCard] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState(
     new Date().toISOString().split("T")[0],
   ); // Default to today
@@ -2690,11 +2700,22 @@ export default function ClientBasedFinOpsTaskManager() {
 
     // Status filter - filter by subtask status, not task status
     if (statusFilter !== "all") {
-      // Check if any subtask has the selected status
-      const hasSubtaskWithStatus =
-        task.subtasks && task.subtasks.length > 0
-          ? task.subtasks.some((subtask) => subtask.status === statusFilter)
-          : false;
+      // Check if any subtask matches the filter
+      let hasSubtaskWithStatus = false;
+
+      if (statusFilter === "approve_pending") {
+        // Approve Pending: completed_by is set AND approved_at is null
+        hasSubtaskWithStatus =
+          task.subtasks && task.subtasks.length > 0
+            ? task.subtasks.some((subtask) => subtask.completed_by && !subtask.approved_at)
+            : false;
+      } else {
+        // Regular status filter
+        hasSubtaskWithStatus =
+          task.subtasks && task.subtasks.length > 0
+            ? task.subtasks.some((subtask) => subtask.status === statusFilter)
+            : false;
+      }
 
       // Only include task if it has at least one subtask with the selected status
       if (!hasSubtaskWithStatus) return false;
@@ -2968,6 +2989,7 @@ export default function ClientBasedFinOpsTaskManager() {
       overdue_subtasks: 0,
       pending_subtasks: 0,
       in_progress_subtasks: 0,
+      approved_subtasks: 0,
     };
 
     filteredTasks.forEach((task: ClientBasedFinOpsTask) => {
@@ -2984,6 +3006,8 @@ export default function ClientBasedFinOpsTaskManager() {
         if (subtask.status === "overdue") summary.overdue_subtasks++;
         if (subtask.status === "pending") summary.pending_subtasks++;
         if (subtask.status === "in_progress") summary.in_progress_subtasks++;
+        // Approve Pending: completed_by is set AND approved_at is null
+        if (subtask.completed_by && !subtask.approved_at) summary.approved_subtasks++;
       });
     });
 
@@ -3048,6 +3072,7 @@ export default function ClientBasedFinOpsTaskManager() {
           // New per-client counts
           pending_subtasks: 0,
           in_progress_subtasks: 0,
+          approved_subtasks: 0,
         };
       }
 
@@ -3065,6 +3090,9 @@ export default function ClientBasedFinOpsTaskManager() {
           clientSummary[clientName].pending_subtasks++;
         if (subtask.status === "in_progress")
           clientSummary[clientName].in_progress_subtasks++;
+        // Approve Pending: completed_at is set AND approved_at is null
+        if ((subtask as any).completed_at && !(subtask as any).approved_at)
+          clientSummary[clientName].approved_subtasks++;
       });
     });
 
@@ -3075,6 +3103,15 @@ export default function ClientBasedFinOpsTaskManager() {
 
   const overallSummary = getOverallSummary();
   const clientSummary = getClientSummary();
+
+  const handleStatusCardClick = (status: string) => {
+    setSelectedStatusCard(selectedStatusCard === status ? null : status);
+    if (selectedStatusCard !== status) {
+      setStatusFilter(status);
+    } else {
+      setStatusFilter("all");
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -3197,6 +3234,7 @@ export default function ClientBasedFinOpsTaskManager() {
                     "Active Clients",
                     "Pending",
                     "In-Progress",
+                    "Approve Pending",
                   ];
 
                   // Fetch tracker data for export (has all completed_by and assigned_to fields)
@@ -3250,6 +3288,23 @@ export default function ClientBasedFinOpsTaskManager() {
                       ? serverResp.tasks
                       : filteredTasks);
 
+                  // Determine format before using it
+                  const isTrackerFormat = trackerResp.length > 0 && !tasksForExport[0]?.subtasks;
+
+                  // Calculate approve_pending from tracker/task data if not in serverSummary
+                  let approvePendingCount = 0;
+                  if (isTrackerFormat) {
+                    // Tracker format: each row is a subtask
+                    approvePendingCount = trackerResp.filter((row: any) => row.completed_by && !row.approved_at).length;
+                  } else {
+                    // Task format: subtasks are nested
+                    tasksForExport.forEach((task: any) => {
+                      (task.subtasks || []).forEach((st: any) => {
+                        if (st.completed_by && !st.approved_at) approvePendingCount++;
+                      });
+                    });
+                  }
+
                   const summaryRow = serverSummary
                     ? [
                         serverSummary.total_tasks ?? 0,
@@ -3260,6 +3315,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         Object.keys(clientSummary).length,
                         serverSummary.pending_subtasks ?? 0,
                         serverSummary.in_progress_subtasks ?? 0,
+                        (serverSummary.approved_subtasks ?? 0) || approvePendingCount || 0,
                       ]
                     : [
                         overallSummary.total_tasks,
@@ -3270,6 +3326,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         Object.keys(clientSummary).length,
                         overallSummary.pending_subtasks,
                         overallSummary.in_progress_subtasks,
+                        overallSummary.approved_subtasks || approvePendingCount || 0,
                       ];
 
                   const wsSummary = XLSX.utils.aoa_to_sheet([
@@ -3280,8 +3337,6 @@ export default function ClientBasedFinOpsTaskManager() {
 
                   // Build client sheets based on server data
                   // Handle both tracker format (flat) and task format (nested with subtasks)
-                  const isTrackerFormat = trackerResp.length > 0 && !tasksForExport[0]?.subtasks;
-
                   const clientNames = Array.from(
                     new Set(
                       tasksForExport.map(
@@ -3407,6 +3462,7 @@ export default function ClientBasedFinOpsTaskManager() {
                     "Overdue Subtasks",
                     "Pending Subtasks",
                     "In-Progress Subtasks",
+                    "Approve Pending Subtasks",
                   ]);
 
                   const clientAgg: Record<string, any> = {};
@@ -3427,6 +3483,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           overdue_subtasks: 0,
                           pending_subtasks: 0,
                           in_progress_subtasks: 0,
+                          approved_subtasks: 0,
                         };
 
                       clientAgg[name].total_tasks.add(row.task_id);
@@ -3442,6 +3499,9 @@ export default function ClientBasedFinOpsTaskManager() {
                         clientAgg[name].pending_subtasks++;
                       if (row.status === "in_progress")
                         clientAgg[name].in_progress_subtasks++;
+                      // Approve Pending: completed_at is set AND approved_at is null
+                      if (row.completed_at && !row.approved_at)
+                        clientAgg[name].approved_subtasks++;
                     });
 
                     Object.entries(clientAgg).forEach(([cName, sum]: any) => {
@@ -3454,6 +3514,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         sum.overdue_subtasks || 0,
                         sum.pending_subtasks || 0,
                         sum.in_progress_subtasks || 0,
+                        sum.approved_subtasks || 0,
                       ]);
                     });
                   } else {
@@ -3473,6 +3534,7 @@ export default function ClientBasedFinOpsTaskManager() {
                           overdue_subtasks: 0,
                           pending_subtasks: 0,
                           in_progress_subtasks: 0,
+                          approved_subtasks: 0,
                         };
                       clientAgg[name].total_tasks += 1;
                       clientAgg[name].total_subtasks += (
@@ -3489,6 +3551,9 @@ export default function ClientBasedFinOpsTaskManager() {
                           clientAgg[name].pending_subtasks++;
                         if (st.status === "in_progress")
                           clientAgg[name].in_progress_subtasks++;
+                        // Approve Pending: completed_by is set AND approved_at is null
+                        if (st.completed_by && !st.approved_at)
+                          clientAgg[name].approved_subtasks++;
                       });
                     });
 
@@ -3502,6 +3567,7 @@ export default function ClientBasedFinOpsTaskManager() {
                         sum.overdue_subtasks || 0,
                         sum.pending_subtasks || 0,
                         sum.in_progress_subtasks || 0,
+                        sum.approved_subtasks || 0,
                       ]);
                     });
                   }
@@ -3608,8 +3674,8 @@ export default function ClientBasedFinOpsTaskManager() {
         )}
 
         {/* Overall Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-          <Card>
+        <div className="flex flex-nowrap gap-2 sm:gap-3 overflow-x-auto pb-2">
+          <Card className="flex-1 min-w-[90px]">
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-blue-600">
                 {overallSummary.total_tasks}
@@ -3618,7 +3684,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="flex-1 min-w-[90px]">
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-gray-900">
                 {overallSummary.total_subtasks}
@@ -3627,7 +3693,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'completed' ? 'ring-2 ring-green-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('completed')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-green-600">
                 {overallSummary.completed_subtasks}
@@ -3636,7 +3702,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'delayed' ? 'ring-2 ring-yellow-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('delayed')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-yellow-600">
                 {overallSummary.delayed_subtasks}
@@ -3645,7 +3711,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'overdue' ? 'ring-2 ring-red-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('overdue')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-red-600">
                 {overallSummary.overdue_subtasks}
@@ -3654,7 +3720,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'pending' ? 'ring-2 ring-indigo-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('pending')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-indigo-600">
                 {overallSummary.pending_subtasks}
@@ -3663,7 +3729,7 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'in_progress' ? 'ring-2 ring-blue-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('in_progress')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-blue-600">
                 {overallSummary.in_progress_subtasks}
@@ -3672,9 +3738,18 @@ export default function ClientBasedFinOpsTaskManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={`flex-1 min-w-[90px] cursor-pointer transition-all ${selectedStatusCard === 'approve_pending' ? 'ring-2 ring-purple-600 shadow-lg' : 'hover:shadow-md'}`} onClick={() => handleStatusCardClick('approve_pending')}>
             <CardContent className="p-3 sm:p-4 text-center">
               <div className="text-xl sm:text-2xl font-bold text-purple-600">
+                {overallSummary.approved_subtasks}
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-600 truncate">Approve Pending</div>
+            </CardContent>
+          </Card>
+
+          <Card className="flex-1 min-w-[90px] cursor-default hover:shadow-md">
+            <CardContent className="p-3 sm:p-4 text-center">
+              <div className="text-xl sm:text-2xl font-bold text-slate-600">
                 {Object.keys(clientSummary).length}
               </div>
               <div className="text-[10px] sm:text-xs text-gray-600 truncate">Active Clients</div>
@@ -3768,6 +3843,7 @@ export default function ClientBasedFinOpsTaskManager() {
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="delayed">Delayed</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="approve_pending">Approve Pending</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -4260,12 +4336,14 @@ export default function ClientBasedFinOpsTaskManager() {
                                     )
                                   }
                                   currentUser={user}
-                                  onRefresh={() =>
+                                  onRefresh={() => {
                                     queryClient.invalidateQueries({
                                       queryKey: ["client-finops-tasks"],
-                                    })
-                                  }
+                                    });
+                                    refetch();
+                                  }}
                                   isInline={true}
+                                  selectedDate={dateFilter}
                                 />
                                 {(slaWarning || subtask.start_time) &&
                                   (() => {

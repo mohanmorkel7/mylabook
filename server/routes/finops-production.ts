@@ -405,8 +405,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
               ft.rejected_by,
               ft.rejected_at,
               ft.reject_reason,
-              (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_by,
-              (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1) AS approved_at
+              ft.approved_by,
+              ft.approved_at
             FROM finops_tracker ft
             WHERE ft.task_id = t.id AND ft.run_date = $1
 
@@ -528,8 +528,8 @@ router.get("/tasks", async (req: Request, res: Response) => {
                 'rejected_by', ft.rejected_by,
                 'rejected_at', ft.rejected_at,
                 'reject_reason', ft.reject_reason,
-                'approved_by', (SELECT a.approved_by FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1),
-                'approved_at', (SELECT a.approved_at FROM finops_approvals a WHERE a.task_id = t.id AND a.subtask_id = ft.subtask_id AND a.tracker_id = ft.id LIMIT 1)
+                'approved_by', ft.approved_by,
+                'approved_at', ft.approved_at
               ) ORDER BY ft.order_position
             ) FILTER (WHERE ft.subtask_id IS NOT NULL),
             '[]'::json
@@ -1047,7 +1047,7 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
     const subtaskId = parseInt(req.params.id);
-    let { approver_name, note, tracker_id } = req.body || {};
+    let { approver_name, note, tracker_id, run_date } = req.body || {};
 
     // Allow approver to be provided via header x-user-name or x-user-id
     if (!approver_name || /undefined|null/i.test(String(approver_name))) {
@@ -1214,16 +1214,41 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
     try {
       await client.query("BEGIN");
 
-      // Prevent re-approval for the same tracker
+      // If tracker_id is provided, use its actual run_date (source of truth)
+      // This ensures the approval is always for the correct date, regardless of what client sends
+      if (tracker_id) {
+        const trackerCheck = await client.query(
+          `SELECT id, run_date FROM finops_tracker WHERE id = $1 LIMIT 1`,
+          [tracker_id],
+        );
+        if (trackerCheck.rows.length > 0) {
+          const trackerRow = trackerCheck.rows[0];
+          const actualTrackerDate = new Date(trackerRow.run_date).toISOString().split("T")[0];
+          if (actualTrackerDate !== run_date) {
+            console.log(
+              `[Approve] Date mismatch: client sent ${run_date}, but tracker ${tracker_id} belongs to ${actualTrackerDate}. Using actual tracker date.`,
+            );
+            run_date = actualTrackerDate;
+          }
+        }
+      }
+
+      // Check if already approved in finops_approvals
       const existing = await client.query(
-        `SELECT 1 FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 AND tracker_id = $3 LIMIT 1`,
+        `SELECT id, approved_by, approved_at FROM finops_approvals WHERE task_id = $1 AND subtask_id = $2 AND tracker_id IS NOT DISTINCT FROM $3 LIMIT 1`,
         [row.task_id, subtaskId, tracker_id || null],
       );
       if (existing.rows.length) {
-        await client.query("ROLLBACK");
-        return res
-          .status(409)
-          .json({ error: "Already approved for this tracker" });
+        // Sync finops_tracker.approved_at if it's missing (data inconsistency from old records)
+        const existingApproval = existing.rows[0];
+        if (tracker_id) {
+          await client.query(
+            `UPDATE finops_tracker SET approved_by = $1, approved_at = $2 WHERE id = $3 AND approved_at IS NULL`,
+            [existingApproval.approved_by, existingApproval.approved_at, tracker_id],
+          );
+        }
+        await client.query("COMMIT");
+        return res.json({ ok: true, approved: true, status: "approved", synced: true });
       }
 
       // Insert approval record
@@ -1246,13 +1271,30 @@ router.post("/subtasks/:id/approve", async (req: Request, res: Response) => {
 
       console.log(`[Approve] Approval record created:`, approvalRes.rows[0]);
 
-      // Update finops_tracker to set approved_by/approved_at for today's tracker row
+      // Update finops_tracker to set approved_by/approved_at
+      // If tracker_id is provided, update that exact row; otherwise update the most recent row for this task+subtask
       try {
-        const trackerUpdateRes = await client.query(
-          `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW() WHERE task_id = $2 AND subtask_id = $3 AND run_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::date
-           RETURNING id, approved_by, approved_at`,
-          [approver_name, row.task_id, subtaskId],
-        );
+        let trackerUpdateRes;
+        if (tracker_id) {
+          trackerUpdateRes = await client.query(
+            `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW()
+             WHERE id = $2
+             RETURNING id, approved_by, approved_at`,
+            [approver_name, tracker_id],
+          );
+        } else {
+          trackerUpdateRes = await client.query(
+            `UPDATE finops_tracker SET approved_by = $1, approved_at = NOW()
+             WHERE id = (
+               SELECT id FROM finops_tracker
+               WHERE task_id = $2 AND subtask_id = $3
+               ORDER BY run_date DESC
+               LIMIT 1
+             )
+             RETURNING id, approved_by, approved_at`,
+            [approver_name, row.task_id, subtaskId],
+          );
+        }
         console.log(`[Approve] Tracker updated:`, trackerUpdateRes.rows[0]);
       } catch (e) {
         console.warn(
@@ -1306,7 +1348,7 @@ router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
   try {
     await requireDatabase();
     const subtaskId = parseInt(req.params.id);
-    let { rejector_name, reason, tracker_id } = req.body || {};
+    let { rejector_name, reason, tracker_id, run_date } = req.body || {};
 
     if (!rejector_name || /undefined|null/i.test(String(rejector_name))) {
       const headerName = (req.headers["x-user-name"] as string) || "";
@@ -1445,9 +1487,20 @@ router.post("/subtasks/:id/reject", async (req: Request, res: Response) => {
       let trackerRes;
       if (tracker_id && !Number.isNaN(Number(tracker_id))) {
         trackerRes = await client.query(
-          `SELECT id, status FROM finops_tracker WHERE id = $1 LIMIT 1`,
+          `SELECT id, status, run_date FROM finops_tracker WHERE id = $1 LIMIT 1`,
           [Number(tracker_id)],
         );
+
+        // Use tracker's actual run_date (source of truth)
+        if (trackerRes.rows.length > 0) {
+          const actualTrackerDate = new Date(trackerRes.rows[0].run_date).toISOString().split("T")[0];
+          if (actualTrackerDate !== run_date) {
+            console.log(
+              `[Reject] Date mismatch: client sent ${run_date}, but tracker ${tracker_id} belongs to ${actualTrackerDate}. Using actual tracker date.`,
+            );
+            run_date = actualTrackerDate;
+          }
+        }
       }
 
       if (!trackerRes || !trackerRes.rows.length) {
@@ -2317,20 +2370,48 @@ router.get("/tracker/cumulative", async (req: Request, res: Response) => {
     // Aggregated counts query - returns only metric counts per date, not raw task details
     const query = `
       SELECT
-        to_char((ft.run_date AT TIME ZONE 'Asia/Kolkata')::date, 'YYYY-MM-DD') as run_date,
-        COUNT(DISTINCT ft.task_id)::int as total_tasks,
-        COUNT(*)::int as total_subtasks,
-        COUNT(CASE WHEN ft.status = 'completed' THEN 1 END)::int as completed_subtasks,
-        COUNT(CASE WHEN ft.status = 'delayed' THEN 1 END)::int as delayed_subtasks,
-        COUNT(CASE WHEN ft.status = 'overdue' THEN 1 END)::int as overdue_subtasks,
-        COUNT(CASE WHEN ft.status = 'pending' THEN 1 END)::int as pending_subtasks,
-        COUNT(CASE WHEN ft.status = 'in_progress' THEN 1 END)::int as in_progress_subtasks,
-        COUNT(DISTINCT t.client_id)::int as active_clients
-      FROM finops_tracker ft
-      JOIN finops_tasks t ON t.id = ft.task_id
-      WHERE ${whereConditions}
-      GROUP BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date
-      ORDER BY (ft.run_date AT TIME ZONE 'Asia/Kolkata')::date DESC
+        to_char(ft_grouped.run_date_ist::date, 'YYYY-MM-DD') as run_date,
+        (COUNT(DISTINCT ft_grouped.task_id) + COALESCE(monthly_counts.count, 0))::int as total_tasks,
+        (COUNT(*) + COALESCE(monthly_counts.count, 0))::int as total_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'completed' THEN 1 END) + COALESCE(monthly_counts.completed, 0))::int as completed_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'delayed' THEN 1 END) + COALESCE(monthly_counts.delayed, 0))::int as delayed_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'overdue' THEN 1 END) + COALESCE(monthly_counts.overdue, 0))::int as overdue_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'pending' THEN 1 END) + COALESCE(monthly_counts.pending, 0))::int as pending_subtasks,
+        (COUNT(CASE WHEN ft_grouped.status = 'in_progress' THEN 1 END) + COALESCE(monthly_counts.in_progress, 0))::int as in_progress_subtasks,
+        (COUNT(CASE WHEN ft_grouped.completed_at IS NOT NULL AND ft_grouped.approved_at IS NULL THEN 1 END) + COALESCE(monthly_counts.approve_pending, 0))::int as approve_pending_subtasks,
+        COUNT(DISTINCT ft_grouped.client_id)::int as active_clients,
+        COALESCE(monthly_counts.count, 0)::int as monthly_tasks_assigned
+      FROM (
+        SELECT
+          ft.run_date AT TIME ZONE 'Asia/Kolkata' as run_date_ist,
+          ft.task_id,
+          ft.status,
+          ft.completed_at,
+          ft.approved_at,
+          t.client_id
+        FROM finops_tracker ft
+        JOIN finops_tasks t ON t.id = ft.task_id
+        WHERE ${whereConditions}
+      ) ft_grouped
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(DISTINCT mt.id) as count,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'completed' THEN fmt.task_id END) as completed,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'delayed' THEN fmt.task_id END) as delayed,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'overdue' THEN fmt.task_id END) as overdue,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'pending' THEN fmt.task_id END) as pending,
+          COUNT(DISTINCT CASE WHEN fmt.status = 'in_progress' THEN fmt.task_id END) as in_progress,
+          COUNT(DISTINCT CASE WHEN fmt.completed_at IS NOT NULL AND fmt.approved_at IS NULL THEN fmt.task_id END) as approve_pending
+        FROM finops_tasks mt
+        LEFT JOIN finops_tracker fmt ON fmt.task_id = mt.id AND (fmt.run_date AT TIME ZONE 'Asia/Kolkata')::date = ft_grouped.run_date_ist::date AND fmt.period = 'monthly'
+        WHERE mt.duration = 'monthly'
+        AND mt.deleted_at IS NULL
+        AND mt.is_active = true
+        AND (mt.effective_from IS NULL OR (mt.effective_from AT TIME ZONE 'Asia/Kolkata')::date <= ft_grouped.run_date_ist::date)
+        AND mt.monthly_day = EXTRACT(DAY FROM ft_grouped.run_date_ist::date)::int
+      ) monthly_counts ON true
+      GROUP BY ft_grouped.run_date_ist::date, monthly_counts.count, monthly_counts.completed, monthly_counts.delayed, monthly_counts.overdue, monthly_counts.pending, monthly_counts.in_progress, monthly_counts.approve_pending
+      ORDER BY ft_grouped.run_date_ist::date DESC
     `;
 
     console.log("Cumulative aggregated query:", { fromDate, toDate });

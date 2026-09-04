@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Edit, Trash2, Clock, MapPin, Globe, Building2, Plus, Video, Calendar, Eye, EyeOff, Mail, Phone, Users, Download, GripVertical, Lock, Upload } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FollowUpForm } from "@/components/FollowUpForm";
@@ -162,10 +163,36 @@ interface ScopeFeatureItem {
   notes?: string;
 }
 
+interface CommercialPricingRow {
+  id: string;
+  item: string;
+  inr: string;
+  usd: string;
+}
+
+interface CommercialPricingPlan {
+  id: string;
+  label: string;
+  items: string[];
+}
+
+interface CommercialProductBase {
+  id: string;
+  label: string;
+  plans: CommercialPricingPlan[];
+}
+
+interface CommercialPricingWorkbenchState {
+  product_base_id: string;
+  plan_id: string;
+  rows: CommercialPricingRow[];
+}
+
 interface ScopeFinalizationState {
   selected_product_ids: string[];
   additional_features: string;
   feature_items: ScopeFeatureItem[];
+  commercial_pricing_workbench: CommercialPricingWorkbenchState;
   architecture_file_name: string;
   architecture_file_path: string;
   architecture_file_size: number | null;
@@ -186,6 +213,18 @@ interface CommercialFormState {
 }
 
 const DEFAULT_COMMERCIAL_TEMPLATE = "Commercial_{{company_name}}_{{date}}";
+const COMMERCIAL_PRODUCT_BASES: CommercialProductBase[] = [
+  {
+    id: "product-catalog",
+    label: "Product Catalog",
+    plans: [
+      { id: "plan-1", label: "Plan-1", items: ["Intelle-360", "Intelle-settle"] },
+      { id: "plan-2", label: "Plan-2", items: ["3DS", "Switch", "Clearing", "Solve"] },
+      { id: "plan-3", label: "Plan-3", items: ["3DS", "Tokenization", "ACS"] },
+      { id: "plan-4", label: "Plan-4", items: ["UPI Switch + Recon", "UPI Recon"] },
+    ],
+  },
+];
 const DOCUMENT_STORAGE_KEY = "materials_documents_templates_v1";
 const SCOPE_TEAMS: ScopeAssignmentTeam[] = [
   "Development Team",
@@ -234,6 +273,7 @@ const FALLBACK_DOCUMENT_TEMPLATES = [
       { type: "header", content: "Commercial Proposal" },
       { type: "text", content: "Prepared for {{client_name}} by {{company_name}} on {{date}}." },
       { type: "clause", content: "Scope of work, commercial terms, and timelines are included." },
+      { type: "text", content: "{{commercials_table}}" },
     ],
   },
   {
@@ -250,6 +290,7 @@ const FALLBACK_DOCUMENT_TEMPLATES = [
     blocks: [
       { type: "header", content: "One-Sided NDA" },
       { type: "clause", content: "{{company_name}} agrees to keep confidential information shared by {{client_name}} private." },
+      { type: "text", content: "{{commercials_table}}" },
       { type: "signature", content: "Authorized Signatory" },
     ],
   },
@@ -267,6 +308,7 @@ const FALLBACK_DOCUMENT_TEMPLATES = [
     blocks: [
       { type: "header", content: "Mutual NDA" },
       { type: "clause", content: "Both {{company_name}} and {{client_name}} agree to protect each other's confidential information." },
+      { type: "text", content: "{{commercials_table}}" },
       { type: "signature", content: "Authorized Signatory" },
     ],
   },
@@ -303,11 +345,112 @@ function buildDefaultScopeFinalization(): ScopeFinalizationState {
     selected_product_ids: [],
     additional_features: "",
     feature_items: [],
+    commercial_pricing_workbench: buildCommercialPricingWorkbench(null, null),
     architecture_file_name: "",
     architecture_file_path: "",
     architecture_file_size: null,
     architecture_file_type: "",
   };
+}
+
+function makeCommercialPricingRow(item: string, inr = "", usd = ""): CommercialPricingRow {
+  return {
+    id: `pricing_${Math.random().toString(36).slice(2, 10)}`,
+    item,
+    inr,
+    usd,
+  };
+}
+
+function getCommercialProductBase(baseId?: string | null) {
+  return COMMERCIAL_PRODUCT_BASES.find((base) => base.id === baseId) || COMMERCIAL_PRODUCT_BASES[0];
+}
+
+function getCommercialPlan(baseId?: string | null, planId?: string | null) {
+  const base = getCommercialProductBase(baseId);
+  return base?.plans.find((plan) => plan.id === planId) || base?.plans[0];
+}
+
+function normalizeLeadCommercialPricing(lead: any) {
+  return Array.isArray(lead?.commercial_pricing)
+    ? lead.commercial_pricing
+        .map((item: any) => ({
+          solution: String(item?.solution || "").trim(),
+          value: item?.value === null || item?.value === undefined ? "" : String(item.value),
+          currency: String(item?.currency || "").trim().toUpperCase(),
+        }))
+        .filter((item: any) => Boolean(item.solution))
+    : [];
+}
+
+function buildCommercialPricingWorkbench(
+  lead: any,
+  existingWorkbench: CommercialPricingWorkbenchState | null,
+  baseId?: string,
+  planId?: string,
+): CommercialPricingWorkbenchState {
+  const selectedBaseId = baseId || existingWorkbench?.product_base_id || COMMERCIAL_PRODUCT_BASES[0]?.id || "";
+  const selectedBase = getCommercialProductBase(selectedBaseId);
+  const selectedPlanId = planId || existingWorkbench?.plan_id || selectedBase?.plans[0]?.id || "";
+  const selectedPlan = getCommercialPlan(selectedBase?.id, selectedPlanId);
+  const existingRows = Array.isArray(existingWorkbench?.rows) ? existingWorkbench.rows : [];
+  const leadCommercialPricing = normalizeLeadCommercialPricing(lead);
+
+  const rows = (selectedPlan?.items || []).map((item) => {
+    const normalizedItem = String(item || "").trim().toLowerCase();
+    const existingRow = existingRows.find((row) => String(row.item || "").trim().toLowerCase() === normalizedItem);
+    const leadPrice = leadCommercialPricing.find((price) => price.solution.toLowerCase() === normalizedItem);
+
+    return {
+      id: existingRow?.id || makeCommercialPricingRow(item).id,
+      item,
+      inr: existingRow?.inr ?? (leadPrice?.currency === "INR" ? leadPrice.value : ""),
+      usd: existingRow?.usd ?? (leadPrice?.currency === "USD" ? leadPrice.value : ""),
+    };
+  });
+
+  return {
+    product_base_id: selectedBase?.id || COMMERCIAL_PRODUCT_BASES[0]?.id || "",
+    plan_id: selectedPlan?.id || "",
+    rows,
+  };
+}
+
+function buildCommercialPricingTableHtml(workbench: CommercialPricingWorkbenchState) {
+  const base = getCommercialProductBase(workbench.product_base_id);
+  const plan = getCommercialPlan(workbench.product_base_id, workbench.plan_id);
+  const rows = Array.isArray(workbench.rows) ? workbench.rows : [];
+  const renderedRows = rows.length
+    ? rows
+        .map(
+          (row) => `
+            <tr>
+              <td style="border-top:1px solid #e2e8f0;padding:10px;">${row.item || "—"}</td>
+              <td style="border-top:1px solid #e2e8f0;padding:10px;">${row.inr || "—"}</td>
+              <td style="border-top:1px solid #e2e8f0;padding:10px;">${row.usd || "—"}</td>
+            </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="3" style="border-top:1px solid #e2e8f0;padding:10px;">No plan selected.</td></tr>`;
+
+  return `
+    <div style="margin-top:20px;">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.14em;">${base?.label || "Product catalog"}</div>
+      <h3 style="margin:8px 0 12px;">${plan?.label || "Selected plan"}</h3>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;">
+        <thead>
+          <tr>
+            <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:10px;">Product</th>
+            <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:10px;">INR</th>
+            <th style="text-align:left;border-bottom:1px solid #e2e8f0;padding:10px;">USD</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${renderedRows}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function getScopeFeatureDefinition(featureName: string) {
@@ -619,6 +762,10 @@ function buildCommercialForm(
       feature_items: Array.isArray(record?.scope_finalization?.feature_items)
         ? record?.scope_finalization?.feature_items
         : [],
+      commercial_pricing_workbench: buildCommercialPricingWorkbench(
+        lead,
+        record?.scope_finalization?.commercial_pricing_workbench || null,
+      ),
     },
   };
 }
@@ -691,6 +838,7 @@ function getStoredDocumentTemplates(): CommercialMaterial[] {
 function buildDocumentValues(
   material: CommercialMaterial,
   recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
 ) {
   const templateValues = (material.template_fields || []).reduce<Record<string, string>>(
     (acc, field) => {
@@ -709,14 +857,19 @@ function buildDocumentValues(
     return acc;
   }, {});
 
-  return { ...templateValues, ...recordValues };
+  return { ...templateValues, ...recordValues, ...extraValues };
 }
 
-function buildDocumentHtml(material: CommercialMaterial, recordFields: CommercialField[] = []) {
-  const values = buildDocumentValues(material, recordFields);
+function buildDocumentHtml(
+  material: CommercialMaterial,
+  recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
+) {
+  const values = buildDocumentValues(material, recordFields, extraValues);
   const renderedContent = (material.template_blocks || [])
     .map((block) => {
       const rendered = replaceTemplateTokens(block.content || "", values);
+      if (rendered.includes("<table") || String(block.content || "").trim() === "{{commercials_table}}") return rendered;
       if (block.type === "header") return `<h1>${rendered}</h1>`;
       if (block.type === "clause") return `<p><strong>Clause:</strong> ${rendered}</p>`;
       if (block.type === "signature") return `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #cbd5e1;"><strong>Signature:</strong> ${rendered}</div>`;
@@ -753,11 +906,15 @@ function buildDocumentHtml(material: CommercialMaterial, recordFields: Commercia
   `;
 }
 
-function viewCommercialMaterial(material: CommercialMaterial, recordFields: CommercialField[] = []) {
+function viewCommercialMaterial(
+  material: CommercialMaterial,
+  recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
+) {
   if (material.source_type === "document") {
     const previewWindow = window.open("", "_blank", "width=1024,height=900");
     if (!previewWindow) return;
-    previewWindow.document.write(buildDocumentHtml(material, recordFields));
+    previewWindow.document.write(buildDocumentHtml(material, recordFields, extraValues));
     previewWindow.document.close();
     return;
   }
@@ -767,9 +924,13 @@ function viewCommercialMaterial(material: CommercialMaterial, recordFields: Comm
   }
 }
 
-function downloadCommercialMaterial(material: CommercialMaterial, recordFields: CommercialField[] = []) {
+function downloadCommercialMaterial(
+  material: CommercialMaterial,
+  recordFields: CommercialField[] = [],
+  extraValues: Record<string, string> = {},
+) {
   if (material.source_type === "document") {
-    const blob = new Blob([buildDocumentHtml(material, recordFields)], { type: "application/msword" });
+    const blob = new Blob([buildDocumentHtml(material, recordFields, extraValues)], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -865,6 +1026,7 @@ export default function LeadOverview() {
   const [selectedCommercialMaterialId, setSelectedCommercialMaterialId] = useState("");
   const [signedCopyFile, setSignedCopyFile] = useState<File | null>(null);
   const [architectureDiagramFile, setArchitectureDiagramFile] = useState<File | null>(null);
+  const [editingCommercialPricingCell, setEditingCommercialPricingCell] = useState<{ rowId: string; field: "inr" | "usd" } | null>(null);
   const [commercialForm, setCommercialForm] = useState<CommercialFormState>(() => buildCommercialForm(null, []));
 
   const { data: leadData, isLoading } = useQuery({
@@ -1004,6 +1166,7 @@ export default function LeadOverview() {
       setSelectedCommercialMaterialId("");
       setSignedCopyFile(null);
       setArchitectureDiagramFile(null);
+      setEditingCommercialPricingCell(null);
       setCommercialForm(buildCommercialForm(lead, masterMaterials));
       toast({
         title: editingCommercial ? "Commercial workflow updated" : "Commercial workflow created",
@@ -1036,6 +1199,11 @@ export default function LeadOverview() {
     },
   });
 
+  const scopeWorkflowSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   if (isLoading) return <div className="p-6">Loading...</div>;
 
   const lead = leadData?.lead;
@@ -1054,9 +1222,24 @@ export default function LeadOverview() {
     label: getProductLabel(product),
     value: String(product.id),
   }));
-  const productNameMap = new Map(
+  const productNameMap = new Map<string, string>(
     productMasters.map((product: any) => [String(product.id), getProductLabel(product)]),
   );
+  const commercialPricingWorkbench = commercialForm.scope_finalization.commercial_pricing_workbench;
+  const commercialPricingBase = getCommercialProductBase(commercialPricingWorkbench.product_base_id);
+  const commercialPricingPlan = getCommercialPlan(
+    commercialPricingWorkbench.product_base_id,
+    commercialPricingWorkbench.plan_id,
+  );
+  const commercialPricingTableHtml = buildCommercialPricingTableHtml(commercialPricingWorkbench);
+  const commercialPricingBaseOptions = COMMERCIAL_PRODUCT_BASES.map((base) => ({
+    label: base.label,
+    value: base.id,
+  }));
+  const commercialPricingPlanOptions = (commercialPricingBase?.plans || []).map((plan) => ({
+    label: plan.label,
+    value: plan.id,
+  }));
   const hydratedCommercialRecords: CommercialRecord[] = commercialRecords.map((record) => {
     const selectedMaterials = hydrateCommercialMaterials(record.selected_materials, masterMaterials);
 
@@ -1099,10 +1282,6 @@ export default function LeadOverview() {
     .map((item) => item.name)
     .filter((name) => Boolean(getScopeFeatureDefinition(name)));
   const scopeAssignmentSummary = buildScopeAssignmentSummary(commercialForm.scope_finalization.feature_items);
-  const scopeWorkflowSensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
 
   const openCommercialForm = (record?: CommercialRecord) => {
     setEditingCommercial(record || null);
@@ -1110,6 +1289,7 @@ export default function LeadOverview() {
     setSignedCopyFile(null);
     setArchitectureDiagramFile(null);
     setSelectedCommercialMaterialId("");
+    setEditingCommercialPricingCell(null);
     setShowCommercialForm(true);
   };
 
@@ -1119,6 +1299,7 @@ export default function LeadOverview() {
     setSignedCopyFile(null);
     setArchitectureDiagramFile(null);
     setSelectedCommercialMaterialId("");
+    setEditingCommercialPricingCell(null);
     setCommercialForm(buildCommercialForm(lead, masterMaterials));
   };
 
@@ -1175,6 +1356,31 @@ export default function LeadOverview() {
     setCommercialForm((prev) => ({
       ...prev,
       scope_finalization: updater(prev.scope_finalization),
+    }));
+  };
+
+  const updateCommercialPricingWorkbench = (baseId: string, planId?: string) => {
+    updateScopeFinalization((scope) => ({
+      ...scope,
+      commercial_pricing_workbench: buildCommercialPricingWorkbench(
+        lead,
+        scope.commercial_pricing_workbench,
+        baseId,
+        planId,
+      ),
+    }));
+    setEditingCommercialPricingCell(null);
+  };
+
+  const updateCommercialPricingCell = (rowId: string, field: "inr" | "usd", value: string) => {
+    updateScopeFinalization((scope) => ({
+      ...scope,
+      commercial_pricing_workbench: {
+        ...scope.commercial_pricing_workbench,
+        rows: scope.commercial_pricing_workbench.rows.map((row) =>
+          row.id === rowId ? { ...row, [field]: value } : row,
+        ),
+      },
     }));
   };
 
@@ -1936,704 +2142,6 @@ export default function LeadOverview() {
         </div>
       </div>
 
-      <div className="mt-8">
-        <Card>
-          <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-1">
-              <CardTitle>Share Commercial + NDA</CardTitle>
-              <p className="text-sm text-gray-600">
-                Select master commercial materials, configure document fields, generate a dynamic name, and track signed status with a stored signed copy.
-              </p>
-            </div>
-            <div className="flex flex-col items-start gap-2 md:items-end">
-              <Badge className={canManageCommercialWorkflow ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>
-                {canManageCommercialWorkflow
-                  ? `${completedDemos.length} completed demo${completedDemos.length > 1 ? "s" : ""}`
-                  : "Waiting for completed demo"}
-              </Badge>
-              <Button onClick={() => openCommercialForm()} disabled={!canManageCommercialWorkflow} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Share Commercial
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {!canManageCommercialWorkflow && (
-              <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Complete the demo stage first. This screen becomes the next step only after at least one demo is marked completed.
-              </div>
-            )}
-
-            {showCommercialForm && (
-              <div className="rounded-2xl border bg-slate-50 p-5 space-y-5">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      {editingCommercial ? "Edit shared commercial" : "New shared commercial"}
-                    </h3>
-                    <p className="text-sm text-slate-600">
-                      Configure the commercial package, NDA type, dynamic fields, and signing status.
-                    </p>
-                  </div>
-                  <Button type="button" variant="outline" onClick={closeCommercialForm}>
-                    Cancel
-                  </Button>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>NDA type</Label>
-                    <Select
-                      value={commercialForm.nda_mode}
-                      onValueChange={(value: "one-sided" | "mutual") =>
-                        setCommercialForm((prev) => ({ ...prev, nda_mode: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="one-sided">One-Sided NDA</SelectItem>
-                        <SelectItem value="mutual">Mutual NDA</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Signed status</Label>
-                    <Select
-                      value={commercialForm.signed_status}
-                      onValueChange={(value: "signed" | "not_signed") =>
-                        setCommercialForm((prev) => ({ ...prev, signed_status: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="not_signed">Not signed</SelectItem>
-                        <SelectItem value="signed">Signed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                  <div className="space-y-2">
-                    <Label>Select commercial from master</Label>
-                    <Select
-                      value={selectedCommercialMaterialId}
-                      onValueChange={setSelectedCommercialMaterialId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose master material" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {masterMaterials.map((material) => (
-                          <SelectItem key={material.id} value={String(material.id)}>
-                            {material.title} ({material.source_type === "document" ? `${material.document_category || "document"} document` : material.file_type.toUpperCase()})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="button" variant="outline" onClick={addSelectedCommercialMaterial}>
-                    Add to list
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Selected materials</Label>
-                    <span className="text-xs text-slate-500">
-                      {commercialForm.selected_materials.length} selected
-                    </span>
-                  </div>
-                  {commercialForm.selected_materials.length === 0 ? (
-                    <div className="rounded-xl border border-dashed bg-white px-4 py-3 text-sm text-slate-500">
-                      No materials added yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-2 rounded-xl border bg-white p-3">
-                      {commercialForm.selected_materials.map((material) => (
-                        <div key={material.id} className="flex flex-col gap-3 rounded-xl border bg-slate-50 px-3 py-3 text-sm md:flex-row md:items-center md:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium text-slate-800">{material.title}</span>
-                              <Badge variant="outline" className="text-[10px] uppercase">
-                                {material.source_type === "document" ? material.document_category || "document" : material.file_type}
-                              </Badge>
-                              {material.nda_mode && (
-                                <Badge variant="secondary" className="text-[10px] uppercase">
-                                  {material.nda_mode === "mutual" ? "Mutual NDA" : "One-Sided NDA"}
-                                </Badge>
-                              )}
-                            </div>
-                            {material.description && (
-                              <p className="mt-1 line-clamp-2 text-xs text-slate-500">{material.description}</p>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, commercialForm.document_fields)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, commercialForm.document_fields)}>
-                              <Download className="mr-2 h-4 w-4" />
-                              Download
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="text-red-600 hover:text-red-700"
-                              onClick={() => removeCommercialMaterial(material.id)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Remove
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Dynamic document name</Label>
-                  <Input
-                    value={commercialForm.document_name_template}
-                    onChange={(e) =>
-                      setCommercialForm((prev) => ({
-                        ...prev,
-                        document_name_template: e.target.value,
-                      }))
-                    }
-                    placeholder="Commercial_{{company_name}}_{{date}}"
-                  />
-                  <p className="text-xs text-slate-500">
-                    Use tokens like <code>{'{{company_name}}'}</code>, <code>{'{{client_name}}'}</code>, <code>{'{{date}}'}</code>.
-                  </p>
-                  <div className="rounded-xl border bg-white px-4 py-3 text-sm">
-                    <span className="text-slate-500">Generated name: </span>
-                    <span className="font-medium text-slate-900">{generatedCommercialDocumentName || "—"}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Document fields</Label>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Dynamic fields from the selected commercial and NDA files are listed here. Update the values before saving the workflow.
-                      </p>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={addCommercialFieldRow}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add field
-                    </Button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {commercialForm.document_fields.map((field) => (
-                      <div key={field.id} className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-start">
-                        <div className="space-y-2">
-                          <Label>Field label</Label>
-                          <Input
-                            value={field.label}
-                            onChange={(e) => updateCommercialField(field.id, "label", e.target.value)}
-                            placeholder="Client name"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Token key</Label>
-                          <Input
-                            value={field.key}
-                            onChange={(e) => updateCommercialField(field.id, "key", e.target.value)}
-                            placeholder="client_name"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Value</Label>
-                          <Textarea
-                            value={field.value}
-                            onChange={(e) => updateCommercialField(field.id, "value", e.target.value)}
-                            placeholder="Enter value"
-                            className="min-h-[88px]"
-                          />
-                        </div>
-                        <div className="flex justify-end md:pt-7">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeCommercialFieldRow(field.id)}
-                            disabled={commercialForm.document_fields.length === 1}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Signed copy</Label>
-                  <Input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                    onChange={(e) => setSignedCopyFile(e.target.files?.[0] || null)}
-                  />
-                  {commercialForm.signed_copy_path && !signedCopyFile && (
-                    <div className="text-sm text-slate-600">
-                      Existing signed copy: <a className="text-blue-600 hover:underline" href={commercialForm.signed_copy_path} target="_blank" rel="noreferrer">{commercialForm.signed_copy_name || "View file"}</a>
-                    </div>
-                  )}
-                  {signedCopyFile && (
-                    <div className="text-sm text-slate-600">Ready to upload: {signedCopyFile.name}</div>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border bg-white p-5 space-y-5">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Lock className="h-4 w-4 text-slate-500" />
-                        <Label className="text-base font-semibold text-slate-900">Scope Finalization</Label>
-                      </div>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Lock the product and solution, organize the delivery workflow, and auto-group features into team assignments.
-                      </p>
-                    </div>
-                    <Badge className={canManageScopeFinalization ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}>
-                      {canManageScopeFinalization ? "Ready for scope finalization" : "Sign and upload the copy first"}
-                    </Badge>
-                  </div>
-
-                  {!canManageScopeFinalization ? (
-                    <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      After the copy is signed and uploaded, this section becomes the next step for locking the product, building the workflow, and preparing the architecture handoff.
-                    </div>
-                  ) : (
-                    <div className="space-y-5">
-                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                        <div className="space-y-3">
-                          <div>
-                            <Label>Product catalog</Label>
-                            <p className="mt-1 text-xs text-slate-500">
-                              Large dropdown from product catalog to lock the product and solution scope.
-                            </p>
-                          </div>
-                          <MultiSelect
-                            options={productCatalogOptions}
-                            value={commercialForm.scope_finalization.selected_product_ids}
-                            onChange={(value) => updateScopeFinalization((scope) => ({ ...scope, selected_product_ids: value }))}
-                            placeholder="Search and select products from the catalog"
-                            className="w-full"
-                          />
-                        </div>
-                        <div className="rounded-xl border bg-slate-50 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Locked products</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {commercialForm.scope_finalization.selected_product_ids.length > 0 ? (
-                              commercialForm.scope_finalization.selected_product_ids.map((productId) => (
-                                <Badge key={productId} variant="secondary" className="px-3 py-1 text-xs">
-                                  {productNameMap.get(productId) || `Product #${productId}`}
-                                </Badge>
-                              ))
-                            ) : (
-                              <p className="text-sm text-slate-500">No products locked yet.</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                        <div className="space-y-3">
-                          <div>
-                            <Label>Workflow features</Label>
-                            <p className="mt-1 text-xs text-slate-500">
-                              Select the scope features that should appear in the workflow and architecture plan.
-                            </p>
-                          </div>
-                          <MultiSelect
-                            options={scopeFeatureLibraryOptions}
-                            value={selectedLibraryScopeFeatures}
-                            onChange={syncScopeLibraryFeatures}
-                            placeholder="Select workflow features"
-                            className="w-full"
-                          />
-                          <div className="space-y-2">
-                            <Label>Additional features</Label>
-                            <Textarea
-                              value={commercialForm.scope_finalization.additional_features}
-                              onChange={(e) => updateScopeFinalization((scope) => ({ ...scope, additional_features: e.target.value }))}
-                              placeholder="Add custom features like Client app, Token gateway, Reports, Preprod"
-                              className="min-h-[88px]"
-                            />
-                            <div className="flex justify-end">
-                              <Button type="button" size="sm" variant="outline" onClick={addAdditionalScopeFeatures}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Add custom features
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div>
-                            <Label>Architecture diagram</Label>
-                            <p className="mt-1 text-xs text-slate-500">
-                              Upload an architecture diagram image if available. The workflow below still auto-builds from the selected features.
-                            </p>
-                          </div>
-                          <Input
-                            type="file"
-                            accept=".png,.jpg,.jpeg,.svg,.pdf"
-                            onChange={(e) => setArchitectureDiagramFile(e.target.files?.[0] || null)}
-                          />
-                          {commercialForm.scope_finalization.architecture_file_path && !architectureDiagramFile && (
-                            <div className="flex flex-wrap gap-2 text-sm text-slate-600">
-                              <Button type="button" size="sm" variant="outline" asChild>
-                                <a href={commercialForm.scope_finalization.architecture_file_path} target="_blank" rel="noreferrer">
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  View diagram
-                                </a>
-                              </Button>
-                              <Button type="button" size="sm" variant="outline" asChild>
-                                <a href={commercialForm.scope_finalization.architecture_file_path} download={commercialForm.scope_finalization.architecture_file_name || "architecture-diagram"}>
-                                  <Download className="mr-2 h-4 w-4" />
-                                  Download diagram
-                                </a>
-                              </Button>
-                            </div>
-                          )}
-                          {architectureDiagramFile && (
-                            <div className="rounded-xl border border-dashed bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                              <Upload className="mr-2 inline h-4 w-4" />
-                              Ready to upload: {architectureDiagramFile.name}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 rounded-2xl border bg-slate-50 p-4">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <Label className="text-base font-semibold text-slate-900">Workflow with drag and drop</Label>
-                            <p className="mt-1 text-xs text-slate-500">
-                              Reorder the feature workflow. Connector colors show status: blue for in progress, green for completed, red for overdue.
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            <Badge className="bg-blue-100 text-blue-800">In progress</Badge>
-                            <Badge className="bg-emerald-100 text-emerald-800">Completed</Badge>
-                            <Badge className="bg-red-100 text-red-800">Overdue</Badge>
-                          </div>
-                        </div>
-
-                        {commercialForm.scope_finalization.feature_items.length === 0 ? (
-                          <div className="rounded-xl border border-dashed bg-white px-4 py-6 text-sm text-slate-500">
-                            Select product features to generate the workflow board.
-                          </div>
-                        ) : (
-                          <DndContext sensors={scopeWorkflowSensors} collisionDetection={closestCenter} onDragEnd={handleScopeWorkflowDragEnd}>
-                            <SortableContext items={commercialForm.scope_finalization.feature_items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-                              <div className="space-y-3">
-                                {commercialForm.scope_finalization.feature_items.map((feature, index) => (
-                                  <SortableScopeFeatureCard
-                                    key={feature.id}
-                                    feature={feature}
-                                    index={index}
-                                    isLast={index === commercialForm.scope_finalization.feature_items.length - 1}
-                                    onUpdate={updateScopeFeatureItem}
-                                    onRemove={removeScopeFeatureItem}
-                                  />
-                                ))}
-                              </div>
-                            </SortableContext>
-                          </DndContext>
-                        )}
-                      </div>
-
-                      <div className="space-y-3 rounded-2xl border bg-slate-50 p-4">
-                        <div>
-                          <Label className="text-base font-semibold text-slate-900">Team assignments</Label>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Features are automatically grouped into the responsible teams based on the workflow configuration.
-                          </p>
-                        </div>
-                        {scopeAssignmentSummary.length === 0 ? (
-                          <div className="rounded-xl border border-dashed bg-white px-4 py-6 text-sm text-slate-500">
-                            Team assignments will appear after features are added.
-                          </div>
-                        ) : (
-                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {scopeAssignmentSummary.map((group) => (
-                              <div key={group.team} className="rounded-xl border bg-white p-4">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="font-semibold text-slate-900">{group.team}</p>
-                                  <Badge variant="outline">{group.items.length} item{group.items.length > 1 ? "s" : ""}</Badge>
-                                </div>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {group.items.map((item) => (
-                                    <Badge key={`${group.team}-${item.id}`} variant="secondary" className="px-2 py-1 text-[11px]">
-                                      {item.name}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSaveCommercialWorkflow} disabled={commercialSaveMutation.isPending}>
-                    {commercialSaveMutation.isPending ? "Saving..." : editingCommercial ? "Update workflow" : "Save workflow"}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {hydratedCommercialRecords.length === 0 ? (
-              <div className="rounded-2xl border border-dashed px-6 py-8 text-center text-sm text-slate-500">
-                No commercial shares created yet.
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {hydratedCommercialRecords.map((record) => (
-                  <div key={record.id} className="rounded-2xl border bg-white p-5 shadow-sm">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-semibold text-slate-900">
-                            {record.generated_document_name || record.document_name_template || "Commercial package"}
-                          </h3>
-                          <Badge variant="outline">{record.nda_mode === "mutual" ? "Mutual NDA" : "One-Sided NDA"}</Badge>
-                          <Badge className={record.signed_status === "signed" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}>
-                            {record.signed_status === "signed" ? "Signed" : "Not signed"}
-                          </Badge>
-                        </div>
-                        <div className="text-sm text-slate-600">
-                          Created by {record.created_by || "Unknown"} on {new Date(record.created_at).toLocaleString()}
-                        </div>
-                        <div className="text-sm text-slate-600">
-                          Dynamic template: <span className="font-medium text-slate-900">{record.document_name_template || "—"}</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => openCommercialForm(record)}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => {
-                            if (confirm("Delete this shared commercial workflow?")) {
-                              commercialDeleteMutation.mutate(record.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                      <div className="rounded-xl border bg-slate-50 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Commercial + NDA files</p>
-                        <div className="mt-3 space-y-2">
-                          {record.selected_materials?.length ? (
-                            record.selected_materials.map((material) => (
-                              <div key={`${record.id}-${material.id}`} className="rounded-xl border bg-white p-3">
-                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                  <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <span className="font-medium text-slate-900">{material.title}</span>
-                                      <Badge variant="secondary">
-                                        {material.source_type === "document" ? material.document_category || "document" : material.file_type}
-                                      </Badge>
-                                    </div>
-                                    {material.description && (
-                                      <p className="mt-1 text-xs text-slate-500">{material.description}</p>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    <Button type="button" size="sm" variant="outline" onClick={() => viewCommercialMaterial(material, record.document_fields)}>
-                                      <Eye className="mr-2 h-4 w-4" />
-                                      View
-                                    </Button>
-                                    <Button type="button" size="sm" variant="outline" onClick={() => downloadCommercialMaterial(material, record.document_fields)}>
-                                      <Download className="mr-2 h-4 w-4" />
-                                      Download
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-slate-500">No materials selected</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border bg-slate-50 p-4 lg:col-span-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Document fields</p>
-                        <div className="mt-3 grid gap-3 md:grid-cols-2">
-                          {record.document_fields?.length ? (
-                            record.document_fields.map((field) => (
-                              <div key={field.id} className="rounded-xl border bg-white p-3">
-                                <p className="text-xs uppercase tracking-wide text-slate-500">{field.label || field.key}</p>
-                                <p className="mt-1 text-sm font-medium text-slate-900 break-words">{field.value || "—"}</p>
-                                <p className="mt-2 text-[11px] text-slate-400">Token: {field.key || "—"}</p>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-slate-500">No document fields configured</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-col gap-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        Signed at: {record.signed_at ? new Date(record.signed_at).toLocaleString() : "Not signed yet"}
-                      </div>
-                      <div className="flex flex-col gap-2 md:items-end">
-                        <div>
-                          Signed copy: <span className="font-medium text-slate-900">{record.signed_copy_name || "Not uploaded"}</span>
-                        </div>
-                        {record.signed_copy_path && (
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" size="sm" variant="outline" asChild>
-                              <a href={record.signed_copy_path} target="_blank" rel="noreferrer">
-                                <Eye className="mr-2 h-4 w-4" />
-                                View
-                              </a>
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" asChild>
-                              <a href={record.signed_copy_path} download={record.signed_copy_name || `signed-copy-${record.id}`}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Download
-                              </a>
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {record.scope_finalization && (
-                      <div className="mt-5 space-y-4 rounded-2xl border bg-slate-50 p-4">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Scope Finalization</p>
-                            <p className="mt-1 text-sm text-slate-600">Locked products, workflow features, team assignments, and architecture handoff.</p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {record.scope_finalization.selected_product_ids?.length ? (
-                              record.scope_finalization.selected_product_ids.map((productId) => (
-                                <Badge key={`${record.id}-product-${productId}`} variant="secondary">
-                                  {productNameMap.get(String(productId)) || `Product #${productId}`}
-                                </Badge>
-                              ))
-                            ) : (
-                              <Badge variant="outline">No locked product</Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {record.scope_finalization.architecture_file_path && (
-                          <div className="flex flex-wrap gap-2">
-                            <Button type="button" size="sm" variant="outline" asChild>
-                              <a href={record.scope_finalization.architecture_file_path} target="_blank" rel="noreferrer">
-                                <Eye className="mr-2 h-4 w-4" />
-                                View architecture diagram
-                              </a>
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" asChild>
-                              <a href={record.scope_finalization.architecture_file_path} download={record.scope_finalization.architecture_file_name || `architecture-${record.id}`}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Download architecture diagram
-                              </a>
-                            </Button>
-                          </div>
-                        )}
-
-                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                          <div className="space-y-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Workflow</p>
-                            {record.scope_finalization.feature_items?.length ? (
-                              <div className="space-y-3">
-                                {record.scope_finalization.feature_items.map((item, index) => {
-                                  const statusClasses = getScopeFeatureStatusClasses(item.status);
-                                  return (
-                                    <div key={item.id} className="relative pl-10">
-                                      <div className={`absolute left-3 top-7 h-3 w-3 rounded-full border-2 border-white ${statusClasses.dot}`} />
-                                      {index < record.scope_finalization!.feature_items.length - 1 && (
-                                        <div className={`absolute left-[17px] top-10 h-[calc(100%-0.5rem)] w-0.5 ${statusClasses.line}`} />
-                                      )}
-                                      <div className={`rounded-xl border bg-white p-3 ${statusClasses.border}`}>
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                          <div>
-                                            <p className="font-medium text-slate-900">{item.name}</p>
-                                            <p className="text-xs text-slate-500">{item.domain} · {item.team}</p>
-                                          </div>
-                                          <Badge className={statusClasses.badge}>{item.status.replace("_", " ")}</Badge>
-                                        </div>
-                                        {item.notes && <p className="mt-2 text-xs text-slate-600">{item.notes}</p>}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-slate-500">No workflow items configured.</p>
-                            )}
-                          </div>
-
-                          <div className="space-y-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Team assignments</p>
-                            {buildScopeAssignmentSummary(record.scope_finalization.feature_items || []).length ? (
-                              <div className="space-y-3">
-                                {buildScopeAssignmentSummary(record.scope_finalization.feature_items || []).map((group) => (
-                                  <div key={`${record.id}-${group.team}`} className="rounded-xl border bg-white p-3">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="font-medium text-slate-900">{group.team}</p>
-                                      <Badge variant="outline">{group.items.length}</Badge>
-                                    </div>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                      {group.items.map((item) => (
-                                        <Badge key={`${record.id}-${group.team}-${item.id}`} variant="secondary" className="text-[11px]">
-                                          {item.name}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-slate-500">No team assignments yet.</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Follow-up Form Dialog */}
       {lead && (

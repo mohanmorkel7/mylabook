@@ -113,7 +113,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const isFinance = role === "finance";
   const canInternalTrigger = role === "sales" || role === "admin";
   const canExternalTrigger = role === "sales" || role === "admin";
-  const canConfigure = role === "admin" || role === "finance";
+  const canConfigure = role === "sales" || role === "admin";
 
   const [period, setPeriod] = useState(currentIstPeriod);
   const [invoices, setInvoices] = useState<ProcessInvoice[]>([]);
@@ -132,6 +132,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recipientsText, setRecipientsText] = useState("");
+  const [internalTemplate, setInternalTemplate] = useState<{ subject: string; body: string } | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
   const loadInvoices = useCallback(async () => {
@@ -284,6 +285,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
       const res = await fetch("/api/invoice-management/process/settings");
       const data = res.ok ? await res.json() : { internalRecipients: [] };
       setRecipientsText((data.internalRecipients || []).join(", "));
+      setInternalTemplate(data.internalEmailTemplate || null);
     } catch {
       setRecipientsText("");
     }
@@ -598,15 +600,31 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Internal trigger recipients</DialogTitle>
-            <DialogDescription>These people receive the invoice PDF and OTP when Internal Trigger is clicked. Separate emails with commas.</DialogDescription>
+            <DialogTitle>Trigger settings</DialogTitle>
+            <DialogDescription>Recipients for the Internal Trigger email. Separate emails with commas.</DialogDescription>
           </DialogHeader>
-          <Textarea
-            value={recipientsText}
-            onChange={(e) => setRecipientsText(e.target.value)}
-            rows={4}
-            placeholder="finance.lead@company.com, approver@company.com"
-          />
+          <div className="space-y-2">
+            <Label htmlFor="internal-recipients">Internal trigger recipients</Label>
+            <Textarea
+              id="internal-recipients"
+              value={recipientsText}
+              onChange={(e) => setRecipientsText(e.target.value)}
+              rows={3}
+              placeholder="finance.lead@company.com, approver@company.com"
+            />
+          </div>
+          {internalTemplate && (
+            <div className="space-y-2">
+              <Label>Internal email template</Label>
+              <div className="rounded-md border bg-muted/30 p-3 text-xs">
+                <p className="font-medium">Subject: {internalTemplate.subject}</p>
+                <pre className="mt-2 whitespace-pre-wrap font-sans">{internalTemplate.body}</pre>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Placeholders are filled in when the email is sent. The invoice PDF is attached automatically.
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSettingsOpen(false)}>Cancel</Button>
             <Button onClick={saveSettings} disabled={savingSettings}>Save</Button>

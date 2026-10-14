@@ -133,6 +133,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recipientsText, setRecipientsText] = useState("");
   const [internalTemplate, setInternalTemplate] = useState<{ subject: string; body: string } | null>(null);
+  const [recipientsAvailable, setRecipientsAvailable] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
 
   const loadInvoices = useCallback(async () => {
@@ -281,13 +282,18 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
 
   const openSettings = async () => {
     setSettingsOpen(true);
+    setRecipientsAvailable(true);
     try {
       const res = await fetch("/api/invoice-management/process/settings");
-      const data = res.ok ? await res.json() : { internalRecipients: [] };
-      setRecipientsText((data.internalRecipients || []).join(", "));
+      const data = await res.json();
+      if (Array.isArray(data.internalRecipients)) {
+        setRecipientsText(data.internalRecipients.join(", "));
+      } else {
+        setRecipientsAvailable(false);
+      }
       setInternalTemplate(data.internalEmailTemplate || null);
     } catch {
-      setRecipientsText("");
+      setRecipientsAvailable(false);
     }
   };
 
@@ -610,8 +616,12 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
               value={recipientsText}
               onChange={(e) => setRecipientsText(e.target.value)}
               rows={3}
+              disabled={!recipientsAvailable}
               placeholder="finance.lead@company.com, approver@company.com"
             />
+            {!recipientsAvailable && (
+              <p className="text-xs text-red-600">Recipients could not be loaded, so saving is disabled to avoid overwriting them.</p>
+            )}
           </div>
           {internalTemplate && (
             <div className="space-y-2">
@@ -627,7 +637,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSettingsOpen(false)}>Cancel</Button>
-            <Button onClick={saveSettings} disabled={savingSettings}>Save</Button>
+            <Button onClick={saveSettings} disabled={savingSettings || !recipientsAvailable}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -114,13 +114,13 @@ function renderTemplate(template: string, values: Record<string, string>) {
 
 // ── GET internal trigger recipients ─────────────────────────────────────────
 router.get("/settings", async (_req: Request, res: Response) => {
+  let internalRecipients: string[] | null = null;
   try {
-    const internalRecipients = await readInternalRecipients();
-    res.json({ internalRecipients, internalEmailTemplate: INTERNAL_EMAIL_TEMPLATE });
+    internalRecipients = await readInternalRecipients();
   } catch (error: any) {
-    console.error("[InvoiceProcess] GET settings error:", error?.message);
-    res.status(500).json({ error: "Failed to load process settings" });
+    console.error("[InvoiceProcess] GET settings recipients error:", error?.message);
   }
+  res.json({ internalRecipients, internalEmailTemplate: INTERNAL_EMAIL_TEMPLATE });
 });
 
 // ── POST internal trigger recipients ────────────────────────────────────────

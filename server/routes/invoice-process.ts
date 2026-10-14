@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import crypto from "crypto";
 import { pool, queryWithRetry } from "../database/connection";
 import { sendMail } from "../services/mailService";
+import { INTERNAL_EMAIL_TEMPLATE, renderTemplate } from "../../shared/invoiceProcessTemplate";
 
 const router = Router();
 
@@ -96,22 +97,6 @@ function decodePdfAttachment(fileName: string, pdfBase64: string) {
   return { filename: fileName, content, contentType: "application/pdf" };
 }
 
-const INTERNAL_EMAIL_TEMPLATE = {
-  subject: "Invoice approval required: {invoiceNumber} ({clientName})",
-  body: [
-    "Invoice {invoiceNumber} for {clientName} is ready for approval.",
-    "Amount: {amount}",
-    "",
-    "Approval OTP: {otp}",
-    "",
-    "The finance team must enter this exact 6-digit OTP to approve the invoice. The invoice PDF is attached.",
-  ].join("\n"),
-};
-
-function renderTemplate(template: string, values: Record<string, string>) {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? values[key] : match));
-}
-
 // ── GET internal trigger recipients ─────────────────────────────────────────
 router.get("/settings", async (_req: Request, res: Response) => {
   let internalRecipients: string[] | null = null;
@@ -120,7 +105,7 @@ router.get("/settings", async (_req: Request, res: Response) => {
   } catch (error: any) {
     console.error("[InvoiceProcess] GET settings recipients error:", error?.message);
   }
-  res.json({ internalRecipients, internalEmailTemplate: INTERNAL_EMAIL_TEMPLATE });
+  res.json({ internalRecipients });
 });
 
 // ── POST internal trigger recipients ────────────────────────────────────────

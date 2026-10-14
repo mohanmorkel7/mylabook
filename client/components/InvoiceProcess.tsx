@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { INTERNAL_EMAIL_TEMPLATE } from "@shared/invoiceProcessTemplate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -132,7 +133,6 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recipientsText, setRecipientsText] = useState("");
-  const [internalTemplate, setInternalTemplate] = useState<{ subject: string; body: string } | null>(null);
   const [recipientsAvailable, setRecipientsAvailable] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -291,7 +291,6 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
       } else {
         setRecipientsAvailable(false);
       }
-      setInternalTemplate(data.internalEmailTemplate || null);
     } catch {
       setRecipientsAvailable(false);
     }
@@ -623,12 +622,12 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
               <p className="text-xs text-red-600">Recipients could not be loaded, so saving is disabled to avoid overwriting them.</p>
             )}
           </div>
-          {internalTemplate && (
+          {(
             <div className="space-y-2">
               <Label>Internal email template</Label>
               <div className="rounded-md border bg-muted/30 p-3 text-xs">
-                <p className="font-medium">Subject: {internalTemplate.subject}</p>
-                <pre className="mt-2 whitespace-pre-wrap font-sans">{internalTemplate.body}</pre>
+                <p className="font-medium">Subject: {INTERNAL_EMAIL_TEMPLATE.subject}</p>
+                <pre className="mt-2 whitespace-pre-wrap font-sans">{INTERNAL_EMAIL_TEMPLATE.body}</pre>
               </div>
               <p className="text-[11px] text-muted-foreground">
                 Placeholders are filled in when the email is sent. The invoice PDF is attached automatically.

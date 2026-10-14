@@ -21,6 +21,19 @@ async function ensureSlackCategoryId(): Promise<number> {
   return insert.rows[0].id;
 }
 
+async function getSlackDefaultAssigneeId(): Promise<number> {
+  const preferredName = process.env.SLACK_DEFAULT_ASSIGNEE_NAME || "Vivekanandan Ravichandran";
+  const res = await pool.query(
+    `SELECT id
+     FROM users
+     WHERE LOWER(TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')))) = LOWER($1)
+        OR LOWER(email) = LOWER($1)
+     LIMIT 1`,
+    [preferredName],
+  );
+  return Number(res.rows[0]?.id || process.env.SLACK_DEFAULT_ASSIGNEE_ID || 315);
+}
+
 function getTodayStartTs() {
   const now = new Date();
   return Math.floor(
@@ -176,6 +189,7 @@ export function initialize() {
                     const description = `Slack from: from@slack.com\nReceived: ${new Date(Number(msg.ts) * 1000).toISOString()}\n\n---\n\n${title}`;
 
                     try {
+                      const assigneeId = await getSlackDefaultAssigneeId();
                       const ticketData: any = {
                         subject: `${title}`,
                         description,
@@ -186,7 +200,7 @@ export function initialize() {
                         bucket_id: 5,
                         demand: 1,
                         tags: ["Slack"],
-                        assigned_to: 76, // Default assign Slack tickets to user 76
+                        assigned_to: assigneeId, // Default assign Slack tickets to Vivekanandan Ravichandran
                         custom_fields: {
                           slack_thread_ts: threadTs,
                           slack_channel: channel.id,

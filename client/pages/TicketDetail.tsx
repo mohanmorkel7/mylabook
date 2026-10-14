@@ -45,6 +45,22 @@ import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api";
 import { formatToISTDateTime } from "@/lib/dateUtils";
 
+type TicketDetailLocationFilters = {
+  searchText?: string;
+  priority?: string;
+  status?: string;
+  assignedTo?: string;
+  source?: string;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+type TicketDetailLocationState = {
+  from?: string;
+  filters?: TicketDetailLocationFilters;
+  activeTab?: "all" | "created";
+};
+
 // Inline styles for email content rendering
 const emailBodyStyles = `
   .email-body-content {
@@ -190,6 +206,22 @@ export default function TicketDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
+  const locationState = (location.state as TicketDetailLocationState) || {};
+  const backNavigationState =
+    locationState.filters || locationState.activeTab
+      ? {
+          filters: locationState.filters,
+          activeTab: locationState.activeTab,
+        }
+      : undefined;
+  const goBackToTickets = () => {
+    const targetPath = locationState.from || `/tickets${location.search || ""}`;
+    if (backNavigationState) {
+      navigate(targetPath, { state: backNavigationState });
+    } else {
+      navigate(targetPath);
+    }
+  };
   const { toast } = useToast();
   const [ticket, setTicket] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
@@ -444,20 +476,12 @@ export default function TicketDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => {
-            // Prefer returning to the originating tickets list path stored in location.state.from
-            const from = (location && (location.state as any)?.from) || null;
-            if (from) {
-              navigate(from);
-            } else {
-              navigate(-1);
-            }
-          }}>
+          <Button variant="ghost" onClick={goBackToTickets}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Tickets
           </Button>
           <Button
             variant="outline"
-            onClick={() => navigate(`/tickets/${ticket.id}/edit`)}
+            onClick={() => navigate(`/tickets/${ticket.id}/edit${location.search}`)}
           >
             <Edit className="w-4 h-4 mr-2" /> Edit
           </Button>

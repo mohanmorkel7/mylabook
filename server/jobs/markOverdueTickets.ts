@@ -14,12 +14,14 @@ export async function runMarkOverdueTickets() {
 
     console.log(`[markOverdueTickets] Overdue status id: ${overdueStatusId}`);
 
-    // Find tickets that have sla_time in the past
+    // Find tickets where SLA time has passed in IST
+    // sla_time is stored as UTC — compare UTC to UTC directly (NOW() is UTC)
+    // Using AT TIME ZONE would shift the timestamp by +5:30 making tickets appear overdue 5h30m early
     const ticketsRes = await pool.query(
       `SELECT t.id, t.status_id, ts.name as status_name, ts.is_closed
        FROM tickets t
        LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
-       WHERE t.sla_time IS NOT NULL AND (t.sla_time AT TIME ZONE 'Asia/Kolkata') < NOW()`,
+       WHERE t.sla_time IS NOT NULL AND t.sla_time < NOW()`,
     );
 
     // console.log(

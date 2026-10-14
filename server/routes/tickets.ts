@@ -2,6 +2,7 @@ import multer from "multer";
 import { Router, Request, Response } from "express";
 import path from "path";
 import fs from "fs";
+import * as XLSX from "xlsx";
 import {
   TicketRepository,
   CreateTicketRequest,
@@ -13,6 +14,82 @@ import { pool } from "../database/connection";
 
 const router = Router();
 import { authenticateToken } from "../middleware/auth";
+
+const isFullAccessRole = (user?: {
+  role?: string;
+  department_admin?: boolean;
+  admin_for_department?: string | null;
+}) => {
+  const roleLower = String(user?.role || "").trim().toLowerCase();
+  if (roleLower === "admin" || roleLower === "finops admin") return true;
+
+  const adminDept = String(user?.admin_for_department || "").trim().toLowerCase();
+  return !!user?.department_admin && adminDept === "finops";
+};
+
+const metadataCache = new Map<string, { data: any; expiresAt: number }>();
+const assignedOptionsCache = new Map<
+  string,
+  { data: any; expiresAt: number }
+>();
+const ticketSummaryCache = new Map<string, { data: any; expiresAt: number }>();
+const ticketUserStatusCache = new Map<string, { data: any; expiresAt: number }>();
+const ticketTagSummaryCache = new Map<string, { data: any; expiresAt: number }>();
+
+const STATUS_CACHE_TTL_MS = 5 * 60_000;
+let statusLookupCache: Map<string, number> | null = null;
+let statusCacheRefreshedAt = 0;
+let statusCachePromise: Promise<void> | null = null;
+
+const normalizeStatusKey = (value: string): string =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+async function ensureStatusLookupCache() {
+  if (
+    statusLookupCache &&
+    Date.now() - statusCacheRefreshedAt < STATUS_CACHE_TTL_MS
+  ) {
+    return;
+  }
+
+  if (!statusCachePromise) {
+    statusCachePromise = (async () => {
+      const statuses = await TicketRepository.getStatuses();
+      const map = new Map<string, number>();
+      for (const status of statuses) {
+        const normalized = normalizeStatusKey(status.name || "");
+        if (normalized) {
+          map.set(normalized, Number(status.id));
+        }
+        map.set(String(status.id), Number(status.id));
+      }
+      statusLookupCache = map;
+      statusCacheRefreshedAt = Date.now();
+    })();
+  }
+
+  try {
+    await statusCachePromise;
+  } finally {
+    statusCachePromise = null;
+  }
+}
+
+async function resolveStatusIdFromQuery(value: string | undefined) {
+  if (!value) return undefined;
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return undefined;
+  const numeric = Number(trimmed);
+  if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+    return Math.floor(numeric);
+  }
+  await ensureStatusLookupCache();
+  const normalized = normalizeStatusKey(trimmed);
+  if (!normalized || !statusLookupCache) return undefined;
+  return statusLookupCache.get(normalized);
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -56,38 +133,38 @@ async function isDatabaseAvailable() {
 
 // Get ticket metadata (priorities, statuses, categories)
 router.get("/metadata", async (req: Request, res: Response) => {
+  const cacheKey = "ticket-metadata";
+  const cached = metadataCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
-    if (await isDatabaseAvailable()) {
-      const priorities = await TicketRepository.getPriorities();
-      const statuses = await TicketRepository.getStatuses();
-      const categories = await TicketRepository.getCategories();
-      // Fetch teams and buckets if available
-      let teams = [];
-      let buckets = [];
-      try {
-        const teamsRes = await pool.query("SELECT * FROM teams LIMIT 50");
-        teams = teamsRes.rows;
-      } catch (e) {
-        // Teams table may not exist
-      }
-      try {
-        const bucketsRes = await pool.query(
-          "SELECT * FROM ticket_buckets LIMIT 50",
-        );
-        buckets = bucketsRes.rows;
-      } catch (e) {
-        // Buckets table may not exist
-      }
-      res.json({
-        priorities,
-        statuses,
-        categories,
-        teams,
-        buckets,
-      });
-    } else {
-      res.status(503).json({ error: "Database unavailable" });
+    const [priorities, statuses, categories] = await Promise.all([
+      TicketRepository.getPriorities(),
+      TicketRepository.getStatuses(),
+      TicketRepository.getCategories(),
+    ]);
+
+    let teams: any[] = [];
+    let buckets: any[] = [];
+    try {
+      const [teamsRes, bucketsRes] = await Promise.all([
+        pool.query("SELECT * FROM teams LIMIT 50"),
+        pool.query("SELECT * FROM ticket_buckets LIMIT 50"),
+      ]);
+      teams = teamsRes.rows;
+      buckets = bucketsRes.rows;
+    } catch (e) {
+      // Teams/buckets tables may not exist
     }
+
+    const payload = { priorities, statuses, categories, teams, buckets };
+    metadataCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 5 * 60_000,
+    });
+    res.json(payload);
   } catch (error) {
     console.error("Error fetching ticket metadata:", error);
     res.status(500).json({ error: "Failed to fetch metadata" });
@@ -106,7 +183,7 @@ const FALLBACK_TICKETS = [
     status_id: 2,
     category_id: 1,
     created_by: 1,
-    assigned_to: 1,
+    assigned_to: 315,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     priority: { id: 3, name: "High", level: 3, color: "#EF4444" },
@@ -174,7 +251,20 @@ router.get("/", async (req: Request, res: Response) => {
         typeof req.query.created_from_mail_config !== "undefined"
           ? String(req.query.created_from_mail_config) === "true"
           : undefined,
+      source: req.query.source ? String(req.query.source) : undefined,
     };
+
+    if (!filters.status_id) {
+      const statusFromParam = await resolveStatusIdFromQuery(
+        req.query.status as string | undefined,
+      );
+      if (
+        typeof statusFromParam === "number" &&
+        !Number.isNaN(statusFromParam)
+      ) {
+        filters.status_id = statusFromParam;
+      }
+    }
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -189,14 +279,12 @@ router.get("/", async (req: Request, res: Response) => {
       if (headerUserId) {
         viewerId = normalizeUserId(headerUserId);
         const roleRes = await pool.query(
-          "SELECT role FROM users WHERE id = $1",
+          "SELECT role, department_admin, admin_for_department FROM users WHERE id = $1",
           [viewerId],
         );
-        const role = roleRes.rows[0]?.role;
-        const roleLower = String(role || "").toLowerCase();
+        const userRow = roleRes.rows[0];
         // Allow full visibility for Admin and FinOps Admin roles
-        if (role && !(roleLower === "admin" || roleLower === "finops admin"))
-          restrictToViewer = true;
+        if (!isFullAccessRole(userRow)) restrictToViewer = true;
       }
     } catch (e) {
       // ignore and default to unrestricted listing
@@ -214,45 +302,89 @@ router.get("/", async (req: Request, res: Response) => {
     // Protect the route from extremely slow DB calls by racing with a timeout
     // If client requests simple listing (raw tickets table), run a lightweight query
     if (String(req.query.simple || "").trim() === "1") {
+      const queryStartMs = Date.now();
       try {
         console.log("[GET /api/tickets] Using simple query mode");
+        const isExport = String(req.query.export || "").trim() === "1";
         const offset = (page - 1) * effectiveLimit;
-        const rowsRes = await pool.query(
-          `SELECT
-              t.id, t.track_id, t.subject, t.description,
+        const simpleWhere = restrictToViewer && viewerId
+          ? `WHERE (t.assigned_to = $1 OR $1 = ANY(t.watcher_user_ids))`
+          : "";
+        const simpleParams = restrictToViewer && viewerId
+          ? isExport
+            ? [viewerId]
+            : [viewerId, effectiveLimit, offset]
+          : isExport
+            ? []
+            : [effectiveLimit, offset];
+        const simpleLimitClause = isExport
+          ? ""
+          : `LIMIT $${restrictToViewer && viewerId ? 2 : 1} OFFSET $${restrictToViewer && viewerId ? 3 : 2}`;
+        const simpleSql = `SELECT
+              t.id, t.track_id, t.subject,
+              LEFT(split_part(t.description, E'\n', 1), 200) AS description,
               t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
               t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
               to_char(t.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
               to_char(t.updated_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at_iso,
-              to_char(t.sla_time AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
+              EXTRACT(EPOCH FROM t.sla_time AT TIME ZONE 'UTC') * 1000 AS sla_time_epoch_ms,
+              to_char(t.sla_time, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sla_time_iso,
               tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
               ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
-              tc.id as category_id_join, tc.name as category_name, tc.color as category_color,
-              creator.id as creator_id, creator.first_name || ' ' || creator.last_name as creator_name, creator.email as creator_email,
-              assignee.id as assignee_id, assignee.first_name || ' ' || assignee.last_name as assignee_name, assignee.email as assignee_email
+              tc.id as category_id_join, tc.name as category_name, tc.color as category_color
              FROM tickets t
              LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
              LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
              LEFT JOIN ticket_categories tc ON t.category_id = tc.id
-             LEFT JOIN users creator ON t.created_by = creator.id
-             LEFT JOIN users assignee ON t.assigned_to = assignee.id
+             ${simpleWhere}
              ORDER BY t.created_at DESC
-             LIMIT $1 OFFSET $2`,
-          [effectiveLimit, offset],
-        );
+             ${simpleLimitClause}`;
+        const exportSql = `SELECT
+              t.id, t.track_id, t.subject, t.description,
+              t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to,
+              t.created_at, t.updated_at, t.sla_time, t.demand, t.mail_config_id,
+              tp.id as priority_id_join, tp.name as priority_name, tp.level as priority_level, tp.color as priority_color,
+              ts.id as status_id_join, ts.name as status_name, ts.color as status_color, ts.is_closed as status_is_closed,
+              tc.id as category_id_join, tc.name as category_name, tc.color as category_color
+             FROM tickets t
+             LEFT JOIN ticket_priorities tp ON t.priority_id = tp.id
+             LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+             LEFT JOIN ticket_categories tc ON t.category_id = tc.id
+             ${simpleWhere}`;
+        const rowsRes = isExport
+          ? await (async () => {
+              const client = await pool.connect();
+              try {
+                await client.query("SET statement_timeout = 0");
+                return await client.query(exportSql, simpleParams);
+              } finally {
+                client.release();
+              }
+            })()
+          : await pool.query(simpleSql, simpleParams);
 
-        const countRes = await pool.query(
-          `SELECT COUNT(*) AS cnt FROM tickets`,
-        );
-        const totalCount = Number(countRes.rows[0]?.cnt || 0);
-        const pages = Math.max(1, Math.ceil(totalCount / effectiveLimit));
+        const queryDurationMs = Date.now() - queryStartMs;
+        if (queryDurationMs > 5000) {
+          const poolSize = (pool as any).totalCount;
+          const idleCount = (pool as any).idleCount;
+          const waitingCount = (pool as any).waitingCount || 0;
+          console.warn(`[GET /api/tickets] Simple query took ${queryDurationMs}ms (page=${page}, limit=${effectiveLimit}) | POOL: Total=${poolSize} Idle=${idleCount} Waiting=${waitingCount}`);
+        }
+
+        const totalCount = isExport ? rowsRes.rows.length : Number((await pool.query(
+          restrictToViewer && viewerId
+            ? `SELECT COUNT(*) FROM tickets WHERE (assigned_to = $1 OR $1 = ANY(watcher_user_ids))`
+            : `SELECT COUNT(*) FROM tickets`,
+          restrictToViewer && viewerId ? [viewerId] : [],
+        )).rows[0]?.count || 0);
+        const pages = isExport ? 1 : Math.max(1, Math.ceil(totalCount / effectiveLimit));
 
         // Map iso fields and reshape data for client
         const tickets = (rowsRes.rows || []).map((r: any) => ({
           id: r.id,
           track_id: r.track_id,
           subject: r.subject,
-          description: r.description,
+          description: r.description || null,
           priority_id: r.priority_id,
           status_id: r.status_id,
           category_id: r.category_id,
@@ -261,6 +393,7 @@ router.get("/", async (req: Request, res: Response) => {
           created_at: r.created_at_iso || r.created_at,
           updated_at: r.updated_at_iso || r.updated_at,
           sla_time: r.sla_time_iso || r.sla_time,
+          sla_time_epoch_ms: r.sla_time_epoch_ms != null ? Number(r.sla_time_epoch_ms) : null,
           demand: r.demand,
           mail_config_id: r.mail_config_id,
           priority: r.priority_id_join
@@ -286,20 +419,6 @@ router.get("/", async (req: Request, res: Response) => {
                 color: r.category_color,
               }
             : null,
-          creator: r.creator_id
-            ? {
-                id: r.creator_id,
-                name: r.creator_name,
-                email: r.creator_email,
-              }
-            : null,
-          assignee: r.assignee_id
-            ? {
-                id: r.assignee_id,
-                name: r.assignee_name,
-                email: r.assignee_email,
-              }
-            : null,
         }));
 
         return res.json({
@@ -310,11 +429,11 @@ router.get("/", async (req: Request, res: Response) => {
           mode: "simple",
         });
       } catch (err) {
+        const errorDurationMs = Date.now() - queryStartMs;
         console.error(
-          "[GET /api/tickets] Simple tickets query failed:",
+          `[GET /api/tickets] Simple query failed after ${errorDurationMs}ms:`,
           err?.message || err,
         );
-        console.error("[GET /api/tickets] Full error:", err);
         // Return empty result instead of falling back to heavy query
         return res.status(200).json({
           tickets: [],
@@ -322,7 +441,7 @@ router.get("/", async (req: Request, res: Response) => {
           pages: 0,
           server_time: new Date().toISOString(),
           mode: "simple",
-          message: "Simple query failed, returning empty results",
+          message: `Simple query failed after ${errorDurationMs}ms: ${err?.message || "unknown error"}`,
         });
       }
     }
@@ -410,9 +529,142 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/tickets/export-stream
+// Returns all ticket data for export - client builds XLSX from this JSON data
+// This avoids server-side XLSX complexity and lets client use its optimized XLSX building
+router.get("/export-stream", async (req: Request, res: Response) => {
+  try {
+    console.log("[GET /api/tickets/export-stream] Starting export data fetch");
+    const startTime = Date.now();
+
+    // Determine viewer from x-user-id header
+    let viewerId: number | undefined = undefined;
+    let restrictToViewer = false;
+    try {
+      const headerUserId = req.headers["x-user-id"] as string | undefined;
+      if (headerUserId) {
+        viewerId = normalizeUserId(headerUserId);
+        const roleRes = await pool.query(
+          "SELECT role, department_admin, admin_for_department FROM users WHERE id = $1",
+          [viewerId],
+        );
+        const userRow = roleRes.rows[0];
+        if (!isFullAccessRole(userRow)) restrictToViewer = true;
+      }
+    } catch (e) {
+      // ignore and default to unrestricted listing
+    }
+
+    // Build where clause for viewer restriction
+    const simpleWhere = restrictToViewer && viewerId
+      ? `WHERE (t.assigned_to = $1 OR $1 = ANY(t.watcher_user_ids))`
+      : "";
+    const simpleParams = restrictToViewer && viewerId ? [viewerId] : [];
+
+    // Compute tag server-side using subject+description CASE (no description returned - just the tag label)
+    // ORDER BY id DESC uses the primary key index
+    const exportSql = `SELECT
+          t.id, t.track_id, t.subject,
+          t.priority_id, t.status_id, t.category_id, t.created_by, t.assigned_to, t.closed_by, t.closed_at,
+          t.created_at, t.updated_at, t.mail_config_id,
+          CASE
+            WHEN (LOWER(t.subject) LIKE '%upi%')
+              AND (LOWER(t.subject) LIKE '%razorpay%' OR LOWER(COALESCE(t.description,'')) LIKE '%razorpay%')
+              THEN 'Razorpay UPI'
+            WHEN LOWER(t.subject) LIKE '%razorpay%'
+              OR LOWER(COALESCE(t.description,'')) LIKE '%razorpay%'
+              OR LOWER(t.subject) LIKE '%@razorpay.com%'
+              THEN 'Razorpay'
+            WHEN LOWER(COALESCE(t.description,'')) LIKE '%payswiff%'
+              OR LOWER(t.subject) LIKE '%payswiff%'
+              THEN 'Payswiff'
+            WHEN LOWER(COALESCE(t.description,'')) LIKE '%@slack.com%'
+              OR LOWER(COALESCE(t.description,'')) LIKE '%slack from%'
+              THEN 'Slack'
+            WHEN t.mail_config_id IS NOT NULL THEN 'Email'
+            ELSE 'Manual'
+          END as ticket_tag
+         FROM tickets t
+         ${simpleWhere}
+         ORDER BY t.id DESC`;
+
+    // Use a dedicated connection without statement timeout for full-table export
+    const client = await pool.connect();
+    try {
+      await client.query("SET statement_timeout = 0");
+
+      // Run main query AND all lookup tables in parallel
+      const [result, prioritiesRes, statusesRes, categoriesRes, usersRes] = await Promise.all([
+        client.query(exportSql, simpleParams),
+        pool.query("SELECT id, name FROM ticket_priorities"),
+        pool.query("SELECT id, name FROM ticket_statuses"),
+        pool.query("SELECT id, name FROM ticket_categories"),
+        pool.query("SELECT id, TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) as name, email FROM users"),
+      ]);
+
+      const rowCount = result.rows.length;
+      const queryDurationMs = Date.now() - startTime;
+
+      console.log(`[export-stream] Fetched ${rowCount} rows in ${queryDurationMs}ms`);
+
+      const prioritiesMap = new Map(prioritiesRes.rows.map((r: any) => [r.id, r.name]));
+      const statusesMap = new Map(statusesRes.rows.map((r: any) => [r.id, r.name]));
+      const categoriesMap = new Map(categoriesRes.rows.map((r: any) => [r.id, r.name]));
+      const usersMap = new Map(usersRes.rows.map((r: any) => [r.id, r.name || r.email || `User #${r.id}`]));
+
+      const userName = (id: any) => (id ? usersMap.get(id) || `User #${id}` : "");
+
+      // Format data for client export
+      const tickets = result.rows.map((r: any) => ({
+        id: r.id,
+        track_id: r.track_id || `TKT-${String(r.id).padStart(4, "0")}`,
+        subject: r.subject || "",
+        priority_name: prioritiesMap.get(r.priority_id) || "",
+        status_name: statusesMap.get(r.status_id) || "",
+        category_name: categoriesMap.get(r.category_id) || "",
+        assigned_to_name: userName(r.assigned_to),
+        closed_by_name: userName(r.closed_by),
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        closed_at: r.closed_at,
+        mail_config_id: r.mail_config_id,
+        ticket_tag: r.ticket_tag || "Manual",
+      }));
+
+      res.set("Cache-Control", "no-store");
+      res.json({
+        tickets,
+        total: rowCount,
+        server_time: new Date().toISOString(),
+        duration_ms: queryDurationMs,
+      });
+
+      console.log(`[export-stream] Responded with ${rowCount} tickets in ${Date.now() - startTime}ms`);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error("[export-stream] Error:", error?.message || error);
+    res.status(500).json({
+      error: "Export failed",
+      details: String(error?.message || error),
+    });
+  }
+});
+
 // GET /api/tickets/summary
 // Returns aggregated counts (assigned users, statuses, overdue stats)
 router.get("/summary", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "private, max-age=30");
+  const cacheKey = JSON.stringify({
+    date_from: req.query.date_from || null,
+    date_to: req.query.date_to || null,
+  });
+  const cached = ticketSummaryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
     // Parse and validate date filters
     let where = "WHERE 1=1";
@@ -467,9 +719,11 @@ router.get("/summary", async (req: Request, res: Response) => {
         a.id,
         CONCAT(a.first_name, ' ', a.last_name) AS name,
         a.email,
-        COUNT(t.id) AS count
+        COUNT(t.id) AS count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
       FROM users a
-      LEFT JOIN tickets t ON t.assigned_to = a.id ${where}
+      LEFT JOIN tickets t ON t.assigned_to = a.id
+      LEFT JOIN clients c ON t.related_client_id = c.id ${where}
       GROUP BY a.id, a.first_name, a.last_name, a.email
       ORDER BY count DESC, name
     `;
@@ -479,13 +733,18 @@ router.get("/summary", async (req: Request, res: Response) => {
       name: row.name,
       email: row.email,
       count: Number(row.count),
+      client_names: row.client_names || [],
     }));
 
     // 2. Statuses
     const statusQuery = `
-      SELECT ts.name as status_name, COUNT(*) as count
+      SELECT
+        ts.name as status_name,
+        COUNT(*) as count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
       FROM tickets t
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN clients c ON t.related_client_id = c.id
       ${where}
       GROUP BY ts.name
       ORDER BY ts.name
@@ -494,6 +753,7 @@ router.get("/summary", async (req: Request, res: Response) => {
     const statuses = statusRes.rows.map((r: any) => ({
       status: r.status_name || "Unknown",
       count: Number(r.count),
+      client_names: r.client_names || [],
     }));
 
     console.log("[GET /api/tickets/summary] statuses:", statuses);
@@ -543,7 +803,7 @@ router.get("/summary", async (req: Request, res: Response) => {
     const overdueClosed = Number(overdueClosedRes.rows[0]?.cnt || 0);
     const nonOverdueClosed = Math.max(0, totalClosed - overdueClosed);
 
-    res.json({
+    const payload = {
       assigned,
       statuses,
       overdue_counts: {
@@ -556,7 +816,12 @@ router.get("/summary", async (req: Request, res: Response) => {
         // historical ever-overdue open (for debugging/compatibility). May be undefined if computation failed.
         everOverdueOpen: (values as any)._everOverdueOpen,
       },
+    };
+    ticketSummaryCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 30_000,
     });
+    res.json(payload);
   } catch (err) {
     console.error("Error fetching ticket summary:", err);
     res.status(500).json({ error: "Failed to fetch summary" });
@@ -566,6 +831,18 @@ router.get("/summary", async (req: Request, res: Response) => {
 // GET /api/tickets/summary/user-status
 // Returns counts grouped by assigned user and by status for a date range
 router.get("/summary/user-status", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "private, max-age=30");
+  const cacheKey = JSON.stringify({
+    status_id: req.query.status_id || null,
+    assigned_to: req.query.assigned_to || null,
+    date_from: req.query.date_from || null,
+    date_to: req.query.date_to || null,
+  });
+  const cached = ticketUserStatusCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
     // Parse query
     const status_id = req.query.status_id
@@ -626,10 +903,12 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
         COALESCE(CONCAT(a.first_name, ' ', a.last_name), 'Unassigned') as user_name,
         ts.id as status_id,
         ts.name as status_name,
-        COUNT(*) as count
+        COUNT(*) as count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
       FROM tickets t
       LEFT JOIN users a ON t.assigned_to = a.id
       LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN clients c ON t.related_client_id = c.id
       ${where}
       GROUP BY a.id, a.first_name, a.last_name, ts.id, ts.name
       ORDER BY user_name, status_name
@@ -642,13 +921,19 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
       status_id: row.status_id,
       status_name: row.status_name,
       count: Number(row.count),
+      client_names: row.client_names || [],
     }));
     console.log(
       `[GET /api/tickets/summary/user-status] Returning ${responseData.length} rows`,
     );
-    res.json({
+    const payload = {
       data: responseData,
+    };
+    ticketUserStatusCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 30_000,
     });
+    res.json(payload);
   } catch (err) {
     console.error("Error fetching user-status summary:", err);
     res.status(500).json({ error: "Failed to fetch summary" });
@@ -658,10 +943,120 @@ router.get("/summary/user-status", async (req: Request, res: Response) => {
 // GET /api/tickets/summary/by-tag
 // Returns counts grouped by tags
 router.get("/summary/by-tag", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "private, max-age=30");
+  const cacheKey = JSON.stringify({
+    date_from: req.query.date_from || null,
+    date_to: req.query.date_to || null,
+    status_id: req.query.status_id || null,
+    assigned_to: req.query.assigned_to || null,
+  });
+  const cached = ticketTagSummaryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
-    // For now, return empty array since tags functionality may not be fully implemented
-    // This prevents the route from falling through to /:id and causing NaN errors
-    res.json([]);
+    let where = "WHERE 1=1";
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    const date_from = req.query.date_from as string;
+    const date_to = req.query.date_to as string;
+    const status_id = req.query.status_id ? parseInt(req.query.status_id as string) : null;
+    const assigned_to = req.query.assigned_to ? parseInt(req.query.assigned_to as string) : null;
+
+    if (date_from) {
+      where += ` AND t.created_at >= $${paramIndex}`;
+      const dateFromValue = date_from.includes("T")
+        ? date_from
+        : new Date(`${date_from}T00:00:00+05:30`).toISOString();
+      values.push(dateFromValue);
+      paramIndex++;
+    }
+
+    if (date_to) {
+      where += ` AND t.created_at <= $${paramIndex}`;
+      const dateToValue = date_to.includes("T")
+        ? date_to
+        : new Date(`${date_to}T23:59:59+05:30`).toISOString();
+      values.push(dateToValue);
+      paramIndex++;
+    }
+
+    if (status_id !== null && !Number.isNaN(status_id)) {
+      where += ` AND t.status_id = $${paramIndex}`;
+      values.push(status_id);
+      paramIndex++;
+    }
+
+    if (assigned_to !== null && !Number.isNaN(assigned_to)) {
+      where += ` AND t.assigned_to = $${paramIndex}`;
+      values.push(assigned_to);
+      paramIndex++;
+    }
+
+    const query = `
+      SELECT
+        CASE
+          WHEN LOWER(COALESCE(t.subject, '')) LIKE '%upi%'
+            AND (
+              LOWER(COALESCE(t.subject, '')) LIKE '%@razorpay.com%' OR
+              LOWER(COALESCE(t.description, '')) LIKE '%@razorpay.com%' OR
+              LOWER(COALESCE(t.subject, '')) LIKE '%razorpay%' OR
+              LOWER(COALESCE(t.description, '')) LIKE '%razorpay%'
+            ) THEN 'Razorpay UPI'
+          WHEN LOWER(COALESCE(t.subject, '')) LIKE '%razorpay%'
+            OR LOWER(COALESCE(t.description, '')) LIKE '%razorpay%'
+            OR LOWER(COALESCE(t.subject, '')) LIKE '%@razorpay.com%'
+            OR LOWER(COALESCE(t.description, '')) LIKE '%@razorpay.com%' THEN 'Razorpay'
+          WHEN LOWER(COALESCE(t.subject, '')) LIKE '%payswiff%'
+            OR LOWER(COALESCE(t.description, '')) LIKE '%payswiff%'
+            OR LOWER(COALESCE(t.subject, '')) LIKE '%@payswiff.com%'
+            OR LOWER(COALESCE(t.description, '')) LIKE '%@payswiff.com%' THEN 'Payswiff'
+          WHEN LOWER(COALESCE(t.subject, '')) LIKE '%slack%'
+            OR LOWER(COALESCE(t.description, '')) LIKE '%slack%' THEN 'Slack'
+          ELSE 'Manual'
+        END AS tag,
+        COALESCE(ts.name, 'Unknown') AS status_name,
+        COUNT(*)::INT AS count,
+        ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(c.client_name, 'Unknown Client')), NULL) AS client_names
+      FROM tickets t
+      LEFT JOIN ticket_statuses ts ON t.status_id = ts.id
+      LEFT JOIN clients c ON t.related_client_id = c.id
+      ${where}
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    `;
+
+    const result = await pool.query(query, values);
+    const grouped: Record<string, Record<string, number>> = {};
+    const clientNamesByTag: Record<string, string[]> = {};
+    for (const row of result.rows as any[]) {
+      const tag = String(row.tag || 'Manual');
+      const statusName = String(row.status_name || 'Unknown');
+      if (!grouped[tag]) grouped[tag] = {};
+      grouped[tag][statusName] = Number(row.count || 0);
+      if (!clientNamesByTag[tag]) clientNamesByTag[tag] = [];
+      const clients = Array.isArray(row.client_names) ? row.client_names : [];
+      clients.forEach((clientName: string) => {
+        if (clientName && !clientNamesByTag[tag].includes(clientName)) {
+          clientNamesByTag[tag].push(clientName);
+        }
+      });
+    }
+
+    const payload = {
+      tags: Object.entries(grouped).map(([tag, counts]) => ({
+        tag,
+        counts,
+        client_names: clientNamesByTag[tag] || [],
+      })),
+    };
+    ticketTagSummaryCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 30_000,
+    });
+    res.json(payload);
   } catch (err) {
     console.error("Error fetching by-tag summary:", err);
     res.status(500).json({ error: "Failed to fetch tag summary" });
@@ -902,12 +1297,8 @@ router.delete("/:id", async (req: Request, res: Response) => {
       try {
         const ticket = await TicketRepository.getById(id);
         // If we get here, ticket exists, proceed with deletion
-        const success = await TicketRepository.delete(id);
-        if (success) {
-          res.json({ message: "Ticket deleted successfully" });
-        } else {
-          res.status(500).json({ error: "Failed to delete ticket" });
-        }
+        await TicketRepository.delete(id);
+        res.json({ message: "Ticket deleted successfully" });
       } catch (getByIdError: any) {
         // getById throws "Ticket not found" error if ticket doesn't exist
         if (getByIdError?.message?.includes("Ticket not found")) {
@@ -1124,17 +1515,28 @@ router.post(
 
 // Get assigned options
 router.get("/assigned-options", async (req: Request, res: Response) => {
+  const cacheKey = "assigned-options";
+  const cached = assignedOptionsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json(cached.data);
+  }
+
   try {
     const users = await pool.query(
       "SELECT id, first_name, last_name, email FROM users ORDER BY first_name, last_name",
     );
-    res.json({
+    const payload = {
       users: users.rows.map((user: any) => ({
         id: user.id,
-        name: `${user.first_name} ${user.last_name}`,
+        name: `${user.first_name} ${user.last_name}`.trim(),
         email: user.email,
       })),
+    };
+    assignedOptionsCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + 5 * 60_000,
     });
+    res.json(payload);
   } catch (error) {
     console.error("Error fetching assigned options:", error);
     res.status(500).json({ error: "Failed to fetch options" });

@@ -358,4 +358,21 @@ router.get("/info/:filename", async (req: Request, res: Response) => {
   }
 });
 
+// Upload signature image for invoice configuration
+router.post("/uploads/signature", upload.single("file"), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // Return only the filename, not the full path
+    const filePath = req.file.filename;
+    console.log("[Signature Upload] Successfully uploaded:", filePath);
+    res.json({ success: true, filePath });
+  } catch (error) {
+    console.error("Error uploading signature:", error);
+    res.status(500).json({ error: "Failed to upload signature image" });
+  }
+});
+
 export default router;

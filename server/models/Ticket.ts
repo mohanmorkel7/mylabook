@@ -205,7 +205,13 @@ export interface TicketFilters {
   // New flags
   unassigned?: boolean;
   created_from_mail_config?: boolean;
+  source?: string;
 }
+
+const ticketCountCache = new Map<
+  string,
+  { total: number; expiresAt: number }
+>();
 
 export class TicketRepository {
   /**
@@ -290,6 +296,8 @@ export class TicketRepository {
       tags,
       custom_fields,
     } = ticketData;
+
+    const normalizedAssignedTo = assigned_to ?? 315;
 
     // Compute SLA time on the server (UTC) and format as 'YYYY-MM-DD HH:mm:ss'
     let computedSlaValue: string | null = null;
@@ -422,7 +430,7 @@ export class TicketRepository {
           bucket_id,
           status_id,
           demand,
-          assigned_to,
+          normalizedAssignedTo,
           related_lead_id,
           related_client_id,
           estimated_hours,
@@ -441,6 +449,11 @@ export class TicketRepository {
         if ((ticketData as any).mail_config_id) {
           cols.push("mail_config_id");
           values.push((ticketData as any).mail_config_id);
+        }
+
+        if ((ticketData as any).source) {
+          cols.push("source");
+          values.push((ticketData as any).source);
         }
 
         // Persist watchers directly into watcher_user_ids column if provided
@@ -701,9 +714,33 @@ export class TicketRepository {
     // Support filtering by whether ticket was created from a mail config
     if (typeof filters.created_from_mail_config !== "undefined") {
       if (filters.created_from_mail_config) {
-        whereConditions.push(`t.mail_config_id IS NOT NULL`);
+      whereConditions.push(`t.mail_config_id IS NOT NULL`);
+    } else {
+      whereConditions.push(`t.mail_config_id IS NULL`);
+    }
+  }
+
+    if (filters.source && String(filters.source).trim() !== "" && String(filters.source).trim() !== "All") {
+      const source = String(filters.source).trim();
+      const sourceLower = source.toLowerCase();
+      const subjectExpr = "LOWER(COALESCE(t.subject, ''))";
+      const descExpr = "LOWER(COALESCE(t.description, ''))";
+      if (sourceLower === "razorpay upi") {
+        whereConditions.push(`(${subjectExpr} LIKE '%upi%' AND (${subjectExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%@razorpay.com%'))`);
+      } else if (sourceLower === "razorpay") {
+        whereConditions.push(`((${subjectExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%@razorpay.com%') AND NOT (${subjectExpr} LIKE '%upi%' AND (${subjectExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%@razorpay.com%')))`);
+      } else if (sourceLower === "payswiff") {
+        whereConditions.push(`(${subjectExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%@payswiff.com%')`);
+      } else if (sourceLower === "slack") {
+        whereConditions.push(`(${subjectExpr} LIKE '%slack%' OR ${descExpr} LIKE '%slack%' OR ${descExpr} LIKE '%@slack.com%')`);
+      } else if (sourceLower === "email") {
+        whereConditions.push(`t.created_from_mail_config IS TRUE`);
+      } else if (sourceLower === "manual") {
+        whereConditions.push(`(t.created_from_mail_config IS DISTINCT FROM TRUE AND t.mail_config_id IS NULL AND NOT (${subjectExpr} LIKE '%razorpay%' OR ${descExpr} LIKE '%razorpay%' OR ${subjectExpr} LIKE '%@razorpay.com%' OR ${descExpr} LIKE '%@razorpay.com%' OR ${subjectExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%payswiff%' OR ${descExpr} LIKE '%@payswiff.com%' OR ${subjectExpr} LIKE '%slack%' OR ${descExpr} LIKE '%slack%' OR ${descExpr} LIKE '%@slack.com%'))`);
       } else {
-        whereConditions.push(`t.mail_config_id IS NULL`);
+        whereConditions.push(`(${subjectExpr} LIKE $${paramIndex} OR ${descExpr} LIKE $${paramIndex})`);
+        queryParams.push(`%${sourceLower}%`);
+        paramIndex++;
       }
     }
 
@@ -721,68 +758,87 @@ export class TicketRepository {
         ? `WHERE ${whereConditions.join(" AND ")}`
         : "";
 
-    // Get total count - attempt exact COUNT(*) but bail out quickly and fall back to estimate if slow
+    // Get total count - cache results and fall back to estimate if exact COUNT(*) is slow
     if (debug)
       console.log("[TicketRepository.getAll] starting total count computation");
     let total = 0;
-    try {
-      const countQuery = `
-        SELECT COUNT(*)
-        FROM tickets t
-        ${whereClause}
-      `;
-
+    const countCacheKey = JSON.stringify({
+      whereClause,
+      queryParams,
+      viewerId: viewerId ?? null,
+      restrictToViewer,
+    });
+    const cachedCount = ticketCountCache.get(countCacheKey);
+    if (cachedCount && cachedCount.expiresAt > Date.now()) {
+      total = cachedCount.total;
       if (debug) {
-        console.log("[TicketRepository.getAll] countQuery:", countQuery);
-        console.log(
-          "[TicketRepository.getAll] countQuery params:",
-          queryParams,
-        );
+        console.log("[TicketRepository.getAll] COUNT cache hit:", total);
       }
-
-      // Run COUNT(*) but timeout if takes too long (fast path preferred). This avoids long-running COUNT on very large tables.
-      const COUNT_TIMEOUT_MS = 2000; // 2s
-      const countPromise = pool.query(countQuery, queryParams);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error("COUNT timed out")),
-          COUNT_TIMEOUT_MS,
-        ),
-      );
-
-      let countResult;
+    } else {
       try {
-        countResult = await Promise.race([countPromise, timeoutPromise]);
-        total = parseInt(countResult.rows[0].count);
+        const countQuery = `
+          SELECT COUNT(*)
+          FROM tickets t
+          ${whereClause}
+        `;
+
         if (debug) {
-          console.log("[TicketRepository.getAll] COUNT result:", total);
-        }
-      } catch (countErr) {
-        // COUNT timed out or failed; fall back to an estimate
-        console.warn(
-          "COUNT(*) slow or failed, falling back to estimate:",
-          countErr?.message || countErr,
-        );
-        const estRes2 = await pool.query(
-          "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
-        );
-        total =
-          estRes2.rows[0] && estRes2.rows[0].estimate
-            ? Number(estRes2.rows[0].estimate)
-            : 0;
-        if (debug) {
+          console.log("[TicketRepository.getAll] countQuery:", countQuery);
           console.log(
-            "[TicketRepository.getAll] COUNT fallback estimate:",
-            total,
+            "[TicketRepository.getAll] countQuery params:",
+            queryParams,
           );
         }
+
+        // Run COUNT(*) but timeout if takes too long (fast path preferred). This avoids long-running COUNT on very large tables.
+        const COUNT_TIMEOUT_MS = 2000; // 2s
+        const countPromise = pool.query(countQuery, queryParams);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("COUNT timed out")),
+            COUNT_TIMEOUT_MS,
+          ),
+        );
+
+        let countResult;
+        try {
+          countResult = await Promise.race([countPromise, timeoutPromise]);
+          total = parseInt(countResult.rows[0].count);
+          if (debug) {
+            console.log("[TicketRepository.getAll] COUNT result:", total);
+          }
+        } catch (countErr) {
+          // COUNT timed out or failed; fall back to an estimate
+          console.warn(
+            "COUNT(*) slow or failed, falling back to estimate:",
+            countErr?.message || countErr,
+          );
+          const estRes2 = await pool.query(
+            "SELECT reltuples::BIGINT AS estimate FROM pg_class WHERE relname = 'tickets'",
+          );
+          total =
+            estRes2.rows[0] && estRes2.rows[0].estimate
+              ? Number(estRes2.rows[0].estimate)
+              : 0;
+          if (debug) {
+            console.log(
+              "[TicketRepository.getAll] COUNT fallback estimate:",
+              total,
+            );
+          }
+        }
+      } catch (outerErr) {
+        console.warn(
+          "Failed to determine total tickets count:",
+          outerErr?.message || outerErr,
+        );
+        total = 0;
       }
-    } catch (outerErr) {
-      console.warn(
-        "Failed to determine total tickets count:",
-        outerErr?.message || outerErr,
-      );
-      total = 0;
+
+      ticketCountCache.set(countCacheKey, {
+        total,
+        expiresAt: Date.now() + 60_000,
+      });
     }
 
     // Get status counts (with filters to show counts matching the current query)
@@ -1022,8 +1078,9 @@ export class TicketRepository {
           if (s instanceof Date) return s.toISOString();
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
-          if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return TicketRepository.convertISTToUTC(str);
+          // sla_time stored as UTC in TIMESTAMP (no TZ) column — just append Z.
+          if (/\d{4}-\d{2}-\d{2}[ T]/.test(str))
+            return str.replace(" ", "T").replace(/(\.[0-9]+)?$/, "Z");
           return str;
         } catch (e) {
           return null;
@@ -1284,8 +1341,9 @@ export class TicketRepository {
           if (s instanceof Date) return s.toISOString();
           const str = String(s);
           if (/\d{4}-\d{2}-\d{2}T.*Z$/.test(str)) return str;
-          if (/\d{4}-\d{2}-\d{2} /.test(str))
-            return TicketRepository.convertISTToUTC(str);
+          // sla_time stored as UTC in TIMESTAMP (no TZ) column — just append Z.
+          if (/\d{4}-\d{2}-\d{2}[ T]/.test(str))
+            return str.replace(" ", "T").replace(/(\.[0-9]+)?$/, "Z");
           return str;
         } catch (e) {
           return null;

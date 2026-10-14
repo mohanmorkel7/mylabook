@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +91,7 @@ interface Ticket {
   tags?: string[];
   custom_fields?: any;
   sla_time?: string;
+  sla_time_epoch_ms?: number | null;
   sla_remaining_ms?: number;
   resolved_at?: string;
   closed_at?: string;
@@ -125,7 +126,7 @@ interface User {
   type?: string;
 }
 
-interface FilterOptions {
+export interface FilterOptions {
   searchText: string;
   priority: string;
   status: string;
@@ -134,6 +135,23 @@ interface FilterOptions {
   dateFrom: string;
   dateTo: string;
 }
+
+type TicketListLocationState = {
+  filters?: Partial<FilterOptions>;
+  activeTab?: "all" | "created";
+};
+
+const normalizeFilterOptions = (
+  candidate: Partial<FilterOptions> | undefined,
+): FilterOptions => ({
+  searchText: String(candidate?.searchText ?? ""),
+  priority: String(candidate?.priority ?? ""),
+  status: String(candidate?.status ?? ""),
+  assignedTo: String(candidate?.assignedTo ?? ""),
+  source: String(candidate?.source ?? ""),
+  dateFrom: String(candidate?.dateFrom ?? ""),
+  dateTo: String(candidate?.dateTo ?? ""),
+});
 
 const PRIORITY_OPTIONS = {
   1: { name: "Low", color: "bg-blue-100 text-blue-800" },
@@ -162,7 +180,7 @@ export default function ManageTickets() {
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [serverOverdueCounts, setServerOverdueCounts] = useState<any>(null);
 
-  const handleSummaryFetched = (summary: any) => {
+  const handleSummaryFetched = useCallback((summary: any) => {
     try {
       // Map statuses array to statusCounts object
       if (summary && Array.isArray(summary.statuses)) {
@@ -179,7 +197,7 @@ export default function ManageTickets() {
     } catch (e) {
       console.warn("handleSummaryFetched failed", e);
     }
-  };
+  }, []);
 
   // Helper to robustly read status counts from server summary with several key variants
   function getStatusCount(name: string): number {
@@ -277,6 +295,7 @@ export default function ManageTickets() {
   const [createdTicketsCount, setCreatedTicketsCount] = useState<number>(0);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [now, setNow] = useState<number>(Date.now());
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [overdueStatusId, setOverdueStatusId] = useState<number | null>(null);
@@ -290,6 +309,9 @@ export default function ManageTickets() {
     { value: string; label: string }[]
   >([]);
   const serverFilteredRef = useRef(false);
+  const ticketsFetchRequestRef = useRef(0);
+  const ticketsFetchDebounceRef = useRef<number | null>(null);
+  const initialFiltersFetchDoneRef = useRef(false);
 
   // Expose getMailConfigProviderName on window for TicketCharts to use
   useEffect(() => {
@@ -370,6 +392,11 @@ export default function ManageTickets() {
     }
   }
 
+  const normalizeStatusToken = (value: any) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+
   function formatProviderNameFromDomain(domain: string): string {
     const stripped = domain.startsWith("@") ? domain.slice(1) : domain;
     const main = stripped.split(".")[0] || stripped;
@@ -438,8 +465,23 @@ export default function ManageTickets() {
   }
 
   // Helper function to classify a ticket into a tag. Prefer mail_config_sources provider, then description_preview or description
-  const getTicketTag = (ticket: any): string => {
+  // Memoized with useCallback to prevent infinite effect loops in TicketCharts
+  const getTicketTag = useCallback((ticket: any): string => {
     try {
+      // Prioritize subject-based Razorpay UPI classification.
+      // Only use the ticket title, not the description/body.
+      const subject = String(ticket.subject || "").toLowerCase();
+      const desc = String(
+        ticket.description_preview || ticket.description || "",
+      ).toLowerCase();
+      const subjectHasUpi = subject.includes("upi");
+      if (
+        subjectHasUpi &&
+        (subject.includes("@razorpay.com") || subject.includes("razorpay") || desc.includes("@razorpay.com") || desc.includes("razorpay"))
+      ) {
+        return "Razorpay UPI";
+      }
+
       // Prefer explicit provider derived from mail config sources
       const provider = getMailConfigProviderName(
         ticket.mail_config_sources || ticket.mail_config_sources,
@@ -447,11 +489,13 @@ export default function ManageTickets() {
       );
       if (provider) return provider;
 
-      // Fallback to scanning the description preview or full description
-      const desc = String(
-        ticket.description_preview || ticket.description || "",
-      ).toLowerCase();
-      if (desc.includes("razorpay") || desc.includes("@razorpay.com")) {
+      // Fallback to scanning the subject/description
+      if (
+        subject.includes("razorpay") ||
+        desc.includes("razorpay") ||
+        subject.includes("@razorpay.com") ||
+        desc.includes("@razorpay.com")
+      ) {
         return "Razorpay";
       }
       if (desc.includes("payswiff") || desc.includes("@payswiff.com")) {
@@ -461,7 +505,7 @@ export default function ManageTickets() {
       // Silently ignore errors
     }
     return "Manual";
-  };
+  }, []);
 
   // Helper function to get today's date in YYYY-MM-DD format
   const getTodayDateString = (): string => {
@@ -484,8 +528,19 @@ export default function ManageTickets() {
     dateTo: "",
   });
   const [filtersInitialized, setFiltersInitialized] = useState(false);
+  const locationState = (location.state as TicketListLocationState) || {};
+  const filtersFromLocationState = locationState.filters;
+  const activeTabFromLocationState = locationState.activeTab;
 
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
+  const detailNavigationState = useMemo(
+    () => ({
+      from: `${location.pathname}${location.search}`,
+      filters: { ...filters },
+      activeTab,
+    }),
+    [location.pathname, location.search, filters, activeTab],
+  );
   const { toast } = useToast();
 
   // Show/hide filters and pagination state
@@ -495,6 +550,28 @@ export default function ManageTickets() {
 
   // Initialize filters from URL on mount and when URL changes (e.g., going back in history)
   useEffect(() => {
+    if (!filtersFromLocationState && !activeTabFromLocationState) return;
+    if (filtersFromLocationState) {
+      setFilters(normalizeFilterOptions(filtersFromLocationState));
+      setFiltersInitialized(true);
+    }
+    if (activeTabFromLocationState) {
+      setActiveTab(activeTabFromLocationState);
+    }
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+  }, [
+    filtersFromLocationState,
+    activeTabFromLocationState,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
+
+  useEffect(() => {
+    if (filtersFromLocationState) return;
     const restored = {
       searchText: searchParams.get("searchText") ?? "",
       priority: searchParams.get("priority") ?? "",
@@ -511,36 +588,68 @@ export default function ManageTickets() {
       setFilters(restored);
       setFiltersInitialized(true);
     }
-  }, [searchParams]);
+  }, [filtersFromLocationState, searchParams, filtersInitialized]);
 
   useEffect(() => {
-    fetchTickets(currentPage);
+    if (!filtersInitialized) return;
+    if (!initialFiltersFetchDoneRef.current) return;
+
+    scheduleTicketsFetch(currentPage);
     fetchUsers();
     fetchTags();
-    fetchAssignedOptions();
-    // Always refresh created tickets count so the tab displays an accurate value
-    fetchCreatedTicketsCount();
     if (activeTab === "created") {
+      fetchCreatedTicketsCount();
       fetchCreatedTickets();
     }
 
     // Listen for created tickets updates from other parts of the app (e.g., Mails)
     const handler = () => {
-      if (activeTab === "created") fetchCreatedTickets();
-      fetchCreatedTicketsCount();
+      if (activeTab === "created") {
+        fetchCreatedTickets();
+        fetchCreatedTicketsCount();
+      }
     };
     window.addEventListener("createdTicketsUpdated", handler);
 
     return () => {
       window.removeEventListener("createdTicketsUpdated", handler);
     };
-  }, [activeTab, currentPage, pageSize]);
+  }, [activeTab, currentPage, pageSize, filtersInitialized]);
+
+  const scheduleTicketsFetch = (page: number) => {
+    if (ticketsFetchDebounceRef.current) {
+      window.clearTimeout(ticketsFetchDebounceRef.current);
+    }
+    ticketsFetchDebounceRef.current = window.setTimeout(() => {
+      fetchTickets(page);
+    }, 120);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (ticketsFetchDebounceRef.current) {
+        window.clearTimeout(ticketsFetchDebounceRef.current);
+      }
+    };
+  }, []);
 
   // When filters change, fetch fresh results from server (reset to page 1)
   useEffect(() => {
+    if (!filtersInitialized) return;
+    if (!initialFiltersFetchDoneRef.current) {
+      initialFiltersFetchDoneRef.current = true;
+      scheduleTicketsFetch(1);
+      fetchUsers();
+      fetchTags();
+      if (activeTab === "created") {
+        fetchCreatedTicketsCount();
+        fetchCreatedTickets();
+      }
+      return;
+    }
     setCurrentPage(1);
-    fetchTickets(1);
-  }, [filters]);
+    scheduleTicketsFetch(1);
+  }, [filters, filtersInitialized, activeTab]);
 
   // Keep URL search params in sync with filters so state survives refresh and navigation
   useEffect(() => {
@@ -631,56 +740,74 @@ export default function ManageTickets() {
   // }, [tickets]);
 
   const fetchTickets = async (page: number = 1) => {
+    const requestId = ++ticketsFetchRequestRef.current;
     try {
       setIsLoading(true);
       // Clear any server-provided overdue counts while loading fresh data to avoid stale summaries
       setServerOverdueCounts(null);
 
+      const hasFilters = Boolean(
+        filters.searchText ||
+          filters.priority ||
+          filters.status ||
+          filters.assignedTo ||
+          filters.source ||
+          filters.dateFrom ||
+          filters.dateTo,
+      );
+
       // Build server-side filters
       const serverFilters: any = {};
-      if (filters.searchText) serverFilters.search = filters.searchText;
-      if (
-        filters.priority !== undefined &&
-        String(filters.priority).trim() !== ""
-      ) {
-        const pid = Number.parseInt(String(filters.priority), 10);
-        if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
-      }
-      // Apply date filters for all tabs
-      if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
-      if (filters.dateTo) serverFilters.date_to = filters.dateTo;
+      if (hasFilters) {
+        if (filters.searchText) serverFilters.search = filters.searchText;
+        if (
+          filters.priority !== undefined &&
+          String(filters.priority).trim() !== ""
+        ) {
+          const pid = Number.parseInt(String(filters.priority), 10);
+          if (!Number.isNaN(pid)) serverFilters.priority_id = pid;
+        }
+        // Apply date filters for all tabs
+        if (filters.dateFrom) serverFilters.date_from = filters.dateFrom;
+        if (filters.dateTo) serverFilters.date_to = filters.dateTo;
 
-      // status -> map to status_id using statusesMap
-      if (
-        filters.status !== undefined &&
-        String(filters.status).trim() !== ""
-      ) {
-        const key = String(filters.status || "").toLowerCase();
-        const normalizedKey = key
-          .replace(/[^a-z0-9]+/g, "_")
-          .replace(/^_+|_+$/g, "");
-        const sid = statusesMap[normalizedKey];
-        if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid)))
-          serverFilters.status_id = Number(sid);
-      }
+        // Preserve the status string so the server can resolve it even if the
+        // local status-id map is still loading after back navigation.
+        if (filters.status !== undefined && String(filters.status).trim() !== "") {
+          serverFilters.status = filters.status;
 
-      // assigned to
-      if (
-        filters.assignedTo !== undefined &&
-        String(filters.assignedTo).trim() !== ""
-      ) {
-        if (filters.assignedTo === "unassigned") {
-          serverFilters.unassigned = true;
-        } else {
-          const aid = Number.parseInt(String(filters.assignedTo), 10);
-          if (!Number.isNaN(aid)) serverFilters.assigned_to = aid;
+          const normalizedKey = normalizeStatusToken(filters.status);
+          const sid = statusesMap[normalizedKey];
+          if (sid !== undefined && sid !== null && !Number.isNaN(Number(sid))) {
+            serverFilters.status_id = Number(sid);
+          }
+        }
+
+        // assigned to
+        if (
+          filters.assignedTo !== undefined &&
+          String(filters.assignedTo).trim() !== ""
+        ) {
+          if (filters.assignedTo === "unassigned") {
+            serverFilters.unassigned = true;
+          } else {
+            const aid = Number.parseInt(String(filters.assignedTo), 10);
+            if (!Number.isNaN(aid)) serverFilters.assigned_to = aid;
+          }
+        }
+
+        if (filters.source && String(filters.source).trim() !== "") {
+          serverFilters.source = filters.source;
         }
       }
 
-      // Note: source/tag filter is applied client-side based on description analysis
-      // Don't apply to server filters
+      // Source is now handled server-side so pagination stays consistent
 
-      const response = await api.getTickets(serverFilters, page, pageSize);
+      const response = await api.getTickets(
+        { ...serverFilters, ...(hasFilters ? {} : { simple: "1" }) },
+        page,
+        pageSize,
+      );
       // API may return parsed JSON directly or an axios-like { data } wrapper
       const data = response?.data ?? response;
       console.debug("[ManageTickets] fetchTickets response data:", data);
@@ -760,6 +887,7 @@ export default function ManageTickets() {
         "tickets:",
         normalized.map((t: any) => ({ id: t.id, subject: t.subject })),
       );
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setTickets(normalized);
       let filtered = [...normalized];
       console.debug(
@@ -796,15 +924,14 @@ export default function ManageTickets() {
       // Status filter - skip if empty or "All"
       const statusValue = String(filters.status || "").trim();
       if (statusValue && statusValue !== "All") {
-        const normalize = (s: any) =>
-          String(s || "")
+        const normalizeStatusToken = (value: any) =>
+          String(value || "")
             .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "_")
-            .replace(/^_+|_+$/g, "");
+            .replace(/[^a-z0-9]+/g, "");
+        const filterToken = normalizeStatusToken(statusValue);
         filtered = filtered.filter((t) => {
           const statusName = (t.status as any)?.name || t.status || "";
-          const token = normalize(statusName);
-          return token === normalize(statusValue);
+          return normalizeStatusToken(statusName) === filterToken;
         });
       }
 
@@ -821,28 +948,6 @@ export default function ManageTickets() {
             filtered = filtered.filter((t) => t.assigned_to_id === assignedId);
           }
         }
-      }
-
-      // Handle source filter - skip if it's empty, "All", or whitespace
-      const sourceFilterValue = String(filters.source || "").trim();
-      if (sourceFilterValue && sourceFilterValue !== "All") {
-        console.debug(
-          "[ManageTickets] Applying source filter:",
-          filters.source,
-          "before:",
-          filtered.length,
-        );
-        filtered = filtered.filter((t) => {
-          const ticketTag = getTicketTag(t);
-          return ticketTag === filters.source;
-        });
-        console.debug("[ManageTickets] After source filter:", filtered.length);
-      } else {
-        console.debug(
-          "[ManageTickets] SKIPPING source filter - showing all tickets",
-          "filters.source value:",
-          JSON.stringify(filters.source),
-        );
       }
 
       // Date filters (only for "Created from Email" tab)
@@ -905,8 +1010,11 @@ export default function ManageTickets() {
         );
         console.error("[ManageTickets] Current filters state:", filters);
       }
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setFilteredTickets(filtered);
       console.debug("[ManageTickets] setFilteredTickets called");
+
+      if (requestId !== ticketsFetchRequestRef.current) return;
 
       // Fallback: compute created-from-mail-config count locally from tickets if server created-tickets table is empty
       const localCreatedCount = normalized.filter(
@@ -915,8 +1023,7 @@ export default function ManageTickets() {
       setCreatedTicketsCount((prev) => Math.max(prev || 0, localCreatedCount));
       // Use filtered count if any client-side filters are active, otherwise use server total
       // Note: dateFrom/dateTo, searchText, priority, status, assignedTo are all SERVER-SIDE filters
-      // Only 'source' is client-side (based on description analysis)
-      const hasClientSideFilters = Boolean(filters.source);
+      const hasClientSideFilters = false;
       // Derive total tickets from multiple possible response shapes
       let serverTotal = undefined as number | undefined;
       if (data != null) {
@@ -970,6 +1077,7 @@ export default function ManageTickets() {
         raw_data: data,
       });
 
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setTotalTickets(finalTotal);
 
       // Compute pages consistently from finalTotal and pageSize unless server explicitly provided pages
@@ -979,6 +1087,7 @@ export default function ManageTickets() {
       const finalPages = hasClientSideFilters
         ? 1
         : (serverPages ?? pagesFromTotal);
+      if (requestId !== ticketsFetchRequestRef.current) return;
       setTotalPages(finalPages);
       // Avoid overwriting statusCounts that may already be set by TicketCharts' summary
       const serverStatusCounts = data?.status_counts ?? {};
@@ -989,44 +1098,22 @@ export default function ManageTickets() {
         return serverStatusCounts || {};
       });
     } catch (error) {
-      console.error("Error fetching tickets:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load tickets",
-        variant: "destructive",
-      });
+      if (requestId === ticketsFetchRequestRef.current) {
+        console.error("Error fetching tickets:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load tickets",
+          variant: "destructive",
+        });
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === ticketsFetchRequestRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      // Use only the regular users API
-      const resp = await api.get("/users");
-      const regular = resp.data?.users ?? resp.data ?? [];
-
-      // Normalize user fields so getAssignedUserName can handle various shapes
-      const normalized = (regular as any[]).map((u) => {
-        const fullName =
-          `${u.first_name || u.firstname || ""} ${u.last_name || u.lastname || ""}`.trim();
-        return {
-          id: Number(u.id),
-          name: u.name ?? (fullName || u.email),
-          first_name: u.first_name,
-          last_name: u.last_name,
-          firstname: u.firstname,
-          lastname: u.lastname,
-          email: u.email,
-          type: u.type,
-        };
-      });
-
-      setUsers(normalized as User[]);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
-  };
+  const fetchUsers = async () => fetchAssignedOptions();
 
   const fetchTags = async () => {
     // Initialize with Manual - actual tags will be extracted from tickets array via useEffect
@@ -1231,14 +1318,6 @@ export default function ManageTickets() {
       }
     }
 
-    // Source filter (based on description classification: Razorpay, Payswiff, Manual)
-    if (filters.source && String(filters.source).trim() !== "") {
-      filtered = filtered.filter((t) => {
-        const ticketTag = getTicketTag(t);
-        return ticketTag === filters.source;
-      });
-    }
-
     // Date range filter (interpret date-only inputs as full IST day ranges)
     const expandIstDate = (dateStr: string, endOfDay = false) => {
       const parts = String(dateStr).split("-");
@@ -1318,74 +1397,231 @@ export default function ManageTickets() {
     try {
       const resp = await api.get("/tickets/assigned-options");
       const data = resp?.data ?? resp;
-      if (Array.isArray(data?.options)) setAssignedOptionsState(data.options);
-      else setAssignedOptionsState([]);
+      const options = Array.isArray(data?.users) ? data.users : [];
+      if (options.length > 0) {
+        const normalized = options.map((u: any) => ({
+          id: Number(u.id),
+          name: u.name ?? u.email,
+          email: u.email,
+        }));
+        setUsers(normalized as User[]);
+        setAssignedOptionsState(
+          normalized.map((u: any) => ({
+            value: String(u.id),
+            label: u.name || u.email || `User #${u.id}`,
+          })),
+        );
+      }
     } catch (e) {
       console.error("Error fetching assigned options:", e);
       setAssignedOptionsState([]);
     }
   };
 
-  // Export all tickets to Excel with multiple sheets as requested
+  // Export all tickets to Excel via server-side streaming endpoint
   const exportAllTicketsToExcel = async () => {
     try {
-      setIsLoading(true);
-      const allTickets: any[] = [];
-      let page = 1;
-      let totalPages = 1;
+      setIsExporting(true);
+      const fetchImpl = (window as any).__originalFetch || window.fetch.bind(window);
+      // Use the new streaming export endpoint that returns XLSX directly
+      const url = `${window.location.origin}/api/tickets/export-stream`;
+      const headers: Record<string, string> = {};
+      try {
+        const stored = localStorage.getItem("banani_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.id) headers["x-user-id"] = String(parsed.id);
+        }
+      } catch (e) {}
 
-      // Fetch all pages sequentially
-      do {
-        const resp = await api.getTickets({}, page, 100);
-        const data = resp?.data ?? resp;
-        const ticketsArr = data?.tickets ?? (Array.isArray(data) ? data : []);
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 600000);
 
-        // Normalize similar to fetchTickets
-        const serverMs = data?.server_time
-          ? new Date(String(data.server_time)).getTime()
-          : null;
-        const fetchClientMs = Date.now();
-        const normalized = (ticketsArr || []).map((t: any) => {
-          let statusInfo = t.status;
-          if (!statusInfo && t.status_id) {
-            statusInfo = {
-              id: t.status_id,
-              name: t.status_name || "Unknown",
-              color: t.status_color || "#999",
-              is_closed: t.status_is_closed || false,
-              sort_order: 0,
-            };
-          }
-          const pr = ((): number | null => {
-            const val =
-              t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
-            const num = Number(val);
-            return Number.isFinite(num) ? num : null;
-          })();
+      const response = await fetchImpl(url, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
 
-          return {
-            ...t,
-            priority_id: pr,
-            assigned_to_id:
-              t.assigned_to_id ??
-              (t.assigned_to !== undefined && t.assigned_to !== null
-                ? Number(t.assigned_to)
-                : null) ??
-              null,
-            track_id:
-              t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
-            description: t.description || "",
-            status: statusInfo,
-            created_from_mail_config: t.created_from_mail_config ?? false,
-            __server_time_ms: serverMs,
-            __fetched_at_ms: fetchClientMs,
+      window.clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Export request failed: ${response.status}`);
+      }
+
+      // Response is JSON with ticket data - build XLSX on client
+      const data = await response.json();
+      const ticketsArr = data?.tickets ?? [];
+
+      if (!Array.isArray(ticketsArr) || ticketsArr.length === 0) {
+        throw new Error("No tickets returned from export endpoint");
+      }
+
+      console.log(`[Export] Received ${ticketsArr.length} tickets, building XLSX...`);
+
+      // ── helpers ──────────────────────────────────────────────────────────────
+      const exportHeaders = [
+        "ticket_id", "subject", "assigned_to", "status", "Priority",
+        "created_at", "Updated_at", "closed_by", "closed_at", "duration", "tag",
+      ];
+
+      const fmtDuration = (start?: string, end?: string) => {
+        if (!start) return "";
+        const s = new Date(start).getTime();
+        const e = end ? new Date(end).getTime() : Date.now();
+        if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return "";
+        let mins = Math.max(0, Math.floor((e - s) / 60000));
+        const d = Math.floor(mins / 1440); mins -= d * 1440;
+        const h = Math.floor(mins / 60);   mins -= h * 60;
+        return [d && `${d}d`, h && `${h}h`, (mins || (!d && !h)) && `${mins}m`].filter(Boolean).join(" ");
+      };
+
+      // Use server-computed tag (includes description analysis) for accurate classification
+      const tagOfTicket = (t: any): string => t.ticket_tag || "Manual";
+
+      const toRow = (t: any) => {
+        const closedAt = t.closed_at || "";
+        const durationEnd = closedAt || undefined;
+        return [
+          t.track_id,
+          t.subject || "",
+          t.assigned_to_name || "",
+          t.status_name || "",
+          t.priority_name || "",
+          formatToIST(t.created_at),
+          formatToIST(t.updated_at),
+          t.closed_by_name || "",
+          closedAt ? formatToIST(closedAt) : "",
+          fmtDuration(t.created_at, durationEnd),
+          tagOfTicket(t),
+        ];
+      };
+
+      // ── aggregate ────────────────────────────────────────────────────────────
+      const tagCounts     = new Map<string, number>();
+      const userCounts    = new Map<string, number>();
+      const statusCounts  = new Map<string, number>();
+      const tagStatusCounts:  Record<string, Record<string, number>> = {};
+      const userStatusCounts: Record<string, Record<string, number>> = {};
+      const allRows:   any[] = [];
+      const emailRows: any[] = [];
+
+      for (const t of ticketsArr) {
+        const tag    = tagOfTicket(t);
+        const status = t.status_name || "Unknown";
+        const user   = t.assigned_to_name || "Unassigned";
+
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+        userCounts.set(user, (userCounts.get(user) || 0) + 1);
+        statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+
+        if (!tagStatusCounts[tag]) tagStatusCounts[tag] = {};
+        tagStatusCounts[tag][status] = (tagStatusCounts[tag][status] || 0) + 1;
+
+        if (!userStatusCounts[user]) userStatusCounts[user] = {};
+        userStatusCounts[user][status] = (userStatusCounts[user][status] || 0) + 1;
+
+        const row = toRow(t);
+        allRows.push(row);
+        if (t.mail_config_id) emailRows.push(row);
+      }
+
+      // ── build workbook ───────────────────────────────────────────────────────
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Summary
+      const statusNames = statusesList?.length
+        ? statusesList.map((s: any) => s.name)
+        : Array.from(statusCounts.keys());
+
+      const summaryRows: any[] = [["Tag", "Total", ...statusNames]];
+      for (const [tag, total] of tagCounts.entries()) {
+        summaryRows.push([tag, total, ...statusNames.map((s: string) => tagStatusCounts[tag]?.[s] || 0)]);
+      }
+      summaryRows.push([]);
+      summaryRows.push(["User", "Total", ...statusNames]);
+      for (const [user, total] of userCounts.entries()) {
+        summaryRows.push([user, total, ...statusNames.map((s: string) => userStatusCounts[user]?.[s] || 0)]);
+      }
+      summaryRows.push([]);
+      summaryRows.push(["Status", "Count"]);
+      for (const [s, c] of statusCounts.entries()) summaryRows.push([s, c]);
+      // Note: "All ticket rows" removed from Summary as requested
+
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), "Summary");
+
+      // Sheet 2: From Email
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([exportHeaders, ...emailRows]), "From Email");
+
+      // Sheet 3: All Tickets
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([exportHeaders, ...allRows]), "All Tickets");
+
+      // Per-tag sheets — fully dynamic, one sheet per unique tag found in the data
+      // Uses server-computed tags (includes description analysis), so all records are correctly classified
+      for (const tag of tagCounts.keys()) {
+        const tagRows = ticketsArr
+          .filter((t: any) => tagOfTicket(t) === tag)
+          .map(toRow);
+        XLSX.utils.book_append_sheet(
+          wb,
+          XLSX.utils.aoa_to_sheet([exportHeaders, ...tagRows]),
+          String(tag).slice(0, 31),
+        );
+      }
+
+      // Write and download
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blobData = new Blob([wbout], { type: "application/octet-stream" });
+      saveAs(blobData, `tickets-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+      setIsExporting(false);
+      toast({
+        title: "Export ready",
+        description: `Downloaded ${ticketsArr.length} tickets across ${1 + tagCounts.size + 2} sheets`,
+      });
+
+      /*
+      // Normalize similar to fetchTickets
+      const serverMs = data?.server_time
+        ? new Date(String(data.server_time)).getTime()
+        : null;
+      const fetchClientMs = Date.now();
+      const allTickets = (ticketsArr || []).map((t: any) => {
+        let statusInfo = t.status;
+        if (!statusInfo && t.status_id) {
+          statusInfo = {
+            id: t.status_id,
+            name: t.status_name || "Unknown",
+            color: t.status_color || "#999",
+            is_closed: t.status_is_closed || false,
+            sort_order: 0,
           };
-        });
+        }
+        const pr = ((): number | null => {
+          const val =
+            t.priority_id ?? (t.priority && (t.priority.id ?? t.priority_id));
+          const num = Number(val);
+          return Number.isFinite(num) ? num : null;
+        })();
 
-        allTickets.push(...normalized);
-        totalPages = data?.pages ?? 1;
-        page += 1;
-      } while (page <= totalPages);
+        return {
+          ...t,
+          priority_id: pr,
+          assigned_to_id:
+            t.assigned_to_id ??
+            (t.assigned_to !== undefined && t.assigned_to !== null
+              ? Number(t.assigned_to)
+              : null) ??
+            null,
+          track_id:
+            t.track_id ?? t.trackId ?? `TKT-${String(t.id).padStart(4, "0")}`,
+          description: t.description || "",
+          status: statusInfo,
+          created_from_mail_config: t.created_from_mail_config ?? false,
+          __server_time_ms: serverMs,
+          __fetched_at_ms: fetchClientMs,
+        };
+      });
 
       // Prepare summaries
       const tagCounts = new Map<string, number>();
@@ -1394,20 +1630,122 @@ export default function ManageTickets() {
 
       const tagStatusCounts: Record<string, Record<string, number>> = {};
 
+      const exportHeaders = [
+        "ticket_id",
+        "subject",
+        "assigned_to",
+        "status",
+        "Priority",
+        "created_at",
+        "Updated_at",
+        "closed_by",
+        "closed_at",
+        "duration",
+        "tag",
+      ];
+
       const createdEmailRows: any[] = [];
+      const allDetailRows: any[] = [];
+
+      const formatDurationLabel = (startedAt?: string, endedAt?: string) => {
+        if (!startedAt) return "";
+        const startMs = new Date(startedAt).getTime();
+        const endMs = endedAt ? new Date(endedAt).getTime() : Date.now();
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return "";
+        let totalMinutes = Math.max(0, Math.floor((endMs - startMs) / 60000));
+        const days = Math.floor(totalMinutes / (60 * 24));
+        totalMinutes -= days * 60 * 24;
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const parts = [];
+        if (days) parts.push(`${days}d`);
+        if (hours) parts.push(`${hours}h`);
+        if (minutes || parts.length === 0) parts.push(`${minutes}m`);
+        return parts.join(" ");
+      };
+
+      const getUserDisplayName = (userId?: number | null, fallbackName?: string) => {
+        if (fallbackName && String(fallbackName).trim()) return fallbackName;
+        const match = users.find((u) => Number(u.id) === Number(userId));
+        if (match) return match.name || match.email || `User #${match.id}`;
+        return userId != null ? `User #${userId}` : "";
+      };
+
+      const getClosedByLabel = (t: any) =>
+        getUserDisplayName(
+          t.closed_by ?? t.status_change_history?.closed?.user_id,
+          t.status_change_history?.closed?.user_name,
+        );
+
+      const getClosedAtLabel = (t: any) =>
+        t.closed_at || t.status_change_history?.closed?.changed_at || "";
+
+      const getExportTagLabel = (t: any) => {
+        try {
+          const tags = normalizeTagForTicket(t);
+          return tags.length > 0 ? tags.join(", ") : "Manual";
+        } catch (e) {
+          return "Manual";
+        }
+      };
+
+      const toExportRow = (t: any) => {
+        const ticketId = t.track_id ?? t.trackId ?? t.ticket_id ?? `TKT-${String(t.id).padStart(4, "0")}`;
+        const assignedLabel = t.assignee?.name || getAssignedUserName(t.assigned_to_id);
+        const statusLabel = (t.status && (t.status.name || t.status)) || "Unknown";
+        const priorityLabel =
+          (t.priority && t.priority.name) ||
+          (PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS] &&
+            PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS].name) ||
+          "";
+        const createdAtLabel = formatToIST(t.created_at);
+        const updatedAtLabel = formatToIST(t.updated_at);
+        const closedByLabel = getClosedByLabel(t);
+        const closedAtRaw = getClosedAtLabel(t);
+        const closedAtLabel = closedAtRaw ? formatToIST(closedAtRaw) : "";
+        const durationEnd = closedAtRaw || (t.status?.is_closed ? t.updated_at : undefined);
+        const durationLabel = formatDurationLabel(t.created_at, durationEnd);
+        const tagLabel = getExportTagLabel(t);
+
+        return [
+          ticketId,
+          t.subject || t.track_id || "",
+          assignedLabel,
+          statusLabel,
+          priorityLabel,
+          createdAtLabel,
+          updatedAtLabel,
+          closedByLabel,
+          closedAtLabel,
+          durationLabel,
+          tagLabel,
+        ];
+      };
 
       const normalizeTagForTicket = (t: any): string[] => {
-        // Priority: explicit tags, description content (Slack, Razorpay, Payswiff), mail config provider, Manual
+        // Priority: subject-based Razorpay UPI, then explicit tags, then description content, then mail config provider, Manual
         try {
-          // 1) Explicit tags
+          const subject = String(t.subject || "").toLowerCase();
+          const desc = String(t.description || "").toLowerCase();
+          if (
+            (subject.includes("upi") || desc.includes("upi")) &&
+            (subject.includes("@razorpay.com") || desc.includes("@razorpay.com") || subject.includes("razorpay") || desc.includes("razorpay"))
+          )
+            return ["Razorpay UPI"];
+        } catch (e) {}
+
+        try {
+          // 2) Explicit tags
           if (Array.isArray(t.tags) && t.tags.length > 0) {
             return t.tags.map((x: any) => String(x).trim()).filter(Boolean);
           }
         } catch (e) {}
 
         try {
+          const subject = String(t.subject || "").toLowerCase();
           const desc = String(t.description || "").toLowerCase();
-          // 2) Slack detection: look for '@slack.com' or 'slack from' patterns
+
+          // 3) Slack detection: look for '@slack.com' or 'slack from' patterns
           if (
             desc.includes("@slack.com") ||
             desc.includes("slack from") ||
@@ -1416,8 +1754,13 @@ export default function ManageTickets() {
           )
             return ["Slack"];
 
-          // 3) Known providers by description
-          if (desc.includes("razorpay")) return ["Razorpay"];
+          // 4) Known providers by subject/description
+          if (
+            subject.includes("razorpay") ||
+            desc.includes("razorpay") ||
+            subject.includes("@razorpay.com") ||
+            desc.includes("@razorpay.com")
+          ) return ["Razorpay"];
           if (desc.includes("payswiff")) return ["Payswiff"];
         } catch (e) {}
 
@@ -1458,42 +1801,11 @@ export default function ManageTickets() {
         statusCounts.set(statusLabel, (statusCounts.get(statusLabel) || 0) + 1);
 
         // Created-from-email rows
-        if (t.created_from_mail_config) {
-          const provider = ((): string => {
-            try {
-              const p = getMailConfigProviderName(
-                t.mail_config_sources || t.mail_config_sources,
-                t.description,
-              );
-              return (
-                p ||
-                (Array.isArray(t.tags) && t.tags.length
-                  ? String(t.tags[0])
-                  : "")
-              );
-            } catch (e) {
-              return Array.isArray(t.tags) && t.tags.length
-                ? String(t.tags[0])
-                : "";
-            }
-          })();
+        const detailRow = toExportRow(t);
+        allDetailRows.push(detailRow);
 
-          createdEmailRows.push([
-            t.id,
-            t.subject || t.track_id || "",
-            assignedLabel,
-            statusLabel,
-            (t.priority && t.priority.name) ||
-              (PRIORITY_OPTIONS[
-                t.priority_id as keyof typeof PRIORITY_OPTIONS
-              ] &&
-                PRIORITY_OPTIONS[t.priority_id as keyof typeof PRIORITY_OPTIONS]
-                  .name) ||
-              "",
-            formatToIST(t.created_at),
-            formatToIST(t.updated_at),
-            provider,
-          ]);
+        if (t.created_from_mail_config) {
+          createdEmailRows.push(detailRow);
         }
       }
 
@@ -1513,18 +1825,6 @@ export default function ManageTickets() {
           (userStatusCounts[assignedLabel][statusLabel] || 0) + 1;
       }
 
-      const tagRows = [["Tag", "Count"]];
-      Array.from(tagCounts.entries()).forEach(([k, v]) => tagRows.push([k, v]));
-
-      const userRows = [["User", "Count"]];
-      Array.from(userCounts.entries()).forEach(([k, v]) =>
-        userRows.push([k, v]),
-      );
-
-      const statusRows = [["Status", "Count"]];
-      Array.from(statusCounts.entries()).forEach(([k, v]) =>
-        statusRows.push([k, v]),
-      );
 
       // Build Summary sheet with per-tag status breakdown
       // Determine status columns from statusesList (fallback to common names)
@@ -1572,24 +1872,18 @@ export default function ManageTickets() {
         summaryRows.push([k, v]),
       );
 
+      summaryRows.push([]);
+      summaryRows.push(["All Tickets", ...exportHeaders]);
+      for (const row of allDetailRows) {
+        summaryRows.push(["", ...row]);
+      }
+
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
       // Sheet 2: From Email
-      const wsEmailHeaders = [
-        [
-          "ticket_id",
-          "subject",
-          "assigned_to",
-          "status",
-          "Priority",
-          "created_at",
-          "Updated_at",
-          "tag",
-        ],
-      ];
       const wsEmail = XLSX.utils.aoa_to_sheet([
-        ...wsEmailHeaders,
+        exportHeaders,
         ...createdEmailRows,
       ]);
       XLSX.utils.book_append_sheet(wb, wsEmail, "From Email");
@@ -1599,18 +1893,7 @@ export default function ManageTickets() {
         new Set<string>([...Array.from(tagCounts.keys())]),
       );
       for (const tagName of uniqueTagsForSheets) {
-        const rows = [
-          [
-            "ticket_id",
-            "subject",
-            "assigned_to",
-            "status",
-            "Priority",
-            "created_at",
-            "Updated_at",
-            "tags",
-          ],
-        ];
+        const rows = [exportHeaders];
         for (const t of allTickets) {
           let match = false;
           try {
@@ -1621,30 +1904,7 @@ export default function ManageTickets() {
           } catch (e) {}
 
           if (match) {
-            rows.push([
-              t.id,
-              t.subject || t.track_id || "",
-              t.assignee?.name || getAssignedUserName(t.assigned_to_id),
-              (t.status && (t.status.name || t.status)) || "",
-              (t.priority && t.priority.name) ||
-                (PRIORITY_OPTIONS[
-                  t.priority_id as keyof typeof PRIORITY_OPTIONS
-                ] &&
-                  PRIORITY_OPTIONS[
-                    t.priority_id as keyof typeof PRIORITY_OPTIONS
-                  ].name) ||
-                "",
-              formatToIST(t.created_at),
-              formatToIST(t.updated_at),
-              Array.isArray(t.tags)
-                ? t.tags.join(", ")
-                : t.created_from_mail_config
-                  ? getMailConfigProviderName(
-                      t.mail_config_sources || t.mail_config_sources,
-                      t.description,
-                    ) || ""
-                  : "Manual",
-            ]);
+            rows.push(toExportRow(t));
           }
         }
 
@@ -1662,6 +1922,7 @@ export default function ManageTickets() {
       );
 
       toast({ title: "Export ready", description: "Excel export downloaded" });
+      */
     } catch (err) {
       console.error("Export failed:", err);
       toast({
@@ -1670,7 +1931,7 @@ export default function ManageTickets() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsExporting(false);
     }
   };
 
@@ -1753,14 +2014,12 @@ export default function ManageTickets() {
         if (mounted) {
           setStatusesList(statuses);
           const map: Record<string, number> = {};
-          for (const s of statuses) {
-            const key = String(s.name || "")
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "_")
-              .replace(/^_+|_+$/g, "");
-            map[key] = Number(s.id);
-          }
-          setStatusesMap(map);
+    for (const s of statuses) {
+      const key = normalizeStatusToken(s.name || "");
+      if (key) map[key] = Number(s.id);
+      map[String(s.id)] = Number(s.id);
+    }
+    setStatusesMap(map);
         }
         const overdue = statuses.find((s: any) =>
           String(s.name).toLowerCase().includes("overdue"),
@@ -1822,59 +2081,28 @@ export default function ManageTickets() {
   // server offset to compute a dynamic serverNowMs so values update each render.
   const computeSlaMsForTicket = (ticket: any): number | null => {
     try {
-      // Compute current server-aligned 'now' (ms). Prefer clientNow - offset when available
-      // so the value changes on every render (setNow interval triggers rerenders).
+      // Use the browser clock for SLA checks so overdue status is decided
+      // entirely on the client side.
       const clientNowMs = Date.now();
-      const serverNowMs =
-        typeof serverTimeOffsetRef.current === "number" &&
-        serverTimeOffsetRef.current !== 0
-          ? clientNowMs - serverTimeOffsetRef.current
-          : clientNowMs;
 
-      // If server provided a precomputed remaining ms, prefer using it and adjust
-      // for elapsed time since server computed it. This uses the server's authoritative
-      // SLA calculation and avoids mismatches due to server/client timezone handling.
-      if (
-        ticket.sla_remaining_ms !== undefined &&
-        ticket.sla_remaining_ms !== null
-      ) {
-        const baseTime = Number(
-          ticket.__server_time_ms ?? ticket.__fetched_at_ms ?? serverNowMs,
-        );
-        const elapsedSinceBase = serverNowMs - baseTime;
-        return Number(ticket.sla_remaining_ms) - elapsedSinceBase;
+      // Prefer server-provided epoch_ms (EXTRACT(EPOCH FROM sla_time AT TIME ZONE 'UTC') — unambiguous)
+      if (ticket.sla_time_epoch_ms != null && !isNaN(Number(ticket.sla_time_epoch_ms))) {
+        return Number(ticket.sla_time_epoch_ms) - clientNowMs;
       }
 
-      // Fallback to using sla_time timestamp if available. Interpret the incoming
-      // sla_time as IST wall time when it lacks an explicit timezone (DB TIMESTAMP without tz).
+      // Fallback: parse sla_time string. DB stores UTC via toISOString(), treat as UTC.
       if (ticket.sla_time) {
         try {
           const s = String(ticket.sla_time || "").trim();
-          // If timestamp contains timezone info or a trailing 'Z', treat it as UTC
           if (/[Tt].*Z$/.test(s) || /[+\-]\d{2}:?\d{2}$/.test(s)) {
             const parsed = new Date(s);
             if (isNaN(parsed.getTime())) return null;
-            return parsed.getTime() - serverNowMs;
+            return parsed.getTime() - clientNowMs;
           }
-
-          // Otherwise treat as IST wall time (YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS)
-          const tsPart = s.includes("T")
-            ? s.split("T")[0] + "T" + s.split("T")[1]
-            : s;
-          const match = tsPart.match(
-            /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/,
-          );
-          if (!match) return null;
-          const y = Number(match[1]);
-          const m = Number(match[2]);
-          const d = Number(match[3]);
-          const hh = Number(match[4] || 0);
-          const mm = Number(match[5] || 0);
-          const ss = Number(match[6] || 0);
-          const IST_OFFSET_MS = 5.5 * 3600 * 1000;
-          // Compute UTC epoch for the IST wall-time by subtracting IST offset
-          const dueUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss) - IST_OFFSET_MS;
-          return dueUtcMs - serverNowMs;
+          const iso = s.includes("T") ? s : s.replace(" ", "T");
+          const dueUtcMs = new Date(iso + "Z").getTime();
+          if (isNaN(dueUtcMs)) return null;
+          return dueUtcMs - clientNowMs;
         } catch (e) {
           return null;
         }
@@ -1900,7 +2128,7 @@ export default function ManageTickets() {
         : NaN;
       if (isNaN(createdTs)) return null;
       const slaTs = createdTs + hours * 3600 * 1000;
-      return slaTs - serverNowMs;
+      return slaTs - clientNowMs;
     } catch (e) {
       console.error("SLA compute error", e);
       return null;
@@ -2218,8 +2446,8 @@ export default function ManageTickets() {
               </Select>
             </div>
 
-            <Button variant="outline" onClick={() => exportAllTicketsToExcel()}>
-              Export Excel
+            <Button variant="outline" onClick={() => exportAllTicketsToExcel()} disabled={isExporting}>
+              {isExporting ? "Exporting..." : "Export Excel"}
             </Button>
 
             <Link to="/tickets/create">
@@ -2235,6 +2463,8 @@ export default function ManageTickets() {
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
           onSummaryFetched={handleSummaryFetched}
+          tickets={tickets}
+          classifyTicketTag={getTicketTag}
         />
       )}
 
@@ -2252,7 +2482,7 @@ export default function ManageTickets() {
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="flex flex-col items-center justify-center py-6">
             <p className="text-2xl md:text-3xl font-bold text-indigo-600">
-              {openToShow}
+              {getStatusCount("Open")}
             </p>
             <p className="mt-2 text-sm font-medium text-gray-600">Open</p>
           </CardContent>
@@ -2527,14 +2757,19 @@ export default function ManageTickets() {
                     <Card
                       key={t.id}
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
-                      onClick={() => navigate(`/tickets/${t.id}${location.search}`)}
+                      onClick={() =>
+                        navigate(`/tickets/${t.id}${location.search}`, {
+                          state: detailNavigationState,
+                        })
+                      }
                     >
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
                             <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
-                                to={`/tickets/${t.id}${location.search}` }
+                                to={`/tickets/${t.id}${location.search}`}
+                                state={detailNavigationState}
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -2585,6 +2820,40 @@ export default function ManageTickets() {
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
 
+                          {/* Live HH:MM:SS timer — only for Overdue status */}
+                          {normalizedStatusName === "overdue" && slaMs !== null && slaMs < 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-mono font-bold text-red-700 border border-red-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                              {formatRemaining(Math.abs(slaMs))}
+                            </span>
+                          )}
+
+                          {/* SLA deadline label for overdue tickets */}
+                          {normalizedStatusName === "overdue" && (t.sla_time_epoch_ms || t.sla_time) && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-red-500 font-medium">
+                              {"SLA: "}
+                              {(() => {
+                                const epochMs = t.sla_time_epoch_ms != null ? Number(t.sla_time_epoch_ms) : null;
+                                const d = epochMs ? new Date(epochMs) : t.sla_time ? new Date(t.sla_time) : null;
+                                if (!d || isNaN(d.getTime())) return "-";
+                                return d.toLocaleString("en-IN", {
+                                  timeZone: "Asia/Kolkata",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                });
+                              })()}
+                            </span>
+                          )}
+
+                          {getTicketTag(t) !== "Manual" && (
+                            <Badge variant="secondary">{getTicketTag(t)}</Badge>
+                          )}
+
                           {/* Show Slack badge if description starts with "Slack from" */}
                           {t.description && String(t.description).trim().toLowerCase().startsWith("slack from") && (
                             <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
@@ -2619,18 +2888,20 @@ export default function ManageTickets() {
                               }
                             }
 
+                            const derivedTags = (() => {
+                              try {
+                                const derived = normalizeTagForTicket(t);
+                                if (Array.isArray(derived) && derived.length > 0)
+                                  return derived;
+                                if (typeof derived === "string" && derived)
+                                  return [derived];
+                              } catch (e) {}
+                              return [];
+                            })();
+
+                            if (derivedTags.includes("Razorpay UPI")) return derivedTags;
                             if (parsedTags.length > 0) return parsedTags;
-
-                            // Fallback: derive tag(s) from description/mail config
-                            try {
-                              const derived = normalizeTagForTicket(t);
-                              if (Array.isArray(derived) && derived.length > 0)
-                                return derived;
-                              if (typeof derived === "string" && derived)
-                                return [derived];
-                            } catch (e) {}
-
-                            return [];
+                            return derivedTags;
                           })().map((tg: any, idx: number) => (
                             <Badge
                               key={`tag-${t.id}-${idx}`}
@@ -2863,14 +3134,19 @@ export default function ManageTickets() {
                     <Card
                       key={ct.id}
                       className="hover:shadow transition-shadow col-span-1 cursor-pointer"
-                      onClick={() => navigate(`/tickets/${t.id}${location.search}`)}
+                      onClick={() =>
+                        navigate(`/tickets/${t.id}${location.search}`, {
+                          state: detailNavigationState,
+                        })
+                      }
                     >
                       <CardHeader className="py-3">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 pr-4">
                             <CardTitle className="text-sm font-semibold mb-1 leading-tight whitespace-normal break-words ticket-title">
                               <Link
-                                to={`/tickets/${t.id}${location.search}` }
+                                to={`/tickets/${t.id}${location.search}`}
+                                state={detailNavigationState}
                                 className="hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -2922,6 +3198,40 @@ export default function ManageTickets() {
                             {t.status?.name || (t.status as any) || "Unknown"}
                           </Badge>
 
+                          {/* Live HH:MM:SS timer — only for Overdue status */}
+                          {normalizedStatusName === "overdue" && slaMs !== null && slaMs < 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-mono font-bold text-red-700 border border-red-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                              {formatRemaining(Math.abs(slaMs))}
+                            </span>
+                          )}
+
+                          {/* SLA deadline label for overdue tickets */}
+                          {normalizedStatusName === "overdue" && (t.sla_time_epoch_ms || t.sla_time) && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-red-500 font-medium">
+                              {"SLA: "}
+                              {(() => {
+                                const epochMs = t.sla_time_epoch_ms != null ? Number(t.sla_time_epoch_ms) : null;
+                                const d = epochMs ? new Date(epochMs) : t.sla_time ? new Date(t.sla_time) : null;
+                                if (!d || isNaN(d.getTime())) return "-";
+                                return d.toLocaleString("en-IN", {
+                                  timeZone: "Asia/Kolkata",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                });
+                              })()}
+                            </span>
+                          )}
+
+                          {getTicketTag(t) !== "Manual" && (
+                            <Badge variant="secondary">{getTicketTag(t)}</Badge>
+                          )}
+
                           {/* Show Slack badge if description starts with "Slack from" */}
                           {t.description && String(t.description).trim().toLowerCase().startsWith("slack from") && (
                             <Badge className="bg-purple-100 text-purple-800">Slack</Badge>
@@ -2956,18 +3266,20 @@ export default function ManageTickets() {
                               }
                             }
 
+                            const derivedTags = (() => {
+                              try {
+                                const derived = normalizeTagForTicket(t);
+                                if (Array.isArray(derived) && derived.length > 0)
+                                  return derived;
+                                if (typeof derived === "string" && derived)
+                                  return [derived];
+                              } catch (e) {}
+                              return [];
+                            })();
+
+                            if (derivedTags.includes("Razorpay UPI")) return derivedTags;
                             if (parsedTags.length > 0) return parsedTags;
-
-                            // Fallback: derive tag(s) from description/mail config
-                            try {
-                              const derived = normalizeTagForTicket(t);
-                              if (Array.isArray(derived) && derived.length > 0)
-                                return derived;
-                              if (typeof derived === "string" && derived)
-                                return [derived];
-                            } catch (e) {}
-
-                            return [];
+                            return derivedTags;
                           })().map((tg: any, idx: number) => (
                             <Badge
                               key={`tag-${t.id}-${idx}`}

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
-import * as nodemailer from "nodemailer";
 import { pool, queryWithRetry } from "../database/connection";
+import { sendMail } from "../services/mailService";
 
 const router = Router();
 
@@ -66,27 +66,6 @@ async function readInternalRecipients(): Promise<string[]> {
   return raw ? parseRecipients(JSON.parse(raw)) : [];
 }
 
-let mailTransport: nodemailer.Transporter | null = null;
-
-function getMailTransport() {
-  if (mailTransport) return mailTransport;
-  const host = process.env.SMTP_HOST || "localhost";
-  const port = parseInt(process.env.SMTP_PORT || "587", 10);
-  const user = process.env.SMTP_USER || "";
-  const pass = process.env.SMTP_PASS || "";
-  const disabled = String(process.env.SMTP_DISABLED || "").toLowerCase() === "true";
-
-  mailTransport = disabled || host === "localhost"
-    ? nodemailer.createTransport({ jsonTransport: true })
-    : nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465,
-        auth: user && pass ? { user, pass } : undefined,
-      });
-  return mailTransport;
-}
-
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -115,13 +94,6 @@ function decodePdfAttachment(fileName: string, pdfBase64: string) {
     throw new Error("Invalid PDF attachment");
   }
   return { filename: fileName, content, contentType: "application/pdf" };
-}
-
-function sendFromFinance(options: nodemailer.SendMailOptions) {
-  return getMailTransport().sendMail({
-    from: process.env.SMTP_FROM || "finops@company.com",
-    ...options,
-  });
 }
 
 // ── GET internal trigger recipients ─────────────────────────────────────────
@@ -224,7 +196,7 @@ router.post("/trigger-internal", async (req: Request, res: Response) => {
     const safeInvoiceNumber = escapeHtml(String(invoiceNumber));
     const formattedAmount = amount != null ? `INR ${Number(amount).toLocaleString("en-IN")}` : "";
 
-    await sendFromFinance({
+    await sendMail({
       to: recipients,
       subject: `Invoice approval required: ${invoiceNumber} (${clientName || clientId})`,
       text: `Invoice ${invoiceNumber} for ${clientName || clientId} is ready for approval.\n${formattedAmount ? `Amount: ${formattedAmount}\n` : ""}\nApproval OTP: ${otp}\n\nThe finance team must enter this exact 6-digit OTP to approve the invoice. The invoice PDF is attached.`,
@@ -330,7 +302,7 @@ router.post("/trigger-external", async (req: Request, res: Response) => {
     const billingLabel = String(month || period);
     const description = `Please find attached invoice ${invoiceNumber} for ${billingLabel}. Kindly process the payment as per the agreed terms.`;
 
-    await sendFromFinance({
+    await sendMail({
       to: recipients,
       subject: `Invoice ${invoiceNumber} - ${billingLabel}`,
       text: `Dear ${clientName || "Client"},\n\n${description}\n\nRegards,\nMyLapay Finance`,

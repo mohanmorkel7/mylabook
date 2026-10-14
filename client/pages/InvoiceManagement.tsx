@@ -24,6 +24,7 @@ import * as XLSX from "xlsx";
 import XLSXStyle from "xlsx-js-style";
 import InvoiceTracker from "@/components/InvoiceTracker";
 import CreditNotesTracker from "@/components/CreditNotesTracker";
+import InvoiceProcess, { type ProcessInvoice } from "@/components/InvoiceProcess";
 import {
   Area,
   AreaChart,
@@ -6050,7 +6051,7 @@ export default function InvoiceManagement() {
     }
   });
 
-  const [mainTab, setMainTab] = useState<"clients" | "tracker" | "credit-notes">("clients");
+  const [mainTabState, setMainTabState] = useState<"clients" | "tracker" | "credit-notes">("clients");
   const [showExportInvoicesModal, setShowExportInvoicesModal] = useState(false);
   const [exportMonth, setExportMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
   const [exportYear, setExportYear] = useState(String(new Date().getFullYear()));
@@ -6093,6 +6094,17 @@ export default function InvoiceManagement() {
     user?.department_admin === true && String(user?.admin_for_department || "").toLowerCase() === "finance";
   const canManageInvoiceApprovalActions = isAdmin || isFinanceDeptAdmin;
   const canManageClientConfigActions = isAdmin;
+  const isProductOnly = user?.role === "product";
+  const isProcessRoute = location.pathname.endsWith("/process");
+  const mainTab = isProductOnly || isProcessRoute ? "process" : mainTabState;
+  const selectMainTab = (tab: "clients" | "tracker" | "credit-notes" | "process") => {
+    if (tab === "process") {
+      navigate("/invoice-management/process");
+      return;
+    }
+    setMainTabState(tab);
+    if (isProcessRoute) navigate("/invoice-management");
+  };
 
   useEffect(() => {
     try {
@@ -7794,8 +7806,8 @@ export default function InvoiceManagement() {
     }
   };
 
-  const previewInvoicePdf = async (invoice: any) => {
-    if (!isApprovedInvoiceStatus(invoice.status)) {
+  const previewInvoicePdf = async (invoice: any, options?: { skipApprovalCheck?: boolean }) => {
+    if (!options?.skipApprovalCheck && !isApprovedInvoiceStatus(invoice.status)) {
       toast({ title: "Awaiting approval", description: "Only approved invoices can be previewed.", variant: "warning" });
       return;
     }
@@ -7812,6 +7824,25 @@ export default function InvoiceManagement() {
     } catch (error: any) {
       console.error("[Invoice] previewInvoicePdf error:", error);
       toast({ title: "Error", description: error?.message || "Failed to open preview", variant: "destructive" });
+    }
+  };
+
+  const getInvoicePdfFile = async (invoice: any) => {
+    const client = resolveInvoiceClientRecord(invoice);
+    if (!client) throw new Error("Could not locate client configuration for this invoice.");
+    const payload = buildInvoicePdfPayload(invoice, client);
+    const blobUrl = (await downloadInvoicePdfTemplate({ ...payload, outputMode: "preview" })) as string;
+    try {
+      const blob = await (await fetch(blobUrl)).blob();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result).split(",")[1] || "");
+        reader.onerror = () => reject(new Error("Could not read generated PDF"));
+        reader.readAsDataURL(blob);
+      });
+      return { fileName: `${payload.invoiceNumber}.pdf`, base64 };
+    } finally {
+      URL.revokeObjectURL(blobUrl);
     }
   };
 
@@ -8305,7 +8336,7 @@ export default function InvoiceManagement() {
     await handleActivateClient(clientIdToActivate);
   };
 
-  const pageTitle = isCreateRoute ? "Create Config" : isEditRoute ? "Edit Config" : isOverviewRoute ? "Client Overview" : "Invoice Management";
+  const pageTitle = isCreateRoute ? "Create Config" : isEditRoute ? "Edit Config" : isOverviewRoute ? "Client Overview" : isProductOnly ? "Invoice Process" : "Invoice Management";
 
   if (isCreateRoute || isEditRoute) {
     return (
@@ -8524,27 +8555,36 @@ export default function InvoiceManagement() {
               Enterprise invoice operations, commercial config management and revenue analytics
             </p>
             {/* Main tab navigation */}
+            {!isProductOnly && (
             <div className="mt-3 flex items-center gap-1 rounded-full border bg-muted/30 p-1 w-fit overflow-x-auto">
               <button
-                onClick={() => setMainTab("clients")}
+                onClick={() => selectMainTab("clients")}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all whitespace-nowrap ${mainTab === "clients" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Clients</span>
               </button>
               <button
-                onClick={() => setMainTab("tracker")}
+                onClick={() => selectMainTab("tracker")}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all whitespace-nowrap ${mainTab === "tracker" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 <span className="flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Invoice Tracker</span>
               </button>
               <button
-                onClick={() => setMainTab("credit-notes")}
+                onClick={() => selectMainTab("credit-notes")}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all whitespace-nowrap ${mainTab === "credit-notes" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Credit Notes</span>
               </button>
+              <button
+                onClick={() => selectMainTab("process")}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all whitespace-nowrap ${mainTab === "process" ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <span className="flex items-center gap-1.5">Process</span>
+              </button>
             </div>
+            )}
           </div>
+          {!isProductOnly && (
           <div className="flex flex-wrap gap-2">
             {canManageClientConfigActions && (
               <Button
@@ -8572,6 +8612,7 @@ export default function InvoiceManagement() {
               <Plus className="h-4 w-4" /> Create Config
             </Button>
           </div>
+          )}
         </div>
       </div>
 
@@ -8603,6 +8644,22 @@ export default function InvoiceManagement() {
       {/* ── Credit Notes tab ─────────────────────────────────────────── */}
       {mainTab === "credit-notes" && !settingsViewOpen && (
         <CreditNotesTracker />
+      )}
+
+      {/* ── Process tab ─────────────────────────────────────────────── */}
+      {mainTab === "process" && (
+        <InvoiceProcess
+          clients={clients
+            .filter((client) => normalizeInlineText(client.status).toLowerCase() !== "inactive")
+            .map((client) => ({
+              clientId: client.clientId || client.id,
+              name: client.name,
+              code: client.code,
+              billingEmail: (client as ClientRecord & { billingEmail?: string }).billingEmail,
+            }))}
+          onPreviewInvoice={(inv: ProcessInvoice) => previewInvoicePdf(inv, { skipApprovalCheck: true })}
+          onGetInvoicePdf={getInvoicePdfFile}
+        />
       )}
 
       {/* Configuration sections shown when settings view is open */}

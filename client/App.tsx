@@ -630,6 +630,17 @@ function AppRoutes() {
       />
 
       <Route
+        path="/invoice-management/process"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "finance", "product"]}>
+            <DashboardLayout>
+              <InvoiceManagement />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/invoice-management/client/:id"
         element={
           <ProtectedRoute allowedRoles={["admin", "finance"]}>

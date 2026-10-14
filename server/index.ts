@@ -59,6 +59,7 @@ import adminProductionRouter from "./routes/admin-production";
 import finopsProductionRouter, { ensureFinOpsProductionSchema } from "./routes/finops-production";
 import financeManagementRouter, { initializeFinanceSchema, runFinanceSLACheck, startFinanceMidnightReset } from "./routes/finance-management";
 import invoiceManagementRouter, { initializeInvoiceSchema } from "./routes/invoice-management";
+import invoiceProcessRouter from "./routes/invoice-process";
 
 export function createServer() {
   const app = express();
@@ -639,6 +640,7 @@ export function createServer() {
   }
 
   try {
+    app.use("/api/invoice-management/process", invoiceProcessRouter);
     app.use("/api/invoice-management", invoiceManagementRouter);
     console.log("Invoice Management router loaded successfully");
   } catch (error) {

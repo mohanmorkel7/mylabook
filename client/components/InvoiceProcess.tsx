@@ -111,8 +111,8 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const { toast } = useToast();
   const role = user?.role;
   const isFinance = role === "finance";
-  const canInternalTrigger = role === "product" || role === "admin";
-  const canExternalTrigger = role === "product" || role === "admin";
+  const canInternalTrigger = role === "sales" || role === "admin";
+  const canExternalTrigger = role === "sales" || role === "admin";
   const canConfigure = role === "admin" || role === "finance";
 
   const [period, setPeriod] = useState(currentIstPeriod);
@@ -342,7 +342,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
           className="h-6 px-2 text-[10px] whitespace-nowrap"
           disabled={!enabled || busy}
           onClick={() => runInternalTrigger(row)}
-          title={!invoice ? "Invoice not generated yet" : !canInternalTrigger ? "Only product team can trigger" : undefined}
+          title={!invoice ? "Invoice not generated yet" : !canInternalTrigger ? "Only sales team can trigger" : undefined}
         >
           {busy ? "Sending..." : cycle?.internalTriggeredAt ? "Resend" : "Internal Trigger"}
         </Button>
@@ -386,7 +386,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
         className="h-6 px-2 text-[10px] whitespace-nowrap"
         disabled={!invoice || !canExternalTrigger || busy}
         onClick={() => runExternalTrigger(row)}
-        title={!canExternalTrigger ? "Only product or admin can trigger" : undefined}
+        title={!canExternalTrigger ? "Only sales or admin can trigger" : undefined}
       >
         {busy ? "Sending..." : "External Trigger"}
       </Button>
@@ -524,9 +524,9 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
               <tbody>
                 {visibleRows.map((row) => (
                   <tr key={row.client.clientId} className="border-b align-middle transition-colors hover:bg-muted/20">
-                    <td className="px-1.5 py-2 truncate font-mono text-gray-500" title={row.client.clientId}>{row.client.clientId}</td>
-                    <td className="px-1.5 py-2 truncate font-medium" title={row.client.name}>{row.client.name}</td>
-                    <td className="px-1.5 py-2 truncate font-mono text-gray-500" title={row.client.code || undefined}>{row.client.code || "—"}</td>
+                    <td className="px-1.5 py-2 break-all font-mono text-gray-500">{row.client.clientId}</td>
+                    <td className="px-1.5 py-2 break-words font-medium">{row.client.name}</td>
+                    <td className="px-1.5 py-2 break-all font-mono text-gray-500">{row.client.code || "—"}</td>
                     <td className="px-1.5 py-2">{renderAmount(row)}</td>
                     <td className="px-1.5 py-2">{renderInternal(row)}</td>
                     <td className="px-1.5 py-2">{renderApproval(row)}</td>

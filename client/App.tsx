@@ -632,7 +632,7 @@ function AppRoutes() {
       <Route
         path="/invoice-management/process"
         element={
-          <ProtectedRoute allowedRoles={["admin", "finance", "product"]}>
+          <ProtectedRoute allowedRoles={["admin", "finance", "sales"]}>
             <DashboardLayout>
               <InvoiceManagement />
             </DashboardLayout>

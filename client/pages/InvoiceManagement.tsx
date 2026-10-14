@@ -6094,9 +6094,9 @@ export default function InvoiceManagement() {
     user?.department_admin === true && String(user?.admin_for_department || "").toLowerCase() === "finance";
   const canManageInvoiceApprovalActions = isAdmin || isFinanceDeptAdmin;
   const canManageClientConfigActions = isAdmin;
-  const isProductOnly = user?.role === "product";
+  const isSalesOnly = user?.role === "sales";
   const isProcessRoute = location.pathname.endsWith("/process");
-  const mainTab = isProductOnly || isProcessRoute ? "process" : mainTabState;
+  const mainTab = isSalesOnly || isProcessRoute ? "process" : mainTabState;
   const selectMainTab = (tab: "clients" | "tracker" | "credit-notes" | "process") => {
     if (tab === "process") {
       navigate("/invoice-management/process");
@@ -8336,7 +8336,7 @@ export default function InvoiceManagement() {
     await handleActivateClient(clientIdToActivate);
   };
 
-  const pageTitle = isCreateRoute ? "Create Config" : isEditRoute ? "Edit Config" : isOverviewRoute ? "Client Overview" : isProductOnly ? "Invoice Process" : "Invoice Management";
+  const pageTitle = isCreateRoute ? "Create Config" : isEditRoute ? "Edit Config" : isOverviewRoute ? "Client Overview" : isSalesOnly ? "Invoice Process" : "Invoice Management";
 
   if (isCreateRoute || isEditRoute) {
     return (
@@ -8555,7 +8555,7 @@ export default function InvoiceManagement() {
               Enterprise invoice operations, commercial config management and revenue analytics
             </p>
             {/* Main tab navigation */}
-            {!isProductOnly && (
+            {!isSalesOnly && (
             <div className="mt-3 flex items-center gap-1 rounded-full border bg-muted/30 p-1 w-fit overflow-x-auto">
               <button
                 onClick={() => selectMainTab("clients")}
@@ -8584,7 +8584,7 @@ export default function InvoiceManagement() {
             </div>
             )}
           </div>
-          {!isProductOnly && (
+          {!isSalesOnly && (
           <div className="flex flex-wrap gap-2">
             {canManageClientConfigActions && (
               <Button

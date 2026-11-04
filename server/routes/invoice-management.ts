@@ -1252,6 +1252,7 @@ router.post("/invoices", async (req: Request, res: Response) => {
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     ON CONFLICT (invoice_id) DO UPDATE SET
       status = EXCLUDED.status,
+      month = EXCLUDED.month,
       billing_model = EXCLUDED.billing_model,
       invoice_type = EXCLUDED.invoice_type,
       custom_invoice_rows = EXCLUDED.custom_invoice_rows,

@@ -7401,7 +7401,7 @@ export default function InvoiceManagement() {
         invoiceNumber: resolvedInvoiceNumber,
         serial: serialInfo.serial,
         financialYear: serialInfo.financialYear,
-        month: normalizeInlineText(invoiceMonthOverride || new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" })),
+        month: normalizeInlineText(invoiceMonthOverride) || new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" }),
         client: client.name,
         amount: generatedAmount,
         status: "Waiting for approval",
@@ -7612,14 +7612,18 @@ export default function InvoiceManagement() {
       }
     }
 
+    const generatedDate = invoiceDateDraft || new Date().toISOString().split("T")[0];
+    const invoiceMonth = normalizeInlineText(invoiceMonthDraft) ||
+      new Date(generatedDate).toLocaleString("en-IN", { month: "short", year: "numeric" });
+
     await generateInvoiceForClient(
       selectedClient,
       "commercial",
       pendingInvoiceAmount,
       pendingInvoiceTxnCount,
-      invoiceDateDraft || new Date().toISOString().split("T")[0],
+      generatedDate,
       pendingInvoiceMmcTitle,
-      invoiceMonthDraft,
+      invoiceMonth,
       resolvedInvoiceNumber,
     );
   };
@@ -8456,6 +8460,9 @@ export default function InvoiceManagement() {
                     value={invoiceMonthDraft || new Date().toLocaleString("en-IN", { month: "short", year: "numeric" })}
                     onChange={(e) => setInvoiceMonthDraft(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Service Period on invoice: {formatInvoiceServicePeriod(invoiceMonthDraft, invoiceDateDraft)}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Status</Label>

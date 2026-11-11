@@ -238,7 +238,9 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
         pdfBase64: pdf.base64,
         triggeredBy: user?.email || "",
       });
-      toast({ title: "Internal trigger sent", description: `OTP and invoice emailed to ${data.recipientCount} recipient(s).` });
+      toast(data.testMode
+        ? { title: "Test trigger ready", description: "No email was sent. The Test OTP is available in the Finance approval column." }
+        : { title: "Internal trigger sent", description: `OTP and invoice emailed to ${data.recipientCount} recipient(s).` });
       await loadCycles();
     } catch (error: any) {
       toast({ title: "Internal trigger failed", description: error?.message, variant: "destructive" });

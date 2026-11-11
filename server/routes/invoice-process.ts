@@ -233,7 +233,7 @@ router.post("/trigger-internal", async (req: Request, res: Response) => {
       ),
     );
 
-    res.json({ success: true, recipientCount: recipients.length });
+    res.json({ success: true, recipientCount: recipients.length, testMode: exposeTestOtp });
   } catch (error: any) {
     console.error("[InvoiceProcess] POST trigger-internal error:", error?.message);
     res.status(500).json({ error: error?.message || "Failed to send internal trigger" });

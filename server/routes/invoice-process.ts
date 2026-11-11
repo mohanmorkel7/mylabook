@@ -9,6 +9,9 @@ const router = Router();
 const PERIOD_PATTERN = /^\d{4}-\d{2}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_PATTERN = /^\d{6}$/;
+const exposeTestOtp =
+  (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") &&
+  process.env.INVOICE_PROCESS_SHOW_TEST_OTP === "true";
 
 let processSchemaPromise: Promise<void> | null = null;
 
@@ -224,7 +227,11 @@ router.post("/trigger-internal", async (req: Request, res: Response) => {
       ),
     );
 
-    res.json({ success: true, recipientCount: recipients.length });
+    res.json({
+      success: true,
+      recipientCount: recipients.length,
+      ...(exposeTestOtp ? { testOtp: otp } : {}),
+    });
   } catch (error: any) {
     console.error("[InvoiceProcess] POST trigger-internal error:", error?.message);
     res.status(500).json({ error: error?.message || "Failed to send internal trigger" });

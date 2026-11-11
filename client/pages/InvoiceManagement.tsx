@@ -9515,7 +9515,6 @@ export default function InvoiceManagement() {
           }
         }}
       >
-        <DialogOverlay className="z-[90] bg-black/60 backdrop-blur-sm" />
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="flex flex-row items-center justify-between gap-3">
             <div>

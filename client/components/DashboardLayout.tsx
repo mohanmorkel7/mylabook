@@ -163,7 +163,7 @@ const navigationItems: NavigationItem[] = [
     name: "Invoice Process",
     href: "/invoice-management/process",
     icon: ReceiptText,
-    roles: ["sales"],
+    roles: ["admin", "sales", "product"],
   },
   // k) Product Management
   {

@@ -69,7 +69,10 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 function currentIstPeriod() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 7);
+  const istDate = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return new Date(Date.UTC(istDate.getUTCFullYear(), istDate.getUTCMonth() - 1, 1))
+    .toISOString()
+    .slice(0, 7);
 }
 
 function invoicePeriod(invoice: ProcessInvoice) {
@@ -131,7 +134,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
     String((user as any)?.admin_for_department || "").toLowerCase() === "finance"
   );
   const canInternalTrigger = role === "sales" || role === "admin";
-  const canExternalTrigger = role === "sales" || role === "admin";
+  const canExternalTrigger = role === "sales" || role === "product" || role === "admin";
   const canConfigure = role === "sales" || role === "admin";
 
   const [period, setPeriod] = useState(currentIstPeriod);
@@ -168,13 +171,13 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
     }
   }, [toast]);
 
-  const loadCycles = useCallback(async () => {
+  const loadCycles = useCallback(async (quiet = false) => {
     try {
       const res = await fetch(`/api/invoice-management/process/cycles?period=${encodeURIComponent(period)}`);
       if (!res.ok) throw new Error("Failed to load process status");
       setCycles(await res.json());
     } catch (error: any) {
-      toast({ title: "Error", description: error?.message, variant: "destructive" });
+      if (!quiet) toast({ title: "Error", description: error?.message, variant: "destructive" });
     }
   }, [period, toast]);
 
@@ -183,7 +186,9 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   }, [loadInvoices]);
 
   useEffect(() => {
-    loadCycles();
+    void loadCycles();
+    const intervalId = window.setInterval(() => void loadCycles(true), 5000);
+    return () => window.clearInterval(intervalId);
   }, [loadCycles]);
 
   const rows = useMemo(() => {

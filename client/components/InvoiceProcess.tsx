@@ -16,7 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Search, Settings2 } from "lucide-react";
+import { PaymentModal, type PaymentModalInvoice } from "@/components/InvoiceTracker";
+import { CheckCircle2, Eye, EyeOff, Search, Settings2 } from "lucide-react";
 
 export interface ProcessClient {
   clientId: string;
@@ -143,6 +144,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [paymentTarget, setPaymentTarget] = useState<PaymentModalInvoice | null>(null);
 
   const [nameQuery, setNameQuery] = useState("");
   const [codeQuery, setCodeQuery] = useState("");
@@ -571,8 +573,8 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
                     <td className="px-1.5 py-2">{renderApproval(row)}</td>
                     <td className="px-1.5 py-2">{renderExternal(row)}</td>
                     <td className="px-1.5 py-2 truncate text-gray-500">{fmtDate(row.invoice?.generatedDate)}</td>
-                    <td className="px-1.5 py-2 truncate text-gray-500">{fmtDate(row.invoice?.sentDate)}</td>
-                    <td className="px-1.5 py-2 truncate text-gray-500">{fmtDate(dueDateOf(row.invoice?.sentDate || null))}</td>
+                    <td className="px-1.5 py-2 truncate text-gray-500">{fmtDate(row.invoice?.sentDate || row.cycle?.externalTriggeredAt)}</td>
+                    <td className="px-1.5 py-2 truncate text-gray-500">{fmtDate(dueDateOf(row.invoice?.sentDate || row.cycle?.externalTriggeredAt || null))}</td>
                     <td className="px-1.5 py-2 text-right">{row.invoice ? fmtINR(row.invoice.totalPaid) : "—"}</td>
                     <td className="px-1.5 py-2 text-right">{row.invoice ? fmtINR(row.invoice.totalTds) : "—"}</td>
                     <td className="px-1.5 py-2">
@@ -582,14 +584,32 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
                     </td>
                     <td className="px-1.5 py-2 text-center">
                       {row.invoice ? (
-                        <button
-                          type="button"
-                          title="Preview Invoice PDF"
-                          onClick={() => onPreviewInvoice(row.invoice as ProcessInvoice)}
-                          className="p-1 rounded text-indigo-500 hover:bg-indigo-50"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            title="Preview Invoice PDF"
+                            onClick={() => onPreviewInvoice(row.invoice as ProcessInvoice)}
+                            className="p-1 rounded text-indigo-500 hover:bg-indigo-50"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                          {isFinance && row.cycle?.externalTriggeredAt && row.invoice.status !== "Received" && (
+                            <button
+                              type="button"
+                              title="Record payment"
+                              onClick={() => setPaymentTarget({
+                                invoiceId: row.invoice!.invoiceId,
+                                invoiceNumber: row.invoice!.invoiceNumber,
+                                clientName: row.client.name,
+                                amount: row.invoice!.amount,
+                                totalPaid: row.invoice!.totalPaid || 0,
+                              })}
+                              className="p-1 rounded text-green-600 hover:bg-green-50"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
@@ -606,6 +626,14 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
           )}
         </CardContent>
       </Card>
+
+      {paymentTarget && (
+        <PaymentModal
+          invoice={paymentTarget}
+          onClose={() => setPaymentTarget(null)}
+          onSaved={() => { void loadInvoices(); }}
+        />
+      )}
 
       <Dialog open={Boolean(approveTarget)} onOpenChange={(open) => { if (!open) { setApproveTarget(null); setOtpInput(""); } }}>
         <DialogContent className="max-w-sm">

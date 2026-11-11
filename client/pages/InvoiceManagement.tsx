@@ -9517,21 +9517,32 @@ export default function InvoiceManagement() {
       >
         <DialogOverlay className="z-[90] bg-black/60 backdrop-blur-sm" />
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="flex items-center justify-between">
+          <DialogHeader className="flex flex-row items-center justify-between gap-3">
             <div>
               <DialogTitle className="text-xl">
                 {previewingInvoice ? getInvoiceDisplayNumber(previewingInvoice) : "Invoice Preview"}
               </DialogTitle>
               <p className="text-xs text-muted-foreground mt-1">Invoice data preview</p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setPreviewModalOpen(false)}
-              className="h-6 w-6"
-            >
-              <XCircle className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={!previewingInvoice}
+                onClick={() => { if (previewingInvoice) void downloadInvoicePdf(previewingInvoice); }}
+              >
+                <FileDown className="h-4 w-4" /> Download PDF
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setPreviewModalOpen(false)}
+                className="h-6 w-6"
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
           </DialogHeader>
 
           {previewPayload && (

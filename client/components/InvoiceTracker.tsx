@@ -476,10 +476,18 @@ function InvoicePreviewModal({
   );
 }
 
+export interface PaymentModalInvoice {
+  invoiceId: string;
+  invoiceNumber: string;
+  clientName: string;
+  amount: number;
+  totalPaid: number;
+}
+
 // ── Payment Modal ─────────────────────────────────────────────────────────
-function PaymentModal({
+export function PaymentModal({
   invoice, onClose, onSaved,
-}: { invoice: TrackerInvoice; onClose: () => void; onSaved: () => void }) {
+}: { invoice: PaymentModalInvoice; onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
 

@@ -29,6 +29,7 @@ export interface ProcessInvoice {
   invoiceId: string;
   invoiceNumber: string;
   clientId: string;
+  month?: string;
   amount: number;
   status: string;
   generatedDate: string;
@@ -68,6 +69,19 @@ const STATUS_COLOR: Record<string, string> = {
 
 function currentIstPeriod() {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 7);
+}
+
+function invoicePeriod(invoice: ProcessInvoice) {
+  const month = String(invoice.month || "").trim();
+  const isoPeriod = month.match(/^(\d{4})-(\d{2})/);
+  if (isoPeriod) return `${isoPeriod[1]}-${isoPeriod[2]}`;
+  const namedPeriod = month.match(/^([A-Za-z]{3,})\s+(\d{4})$/);
+  if (namedPeriod) {
+    const monthIndex = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+      .indexOf(namedPeriod[1].slice(0, 3).toLowerCase());
+    if (monthIndex >= 0) return `${namedPeriod[2]}-${String(monthIndex + 1).padStart(2, "0")}`;
+  }
+  return String(invoice.generatedDate || "").slice(0, 7);
 }
 
 function fmtINR(value: number) {
@@ -171,7 +185,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const rows = useMemo(() => {
     return clients.map((client) => {
       const matches = invoices.filter(
-        (inv) => inv.clientId === client.clientId && String(inv.generatedDate || "").slice(0, 7) === period,
+        (inv) => inv.clientId === client.clientId && invoicePeriod(inv) === period,
       );
       const invoice = matches.find((inv) => inv.status !== "Rejected") || matches[0] || null;
       const cycle = cycles[client.clientId] || null;

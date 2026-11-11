@@ -8664,7 +8664,6 @@ export default function InvoiceManagement() {
               code: client.code,
               billingEmail: (client as ClientRecord & { billingEmail?: string }).billingEmail,
             }))}
-          onPreviewInvoice={(inv: ProcessInvoice) => previewInvoicePdf(inv, { skipApprovalCheck: true })}
           onGetInvoicePdf={getInvoicePdfFile}
         />
       )}

@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { PaymentModal, type PaymentModalInvoice } from "@/components/InvoiceTracker";
-import { CheckCircle2, Eye, EyeOff, Search, Settings2 } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, FileDown, Search, Settings2 } from "lucide-react";
 
 export interface ProcessClient {
   clientId: string;
@@ -52,7 +52,6 @@ interface ProcessCycle {
 
 interface InvoiceProcessProps {
   clients: ProcessClient[];
-  onPreviewInvoice: (invoice: ProcessInvoice) => void;
   onGetInvoicePdf: (invoice: ProcessInvoice) => Promise<{ fileName: string; base64: string }>;
 }
 
@@ -126,7 +125,7 @@ async function postJson(url: string, body: unknown) {
   return data;
 }
 
-export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoicePdf }: InvoiceProcessProps) {
+export default function InvoiceProcess({ clients, onGetInvoicePdf }: InvoiceProcessProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const role = user?.role;
@@ -145,6 +144,12 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [paymentTarget, setPaymentTarget] = useState<PaymentModalInvoice | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState("");
+  const [previewInvoice, setPreviewInvoice] = useState<ProcessInvoice | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
 
   const [nameQuery, setNameQuery] = useState("");
   const [codeQuery, setCodeQuery] = useState("");
@@ -186,6 +191,10 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
+
+  useEffect(() => () => {
+    if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+  }, [previewPdfUrl]);
 
   useEffect(() => {
     void loadCycles();
@@ -279,6 +288,40 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
     } finally {
       setBusyKey(null);
     }
+  };
+
+  const openInvoicePreview = async (invoice: ProcessInvoice) => {
+    setPreviewInvoice(invoice);
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewError("");
+    setPreviewPdfUrl(null);
+    try {
+      const file = await onGetInvoicePdf(invoice);
+      const bytes = Uint8Array.from(atob(file.base64), (character) => character.charCodeAt(0));
+      setPreviewFileName(file.fileName);
+      setPreviewPdfUrl(URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })));
+    } catch (error: any) {
+      setPreviewError(error?.message || "Could not generate invoice PDF preview.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closeInvoicePreview = () => {
+    setPreviewOpen(false);
+    setPreviewInvoice(null);
+    setPreviewFileName("");
+    setPreviewError("");
+    setPreviewPdfUrl(null);
+  };
+
+  const downloadPreviewPdf = () => {
+    if (!previewPdfUrl) return;
+    const link = document.createElement("a");
+    link.href = previewPdfUrl;
+    link.download = previewFileName;
+    link.click();
   };
 
   const submitApproval = async () => {
@@ -588,7 +631,7 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
                           <button
                             type="button"
                             title="Preview Invoice PDF"
-                            onClick={() => onPreviewInvoice(row.invoice as ProcessInvoice)}
+                            onClick={() => { void openInvoicePreview(row.invoice as ProcessInvoice); }}
                             className="p-1 rounded text-indigo-500 hover:bg-indigo-50"
                           >
                             <Eye className="h-3.5 w-3.5" />
@@ -634,6 +677,28 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
           onSaved={() => { void loadInvoices(); }}
         />
       )}
+
+      <Dialog open={previewOpen} onOpenChange={(open) => { if (!open) closeInvoicePreview(); }}>
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[92vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>{previewInvoice?.invoiceNumber || "Invoice PDF Preview"}</DialogTitle>
+            <DialogDescription>{previewInvoice?.clientName || previewInvoice?.client || "Invoice"}</DialogDescription>
+          </DialogHeader>
+          <div className="min-h-[60vh] rounded-md border bg-muted/30">
+            {previewLoading && <div className="flex h-[60vh] items-center justify-center text-sm text-muted-foreground">Generating PDF preview…</div>}
+            {!previewLoading && previewError && <div className="flex h-[60vh] items-center justify-center text-sm text-destructive">{previewError}</div>}
+            {!previewLoading && !previewError && previewPdfUrl && (
+              <iframe title="Invoice PDF preview" src={previewPdfUrl} className="h-[70vh] w-full rounded-md" />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeInvoicePreview}>Close</Button>
+            <Button onClick={downloadPreviewPdf} disabled={!previewPdfUrl} className="gap-2">
+              <FileDown className="h-4 w-4" /> Download PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(approveTarget)} onOpenChange={(open) => { if (!open) { setApproveTarget(null); setOtpInput(""); } }}>
         <DialogContent className="max-w-sm">

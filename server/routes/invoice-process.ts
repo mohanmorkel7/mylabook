@@ -26,6 +26,7 @@ function ensureProcessSchema() {
             internal_triggered_at TIMESTAMPTZ,
             internal_triggered_by TEXT,
             otp_hash              TEXT,
+            test_otp              TEXT,
             approved_at           TIMESTAMPTZ,
             approved_by           TEXT,
             external_triggered_at TIMESTAMPTZ,
@@ -34,6 +35,9 @@ function ensureProcessSchema() {
             PRIMARY KEY (client_id, period)
           )
         `),
+      );
+      await queryWithRetry(() =>
+        pool.query(`ALTER TABLE invoice_process_cycles ADD COLUMN IF NOT EXISTS test_otp TEXT`),
       );
       await queryWithRetry(() =>
         pool.query(`
@@ -144,7 +148,7 @@ router.get("/cycles", async (req: Request, res: Response) => {
 
     const result = await queryWithRetry(() =>
       pool.query(
-        `SELECT client_id, internal_triggered_at, internal_triggered_by, approved_at, approved_by,
+        `SELECT client_id, internal_triggered_at, internal_triggered_by, test_otp, approved_at, approved_by,
                 external_triggered_at, external_triggered_by
          FROM invoice_process_cycles
          WHERE period = $1`,
@@ -157,6 +161,7 @@ router.get("/cycles", async (req: Request, res: Response) => {
         {
           internalTriggeredAt: row.internal_triggered_at,
           internalTriggeredBy: row.internal_triggered_by,
+          testOtp: exposeTestOtp ? row.test_otp : null,
           approvedAt: row.approved_at,
           approvedBy: row.approved_by,
           externalTriggeredAt: row.external_triggered_at,
@@ -214,24 +219,21 @@ router.post("/trigger-internal", async (req: Request, res: Response) => {
 
     await queryWithRetry(() =>
       pool.query(
-        `INSERT INTO invoice_process_cycles (client_id, period, internal_triggered_at, internal_triggered_by, otp_hash, updated_at)
-         VALUES ($1, $2, NOW(), $3, $4, NOW())
+        `INSERT INTO invoice_process_cycles (client_id, period, internal_triggered_at, internal_triggered_by, otp_hash, test_otp, updated_at)
+         VALUES ($1, $2, NOW(), $3, $4, $5, NOW())
          ON CONFLICT (client_id, period) DO UPDATE SET
            internal_triggered_at = NOW(),
            internal_triggered_by = EXCLUDED.internal_triggered_by,
            otp_hash = EXCLUDED.otp_hash,
+           test_otp = EXCLUDED.test_otp,
            approved_at = NULL,
            approved_by = NULL,
            updated_at = NOW()`,
-        [clientId, period, String(triggeredBy || ""), hash],
+        [clientId, period, String(triggeredBy || ""), hash, exposeTestOtp ? otp : null],
       ),
     );
 
-    res.json({
-      success: true,
-      recipientCount: recipients.length,
-      ...(exposeTestOtp ? { testOtp: otp } : {}),
-    });
+    res.json({ success: true, recipientCount: recipients.length });
   } catch (error: any) {
     console.error("[InvoiceProcess] POST trigger-internal error:", error?.message);
     res.status(500).json({ error: error?.message || "Failed to send internal trigger" });
@@ -272,6 +274,7 @@ router.post("/approve", async (req: Request, res: Response) => {
            approved_at = NOW(),
            approved_by = $3,
            otp_hash = NULL,
+           test_otp = NULL,
            updated_at = NOW()
          WHERE client_id = $1 AND period = $2 AND otp_hash = $4`,
         [clientId, period, String(approvedBy || ""), submittedHash],

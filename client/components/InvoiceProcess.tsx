@@ -44,6 +44,7 @@ interface ProcessCycle {
   internalTriggeredBy: string | null;
   approvedAt: string | null;
   approvedBy: string | null;
+  testOtp?: string | null;
   externalTriggeredAt: string | null;
   externalTriggeredBy: string | null;
 }
@@ -125,7 +126,10 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const { user } = useAuth();
   const { toast } = useToast();
   const role = user?.role;
-  const isFinance = role === "finance";
+  const isFinance = role === "finance" || (
+    (user as any)?.department_admin === true &&
+    String((user as any)?.admin_for_department || "").toLowerCase() === "finance"
+  );
   const canInternalTrigger = role === "sales" || role === "admin";
   const canExternalTrigger = role === "sales" || role === "admin";
   const canConfigure = role === "sales" || role === "admin";
@@ -136,7 +140,6 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
-  const [testOtps, setTestOtps] = useState<Record<string, string>>({});
 
   const [nameQuery, setNameQuery] = useState("");
   const [codeQuery, setCodeQuery] = useState("");
@@ -223,11 +226,6 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
   const runInternalTrigger = async (row: (typeof rows)[number]) => {
     if (!row.invoice) return;
     setBusyKey(`internal-${row.client.clientId}`);
-    setTestOtps((prev) => {
-      const next = { ...prev };
-      delete next[row.client.clientId];
-      return next;
-    });
     try {
       const pdf = await onGetInvoicePdf(row.invoice);
       const data = await postJson("/api/invoice-management/process/trigger-internal", {
@@ -240,9 +238,6 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
         pdfBase64: pdf.base64,
         triggeredBy: user?.email || "",
       });
-      if (typeof data.testOtp === "string") {
-        setTestOtps((prev) => ({ ...prev, [row.client.clientId]: data.testOtp }));
-      }
       toast({ title: "Internal trigger sent", description: `OTP and invoice emailed to ${data.recipientCount} recipient(s).` });
       await loadCycles();
     } catch (error: any) {
@@ -377,11 +372,6 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
           {busy ? "Sending..." : cycle?.internalTriggeredAt ? "Resend" : "Internal Trigger"}
         </Button>
         {cycle?.internalTriggeredAt && <span className="text-[10px] text-gray-500">{fmtDate(cycle.internalTriggeredAt)}</span>}
-        {testOtps[client.clientId] && (
-          <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-            Test OTP: {testOtps[client.clientId]}
-          </span>
-        )}
       </div>
     );
   };
@@ -394,16 +384,23 @@ export default function InvoiceProcess({ clients, onPreviewInvoice, onGetInvoice
     if (!cycle?.internalTriggeredAt) return <span className="text-[10px] text-gray-400">Pending</span>;
     if (!isFinance) return <span className="text-[10px] text-amber-600">Awaiting finance</span>;
     return (
-      <Button
-        size="sm"
-        className="h-6 px-2 text-[10px] whitespace-nowrap"
-        onClick={() => {
-          setOtpInput("");
-          setApproveTarget(client.clientId);
-        }}
-      >
-        Approve
-      </Button>
+      <div className="flex flex-col items-start gap-1">
+        {cycle.testOtp && (
+          <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+            Test OTP: {cycle.testOtp}
+          </span>
+        )}
+        <Button
+          size="sm"
+          className="h-6 px-2 text-[10px] whitespace-nowrap"
+          onClick={() => {
+            setOtpInput("");
+            setApproveTarget(client.clientId);
+          }}
+        >
+          Approve
+        </Button>
+      </div>
     );
   };
 

@@ -10,12 +10,13 @@ const dbConfig = {
   password: process.env.PG_PASSWORD || "myl@p@y-crm$102019",
   port: Number(process.env.PG_PORT) || 2019,
   ssl: false,
-  // Reduced pool size to prevent exhaustion under load
-  max: 10, // max number of clients in the pool (reduced from 20)
-  min: 2, // minimum connections to maintain
-  idleTimeoutMillis: 20000, // 20 seconds - close idle connections faster
-  connectionTimeoutMillis: 10000, // 10 seconds for connection (reduced from 20s)
-  statement_timeout: 120000, // 120 seconds (2 minutes) for statement execution - remote DB is slow
+  // Pool sized for concurrent ticket page + chart traffic
+  // Background jobs now run on longer schedules to avoid starvation
+  max: 25, // max clients in the pool
+  min: 2, // keep minimal warm connections ready (reduce from 4 to free up sooner)
+  idleTimeoutMillis: 10000, // 10s - release idle connections faster
+  connectionTimeoutMillis: 8000,
+  statement_timeout: 120000, // 120 seconds for statement execution - remote DB is slow
 };
 
 // Log the actual connection parameters being used (hide password for security)
@@ -83,9 +84,10 @@ export function startPoolMonitoring() {
     }
 
     // If too many waiting connections, drain to reset
-    if (waitingCount > 10) {
+    // Lower threshold (3 waiting) since pool is only 25 total
+    if (waitingCount > 3) {
       console.warn(
-        `[POOL] ${waitingCount} connections waiting, draining pool...`,
+        `[POOL] ${waitingCount} connections waiting (${idleCount} idle of ${poolSize} total), draining pool...`,
       );
       await pool.drain();
       connectionErrors = 0;
@@ -330,6 +332,21 @@ export async function initializeDatabase() {
           "Ticket status tracking migration already applied or error:",
           ticketTrackingError.message,
         );
+      }
+
+      // Ensure ticket performance indexes exist (idempotent)
+      try {
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_tickets_id_desc ON tickets(id DESC);
+          CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_tickets_status_id ON tickets(status_id);
+          CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);
+          CREATE INDEX IF NOT EXISTS idx_tickets_created_by ON tickets(created_by);
+          CREATE INDEX IF NOT EXISTS idx_tickets_priority_id ON tickets(priority_id);
+        `);
+        console.log("Ticket performance indexes ensured");
+      } catch (indexError: any) {
+        console.log("Ticket index creation skipped:", indexError.message);
       }
 
       // Run finops hourly timeline migration

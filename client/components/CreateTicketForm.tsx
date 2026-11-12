@@ -40,7 +40,7 @@ export default function CreateTicketForm({
     description: "",
     priority_id: "",
     category_id: "",
-    assigned_to: "",
+    assigned_to: "315",
     tags: [] as string[],
   });
 
@@ -72,7 +72,7 @@ export default function CreateTicketForm({
       description: "",
       priority_id: "",
       category_id: "",
-      assigned_to: "",
+      assigned_to: "315",
       tags: [],
     });
     setNewTag("");
@@ -107,7 +107,7 @@ export default function CreateTicketForm({
         : undefined,
       assigned_to: formData.assigned_to
         ? parseInt(formData.assigned_to)
-        : undefined,
+        : 315,
       created_by: currentUser?.id || "1",
       related_lead_id: relatedLeadId,
       related_client_id: relatedClientId,

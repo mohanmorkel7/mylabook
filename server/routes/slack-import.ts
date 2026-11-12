@@ -37,6 +37,19 @@ async function ensureSlackCategoryId(): Promise<number> {
   return insert.rows[0].id;
 }
 
+async function getSlackDefaultAssigneeId(): Promise<number> {
+  const preferredName = process.env.SLACK_DEFAULT_ASSIGNEE_NAME || "Vivekanandan Ravichandran";
+  const res = await pool.query(
+    `SELECT id
+     FROM users
+     WHERE LOWER(TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')))) = LOWER($1)
+        OR LOWER(email) = LOWER($1)
+     LIMIT 1`,
+    [preferredName],
+  );
+  return Number(res.rows[0]?.id || process.env.SLACK_DEFAULT_ASSIGNEE_ID || 315);
+}
+
 async function getAllChannels(client: WebClient) {
   let channels: any[] = [];
   let cursor: string | undefined;
@@ -69,6 +82,7 @@ router.post("/import-slack", async (req: Request, res: Response) => {
 
     const categoryId = await ensureSlackCategoryId();
     const createdBy = Number(process.env.SLACK_TICKET_CREATED_BY || "76");
+    const assigneeId = await getSlackDefaultAssigneeId();
 
     let inserted = 0;
     for (const channel of channels) {
@@ -102,7 +116,7 @@ router.post("/import-slack", async (req: Request, res: Response) => {
                 bucket_id: 5,
                 demand: 1,
                 tags: ["Slack"],
-                assigned_to: 76, // Default assign Slack tickets to user 76
+                assigned_to: assigneeId, // Default assign Slack tickets to Vivekanandan Ravichandran
                 // mail_config_id: null,
               };
 

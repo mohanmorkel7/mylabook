@@ -71,6 +71,7 @@ export class DepartmentService {
       admin: "admin", // Admin department gets 'admin' role
       administration: "admin",
       switch_team: "switch_team",
+      sales: "sales",
       business_analyst:"business_analyst" // Administration department also gets 'admin' role
     };
 

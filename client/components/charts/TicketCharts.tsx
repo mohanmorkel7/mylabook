@@ -1,84 +1,820 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { Download } from "lucide-react";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import api from "@/lib/api";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AssignedCount {
   user_id: number | null;
   name: string;
   count: number;
+  client_names?: string[];
 }
 
 interface StatusCount {
   status: string;
   count: number;
+  client_names?: string[];
 }
 
-export default function TicketCharts({
+interface GroupedStatusCount {
+  user_id: number | string | null;
+  name: string;
+  counts: Record<string, number>;
+  client_names?: string[];
+}
+
+type StackedRow = { name: string; total: number; client_names?: string[] } & Record<string, any>;
+
+// ─── Palette ──────────────────────────────────────────────────────────────────
+
+const STATUS_ORDER = ["Open", "In Progress", "Pending", "Overdue", "Closed"];
+
+const STATUS_COLORS: Record<string, string> = {
+  Open: "#6366f1",
+  "In Progress": "#06b6d4",
+  Pending: "#f59e0b",
+  Overdue: "#f43f5e",
+  Closed: "#10b981",
+};
+
+const ASSIGNEE_COLORS = [
+  "#6366f1", "#06b6d4", "#f59e0b", "#f43f5e", "#10b981",
+  "#8b5cf6", "#0ea5e9", "#ec4899", "#14b8a6", "#f97316",
+];
+
+function statusColor(status: string, idx: number): string {
+  return STATUS_COLORS[status] ?? ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length];
+}
+
+function statusRank(status?: string): number {
+  const n = String(status || "").trim();
+  const i = STATUS_ORDER.findIndex(s => s.toLowerCase() === n.toLowerCase());
+  return i === -1 ? STATUS_ORDER.length : i;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function normalizeClientNames(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(v => String(v || "").trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map(v => v.trim()).filter(Boolean);
+  return [];
+}
+
+function fmtTooltip({ label, count, pct, clients }: { label: string; count: number; pct?: number; clients?: string[] }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+      <p className="text-sm font-semibold text-slate-800">{label}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        {count.toLocaleString()} ticket{count !== 1 ? "s" : ""}
+        {pct != null ? <span className="ml-2 font-medium text-slate-700">{pct}%</span> : null}
+      </p>
+      {clients && clients.length > 0 && (
+        <p className="mt-1.5 text-[11px] text-slate-400">
+          {clients.slice(0, 3).join(", ")}
+          {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Custom X-axis tick with truncation ───────────────────────────────────────
+
+function CustomXTick({ x, y, payload }: any) {
+  const name: string = payload?.value ?? "";
+  const short = name.length > 13 ? name.slice(0, 12) + "…" : name;
+  return (
+    <g transform={`translate(${x},${y + 4})`}>
+      <text
+        x={0}
+        y={0}
+        dy={4}
+        dx={-2}
+        textAnchor="end"
+        fill="#475569"
+        fontSize={10}
+        fontFamily="inherit"
+        transform="rotate(-38)"
+      >
+        {short}
+      </text>
+    </g>
+  );
+}
+
+// ─── Shared constants ────────────────────────────────────────────────────────
+
+const SLOT_W = 54; // px per bar slot for scrollable charts
+
+// ─── Chart: Assignee — vertical bars, ALL agents, horizontal scroll ────────────
+
+const AssigneeChart = React.memo(function AssigneeChart({
+  data,
+  allStatusKeys,
+}: {
+  data: { name: string; value: number; client_names?: string[]; statusBreakdown?: Record<string, number> }[];
+  allStatusKeys: string[];
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const innerW = Math.max(data.length * SLOT_W, 280);
+
+  // Portal tooltip state – escapes the overflow container entirely
+  const [tip, setTip] = useState<{ visible: boolean; x: number; y: number; row: any }>({
+    visible: false, x: 0, y: 0, row: null,
+  });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const tipEl = tip.visible && tip.row ? (
+    <div
+      className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl"
+      style={{
+        position: "fixed",
+        left: tip.x + 14,
+        top: tip.y - 8,
+        transform: "translateY(-100%)",
+        zIndex: 9999,
+        pointerEvents: "none",
+        minWidth: 200,
+      }}
+    >
+      <p className="text-sm font-semibold text-slate-800">{tip.row.name}</p>
+      <p className="mt-0.5 text-xs text-slate-500">
+        {Number(tip.row.value).toLocaleString()} tickets
+        {total > 0 && (
+          <span className="ml-2 font-medium text-slate-700">
+            {Math.round((tip.row.value / total) * 100)}% of total
+          </span>
+        )}
+      </p>
+      {allStatusKeys.some(st => Number((tip.row.statusBreakdown || {})[st] || 0) > 0) && (
+        <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
+          {allStatusKeys.map((status, idx) => {
+            const val = Number((tip.row.statusBreakdown || {})[status] || 0);
+            if (!val) return null;
+            return (
+              <div key={status} className="flex items-center justify-between gap-4 text-xs">
+                <span className="flex items-center gap-1.5 text-slate-600">
+                  <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                  {status}
+                </span>
+                <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {(() => {
+        const clients = normalizeClientNames(tip.row.client_names)
+          .filter(c => c.toLowerCase() !== "unknown client");
+        return clients.length > 0 ? (
+          <p className="mt-2 text-[11px] text-slate-400">
+            {clients.slice(0, 3).join(", ")}{clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+          </p>
+        ) : null;
+      })()}
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <div
+        ref={containerRef}
+        style={{ overflowX: "auto", overflowY: "hidden" }}
+        onMouseMove={e => setTip(t => ({ ...t, x: e.clientX, y: e.clientY }))}
+        onMouseLeave={() => setTip(t => ({ ...t, visible: false }))}
+      >
+        <div style={{ width: innerW, height: 300 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
+              barCategoryGap="35%"
+              onMouseMove={(state: any) => {
+                if (state?.activePayload?.[0]?.payload) {
+                  setTip(t => ({ ...t, visible: true, row: state.activePayload[0].payload }));
+                }
+              }}
+              onMouseLeave={() => setTip(t => ({ ...t, visible: false }))}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                tick={<CustomXTick />}
+                interval={0}
+                height={65}
+              />
+              <YAxis
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                width={28}
+              />
+              {/* No Recharts Tooltip — we render via portal to escape overflow */}
+              <Bar
+                dataKey="value"
+                radius={[6, 6, 0, 0]}
+                isAnimationActive={false}
+                minPointSize={3}
+                cursor="pointer"
+              >
+                {data.map((entry, idx) => (
+                  <Cell key={`${entry.name}-${idx}`} fill={ASSIGNEE_COLORS[idx % ASSIGNEE_COLORS.length]} />
+                ))}
+                <LabelList
+                  dataKey="value"
+                  position="top"
+                  fill="#64748b"
+                  fontSize={10}
+                  formatter={(v: number) => v.toLocaleString()}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      {typeof document !== "undefined" && tipEl && createPortal(tipEl, document.body)}
+    </>
+  );
+});
+
+// ─── Chart: Status — donut, Closed excluded ──────────────────────────────────
+
+const StatusDonut = React.memo(function StatusDonut({
+  data,
+}: {
+  data: { name: string; value: number }[];
+}) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const RADIAN = Math.PI / 180;
+
+  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent < 0.04) return null;
+    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + r * Math.cos(-midAngle * RADIAN);
+    const y = cy + r * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="600">
+        {`${Math.round(percent * 100)}%`}
+      </text>
+    );
+  };
+
+  return (
+    <div style={{ width: "100%", height: 300 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="44%"
+            innerRadius={62}
+            outerRadius={98}
+            paddingAngle={3}
+            labelLine={false}
+            label={renderLabel}
+            isAnimationActive={false}
+          >
+            {data.map((entry, idx) => (
+              <Cell key={`${entry.name}-${idx}`} fill={statusColor(entry.name, idx)} />
+            ))}
+          </Pie>
+          <Tooltip
+            content={({ active, payload }: any) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload || {};
+              const pct = total ? Math.round((row.value / total) * 100) : 0;
+              return fmtTooltip({ label: row.name, count: row.value, pct });
+            }}
+          />
+          <Legend
+            verticalAlign="bottom"
+            iconType="circle"
+            iconSize={8}
+            formatter={(value: string) => <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+// ─── Chart: By User — vertical stacked bars, Closed excluded, horizontal scroll ─
+
+const UserStackedScrollChart = React.memo(function UserStackedScrollChart({
+  data,
+  statusKeys,
+}: {
+  data: StackedRow[];
+  statusKeys: string[]; // Closed already excluded by caller
+}) {
+  const innerW = Math.max(data.length * SLOT_W, 280);
+  return (
+    <>
+      <div style={{ overflowX: "auto", overflowY: "hidden" }}>
+        <div style={{ width: innerW, height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
+              barCategoryGap="35%"
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="name"
+                tickLine={false}
+                axisLine={false}
+                tick={<CustomXTick />}
+                interval={0}
+                height={65}
+              />
+              <YAxis
+                scale="sqrt"
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+                width={32}
+                tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))}
+              />
+              <Tooltip
+                cursor={{ fill: "rgba(99,102,241,0.06)" }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload || {};
+                  // filter out placeholder "Unknown Client" — only show real client names
+                  const clients = normalizeClientNames(row.client_names)
+                    .filter(c => c.toLowerCase() !== "unknown client");
+                  return (
+                    <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+                      <p className="text-sm font-semibold text-slate-800">{row.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {statusKeys.reduce((s, st) => s + Number(row[st] || 0), 0).toLocaleString()} active tickets
+                      </p>
+                      <div className="mt-2 space-y-1">
+                        {statusKeys.map((status, idx) => {
+                          const val = Number(row[status] || 0);
+                          if (!val) return null;
+                          return (
+                            <div key={status} className="flex items-center justify-between gap-6 text-xs">
+                              <span className="flex items-center gap-1.5 text-slate-600">
+                                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                                {status}
+                              </span>
+                              <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {clients.length > 0 && (
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {clients.slice(0, 3).join(", ")}
+                          {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+              {statusKeys.map((status, idx) => (
+                <Bar
+                  key={status}
+                  dataKey={status}
+                  stackId="s"
+                  fill={statusColor(status, idx)}
+                  isAnimationActive={false}
+                  minPointSize={8}
+                  radius={idx === statusKeys.length - 1 ? [6, 6, 0, 0] : 0}
+                >
+                  {/* Show active total count on top of the last stack segment */}
+                  {idx === statusKeys.length - 1 && (
+                    <LabelList
+                      content={({ x, y, width, index }: any) => {
+                        const row = data[index];
+                        if (!row) return null;
+                        const activeTotal = statusKeys.reduce((s, st) => s + Number(row[st] || 0), 0);
+                        if (!activeTotal) return null;
+                        return (
+                          <text
+                            x={Number(x) + Number(width) / 2}
+                            y={Number(y) - 4}
+                            textAnchor="middle"
+                            fill="#64748b"
+                            fontSize={9}
+                          >
+                            {activeTotal.toLocaleString()}
+                          </text>
+                        );
+                      }}
+                    />
+                  )}
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      {/* pinned legend */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 pt-2">
+        {statusKeys.map((status, idx) => (
+          <span key={status} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+            {status}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+});
+
+// ─── Chart: Stacked bar vertical (By Tag) ────────────────────────────────────
+
+const StackedChart = React.memo(function StackedChart({
+  data,
+  statusKeys,
+}: {
+  data: StackedRow[];
+  statusKeys: string[];
+}) {
+  const display = data.slice(0, 10);
+  return (
+    <div style={{ width: "100%", height: 300 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={display}
+          margin={{ top: 20, right: 8, left: 0, bottom: 65 }}
+          barCategoryGap="35%"
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <XAxis
+            dataKey="name"
+            tickLine={false}
+            axisLine={false}
+            tick={<CustomXTick />}
+            interval={0}
+            height={65}
+          />
+          <YAxis
+            allowDecimals={false}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            width={28}
+          />
+          <Tooltip
+            cursor={{ fill: "rgba(6,182,212,0.06)" }}
+            content={({ active, payload }: any) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload || {};
+              return (
+                <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+                  <p className="text-sm font-semibold text-slate-800">{row.name}</p>
+                  <p className="mt-1 text-xs text-slate-500">{Number(row.total || 0).toLocaleString()} total</p>
+                  <div className="mt-2 space-y-1">
+                    {statusKeys.map((status, idx) => {
+                      const val = Number(row[status] || 0);
+                      if (!val) return null;
+                      return (
+                        <div key={status} className="flex items-center justify-between gap-6 text-xs">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                            {status}
+                          </span>
+                          <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }}
+          />
+          <Legend
+            verticalAlign="bottom"
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ paddingTop: 4 }}
+            formatter={(value: string) => <span style={{ fontSize: 11, color: "#475569" }}>{value}</span>}
+          />
+          {statusKeys.map((status, idx) => (
+            <Bar
+              key={status}
+              dataKey={status}
+              stackId="s"
+              fill={statusColor(status, idx)}
+              isAnimationActive={false}
+              minPointSize={2}
+              radius={idx === statusKeys.length - 1 ? [6, 6, 0, 0] : 0}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
+// ─── Chart: Scrollable horizontal stacked bars (By User — all users) ──────────
+
+const UserScrollChart = React.memo(function UserScrollChart({
+  data,
+  statusKeys,
+}: {
+  data: StackedRow[];
+  statusKeys: string[];
+}) {
+  const ROW_H = 30;
+  const chartHeight = data.length * ROW_H + 24; // 24 = top/bottom margin
+
+  return (
+    <>
+      {/* scrollable chart area */}
+      <div style={{ overflowY: "auto", overflowX: "hidden", maxHeight: 252 }}>
+        <div style={{ width: "100%", height: Math.max(chartHeight, 100) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              layout="vertical"
+              margin={{ top: 4, right: 48, left: 4, bottom: 4 }}
+              barCategoryGap="20%"
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+              <XAxis
+                type="number"
+                allowDecimals={false}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10, fill: "#94a3b8" }}
+              />
+              <YAxis
+                dataKey="name"
+                type="category"
+                width={112}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11, fill: "#475569" }}
+                tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 13) + "…" : v}
+              />
+              <Tooltip
+                cursor={{ fill: "rgba(99,102,241,0.06)" }}
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0]?.payload || {};
+                  const clients = normalizeClientNames(row.client_names);
+                  return (
+                    <div className="rounded-xl border border-slate-100 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
+                      <p className="text-sm font-semibold text-slate-800">{row.name}</p>
+                      <p className="mt-1 text-xs text-slate-500">{Number(row.total || 0).toLocaleString()} total tickets</p>
+                      <div className="mt-2 space-y-1">
+                        {statusKeys.map((status, idx) => {
+                          const val = Number(row[status] || 0);
+                          if (!val) return null;
+                          return (
+                            <div key={status} className="flex items-center justify-between gap-6 text-xs">
+                              <span className="flex items-center gap-1.5 text-slate-600">
+                                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+                                {status}
+                              </span>
+                              <span className="font-semibold text-slate-800">{val.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {clients.length > 0 && (
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {clients.slice(0, 3).join(", ")}
+                          {clients.length > 3 ? ` +${clients.length - 3} more` : ""}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+              {statusKeys.map((status, idx) => (
+                <Bar
+                  key={status}
+                  dataKey={status}
+                  stackId="s"
+                  fill={statusColor(status, idx)}
+                  isAnimationActive={false}
+                  barSize={16}
+                  minPointSize={2}
+                  radius={idx === statusKeys.length - 1 ? [0, 4, 4, 0] : 0}
+                >
+                  {idx === statusKeys.length - 1 && (
+                    <LabelList
+                      dataKey="total"
+                      position="right"
+                      fill="#64748b"
+                      fontSize={10}
+                      formatter={(v: number) => v > 0 ? v.toLocaleString() : ""}
+                    />
+                  )}
+                </Bar>
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      {/* legend pinned below scroll area */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-2">
+        {statusKeys.map((status, idx) => (
+          <span key={status} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: statusColor(status, idx) }} />
+            {status}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+});
+
+// ─── Skeleton loader ───────────────────────────────────────────────────────────
+
+function ChartSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3 pt-4">
+      {[80, 60, 90, 50, 70].map((w, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <div className="h-3 rounded bg-slate-100" style={{ width: 110 }} />
+          <div className="h-5 rounded-lg bg-slate-100" style={{ width: `${w}%` }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Export helpers ───────────────────────────────────────────────────────────
+
+function exportToExcel(fileName: string, data: any[]) {
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Data");
+  XLSX.writeFile(wb, `${fileName}-${new Date().toISOString().split("T")[0]}.xlsx`);
+}
+
+function exportToCSV(fileName: string, data: any[]) {
+  const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(data));
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  saveAs(blob, `${fileName}-${new Date().toISOString().split("T")[0]}.csv`);
+}
+
+// ─── Card wrapper ─────────────────────────────────────────────────────────────
+
+function ChartCard({
+  title,
+  subtitle,
+  badge,
+  loading,
+  hasData,
+  wide,
+  children,
+  onExportCSV,
+  onExportExcel,
+}: {
+  title: string;
+  subtitle: string;
+  badge?: React.ReactNode;
+  loading?: boolean;
+  hasData?: boolean;
+  wide?: boolean;
+  children: React.ReactNode;
+  onExportCSV?: () => void;
+  onExportExcel?: () => void;
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+
+  return (
+    <div
+      className="flex-shrink-0 flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-sm"
+      style={{ minWidth: 200, flex: wide ? "2 1 0" : "1 1 0" }}
+    >
+      <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">{title}</p>
+          <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {badge && (
+            <span className="mt-0.5 shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600">
+              {badge}
+            </span>
+          )}
+          {hasData && (onExportCSV || onExportExcel) && (
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Export data"
+              >
+                <Download className="w-4 h-4 text-slate-500" />
+              </button>
+              {showMenu && (
+                <div className="absolute right-0 mt-1 w-32 rounded-lg border border-slate-200 bg-white shadow-lg z-10">
+                  {onExportExcel && (
+                    <button
+                      onClick={() => {
+                        onExportExcel();
+                        setShowMenu(false);
+                      }}
+                      className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-t-lg"
+                    >
+                      Export as Excel
+                    </button>
+                  )}
+                  {onExportCSV && (
+                    <button
+                      onClick={() => {
+                        onExportCSV();
+                        setShowMenu(false);
+                      }}
+                      className={`block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 ${onExportExcel ? "" : "rounded-t-lg"} rounded-b-lg`}
+                    >
+                      Export as CSV
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="px-2 pb-4">
+        {loading ? (
+          <div className="px-3"><ChartSkeleton /></div>
+        ) : !hasData ? (
+          <div className="flex h-[300px] items-center justify-center text-sm text-slate-400">
+            No data available
+          </div>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+function TicketCharts({
   dateFrom,
   dateTo,
   onSummaryFetched,
+  tickets,
+  classifyTicketTag,
 }: {
   dateFrom?: string;
   dateTo?: string;
   onSummaryFetched?: (summary: any) => void;
+  tickets?: any[];
+  classifyTicketTag?: (ticket: any) => string;
 }) {
   const [assigned, setAssigned] = useState<AssignedCount[]>([]);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);
-  const [userStatus, setUserStatus] = useState<any[]>([]); // [{ user_id, name, counts: { statusName: count } }]
-  const [tagStatus, setTagStatus] = useState<any[]>([]); // [{ tag, counts: { statusName: count } }]
+  const [userStatus, setUserStatus] = useState<GroupedStatusCount[]>([]);
+  const [tagStatus, setTagStatus] = useState<GroupedStatusCount[]>([]);
   const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState<"all" | "today" | "7days" | "month">(
-    "all",
-  );
+  const [range, setRange] = useState<"all" | "today" | "7days" | "month">("all");
 
-  // Compute date_from/date_to based on selected range (IST day handling)
+  // IST-aware date range helper
   const computeRange = () => {
-    if (range === "all")
-      return {
-        df: undefined as string | undefined,
-        dt: undefined as string | undefined,
-      };
+    if (range === "all") return { df: undefined as string | undefined, dt: undefined as string | undefined };
     const now = new Date();
-    const istOffsetMs = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(now.getTime() + istOffsetMs);
-    const yyyy = istNow.getUTCFullYear();
-    const mm = String(istNow.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(istNow.getUTCDate()).padStart(2, "0");
-
-    const isoDate = (y: number, m: number, d: number) =>
-      `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-
-    if (range === "today") {
-      return {
-        df: isoDate(yyyy, Number(mm), Number(dd)),
-        dt: isoDate(yyyy, Number(mm), Number(dd)),
-      };
-    }
-
+    const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const y = istNow.getUTCFullYear();
+    const m = istNow.getUTCMonth() + 1;
+    const d = istNow.getUTCDate();
+    const fmt = (yy: number, mm: number, dd: number) =>
+      `${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+    const today = fmt(y, m, d);
+    if (range === "today") return { df: today, dt: today };
     if (range === "7days") {
-      const past = new Date(istNow.getTime() - 6 * 24 * 3600 * 1000); // include today => last 7 days
-      const pY = past.getUTCFullYear();
-      const pM = past.getUTCMonth() + 1;
-      const pD = past.getUTCDate();
-      return {
-        df: isoDate(pY, pM, pD),
-        dt: isoDate(yyyy, Number(mm), Number(dd)),
-      };
+      const past = new Date(istNow.getTime() - 6 * 24 * 3600 * 1000);
+      return { df: fmt(past.getUTCFullYear(), past.getUTCMonth() + 1, past.getUTCDate()), dt: today };
     }
-
-    if (range === "month") {
-      const start = new Date(Date.UTC(yyyy, istNow.getUTCMonth(), 1));
-      const sY = start.getUTCFullYear();
-      const sM = start.getUTCMonth() + 1;
-      const sD = 1;
-      return {
-        df: isoDate(sY, sM, sD),
-        dt: isoDate(yyyy, Number(mm), Number(dd)),
-      };
-    }
-    return {
-      df: undefined as string | undefined,
-      dt: undefined as string | undefined,
-    };
+    return { df: fmt(y, m, 1), dt: today };
   };
 
   const { df: computedFrom, dt: computedTo } = computeRange();
@@ -89,674 +825,196 @@ export default function TicketCharts({
     const fetchData = async () => {
       try {
         setLoading(true);
-        console.log("TicketCharts: fetchData called with", {
-          range,
-          dateFrom,
-          dateTo,
-          computedFrom,
-          computedTo,
-        });
         const params = new URLSearchParams();
-        // Prefer explicit dateFrom/dateTo props when provided (e.g., date picker in Manage Tickets)
-        const useFrom =
-          dateFrom && String(dateFrom).trim()
-            ? dateFrom
-            : range === "all"
-              ? undefined
-              : computedFrom;
-        const useTo =
-          dateTo && String(dateTo).trim()
-            ? dateTo
-            : range === "all"
-              ? undefined
-              : computedTo;
-        console.log("[TicketCharts] Date filter logic:", {
-          dateFrom,
-          dateTo,
-          range,
-          "dateFrom && String(dateFrom).trim()":
-            dateFrom && String(dateFrom).trim(),
-          "dateTo && String(dateTo).trim()": dateTo && String(dateTo).trim(),
-          useFrom,
-          useTo,
-        });
+        const useFrom = (dateFrom && String(dateFrom).trim()) ? dateFrom : (range === "all" ? undefined : computedFrom);
+        const useTo = (dateTo && String(dateTo).trim()) ? dateTo : (range === "all" ? undefined : computedTo);
         if (useFrom) params.append("date_from", useFrom);
         if (useTo) params.append("date_to", useTo);
-        const query = params.toString() ? `?${params.toString()}` : "";
-        const resp = await api.get(`/tickets/summary${query}`);
-        const payload = resp?.data ?? resp;
+        const q = params.toString() ? `?${params.toString()}` : "";
+
+        const [summaryResp, userStatusResp, tagResp] = await Promise.allSettled([
+          api.get(`/tickets/summary${q}`),
+          api.get(`/tickets/summary/user-status${q}`),
+          api.get(`/tickets/summary/by-tag${q}`),
+        ]);
+
         if (!mounted) return;
-        setAssigned(payload.assigned || []);
-        setStatuses(payload.statuses || []);
-        if (onSummaryFetched) {
-          try {
-            onSummaryFetched(payload);
-          } catch (e) {
-            console.warn("onSummaryFetched callback failed", e);
-          }
+
+        if (summaryResp.status === "fulfilled") {
+          const payload = (summaryResp.value as any)?.data ?? summaryResp.value;
+          setAssigned(payload.assigned || []);
+          setStatuses(payload.statuses || []);
+          try { onSummaryFetched?.(payload); } catch {}
         }
 
-        // Fetch user-status summary in parallel
-        try {
-          console.log(
-            "[TicketCharts] Fetching user-status from:",
-            `/tickets/summary/user-status${query}`,
-          );
-          const resp2 = await api.get(`/tickets/summary/user-status${query}`);
-          console.log("[TicketCharts] user-status raw response:", resp2);
-          const p2 = resp2?.data ?? resp2;
-          console.log("[TicketCharts] user-status p2:", p2);
-          // p2 could be {data: [...]} or [...] depending on how api client unwraps response
-          const rawData = Array.isArray(p2) ? p2 : p2?.data || [];
-          console.log(
-            "[TicketCharts] user-status rawData:",
-            rawData,
-            "length:",
-            rawData.length,
-          );
-
-          // Transform flat data to grouped format: { user_id, name, counts: { statusName: count } }
-          const grouped: Record<
-            number,
-            { user_id: number; name: string; counts: Record<string, number> }
-          > = {};
+        if (userStatusResp.status === "fulfilled") {
+          const payload = (userStatusResp.value as any)?.data ?? userStatusResp.value;
+          const rawData = Array.isArray(payload) ? payload : payload?.data || [];
+          const grouped: Record<number, GroupedStatusCount & { client_names: string[] }> = {};
           rawData.forEach((row: any) => {
-            const userId = row.user_id || 0;
-            if (!grouped[userId]) {
-              grouped[userId] = {
-                user_id: userId,
-                name: row.user_name || "Unknown",
-                counts: {},
-              };
+            const uid = row.user_id || 0;
+            if (!grouped[uid]) {
+              grouped[uid] = { user_id: uid, name: row.user_name || "Unknown", counts: {}, client_names: [] };
             }
-            const statusName = row.status_name || "Unknown";
-            grouped[userId].counts[statusName] = row.count || 0;
+            grouped[uid].counts[row.status_name || "Unknown"] = Number(row.count || 0);
+            normalizeClientNames(row.client_names).forEach(cn => {
+              if (!grouped[uid].client_names.includes(cn)) grouped[uid].client_names.push(cn);
+            });
           });
-
-          const transformedData = Object.values(grouped);
-          console.log(
-            "[TicketCharts] user-status transformed data:",
-            transformedData,
-            "length:",
-            transformedData.length,
-          );
-          if (mounted) setUserStatus(transformedData);
-        } catch (e2) {
-          console.error(
-            "TicketCharts: failed to fetch user-status summary",
-            e2,
-          );
+          if (mounted) setUserStatus(Object.values(grouped));
         }
 
-        // Fetch tag-status summary (fallback to client-side classification if server data is unreliable)
-        try {
-          const resp3 = await api.get(`/tickets/summary/by-tag${query}`);
-          const p3 = resp3?.data ?? resp3;
-          console.log("TicketCharts: tag-status API response:", {
-            resp3,
-            p3,
-            tags: p3?.tags,
-          });
-          if (mounted) setTagStatus(p3?.tags || []);
-        } catch (e3) {
-          console.warn("TicketCharts: failed to fetch tag-status summary", e3);
-        }
-
-        // Additionally compute tag counts client-side using ticket descriptions to ensure Razorpay/Payswiff/Manual classification
-        try {
-          const computedTagCounts: Record<string, Record<string, number>> = {};
-          let page = 1;
-          let pages = 1;
-          let totalTicketsProcessed = 0;
-          do {
-            console.log("TicketCharts: fetching tickets page", page, {
-              useFrom,
-              useTo,
-            });
-            const respAll = await api.getTickets(
-              { date_from: useFrom, date_to: useTo },
-              page,
-              100,
-            );
-            const d = respAll?.data ?? respAll;
-            let ticketsArr = d?.tickets ?? (Array.isArray(d) ? d : []);
-            // Ensure ticketsArr is always an array
-            if (!Array.isArray(ticketsArr)) {
-              ticketsArr = [];
-            }
-            pages = d?.pages ?? 1;
-            // If pages is 0 but we got some tickets, set pages to 1 to avoid immediate exit
-            if (pages === 0 && ticketsArr.length > 0) pages = 1;
-            console.log("TicketCharts: fetched tickets page", page, {
-              ticketsCount: ticketsArr.length,
-              pages,
-              response: d,
-            });
-            totalTicketsProcessed += ticketsArr.length;
-            for (const t of ticketsArr) {
-              let tag = "Manual";
-              try {
-                // Normalize tags: support array, JSON-string, or Postgres-style '{A,B}' string
-                const rawTags = (t as any).tags;
-                let firstTag: string | null = null;
-                if (Array.isArray(rawTags) && rawTags.length > 0) {
-                  firstTag = String(rawTags[0]);
-                } else if (typeof rawTags === "string" && rawTags.trim()) {
-                  try {
-                    const parsed = JSON.parse(rawTags);
-                    if (Array.isArray(parsed) && parsed.length > 0)
-                      firstTag = String(parsed[0]);
-                  } catch (e) {
-                    // not JSON
-                  }
-                  if (!firstTag) {
-                    const m = rawTags.match(/^\{(.+)\}$/);
-                    if (m && m[1]) {
-                      const arr = m[1]
-                        .split(",")
-                        .map((s) => s.replace(/^\"|\"$/g, "").trim())
-                        .filter(Boolean);
-                      if (arr.length) firstTag = arr[0];
-                    }
-                  }
-                  if (!firstTag) firstTag = rawTags;
-                }
-
-                if (firstTag) {
-                  tag = String(firstTag);
-                } else {
-                  const desc = String(t.description || "").toLowerCase();
-                  if (
-                    desc.includes("@slack.com") ||
-                    desc.includes("slack from") ||
-                    desc.includes("from@slack.com") ||
-                    /\bslack\b/.test(desc)
-                  )
-                    tag = "Slack";
-                  else if (desc.includes("razorpay")) tag = "Razorpay";
-                  else if (desc.includes("payswiff")) tag = "Payswiff";
-                  else if (t.created_from_mail_config) {
-                    // prefer mail config provider name if available
-                    try {
-                      const prov = (window as any).getMailConfigProviderName
-                        ? (window as any).getMailConfigProviderName(
-                            t.mail_config_sources,
-                            t.description,
-                          )
-                        : null;
-                      if (prov) tag = prov;
-                    } catch (e) {}
-                  }
-                }
-              } catch (e) {}
-
-              const statusName =
-                (t.status && (t.status.name || t.status)) || "Unknown";
-              if (!computedTagCounts[tag]) computedTagCounts[tag] = {};
-              computedTagCounts[tag][statusName] =
-                (computedTagCounts[tag][statusName] || 0) + 1;
-            }
-            page += 1;
-          } while (page <= pages);
-
-          if (mounted) {
-            const arr = Object.entries(computedTagCounts).map(
-              ([tag, counts]) => ({ tag, counts }),
-            );
-            console.log("TicketCharts: computed tag status (client-side):", {
-              totalTicketsProcessed,
-              computedTagCounts,
-              arr,
-              arrayLength: arr.length,
-            });
-            setTagStatus(arr);
+        const buildTagFromTickets = (): GroupedStatusCount[] => {
+          const grouped: Record<string, Record<string, number>> = {};
+          for (const t of Array.isArray(tickets) ? tickets : []) {
+            const tag = classifyTicketTag ? classifyTicketTag(t) : "Manual";
+            const status = t?.status?.name || t?.status_name || "Unknown";
+            if (!grouped[tag]) grouped[tag] = {};
+            grouped[tag][status] = (grouped[tag][status] || 0) + 1;
           }
-        } catch (e) {
-          console.warn(
-            "TicketCharts: failed to compute client-side tag summary",
-            e,
-          );
+          return Object.entries(grouped).map(([tag, counts]) => ({ user_id: tag, name: tag, counts, client_names: [] }));
+        };
+
+        if (tagResp.status === "fulfilled") {
+          const payload = (tagResp.value as any)?.data ?? tagResp.value;
+          const tags: any[] = Array.isArray(payload) ? payload : payload?.tags || [];
+          if (mounted) {
+            setTagStatus(
+              tags.length > 0
+                ? tags.map((r: any) => ({
+                    user_id: r.tag, name: r.tag, counts: r.counts || {},
+                    client_names: normalizeClientNames(r.client_names),
+                  }))
+                : buildTagFromTickets(),
+            );
+          }
+        } else if (mounted) {
+          setTagStatus(buildTagFromTickets());
         }
       } catch (e) {
-        console.error("TicketCharts: failed to fetch summary", e);
+        console.error("TicketCharts: fetch failed", e);
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
-    // Initial fetch
     fetchData();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [dateFrom, dateTo, range]);
 
-  // Vertical bar chart component
-  const VerticalBarChart = ({
-    items,
-    labelKey,
-    valueKey,
-  }: {
-    items: any[];
-    labelKey: string;
-    valueKey: string;
-  }) => {
-    const max = items.reduce((m, it) => Math.max(m, it[valueKey] || 0), 0) || 1;
-    const MAX_PX = 160;
-    const MIN_PX = 8;
+  // ── Computed data (memoised, zero-values filtered out) ─────────────────────
 
-    // Color palettes for better visual distinction
-    const palette = [
-      "#3B82F6",
-      "#10B981",
-      "#F59E0B",
-      "#EF4444",
-      "#8B5CF6",
-      "#06B6D4",
-      "#F472B6",
-      "#7C3AED",
-    ];
+  const statusKeys = useMemo(() => {
+    const keys = new Set<string>(STATUS_ORDER);
+    statuses.forEach(s => { if (s.status) keys.add(s.status); });
+    userStatus.forEach(r => Object.keys(r.counts).forEach(k => keys.add(k)));
+    tagStatus.forEach(r => Object.keys(r.counts).forEach(k => keys.add(k)));
+    return Array.from(keys).sort((a, b) => statusRank(a) - statusRank(b));
+  }, [statuses, userStatus, tagStatus]);
 
-    return (
-      <div className="flex flex-col">
-        <div className="flex items-end gap-4 px-2" style={{ height: MAX_PX }}>
-          {items.map((it, idx) => {
-            const val = Number(it[valueKey] || 0);
-            const h = Math.max(MIN_PX, Math.round((val / max) * MAX_PX));
-            const color = palette[idx % palette.length];
-            return (
-              <div key={idx} className="flex-1 flex flex-col items-center">
-                <div className="text-sm text-gray-700 mb-2">{val}</div>
-                <div
-                  className="w-full flex items-end justify-center"
-                  style={{ minHeight: 0 }}
-                >
-                  <div
-                    style={{
-                      width: 28,
-                      height: h,
-                      background: color,
-                      borderTopLeftRadius: 6,
-                      borderTopRightRadius: 6,
-                    }}
-                    title={`${it[labelKey]}: ${val}`}
-                    className="transition-all"
-                  />
-                </div>
-                <div
-                  className="mt-2 text-xs text-center text-gray-700 truncate"
-                  style={{ maxWidth: "6rem" }}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: color,
-                        display: "inline-block",
-                        borderRadius: 4,
-                      }}
-                    />
-                    <span
-                      style={{
-                        maxWidth: 80,
-                        display: "inline-block",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {it[labelKey]}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
+  const statusData = useMemo(
+    () => statuses
+      .map(s => ({ name: s.status || "Unknown", value: Number(s.count || 0) }))
+      .filter(d => d.value > 0)
+      .sort((a, b) => statusRank(a.name) - statusRank(b.name)),
+    [statuses],
+  );
 
-  // Donut chart component for status distribution
-  const DonutChart = ({
-    items,
-    labelKey,
-    valueKey,
-  }: {
-    items: any[];
-    labelKey: string;
-    valueKey: string;
-  }) => {
-    const total =
-      items.reduce((s, it) => s + Number(it[valueKey] || 0), 0) || 1;
-    const radius = 72; // larger donut
-    const stroke = 24;
-    const normalizedRadius = radius - stroke / 2;
-    const circumference = 2 * Math.PI * normalizedRadius;
+  const userStackData = useMemo(
+    () => userStatus.map(row => {
+      const r: StackedRow = { name: row.name || "Unknown", total: 0, client_names: row.client_names || [] };
+      statusKeys.forEach(st => { const v = Number(row.counts?.[st] || 0); r[st] = v; r.total += v; });
+      return r;
+    })
+    .filter(r => r.total > 0)
+    // sort by active (non-Closed) count, highest first
+    .sort((a, b) => {
+      const aActive = a.total - Number(a["Closed"] || 0);
+      const bActive = b.total - Number(b["Closed"] || 0);
+      return bActive - aActive;
+    }),
+    [statusKeys, userStatus],
+  );
 
-    const palette = [
-      "#3B82F6",
-      "#10B981",
-      "#F59E0B",
-      "#EF4444",
-      "#8B5CF6",
-      "#06B6D4",
-      "#F472B6",
-      "#7C3AED",
-    ];
+  const tagStackData = useMemo(
+    () => tagStatus.map(row => {
+      const r: StackedRow = { name: row.name || String(row.user_id || "Unknown"), total: 0, client_names: row.client_names || [] };
+      statusKeys.forEach(st => { const v = Number(row.counts?.[st] || 0); r[st] = v; r.total += v; });
+      return r;
+    }).filter(r => r.total > 0).sort((a, b) => b.total - a.total),
+    [statusKeys, tagStatus],
+  );
 
-    let cumulative = 0;
+  const assignedData = useMemo(
+    () => assigned
+      .map(a => {
+        const name = a.name || "Unknown";
+        // Merge status breakdown from user-status data (matched by name)
+        const userRow = userStackData.find(r => r.name === name);
+        const statusBreakdown: Record<string, number> = {};
+        if (userRow) {
+          statusKeys.forEach(st => { statusBreakdown[st] = Number(userRow[st] || 0); });
+        }
+        return { name, value: Number(a.count || 0), client_names: a.client_names || [], statusBreakdown };
+      })
+      .filter(d => d.value > 0)
+      .sort((a, b) => b.value - a.value),
+    [assigned, userStackData, statusKeys],
+  );
 
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <div style={{ width: radius * 2, height: radius * 2 }}>
-          <svg
-            height={radius * 2}
-            width={radius * 2}
-            style={{ transform: "rotate(-90deg)" }}
-          >
-            {items.map((it, i) => {
-              const val = Number(it[valueKey] || 0);
-              const fraction = val / total;
-              const dash = fraction * circumference;
-              const dashArray = `${dash} ${circumference - dash}`;
-              const offset = circumference * (1 - cumulative);
-              const color = palette[i % palette.length];
-              cumulative += fraction;
-              return (
-                <circle
-                  key={i}
-                  r={normalizedRadius}
-                  cx={radius}
-                  cy={radius}
-                  fill="transparent"
-                  stroke={color}
-                  strokeWidth={stroke}
-                  strokeDasharray={dashArray}
-                  strokeDashoffset={offset}
-                  strokeLinecap="butt"
-                />
-              );
-            })}
-            <circle
-              r={normalizedRadius - stroke}
-              cx={radius}
-              cy={radius}
-              fill="#fff"
-            />
-            <text
-              x="50%"
-              y="50%"
-              dominantBaseline="middle"
-              textAnchor="middle"
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                transform: "rotate(90deg)",
-                transformOrigin: `${radius}px ${radius}px`,
-              }}
-            >
-              {total}
-            </text>
-          </svg>
-        </div>
+  // Only include status keys that actually have non-zero values in user/tag data
+  const activeStatusKeys = useMemo(
+    () => statusKeys.filter(st =>
+      userStackData.some(r => Number(r[st] || 0) > 0) ||
+      tagStackData.some(r => Number(r[st] || 0) > 0),
+    ),
+    [statusKeys, userStackData, tagStackData],
+  );
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-[220px]">
-          {items.map((it, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 text-xs text-gray-700"
-            >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  background: palette[i % palette.length],
-                  display: "inline-block",
-                  borderRadius: 3,
-                }}
-              />
-              <span className="truncate" style={{ minWidth: 60 }}>
-                {it[labelKey]}
-              </span>
-              <span className="text-gray-500 ml-2">{it[valueKey]}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  // Status keys for By User — exclude Closed
+  const userStatusKeys = useMemo(
+    () => activeStatusKeys.filter(st => st !== "Closed"),
+    [activeStatusKeys],
+  );
+
+  // Status data for Status donut — exclude Closed (case-insensitive)
+  const activeStatusData = useMemo(
+    () => statusData.filter(d => d.name.toLowerCase() !== "closed"),
+    [statusData],
+  );
 
   const totalTickets = statuses.reduce((s, r) => s + Number(r.count || 0), 0);
+  // Active = everything except Closed (for badges)
+  const totalActive = statuses
+    .filter(s => s.status !== "Closed")
+    .reduce((s, r) => s + Number(r.count || 0), 0);
   const totalAssigned = assigned.reduce((s, r) => s + Number(r.count || 0), 0);
-
-  // Grouped side-by-side vertical bars per user (each user's column contains bars for each status)
-  const GroupedBarChart = ({
-    users,
-    statuses,
-  }: {
-    users: any[];
-    statuses: StatusCount[];
-  }) => {
-    const MAX_PX = 140; // reduced to make room for count labels at top
-    const MIN_PX = 10; // visible but not too tall
-    // compute union of status names from both statuses list and users' counts
-    const derivedFromUsers = Array.from(
-      new Set(users.flatMap((u) => (u.counts ? Object.keys(u.counts) : []))),
-    );
-    const statusNames = Array.from(
-      new Set([...(statuses || []).map((s) => s.status), ...derivedFromUsers]),
-    );
-
-    // fixed bar width and gap
-    const gap = 8;
-    const fixedBarWidth = 28; // px per small bar
-    const totalColWidth = Math.max(
-      56,
-      statusNames.length * (fixedBarWidth + gap) + 8,
-    );
-
-    const palette = [
-      "#3B82F6",
-      "#10B981",
-      "#F59E0B",
-      "#EF4444",
-      "#8B5CF6",
-      "#06B6D4",
-      "#F472B6",
-      "#7C3AED",
-    ];
-
-    // stable color map for statuses
-    const colorMap: Record<string, string> = {};
-    statusNames.forEach((st, i) => {
-      colorMap[st] = palette[i % palette.length];
-    });
-
-    // global max value across all users/statuses for consistent scaling
-    const maxVal = Math.max(
-      1,
-      ...users.flatMap((u) =>
-        statusNames.map((st) => Number((u.counts && u.counts[st]) || 0)),
-      ),
-    );
-
-    const barWidth = fixedBarWidth;
-
-    return (
-      <div className="flex flex-col">
-        <div
-          className="flex items-end gap-4 px-2"
-          style={{ height: MAX_PX + 24, paddingTop: 24 }}
-        >
-          {users.map((u, ui) => {
-            const name = u.name || `User ${u.user_id}`;
-            // Per-user scaling: ensure every non-zero status gets a minimum visible height
-            const userMax = Math.max(
-              1,
-              ...statusNames.map((st) =>
-                Number((u.counts && u.counts[st]) || 0),
-              ),
-            );
-            const nonZeroMinHeight = Math.round(MAX_PX * 0.22); // ~22% of chart height
-            const zeroHeight = Math.max(4, Math.round(nonZeroMinHeight * 0.18));
-
-            const bars = statusNames.map((st, idx) => {
-              const val = Number((u.counts && u.counts[st]) || 0);
-              let h = 0;
-              if (val === 0) {
-                h = zeroHeight;
-              } else {
-                const proportion = val / userMax;
-                h = Math.max(nonZeroMinHeight, Math.round(proportion * MAX_PX));
-              }
-              return {
-                val,
-                h,
-                color: colorMap[st] || palette[idx % palette.length],
-                status: st,
-              };
-            });
-
-            return (
-              <div key={ui} className="flex-1 flex flex-col items-center">
-                <div className="text-sm text-gray-700 mb-2">
-                  {statusNames.reduce(
-                    (s, st) => s + Number((u.counts && u.counts[st]) || 0),
-                    0,
-                  )}
-                </div>
-                <div
-                  className="w-full flex items-end justify-center"
-                  style={{ minHeight: 0 }}
-                >
-                  <div
-                    style={{ width: totalColWidth }}
-                    title={`${name}`}
-                    className="overflow-hidden"
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-end",
-                        justifyContent: "center",
-                        gap: 6,
-                        minWidth: Math.max(
-                          120,
-                          statusNames.length * (barWidth + gap),
-                        ),
-                      }}
-                    >
-                      {bars.map((bar, bi) => (
-                        <div
-                          key={bi}
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            minHeight: "100%",
-                            justifyContent: "flex-end",
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 10,
-                              color: "#374151",
-                              marginBottom: 4,
-                              height: 14,
-                              minWidth: barWidth,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            {bar.val}
-                          </div>
-                          <div
-                            style={{
-                              width: barWidth,
-                              height: bar.h,
-                              background: bar.color,
-                              borderTopLeftRadius: 4,
-                              borderTopRightRadius: 4,
-                              boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-                              border: "1px solid rgba(0,0,0,0.04)",
-                            }}
-                            title={`${name} - ${bar.status}: ${bar.val}`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="mt-2 text-xs text-center text-gray-700 truncate"
-                  style={{ maxWidth: "6rem" }}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        background: "#666",
-                        display: "inline-block",
-                        borderRadius: 4,
-                      }}
-                    />
-                    <span
-                      style={{
-                        maxWidth: 80,
-                        display: "inline-block",
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {name}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {statusNames.map((st, i) => (
-            <div key={st} className="text-xs inline-flex items-center gap-2">
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  background: colorMap[st] || palette[i % palette.length],
-                  display: "inline-block",
-                  borderRadius: 3,
-                }}
-              />
-              <span className="text-gray-700">{st}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const totalAssignedActive = useMemo(
+    () => userStackData.reduce((s, r) => {
+      const closed = Number(r["Closed"] || 0);
+      return s + Number(r.total || 0) - closed;
+    }, 0),
+    [userStackData],
+  );
 
   return (
-    <div className="mb-6">
-      <div className="flex items-start justify-between mb-4">
+    <div className="mb-8">
+      {/* Header row */}
+      <div className="mb-5 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Tickets Overview</h3>
-          <div className="text-sm text-gray-600">
-            Total:{" "}
-            <span className="font-medium text-gray-900">{totalTickets}</span>
-          </div>
+          <h3 className="text-base font-semibold text-slate-800">Tickets Overview</h3>
+          <p className="text-xs text-slate-500">
+            {totalActive.toLocaleString()} active tickets · {totalTickets.toLocaleString()} total
+          </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <label className="text-sm text-gray-600">Range</label>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Range</span>
           <select
             value={range}
-            onChange={(e) => setRange(e.target.value as any)}
-            className="border rounded px-2 py-1 text-sm"
+            onChange={e => setRange(e.target.value as any)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
           >
-            <option value="all">All</option>
+            <option value="all">All time</option>
             <option value="today">Today</option>
             <option value="7days">Last 7 days</option>
             <option value="month">This month</option>
@@ -764,116 +1022,83 @@ export default function TicketCharts({
         </div>
       </div>
 
-      {/* Three cards in a single row */}
-      <div className="flex gap-4 items-stretch flex-col md:flex-row">
-        {/* Assigned To Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">Assigned To</h4>
-            <div className="text-sm text-gray-600">
-              Total:{" "}
-              <span className="font-medium text-gray-900">{totalAssigned}</span>
-            </div>
-          </div>
-          <div style={{ overflowX: "auto", overflowY: "visible" }}>
-            {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
-            ) : assigned.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
-            ) : (
-              <div className="min-w-[220px]" style={{ marginTop: 50 }}>
-                <VerticalBarChart
-                  items={assigned}
-                  labelKey="name"
-                  valueKey="count"
-                />
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Single scrollable row of cards */}
+      <div className="flex gap-3 w-full">
+        {/* 1 – Assigned To */}
+        <ChartCard
+          title="Assigned To"
+          subtitle={`${assignedData.length} agents with tickets`}
+          badge={totalAssignedActive.toLocaleString() + " active"}
+          loading={loading}
+          hasData={assignedData.length > 0}
+          onExportExcel={() => exportToExcel("assigned-to", assignedData.map(d => ({ Name: d.name, "Ticket Count": d.value })))}
+          onExportCSV={() => exportToCSV("assigned-to", assignedData.map(d => ({ Name: d.name, "Ticket Count": d.value })))}
+        >
+          <AssigneeChart data={assignedData} allStatusKeys={statusKeys} />
+        </ChartCard>
 
-        {/* Status Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">Status</h4>
-            <div className="text-sm text-gray-600">
-              Total:{" "}
-              <span className="font-medium text-gray-900">{totalTickets}</span>
-            </div>
-          </div>
-          <div>
-            {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
-            ) : statuses.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
-            ) : (
-              <div>
-                <DonutChart
-                  items={statuses.filter((s) => s.status?.toLowerCase() !== "closed")}
-                  labelKey="status"
-                  valueKey="count"
-                />
-              </div>
-            )}
-          </div>
-        </div>
+        {/* 2 – Status Distribution */}
+        <ChartCard
+          title="Status"
+          subtitle="Ticket distribution by current status"
+          badge={totalActive.toLocaleString() + " active"}
+          loading={loading}
+          hasData={statusData.length > 0}
+          onExportExcel={() => exportToExcel("status-distribution", statusData.map(d => ({ Status: d.name, "Ticket Count": d.value })))}
+          onExportCSV={() => exportToCSV("status-distribution", statusData.map(d => ({ Status: d.name, "Ticket Count": d.value })))}
+        >
+          <StatusDonut data={activeStatusData} />
+        </ChartCard>
 
-        {/* By User (Status) Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">By User (Status)</h4>
-            <div className="text-sm text-gray-600">
-              Users:{" "}
-              <span className="font-medium text-gray-900">
-                {userStatus.length}
-              </span>
-            </div>
-          </div>
-          <div style={{ overflowX: "auto", overflowY: "visible" }}>
-            {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
-            ) : userStatus.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
-            ) : (
-              <div className="min-w-[320px]" style={{ marginTop: 50 }}>
-                <GroupedBarChart users={userStatus} statuses={statuses} />
-              </div>
-            )}
-          </div>
-        </div>
+        {/* 3 – By User (Status) — scrollable, all users */}
+        <ChartCard
+          title="By User"
+          subtitle={`${userStackData.length} agents · scroll to see all`}
+          badge={`${userStackData.length} users`}
+          loading={loading}
+          hasData={userStackData.length > 0}
+          wide
+          onExportExcel={() => {
+            const exportData = userStackData
+              .map(d => ({
+                User: d.name,
+                "Open": Number(d["Open"] || 0),
+                "In Progress": Number(d["In Progress"] || 0),
+                "Overdue": Number(d["Overdue"] || 0),
+              }))
+              .filter(row => row.Open > 0 || row["In Progress"] > 0 || row.Overdue > 0);
+            exportToExcel("by-user", exportData);
+          }}
+          onExportCSV={() => {
+            const exportData = userStackData
+              .map(d => ({
+                User: d.name,
+                "Open": Number(d["Open"] || 0),
+                "In Progress": Number(d["In Progress"] || 0),
+                "Overdue": Number(d["Overdue"] || 0),
+              }))
+              .filter(row => row.Open > 0 || row["In Progress"] > 0 || row.Overdue > 0);
+            exportToCSV("by-user", exportData);
+          }}
+        >
+          <UserStackedScrollChart data={userStackData} statusKeys={userStatusKeys} />
+        </ChartCard>
 
-        {/* Tag (Status) Card */}
-        <div className="bg-white shadow rounded p-4 flex-1 min-w-0 mt-4 md:mt-0">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold">By Tag (Status)</h4>
-            <div className="text-sm text-gray-600">
-              Tags:{" "}
-              <span className="font-medium text-gray-900">
-                {tagStatus.length}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ overflowX: "auto", overflowY: "visible" }}>
-            {loading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
-            ) : tagStatus.length === 0 ? (
-              <div className="text-sm text-gray-500">No data</div>
-            ) : (
-              <div className="min-w-[320px]" style={{ marginTop: 50 }}>
-                <GroupedBarChart
-                  users={tagStatus.map((t: any) => ({
-                    user_id: t.tag,
-                    name: t.tag,
-                    counts: t.counts,
-                  }))}
-                  statuses={statuses}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+        {/* 4 – By Tag (Status) */}
+        <ChartCard
+          title="By Tag"
+          subtitle="Ticket source tags with status breakdown"
+          badge={`${tagStackData.length} tags`}
+          loading={loading}
+          hasData={tagStackData.length > 0}
+          onExportExcel={() => exportToExcel("by-tag", tagStackData.map(d => ({ Tag: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
+          onExportCSV={() => exportToCSV("by-tag", tagStackData.map(d => ({ Tag: d.name, Total: d.total, ...statusKeys.reduce((acc, st) => ({ ...acc, [st]: d[st] || 0 }), {}) })))}
+        >
+          <StackedChart data={tagStackData} statusKeys={activeStatusKeys} />
+        </ChartCard>
       </div>
     </div>
   );
 }
+
+export default React.memo(TicketCharts);

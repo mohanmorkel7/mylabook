@@ -14,32 +14,24 @@ export default defineConfig({
     target: "node22",
     ssr: true,
     rollupOptions: {
-      external: [
-        // Node.js built-ins
-        "fs",
-        "path",
-        "url",
-        "http",
-        "https",
-        "os",
-        "crypto",
-        "stream",
-        "util",
-        "events",
-        "buffer",
-        "querystring",
-        "child_process",
-        // External dependencies that should not be bundled
-        "express",
-        "cors",
-      ],
+      // Externalize ALL node_modules — bundling heavy packages like googleapis,
+      // natural, fluent-ffmpeg, etc. causes the build to hang indefinitely.
+      // The server runs in Node.js where node_modules are available at runtime.
+      external: (id) => {
+        // Externalize anything that looks like a node_module (not a relative or absolute local path)
+        if (id.startsWith(".") || id.startsWith("/") || path.isAbsolute(id)) {
+          return false; // local file — bundle it
+        }
+        // Externalize node built-ins and all npm packages
+        return true;
+      },
       output: {
         format: "es",
         entryFileNames: "[name].mjs",
       },
     },
     minify: false, // Keep readable for debugging
-    sourcemap: true,
+    sourcemap: false, // Disable sourcemap for faster build
   },
   resolve: {
     alias: {
